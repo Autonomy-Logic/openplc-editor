@@ -16,28 +16,29 @@ const Layout: React.FC<LayoutProps> = ({
   leftColumn,
   mainContent,
 }) => {
+  const initialSize = 300;
+
   return (
-    // h-screen w-screen overflow-hidden
-    <div className="layout-grid  h-screen w-screen overflow-hidden">
-      <div className="flex items-center top-row border-b border-gray-200 h-14 dark:border-gray-700">
+    <div className="layout-grid">
+      <header className="flex items-center top-row border-b border-gray-200 h-14 dark:border-gray-700">
         {topRow}
-      </div>
+      </header>
       <ResizableBox
-        width={300}
+        width={initialSize}
         height={Infinity}
         className="left-column border-r border-gray-200 dark:border-gray-700"
-        minConstraints={[300, Infinity]}
+        minConstraints={[initialSize, Infinity]}
         resizeHandles={['e']}
         axis="x"
       >
         {leftColumn}
       </ResizableBox>
-      <main className="flex-1 main-content">{mainContent}</main>
+      <main className="main-content">{mainContent}</main>
       <ResizableBox
-        width={300}
+        width={initialSize}
         height={Infinity}
         className="right-column border-l border-gray-200 dark:border-gray-700"
-        minConstraints={[300, Infinity]}
+        minConstraints={[initialSize, Infinity]}
         resizeHandles={['w']}
         axis="x"
       >
@@ -45,9 +46,9 @@ const Layout: React.FC<LayoutProps> = ({
       </ResizableBox>
       <ResizableBox
         width={Infinity}
-        height={300}
+        height={initialSize}
         className="bottom-row border-t border-gray-200 dark:border-gray-700"
-        minConstraints={[Infinity, 300]}
+        minConstraints={[Infinity, initialSize]}
         resizeHandles={['n']}
         axis="y"
       >

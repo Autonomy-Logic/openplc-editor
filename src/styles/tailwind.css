@@ -4,7 +4,7 @@
 
 @layer utilities {
   .layout-grid {
-    @apply grid grid-cols-[0.25fr_repeat(3,1fr)_0.25fr] grid-rows-[0.25fr_repeat(3,1fr)_0.25fr] gap-x-0 gap-y-0;
+    @apply grid grid-cols-[0.25fr_repeat(3,1fr)_0.25fr] grid-rows-[0.25fr_repeat(3,1fr)_0.25fr] gap-x-0 gap-y-0 h-[calc(100vh_-_30px)];
   }
   .top-row {
     grid-area: 1 / 1 / 2 / 6;
@@ -42,7 +42,7 @@
 
 @layer base {
   ::-webkit-scrollbar {
-    @apply w-3.5 h-3.5;
+    @apply w-3.5 h-3.5 bg-white;
   }
   ::-webkit-scrollbar-corner {
     @apply bg-transparent;
@@ -52,5 +52,8 @@
   }
   ::-webkit-scrollbar-thumb {
     @apply bg-open-plc-blue bg-clip-padding transition-all duration-[0.3s] rounded-[10px] border-4 border-solid border-transparent hover:border-[3px] hover:border-solid hover:border-transparent;
+  }
+  .dark ::-webkit-scrollbar {
+    @apply bg-gray-900;
   }
 }

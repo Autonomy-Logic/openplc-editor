@@ -31,7 +31,7 @@ const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
 
   const [theme, setTheme] = useState<ThemeState>();
 
-  const html = document.documentElement;
+  const { documentElement: html } = document;
 
   const addDarkClass = useCallback(() => {
     html.classList.add(variants.DARK);
