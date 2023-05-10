@@ -1,4 +1,4 @@
-export default {
+export const CONSTANTS = {
   theme: {
     variants: {
       LIGHT: 'light',

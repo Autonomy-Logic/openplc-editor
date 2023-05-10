@@ -16,12 +16,12 @@ import {
   ScissorsIcon,
   SunIcon,
 } from '@heroicons/react/24/solid';
+import { CONSTANTS } from '@shared/constants';
 import React, { Fragment, useEffect, useState } from 'react';
 import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { useTranslation } from 'react-i18next';
 
 import { useFullScreen, useIpcRender, useTheme, useWindowSize } from '@/hooks';
-import { CONSTANTS } from '@/shared';
 
 import Toggle from './Toggle';
 import Tooltip from './Tooltip';
@@ -32,7 +32,7 @@ const {
 } = CONSTANTS;
 
 const ToolBar: React.FC = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('toolbar');
   const [position, setPosition] = useState<number>(0);
   const { requestFullscreen, exitFullScreen, isFullScreen } = useFullScreen();
   const { width } = useWindowSize();
@@ -55,42 +55,42 @@ const ToolBar: React.FC = () => {
       onClick: () => console.log('will be created soon'),
       icon: DocumentPlusIcon,
       className: '',
-      tooltip: t('toolBar.new'),
+      tooltip: t('new'),
     },
     {
       id: 2,
       onClick: () => console.log('will be created soon'),
       icon: FolderOpenIcon,
       className: '',
-      tooltip: t('toolBar.open'),
+      tooltip: t('open'),
     },
     {
       id: 3,
       onClick: () => console.log('will be created soon'),
       icon: ArrowDownTrayIcon,
       className: '',
-      tooltip: t('toolBar.save'),
+      tooltip: t('save'),
     },
     {
       id: 4,
       onClick: () => console.log('will be created soon'),
       icon: ArrowDownOnSquareStackIcon,
       className: '',
-      tooltip: t('toolBar.saveAs'),
+      tooltip: t('saveAs'),
     },
     {
       id: 5,
       onClick: () => console.log('will be created soon'),
       icon: PrinterIcon,
       className: '',
-      tooltip: t('toolBar.print'),
+      tooltip: t('print'),
     },
     {
       id: 6,
       onClick: () => console.log('will be created soon'),
       icon: ArrowUturnLeftIcon,
       className: '',
-      tooltip: t('toolBar.undo'),
+      tooltip: t('undo'),
       divider: 'before',
     },
     {
@@ -98,7 +98,7 @@ const ToolBar: React.FC = () => {
       onClick: () => console.log('will be created soon'),
       icon: ArrowUturnRightIcon,
       className: '',
-      tooltip: t('toolBar.redo'),
+      tooltip: t('redo'),
       divider: 'after',
     },
 
@@ -107,35 +107,35 @@ const ToolBar: React.FC = () => {
       onClick: () => console.log('will be created soon'),
       icon: ScissorsIcon,
       className: '',
-      tooltip: t('toolBar.cut'),
+      tooltip: t('cut'),
     },
     {
       id: 9,
       onClick: () => console.log('will be created soon'),
       icon: DocumentDuplicateIcon,
       className: '',
-      tooltip: t('toolBar.copy'),
+      tooltip: t('copy'),
     },
     {
       id: 10,
       onClick: () => console.log('will be created soon'),
       icon: ClipboardDocumentIcon,
       className: '',
-      tooltip: t('toolBar.paste'),
+      tooltip: t('paste'),
     },
     {
       id: 11,
       onClick: () => console.log('will be created soon'),
       icon: DocumentMagnifyingGlassIcon,
       className: '',
-      tooltip: t('toolBar.search'),
+      tooltip: t('search'),
     },
     {
       id: 12,
       onClick: () => (isFullScreen ? exitFullScreen() : requestFullscreen()),
       icon: isFullScreen ? ArrowsPointingInIcon : ArrowsPointingOutIcon,
       className: '',
-      tooltip: t('toolBar.fullScreen'),
+      tooltip: t('fullScreen'),
     },
   ];
 
@@ -205,7 +205,7 @@ const ToolBar: React.FC = () => {
         ))}
 
         <div className="press-animated flex items-center justify-center">
-          <Tooltip label={t('toolBar.toggleTheme')}>
+          <Tooltip label={t('toggleTheme')}>
             <Toggle
               data-tooltip-target="tooltip"
               enabled={theme === variants.DARK}

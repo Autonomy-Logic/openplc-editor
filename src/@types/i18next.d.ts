@@ -1,12 +1,8 @@
-import 'i18next';
-
-import enUS from '../i18n/locales/en-US/translation.json';
+import { defaultNS, resources } from 'shared/i18n';
 
 declare module 'i18next' {
   interface CustomTypeOptions {
-    defaultNS: 'en-US';
-    resources: {
-      'en-US': typeof enUS;
-    };
+    defaultNS: typeof defaultNS;
+    resources: (typeof resources)['en'];
   }
 }

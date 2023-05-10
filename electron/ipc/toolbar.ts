@@ -1,6 +1,6 @@
+import { CONSTANTS } from '@shared/constants';
 import { ipcMain } from 'electron';
 
-import { CONSTANTS } from '../../src/shared';
 import { store } from '../store';
 
 const { channels } = CONSTANTS;

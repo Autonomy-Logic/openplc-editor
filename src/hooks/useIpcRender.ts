@@ -1,9 +1,8 @@
+import { CONSTANTS } from '@shared/constants';
 import { ipcRenderer } from 'electron';
 import { useEffect, useState } from 'react';
 
-import constants from '@/shared/constants';
-
-const { channels } = constants;
+const { channels } = CONSTANTS;
 
 type Channels = (typeof channels)[keyof typeof channels];
 

@@ -8,7 +8,7 @@ import { ComboBox, Tabs, Tooltip } from '@/components';
 import { ComboBoxOption } from '@/components/ComboBox';
 
 const LeftColumn: React.FC = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('leftColumnTabs');
 
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState({} as ComboBoxOption);
@@ -16,7 +16,7 @@ const LeftColumn: React.FC = () => {
   const leftColumnTabs = [
     {
       id: 0,
-      name: t('leftColumnTabs.project'),
+      name: t('project'),
       onClick: () => setCurrent(0),
       current: current === 0,
     },
@@ -48,7 +48,7 @@ const LeftColumn: React.FC = () => {
       </ResizableBox>
       <div>
         <div className="flex items-center justify-center gap-2 p-2 border-b border-gray-200 dark:border-gray-700">
-          <Tooltip label={t('leftColumnTabs.parentInstance')}>
+          <Tooltip label={t('parentInstance')}>
             <button
               type="button"
               className="press-animated flex flex-col items-center justify-center mt-2"
@@ -58,7 +58,7 @@ const LeftColumn: React.FC = () => {
             </button>
           </Tooltip>
           <ComboBox selected={selected} setSelected={setSelected} options={options} />
-          <Tooltip label={t('leftColumnTabs.debugInstance')}>
+          <Tooltip label={t('debugInstance')}>
             <button className="press-animated ml-2" type="button">
               <svg
                 height="24px"

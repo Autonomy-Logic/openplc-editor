@@ -1,6 +1,8 @@
 import React from 'react';
 import { ResizableBox } from 'react-resizable';
 
+import { useFullScreen } from '@/hooks';
+
 export type LayoutProps = {
   topRow: React.ReactNode;
   rightColumn: React.ReactNode;
@@ -16,10 +18,13 @@ const Layout: React.FC<LayoutProps> = ({
   leftColumn,
   mainContent,
 }) => {
+  const { isFullScreen } = useFullScreen();
   const initialSize = 300;
 
   return (
-    <div className="layout-grid">
+    <div
+      className={`layout-grid ${isFullScreen ? 'h-screen' : 'h-[calc(100vh_-_30px)]'}`}
+    >
       <header className="flex items-center top-row border-b border-gray-200 h-14 dark:border-gray-700">
         {topRow}
       </header>

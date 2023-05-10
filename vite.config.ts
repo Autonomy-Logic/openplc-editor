@@ -1,5 +1,5 @@
 import { rmSync } from 'node:fs';
-import path from 'node:path';
+import path, { resolve } from 'node:path';
 
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
@@ -16,12 +16,16 @@ export default defineConfig(({ command }) => {
   const isBuild = command === 'build';
   const sourcemap = isServe || !!process.env.VSCODE_DEBUG;
 
-  return {
-    resolve: {
-      alias: {
-        '@': path.join(__dirname, 'src'),
-      },
+  const resolve = {
+    alias: {
+      '@': path.join(__dirname, 'src'),
+      '@shared': path.join(__dirname, 'shared'),
+      '@electron': path.join(__dirname, 'electron'),
     },
+  };
+
+  return {
+    resolve,
     plugins: [
       react(),
       electron([
@@ -36,6 +40,7 @@ export default defineConfig(({ command }) => {
             }
           },
           vite: {
+            resolve,
             build: {
               sourcemap,
               minify: isBuild,

@@ -1,7 +1,7 @@
 import '@/styles/tailwind.css';
 import '@/styles/react-resizable.css';
 import '@/styles/titlebar.css';
-import '@/i18n';
+import '@shared/i18n';
 import '@/utils/string.extension';
 
 import React from 'react';

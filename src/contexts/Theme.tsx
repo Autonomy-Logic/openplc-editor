@@ -1,3 +1,4 @@
+import { CONSTANTS } from '@shared/constants';
 import React, {
   createContext,
   PropsWithChildren,
@@ -7,7 +8,6 @@ import React, {
 } from 'react';
 
 import { useIpcRender } from '@/hooks';
-import { CONSTANTS } from '@/shared';
 
 const {
   theme: { variants },
