@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 
+import { appConfig } from '@shared/app.config';
 import { attachTitlebarToWindow } from 'custom-electron-titlebar/main';
 import { BrowserWindow, shell } from 'electron';
-import { appConfig } from '@shared/app.config';
 
 import { setupWindowListeners } from '../listeners';
 import { store } from '../store';
