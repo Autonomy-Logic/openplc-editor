@@ -1,0 +1,74 @@
+{
+  "name": "openplceditor",
+  "displayName": "Open PLC Editor",
+  "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
+  "version": "0.0.1",
+  "main": "dist-electron/main/index.js",
+  "author": {
+    "name": "Autonomy Logic"
+  },
+  "license": "MIT",
+  "debug": {
+    "env": {
+      "VITE_DEV_SERVER_URL": "http://127.0.0.1:5173/"
+    }
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && electron-builder",
+    "preview": "vite preview",
+    "pree2e": "vite build --mode=test",
+    "e2e": "playwright test",
+    "lint:fix": "eslint ./src --ext .jsx,.js,.ts,.tsx --quiet --fix --ignore-path ./.gitignore",
+    "lint:format": "prettier  --loglevel warn --write \"./**/*.{js,jsx,ts,tsx,css,md,json}\" ",
+    "lint": "npm run lint:format && npm run lint:fix ",
+    "type-check": "tsc"
+  },
+  "dependencies": {
+    "@headlessui/react": "^1.7.14",
+    "@heroicons/react": "^2.0.17",
+    "@tailwindcss/forms": "^0.5.3",
+    "custom-electron-titlebar": "^4.1.6",
+    "electron-store": "^8.1.0",
+    "electron-updater": "^5.3.0",
+    "i18next": "^22.4.14",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-draggable": "^4.4.5",
+    "react-i18next": "^12.2.0",
+    "react-resizable": "^3.0.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.32.0",
+    "@types/node": "^18.15.11",
+    "@types/react": "^18.0.28",
+    "@types/react-dom": "^18.0.11",
+    "@types/react-resizable": "^3.0.4",
+    "@typescript-eslint/eslint-plugin": "^5.59.0",
+    "@typescript-eslint/parser": "^5.59.0",
+    "@vitejs/plugin-react": "^3.1.0",
+    "autoprefixer": "^10.4.14",
+    "electron": "^23.2.0",
+    "electron-builder": "^23.6.0",
+    "eslint": "^8.38.0",
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-plugin-import": "^2.27.5",
+    "eslint-plugin-jsx-a11y": "^6.7.1",
+    "eslint-plugin-prettier": "^4.2.1",
+    "eslint-plugin-react": "^7.32.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-simple-import-sort": "^10.0.0",
+    "postcss": "^8.4.22",
+    "pre-commit": "^1.2.2",
+    "prettier": "^2.8.7",
+    "tailwindcss": "^3.3.1",
+    "typescript": "^5.0.2",
+    "vite": "^4.1.4",
+    "vite-plugin-electron": "^0.11.2",
+    "vite-plugin-electron-renderer": "^0.14.1"
+  },
+  "engines": {
+    "node": "^14.18.0 || >=16.0.0"
+  },
+  "pre-commit": "lint"
+}

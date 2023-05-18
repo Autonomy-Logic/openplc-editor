@@ -1,0 +1,15 @@
+{
+  "new": "New",
+  "open": "Open",
+  "save": "Save",
+  "saveAs": "Save as...",
+  "print": "Print",
+  "undo": "Undo",
+  "redo": "Redo",
+  "cut": "Cut",
+  "copy": "Copy",
+  "paste": "Paste",
+  "search": "Search in project",
+  "fullScreen": "Toggle full screen mode",
+  "toggleTheme": "Toggle dark or light theme"
+}

@@ -1,0 +1,3 @@
+.cet-controls-container div {
+  @apply flex items-center justify-center;
+}

@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .layout-grid {
+    @apply grid grid-cols-[0.25fr_repeat(3,1fr)_0.25fr] grid-rows-[0.25fr_repeat(3,1fr)_0.25fr] gap-x-0 gap-y-0;
+  }
+  .top-row {
+    grid-area: 1 / 1 / 2 / 6;
+  }
+  .right-column {
+    grid-area: 2 / 5 / 5 / 6;
+  }
+  .bottom-row {
+    grid-area: 5 / 2 / 6 / 6;
+  }
+  .left-column {
+    grid-area: 2 / 1 / 6 / 2;
+  }
+  .main-content {
+    grid-area: 2 / 2 / 5 / 5;
+  }
+  .tooltip {
+    @apply invisible absolute;
+  }
+  .has-tooltip:hover .tooltip {
+    @apply visible z-50;
+  }
+  .press-animated {
+    @apply no-underline cursor-pointer transition-[0.2s] duration-[all] border-[none] active:scale-[0.90] bg-transparent;
+    outline: none;
+  }
+  .drag-window {
+    -webkit-user-select: none;
+    -webkit-app-region: drag;
+  }
+  .no-drag-window {
+    -webkit-app-region: no-drag;
+  }
+}
+
+@layer base {
+  ::-webkit-scrollbar {
+    @apply w-3.5 h-3.5 bg-white;
+  }
+  ::-webkit-scrollbar-corner {
+    @apply bg-transparent;
+  }
+  :-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-open-plc-blue bg-clip-padding transition-all duration-[0.3s] rounded-[10px] border-4 border-solid border-transparent hover:border-[3px] hover:border-solid hover:border-transparent;
+  }
+  .dark ::-webkit-scrollbar {
+    @apply bg-gray-900;
+  }
+}

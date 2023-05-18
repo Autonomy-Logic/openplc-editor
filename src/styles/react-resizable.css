@@ -1,0 +1,58 @@
+.react-resizable {
+  @apply relative;
+}
+.react-resizable-handle {
+  @apply absolute w-1 h-1 transition-all duration-[0.3s] pl-0 pr-[3px] pt-0 pb-[3px];
+}
+.react-resizable-handle:active {
+  @apply bg-open-plc-blue transition-all duration-[0.3s];
+}
+.react-resizable-handle-sw {
+  @apply cursor-sw-resize rotate-90 left-0 bottom-0;
+}
+.react-resizable-handle-se {
+  @apply cursor-se-resize right-0 bottom-0;
+}
+.react-resizable-handle-nw {
+  @apply cursor-nw-resize rotate-180 left-0 top-0;
+}
+.react-resizable-handle-ne {
+  @apply cursor-ne-resize rotate-[270deg] right-0 top-0;
+}
+.react-resizable-handle-w,
+.react-resizable-handle-e {
+  @apply cursor-ew-resize -mt-2.5 top-2/4;
+}
+.react-resizable-handle-w {
+  @apply rotate-[135deg] left-0;
+}
+.react-resizable-handle-e {
+  @apply rotate-[315deg] right-0;
+}
+.react-resizable-handle-n,
+.react-resizable-handle-s {
+  @apply cursor-ns-resize -ml-2.5 left-2/4;
+}
+.react-resizable-handle-n {
+  @apply rotate-[225deg] top-0;
+}
+.react-resizable-handle-s {
+  @apply rotate-45 bottom-0;
+}
+
+/* replaces some react resizable handle classes to be resizable across border */
+
+.react-resizable-handle-e,
+.react-resizable-handle-w,
+.react-resizable-handle-n,
+.react-resizable-handle-s {
+  @apply rotate-[0];
+}
+.react-resizable-handle-e,
+.react-resizable-handle-w {
+  @apply h-full top-2.5;
+}
+.react-resizable-handle-n,
+.react-resizable-handle-s {
+  @apply w-full left-2.5;
+}
