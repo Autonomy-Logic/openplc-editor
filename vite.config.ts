@@ -1,5 +1,5 @@
 import { rmSync } from 'node:fs';
-import path, { resolve } from 'node:path';
+import { join } from 'node:path';
 
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
@@ -18,9 +18,9 @@ export default defineConfig(({ command }) => {
 
   const resolve = {
     alias: {
-      '@': path.join(__dirname, 'src'),
-      '@shared': path.join(__dirname, 'shared'),
-      '@electron': path.join(__dirname, 'electron'),
+      '@': join(__dirname, 'src'),
+      '@shared': join(__dirname, 'shared'),
+      '@electron': join(__dirname, 'electron'),
     },
   };
 

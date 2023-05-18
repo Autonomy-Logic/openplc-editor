@@ -4,11 +4,10 @@ import { appConfig } from '@shared/app.config';
 import { attachTitlebarToWindow } from 'custom-electron-titlebar/main';
 import { BrowserWindow, shell } from 'electron';
 
-import { setupWindowListeners } from '../listeners';
 import { store } from '../store';
 import { update } from './update';
 
-export const createWindow = async () => {
+export const createWindow = () => {
   const preload = join(__dirname, '../preload/index.js');
   const url = process.env.VITE_DEV_SERVER_URL;
   const indexHtml = join(process.env.DIST, 'index.html');
@@ -34,7 +33,21 @@ export const createWindow = async () => {
     },
   });
 
-  setupWindowListeners(window);
+  window.webContents.on('did-finish-load', () => {
+    window.webContents.send('main-process-message', new Date().toLocaleString());
+  });
+
+  window.on('resize', () => {
+    store.set('window.bounds', window?.getBounds());
+  });
+
+  window.on('close', () => {
+    store.set('window.bounds', window?.getBounds());
+  });
+
+  window.on('move', () => {
+    store.set('window.bounds', window?.getBounds());
+  });
 
   if (!bounds) {
     window.maximize();

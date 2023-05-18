@@ -1,7 +1,10 @@
 import { i18n } from '@shared/i18n';
 import { Menu, MenuItemConstructorOptions, shell } from 'electron';
 
-export const createMenu = async () => {
+import { CreateNewProjectController } from '../controllers';
+
+export const createMenu = () => {
+  const createNewProjectController = new CreateNewProjectController();
   const template: MenuItemConstructorOptions[] = [
     {
       label: i18n.t('menu:file.label'),
@@ -10,9 +13,7 @@ export const createMenu = async () => {
           label: i18n.t('menu:file.submenu.new'),
 
           accelerator: 'CmdOrCtrl+N',
-          click: () => {
-            console.log('Will be implemented soon');
-          },
+          click: createNewProjectController.handle,
         },
         {
           label: i18n.t('menu:file.submenu.open'),

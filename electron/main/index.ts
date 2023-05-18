@@ -30,13 +30,13 @@ if (!app.requestSingleInstanceLock()) {
 // Read more on https://www.electronjs.org/docs/latest/tutorial/security
 // process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
 
-let mainWindow: BrowserWindow | null = null;
+export let mainWindow: BrowserWindow | null = null;
 
 setupTitlebar();
 
-app.whenReady().then(async () => {
-  mainWindow = await createWindow();
-  await createMenu();
+app.whenReady().then(() => {
+  mainWindow = createWindow();
+  createMenu();
 });
 
 app.on('window-all-closed', () => {
