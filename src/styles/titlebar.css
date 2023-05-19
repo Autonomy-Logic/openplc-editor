@@ -1,3 +1,7 @@
+.cet-titlebar {
+  @apply border-b border-gray-200 dark:border-gray-700;
+}
+
 .cet-controls-container div {
   @apply flex items-center justify-center;
 }

@@ -10,7 +10,15 @@ export const schema: Schema<DefaultStore> = {
     type: 'object',
     properties: {
       position: {
-        type: 'number',
+        type: 'object',
+        properties: {
+          x: {
+            type: 'number',
+          },
+          y: {
+            type: 'number',
+          },
+        },
       },
     },
   },

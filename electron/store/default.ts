@@ -1,7 +1,10 @@
 export type DefaultStore = {
   theme: string;
   toolbar: {
-    position: number;
+    position: {
+      x: number;
+      y: number;
+    };
   };
   window: {
     bounds?: {
@@ -17,7 +20,10 @@ export const getDefaultStore = (): DefaultStore => {
   return {
     theme: 'light',
     toolbar: {
-      position: 0,
+      position: {
+        x: 0,
+        y: 0,
+      },
     },
     window: {},
   };

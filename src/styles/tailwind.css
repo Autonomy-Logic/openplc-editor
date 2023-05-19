@@ -4,22 +4,22 @@
 
 @layer utilities {
   .layout-grid {
-    @apply grid grid-cols-[0.25fr_repeat(3,1fr)_0.25fr] grid-rows-[0.25fr_repeat(3,1fr)_0.25fr] gap-x-0 gap-y-0;
-  }
-  .top-row {
-    grid-area: 1 / 1 / 2 / 6;
+    @apply grid grid-cols-[0.25fr_repeat(3,1fr)_0.25fr] grid-rows-[repeat(5,1fr)] gap-x-0 gap-y-0;
   }
   .right-column {
-    grid-area: 2 / 5 / 5 / 6;
+    grid-area: 1 / 5 / 5 / 6;
   }
   .bottom-row {
     grid-area: 5 / 2 / 6 / 6;
   }
   .left-column {
-    grid-area: 2 / 1 / 6 / 2;
+    grid-area: 1 / 1 / 6 / 2;
   }
   .main-content {
-    grid-area: 2 / 2 / 5 / 5;
+    grid-area: 1 / 2 / 5 / 5;
+  }
+  .hide-top-row {
+    @apply w-0 h-0;
   }
   .tooltip {
     @apply invisible absolute;

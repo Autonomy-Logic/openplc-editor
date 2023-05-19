@@ -25,7 +25,7 @@ const TitlebarProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const { theme } = useTheme();
 
   const updateBackground = useCallback(
-    (color: string) => titlebar?.updateBackground(Color.fromHex(color)),
+    (color: string) => titlebar?.updateBackground(Color?.fromHex(color)),
     [titlebar],
   );
 

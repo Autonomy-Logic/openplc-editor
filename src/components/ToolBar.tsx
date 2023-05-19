@@ -1,3 +1,4 @@
+import { XCircleIcon } from '@heroicons/react/20/solid';
 import {
   ArrowDownOnSquareStackIcon,
   ArrowDownTrayIcon,
@@ -22,9 +23,12 @@ import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { useTranslation } from 'react-i18next';
 
 import { useFullScreen, useIpcRender, useTheme, useWindowSize } from '@/hooks';
+import { classNames } from '@/utils';
 
 import Toggle from './Toggle';
 import Tooltip from './Tooltip';
+
+export type PositionProps = { x: number; y: number };
 
 const {
   theme: { variants },
@@ -33,17 +37,20 @@ const {
 
 const ToolBar: React.FC = () => {
   const { t } = useTranslation('toolbar');
-  const [position, setPosition] = useState<number>(0);
+  const [position, setPosition] = useState<PositionProps>({ x: 0, y: 0 });
   const { requestFullscreen, exitFullScreen, isFullScreen } = useFullScreen();
-  const { width } = useWindowSize();
+  const { width, height } = useWindowSize();
   const {
     send,
     data: storedPosition,
     receivedFirstResponse,
-  } = useIpcRender<number>({
+  } = useIpcRender<PositionProps>({
     get: channels.GET_TOOLBAR_POSITION,
     set: channels.SET_TOOLBAR_POSITION,
   });
+
+  const onClick = () => console.log('will be created soon');
+
   const tools = [
     {
       id: 0,
@@ -52,42 +59,42 @@ const ToolBar: React.FC = () => {
     },
     {
       id: 1,
-      onClick: () => console.log('will be created soon'),
+      onClick,
       icon: DocumentPlusIcon,
       className: '',
       tooltip: t('new'),
     },
     {
       id: 2,
-      onClick: () => console.log('will be created soon'),
+      onClick,
       icon: FolderOpenIcon,
       className: '',
       tooltip: t('open'),
     },
     {
       id: 3,
-      onClick: () => console.log('will be created soon'),
+      onClick,
       icon: ArrowDownTrayIcon,
       className: '',
       tooltip: t('save'),
     },
     {
       id: 4,
-      onClick: () => console.log('will be created soon'),
+      onClick,
       icon: ArrowDownOnSquareStackIcon,
       className: '',
       tooltip: t('saveAs'),
     },
     {
       id: 5,
-      onClick: () => console.log('will be created soon'),
+      onClick,
       icon: PrinterIcon,
       className: '',
       tooltip: t('print'),
     },
     {
       id: 6,
-      onClick: () => console.log('will be created soon'),
+      onClick,
       icon: ArrowUturnLeftIcon,
       className: '',
       tooltip: t('undo'),
@@ -95,7 +102,7 @@ const ToolBar: React.FC = () => {
     },
     {
       id: 7,
-      onClick: () => console.log('will be created soon'),
+      onClick,
       icon: ArrowUturnRightIcon,
       className: '',
       tooltip: t('redo'),
@@ -104,28 +111,28 @@ const ToolBar: React.FC = () => {
 
     {
       id: 8,
-      onClick: () => console.log('will be created soon'),
+      onClick,
       icon: ScissorsIcon,
       className: '',
       tooltip: t('cut'),
     },
     {
       id: 9,
-      onClick: () => console.log('will be created soon'),
+      onClick,
       icon: DocumentDuplicateIcon,
       className: '',
       tooltip: t('copy'),
     },
     {
       id: 10,
-      onClick: () => console.log('will be created soon'),
+      onClick,
       icon: ClipboardDocumentIcon,
       className: '',
       tooltip: t('paste'),
     },
     {
       id: 11,
-      onClick: () => console.log('will be created soon'),
+      onClick,
       icon: DocumentMagnifyingGlassIcon,
       className: '',
       tooltip: t('search'),
@@ -139,28 +146,59 @@ const ToolBar: React.FC = () => {
     },
   ];
 
+  const isFloatingOnScreen = position.y > 0;
+
   const { theme, toggleTheme } = useTheme();
 
   const onDrag = (_e: DraggableEvent, data: DraggableData) => {
-    setPosition(data.x);
+    setPosition({
+      x: data.x,
+      y: data.y,
+    });
   };
 
   const onStop = (_e: DraggableEvent, data: DraggableData) => {
-    send(data.x);
+    send({
+      x: data.x,
+      y: data.y,
+    });
   };
+
+  const handleCancelFloating = () => setPosition({ x: 0, y: 0 });
 
   useEffect(() => {
     if (receivedFirstResponse && storedPosition)
-      setPosition((state) =>
-        state === 0
-          ? storedPosition > width
-            ? storedPosition - width
-            : storedPosition
-          : state > width
-          ? state - width
-          : state,
-      );
-  }, [storedPosition, receivedFirstResponse, width]);
+      setPosition((state) => ({
+        ...state,
+        x:
+          state.x === 0
+            ? storedPosition.x > width
+              ? storedPosition.x - width
+              : storedPosition.x
+            : state.x > width
+            ? state.x - width
+            : state.x,
+        y:
+          state.y === 0
+            ? storedPosition.y > height
+              ? storedPosition.y - height
+              : storedPosition.y
+            : state.y > height
+            ? state.y - height
+            : state.y,
+      }));
+  }, [storedPosition, receivedFirstResponse, width, height]);
+
+  useEffect(() => {
+    setPosition((state) => (state.y === 0 ? { ...state, y: 0 } : state));
+  }, [width, height]);
+
+  useEffect(() => {
+    const topRow = document.getElementById('top-row');
+    if ((isFloatingOnScreen && position.y <= 28) || position.y === 0)
+      topRow?.classList.remove('hide-top-row');
+    else if (isFloatingOnScreen) topRow?.classList.add('hide-top-row');
+  }, [isFloatingOnScreen, position.y]);
 
   const Divider = () => {
     return <div className="h-full w-[2px] bg-gray-400 rounded dark:bg-gray-600" />;
@@ -170,21 +208,21 @@ const ToolBar: React.FC = () => {
 
   return (
     <Draggable
-      axis="x"
+      axis="both"
       handle=".handle"
-      bounds="parent"
+      bounds="body"
       onStop={onStop}
       onDrag={onDrag}
-      position={{
-        x: position,
-        y: 0,
-      }}
-      defaultPosition={{
-        x: position,
-        y: 0,
-      }}
+      position={position}
+      defaultPosition={position}
+      grid={[1, isFloatingOnScreen ? 1 : 250]}
     >
-      <div className="flex h-full gap-3 p-2">
+      <div
+        className={classNames(
+          'flex gap-3 p-2 bg-white dark:bg-gray-900 z-50',
+          isFloatingOnScreen ? 'shadow h-14' : 'h-full',
+        )}
+      >
         {tools.map(({ id, onClick, icon: Icon, className, tooltip, divider }) => (
           <Fragment key={id}>
             {divider === 'before' && <Divider />}
@@ -217,6 +255,23 @@ const ToolBar: React.FC = () => {
             />
           </Tooltip>
         </div>
+        {isFloatingOnScreen && (
+          <div className="flex justify-center items-center handle cursor-move absolute bg-gray-400 h-5 -top-5 left-0 w-full dark:bg-gray-800">
+            <span className="flex-1 text-center text-sm font-semibold text-gray-800 dark:text-gray-500">
+              Menu toolbar
+            </span>
+            <Tooltip label={t('close')}>
+              <button
+                className="press-animated"
+                data-tooltip-target="tooltip"
+                type="button"
+                onClick={handleCancelFloating}
+              >
+                <XCircleIcon className="h-4 w-4 text-gray-800 mr-1 dark:text-gray-500" />
+              </button>
+            </Tooltip>
+          </div>
+        )}
       </div>
     </Draggable>
   );
