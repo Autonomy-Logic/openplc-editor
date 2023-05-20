@@ -13,15 +13,13 @@ export type IpcRenderChannelProps = {
 export type IpcRenderProps<T> = {
   send: (data: T) => void;
   data?: T;
-  receivedFirstResponse: boolean;
 };
 
 const useIpcRender = <T>(
   channel: IpcRenderChannelProps,
   initialData?: T,
 ): IpcRenderProps<T> => {
-  const [data, setData] = useState<T>();
-  const [receivedFirstResponse, setReceivedFirstResponse] = useState(false);
+  const [data, setData] = useState<T>(initialData as T);
 
   useEffect(() => {
     channel.get && ipcRenderer.send(channel.get, initialData);
@@ -31,7 +29,6 @@ const useIpcRender = <T>(
     channel.get &&
       ipcRenderer.on(channel.get, (_event, arg) => {
         setData(arg);
-        setReceivedFirstResponse((state) => (state ? state : true));
       });
     return () => {
       channel.get && ipcRenderer.removeAllListeners(channel.get);
@@ -43,7 +40,6 @@ const useIpcRender = <T>(
   return {
     send,
     data,
-    receivedFirstResponse,
   };
 };
 

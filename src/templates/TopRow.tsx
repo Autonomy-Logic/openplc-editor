@@ -1,9 +1,9 @@
 import React from 'react';
 
-import { ToolBar } from '@/components';
+import { Toolbar } from '@/components';
 
 const TopRow: React.FC = () => {
-  return <ToolBar />;
+  return <Toolbar />;
 };
 
 export default TopRow;

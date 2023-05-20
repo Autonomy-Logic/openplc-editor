@@ -25,12 +25,14 @@ const Layout: React.FC<LayoutProps> = ({
     <>
       <header
         id="top-row"
-        className="flex items-center border-b border-gray-200 h-14 dark:border-gray-700 z-50"
+        className="flex items-center border-b border-gray-200 h-14 dark:border-gray-700 z-40"
       >
         {topRow}
       </header>
       <div
-        className={`layout-grid ${isFullScreen ? 'h-screen' : 'h-[calc(100vh_-_30px)]'}`}
+        className={`layout-grid ${
+          isFullScreen ? 'h-screen' : 'h-[calc(100vh_-_1.875rem)]'
+        }`}
       >
         <ResizableBox
           width={initialSize}

@@ -24,10 +24,13 @@ export type ThemeContextData = {
 export const ThemeContext = createContext<ThemeContextData>({} as ThemeContextData);
 
 const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
-  const { send, data, receivedFirstResponse } = useIpcRender<string>({
-    get: channels.GET_THEME,
-    set: channels.SET_THEME,
-  });
+  const { send, data: storedTheme } = useIpcRender<string>(
+    {
+      get: channels.GET_THEME,
+      set: channels.SET_THEME,
+    },
+    '',
+  );
 
   const [theme, setTheme] = useState<ThemeState>();
 
@@ -56,10 +59,10 @@ const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
   }, [addDarkClass, removeDarkClass, send]);
 
   useEffect(() => {
-    if (receivedFirstResponse) {
+    if (storedTheme !== '') {
       setTheme(() => {
-        if (data) {
-          if (data === variants.DARK) {
+        if (storedTheme) {
+          if (storedTheme === variants.DARK) {
             addDarkClass();
             return variants.DARK;
           } else {
@@ -77,7 +80,7 @@ const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
         }
       });
     }
-  }, [addDarkClass, data, receivedFirstResponse, removeDarkClass]);
+  }, [addDarkClass, storedTheme, removeDarkClass]);
 
   return (
     <ThemeContext.Provider

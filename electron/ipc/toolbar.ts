@@ -5,7 +5,7 @@ import { store } from '../store';
 
 const { channels } = CONSTANTS;
 
-export const ipcToolBar = () => {
+export const toolbarIpc = () => {
   ipcMain.on(channels.GET_TOOLBAR_POSITION, (event) => {
     const position = store.get('toolbar.position');
     event.sender.send(channels.GET_TOOLBAR_POSITION, position);

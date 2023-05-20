@@ -2,21 +2,20 @@ import { promises, writeFile } from 'node:fs';
 import { join } from 'node:path';
 
 import { i18n } from '@shared/i18n';
-import { dialog } from 'electron';
+import { BrowserWindow, dialog } from 'electron';
 import { create } from 'xmlbuilder2';
 
 import { mainWindow } from '../main';
+import { ServiceError } from './error';
 
-export default class CreateNewProjectService {
-  async execute() {
-    if (!mainWindow) return { ok: false, reason: 'Main window is null' };
-
-    const response = await dialog.showOpenDialog(mainWindow, {
-      title: i18n.t('dialog:createNewProject.title'),
+const createNewProjectService = {
+  async execute(): Promise<ServiceError> {
+    const response = await dialog.showOpenDialog(mainWindow as BrowserWindow, {
+      title: i18n.t('createNewProject:dialog.title'),
       properties: ['openDirectory'],
     });
 
-    if (response.canceled) return { ok: false, reason: 'Canceled operation' };
+    if (response.canceled) return { ok: false };
 
     const [filePath] = response.filePaths;
 
@@ -31,7 +30,15 @@ export default class CreateNewProjectService {
       }
     };
 
-    if (!(await isEmptyDir())) return { ok: false, reason: 'Directory is not empty' };
+    if (!(await isEmptyDir())) {
+      return {
+        ok: false,
+        reason: {
+          title: i18n.t('createNewProject:errors.directoryNotEmpty.title'),
+          description: i18n.t('createNewProject:errors.directoryNotEmpty.description'),
+        },
+      };
+    }
 
     const padTo2Digits = (num: number) => num.toString().padStart(2, '0');
 
@@ -114,8 +121,17 @@ export default class CreateNewProjectService {
       if (error) failedToCreateFile = false;
     });
 
-    if (failedToCreateFile) return { ok: false, reason: 'Failed to create file' };
+    if (failedToCreateFile)
+      return {
+        ok: false,
+        reason: {
+          title: i18n.t('createNewProject:errors.failedToCreateFile.title'),
+          description: i18n.t('createNewProject:errors.failedToCreateFile.description'),
+        },
+      };
 
-    return { ok: true, value: null };
-  }
-}
+    return { ok: true };
+  },
+};
+
+export default createNewProjectService;

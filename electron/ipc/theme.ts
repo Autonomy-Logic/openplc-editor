@@ -5,7 +5,7 @@ import { store } from '../store';
 
 const { channels } = CONSTANTS;
 
-export const ipcTheme = () => {
+export const themeIpc = () => {
   ipcMain.on(channels.GET_THEME, (event) => {
     const theme = store.get('theme');
     event.sender.send(channels.GET_THEME, theme);

@@ -1,17 +1,13 @@
-import { ipcTheme } from './theme';
-import { ipcToolBar } from './toolbar';
+import { createNewPouWindowIpc as createNewPouWindow } from './createNewPouWindow';
+import { themeIpc } from './theme';
+import { toastIpc as toast } from './toast';
+import { toolbarIpc } from './toolbar';
 
-const setup = () => {
-  ipcTheme();
-  ipcToolBar();
-};
-
-const ipcs = {
-  ipcTheme,
-  ipcToolBar,
-};
-
-export const Ipc = {
-  setup,
-  ipcs,
+export const ipc = {
+  setupListeners() {
+    themeIpc();
+    toolbarIpc();
+  },
+  toast,
+  createNewPouWindow,
 };

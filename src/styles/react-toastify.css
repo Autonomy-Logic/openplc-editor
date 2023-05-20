@@ -1,0 +1,24 @@
+@import 'react-toastify/dist/ReactToastify.css';
+
+.Toastify__toast,
+.Toastify__toast-body {
+  @apply p-0 bg-transparent;
+}
+.Toastify__toast-container--top-right {
+  @apply right-[1em] top-[2em];
+}
+.Toastify__toast-icon {
+  @apply hidden;
+}
+.Toastify__progress-bar--success {
+  @apply bg-green-400;
+}
+.To .Toastify__progress-bar--error {
+  @apply bg-red-400;
+}
+.Toastify__progress-bar--warning {
+  @apply bg-yellow-400;
+}
+.Toastify__progress-bar--info {
+  @apply bg-blue-400;
+}

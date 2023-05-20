@@ -1,12 +1,24 @@
 import { i18n } from '@shared/i18n';
-import { Menu, MenuItemConstructorOptions, shell } from 'electron';
+import { Menu, MenuItemConstructorOptions } from 'electron';
 
-import { CreateNewProjectController } from '../controllers';
+import { createNewProjectController } from '../controllers';
+import { ipc } from '../ipc';
 
 export const createMenu = () => {
-  const createNewProjectController = new CreateNewProjectController();
-
+  const { toast, createNewPouWindow } = ipc;
   const click = () => console.log('Will be implemented soon');
+
+  const handleCreateNewProject = async () => {
+    const { ok, reason } = await createNewProjectController.handle();
+    if (!ok && reason) {
+      toast.send({
+        type: 'error',
+        ...reason,
+      });
+    } else {
+      createNewPouWindow.send(true);
+    }
+  };
 
   const template: MenuItemConstructorOptions[] = [
     {
@@ -15,7 +27,7 @@ export const createMenu = () => {
         {
           label: i18n.t('menu:file.submenu.new'),
           accelerator: 'CmdOrCtrl+N',
-          click: createNewProjectController.handle,
+          click: handleCreateNewProject,
         },
         {
           label: i18n.t('menu:file.submenu.open'),

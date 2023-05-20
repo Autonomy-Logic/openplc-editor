@@ -1,8 +1,5 @@
-import '@/styles/tailwind.css';
-import '@/styles/react-resizable.css';
-import '@/styles/titlebar.css';
+import '@/styles/index.css';
 import '@shared/i18n';
-import '@/utils/string.extension';
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';

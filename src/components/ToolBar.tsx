@@ -35,16 +35,12 @@ const {
   channels,
 } = CONSTANTS;
 
-const ToolBar: React.FC = () => {
+const Toolbar: React.FC = () => {
   const { t } = useTranslation('toolbar');
-  const [position, setPosition] = useState<PositionProps>({ x: 0, y: 0 });
+  const [position, setPosition] = useState<PositionProps | null>(null);
   const { requestFullscreen, exitFullScreen, isFullScreen } = useFullScreen();
   const { width, height } = useWindowSize();
-  const {
-    send,
-    data: storedPosition,
-    receivedFirstResponse,
-  } = useIpcRender<PositionProps>({
+  const { send, data: storedPosition } = useIpcRender<PositionProps>({
     get: channels.GET_TOOLBAR_POSITION,
     set: channels.SET_TOOLBAR_POSITION,
   });
@@ -146,7 +142,7 @@ const ToolBar: React.FC = () => {
     },
   ];
 
-  const isFloatingOnScreen = position.y > 0;
+  const isFloatingOnScreen = position && position.y > 0;
 
   const { theme, toggleTheme } = useTheme();
 
@@ -167,44 +163,42 @@ const ToolBar: React.FC = () => {
   const handleCancelFloating = () => setPosition({ x: 0, y: 0 });
 
   useEffect(() => {
-    if (receivedFirstResponse && storedPosition)
+    if (storedPosition)
       setPosition((state) => ({
-        ...state,
-        x:
-          state.x === 0
-            ? storedPosition.x > width
-              ? storedPosition.x - width
-              : storedPosition.x
-            : state.x > width
-            ? state.x - width
-            : state.x,
-        y:
-          state.y === 0
-            ? storedPosition.y > height
-              ? storedPosition.y - height
-              : storedPosition.y
-            : state.y > height
-            ? state.y - height
-            : state.y,
+        x: !state
+          ? storedPosition.x > width
+            ? storedPosition.x - width
+            : storedPosition.x
+          : state.x > width
+          ? state.x - width
+          : state.x,
+        y: !state
+          ? storedPosition.y > height
+            ? storedPosition.y - height
+            : storedPosition.y
+          : state.y > height
+          ? state.y - height
+          : state.y,
       }));
-  }, [storedPosition, receivedFirstResponse, width, height]);
+  }, [storedPosition, width, height]);
 
   useEffect(() => {
-    setPosition((state) => (state.y === 0 ? { ...state, y: 0 } : state));
+    setPosition((state) => state && (state.y === 0 ? { ...state, y: 0 } : state));
   }, [width, height]);
 
   useEffect(() => {
     const topRow = document.getElementById('top-row');
-    if ((isFloatingOnScreen && position.y <= 28) || position.y === 0)
+    if ((isFloatingOnScreen && position.y <= 28) || position?.y === 0) {
       topRow?.classList.remove('hide-top-row');
-    else if (isFloatingOnScreen) topRow?.classList.add('hide-top-row');
-  }, [isFloatingOnScreen, position.y]);
+      setPosition((state) => state && { ...state, y: 0 });
+    } else if (isFloatingOnScreen) topRow?.classList.add('hide-top-row');
+  }, [isFloatingOnScreen, position?.y]);
 
   const Divider = () => {
-    return <div className="h-full w-[2px] bg-gray-400 rounded dark:bg-gray-600" />;
+    return <div className="h-full w-[0.125rem] bg-gray-400 rounded dark:bg-gray-600" />;
   };
 
-  if (!receivedFirstResponse || !theme) return <></>;
+  if (!position || !theme) return <>loading</>;
 
   return (
     <Draggable
@@ -219,7 +213,7 @@ const ToolBar: React.FC = () => {
     >
       <div
         className={classNames(
-          'flex gap-3 p-2 bg-white dark:bg-gray-900 z-50',
+          'flex gap-3 p-2 bg-white dark:bg-gray-900 z-40',
           isFloatingOnScreen ? 'shadow h-14' : 'h-full',
         )}
       >
@@ -277,4 +271,4 @@ const ToolBar: React.FC = () => {
   );
 };
 
-export default ToolBar;
+export default Toolbar;

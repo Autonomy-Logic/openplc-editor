@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { setupTitlebar } from 'custom-electron-titlebar/main';
 import { app, BrowserWindow } from 'electron';
 
-import { Ipc } from '../ipc';
+import { ipc } from '../ipc';
 import { createMenu } from './createMenu';
 import { createWindow } from './createWindow';
 
@@ -61,4 +61,4 @@ app.on('activate', () => {
   }
 });
 
-Ipc.setup();
+ipc.setupListeners();

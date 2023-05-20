@@ -1,1 +1,1 @@
-export { default as CreateNewProjectController } from './createNewProjectController';
+export { default as createNewProjectController } from './createNewProjectController';

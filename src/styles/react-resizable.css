@@ -2,7 +2,7 @@
   @apply relative;
 }
 .react-resizable-handle {
-  @apply absolute w-1 h-1 transition-all duration-[0.3s] pl-0 pr-[3px] pt-0 pb-[3px];
+  @apply absolute w-1 h-1 transition-all duration-[0.3s] pl-0 pr-[0.188rem] pt-0 pb-[0.188rem];
 }
 .react-resizable-handle:active {
   @apply bg-open-plc-blue transition-all duration-[0.3s];
