@@ -23,7 +23,7 @@ const Tabs: React.FC<TabsProps> = ({ tabs }) => {
             className={classNames(
               current
                 ? 'border-open-plc-blue text-open-plc-blue'
-                : 'border-transparent text-gray-500 hover:border-gray-600 hover:text-gray-600',
+                : 'border-transparent text-gray-500 hover:border-gray-600 hover:text-gray-600 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-500',
               'whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium',
             )}
             aria-current={current ? 'page' : undefined}

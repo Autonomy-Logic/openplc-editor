@@ -12,7 +12,7 @@ const Tooltip: React.FC<PropsWithChildren<TooltipProps>> = ({ children, label })
     <div
       className={classNames('flex items-center justify-start', !!label && 'has-tooltip')}
     >
-      <span className="tooltip inline-block px-2 py-1 text-xs font-medium mt-16 whitespace-nowrap text-gray-800 transition-opacity duration-300 bg-white rounded-lg shadow dark:bg-gray-800 dark:text-gray-50">
+      <span className="tooltip inline-block px-2 py-1 text-xs font-medium mt-16 whitespace-nowrap text-gray-500 transition-opacity duration-300 bg-white rounded-lg shadow dark:bg-gray-900 dark:text-gray-400">
         {label}
       </span>
       {children}

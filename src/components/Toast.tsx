@@ -5,10 +5,12 @@ import {
   InformationCircleIcon,
   XCircleIcon,
 } from '@heroicons/react/24/solid';
-import { ToastMessageProps } from '@shared/types/message';
+import { ToastProps as SharedToastProps } from '@shared/types/toast';
 import React from 'react';
 
-export type ToastProps = ToastMessageProps & {
+import { classNames } from '@/utils';
+
+export type ToastProps = SharedToastProps & {
   closeToast?: () => void;
 };
 
@@ -20,16 +22,44 @@ const Toast: React.FC<ToastProps> = ({ type, title, description, closeToast }) =
     info: <InformationCircleIcon className="h-6 w-6 text-blue-400" />,
   };
   return (
-    <div className="w-full flex items-start p-4 rounded bg-gray-50 dark:bg-gray-800">
+    <div
+      className={classNames(
+        'w-full flex items-start p-4 rounded shadow',
+        type === 'error' && 'bg-red-50',
+        type === 'success' && 'bg-green-50',
+        type === 'warning' && 'bg-yellow-50',
+        type === 'info' && 'bg-blue-50',
+      )}
+    >
       <div className="flex-shrink-0">{icons[type]}</div>
       <div className="ml-3 w-0 flex-1 pt-0.5">
-        <p className="text-sm font-medium text-gray-900 dark:text-gray-400">{title}</p>
-        <p className="mt-1 text-sm text-gray-500">{description}</p>
+        <h3
+          className={classNames(
+            'text-sm font-semibold',
+            type === 'error' && 'text-red-800',
+            type === 'success' && 'text-green-800',
+            type === 'warning' && 'text-yellow-800',
+            type === 'info' && 'text-blue-800',
+          )}
+        >
+          {title}
+        </h3>
+        <p
+          className={classNames(
+            'mt-1 text-sm',
+            type === 'error' && 'text-red-700',
+            type === 'success' && 'text-green-700',
+            type === 'warning' && 'text-yellow-700',
+            type === 'info' && 'text-blue-700',
+          )}
+        >
+          {description}
+        </p>
       </div>
       <div className="ml-4 flex flex-shrink-0">
         <button
           type="button"
-          className="press-animated inline-flex rounded-md bg-white text-gray-400 hover:text-gray-500"
+          className="press-animated inline-flex rounded-md text-gray-400 hover:text-gray-500"
           onClick={closeToast}
         >
           <span className="sr-only">Close</span>

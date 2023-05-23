@@ -14,6 +14,7 @@ export type TitlebarProps = InstanceType<typeof Titlebar>;
 
 export type TitlebarContextData = {
   updateBackground: (color: string) => TitlebarProps | undefined;
+  dispose: () => void;
 };
 
 export const TitlebarContext = createContext<TitlebarContextData>(
@@ -28,6 +29,8 @@ const TitlebarProvider: React.FC<PropsWithChildren> = ({ children }) => {
     (color: string) => titlebar?.updateBackground(Color?.fromHex(color)),
     [titlebar],
   );
+
+  const dispose = useCallback(() => titlebar?.dispose(), [titlebar]);
 
   useEffect(() => {
     setTitlebar((state) =>
@@ -44,7 +47,7 @@ const TitlebarProvider: React.FC<PropsWithChildren> = ({ children }) => {
   }, [theme, titlebar, updateBackground]);
 
   return (
-    <TitlebarContext.Provider value={{ updateBackground }}>
+    <TitlebarContext.Provider value={{ updateBackground, dispose }}>
       {children}
     </TitlebarContext.Provider>
   );

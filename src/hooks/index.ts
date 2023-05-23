@@ -1,5 +1,6 @@
 export { default as useFullScreen } from './useFullScreen';
 export { default as useIpcRender } from './useIpcRender';
 export { default as useTheme } from './useTheme';
+export { default as useTitlebar } from './useTitlebar';
 export { default as useToast } from './useToast';
 export { default as useWindowSize } from './useWindowSize';

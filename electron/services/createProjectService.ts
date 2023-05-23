@@ -6,12 +6,12 @@ import { BrowserWindow, dialog } from 'electron';
 import { create } from 'xmlbuilder2';
 
 import { mainWindow } from '../main';
-import { ServiceError } from './error';
+import { ServiceError } from './types/error';
 
-const createNewProjectService = {
+const createProjectService = {
   async execute(): Promise<ServiceError> {
     const response = await dialog.showOpenDialog(mainWindow as BrowserWindow, {
-      title: i18n.t('createNewProject:dialog.title'),
+      title: i18n.t('createProject:dialog.title'),
       properties: ['openDirectory'],
     });
 
@@ -34,8 +34,8 @@ const createNewProjectService = {
       return {
         ok: false,
         reason: {
-          title: i18n.t('createNewProject:errors.directoryNotEmpty.title'),
-          description: i18n.t('createNewProject:errors.directoryNotEmpty.description'),
+          title: i18n.t('createProject:errors.directoryNotEmpty.title'),
+          description: i18n.t('createProject:errors.directoryNotEmpty.description'),
         },
       };
     }
@@ -125,8 +125,8 @@ const createNewProjectService = {
       return {
         ok: false,
         reason: {
-          title: i18n.t('createNewProject:errors.failedToCreateFile.title'),
-          description: i18n.t('createNewProject:errors.failedToCreateFile.description'),
+          title: i18n.t('createProject:errors.failedToCreateFile.title'),
+          description: i18n.t('createProject:errors.failedToCreateFile.description'),
         },
       };
 
@@ -134,4 +134,4 @@ const createNewProjectService = {
   },
 };
 
-export default createNewProjectService;
+export default createProjectService;

@@ -6,11 +6,19 @@ export const CONSTANTS = {
     },
   },
   channels: {
-    GET_THEME: 'get_theme',
-    SET_THEME: 'set_theme',
-    GET_TOOLBAR_POSITION: 'get_toolbar_position',
-    SET_TOOLBAR_POSITION: 'set_toolbar_position',
-    SET_TOAST: 'set_toast',
-    SET_CREATE_NEW_POU_WINDOW: 'SET_CREATE_NEW_POU_WINDOW',
+    get: {
+      THEME: 'get_theme',
+      TOOLBAR_POSITION: 'get_toolbar_position',
+    },
+    set: {
+      THEME: 'set_theme',
+      TOOLBAR_POSITION: 'set_toolbar_position',
+      TOAST: 'set_toast',
+      CREATE_POU_WINDOW: 'set_CREATE_POU_window',
+      NEW_WINDOW: 'set_new_window',
+    },
+  },
+  paths: {
+    CREATE_POU: 'create-pou',
   },
 };

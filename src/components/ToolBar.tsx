@@ -18,6 +18,7 @@ import {
   SunIcon,
 } from '@heroicons/react/24/solid';
 import { CONSTANTS } from '@shared/constants';
+import { ToolbarPositionProps } from '@shared/types/toolbar';
 import React, { Fragment, useEffect, useState } from 'react';
 import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { useTranslation } from 'react-i18next';
@@ -28,21 +29,19 @@ import { classNames } from '@/utils';
 import Toggle from './Toggle';
 import Tooltip from './Tooltip';
 
-export type PositionProps = { x: number; y: number };
-
 const {
   theme: { variants },
-  channels,
+  channels: { get, set },
 } = CONSTANTS;
 
 const Toolbar: React.FC = () => {
   const { t } = useTranslation('toolbar');
-  const [position, setPosition] = useState<PositionProps | null>(null);
+  const [position, setPosition] = useState<ToolbarPositionProps | null>(null);
   const { requestFullscreen, exitFullScreen, isFullScreen } = useFullScreen();
   const { width, height } = useWindowSize();
-  const { send, data: storedPosition } = useIpcRender<PositionProps>({
-    get: channels.GET_TOOLBAR_POSITION,
-    set: channels.SET_TOOLBAR_POSITION,
+  const { send, data: storedPosition } = useIpcRender<ToolbarPositionProps>({
+    get: get.TOOLBAR_POSITION,
+    set: set.TOOLBAR_POSITION,
   });
 
   const onClick = () => console.log('will be created soon');
@@ -195,7 +194,9 @@ const Toolbar: React.FC = () => {
   }, [isFloatingOnScreen, position?.y]);
 
   const Divider = () => {
-    return <div className="h-full w-[0.125rem] bg-gray-400 rounded dark:bg-gray-600" />;
+    return (
+      <div className="h-full w-[0.125rem] bg-gray-200 rounded shadow-inner dark:bg-gray-700" />
+    );
   };
 
   if (!position || !theme) return <>loading</>;
@@ -227,9 +228,7 @@ const Toolbar: React.FC = () => {
                 type="button"
                 onClick={onClick}
               >
-                <Icon
-                  className={`h-6 w-6 text-gray-500 dark:text-gray-500 ${className}`}
-                />
+                <Icon className={`h-6 w-6 text-gray-500 ${className}`} />
               </button>
             </Tooltip>
             {divider === 'after' && <Divider />}

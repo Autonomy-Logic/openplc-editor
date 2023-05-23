@@ -1,11 +1,15 @@
 import { CONSTANTS } from '@shared/constants';
-import { ToastMessageProps } from '@shared/types/message';
+import { ToastProps, toastSchema } from '@shared/types/toast';
 
 import { mainWindow } from '../main';
 
-const { channels } = CONSTANTS;
+const {
+  channels: { set },
+} = CONSTANTS;
 
 export const toastIpc = {
-  send: (message: ToastMessageProps) =>
-    mainWindow?.webContents.send(channels.SET_TOAST, message),
+  send: (arg: ToastProps) => {
+    const message = toastSchema.parse(arg);
+    mainWindow?.webContents.send(set.TOAST, message);
+  },
 };

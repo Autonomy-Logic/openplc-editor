@@ -22,6 +22,6 @@
       "@electron/*": ["electron/*"],
     }
   },
-  "include": ["src", "electron", "shared"],
+  "include": ["src", "electron", "shared", "src/components/Form/Label/.tsx"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

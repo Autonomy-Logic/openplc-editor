@@ -1,17 +1,31 @@
 import { ArrowSmallUpIcon } from '@heroicons/react/20/solid';
 import { PlusSmallIcon } from '@heroicons/react/24/solid';
+import { zodResolver } from '@hookform/resolvers/zod';
 import React, { useState } from 'react';
+import { FormProvider, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { ResizableBox } from 'react-resizable';
+import { z } from 'zod';
 
-import { ComboBox, Tabs, Tooltip } from '@/components';
-import { ComboBoxOption } from '@/components/ComboBox';
+import { Form, Tabs, Tooltip } from '@/components';
+
+const comboboxSchema = z.object({
+  combobox: z.object({
+    id: z.union([z.number(), z.string()]),
+    label: z.string(),
+    value: z.union([z.number(), z.string()]),
+  }),
+});
+
+type CreateComboboxData = z.infer<typeof comboboxSchema>;
 
 const LeftColumn: React.FC = () => {
   const { t } = useTranslation('leftColumnTabs');
 
   const [current, setCurrent] = useState(0);
-  const [selected, setSelected] = useState({} as ComboBoxOption);
+  const createComboboxForm = useForm<CreateComboboxData>({
+    resolver: zodResolver(comboboxSchema),
+  });
 
   const leftColumnTabs = [
     {
@@ -57,7 +71,12 @@ const LeftColumn: React.FC = () => {
               <ArrowSmallUpIcon className="h-8 w-8 text-orange-400" />
             </button>
           </Tooltip>
-          <ComboBox selected={selected} setSelected={setSelected} options={options} />
+          <FormProvider {...createComboboxForm}>
+            <Form.Field>
+              <Form.ComboBox name="combobox" options={options} />
+            </Form.Field>
+          </FormProvider>
+
           <Tooltip label={t('debugInstance')}>
             <button className="press-animated ml-2" type="button">
               <svg

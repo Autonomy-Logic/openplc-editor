@@ -1,1 +1,1 @@
-export { default as createNewProjectService } from './createNewProjectService';
+export { default as createProjectService } from './createProjectService';

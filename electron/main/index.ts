@@ -29,6 +29,7 @@ if (!app.requestSingleInstanceLock()) {
 // This warning only shows in development mode
 // Read more on https://www.electronjs.org/docs/latest/tutorial/security
 // process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
+// console.log(app.getPath('userData'));
 
 export let mainWindow: BrowserWindow | null = null;
 

@@ -1,8 +1,8 @@
 import { Schema } from 'electron-store';
 
-import { DefaultStore } from './default';
+import { DefaultStoreProps } from './default';
 
-export const schema: Schema<DefaultStore> = {
+export const schema: Schema<DefaultStoreProps> = {
   theme: {
     type: 'string',
   },

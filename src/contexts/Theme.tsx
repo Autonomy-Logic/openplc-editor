@@ -1,4 +1,5 @@
 import { CONSTANTS } from '@shared/constants';
+import { ThemeProps } from '@shared/types/theme';
 import React, {
   createContext,
   PropsWithChildren,
@@ -11,7 +12,7 @@ import { useIpcRender } from '@/hooks';
 
 const {
   theme: { variants },
-  channels,
+  channels: { get, set },
 } = CONSTANTS;
 
 export type ThemeState = typeof variants.DARK | typeof variants.LIGHT;
@@ -24,10 +25,10 @@ export type ThemeContextData = {
 export const ThemeContext = createContext<ThemeContextData>({} as ThemeContextData);
 
 const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
-  const { send, data: storedTheme } = useIpcRender<string>(
+  const { send, data: storedTheme } = useIpcRender<ThemeProps>(
     {
-      get: channels.GET_THEME,
-      set: channels.SET_THEME,
+      get: get.THEME,
+      set: set.THEME,
     },
     '',
   );

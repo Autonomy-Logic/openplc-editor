@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 export type FullScreenProps = {
   isFullScreen: boolean;
   requestFullscreen: () => void;
@@ -9,14 +9,14 @@ const useFullScreen = (): FullScreenProps => {
 
   const { documentElement } = document;
 
-  const requestFullscreen = () => {
+  const requestFullscreen = useCallback(() => {
     if (documentElement && documentElement.requestFullscreen)
       documentElement.requestFullscreen();
-  };
+  }, [documentElement]);
 
-  const exitFullScreen = () => {
+  const exitFullScreen = useCallback(() => {
     if (document && document.exitFullscreen) document.exitFullscreen();
-  };
+  }, []);
 
   useEffect(() => {
     const resize = () => {

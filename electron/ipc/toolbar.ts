@@ -1,17 +1,21 @@
 import { CONSTANTS } from '@shared/constants';
+import { ToolbarPositionProps, toolbarPositionSchema } from '@shared/types/toolbar';
 import { ipcMain } from 'electron';
 
 import { store } from '../store';
 
-const { channels } = CONSTANTS;
+const {
+  channels: { get, set },
+} = CONSTANTS;
 
 export const toolbarIpc = () => {
-  ipcMain.on(channels.GET_TOOLBAR_POSITION, (event) => {
-    const position = store.get('toolbar.position');
-    event.sender.send(channels.GET_TOOLBAR_POSITION, position);
+  ipcMain.on(get.TOOLBAR_POSITION, (event) => {
+    const position = store.get('toolbar.position') as ToolbarPositionProps;
+    event.sender.send(get.TOOLBAR_POSITION, position);
   });
 
-  ipcMain.on(channels.SET_TOOLBAR_POSITION, (_event, arg) => {
-    store.set('toolbar.position', arg);
+  ipcMain.on(set.TOOLBAR_POSITION, (_event, arg: ToolbarPositionProps) => {
+    const position = toolbarPositionSchema.parse(arg);
+    store.set('toolbar.position', position);
   });
 };

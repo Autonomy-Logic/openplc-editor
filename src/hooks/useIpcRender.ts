@@ -1,14 +1,15 @@
 import { CONSTANTS } from '@shared/constants';
 import { ipcRenderer } from 'electron';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 const { channels } = CONSTANTS;
 
-type Channels = (typeof channels)[keyof typeof channels];
+type GetChannels = (typeof channels.get)[keyof typeof channels.get];
+type SetChannels = (typeof channels.set)[keyof typeof channels.set];
 
 export type IpcRenderChannelProps = {
-  get?: Channels;
-  set?: Channels;
+  get?: GetChannels;
+  set?: SetChannels;
 };
 export type IpcRenderProps<T> = {
   send: (data: T) => void;
@@ -35,7 +36,10 @@ const useIpcRender = <T>(
     };
   }, [channel.get]);
 
-  const send = (data: T) => channel.set && ipcRenderer.send(channel.set, data);
+  const send = useCallback(
+    (data: T) => channel.set && ipcRenderer.send(channel.set, data),
+    [channel.set],
+  );
 
   return {
     send,

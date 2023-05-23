@@ -1,9 +1,9 @@
 import Store from 'electron-store';
 
-import { DefaultStore, getDefaultStore } from './default';
+import { DefaultStoreProps, getDefaultStore } from './default';
 import { schema } from './schema';
 
-export const store = new Store<DefaultStore>({
+export const store = new Store<DefaultStoreProps>({
   defaults: getDefaultStore(),
   clearInvalidConfig: true,
   schema,
