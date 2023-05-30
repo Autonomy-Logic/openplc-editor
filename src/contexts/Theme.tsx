@@ -30,7 +30,7 @@ const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
       get: get.THEME,
       set: set.THEME,
     },
-    '',
+    variants.LIGHT,
   );
 
   const [theme, setTheme] = useState<ThemeState>();

@@ -12,7 +12,7 @@ export type IpcRenderChannelProps = {
   set?: SetChannels;
 };
 export type IpcRenderProps<T> = {
-  send: (data: T) => void;
+  send: (data?: T) => void;
   data?: T;
 };
 
@@ -20,10 +20,10 @@ const useIpcRender = <T>(
   channel: IpcRenderChannelProps,
   initialData?: T,
 ): IpcRenderProps<T> => {
-  const [data, setData] = useState<T>(initialData as T);
+  const [data, setData] = useState<T>();
 
   useEffect(() => {
-    channel.get && ipcRenderer.send(channel.get, initialData);
+    channel.get && initialData && ipcRenderer.send(channel.get, initialData);
   }, [channel.get, initialData]);
 
   useEffect(() => {
@@ -37,7 +37,7 @@ const useIpcRender = <T>(
   }, [channel.get]);
 
   const send = useCallback(
-    (data: T) => channel.set && ipcRenderer.send(channel.set, data),
+    (data?: T) => channel.set && ipcRenderer.send(channel.set, data),
     [channel.set],
   );
 

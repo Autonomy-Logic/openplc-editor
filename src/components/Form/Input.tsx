@@ -11,7 +11,7 @@ const Input: React.FC<InputProps> = ({ name, ...rest }) => {
   return (
     <input
       id={name}
-      className="flex-1 rounded-md border border-gray-200 shadow-sm px-3 py-2 text-gray-500 focus:outline-none focus:ring-2 focus:ring-open-plc-blue dark:text-gray-400 dark:border-gray-700 dark:bg-white/5"
+      className="flex-1 w-full rounded-md border border-gray-200 shadow-sm px-3 py-2 text-gray-500 focus:outline-none focus:ring-2 focus:ring-open-plc-blue dark:text-gray-400 dark:border-gray-700 dark:bg-white/5"
       {...register(name)}
       {...rest}
     />

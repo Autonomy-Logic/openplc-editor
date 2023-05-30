@@ -26,7 +26,7 @@ const ErrorMessage: React.FC<ErrorMessageProps> = ({ field }) => {
   const fieldError = get(errors, field);
 
   if (!fieldError) {
-    return null;
+    return <div className="h-4 mt-1" />;
   }
 
   return (

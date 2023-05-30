@@ -1,3 +1,4 @@
+import { appConfig } from '@shared/app.config';
 import { Color, Titlebar } from 'custom-electron-titlebar';
 import React, {
   createContext,
@@ -9,6 +10,8 @@ import React, {
 import colors from 'tailwindcss/colors';
 
 import { useTheme } from '@/hooks';
+
+const { title } = appConfig;
 
 export type TitlebarProps = InstanceType<typeof Titlebar>;
 
@@ -31,6 +34,11 @@ const TitlebarProvider: React.FC<PropsWithChildren> = ({ children }) => {
   );
 
   const dispose = useCallback(() => titlebar?.dispose(), [titlebar]);
+
+  useEffect(() => {
+    const [titleElement] = document.getElementsByClassName('cet-window-title');
+    if (titleElement) titleElement.innerHTML = title;
+  }, []);
 
   useEffect(() => {
     setTitlebar((state) =>

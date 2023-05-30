@@ -10,7 +10,7 @@ const {
 } = CONSTANTS;
 
 export const createChildWindowIpc = () => {
-  ipcMain.on(set.NEW_WINDOW, (_, arg: ChildWindowProps) => {
+  ipcMain.on(set.CREATE_CHILD_WINDOW, (_, arg: ChildWindowProps) => {
     const { path, hideMenuBar, ...newWindow } = childWindowSchema.parse(arg);
     const url = process.env.VITE_DEV_SERVER_URL;
     const indexHtml = join(process.env.DIST, 'index.html');

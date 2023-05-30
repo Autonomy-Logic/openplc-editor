@@ -5,26 +5,24 @@
 ![GitHub issues](https://img.shields.io/github/issues/Autonomy-Logic/OpenPLC_Editor?color=d8b22d)
 ![GitHub license](https://img.shields.io/github/license/caoxiemeihao/vite-react-electron)
 
-
 ## 🛫 Quick start
 
-### Run development environment 
+### Run development environment
 
 ```sh
 npm run dev
 ```
 
-### Generate production version 
+### Generate production version
 
 ```sh
 npm run build
 ```
 
-
 ## 📂 Directory structure
 
 Familiar React application structure, just with `electron` folder on the top :wink:  
-*Files in this folder will be separated from your React application and built into `dist-electron`*  
+_Files in this folder will be separated from your React application and built into `dist-electron`_
 
 ```tree
 ├── electron                                 Electron-related code
@@ -39,4 +37,3 @@ Familiar React application structure, just with `electron` folder on the top :wi
 ├── public                                   Static assets
 └── src                                      Renderer source code, your React application
 ```
-

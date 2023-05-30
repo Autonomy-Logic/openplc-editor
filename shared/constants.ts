@@ -14,8 +14,9 @@ export const CONSTANTS = {
       THEME: 'set_theme',
       TOOLBAR_POSITION: 'set_toolbar_position',
       TOAST: 'set_toast',
-      CREATE_POU_WINDOW: 'set_CREATE_POU_window',
-      NEW_WINDOW: 'set_new_window',
+      CREATE_POU_WINDOW: 'set_create_pou_window',
+      CREATE_CHILD_WINDOW: 'set_create_child_window',
+      CREATE_PROJECT_FROM_TOOLBAR: 'set_create_project_from_toolbar',
     },
   },
   paths: {

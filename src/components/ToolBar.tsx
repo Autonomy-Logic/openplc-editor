@@ -18,12 +18,13 @@ import {
   SunIcon,
 } from '@heroicons/react/24/solid';
 import { CONSTANTS } from '@shared/constants';
+import { ChildWindowProps } from '@shared/types/childWindow';
 import { ToolbarPositionProps } from '@shared/types/toolbar';
 import React, { Fragment, useEffect, useState } from 'react';
 import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { useTranslation } from 'react-i18next';
 
-import { useFullScreen, useIpcRender, useTheme, useWindowSize } from '@/hooks';
+import { useFullScreen, useIpcRender, useTheme, useToast, useWindowSize } from '@/hooks';
 import { classNames } from '@/utils';
 
 import Toggle from './Toggle';
@@ -32,16 +33,33 @@ import Tooltip from './Tooltip';
 const {
   theme: { variants },
   channels: { get, set },
+  paths,
 } = CONSTANTS;
+
+type CreateProjectFromToolbarProps = {
+  ok: boolean;
+  reason?: { title: string; description?: string };
+};
 
 const Toolbar: React.FC = () => {
   const { t } = useTranslation('toolbar');
+  const { t: createPOUTranslation } = useTranslation('createPOU');
   const [position, setPosition] = useState<ToolbarPositionProps | null>(null);
   const { requestFullscreen, exitFullScreen, isFullScreen } = useFullScreen();
   const { width, height } = useWindowSize();
-  const { send, data: storedPosition } = useIpcRender<ToolbarPositionProps>({
-    get: get.TOOLBAR_POSITION,
-    set: set.TOOLBAR_POSITION,
+  const { createToast } = useToast();
+  const { send: sendToStoreToolbarPosition, data: storedPosition } =
+    useIpcRender<ToolbarPositionProps>(
+      { get: get.TOOLBAR_POSITION, set: set.TOOLBAR_POSITION },
+      { x: 0, y: 0 },
+    );
+  const { send: createProjectFromToolbar, data: createProjectFromToolbarResponse } =
+    useIpcRender<CreateProjectFromToolbarProps>({
+      set: set.CREATE_PROJECT_FROM_TOOLBAR,
+      get: set.CREATE_PROJECT_FROM_TOOLBAR,
+    });
+  const { send: createChildWindow } = useIpcRender<ChildWindowProps>({
+    set: set.CREATE_CHILD_WINDOW,
   });
 
   const onClick = () => console.log('will be created soon');
@@ -54,7 +72,7 @@ const Toolbar: React.FC = () => {
     },
     {
       id: 1,
-      onClick,
+      onClick: createProjectFromToolbar,
       icon: DocumentPlusIcon,
       className: '',
       tooltip: t('new'),
@@ -153,7 +171,7 @@ const Toolbar: React.FC = () => {
   };
 
   const onStop = (_e: DraggableEvent, data: DraggableData) => {
-    send({
+    sendToStoreToolbarPosition({
       x: data.x,
       y: data.y,
     });
@@ -193,13 +211,44 @@ const Toolbar: React.FC = () => {
     } else if (isFloatingOnScreen) topRow?.classList.add('hide-top-row');
   }, [isFloatingOnScreen, position?.y]);
 
+  useEffect(() => {
+    if (createProjectFromToolbarResponse) {
+      const { ok, reason } = createProjectFromToolbarResponse;
+      if (!ok && reason) {
+        createToast({
+          type: 'error',
+          ...reason,
+        });
+      } else if (ok) {
+        createChildWindow({
+          path: paths.CREATE_POU,
+          resizable: false,
+          center: true,
+          modal: true,
+          minimizable: false,
+          fullscreenable: false,
+          fullscreen: false,
+          width: 576,
+          height: 360,
+          hideMenuBar: true,
+          title: createPOUTranslation('title'),
+        });
+      }
+    }
+  }, [
+    createChildWindow,
+    createProjectFromToolbarResponse,
+    createToast,
+    createPOUTranslation,
+  ]);
+
   const Divider = () => {
     return (
       <div className="h-full w-[0.125rem] bg-gray-200 rounded shadow-inner dark:bg-gray-700" />
     );
   };
 
-  if (!position || !theme) return <>loading</>;
+  if (!position || !theme) return <></>;
 
   return (
     <Draggable
@@ -226,7 +275,7 @@ const Toolbar: React.FC = () => {
                 className="press-animated"
                 data-tooltip-target="tooltip"
                 type="button"
-                onClick={onClick}
+                onClick={() => onClick && onClick()}
               >
                 <Icon className={`h-6 w-6 text-gray-500 ${className}`} />
               </button>

@@ -14,12 +14,11 @@ export type ComboBoxOption = {
 export type ComboBoxProps = {
   options: ComboBoxOption[];
   name: string;
+  showOptions?: number;
 };
 
-const ComboBox: React.FC<ComboBoxProps> = ({ options, name }) => {
+const ComboBox: React.FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) => {
   const { control } = useFormContext();
-  const [selected, setSelected] = useState<ComboBoxOption>({} as ComboBoxOption);
-
   const [query, setQuery] = useState('');
 
   const filteredList =
@@ -31,17 +30,8 @@ const ComboBox: React.FC<ComboBoxProps> = ({ options, name }) => {
     <Controller
       control={control}
       name={name}
-      render={({ field: { onChange, ref } }) => (
-        <Combobox
-          className="w-full"
-          as="div"
-          value={selected}
-          ref={ref}
-          onChange={(value: ComboBoxOption) => {
-            setSelected(value);
-            onChange(value);
-          }}
-        >
+      render={({ field }) => (
+        <Combobox className="w-full" as="div" {...field}>
           <div className="relative w-full">
             <Combobox.Input
               className="flex-1 w-full rounded-md border border-gray-200 shadow-sm px-3 py-2 text-gray-500 focus:outline-none focus:ring-2 focus:ring-open-plc-blue dark:text-gray-400 dark:border-gray-700 dark:bg-white/5"
@@ -53,7 +43,10 @@ const ComboBox: React.FC<ComboBoxProps> = ({ options, name }) => {
             </Combobox.Button>
 
             {filteredList.length > 0 && (
-              <Combobox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm dark:bg-gray-800">
+              <Combobox.Options
+                className={`absolute z-10 mt-1 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm dark:bg-gray-800`}
+                style={{ maxHeight: `${Math.round(showOptions) * 2.75}rem` }}
+              >
                 {filteredList.map((option) => (
                   <Combobox.Option
                     key={option.id}

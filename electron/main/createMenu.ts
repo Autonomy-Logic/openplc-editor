@@ -15,7 +15,7 @@ export const createMenu = () => {
         type: 'error',
         ...reason,
       });
-    } else {
+    } else if (ok) {
       createPOUWindow.send();
     }
   };

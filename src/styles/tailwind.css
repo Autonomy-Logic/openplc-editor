@@ -28,8 +28,7 @@
     @apply visible z-40;
   }
   .press-animated {
-    @apply no-underline cursor-pointer transition-[0.2s] duration-[all] border-[none] active:scale-[0.90] bg-transparent;
-    outline: none;
+    @apply transition-[0.2s] duration-[all] border-[none] active:scale-[0.90];
   }
   .drag-window {
     -webkit-user-select: none;
