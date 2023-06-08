@@ -9,13 +9,14 @@ const {
 } = CONSTANTS;
 
 export const themeIpc = () => {
-  ipcMain.on(get.THEME, (event) => {
+  ipcMain.handle(get.THEME, () => {
     const theme = store.get('theme') as ThemeProps;
-    event.sender.send(get.THEME, theme);
+    return theme;
   });
 
-  ipcMain.on(set.THEME, (_event, arg: ThemeProps) => {
+  ipcMain.handle(set.THEME, (_event, arg: ThemeProps) => {
     const theme = themeSchema.parse(arg);
     store.set('theme', theme);
+    return { ok: true };
   });
 };

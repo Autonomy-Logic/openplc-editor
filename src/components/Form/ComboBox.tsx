@@ -1,7 +1,7 @@
 import { Combobox } from '@headlessui/react';
-import { CheckIcon, ChevronUpDownIcon } from '@heroicons/react/20/solid';
 import React, { useState } from 'react';
 import { Controller, useFormContext } from 'react-hook-form';
+import { HiCheck, HiChevronUpDown } from 'react-icons/hi2';
 
 import { classNames } from '@/utils';
 
@@ -39,7 +39,7 @@ const ComboBox: React.FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) =
               displayValue={(value: ComboBoxOption) => value?.label}
             />
             <Combobox.Button className="absolute inset-y-0 right-0 flex items-center rounded-r-md px-2 focus:outline-none">
-              <ChevronUpDownIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+              <HiChevronUpDown className="h-5 w-5 text-gray-400" aria-hidden="true" />
             </Combobox.Button>
 
             {filteredList.length > 0 && (
@@ -78,7 +78,7 @@ const ComboBox: React.FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) =
                               active ? 'text-white' : 'text-open-plc-blue',
                             )}
                           >
-                            <CheckIcon className="h-5 w-5" aria-hidden="true" />
+                            <HiCheck className="h-5 w-5" aria-hidden="true" />
                           </span>
                         )}
                       </>

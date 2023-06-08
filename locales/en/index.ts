@@ -1,6 +1,7 @@
 export { default as bottomRowTabs } from './bottomRowTabs.json';
 export { default as createPOU } from './createPOU.json';
 export { default as createProject } from './createProject.json';
+export { default as getProject } from './getProject.json';
 export { default as leftColumnTabs } from './leftColumnTabs.json';
 export { default as menu } from './menu.json';
 export { default as rightColumnTabs } from './rightColumnTabs.json';

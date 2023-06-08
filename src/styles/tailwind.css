@@ -21,6 +21,9 @@
   .hide-top-row {
     @apply w-0 h-0;
   }
+  .comment-icon {
+    transform: rotateX(180deg) rotateY(0deg) rotateZ(90deg);
+  }
   .tooltip {
     @apply invisible absolute;
   }

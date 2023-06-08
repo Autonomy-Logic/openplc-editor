@@ -1,9 +1,8 @@
-import { ArrowSmallUpIcon } from '@heroicons/react/20/solid';
-import { PlusSmallIcon } from '@heroicons/react/24/solid';
 import { zodResolver } from '@hookform/resolvers/zod';
 import React, { useState } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { HiArrowSmallUp, HiPlusSmall } from 'react-icons/hi2';
 import { ResizableBox } from 'react-resizable';
 import { z } from 'zod';
 
@@ -55,7 +54,7 @@ const LeftColumn: React.FC = () => {
         <div className="w-full h-full relative overflow-hidden">
           <span className="absolute -bottom-20 -right-20 bg-gray-400 w-40 h-40 p-6 rounded-full dark:bg-gray-600">
             <button type="button" className="press-animated">
-              <PlusSmallIcon className="h-12 w-12 text-white" />
+              <HiPlusSmall className="h-12 w-12 text-white" />
             </button>
           </span>
         </div>
@@ -67,8 +66,8 @@ const LeftColumn: React.FC = () => {
               type="button"
               className="press-animated flex flex-col items-center justify-center mt-2"
             >
-              <div className="w-4 h-[0.125rem] -mb-2 bg-orange-400" />
-              <ArrowSmallUpIcon className="h-8 w-8 text-orange-400" />
+              <div className="w-5 h-[0.125rem] -mb-1 bg-orange-400" />
+              <HiArrowSmallUp className="h-8 w-8 text-orange-400" />
             </button>
           </Tooltip>
           <FormProvider {...createComboboxForm}>

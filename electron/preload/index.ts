@@ -40,14 +40,21 @@ const useLoading = () => {
       display: flex;
       align-items: center;
       justify-content: center;
-      flex-direction: column;
       z-index: 99999;
-      background: black;
-      color: white;
+      background: transparent;
     }
     .${logoClassName} {
       display: flex;
       align-items: center;
+      justify-content: center;
+      width: 30rem;
+      height: 18.75rem;
+      background: black;
+      overflow: hidden;
+    }
+    .${logoClassName} svg {
+      transform: scale(1.2);
+      margin-left: -12rem;
     }
   `;
 

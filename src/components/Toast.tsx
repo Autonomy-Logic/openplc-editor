@@ -1,12 +1,12 @@
-import { XMarkIcon } from '@heroicons/react/20/solid';
-import {
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
-  XCircleIcon,
-} from '@heroicons/react/24/solid';
 import { ToastProps as SharedToastProps } from '@shared/types/toast';
 import React from 'react';
+import {
+  HiCheckCircle,
+  HiExclamationTriangle,
+  HiInformationCircle,
+  HiXCircle,
+  HiXMark,
+} from 'react-icons/hi2';
 
 import { classNames } from '@/utils';
 
@@ -16,10 +16,10 @@ export type ToastProps = SharedToastProps & {
 
 const Toast: React.FC<ToastProps> = ({ type, title, description, closeToast }) => {
   const icons = {
-    success: <CheckCircleIcon className="h-6 w-6 text-green-400" />,
-    error: <XCircleIcon className="h-6 w-6 text-red-400" />,
-    warning: <ExclamationTriangleIcon className="h-6 w-6 text-yellow-400" />,
-    info: <InformationCircleIcon className="h-6 w-6 text-blue-400" />,
+    success: <HiCheckCircle className="h-6 w-6 text-green-400" />,
+    error: <HiXCircle className="h-6 w-6 text-red-400" />,
+    warning: <HiExclamationTriangle className="h-6 w-6 text-yellow-400" />,
+    info: <HiInformationCircle className="h-6 w-6 text-blue-400" />,
   };
   return (
     <div
@@ -63,7 +63,7 @@ const Toast: React.FC<ToastProps> = ({ type, title, description, closeToast }) =
           onClick={closeToast}
         >
           <span className="sr-only">Close</span>
-          <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+          <HiXMark className="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
     </div>

@@ -6,10 +6,10 @@ import { BrowserWindow, dialog } from 'electron';
 import { create } from 'xmlbuilder2';
 
 import { mainWindow } from '../main';
-import { ServiceError } from './types/error';
+import { ServiceResponse } from './types/response';
 
 const createProjectService = {
-  async execute(): Promise<ServiceError> {
+  async execute(): Promise<ServiceResponse<string>> {
     const response = await dialog.showOpenDialog(mainWindow as BrowserWindow, {
       title: i18n.t('createProject:dialog.title'),
       properties: ['openDirectory'],
@@ -130,7 +130,7 @@ const createProjectService = {
         },
       };
 
-    return { ok: true };
+    return { ok: true, data: filePath };
   },
 };
 

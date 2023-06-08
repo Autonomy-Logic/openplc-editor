@@ -9,8 +9,8 @@ const {
   channels: { set },
 } = CONSTANTS;
 
-export const createChildWindowIpc = () => {
-  ipcMain.on(set.CREATE_CHILD_WINDOW, (_, arg: ChildWindowProps) => {
+export const childWindowIpc = () => {
+  ipcMain.handle(set.CREATE_CHILD_WINDOW, (_, arg: ChildWindowProps) => {
     const { path, hideMenuBar, ...newWindow } = childWindowSchema.parse(arg);
     const url = process.env.VITE_DEV_SERVER_URL;
     const indexHtml = join(process.env.DIST, 'index.html');
@@ -30,4 +30,5 @@ export const createChildWindowIpc = () => {
       childWindow.loadFile(indexHtml, { hash: path });
     }
   });
+  return { ok: true };
 };

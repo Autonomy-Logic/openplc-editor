@@ -25,13 +25,7 @@ export type ThemeContextData = {
 export const ThemeContext = createContext<ThemeContextData>({} as ThemeContextData);
 
 const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
-  const { send, data: storedTheme } = useIpcRender<ThemeProps>(
-    {
-      get: get.THEME,
-      set: set.THEME,
-    },
-    variants.LIGHT,
-  );
+  const { invoke } = useIpcRender<ThemeProps | undefined, ThemeProps>();
 
   const [theme, setTheme] = useState<ThemeState>();
 
@@ -49,18 +43,19 @@ const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
     setTheme((state) => {
       if (state === variants.LIGHT) {
         addDarkClass();
-        send(variants.DARK);
+        invoke(set.THEME, variants.DARK);
         return variants.DARK;
       } else {
         removeDarkClass();
-        send(variants.LIGHT);
+        invoke(set.THEME, variants.LIGHT);
         return variants.LIGHT;
       }
     });
-  }, [addDarkClass, removeDarkClass, send]);
+  }, [addDarkClass, invoke, removeDarkClass]);
 
   useEffect(() => {
-    if (storedTheme !== '') {
+    const getStoredTheme = async () => {
+      const storedTheme = await invoke(get.THEME);
       setTheme(() => {
         if (storedTheme) {
           if (storedTheme === variants.DARK) {
@@ -80,8 +75,9 @@ const ThemeProvider: React.FC<PropsWithChildren> = ({ children }) => {
           return variants.LIGHT;
         }
       });
-    }
-  }, [addDarkClass, storedTheme, removeDarkClass]);
+    };
+    getStoredTheme();
+  }, [addDarkClass, invoke, removeDarkClass]);
 
   return (
     <ThemeContext.Provider

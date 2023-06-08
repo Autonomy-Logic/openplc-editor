@@ -1,17 +1,16 @@
-import { createChildWindowIpc } from './createChildWindow';
-import { createPOUWindowIpc as createPOUWindow } from './createPOUWindow';
-import { createProjectFromToolbarIpc } from './createProjectFromToolbar';
+import { childWindowIpc } from './childWindow';
+import { pouIpc as pou } from './pou';
+import { project, projectIpc } from './project';
 import { themeIpc } from './theme';
 import { toastIpc as toast } from './toast';
-import { toolbarIpc } from './toolbar';
 
 export const ipc = {
   setupListeners() {
     themeIpc();
-    toolbarIpc();
-    createChildWindowIpc();
-    createProjectFromToolbarIpc();
+    childWindowIpc();
+    projectIpc();
   },
   toast,
-  createPOUWindow,
+  pou,
+  project,
 };

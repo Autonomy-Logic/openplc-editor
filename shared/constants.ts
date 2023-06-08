@@ -8,13 +8,12 @@ export const CONSTANTS = {
   channels: {
     get: {
       THEME: 'get_theme',
-      TOOLBAR_POSITION: 'get_toolbar_position',
+      PROJECT: 'get_project',
+      CREATE_POU_WINDOW: 'get_create_pou_window',
+      TOAST: 'get_toast',
     },
     set: {
       THEME: 'set_theme',
-      TOOLBAR_POSITION: 'set_toolbar_position',
-      TOAST: 'set_toast',
-      CREATE_POU_WINDOW: 'set_create_pou_window',
       CREATE_CHILD_WINDOW: 'set_create_child_window',
       CREATE_PROJECT_FROM_TOOLBAR: 'set_create_project_from_toolbar',
     },

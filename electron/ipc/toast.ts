@@ -4,12 +4,12 @@ import { ToastProps, toastSchema } from '@shared/types/toast';
 import { mainWindow } from '../main';
 
 const {
-  channels: { set },
+  channels: { get },
 } = CONSTANTS;
 
 export const toastIpc = {
   send: (arg: ToastProps) => {
     const message = toastSchema.parse(arg);
-    mainWindow?.webContents.send(set.TOAST, message);
+    mainWindow?.webContents.send(get.TOAST, message);
   },
 };

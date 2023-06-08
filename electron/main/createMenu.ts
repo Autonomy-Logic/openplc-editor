@@ -5,18 +5,19 @@ import { createProjectController } from '../controllers';
 import { ipc } from '../ipc';
 
 export const createMenu = () => {
-  const { toast, createPOUWindow } = ipc;
+  const { toast, pou, project } = ipc;
   const click = () => console.log('Will be implemented soon');
 
   const handleCreateProject = async () => {
-    const { ok, reason } = await createProjectController.handle();
+    const { ok, reason, data } = await createProjectController.handle();
     if (!ok && reason) {
       toast.send({
         type: 'error',
         ...reason,
       });
-    } else if (ok) {
-      createPOUWindow.send();
+    } else if (ok && data) {
+      pou.createWindow();
+      await project.send(data);
     }
   };
 

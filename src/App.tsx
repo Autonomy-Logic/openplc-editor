@@ -2,6 +2,7 @@ import React from 'react';
 import { ToastContainer } from 'react-toastify';
 
 import {
+  ProjectProvider,
   RouterProvider,
   ThemeProvider,
   TitlebarProvider,
@@ -11,12 +12,14 @@ import {
 const App: React.FC = () => {
   return (
     <ThemeProvider>
-      <TitlebarProvider>
-        <ToastProvider>
-          <RouterProvider />
-          <ToastContainer />
-        </ToastProvider>
-      </TitlebarProvider>
+      <ToastProvider>
+        <TitlebarProvider>
+          <ProjectProvider>
+            <RouterProvider />
+            <ToastContainer closeButton={false} closeOnClick={false} />
+          </ProjectProvider>
+        </TitlebarProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 };

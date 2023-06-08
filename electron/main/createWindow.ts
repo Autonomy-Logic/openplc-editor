@@ -22,6 +22,7 @@ export const createWindow = () => {
     ...bounds,
     show: false,
     titleBarStyle: 'hidden',
+    transparent: true,
     webPreferences: {
       preload,
       // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production

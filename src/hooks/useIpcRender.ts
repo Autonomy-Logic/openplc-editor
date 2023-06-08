@@ -1,49 +1,40 @@
 import { CONSTANTS } from '@shared/constants';
 import { ipcRenderer } from 'electron';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 
 const { channels } = CONSTANTS;
 
 type GetChannels = (typeof channels.get)[keyof typeof channels.get];
 type SetChannels = (typeof channels.set)[keyof typeof channels.set];
 
-export type IpcRenderChannelProps = {
-  get?: GetChannels;
-  set?: SetChannels;
-};
-export type IpcRenderProps<T> = {
-  send: (data?: T) => void;
-  data?: T;
+type Channels = GetChannels | SetChannels;
+
+export type IpcRenderProps<T = void, S = void> = {
+  invoke: (channel: Channels, data?: T) => Promise<S>;
 };
 
-const useIpcRender = <T>(
-  channel: IpcRenderChannelProps,
-  initialData?: T,
-): IpcRenderProps<T> => {
-  const [data, setData] = useState<T>();
-
+const useIpcRender = <T = void, S = void>(listener?: {
+  channel: Channels;
+  callback: (data: S) => void;
+}): IpcRenderProps<T, S> => {
   useEffect(() => {
-    channel.get && initialData && ipcRenderer.send(channel.get, initialData);
-  }, [channel.get, initialData]);
-
-  useEffect(() => {
-    channel.get &&
-      ipcRenderer.on(channel.get, (_event, arg) => {
-        setData(arg);
+    if (listener) {
+      ipcRenderer.on(listener.channel, (_event, arg) => {
+        listener.callback(arg);
       });
-    return () => {
-      channel.get && ipcRenderer.removeAllListeners(channel.get);
-    };
-  }, [channel.get]);
+      return () => {
+        ipcRenderer.removeAllListeners(listener.channel);
+      };
+    }
+  }, [listener]);
 
-  const send = useCallback(
-    (data?: T) => channel.set && ipcRenderer.send(channel.set, data),
-    [channel.set],
-  );
+  const invoke = useCallback(async (channel: Channels, data?: T) => {
+    const response = await ipcRenderer.invoke(channel, data);
+    return response as S;
+  }, []);
 
   return {
-    send,
-    data,
+    invoke,
   };
 };
 

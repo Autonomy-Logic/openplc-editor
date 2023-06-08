@@ -1,6 +1,6 @@
 import { CONSTANTS } from '@shared/constants';
 import { ChildWindowProps } from '@shared/types/childWindow';
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Layout } from '@/components';
@@ -8,34 +8,32 @@ import { useIpcRender } from '@/hooks';
 import { BottomRow, LeftColumn, RightColumn, TopRow } from '@/templates';
 
 const {
-  channels: { set },
+  channels: { get, set },
   paths,
 } = CONSTANTS;
 const Home: React.FC = () => {
   const { t } = useTranslation('createPOU');
-  const { send: createChildWindow } = useIpcRender<ChildWindowProps>({
-    set: set.CREATE_CHILD_WINDOW,
-  });
-  const { data: createPOUWindow } = useIpcRender({
-    get: set.CREATE_POU_WINDOW,
-  });
+  const { invoke: createChildWindow } = useIpcRender<ChildWindowProps>();
 
-  useEffect(() => {
-    if (createPOUWindow)
-      createChildWindow({
-        path: paths.CREATE_POU,
-        resizable: false,
-        center: true,
-        modal: true,
-        minimizable: false,
-        fullscreenable: false,
-        fullscreen: false,
-        width: 576,
-        height: 360,
-        hideMenuBar: true,
-        title: t('title'),
-      });
-  }, [createPOUWindow, createChildWindow, t]);
+  useIpcRender<undefined, boolean>({
+    channel: get.CREATE_POU_WINDOW,
+    callback: (createPOUWindow) => {
+      if (createPOUWindow)
+        createChildWindow(set.CREATE_CHILD_WINDOW, {
+          path: paths.CREATE_POU,
+          resizable: false,
+          center: true,
+          modal: true,
+          minimizable: false,
+          fullscreenable: false,
+          fullscreen: false,
+          width: 576,
+          height: 360,
+          hideMenuBar: true,
+          title: t('title'),
+        });
+    },
+  });
 
   return (
     <Layout
@@ -43,7 +41,7 @@ const Home: React.FC = () => {
       rightColumn={<RightColumn />}
       bottomRow={<BottomRow />}
       leftColumn={<LeftColumn />}
-      mainContent={<></>}
+      mainContent={<div />}
     />
   );
 };
