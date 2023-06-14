@@ -22,6 +22,7 @@ const useIpcRender = <T = void, S = void>(listener?: {
       ipcRenderer.on(listener.channel, (_event, arg) => {
         listener.callback(arg);
       });
+
       return () => {
         ipcRenderer.removeAllListeners(listener.channel);
       };

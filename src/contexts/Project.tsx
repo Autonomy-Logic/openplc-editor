@@ -8,10 +8,21 @@ import {
 import { useIpcRender, useToast } from '@/hooks';
 
 const {
-  channels: { get },
+  types,
+  languages,
+  channels: { get, set },
 } = CONSTANTS;
 
-type ProjectProps = XMLSerializedAsObject | XMLSerializedAsObjectArray;
+type ProjectProps = {
+  language?: keyof typeof languages;
+  xmlSerialized?: XMLSerializedAsObject | XMLSerializedAsObjectArray;
+};
+
+type CreatePouDataProps = {
+  name: string;
+  type: keyof typeof types;
+  language: keyof typeof languages;
+};
 
 type GetProjectProps = {
   ok: boolean;
@@ -32,16 +43,53 @@ const ProjectProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const { invoke } = useIpcRender<string, GetProjectProps>({
     channel: get.PROJECT,
     callback: ({ ok, data, reason }) => {
-      console.log('callback ->', { ok, data, reason });
       if (!ok && reason) {
         createToast({
           type: 'error',
           ...reason,
         });
       } else if (ok && data) {
-        setProject(data);
+        setProject((state) => ({ ...state, xmlSerialized: data }));
       }
     },
+  });
+
+  useIpcRender<undefined, CreatePouDataProps>({
+    channel: set.CREATE_POU_DATA,
+    callback: ({ name, type, language }) =>
+      setProject((state) => ({
+        language,
+        xmlSerialized: Object.assign(state?.xmlSerialized || {}, {
+          types: {
+            pous: {
+              pou: {
+                '@name': name,
+                '@pouType': type,
+                body: {
+                  [language]: {},
+                },
+              },
+            },
+          },
+          instances: {
+            configurations: {
+              configuration: {
+                resource: {
+                  task: {
+                    '@name': 'task0',
+                    '@priority': '0',
+                    '@interval': 'T#20ms',
+                    pouInstance: {
+                      '@name': 'instance0',
+                      '@typeName': name,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }),
+      })),
   });
 
   const getProject = useCallback(
@@ -53,7 +101,7 @@ const ProjectProvider: React.FC<PropsWithChildren> = ({ children }) => {
           ...reason,
         });
       } else if (ok && data) {
-        setProject(data);
+        setProject((state) => ({ ...state, xmlSerialized: data }));
       }
     },
     [createToast, invoke],

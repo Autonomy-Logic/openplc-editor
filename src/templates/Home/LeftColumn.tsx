@@ -41,7 +41,7 @@ const LeftColumn: React.FC = () => {
   ];
 
   return (
-    <>
+    <aside>
       <Tabs tabs={leftColumnTabs} />
       <ResizableBox
         width={Infinity}
@@ -142,7 +142,7 @@ const LeftColumn: React.FC = () => {
           </Tooltip>
         </div>
       </div>
-    </>
+    </aside>
   );
 };
 

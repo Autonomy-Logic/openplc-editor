@@ -29,7 +29,11 @@ const BottomRow: React.FC = () => {
     },
   ];
 
-  return <Tabs tabs={bottomRowTabs} />;
+  return (
+    <footer>
+      <Tabs tabs={bottomRowTabs} />
+    </footer>
+  );
 };
 
 export default BottomRow;

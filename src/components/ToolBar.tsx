@@ -119,35 +119,33 @@ const Toolbar: React.FC<ToolbarProps> = ({
         {tools.map(({ id, onClick, icon: Icon, className, tooltip, divider, type }) => (
           <Fragment key={id}>
             {type === 'toggleTheme' && (
-              <div className="press-animated flex items-center justify-center">
-                <Tooltip label={t('menuToolbar.toggleTheme')}>
-                  <Toggle
-                    data-tooltip-target="tooltip"
-                    enabled={theme === variants.DARK}
-                    setEnabled={toggleTheme}
-                    icons={{
-                      enabled: <HiMoon className="h-3 w-3 text-open-plc-blue" />,
-                      disabled: <HiSun className="h-4 w-4 text-gray-400" />,
-                    }}
-                  />
-                </Tooltip>
-              </div>
+              <Tooltip label={t('menuToolbar.toggleTheme')}>
+                <Toggle
+                  data-tooltip-target="tooltip"
+                  enabled={theme === variants.DARK}
+                  setEnabled={toggleTheme}
+                  icons={{
+                    enabled: <HiMoon className="h-3 w-3 text-open-plc-blue" />,
+                    disabled: <HiSun className="h-4 w-4 text-gray-400" />,
+                  }}
+                />
+              </Tooltip>
             )}
             {divider === 'before' && <Divider />}
-            <Tooltip label={tooltip}>
-              <button
-                className="press-animated"
-                data-tooltip-target="tooltip"
-                type="button"
-                onClick={() => onClick && onClick()}
-              >
-                {Icon && (
+            <button
+              className="press-animated"
+              data-tooltip-target="tooltip"
+              type="button"
+              onClick={() => onClick && onClick()}
+            >
+              {Icon && (
+                <Tooltip label={tooltip}>
                   <Icon
                     className={`h-6 w-6 text-gray-500 hover:opacity-90 ${className}`}
                   />
-                )}
-              </button>
-            </Tooltip>
+                </Tooltip>
+              )}
+            </button>
             {divider === 'after' && <Divider />}
           </Fragment>
         ))}

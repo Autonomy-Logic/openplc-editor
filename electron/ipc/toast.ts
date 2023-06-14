@@ -7,7 +7,7 @@ const {
   channels: { get },
 } = CONSTANTS;
 
-export const toastIpc = {
+export const toast = {
   send: (arg: ToastProps) => {
     const message = toastSchema.parse(arg);
     mainWindow?.webContents.send(get.TOAST, message);

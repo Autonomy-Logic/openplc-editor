@@ -23,7 +23,11 @@ const RightColumn: React.FC = () => {
     },
   ];
 
-  return <Tabs tabs={rightColumnTabs} />;
+  return (
+    <aside>
+      <Tabs tabs={rightColumnTabs} />
+    </aside>
+  );
 };
 
 export default RightColumn;

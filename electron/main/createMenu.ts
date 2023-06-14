@@ -73,6 +73,7 @@ export const createMenu = () => {
         },
         { type: 'separator' },
         {
+          id: 'test',
           label: i18n.t('menu:file.submenu.save'),
           accelerator: 'CmdOrCtrl+S',
           click,

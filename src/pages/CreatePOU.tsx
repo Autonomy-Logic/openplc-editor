@@ -1,15 +1,24 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { CONSTANTS } from '@shared/constants';
 import React, { useEffect } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 
 import { Button, Form } from '@/components';
-import { useTitlebar } from '@/hooks';
+import { useIpcRender, useTitlebar } from '@/hooks';
+
+const {
+  languages,
+  types,
+  channels: { set },
+} = CONSTANTS;
 
 const CreateNewPOU: React.FC = () => {
   const { dispose } = useTitlebar();
+  const { t: translate } = useTranslation();
   const { t } = useTranslation('createPOU');
+  const { invoke } = useIpcRender<{ name: string; type: string; language: string }>();
 
   const createPOUSchema = z.object({
     name: z.string().nonempty({
@@ -35,23 +44,15 @@ const CreateNewPOU: React.FC = () => {
 
   type createPOUSchemaData = z.infer<typeof createPOUSchema>;
 
-  const typeOptions = [{ id: 0, label: 'program', value: 'program' }];
+  const typeOptions = [{ id: 0, label: types.PROGRAM, value: types.PROGRAM }];
 
-  const languageOptions = [
-    { id: 0, label: 'IL', value: 'IL' },
-    { id: 1, label: 'ST', value: 'ST' },
-    { id: 2, label: 'LD', value: 'LD' },
-    { id: 3, label: 'FBD', value: 'FBD' },
-    { id: 4, label: 'SFC', value: 'SFC' },
-  ];
+  const languageOptions = [{ id: 0, label: languages.LD, value: languages.LD }];
 
   useEffect(() => {
     dispose();
   }, [dispose]);
 
-  const handleCancel = () => {
-    window.close();
-  };
+  const handleCancel = () => window.close();
 
   const createPouForm = useForm<createPOUSchemaData>({
     resolver: zodResolver(createPOUSchema),
@@ -61,8 +62,17 @@ const CreateNewPOU: React.FC = () => {
     },
   });
 
-  const createPOU = async (data: createPOUSchemaData) => {
-    console.log(data);
+  const handleCreatePOU = async (data: createPOUSchemaData) => {
+    const {
+      type: { value: type },
+      language: { value: language },
+      name,
+    } = data;
+    invoke(set.CREATE_POU_DATA, {
+      name,
+      type: type as keyof typeof types,
+      language: language as keyof typeof languages,
+    });
     window.close();
   };
 
@@ -75,7 +85,7 @@ const CreateNewPOU: React.FC = () => {
     <div className="h-screen w-screen p-8">
       <FormProvider {...createPouForm}>
         <form
-          onSubmit={handleSubmit(createPOU)}
+          onSubmit={handleSubmit(handleCreatePOU)}
           className="grid grid-cols-2 grid-rows-3 gap-x-4 w-full"
         >
           <Form.Field className="col-span-full">
@@ -94,11 +104,11 @@ const CreateNewPOU: React.FC = () => {
             <Form.ErrorMessage field="language" />
           </Form.Field>
           <Form.Field className="flex flex-row h-10 mt-8 gap-4 col-start-2">
-            <Button label="OK" disabled={isSubmitting} widthFull />
+            <Button label={translate('buttons.ok')} disabled={isSubmitting} widthFull />
             <Button
               type="button"
               appearance="secondary"
-              label="Cancel"
+              label={translate('buttons.cancel')}
               disabled={isSubmitting}
               onClick={handleCancel}
               widthFull

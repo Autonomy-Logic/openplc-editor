@@ -41,7 +41,6 @@ const ComboBox: React.FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) =
             <Combobox.Button className="absolute inset-y-0 right-0 flex items-center rounded-r-md px-2 focus:outline-none">
               <HiChevronUpDown className="h-5 w-5 text-gray-400" aria-hidden="true" />
             </Combobox.Button>
-
             {filteredList.length > 0 && (
               <Combobox.Options
                 className={`absolute z-10 mt-1 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm dark:bg-gray-800`}
@@ -70,7 +69,6 @@ const ComboBox: React.FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) =
                         >
                           {option.label}
                         </span>
-
                         {selected && (
                           <span
                             className={classNames(

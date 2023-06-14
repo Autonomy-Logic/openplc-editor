@@ -6,6 +6,6 @@ const {
   channels: { get },
 } = CONSTANTS;
 
-export const pouIpc = {
+export const pou = {
   createWindow: () => mainWindow?.webContents.send(get.CREATE_POU_WINDOW, true),
 };

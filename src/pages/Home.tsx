@@ -3,9 +3,8 @@ import { ChildWindowProps } from '@shared/types/childWindow';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Layout } from '@/components';
 import { useIpcRender } from '@/hooks';
-import { BottomRow, LeftColumn, RightColumn, TopRow } from '@/templates';
+import { Home as HomeTemplate } from '@/templates';
 
 const {
   channels: { get, set },
@@ -35,15 +34,7 @@ const Home: React.FC = () => {
     },
   });
 
-  return (
-    <Layout
-      topRow={<TopRow />}
-      rightColumn={<RightColumn />}
-      bottomRow={<BottomRow />}
-      leftColumn={<LeftColumn />}
-      mainContent={<div />}
-    />
-  );
+  return <HomeTemplate />;
 };
 
 export default Home;

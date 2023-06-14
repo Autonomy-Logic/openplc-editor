@@ -1,1 +1,6 @@
-{}
+{
+  "buttons": {
+    "cancel": "Cancel",
+    "ok": "OK"
+  }
+}

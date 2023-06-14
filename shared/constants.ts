@@ -16,9 +16,20 @@ export const CONSTANTS = {
       THEME: 'set_theme',
       CREATE_CHILD_WINDOW: 'set_create_child_window',
       CREATE_PROJECT_FROM_TOOLBAR: 'set_create_project_from_toolbar',
+      CREATE_POU_DATA: 'set_create_pou_data',
     },
   },
   paths: {
     CREATE_POU: 'create-pou',
+  },
+  types: {
+    PROGRAM: 'program',
+  },
+  languages: {
+    IL: 'IL',
+    ST: 'ST',
+    LD: 'LD',
+    FBD: 'FBD',
+    SFC: 'SFC',
   },
 };

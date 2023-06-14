@@ -3,21 +3,12 @@ import { ResizableBox } from 'react-resizable';
 
 import { useFullScreen } from '@/hooks';
 
-export type LayoutProps = {
-  topRow: React.ReactNode;
-  rightColumn: React.ReactNode;
-  bottomRow: React.ReactNode;
-  leftColumn: React.ReactNode;
-  mainContent: React.ReactNode;
-};
+import BottomRow from './BottomRow';
+import LeftColumn from './LeftColumn';
+import RightColumn from './RightColumn';
+import TopRow from './TopRow';
 
-const Layout: React.FC<LayoutProps> = ({
-  topRow,
-  rightColumn,
-  bottomRow,
-  leftColumn,
-  mainContent,
-}) => {
+const Layout: React.FC = () => {
   const { isFullScreen } = useFullScreen();
   const initialSize = 300;
 
@@ -27,7 +18,7 @@ const Layout: React.FC<LayoutProps> = ({
         id="top-row"
         className="flex items-center border-b border-gray-200 h-14 dark:border-gray-700 z-40"
       >
-        {topRow}
+        <TopRow />
       </header>
       <div
         className={`layout-grid ${
@@ -42,9 +33,9 @@ const Layout: React.FC<LayoutProps> = ({
           resizeHandles={['e']}
           axis="x"
         >
-          {leftColumn}
+          <LeftColumn />
         </ResizableBox>
-        <main className="main-content">{mainContent}</main>
+        <main className="main-content"></main>
         <ResizableBox
           width={initialSize}
           height={Infinity}
@@ -53,7 +44,7 @@ const Layout: React.FC<LayoutProps> = ({
           resizeHandles={['w']}
           axis="x"
         >
-          {rightColumn}
+          <RightColumn />
         </ResizableBox>
         <ResizableBox
           width={Infinity}
@@ -63,7 +54,7 @@ const Layout: React.FC<LayoutProps> = ({
           resizeHandles={['n']}
           axis="y"
         >
-          {bottomRow}
+          <BottomRow />
         </ResizableBox>
       </div>
     </>
