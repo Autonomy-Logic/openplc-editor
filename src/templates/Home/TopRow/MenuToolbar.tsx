@@ -1,8 +1,8 @@
-import { CONSTANTS } from '@shared/constants';
-import { ChildWindowProps } from '@shared/types/childWindow';
-import { ToolbarPositionProps } from '@shared/types/toolbar';
-import React, { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { CONSTANTS } from '@shared/constants'
+import { ChildWindowProps } from '@shared/types/childWindow'
+import { ToolbarPositionProps } from '@shared/types/toolbar'
+import { Dispatch, FC, SetStateAction, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   HiArrowDownOnSquareStack,
   HiArrowDownTray,
@@ -18,57 +18,57 @@ import {
   HiFolderOpen,
   HiPrinter,
   HiScissors,
-} from 'react-icons/hi2';
+} from 'react-icons/hi2'
 
-import { Toolbar } from '@/components';
-import { ToolsProps } from '@/components/Toolbar';
-import { useFullScreen, useIpcRender, useProject, useToast } from '@/hooks';
+import { Toolbar } from '@/components'
+import { ToolsProps } from '@/components/Toolbar'
+import { useFullScreen, useIpcRender, useProject, useToast } from '@/hooks'
 
 const {
   channels: { set },
   paths,
-} = CONSTANTS;
+} = CONSTANTS
 
 type CreateProjectFromToolbarProps = {
-  ok: boolean;
-  reason?: { title: string; description?: string };
-  data?: string;
-};
+  ok: boolean
+  reason?: { title: string; description?: string }
+  data?: string
+}
 
 type MenuToolbarProps = {
-  currentPosition: React.Dispatch<React.SetStateAction<ToolbarPositionProps>>;
-  isCurrentToolbar?: boolean;
-  onMouseDown?: (e: MouseEvent) => void;
-};
+  currentPosition: Dispatch<SetStateAction<ToolbarPositionProps>>
+  isCurrentToolbar?: boolean
+  onMouseDown?: (e: MouseEvent) => void
+}
 
-const MenuToolbar: React.FC<MenuToolbarProps> = ({
+const MenuToolbar: FC<MenuToolbarProps> = ({
   currentPosition,
   isCurrentToolbar,
   onMouseDown,
 }) => {
-  const { t } = useTranslation('toolbar');
-  const [position, setPosition] = useState<ToolbarPositionProps>({ x: 0, y: 0 });
-  const { t: createPOUTranslation } = useTranslation('createPOU');
-  const { createToast } = useToast();
-  const { requestFullscreen, exitFullScreen, isFullScreen } = useFullScreen();
+  const { t } = useTranslation('toolbar')
+  const [position, setPosition] = useState<ToolbarPositionProps>({ x: 0, y: 0 })
+  const { t: createPOUTranslation } = useTranslation('createPOU')
+  const { createToast } = useToast()
+  const { requestFullscreen, exitFullScreen, isFullScreen } = useFullScreen()
   const { invoke: createProjectFromToolbar } = useIpcRender<
     undefined,
     CreateProjectFromToolbarProps
-  >();
-  const { invoke: createChildWindow } = useIpcRender<ChildWindowProps>();
-  const { getProject } = useProject();
+  >()
+  const { invoke: createChildWindow } = useIpcRender<ChildWindowProps>()
+  const { getProject } = useProject()
 
-  const onClick = () => console.log('will be created soon');
+  const onClick = () => console.log('will be created soon')
 
   const handleCreateProjectFromToolbar = async () => {
     const { ok, reason, data } = await createProjectFromToolbar(
       set.CREATE_PROJECT_FROM_TOOLBAR,
-    );
+    )
     if (!ok && reason) {
       createToast({
         type: 'error',
         ...reason,
-      });
+      })
     } else if (ok && data) {
       createChildWindow(set.CREATE_CHILD_WINDOW, {
         path: paths.CREATE_POU,
@@ -82,10 +82,10 @@ const MenuToolbar: React.FC<MenuToolbarProps> = ({
         height: 360,
         hideMenuBar: true,
         title: createPOUTranslation('title'),
-      });
-      await getProject(data);
+      })
+      await getProject(data)
     }
-  };
+  }
 
   const menuTools: ToolsProps[] = [
     {
@@ -171,17 +171,17 @@ const MenuToolbar: React.FC<MenuToolbarProps> = ({
       id: 13,
       type: 'toggleTheme',
     },
-  ];
+  ]
 
   useEffect(() => {
-    currentPosition(position);
-  }, [currentPosition, position]);
+    currentPosition(position)
+  }, [currentPosition, position])
 
   useEffect(() => {
     if ((position.y > 0 && position.y <= 28) || position?.y === 0) {
-      setPosition((state) => ({ ...state, y: 0 }));
+      setPosition((state) => ({ ...state, y: 0 }))
     }
-  }, [position.y]);
+  }, [position.y])
 
   return (
     <Toolbar
@@ -192,7 +192,7 @@ const MenuToolbar: React.FC<MenuToolbarProps> = ({
       isCurrentToolbar={isCurrentToolbar}
       onMouseDown={onMouseDown}
     />
-  );
-};
+  )
+}
 
-export default MenuToolbar;
+export default MenuToolbar

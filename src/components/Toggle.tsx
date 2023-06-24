@@ -1,18 +1,18 @@
-import { Switch } from '@headlessui/react';
-import React from 'react';
+import { Switch } from '@headlessui/react'
+import { FC, ReactElement } from 'react'
 
-import { classNames } from '@/utils';
+import { classNames } from '@/utils'
 
 export type ToggleProps = {
-  enabled: boolean;
-  setEnabled: () => void;
+  enabled: boolean
+  setEnabled: () => void
   icons?: {
-    enabled: React.ReactElement;
-    disabled: React.ReactElement;
-  };
-};
+    enabled: ReactElement
+    disabled: ReactElement
+  }
+}
 
-const Toggle: React.FC<ToggleProps> = ({ enabled, setEnabled, icons }) => {
+const Toggle: FC<ToggleProps> = ({ enabled, setEnabled, icons }) => {
   return (
     <Switch
       checked={enabled}
@@ -53,7 +53,7 @@ const Toggle: React.FC<ToggleProps> = ({ enabled, setEnabled, icons }) => {
         </span>
       </span>
     </Switch>
-  );
-};
+  )
+}
 
-export default Toggle;
+export default Toggle

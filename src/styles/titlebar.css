@@ -1,5 +1,5 @@
 .cet-titlebar {
-  @apply border-b border-gray-200 dark:border-gray-700;
+  @apply border-b border-gray-900/10 dark:border-white/5;
 }
 
 .cet-controls-container div {

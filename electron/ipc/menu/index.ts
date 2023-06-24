@@ -1,27 +1,27 @@
-import { i18n } from '@shared/i18n';
-import { Menu, MenuItemConstructorOptions } from 'electron';
+import { CONSTANTS } from '@shared/constants'
+import { i18n } from '@shared/i18n'
+import { ipcMain, Menu, MenuItemConstructorOptions } from 'electron'
 
-import { createProjectController } from '../controllers';
-import { ipc } from '../ipc';
+import { click, handleCreateProject } from './actions'
 
-export const createMenu = () => {
-  const { toast, pou, project } = ipc;
-  const click = () => console.log('Will be implemented soon');
+type GetTemplate = {
+  hasProject?: boolean
+}
 
-  const handleCreateProject = async () => {
-    const { ok, reason, data } = await createProjectController.handle();
-    if (!ok && reason) {
-      toast.send({
-        type: 'error',
-        ...reason,
-      });
-    } else if (ok && data) {
-      pou.createWindow();
-      await project.send(data);
-    }
-  };
+const {
+  channels: { set },
+} = CONSTANTS
 
-  const template: MenuItemConstructorOptions[] = [
+const developOptions: MenuItemConstructorOptions[] = [
+  { type: 'separator' },
+  { role: 'reload' },
+  { role: 'forceReload' },
+  { role: 'toggleDevTools' },
+]
+
+const getTemplate = (options?: GetTemplate): MenuItemConstructorOptions[] => {
+  const { hasProject = false } = options || ({} as GetTemplate)
+  return [
     {
       label: i18n.t('menu:file.label'),
       submenu: [
@@ -32,7 +32,6 @@ export const createMenu = () => {
         },
         {
           label: i18n.t('menu:file.submenu.open'),
-
           accelerator: 'CmdOrCtrl+O',
           click,
         },
@@ -58,7 +57,9 @@ export const createMenu = () => {
               click,
             },
             {
-              label: i18n.t('menu:file.submenu.examples.submenu.randomGeneratorPragma'),
+              label: i18n.t(
+                'menu:file.submenu.examples.submenu.randomGeneratorPragma',
+              ),
               click,
             },
             {
@@ -66,7 +67,9 @@ export const createMenu = () => {
               click,
             },
             {
-              label: i18n.t('menu:file.submenu.examples.submenu.trafficLightFBD'),
+              label: i18n.t(
+                'menu:file.submenu.examples.submenu.trafficLightFBD',
+              ),
               click,
             },
           ],
@@ -77,37 +80,44 @@ export const createMenu = () => {
           label: i18n.t('menu:file.submenu.save'),
           accelerator: 'CmdOrCtrl+S',
           click,
+          enabled: hasProject,
         },
         {
           label: i18n.t('menu:file.submenu.saveAs'),
           accelerator: 'CmdOrCtrl+Shift+S',
           click,
+          enabled: hasProject,
         },
         {
           label: i18n.t('menu:file.submenu.closeTab'),
           accelerator: 'CmdOrCtrl+W',
           click,
+          enabled: hasProject,
         },
         {
           label: i18n.t('menu:file.submenu.closeProject'),
           accelerator: 'CmdOrCtrl+Shift+W',
           click,
+          enabled: hasProject,
         },
         { type: 'separator' },
         {
           label: i18n.t('menu:file.submenu.pageSetup'),
           accelerator: 'CmdOrCtrl+Alt+P',
           click,
+          enabled: hasProject,
         },
         {
           label: i18n.t('menu:file.submenu.preview'),
           accelerator: 'CmdOrCtrl+Shift+P',
           click,
+          enabled: hasProject,
         },
         {
           label: i18n.t('menu:file.submenu.print'),
           accelerator: 'CmdOrCtrl+P',
           click,
+          enabled: hasProject,
         },
         { type: 'separator' },
         {
@@ -126,58 +136,106 @@ export const createMenu = () => {
     {
       label: i18n.t('menu:edit.label'),
       submenu: [
-        { label: i18n.t('menu:edit.submenu.undo'), role: 'undo' },
-        { label: i18n.t('menu:edit.submenu.redo'), role: 'redo' },
+        {
+          label: i18n.t('menu:edit.submenu.undo'),
+          role: 'undo',
+          enabled: hasProject,
+        },
+        {
+          label: i18n.t('menu:edit.submenu.redo'),
+          role: 'redo',
+          enabled: false,
+        },
         { type: 'separator' },
-        { label: i18n.t('menu:edit.submenu.cut'), role: 'cut' },
-        { label: i18n.t('menu:edit.submenu.copy'), role: 'copy' },
-        { label: i18n.t('menu:edit.submenu.paste'), role: 'paste' },
+        {
+          label: i18n.t('menu:edit.submenu.cut'),
+          role: 'cut',
+          enabled: hasProject,
+        },
+        {
+          label: i18n.t('menu:edit.submenu.copy'),
+          role: 'copy',
+          enabled: hasProject,
+        },
+        {
+          label: i18n.t('menu:edit.submenu.paste'),
+          role: 'paste',
+          enabled: hasProject,
+        },
         { type: 'separator' },
         {
           label: i18n.t('menu:edit.submenu.find'),
           accelerator: 'CmdOrCtrl+F',
           click,
+          enabled: hasProject,
         },
         {
           label: i18n.t('menu:edit.submenu.findNext'),
           accelerator: 'CmdOrCtrl+K',
           click,
+          enabled: false,
         },
         {
           label: i18n.t('menu:edit.submenu.findPrevious'),
           accelerator: 'CmdOrCtrl+Shift+K',
           click,
+          enabled: false,
         },
         { type: 'separator' },
         {
           label: i18n.t('menu:edit.submenu.findInProject'),
           accelerator: 'CmdOrCtrl+Shift+F',
           click,
+          enabled: hasProject,
         },
         { type: 'separator' },
-        { label: i18n.t('menu:edit.submenu.addElement'), submenu: [] },
-        { label: i18n.t('menu:edit.submenu.selectAll'), role: 'selectAll' },
-        { label: i18n.t('menu:edit.submenu.delete'), role: 'delete' },
+        {
+          label: i18n.t('menu:edit.submenu.addElement'),
+          submenu: [],
+          enabled: hasProject,
+        },
+        {
+          label: i18n.t('menu:edit.submenu.selectAll'),
+          role: 'selectAll',
+          enabled: hasProject,
+        },
+        {
+          label: i18n.t('menu:edit.submenu.delete'),
+          role: 'delete',
+          enabled: hasProject,
+        },
       ],
     },
     {
       label: i18n.t('menu:display.label'),
       submenu: [
-        { label: i18n.t('menu:display.submenu.refresh'), role: 'reload' },
+        {
+          label: i18n.t('menu:display.submenu.refresh'),
+          role: 'reload',
+          enabled: hasProject,
+        },
         {
           label: i18n.t('menu:display.submenu.clearErrors'),
           accelerator: 'CmdOrCtrl+K',
           click,
+          enabled: hasProject,
         },
         { type: 'separator' },
-        { label: i18n.t('menu:display.submenu.zoom'), submenu: [] },
+        {
+          label: i18n.t('menu:display.submenu.zoom'),
+          enabled: hasProject,
+          submenu: [],
+        },
         { type: 'separator' },
         {
           label: i18n.t('menu:display.submenu.switchPerspective'),
           accelerator: 'F12',
           click,
         },
-        { label: i18n.t('menu:display.submenu.fullScreen'), role: 'togglefullscreen' },
+        {
+          label: i18n.t('menu:display.submenu.fullScreen'),
+          role: 'togglefullscreen',
+        },
         {
           label: i18n.t('menu:display.submenu.resetPerspective'),
           click,
@@ -186,9 +244,7 @@ export const createMenu = () => {
           label: i18n.t('menu:display.submenu.sortAlpha'),
           click,
         },
-        { type: 'separator' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
+        ...(process.env.VITE_DEV_SERVER_URL ? developOptions : []),
       ],
     },
     {
@@ -205,8 +261,22 @@ export const createMenu = () => {
         },
       ],
     },
-  ];
+  ]
+}
 
-  const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
-};
+export const menu = {
+  createMenu: () => {
+    const template = getTemplate()
+    const menu = Menu.buildFromTemplate(template)
+    Menu.setApplicationMenu(menu)
+  },
+}
+
+export const menuIpc = () => {
+  ipcMain.handle(set.UPDATE_MENU_PROJECT, async () => {
+    const template = getTemplate({ hasProject: true })
+    const menu = Menu.buildFromTemplate(template)
+    Menu.setApplicationMenu(menu)
+    return { ok: true }
+  })
+}

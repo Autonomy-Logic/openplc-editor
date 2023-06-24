@@ -1,5 +1,5 @@
-export { ProjectContext, default as ProjectProvider } from './Project';
-export { default as RouterProvider } from './Router';
-export { ThemeContext, default as ThemeProvider } from './Theme';
-export { TitlebarContext, default as TitlebarProvider } from './Titlebar';
-export { ToastContext, default as ToastProvider } from './Toast';
+export { ProjectContext, default as ProjectProvider } from './Project'
+export { default as RouterProvider } from './Router'
+export { ThemeContext, default as ThemeProvider } from './Theme'
+export { TitlebarContext, default as TitlebarProvider } from './Titlebar'
+export { ToastContext, default as ToastProvider } from './Toast'

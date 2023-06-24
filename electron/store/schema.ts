@@ -1,6 +1,6 @@
-import { Schema } from 'electron-store';
+import { Schema } from 'electron-store'
 
-import { DefaultStoreProps } from './default';
+import { DefaultStoreProps } from './default'
 
 export const schema: Schema<DefaultStoreProps> = {
   theme: {
@@ -28,4 +28,4 @@ export const schema: Schema<DefaultStoreProps> = {
       },
     },
   },
-};
+}

@@ -1,9 +1,9 @@
-import React, { HTMLAttributes } from 'react';
+import { FC, HTMLAttributes } from 'react'
 
-export type FieldProps = HTMLAttributes<HTMLDivElement>;
+export type FieldProps = HTMLAttributes<HTMLDivElement>
 
-const Field: React.FC<FieldProps> = (props) => {
-  return <div className="flex flex-1 flex-col gap-1" {...props} />;
-};
+const Field: FC<FieldProps> = (props) => {
+  return <div className="flex flex-1 flex-col gap-1" {...props} />
+}
 
-export default Field;
+export default Field

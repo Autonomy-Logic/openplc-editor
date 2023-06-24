@@ -1,12 +1,14 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import React, { useState } from 'react';
-import { FormProvider, useForm } from 'react-hook-form';
-import { useTranslation } from 'react-i18next';
-import { HiArrowSmallUp, HiPlusSmall } from 'react-icons/hi2';
-import { ResizableBox } from 'react-resizable';
-import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod'
+import { FC, useEffect, useState } from 'react'
+import { FormProvider, useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
+import { HiArrowSmallUp, HiPlusSmall } from 'react-icons/hi2'
+import { ResizableBox } from 'react-resizable'
+import { z } from 'zod'
 
-import { Form, Tabs, Tooltip } from '@/components';
+import { Form, Tabs, Tooltip } from '@/components'
+import { RootProps } from '@/components/Tree'
+import { useProject } from '@/hooks'
 
 const comboboxSchema = z.object({
   combobox: z.object({
@@ -14,17 +16,18 @@ const comboboxSchema = z.object({
     label: z.string(),
     value: z.union([z.number(), z.string()]),
   }),
-});
+})
 
-type CreateComboboxData = z.infer<typeof comboboxSchema>;
+type CreateComboboxData = z.infer<typeof comboboxSchema>
 
-const LeftColumn: React.FC = () => {
-  const { t } = useTranslation('leftColumnTabs');
-
-  const [current, setCurrent] = useState(0);
+const LeftColumn: FC = () => {
+  const { t } = useTranslation('leftColumnTabs')
+  const { project } = useProject()
+  const [root, setRoot] = useState<RootProps>()
+  const [current, setCurrent] = useState(0)
   const createComboboxForm = useForm<CreateComboboxData>({
     resolver: zodResolver(comboboxSchema),
-  });
+  })
 
   const leftColumnTabs = [
     {
@@ -33,12 +36,47 @@ const LeftColumn: React.FC = () => {
       onClick: () => setCurrent(0),
       current: current === 0,
     },
-  ];
+  ]
 
   const options = [
     { id: 0, label: 'open plc editor', value: 0 },
     { id: 1, label: 'lorem ipsum', value: 1 },
-  ];
+  ]
+
+  useEffect(() => {
+    if (project && project?.xmlSerialized) {
+      const { xmlSerialized } = project
+      setRoot({
+        title: 'root',
+        children: [
+          {
+            title: xmlSerialized?.project?.fileHeader['@productName'],
+            icon: () => (
+              <div className="flex h-5 w-5 items-center justify-center border-2 border-gray-500 px-1">
+                <div className="-ml-1 -mt-1 -rotate-45">
+                  <span className="text-[0.5rem] font-bold text-gray-500">
+                    PLC
+                  </span>
+                </div>
+              </div>
+            ),
+            children: [
+              ...Object.keys(xmlSerialized?.project?.types?.pous).map(
+                (key) => ({
+                  title: xmlSerialized?.project?.types?.pous[key]['@name'],
+                }),
+              ),
+              {
+                title:
+                  xmlSerialized?.project?.instances?.configurations
+                    ?.configuration?.resource['@name'],
+              },
+            ],
+          },
+        ],
+      })
+    }
+  }, [project])
 
   return (
     <aside>
@@ -46,13 +84,13 @@ const LeftColumn: React.FC = () => {
       <ResizableBox
         width={Infinity}
         height={300}
-        className="border-b border-gray-200 dark:border-gray-700"
+        className="border-b border-gray-900/10 dark:border-white/5"
         minConstraints={[Infinity, 300]}
         resizeHandles={['s']}
         axis="y"
       >
-        <div className="w-full h-full relative overflow-hidden">
-          <span className="absolute -bottom-20 -right-20 bg-gray-400 w-40 h-40 p-6 rounded-full dark:bg-gray-600">
+        <div className="relative h-full w-full overflow-hidden p-4">
+          <span className="absolute -bottom-20 -right-20 h-40 w-40 rounded-full bg-gray-400 p-6 dark:bg-gray-600">
             <button type="button" className="press-animated">
               <HiPlusSmall className="h-12 w-12 text-white" />
             </button>
@@ -60,13 +98,13 @@ const LeftColumn: React.FC = () => {
         </div>
       </ResizableBox>
       <div>
-        <div className="flex items-center justify-center gap-2 p-2 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-center gap-2 border-b border-gray-900/10 p-2 dark:border-white/5">
           <Tooltip label={t('parentInstance')}>
             <button
               type="button"
-              className="press-animated flex flex-col items-center justify-center mt-2"
+              className="press-animated mt-2 flex flex-col items-center justify-center"
             >
-              <div className="w-5 h-[0.125rem] -mb-1 bg-orange-400" />
+              <div className="-mb-1 h-[0.125rem] w-5 bg-orange-400" />
               <HiArrowSmallUp className="h-8 w-8 text-orange-400" />
             </button>
           </Tooltip>
@@ -143,7 +181,7 @@ const LeftColumn: React.FC = () => {
         </div>
       </div>
     </aside>
-  );
-};
+  )
+}
 
-export default LeftColumn;
+export default LeftColumn

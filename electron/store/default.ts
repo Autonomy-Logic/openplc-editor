@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod'
 
 export const defaultStoreSchema = z.object({
   theme: z.string(),
@@ -12,13 +12,13 @@ export const defaultStoreSchema = z.object({
       })
       .optional(),
   }),
-});
+})
 
-export type DefaultStoreProps = z.infer<typeof defaultStoreSchema>;
+export type DefaultStoreProps = z.infer<typeof defaultStoreSchema>
 
 export const getDefaultStore = (): DefaultStoreProps => {
   return {
     theme: 'light',
     window: {},
-  };
-};
+  }
+}

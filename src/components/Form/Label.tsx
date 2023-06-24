@@ -1,15 +1,15 @@
-import React, { LabelHTMLAttributes } from 'react';
+import { FC, LabelHTMLAttributes } from 'react'
 
-type LabelProps = LabelHTMLAttributes<HTMLLabelElement>;
+type LabelProps = LabelHTMLAttributes<HTMLLabelElement>
 
-const Label: React.FC<LabelProps> = ({ htmlFor, ...rest }) => {
+const Label: FC<LabelProps> = ({ htmlFor, ...rest }) => {
   return (
     <label
       htmlFor={htmlFor}
-      className="text-sm text-gray-500 flex items-center justify-between font-medium leading-6 dark:text-gray-400"
+      className="flex items-center justify-between text-sm font-medium leading-6 text-gray-500 dark:text-gray-400"
       {...rest}
     />
-  );
-};
+  )
+}
 
-export default Label;
+export default Label

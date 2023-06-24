@@ -1,18 +1,18 @@
-import { CONSTANTS } from '@shared/constants';
-import { ChildWindowProps } from '@shared/types/childWindow';
-import React from 'react';
-import { useTranslation } from 'react-i18next';
+import { CONSTANTS } from '@shared/constants'
+import { ChildWindowProps } from '@shared/types/childWindow'
+import { FC } from 'react'
+import { useTranslation } from 'react-i18next'
 
-import { useIpcRender } from '@/hooks';
-import { Home as HomeTemplate } from '@/templates';
+import { useIpcRender } from '@/hooks'
+import { Home as HomeTemplate } from '@/templates'
 
 const {
   channels: { get, set },
   paths,
-} = CONSTANTS;
-const Home: React.FC = () => {
-  const { t } = useTranslation('createPOU');
-  const { invoke: createChildWindow } = useIpcRender<ChildWindowProps>();
+} = CONSTANTS
+const Home: FC = () => {
+  const { t } = useTranslation('createPOU')
+  const { invoke: createChildWindow } = useIpcRender<ChildWindowProps>()
 
   useIpcRender<undefined, boolean>({
     channel: get.CREATE_POU_WINDOW,
@@ -30,11 +30,11 @@ const Home: React.FC = () => {
           height: 360,
           hideMenuBar: true,
           title: t('title'),
-        });
+        })
     },
-  });
+  })
 
-  return <HomeTemplate />;
-};
+  return <HomeTemplate />
+}
 
-export default Home;
+export default Home

@@ -1,7 +1,7 @@
-import { CONSTANTS } from '@shared/constants';
-import { z } from 'zod';
+import { CONSTANTS } from '@shared/constants'
+import { z } from 'zod'
 
-const { paths } = CONSTANTS;
+const { paths } = CONSTANTS
 
 export const childWindowSchema = z.object({
   path: z.string().refine((theme) => Object.values(paths).includes(theme)),
@@ -38,6 +38,6 @@ export const childWindowSchema = z.object({
   titleBarStyle: z
     .enum(['default', 'hidden', 'hiddenInset', 'customButtonsOnHover'])
     .optional(),
-});
+})
 
-export type ChildWindowProps = z.infer<typeof childWindowSchema>;
+export type ChildWindowProps = z.infer<typeof childWindowSchema>

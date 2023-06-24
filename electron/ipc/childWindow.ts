@@ -1,19 +1,19 @@
-import { CONSTANTS } from '@shared/constants';
-import { ChildWindowProps, childWindowSchema } from '@shared/types/childWindow';
-import { BrowserWindow, ipcMain } from 'electron';
-import { join } from 'path';
+import { CONSTANTS } from '@shared/constants'
+import { ChildWindowProps, childWindowSchema } from '@shared/types/childWindow'
+import { BrowserWindow, ipcMain } from 'electron'
+import { join } from 'path'
 
-import { mainWindow } from '../main';
+import { mainWindow } from '../main'
 
 const {
   channels: { set },
-} = CONSTANTS;
+} = CONSTANTS
 
 export const childWindowIpc = () => {
   ipcMain.handle(set.CREATE_CHILD_WINDOW, (_, arg: ChildWindowProps) => {
-    const { path, hideMenuBar, ...newWindow } = childWindowSchema.parse(arg);
-    const url = process.env.VITE_DEV_SERVER_URL;
-    const indexHtml = join(process.env.DIST, 'index.html');
+    const { path, hideMenuBar, ...newWindow } = childWindowSchema.parse(arg)
+    const url = process.env.VITE_DEV_SERVER_URL
+    const indexHtml = join(process.env.DIST, 'index.html')
     const childWindow = new BrowserWindow({
       icon: join(process.env.PUBLIC, 'favicon.ico'),
       parent: mainWindow as BrowserWindow,
@@ -22,13 +22,13 @@ export const childWindowIpc = () => {
         contextIsolation: false,
       },
       ...newWindow,
-    });
-    if (hideMenuBar) childWindow.setMenu(null);
+    })
+    if (hideMenuBar) childWindow.setMenu(null)
     if (process.env.VITE_DEV_SERVER_URL) {
-      childWindow.loadURL(`${url}${path}`);
+      childWindow.loadURL(`${url}${path}`)
     } else {
-      childWindow.loadFile(indexHtml, { hash: path });
+      childWindow.loadFile(indexHtml, { hash: path })
     }
-  });
-  return { ok: true };
-};
+  })
+  return { ok: true }
+}

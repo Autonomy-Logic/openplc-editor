@@ -1,15 +1,15 @@
-import { CONSTANTS } from '@shared/constants';
-import { ToastProps, toastSchema } from '@shared/types/toast';
+import { CONSTANTS } from '@shared/constants'
+import { ToastProps, toastSchema } from '@shared/types/toast'
 
-import { mainWindow } from '../main';
+import { mainWindow } from '../main'
 
 const {
   channels: { get },
-} = CONSTANTS;
+} = CONSTANTS
 
 export const toast = {
   send: (arg: ToastProps) => {
-    const message = toastSchema.parse(arg);
-    mainWindow?.webContents.send(get.TOAST, message);
+    const message = toastSchema.parse(arg)
+    mainWindow?.webContents.send(get.TOAST, message)
   },
-};
+}

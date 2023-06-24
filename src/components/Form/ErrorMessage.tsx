@@ -1,8 +1,8 @@
-import React from 'react';
-import { useFormContext } from 'react-hook-form';
+import { FC } from 'react'
+import { useFormContext } from 'react-hook-form'
 
 interface ErrorMessageProps {
-  field: string;
+  field: string
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -11,27 +11,32 @@ const get = (obj: Record<any, any>, path: string) => {
     String.prototype.split
       .call(path, regexp)
       .filter(Boolean)
-      .reduce((res, key) => (res !== null && res !== undefined ? res[key] : res), obj);
+      .reduce(
+        (res, key) => (res !== null && res !== undefined ? res[key] : res),
+        obj,
+      )
 
-  const result = travel(/[,[\]]+?/) || travel(/[,[\].]+?/);
+  const result = travel(/[,[\]]+?/) || travel(/[,[\].]+?/)
 
-  return result;
-};
+  return result
+}
 
-const ErrorMessage: React.FC<ErrorMessageProps> = ({ field }) => {
+const ErrorMessage: FC<ErrorMessageProps> = ({ field }) => {
   const {
     formState: { errors },
-  } = useFormContext();
+  } = useFormContext()
 
-  const fieldError = get(errors, field);
+  const fieldError = get(errors, field)
 
   if (!fieldError) {
-    return <div className="h-4 mt-1" />;
+    return <div className="mt-1 h-4" />
   }
 
   return (
-    <span className="text-xs text-red-500 mt-1">{fieldError.message?.toString()}</span>
-  );
-};
+    <span className="mt-1 text-xs text-red-500">
+      {fieldError.message?.toString()}
+    </span>
+  )
+}
 
-export default ErrorMessage;
+export default ErrorMessage

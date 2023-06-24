@@ -1,10 +1,10 @@
-import { createProjectService } from '../services';
+import { createProjectService } from '../services'
 
 const createProjectController = {
   async handle() {
-    const result = await createProjectService.execute();
-    return result;
+    const result = await createProjectService.execute()
+    return result
   },
-};
+}
 
-export default createProjectController;
+export default createProjectController

@@ -2,7 +2,7 @@
 
 .Toastify__toast,
 .Toastify__toast-body {
-  @apply p-0 bg-transparent;
+  @apply bg-transparent p-0;
 }
 .Toastify__toast-container--top-right {
   @apply right-[1em] top-[2em];

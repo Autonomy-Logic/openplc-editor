@@ -17,6 +17,7 @@ export const CONSTANTS = {
       CREATE_CHILD_WINDOW: 'set_create_child_window',
       CREATE_PROJECT_FROM_TOOLBAR: 'set_create_project_from_toolbar',
       CREATE_POU_DATA: 'set_create_pou_data',
+      UPDATE_MENU_PROJECT: 'set_update_menu_project',
     },
   },
   paths: {
@@ -32,4 +33,4 @@ export const CONSTANTS = {
     FBD: 'FBD',
     SFC: 'SFC',
   },
-};
+}

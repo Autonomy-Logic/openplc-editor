@@ -1,5 +1,5 @@
-import React from 'react';
-import { ToastContainer } from 'react-toastify';
+import { FC } from 'react'
+import { ToastContainer } from 'react-toastify'
 
 import {
   ProjectProvider,
@@ -7,21 +7,21 @@ import {
   ThemeProvider,
   TitlebarProvider,
   ToastProvider,
-} from './contexts';
+} from './contexts'
 
-const App: React.FC = () => {
+const App: FC = () => {
   return (
     <ThemeProvider>
       <ToastProvider>
-        <TitlebarProvider>
-          <ProjectProvider>
+        <ProjectProvider>
+          <TitlebarProvider>
             <RouterProvider />
             <ToastContainer closeButton={false} closeOnClick={false} />
-          </ProjectProvider>
-        </TitlebarProvider>
+          </TitlebarProvider>
+        </ProjectProvider>
       </ToastProvider>
     </ThemeProvider>
-  );
-};
+  )
+}
 
-export default App;
+export default App

@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { FC, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
-import { Tabs } from '@/components';
+import { Tabs } from '@/components'
 
-const RightColumn: React.FC = () => {
-  const { t } = useTranslation('rightColumnTabs');
+const RightColumn: FC = () => {
+  const { t } = useTranslation('rightColumnTabs')
 
-  const [current, setCurrent] = useState(0);
+  const [current, setCurrent] = useState(0)
 
   const rightColumnTabs = [
     {
@@ -21,13 +21,13 @@ const RightColumn: React.FC = () => {
       onClick: () => setCurrent(1),
       current: current === 1,
     },
-  ];
+  ]
 
   return (
     <aside>
       <Tabs tabs={rightColumnTabs} />
     </aside>
-  );
-};
+  )
+}
 
-export default RightColumn;
+export default RightColumn

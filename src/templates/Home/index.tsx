@@ -1,22 +1,22 @@
-import React from 'react';
-import { ResizableBox } from 'react-resizable';
+import { FC } from 'react'
+import { ResizableBox } from 'react-resizable'
 
-import { useFullScreen } from '@/hooks';
+import { useFullScreen } from '@/hooks'
 
-import BottomRow from './BottomRow';
-import LeftColumn from './LeftColumn';
-import RightColumn from './RightColumn';
-import TopRow from './TopRow';
+import BottomRow from './BottomRow'
+import LeftColumn from './LeftColumn'
+import RightColumn from './RightColumn'
+import TopRow from './TopRow'
 
-const Layout: React.FC = () => {
-  const { isFullScreen } = useFullScreen();
-  const initialSize = 300;
+const Layout: FC = () => {
+  const { isFullScreen } = useFullScreen()
+  const initialSize = 300
 
   return (
     <>
       <header
         id="top-row"
-        className="flex items-center border-b border-gray-200 h-14 dark:border-gray-700 z-40"
+        className="z-40 flex h-14 items-center border-b border-gray-900/10 dark:border-white/5"
       >
         <TopRow />
       </header>
@@ -28,7 +28,7 @@ const Layout: React.FC = () => {
         <ResizableBox
           width={initialSize}
           height={Infinity}
-          className="left-column border-r border-gray-200 dark:border-gray-700"
+          className="left-column border-r border-gray-900/10 dark:border-white/5"
           minConstraints={[initialSize, Infinity]}
           resizeHandles={['e']}
           axis="x"
@@ -39,7 +39,7 @@ const Layout: React.FC = () => {
         <ResizableBox
           width={initialSize}
           height={Infinity}
-          className="right-column border-l border-gray-200 dark:border-gray-700"
+          className="right-column border-l border-gray-900/10 dark:border-white/5"
           minConstraints={[initialSize, Infinity]}
           resizeHandles={['w']}
           axis="x"
@@ -49,7 +49,7 @@ const Layout: React.FC = () => {
         <ResizableBox
           width={Infinity}
           height={initialSize}
-          className="bottom-row border-t border-gray-200 dark:border-gray-700"
+          className="bottom-row border-t border-gray-900/10 dark:border-white/5"
           minConstraints={[Infinity, initialSize]}
           resizeHandles={['n']}
           axis="y"
@@ -58,7 +58,7 @@ const Layout: React.FC = () => {
         </ResizableBox>
       </div>
     </>
-  );
-};
+  )
+}
 
-export default Layout;
+export default Layout

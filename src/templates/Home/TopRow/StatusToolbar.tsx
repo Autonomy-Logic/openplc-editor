@@ -1,27 +1,27 @@
-import { ToolbarPositionProps } from '@shared/types/toolbar';
-import React, { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { BiRun } from 'react-icons/bi';
-import { HiArrowDown, HiCpuChip, HiEllipsisVertical } from 'react-icons/hi2';
+import { ToolbarPositionProps } from '@shared/types/toolbar'
+import { Dispatch, FC, SetStateAction, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { BiRun } from 'react-icons/bi'
+import { HiArrowDown, HiCpuChip, HiEllipsisVertical } from 'react-icons/hi2'
 
-import { Toolbar } from '@/components';
-import { ToolsProps } from '@/components/Toolbar';
+import { Toolbar } from '@/components'
+import { ToolsProps } from '@/components/Toolbar'
 
 type StatusToolbarProps = {
-  currentPosition: React.Dispatch<React.SetStateAction<ToolbarPositionProps>>;
-  isCurrentToolbar?: boolean;
-  onMouseDown?: (e: MouseEvent) => void;
-};
+  currentPosition: Dispatch<SetStateAction<ToolbarPositionProps>>
+  isCurrentToolbar?: boolean
+  onMouseDown?: (e: MouseEvent) => void
+}
 
-const StatusToolbar: React.FC<StatusToolbarProps> = ({
+const StatusToolbar: FC<StatusToolbarProps> = ({
   currentPosition,
   isCurrentToolbar,
   onMouseDown,
 }) => {
-  const { t } = useTranslation('toolbar');
-  const [position, setPosition] = useState<ToolbarPositionProps>({ x: 0, y: 0 });
+  const { t } = useTranslation('toolbar')
+  const [position, setPosition] = useState<ToolbarPositionProps>({ x: 0, y: 0 })
 
-  const onClick = () => console.log('will be created soon');
+  const onClick = () => console.log('will be created soon')
 
   const statusTools: ToolsProps[] = [
     {
@@ -47,17 +47,17 @@ const StatusToolbar: React.FC<StatusToolbarProps> = ({
       icon: HiCpuChip,
       tooltip: t('statusToolbar.transferProgram'),
     },
-  ];
+  ]
 
   useEffect(() => {
-    currentPosition(position);
-  }, [currentPosition, position]);
+    currentPosition(position)
+  }, [currentPosition, position])
 
   useEffect(() => {
     if ((position.y > 0 && position.y <= 28) || position?.y === 0) {
-      setPosition((state) => ({ ...state, y: 0 }));
+      setPosition((state) => ({ ...state, y: 0 }))
     }
-  }, [position.y]);
+  }, [position.y])
 
   return (
     <Toolbar
@@ -68,7 +68,7 @@ const StatusToolbar: React.FC<StatusToolbarProps> = ({
       isCurrentToolbar={isCurrentToolbar}
       onMouseDown={onMouseDown}
     />
-  );
-};
+  )
+}
 
-export default StatusToolbar;
+export default StatusToolbar

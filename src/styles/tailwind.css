@@ -19,7 +19,7 @@
     grid-area: 1 / 2 / 5 / 5;
   }
   .hide-top-row {
-    @apply w-0 h-0;
+    @apply h-0 w-0;
   }
   .comment-icon {
     transform: rotateX(180deg) rotateY(0deg) rotateZ(90deg);
@@ -31,7 +31,7 @@
     @apply visible z-40;
   }
   .press-animated {
-    @apply transition-[0.2s] duration-[all] border-[none] active:scale-[0.90];
+    @apply border-[none] transition-[0.2s] duration-[all] active:scale-[0.90];
   }
   .drag-window {
     -webkit-user-select: none;
@@ -44,7 +44,7 @@
 
 @layer base {
   ::-webkit-scrollbar {
-    @apply w-3.5 h-3.5 bg-white;
+    @apply h-3.5 w-3.5 bg-white;
   }
   ::-webkit-scrollbar-corner {
     @apply bg-transparent;
@@ -53,7 +53,7 @@
     @apply bg-transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-open-plc-blue bg-clip-padding transition-all duration-[0.3s] rounded-[0.625rem] border-4 border-solid border-transparent hover:border-[0.188rem] hover:border-solid hover:border-transparent;
+    @apply rounded-[0.625rem] border-4 border-solid border-transparent bg-open-plc-blue bg-clip-padding transition-all duration-[0.3s] hover:border-[0.188rem] hover:border-solid hover:border-transparent;
   }
   .dark ::-webkit-scrollbar {
     @apply bg-gray-900;

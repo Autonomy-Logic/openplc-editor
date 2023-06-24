@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { FC, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
-import { Tabs } from '@/components';
+import { Tabs } from '@/components'
 
-const BottomRow: React.FC = () => {
-  const { t } = useTranslation('bottomRowTabs');
+const BottomRow: FC = () => {
+  const { t } = useTranslation('bottomRowTabs')
 
-  const [current, setCurrent] = useState(0);
+  const [current, setCurrent] = useState(0)
 
   const bottomRowTabs = [
     {
@@ -27,13 +27,13 @@ const BottomRow: React.FC = () => {
       onClick: () => setCurrent(2),
       current: current === 2,
     },
-  ];
+  ]
 
   return (
     <footer>
       <Tabs tabs={bottomRowTabs} />
     </footer>
-  );
-};
+  )
+}
 
-export default BottomRow;
+export default BottomRow

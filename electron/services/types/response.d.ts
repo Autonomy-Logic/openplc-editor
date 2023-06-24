@@ -1,8 +1,8 @@
 export type ServiceResponse<T = unknown> = {
-  ok: boolean;
+  ok: boolean
   reason?: {
-    title: string;
-    description?: string;
-  };
-  data?: T;
-};
+    title: string
+    description?: string
+  }
+  data?: T
+}
