@@ -1,64 +1,116 @@
-import { FC } from 'react'
-import { ResizableBox } from 'react-resizable'
+import { CONSTANTS } from '@shared/constants'
+import { FC, Fragment } from 'react'
+import { useTranslation } from 'react-i18next'
+import {
+  HiBars3,
+  HiOutlineBars3CenterLeft,
+  HiOutlineCog6Tooth,
+  HiOutlineSquares2X2,
+} from 'react-icons/hi2'
+import { RiNodeTree } from 'react-icons/ri'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 
-import { useFullScreen } from '@/hooks'
+import { Tooltip } from '@/components'
+import { useFullScreen, useProject, useToggle } from '@/hooks'
+import { classNames, convertToPath } from '@/utils'
 
-import BottomRow from './BottomRow'
-import LeftColumn from './LeftColumn'
-import RightColumn from './RightColumn'
-import TopRow from './TopRow'
+const { paths } = CONSTANTS
 
-const Layout: FC = () => {
+const Home: FC = () => {
+  const { t } = useTranslation('sidebar')
+  const { pathname } = useLocation()
+  const { project } = useProject()
   const { isFullScreen } = useFullScreen()
-  const initialSize = 300
+  const [isSidebarOpen, toggleIsSideBarOpen] = useToggle(true)
+
+  const navigation = [
+    {
+      name: t('tools'),
+      to: convertToPath([paths.TOOLS]),
+      icon: HiOutlineSquares2X2,
+    },
+    ...(project?.xmlSerialized
+      ? [
+          {
+            name: t('project'),
+            to: convertToPath([paths.PROJECT_TREE]),
+            icon: RiNodeTree,
+          },
+        ]
+      : []),
+  ]
 
   return (
     <>
-      <header
-        id="top-row"
-        className="z-40 flex h-14 items-center border-b border-gray-900/10 dark:border-white/5"
-      >
-        <TopRow />
-      </header>
       <div
-        className={`layout-grid ${
-          isFullScreen ? 'h-screen' : 'h-[calc(100vh_-_1.875rem)]'
-        }`}
+        className={classNames(
+          'layout',
+          isFullScreen ? 'z-50 h-screen' : 'h-[calc(100vh_-_4rem)]',
+        )}
       >
-        <ResizableBox
-          width={initialSize}
-          height={Infinity}
-          className="left-column border-r border-gray-900/10 dark:border-white/5"
-          minConstraints={[initialSize, Infinity]}
-          resizeHandles={['e']}
-          axis="x"
+        <div className="sidebar z-10  w-20 overflow-y-auto border-r border-gray-100 bg-white px-4 dark:border-white/5 dark:bg-gray-900">
+          <nav className="flex h-full flex-col items-center py-4">
+            <ul className="flex flex-col items-center space-y-1">
+              {navigation.map(({ name, to, icon: Icon }) => (
+                <li key={name}>
+                  <Tooltip id={name} label={name} place="right">
+                    <Link
+                      to={to}
+                      className={classNames(
+                        pathname === to
+                          ? 'bg-blue-100 text-open-plc-blue dark:bg-gray-800'
+                          : 'text-gray-500 hover:bg-blue-100 hover:text-open-plc-blue dark:hover:bg-gray-800',
+                        'group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6',
+                      )}
+                    >
+                      <Icon className="h-6 w-6 shrink-0" aria-hidden="true" />
+                      <span className="sr-only">{name}</span>
+                    </Link>
+                  </Tooltip>
+                </li>
+              ))}
+            </ul>
+            <Tooltip id={t('settings')} label={t('settings')} place="right">
+              <Link
+                to={convertToPath([paths.SETTINGS, paths.THEME])}
+                className={classNames(
+                  pathname.includes('settings')
+                    ? 'bg-blue-100 text-open-plc-blue dark:bg-gray-800'
+                    : 'text-gray-500 hover:bg-blue-100 hover:text-open-plc-blue dark:hover:bg-gray-800',
+                  'group mt-auto flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6',
+                )}
+              >
+                <HiOutlineCog6Tooth
+                  className="h-6 w-6 shrink-0"
+                  aria-hidden="true"
+                />
+                <span className="sr-only">settings</span>
+              </Link>
+            </Tooltip>
+            <button
+              onClick={toggleIsSideBarOpen}
+              className="group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 text-gray-500 hover:text-open-plc-blue"
+            >
+              {isSidebarOpen ? (
+                <HiOutlineBars3CenterLeft className="h-6 w-6 shrink-0" />
+              ) : (
+                <HiBars3 className="h-6 w-6 shrink-0" />
+              )}
+            </button>
+          </nav>
+        </div>
+        <aside
+          className={classNames(
+            'secondary-sidebar absolute h-full w-96 overflow-y-auto border-r border-gray-100 bg-white px-8 shadow transition-all duration-500  dark:border-white/5 dark:bg-gray-900',
+            isSidebarOpen ? 'left-20' : '-left-96',
+          )}
         >
-          <LeftColumn />
-        </ResizableBox>
-        <main className="main-content"></main>
-        <ResizableBox
-          width={initialSize}
-          height={Infinity}
-          className="right-column border-l border-gray-900/10 dark:border-white/5"
-          minConstraints={[initialSize, Infinity]}
-          resizeHandles={['w']}
-          axis="x"
-        >
-          <RightColumn />
-        </ResizableBox>
-        <ResizableBox
-          width={Infinity}
-          height={initialSize}
-          className="bottom-row border-t border-gray-900/10 dark:border-white/5"
-          minConstraints={[Infinity, initialSize]}
-          resizeHandles={['n']}
-          axis="y"
-        >
-          <BottomRow />
-        </ResizableBox>
+          <Outlet />
+        </aside>
+        <main className="main-content bg-gray-100 px-8 py-6 dark:bg-gray-800"></main>
       </div>
     </>
   )
 }
 
-export default Layout
+export default Home

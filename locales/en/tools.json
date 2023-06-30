@@ -1,6 +1,7 @@
 {
   "common": {
-    "close": "Close"
+    "close": "Close",
+    "tabName": "Tools"
   },
   "menuToolbar": {
     "title": "Menu Toolbar",

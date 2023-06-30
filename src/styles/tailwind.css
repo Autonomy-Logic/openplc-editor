@@ -3,32 +3,24 @@
 @tailwind utilities;
 
 @layer utilities {
-  .layout-grid {
-    @apply grid grid-cols-[0.25fr_repeat(3,1fr)_0.25fr] grid-rows-[repeat(5,1fr)] gap-x-0 gap-y-0;
+  .layout {
+    @apply grid grid-cols-[5rem_24rem_repeat(3,1fr)] grid-rows-[repeat(5,1fr)] gap-x-0 gap-y-0;
   }
-  .right-column {
-    grid-area: 1 / 5 / 5 / 6;
-  }
-  .bottom-row {
-    grid-area: 5 / 2 / 6 / 6;
-  }
-  .left-column {
+  .sidebar {
     grid-area: 1 / 1 / 6 / 2;
   }
+  .secondary-sidebar {
+    grid-area: 1 / 2 / 6 / 3;
+  }
   .main-content {
-    grid-area: 1 / 2 / 5 / 5;
+    /* grid-area: 1 / 3 / 6 / 6; */
+    grid-area: 1 / 2 / 6 / 6;
   }
   .hide-top-row {
     @apply h-0 w-0;
   }
   .comment-icon {
     transform: rotateX(180deg) rotateY(0deg) rotateZ(90deg);
-  }
-  .tooltip {
-    @apply invisible absolute;
-  }
-  .has-tooltip:hover .tooltip {
-    @apply visible z-40;
   }
   .press-animated {
     @apply border-[none] transition-[0.2s] duration-[all] active:scale-[0.90];
@@ -43,6 +35,9 @@
 }
 
 @layer base {
+  body * {
+    @apply transition-colors duration-500;
+  }
   ::-webkit-scrollbar {
     @apply h-3.5 w-3.5 bg-white;
   }

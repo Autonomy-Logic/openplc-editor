@@ -5,18 +5,34 @@ import {
   RouterProvider as ReactRouterDomRouterProvider,
 } from 'react-router-dom'
 
-import { CreatePOU, Home } from '@/pages'
+import { Home, ProjectTree, Settings, Theme, Tools } from '@/pages'
 
 const { paths } = CONSTANTS
 
 const router = createBrowserRouter([
   {
-    path: '/',
+    path: paths.HOME,
     element: <Home />,
-  },
-  {
-    path: paths.CREATE_POU,
-    element: <CreatePOU />,
+    children: [
+      {
+        path: paths.TOOLS,
+        element: <Tools />,
+      },
+      {
+        path: paths.PROJECT_TREE,
+        element: <ProjectTree />,
+      },
+      {
+        path: paths.SETTINGS,
+        element: <Settings />,
+        children: [
+          {
+            path: paths.THEME,
+            element: <Theme />,
+          },
+        ],
+      },
+    ],
   },
 ])
 

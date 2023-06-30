@@ -1,30 +1,30 @@
-import { FC, PropsWithChildren } from 'react'
-
-import { classNames } from '@/utils'
+import { cloneElement, FC, PropsWithChildren } from 'react'
+import { PlacesType, Tooltip as ReactTooltip } from 'react-tooltip'
 
 export type TooltipProps = {
-  label?: string
-  position?: 'start' | 'center' | 'end'
+  id: string
+  label: string
+  place?: PlacesType
 }
 
 const Tooltip: FC<PropsWithChildren<TooltipProps>> = ({
+  id,
   children,
   label,
-  position = 'center',
+  place,
 }) => {
-  if (!label) return <>{children}</>
   return (
-    <div
-      className={classNames(
-        `flex items-center justify-${position}`,
-        !!label && 'has-tooltip',
-      )}
-    >
-      <span className="tooltip mt-16 inline-block whitespace-nowrap rounded-lg bg-white px-2 py-1 text-xs font-medium text-gray-500 shadow transition-opacity duration-300 dark:bg-gray-900 dark:text-gray-400">
-        {label}
-      </span>
-      {children}
-    </div>
+    <>
+      {cloneElement(children as JSX.Element, {
+        'data-tooltip-id': id,
+        'data-tooltip-content': label,
+      })}
+      <ReactTooltip
+        id={id}
+        place={place}
+        className="z-20 whitespace-nowrap rounded bg-white px-2 py-1 text-xs font-medium text-gray-500 shadow transition-opacity duration-300 dark:bg-gray-800 dark:text-gray-400"
+      />
+    </>
   )
 }
 

@@ -1,7 +1,35 @@
 .cet-titlebar {
-  @apply border-b border-gray-900/10 dark:border-white/5;
+  @apply !z-10 !flex !h-16 !px-5 shadow dark:border-b dark:border-white/5;
+}
+
+.cet-window-title {
+  @apply !max-w-none;
+}
+
+.cet-container {
+  @apply !top-16;
 }
 
 .cet-controls-container div {
-  @apply flex items-center justify-center;
+  @apply flex items-center justify-center rounded-md;
+}
+
+.cet-window-icon {
+  @apply !mr-5;
+}
+
+.cet-window-icon img {
+  @apply !h-10 !w-auto;
+}
+
+.cet-menubar div {
+  @apply flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 hover:!bg-blue-100 hover:text-open-plc-blue dark:hover:!bg-gray-800;
+}
+
+.cet-menubar-menu-container {
+  @apply !mt-4;
+}
+
+.inactive {
+  @apply !bg-gray-900;
 }

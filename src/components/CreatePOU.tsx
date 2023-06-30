@@ -1,28 +1,20 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CONSTANTS } from '@shared/constants'
-import { FC, useEffect } from 'react'
+import { FC } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 import { Button, Form } from '@/components'
-import { useIpcRender, useTitlebar } from '@/hooks'
+import { useModal, useProject } from '@/hooks'
 
-const {
-  languages,
-  types,
-  channels: { set },
-} = CONSTANTS
+const { languages, types } = CONSTANTS
 
 const CreateNewPOU: FC = () => {
-  const { dispose } = useTitlebar()
+  const { createPOU } = useProject()
+  const { handleCloseModal } = useModal()
   const { t: translate } = useTranslation()
   const { t } = useTranslation('createPOU')
-  const { invoke } = useIpcRender<{
-    name: string
-    type: string
-    language: string
-  }>()
 
   const createPOUSchema = z.object({
     name: z.string().nonempty({
@@ -52,11 +44,12 @@ const CreateNewPOU: FC = () => {
 
   const languageOptions = [{ id: 0, label: languages.LD, value: languages.LD }]
 
-  useEffect(() => {
-    dispose()
-  }, [dispose])
-
-  const handleCancel = () => window.close()
+  const handleCancel = () => {
+    createPOU({
+      type: typeOptions[0].value as string,
+    })
+    handleCloseModal()
+  }
 
   const createPouForm = useForm<createPOUSchemaData>({
     resolver: zodResolver(createPOUSchema),
@@ -72,12 +65,12 @@ const CreateNewPOU: FC = () => {
       language: { value: language },
       name,
     } = data
-    invoke(set.CREATE_POU_DATA, {
+    createPOU({
       name,
-      type: type as keyof typeof types,
-      language: language as keyof typeof languages,
+      type: type as string,
+      language: language as string,
     })
-    window.close()
+    handleCloseModal()
   }
 
   const {
@@ -86,7 +79,7 @@ const CreateNewPOU: FC = () => {
   } = createPouForm
 
   return (
-    <div className="h-screen w-screen p-8">
+    <div className="p-8">
       <FormProvider {...createPouForm}>
         <form
           onSubmit={handleSubmit(handleCreatePOU)}
@@ -111,7 +104,7 @@ const CreateNewPOU: FC = () => {
             />
             <Form.ErrorMessage field="language" />
           </Form.Field>
-          <Form.Field className="col-start-2 mt-8 flex h-10 flex-row gap-4">
+          <Form.Field className="col-start-2 mt-auto flex h-10 flex-row gap-4">
             <Button
               label={translate('buttons.ok')}
               disabled={isSubmitting}

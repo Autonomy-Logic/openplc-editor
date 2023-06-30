@@ -9,6 +9,7 @@ import {
   useEffect,
   useState,
 } from 'react'
+import { createRoot } from 'react-dom/client'
 import colors from 'tailwindcss/colors'
 
 import { useIpcRender, useProject, useTheme } from '@/hooks'
@@ -21,7 +22,6 @@ const {
 export type TitlebarProps = InstanceType<typeof Titlebar>
 
 export type TitlebarContextData = {
-  updateBackground: (color: string) => TitlebarProps | undefined
   dispose: () => void
 }
 
@@ -36,17 +36,7 @@ const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
 
   const { invoke } = useIpcRender<undefined, { ok: boolean }>()
 
-  const updateBackground = useCallback(
-    (color: string) => titlebar?.updateBackground(Color?.fromHex(color)),
-    [titlebar],
-  )
-
   const dispose = useCallback(() => titlebar?.dispose(), [titlebar])
-
-  useEffect(() => {
-    const [titleElement] = document.getElementsByClassName('cet-window-title')
-    if (titleElement) titleElement.innerHTML = title
-  }, [])
 
   useEffect(() => {
     setTitlebar((state) =>
@@ -54,14 +44,10 @@ const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
         ? state
         : new Titlebar({
             containerOverflow: 'hidden',
+            backgroundColor: Color?.fromHex(colors.gray['900']),
           }),
     )
   }, [theme])
-
-  useEffect(() => {
-    if (titlebar)
-      updateBackground(theme === 'dark' ? colors.gray['900'] : colors.white)
-  }, [theme, titlebar, updateBackground])
 
   useEffect(() => {
     const updateMenu = async () => {
@@ -74,7 +60,7 @@ const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
   }, [invoke, titlebar, project])
 
   return (
-    <TitlebarContext.Provider value={{ updateBackground, dispose }}>
+    <TitlebarContext.Provider value={{ dispose }}>
       {children}
     </TitlebarContext.Provider>
   )

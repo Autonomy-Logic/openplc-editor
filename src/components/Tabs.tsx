@@ -6,7 +6,7 @@ export type TabsProps = {
   tabs: {
     id: number | string
     name: string
-    onClick: () => void
+    onClick?: () => void
     current: boolean
   }[]
 }

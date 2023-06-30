@@ -25,8 +25,4 @@ export const projectIpc = () => {
     const response = await createProjectController.handle()
     return response
   })
-
-  ipcMain.handle(set.CREATE_POU_DATA, async (_event, pouData) => {
-    mainWindow?.webContents.send(set.CREATE_POU_DATA, pouData)
-  })
 }

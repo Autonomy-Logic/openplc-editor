@@ -13,7 +13,7 @@ import { useIpcRender, useToast } from '@/hooks'
 const {
   types,
   languages,
-  channels: { get, set },
+  channels: { get },
 } = CONSTANTS
 
 type XmlSerialized = {
@@ -22,14 +22,14 @@ type XmlSerialized = {
 }
 
 type ProjectProps = {
-  language?: keyof typeof languages
+  language?: (typeof languages)[keyof typeof languages]
   xmlSerialized?: XmlSerialized
 }
 
 type CreatePouDataProps = {
-  name: string
-  type: keyof typeof types
-  language: keyof typeof languages
+  name?: string
+  type: (typeof types)[keyof typeof types]
+  language?: (typeof languages)[keyof typeof languages]
 }
 
 type GetProjectProps = {
@@ -41,6 +41,7 @@ type GetProjectProps = {
 export type ProjectContextData = {
   project?: ProjectProps
   getProject: (path: string) => Promise<void>
+  createPOU: (data: CreatePouDataProps) => void
 }
 
 export const ProjectContext = createContext<ProjectContextData>(
@@ -64,9 +65,8 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
     },
   })
 
-  useIpcRender<undefined, CreatePouDataProps>({
-    channel: set.CREATE_POU_DATA,
-    callback: ({ name, type, language }) =>
+  const createPOU = useCallback(
+    ({ name, type, language }: CreatePouDataProps) =>
       setProject((state) => ({
         language,
         xmlSerialized: merge(state?.xmlSerialized, {
@@ -74,10 +74,10 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
             types: {
               pous: {
                 pou: {
-                  '@name': name,
+                  ...(name && { '@name': name }),
                   '@pouType': type,
                   body: {
-                    [language]: {},
+                    ...(language && { [language]: {} }),
                   },
                 },
               },
@@ -102,7 +102,8 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
           },
         }),
       })),
-  })
+    [],
+  )
 
   const getProject = useCallback(
     async (path: string) => {
@@ -120,7 +121,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
   )
 
   return (
-    <ProjectContext.Provider value={{ project, getProject }}>
+    <ProjectContext.Provider value={{ project, getProject, createPOU }}>
       {children}
     </ProjectContext.Provider>
   )

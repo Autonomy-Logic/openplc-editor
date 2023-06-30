@@ -23,7 +23,9 @@ export const createWindow = () => {
     height: 300,
     ...bounds,
     show: false,
-    titleBarStyle: 'hidden',
+    // titleBarStyle: 'hidden',
+    // transparent: true,
+    frame: false,
     webPreferences: {
       preload,
       // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production

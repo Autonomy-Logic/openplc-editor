@@ -2,6 +2,7 @@ import { FC } from 'react'
 import { ToastContainer } from 'react-toastify'
 
 import {
+  ModalProvider,
   ProjectProvider,
   RouterProvider,
   ThemeProvider,
@@ -15,8 +16,10 @@ const App: FC = () => {
       <ToastProvider>
         <ProjectProvider>
           <TitlebarProvider>
-            <RouterProvider />
-            <ToastContainer closeButton={false} closeOnClick={false} />
+            <ModalProvider>
+              <RouterProvider />
+              <ToastContainer closeButton={false} closeOnClick={false} />
+            </ModalProvider>
           </TitlebarProvider>
         </ProjectProvider>
       </ToastProvider>

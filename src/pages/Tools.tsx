@@ -1,8 +1,7 @@
 import { CONSTANTS } from '@shared/constants'
-import { ChildWindowProps } from '@shared/types/childWindow'
-import { ToolbarPositionProps } from '@shared/types/toolbar'
-import { Dispatch, FC, SetStateAction, useEffect, useState } from 'react'
+import React, { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
+import { IconType } from 'react-icons'
 import {
   HiArrowDownOnSquareStack,
   HiArrowDownTray,
@@ -14,19 +13,22 @@ import {
   HiDocumentDuplicate,
   HiDocumentMagnifyingGlass,
   HiDocumentPlus,
-  HiEllipsisVertical,
   HiFolderOpen,
   HiPrinter,
   HiScissors,
 } from 'react-icons/hi2'
 
-import { Toolbar } from '@/components'
-import { ToolsProps } from '@/components/Toolbar'
-import { useFullScreen, useIpcRender, useProject, useToast } from '@/hooks'
+import { CreatePOU, Tabs, Tooltip } from '@/components'
+import {
+  useFullScreen,
+  useIpcRender,
+  useModal,
+  useProject,
+  useToast,
+} from '@/hooks'
 
 const {
   channels: { set },
-  paths,
 } = CONSTANTS
 
 type CreateProjectFromToolbarProps = {
@@ -35,28 +37,27 @@ type CreateProjectFromToolbarProps = {
   data?: string
 }
 
-type MenuToolbarProps = {
-  currentPosition: Dispatch<SetStateAction<ToolbarPositionProps>>
-  isCurrentToolbar?: boolean
-  onMouseDown?: (e: MouseEvent) => void
+export type ToolsProps = {
+  id: number
+  icon: IconType
+  className?: string
+  onClick?: () => void
+  tooltip: string
 }
 
-const MenuToolbar: FC<MenuToolbarProps> = ({
-  currentPosition,
-  isCurrentToolbar,
-  onMouseDown,
-}) => {
-  const { t } = useTranslation('toolbar')
-  const [position, setPosition] = useState<ToolbarPositionProps>({ x: 0, y: 0 })
-  const { t: createPOUTranslation } = useTranslation('createPOU')
+const Tools: React.FC = () => {
+  const { t } = useTranslation('tools')
   const { createToast } = useToast()
   const { requestFullscreen, exitFullScreen, isFullScreen } = useFullScreen()
   const { invoke: createProjectFromToolbar } = useIpcRender<
     undefined,
     CreateProjectFromToolbarProps
   >()
-  const { invoke: createChildWindow } = useIpcRender<ChildWindowProps>()
   const { getProject } = useProject()
+  const { handleOpenModal } = useModal({
+    content: <CreatePOU />,
+    hideCloseButton: true,
+  })
 
   const onClick = () => console.log('will be created soon')
 
@@ -70,29 +71,12 @@ const MenuToolbar: FC<MenuToolbarProps> = ({
         ...reason,
       })
     } else if (ok && data) {
-      createChildWindow(set.CREATE_CHILD_WINDOW, {
-        path: paths.CREATE_POU,
-        resizable: false,
-        center: true,
-        modal: true,
-        minimizable: false,
-        fullscreenable: false,
-        fullscreen: false,
-        width: 576,
-        height: 360,
-        hideMenuBar: true,
-        title: createPOUTranslation('title'),
-      })
+      handleOpenModal()
       await getProject(data)
     }
   }
 
-  const menuTools: ToolsProps[] = [
-    {
-      id: 0,
-      icon: HiEllipsisVertical,
-      className: 'handle cursor-move',
-    },
+  const tools: ToolsProps[] = [
     {
       id: 1,
       onClick: handleCreateProjectFromToolbar,
@@ -128,14 +112,12 @@ const MenuToolbar: FC<MenuToolbarProps> = ({
       onClick,
       icon: HiArrowUturnLeft,
       tooltip: t('menuToolbar.undo'),
-      divider: 'before',
     },
     {
       id: 7,
       onClick,
       icon: HiArrowUturnRight,
       tooltip: t('menuToolbar.redo'),
-      divider: 'after',
     },
     {
       id: 8,
@@ -167,32 +149,37 @@ const MenuToolbar: FC<MenuToolbarProps> = ({
       icon: isFullScreen ? HiArrowsPointingIn : HiArrowsPointingOut,
       tooltip: t('menuToolbar.fullScreen'),
     },
-    {
-      id: 13,
-      type: 'toggleTheme',
-    },
   ]
 
-  useEffect(() => {
-    currentPosition(position)
-  }, [currentPosition, position])
-
-  useEffect(() => {
-    if ((position.y > 0 && position.y <= 28) || position?.y === 0) {
-      setPosition((state) => ({ ...state, y: 0 }))
-    }
-  }, [position.y])
-
   return (
-    <Toolbar
-      title={t('menuToolbar.title')}
-      tools={menuTools}
-      position={position}
-      setPosition={setPosition}
-      isCurrentToolbar={isCurrentToolbar}
-      onMouseDown={onMouseDown}
-    />
+    <div className="">
+      <Tabs
+        tabs={[
+          {
+            id: t('common.tabName'),
+            name: t('common.tabName'),
+            current: true,
+          },
+        ]}
+      />
+      <div className="mt-10 grid grid-cols-6 gap-4">
+        {tools.map(({ id, onClick, icon: Icon, className, tooltip }) => (
+          <Fragment key={id}>
+            <Tooltip id={tooltip} label={tooltip} place="bottom">
+              <button
+                className="press-animated border-none outline-none"
+                onClick={() => onClick && onClick()}
+              >
+                <Icon
+                  className={`h-6 w-6 text-gray-500 hover:opacity-90 ${className}`}
+                />
+              </button>
+            </Tooltip>
+          </Fragment>
+        ))}
+      </div>
+    </div>
   )
 }
 
-export default MenuToolbar
+export default Tools

@@ -10,7 +10,11 @@ export type ItemProps = PropsWithChildren<
 >
 
 const Item: FC<ItemProps> = ({ children, ...rest }) => {
-  return <></>
+  return (
+    <li className="cursor-pointer" {...rest}>
+      {children}
+    </li>
+  )
 }
 
 export default Item
