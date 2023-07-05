@@ -1,13 +1,9 @@
 .cet-titlebar {
-  @apply !z-10 !flex !h-16 !px-5 shadow dark:border-b dark:border-white/5;
+  @apply !z-10 !h-16 !px-5 shadow dark:border-b dark:border-white/5;
 }
 
 .cet-window-title {
   @apply !max-w-none;
-}
-
-.cet-container {
-  @apply !top-16;
 }
 
 .cet-controls-container div {

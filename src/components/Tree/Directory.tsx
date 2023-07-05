@@ -10,13 +10,15 @@ import Item from './Item'
 export type DirectoryProps = {
   item: RootProps
   isChild?: boolean
+  isMainDirectory?: boolean
 }
 
 export const Directory: FC<PropsWithChildren<DirectoryProps>> = ({
   item,
   isChild = false,
+  isMainDirectory = false,
 }) => {
-  const { title, icon: Icon } = item
+  const { title, icon: Icon, onClick } = item
   const [toggle, setToggle] = useState<boolean>(false)
 
   const onCollapseClicked = useCallback(
@@ -28,7 +30,7 @@ export const Directory: FC<PropsWithChildren<DirectoryProps>> = ({
   )
 
   return (
-    <Item className={classNames(isChild && 'ml-6')}>
+    <Item className={classNames(isChild && 'ml-6 max-w-fit cursor-pointer')}>
       <div className="flex items-center p-1 pl-0">
         <button
           type="button"
@@ -42,14 +44,17 @@ export const Directory: FC<PropsWithChildren<DirectoryProps>> = ({
           )}
         </button>
         {Icon && <Icon />}
-        <span
-          className={classNames(
-            !!Icon && 'ml-1',
-            'block truncate text-lg font-semibold uppercase text-gray-400 transition dark:text-gray-600',
-          )}
-        >
-          {title}
-        </span>
+        <button onClick={onClick}>
+          <span
+            className={classNames(
+              !!Icon && 'ml-1',
+              isMainDirectory ? 'text-lg' : 'text-sm',
+              'block truncate font-semibold uppercase text-gray-400 transition dark:text-gray-600',
+            )}
+          >
+            {title}
+          </span>
+        </button>
       </div>
       <Transition
         show={toggle}

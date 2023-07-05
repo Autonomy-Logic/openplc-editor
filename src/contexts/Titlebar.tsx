@@ -1,4 +1,3 @@
-// import { appConfig } from '@shared/app.config'
 import { CONSTANTS } from '@shared/constants'
 import { Color, Titlebar } from 'custom-electron-titlebar'
 import {
@@ -11,9 +10,7 @@ import {
 } from 'react'
 import colors from 'tailwindcss/colors'
 
-import { useIpcRender, useProject, useTheme } from '@/hooks'
-
-// const { title } = appConfig
+import { useIpcRender, useProject } from '@/hooks'
 
 const {
   channels: { set },
@@ -23,7 +20,6 @@ export type TitlebarProps = InstanceType<typeof Titlebar>
 
 export type TitlebarContextData = {
   dispose: () => void
-  updateTitle: (title: string) => void
 }
 
 export const TitlebarContext = createContext<TitlebarContextData>(
@@ -32,17 +28,11 @@ export const TitlebarContext = createContext<TitlebarContextData>(
 
 const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
   const [titlebar, setTitlebar] = useState<TitlebarProps>()
-  const { theme } = useTheme()
   const { project } = useProject()
 
   const { invoke } = useIpcRender<undefined, { ok: boolean }>()
 
   const dispose = useCallback(() => titlebar && titlebar.dispose(), [titlebar])
-
-  const updateTitle = useCallback(
-    (title: string) => titlebar && titlebar.updateTitle(title),
-    [titlebar],
-  )
 
   useEffect(() => {
     setTitlebar((state) =>
@@ -53,7 +43,7 @@ const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
             backgroundColor: Color?.fromHex(colors.gray['900']),
           }),
     )
-  }, [theme])
+  }, [])
 
   useEffect(() => {
     const updateMenu = async () => {
@@ -65,12 +55,8 @@ const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
     updateMenu()
   }, [invoke, titlebar, project])
 
-  // useEffect(() => {
-  //   if (titlebar) updateTitle(title)
-  // }, [titlebar, updateTitle])
-
   return (
-    <TitlebarContext.Provider value={{ dispose, updateTitle }}>
+    <TitlebarContext.Provider value={{ dispose }}>
       {children}
     </TitlebarContext.Provider>
   )

@@ -49,12 +49,12 @@ const Home: FC = () => {
       <div
         className={classNames(
           'layout',
-          isFullScreen ? 'z-50 h-screen' : 'h-[calc(100vh_-_4rem)]',
+          isFullScreen ? 'h-full' : 'h-[calc(100vh_-_4rem)]',
         )}
       >
-        <div className="sidebar z-10 w-20 overflow-y-auto border-r border-gray-100 bg-white px-4 dark:border-white/5 dark:bg-gray-900">
-          <nav className="flex h-full flex-col items-center py-4">
-            <ul className="mb-auto flex flex-col items-center space-y-1">
+        <div className="sidebar z-10 h-full w-20 overflow-y-auto border-r border-gray-100 bg-white px-4 py-4 dark:border-white/5 dark:bg-gray-900">
+          <nav className="flex h-full flex-col items-center justify-between">
+            <ul className="flex flex-col items-center space-y-1">
               {navigation.map(({ name, to, icon: Icon }) => (
                 <li key={name}>
                   <Tooltip id={name} label={name} place="right">
@@ -76,35 +76,37 @@ const Home: FC = () => {
                 </li>
               ))}
             </ul>
-            <Tooltip id={t('settings')} label={t('settings')} place="right">
-              <Link to={convertToPath([paths.SETTINGS, paths.THEME])}>
-                <button
-                  className={classNames(
-                    pathname.includes('settings')
-                      ? 'bg-blue-100 text-open-plc-blue dark:bg-gray-800'
-                      : 'text-gray-500 hover:bg-blue-100 hover:text-open-plc-blue dark:hover:bg-gray-800',
-                    'group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6',
-                  )}
-                  onClick={handleClickLink}
-                >
-                  <HiOutlineCog6Tooth
-                    className="h-6 w-6 shrink-0"
-                    aria-hidden="true"
-                  />
-                  <span className="sr-only">settings</span>
-                </button>
-              </Link>
-            </Tooltip>
-            <button
-              onClick={toggleIsSideBarOpen}
-              className="group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 text-gray-500 hover:text-open-plc-blue"
-            >
-              {isSidebarOpen ? (
-                <HiOutlineBars3CenterLeft className="h-6 w-6 shrink-0" />
-              ) : (
-                <HiBars3 className="h-6 w-6 shrink-0" />
-              )}
-            </button>
+            <div>
+              <Tooltip id={t('settings')} label={t('settings')} place="right">
+                <Link to={convertToPath([paths.SETTINGS, paths.THEME])}>
+                  <button
+                    className={classNames(
+                      pathname.includes('settings')
+                        ? 'bg-blue-100 text-open-plc-blue dark:bg-gray-800'
+                        : 'text-gray-500 hover:bg-blue-100 hover:text-open-plc-blue dark:hover:bg-gray-800',
+                      'group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6',
+                    )}
+                    onClick={handleClickLink}
+                  >
+                    <HiOutlineCog6Tooth
+                      className="h-6 w-6 shrink-0"
+                      aria-hidden="true"
+                    />
+                    <span className="sr-only">settings</span>
+                  </button>
+                </Link>
+              </Tooltip>
+              <button
+                onClick={toggleIsSideBarOpen}
+                className="group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 text-gray-500 hover:text-open-plc-blue"
+              >
+                {isSidebarOpen ? (
+                  <HiOutlineBars3CenterLeft className="h-6 w-6 shrink-0" />
+                ) : (
+                  <HiBars3 className="h-6 w-6 shrink-0" />
+                )}
+              </button>
+            </div>
           </nav>
         </div>
         <aside

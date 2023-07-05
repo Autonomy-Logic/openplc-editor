@@ -42,6 +42,10 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  .hide-titlebar {
+    display: none;
+  }
 }
 
 @layer base {

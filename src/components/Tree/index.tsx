@@ -10,6 +10,7 @@ export type RootProps = {
   id: string | number
   title: string
   icon?: IconType
+  onClick?: () => void
   children?: RootProps[]
 }
 
@@ -20,9 +21,12 @@ export type TreeProps = {
 
 const Tree: FC<TreeProps> = ({ root, isChild = false }) => {
   const onItemClicked = useCallback(
-    (event: React.MouseEvent<HTMLLIElement, MouseEvent>) => {
+    (
+      event: React.MouseEvent<HTMLLIElement, MouseEvent>,
+      callback?: () => void,
+    ) => {
       event.stopPropagation()
-      console.log('clicked')
+      callback && callback()
     },
     [],
   )
@@ -38,12 +42,23 @@ const Tree: FC<TreeProps> = ({ root, isChild = false }) => {
       )}
     >
       {root.children &&
-        root.children.map((item) => {
-          const { id, title, children, icon: Icon } = item
+        root.children.map((item, index) => {
+          const { id, title, children, icon: Icon, onClick } = item
           if (children && children.length > 0)
-            return <Directory key={id} item={item} isChild={isChild} />
+            return (
+              <Directory
+                key={id}
+                item={item}
+                isMainDirectory={index === 0 && !isChild}
+                isChild={isChild}
+              />
+            )
           return (
-            <Item key={id} onClick={onItemClicked} className="ml-6">
+            <Item
+              key={id}
+              onClick={(event) => onItemClicked(event, onClick)}
+              className="ml-6 max-w-fit cursor-pointer"
+            >
               <div className="flex items-center p-1 pl-0">
                 {Icon && <Icon />}
                 <span

@@ -20,7 +20,7 @@ const Settings: FC = () => {
         tabs={[
           {
             id: t('theme.tabName'),
-            name: t('theme.tabName'),
+            title: t('theme.tabName'),
             current: pathname === themePath,
             onClick: () => navigate(themePath),
           },

@@ -157,7 +157,7 @@ const Tools: React.FC = () => {
         tabs={[
           {
             id: t('common.tabName'),
-            name: t('common.tabName'),
+            title: t('common.tabName'),
             current: true,
           },
         ]}
