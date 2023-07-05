@@ -48,8 +48,83 @@ export const ProjectContext = createContext<ProjectContextData>(
   {} as ProjectContextData,
 )
 
+// TODO: Remove mock project
+
+const mockProject = {
+  language: 'LD',
+  xmlSerialized: {
+    project: {
+      '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6.xsd',
+      '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
+      '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
+      '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
+      fileHeader: {
+        '@companyName': 'Unknown',
+        '@productName': 'Unnamed',
+        '@productVersion': '1',
+        '@creationDateTime': '2023-07-03T20:25:15',
+      },
+      contentHeader: {
+        '@name': 'Unnamed',
+        '@modificationDateTime': '2023-07-03T20:25:15',
+        coordinateInfo: {
+          fbd: {
+            scaling: {
+              '@x': '10',
+              '@y': '10',
+            },
+          },
+          ld: {
+            scaling: {
+              '@x': '10',
+              '@y': '10',
+            },
+          },
+          sfc: {
+            scaling: {
+              '@x': '10',
+              '@y': '10',
+            },
+          },
+        },
+      },
+      types: {
+        dataTypes: {},
+        pous: {
+          pou: {
+            '@name': 'program0',
+            '@pouType': 'program',
+            body: {
+              LD: {},
+            },
+          },
+        },
+      },
+      instances: {
+        configurations: {
+          configuration: {
+            '@name': 'Config0',
+            resource: {
+              '@name': 'Res0',
+              task: {
+                '@name': 'task0',
+                '@priority': '0',
+                '@interval': 'T#20ms',
+                pouInstance: {
+                  '@name': 'instance0',
+                  '@typeName': 'program0',
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+}
+
 const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
-  const [project, setProject] = useState<ProjectProps>()
+  const [project, setProject] = useState<ProjectProps>(mockProject)
   const { createToast } = useToast()
   const { invoke } = useIpcRender<string, GetProjectProps>({
     channel: get.PROJECT,

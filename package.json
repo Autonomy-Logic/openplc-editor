@@ -40,6 +40,7 @@
     "react-hook-form": "^7.43.9",
     "react-i18next": "^12.2.0",
     "react-icons": "^4.9.0",
+    "react-indiana-drag-scroll": "^3.0.3-alpha",
     "react-resizable": "^3.0.5",
     "react-router-dom": "^6.11.2",
     "react-toastify": "^9.1.3",

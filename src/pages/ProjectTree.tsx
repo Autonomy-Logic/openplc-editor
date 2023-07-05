@@ -23,15 +23,6 @@ const ProjectTree: FC = () => {
           {
             id: 'product-name',
             title: xmlSerialized?.project?.fileHeader?.['@productName'],
-            icon: () => (
-              <div className="flex h-5 w-5 items-center justify-center border-2 border-gray-500 px-1">
-                <div className="-ml-1 -mt-1 -rotate-45">
-                  <span className="text-[0.5rem] font-bold text-gray-500">
-                    PLC
-                  </span>
-                </div>
-              </div>
-            ),
             children: [
               ...Object.keys(xmlSerialized?.project?.types?.pous).map(
                 (key, index) => ({

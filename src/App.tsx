@@ -5,6 +5,7 @@ import {
   ModalProvider,
   ProjectProvider,
   RouterProvider,
+  TabsProvider,
   ThemeProvider,
   TitlebarProvider,
   ToastProvider,
@@ -17,8 +18,10 @@ const App: FC = () => {
         <ProjectProvider>
           <TitlebarProvider>
             <ModalProvider>
-              <RouterProvider />
-              <ToastContainer closeButton={false} closeOnClick={false} />
+              <TabsProvider>
+                <RouterProvider />
+                <ToastContainer closeButton={false} closeOnClick={false} />
+              </TabsProvider>
             </ModalProvider>
           </TitlebarProvider>
         </ProjectProvider>

@@ -55,7 +55,7 @@ const Modal: FC<PropsWithChildren<ModalProps>> = ({
                   <div className="absolute right-0 top-0 hidden pr-4 pt-4 sm:block">
                     <button
                       type="button"
-                      className="press-animated border-none text-gray-400 outline-none hover:text-gray-500"
+                      className="press-animated border-none text-gray-400 hover:text-gray-500"
                       onClick={() => onClose(false)}
                     >
                       <span className="sr-only">Close</span>

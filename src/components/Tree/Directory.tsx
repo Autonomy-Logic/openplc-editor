@@ -1,6 +1,6 @@
 import { Transition } from '@headlessui/react'
 import { FC, MouseEvent, PropsWithChildren, useCallback, useState } from 'react'
-import { HiMinusSmall, HiPlusSmall } from 'react-icons/hi2'
+import { IoMdArrowDropdown, IoMdArrowDropup } from 'react-icons/io'
 
 import { classNames } from '@/utils'
 
@@ -36,13 +36,20 @@ export const Directory: FC<PropsWithChildren<DirectoryProps>> = ({
           onClick={onCollapseClicked}
         >
           {toggle ? (
-            <HiMinusSmall className="w-4" />
+            <IoMdArrowDropup className="w-4 text-gray-400 dark:text-gray-600" />
           ) : (
-            <HiPlusSmall className="w-4" />
+            <IoMdArrowDropdown className="w-4 text-gray-400 dark:text-gray-600" />
           )}
         </button>
         {Icon && <Icon />}
-        <span className="ml-1 block truncate transition">{title}</span>
+        <span
+          className={classNames(
+            !!Icon && 'ml-1',
+            'block truncate text-lg font-semibold uppercase text-gray-400 transition dark:text-gray-600',
+          )}
+        >
+          {title}
+        </span>
       </div>
       <Transition
         show={toggle}

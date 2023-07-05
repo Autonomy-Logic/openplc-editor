@@ -46,7 +46,14 @@ const Tree: FC<TreeProps> = ({ root, isChild = false }) => {
             <Item key={id} onClick={onItemClicked} className="ml-6">
               <div className="flex items-center p-1 pl-0">
                 {Icon && <Icon />}
-                <span className="ml-1 block truncate transition">{title}</span>
+                <span
+                  className={classNames(
+                    !!Icon && 'ml-1',
+                    'block truncate text-sm font-semibold text-gray-600 transition dark:text-gray-400',
+                  )}
+                >
+                  {title}
+                </span>
               </div>
             </Item>
           )
