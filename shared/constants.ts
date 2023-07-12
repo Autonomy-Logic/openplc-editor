@@ -20,11 +20,10 @@ export const CONSTANTS = {
     },
   },
   paths: {
-    HOME: '/',
-    SETTINGS: 'settings',
-    THEME: 'theme',
-    PROJECT_TREE: 'project-tree',
-    TOOLS: 'tools',
+    MAIN: '/',
+    PROJECT: 'project',
+    POU: 'pou',
+    RES: 'res',
   },
   types: {
     PROGRAM: 'program',

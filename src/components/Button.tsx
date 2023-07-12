@@ -25,7 +25,7 @@ const Button: FC<ButtonProps> = ({
       className={classNames(
         appearance === 'primary'
           ? 'border border-transparent bg-open-plc-blue text-white  focus:ring-open-plc-blue'
-          : 'border border-gray-300 bg-white text-gray-700 focus:ring-open-plc-blue',
+          : 'border border-gray-300 bg-white text-gray-700 focus:ring-open-plc-blue dark:border-white/5 dark:bg-white/5 dark:text-gray-400',
         disabled
           ? 'cursor-not-allowed opacity-50'
           : 'press-animated hover:opacity-90',

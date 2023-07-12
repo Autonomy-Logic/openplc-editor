@@ -1,5 +1,5 @@
 import { CONSTANTS } from '@shared/constants'
-import React, { Fragment } from 'react'
+import { FC, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { IconType } from 'react-icons'
 import {
@@ -45,7 +45,7 @@ export type ToolsProps = {
   tooltip: string
 }
 
-const Tools: React.FC = () => {
+const Tools: FC = () => {
   const { t } = useTranslation('tools')
   const { createToast } = useToast()
   const { requestFullscreen, exitFullScreen, isFullScreen } = useFullScreen()
@@ -152,7 +152,7 @@ const Tools: React.FC = () => {
   ]
 
   return (
-    <div className="">
+    <>
       <Tabs
         tabs={[
           {
@@ -178,7 +178,7 @@ const Tools: React.FC = () => {
           </Fragment>
         ))}
       </div>
-    </div>
+    </>
   )
 }
 

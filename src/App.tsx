@@ -1,11 +1,11 @@
 import { FC } from 'react'
 import { ToastContainer } from 'react-toastify'
+import { ReactFlowProvider } from 'reactflow'
 
 import {
   ModalProvider,
   ProjectProvider,
   RouterProvider,
-  TabsProvider,
   ThemeProvider,
   TitlebarProvider,
   ToastProvider,
@@ -17,12 +17,12 @@ const App: FC = () => {
       <ToastProvider>
         <ProjectProvider>
           <TitlebarProvider>
-            <ModalProvider>
-              <TabsProvider>
+            <ReactFlowProvider>
+              <ModalProvider>
                 <RouterProvider />
                 <ToastContainer closeButton={false} closeOnClick={false} />
-              </TabsProvider>
-            </ModalProvider>
+              </ModalProvider>
+            </ReactFlowProvider>
           </TitlebarProvider>
         </ProjectProvider>
       </ToastProvider>

@@ -1,3 +1,4 @@
+import { CONSTANTS } from '@shared/constants'
 import {
   createContext,
   FC,
@@ -7,10 +8,11 @@ import {
   useState,
 } from 'react'
 import { createRoot, Root } from 'react-dom/client'
-
-import { useProject } from '@/hooks'
+import { useNavigate } from 'react-router-dom'
 
 import { TitlebarTabs } from '../components'
+
+const { paths } = CONSTANTS
 
 type TabsProps = {
   id: number | string
@@ -24,16 +26,14 @@ export type TabsContextData = {
   tabs: TabsProps[]
   addTab: (tab: TabsProps) => void
   removeTab: (id: number | string) => void
-  currentTab: (id: number | string) => void
 }
 
 export const TabsContext = createContext<TabsContextData>({} as TabsContextData)
 
 const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
-  const { project } = useProject()
   const [rootTitlebarTabs, setRootTitlebarTabs] = useState<Root>()
-
   const [tabs, setTabs] = useState<TabsProps[]>([])
+  const navigate = useNavigate()
 
   const addTab = useCallback(
     (tab: TabsProps) =>
@@ -60,7 +60,7 @@ const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
     [],
   )
 
-  const currentTab = useCallback(
+  const setCurrentTab = useCallback(
     (id: number | string) =>
       setTabs((state) =>
         state.map((tab) =>
@@ -70,6 +70,11 @@ const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
         ),
       ),
     [],
+  )
+
+  const getCurrentTab = useCallback(
+    () => tabs.find(({ current }) => current),
+    [tabs],
   )
 
   useEffect(() => {
@@ -89,24 +94,34 @@ const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
 
   useEffect(() => {
     if (rootTitlebarTabs) {
-      rootTitlebarTabs.render(<TitlebarTabs tabs={tabs} />)
+      rootTitlebarTabs.render(
+        <TitlebarTabs
+          tabs={tabs.map((tab) => ({
+            ...tab,
+            onClick: () => {
+              tab.onClick && tab.onClick()
+              setCurrentTab(tab.id)
+            },
+            onClickCloseButton: () => {
+              tab.onClickCloseButton && tab.onClickCloseButton()
+              removeTab(tab.id)
+              getCurrentTab()?.id === tab.id && navigate(paths.MAIN)
+            },
+          }))}
+        />,
+      )
     }
-  }, [removeTab, rootTitlebarTabs, tabs])
-
-  useEffect(() => {
-    if (project?.xmlSerialized?.project) {
-      const pouName = project.xmlSerialized.project?.types?.pous.pou?.['@name']
-      addTab({
-        id: pouName,
-        title: pouName,
-        onClick: () => currentTab(pouName),
-        onClickCloseButton: () => removeTab(pouName),
-      })
-    }
-  }, [addTab, currentTab, project?.xmlSerialized?.project, removeTab])
+  }, [
+    getCurrentTab,
+    navigate,
+    removeTab,
+    rootTitlebarTabs,
+    setCurrentTab,
+    tabs,
+  ])
 
   return (
-    <TabsContext.Provider value={{ tabs, addTab, removeTab, currentTab }}>
+    <TabsContext.Provider value={{ tabs, addTab, removeTab }}>
       {children}
     </TabsContext.Provider>
   )

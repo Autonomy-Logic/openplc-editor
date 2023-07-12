@@ -6,24 +6,40 @@ import { useNavigate } from 'react-router-dom'
 import { Tabs } from '@/components'
 import Tree, { RootProps } from '@/components/Tree'
 import { useProject, useTabs } from '@/hooks'
+import { convertToPath } from '@/utils'
 
 const { paths } = CONSTANTS
 
 const ProjectTree: FC = () => {
   const { project } = useProject()
-  const { addTab, removeTab, currentTab } = useTabs()
+  const { addTab } = useTabs()
   const [root, setRoot] = useState<RootProps>()
   const { t } = useTranslation()
   const navigate = useNavigate()
 
+  const productName =
+    project?.xmlSerialized?.project?.fileHeader?.['@productName']
+
   useEffect(() => {
     if (project && project?.xmlSerialized) {
       const { xmlSerialized } = project
-      const productName = xmlSerialized?.project?.fileHeader?.['@productName']
       const pous = xmlSerialized?.project?.types?.pous
       const resourceName =
         xmlSerialized?.project?.instances?.configurations?.configuration
           ?.resource?.['@name']
+
+      const handleClick = (data: {
+        id: number | string
+        title: string
+        path: string
+      }) => {
+        addTab({
+          ...data,
+          onClick: () => navigate(data.path),
+        })
+        navigate(data.path)
+      }
+
       setRoot({
         id: 'root',
         title: 'root',
@@ -31,10 +47,18 @@ const ProjectTree: FC = () => {
           {
             id: productName,
             title: productName,
+            onClick: () =>
+              handleClick({
+                id: productName,
+                title: productName,
+                path: paths.PROJECT,
+              }),
+            isOpen: true,
             children: [
               {
                 id: 'programs',
                 title: t('programs'),
+                isOpen: true,
                 children: [
                   ...Object.keys(pous).map((key) => {
                     const pouName = pous?.[key]?.['@name']
@@ -42,11 +66,10 @@ const ProjectTree: FC = () => {
                       id: pouName,
                       title: pouName,
                       onClick: () =>
-                        addTab({
+                        handleClick({
                           id: pouName,
                           title: pouName,
-                          onClick: () => currentTab(pouName),
-                          onClickCloseButton: () => removeTab(pouName),
+                          path: convertToPath([paths.POU, pouName]),
                         }),
                     }
                   }),
@@ -56,11 +79,10 @@ const ProjectTree: FC = () => {
                 id: resourceName,
                 title: resourceName,
                 onClick: () =>
-                  addTab({
+                  handleClick({
                     id: resourceName,
                     title: resourceName,
-                    onClick: () => currentTab(resourceName),
-                    onClickCloseButton: () => removeTab(resourceName),
+                    path: paths.RES,
                   }),
               },
             ],
@@ -68,18 +90,17 @@ const ProjectTree: FC = () => {
         ],
       })
     } else {
-      navigate(paths.HOME)
+      navigate(paths.MAIN)
     }
-  }, [addTab, currentTab, navigate, project, removeTab, t])
+  }, [addTab, navigate, productName, project, t])
 
   return (
     <>
       <Tabs
         tabs={[
           {
-            id: project?.xmlSerialized?.project?.fileHeader?.['@productName'],
-            title:
-              project?.xmlSerialized?.project?.fileHeader?.['@productName'],
+            id: productName,
+            title: productName,
             current: true,
           },
         ]}

@@ -1,7 +1,8 @@
 import { Transition } from '@headlessui/react'
-import { FC, MouseEvent, PropsWithChildren, useCallback, useState } from 'react'
+import { FC, MouseEvent, PropsWithChildren, useCallback } from 'react'
 import { IoMdArrowDropdown, IoMdArrowDropup } from 'react-icons/io'
 
+import { useToggle } from '@/hooks'
 import { classNames } from '@/utils'
 
 import Tree, { RootProps } from './index'
@@ -19,14 +20,15 @@ export const Directory: FC<PropsWithChildren<DirectoryProps>> = ({
   isMainDirectory = false,
 }) => {
   const { title, icon: Icon, onClick } = item
-  const [toggle, setToggle] = useState<boolean>(false)
+
+  const [open, toggleOpen] = useToggle(false)
 
   const onCollapseClicked = useCallback(
     (event: MouseEvent<HTMLButtonElement, globalThis.MouseEvent>) => {
       event.stopPropagation()
-      setToggle(!toggle)
+      toggleOpen()
     },
-    [toggle],
+    [toggleOpen],
   )
 
   return (
@@ -37,14 +39,17 @@ export const Directory: FC<PropsWithChildren<DirectoryProps>> = ({
           className="mr-3 flex w-4 items-center justify-center"
           onClick={onCollapseClicked}
         >
-          {toggle ? (
+          {open ? (
             <IoMdArrowDropup className="w-4 text-gray-400 dark:text-gray-600" />
           ) : (
             <IoMdArrowDropdown className="w-4 text-gray-400 dark:text-gray-600" />
           )}
         </button>
         {Icon && <Icon />}
-        <button onClick={onClick}>
+        <button
+          onClick={onClick}
+          className={classNames(onClick ? 'cursor-pointer' : 'cursor-text')}
+        >
           <span
             className={classNames(
               !!Icon && 'ml-1',
@@ -57,7 +62,7 @@ export const Directory: FC<PropsWithChildren<DirectoryProps>> = ({
         </button>
       </div>
       <Transition
-        show={toggle}
+        show={open}
         enter="transition-opacity duration-75"
         enterFrom="opacity-0"
         enterTo="opacity-100"

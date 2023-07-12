@@ -3,48 +3,14 @@
 @tailwind utilities;
 
 @layer utilities {
-  .layout {
-    @apply grid grid-cols-[5rem_24rem_repeat(3,1fr)] grid-rows-[repeat(5,1fr)] gap-x-0 gap-y-0;
-  }
-  .sidebar {
-    grid-area: 1 / 1 / 6 / 2;
-  }
-  .secondary-sidebar {
-    grid-area: 1 / 2 / 6 / 3;
-  }
-  .main-content {
-    grid-area: 1 / 2 / 6 / 6;
-  }
-  .hide-top-row {
-    @apply h-0 w-0;
-  }
-  .comment-icon {
-    transform: rotateX(180deg) rotateY(0deg) rotateZ(90deg);
-  }
   .press-animated {
     @apply border-[none] transition-[0.2s] duration-[all] active:scale-[0.90];
-  }
-  .drag-window {
-    -webkit-user-select: none;
-    -webkit-app-region: drag;
   }
   .no-drag-window {
     -webkit-app-region: no-drag;
   }
-  .transition-left {
-    transition-property: left !important;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
-  }
-  .hide-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-
-  .hide-titlebar {
-    display: none;
+  .scrollbar-white ::-webkit-scrollbar {
+    @apply bg-white;
   }
 }
 

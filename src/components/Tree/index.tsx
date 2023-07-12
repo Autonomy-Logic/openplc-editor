@@ -11,6 +11,7 @@ export type RootProps = {
   title: string
   icon?: IconType
   onClick?: () => void
+  isOpen?: boolean
   children?: RootProps[]
 }
 
@@ -57,7 +58,10 @@ const Tree: FC<TreeProps> = ({ root, isChild = false }) => {
             <Item
               key={id}
               onClick={(event) => onItemClicked(event, onClick)}
-              className="ml-6 max-w-fit cursor-pointer"
+              className={classNames(
+                'ml-14 max-w-fit',
+                onClick ? 'cursor-pointer' : 'cursor-text',
+              )}
             >
               <div className="flex items-center p-1 pl-0">
                 {Icon && <Icon />}

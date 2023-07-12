@@ -3,6 +3,7 @@ import { default as ErrorMessage } from './ErrorMessage'
 import { default as Field } from './Field'
 import { default as Input } from './Input'
 import { default as Label } from './Label'
+import { default as Radio } from './Radio'
 
 export default {
   Label,
@@ -10,4 +11,5 @@ export default {
   ErrorMessage,
   Field,
   ComboBox,
+  Radio,
 }

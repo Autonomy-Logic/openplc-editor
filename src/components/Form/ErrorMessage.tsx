@@ -1,7 +1,7 @@
 import { FC } from 'react'
 import { useFormContext } from 'react-hook-form'
 
-interface ErrorMessageProps {
+type ErrorMessageProps = {
   field: string
 }
 

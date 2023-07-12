@@ -26,7 +26,13 @@ const Modal: FC<PropsWithChildren<ModalProps>> = ({
   if (!children && !content) return <></>
   return (
     <Transition.Root show={open} as={Fragment}>
-      <Dialog as="div" className="relative z-20" onClose={onClose}>
+      <Dialog
+        as="div"
+        className="relative z-20"
+        onClose={() => {
+          if (!hideCloseButton) onClose(false)
+        }}
+      >
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"
@@ -51,7 +57,7 @@ const Modal: FC<PropsWithChildren<ModalProps>> = ({
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
               <Dialog.Panel className="relative flex transform flex-col items-center justify-center overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all dark:bg-gray-900 sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-                {hideCloseButton && (
+                {!hideCloseButton && (
                   <div className="absolute right-0 top-0 hidden pr-4 pt-4 sm:block">
                     <button
                       type="button"

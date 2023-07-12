@@ -1,6 +1,7 @@
 export { ModalContext, default as ModalProvider } from './Modal'
 export { ProjectContext, default as ProjectProvider } from './Project'
 export { default as RouterProvider } from './Router'
+export { SidebarContext, default as SidebarProvider } from './Sidebar'
 export { TabsContext, default as TabsProvider } from './Tabs'
 export { ThemeContext, default as ThemeProvider } from './Theme'
 export { TitlebarContext, default as TitlebarProvider } from './Titlebar'
