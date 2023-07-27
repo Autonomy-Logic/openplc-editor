@@ -6,7 +6,12 @@ import {
   useState,
 } from 'react'
 
-export type CurrentProps = 'tools' | 'projectTree' | 'settings' | 'editorTools'
+export type CurrentProps =
+  | 'tools'
+  | 'projectTree'
+  | 'settings'
+  | 'editorTools'
+  | 'variables'
 
 export type SidebarContextData = {
   current?: CurrentProps

@@ -19,10 +19,10 @@ const PowerRailProperties: FC<PowerRailPropertiesProps> = ({ position }) => {
   const { t: translate } = useTranslation()
   const { t } = useTranslation('powerRailProperties')
   const [pinNumber, setPinNumber] = useState(1)
-  const [type, setType] = useState('left')
+  const [pinPosition, setPinPosition] = useState('left')
 
   const powerRailPropertiesSchema = z.object({
-    type: z.string(),
+    pinPosition: z.string(),
     pinNumber: z.number(),
   })
 
@@ -31,7 +31,7 @@ const PowerRailProperties: FC<PowerRailPropertiesProps> = ({ position }) => {
   const powerRailPropertiesForm = useForm<PowerRailPropertiesSchemaData>({
     resolver: zodResolver(powerRailPropertiesSchema),
     defaultValues: {
-      type: 'left',
+      pinPosition: 'left',
       pinNumber: 1,
     },
   })
@@ -43,10 +43,7 @@ const PowerRailProperties: FC<PowerRailPropertiesProps> = ({ position }) => {
       id: crypto.randomUUID(),
       type: 'powerRail',
       position,
-      data: {
-        pinNumber: data.pinNumber,
-        pinPosition: data.type,
-      },
+      data,
     })
     handleCloseModal()
   }
@@ -58,9 +55,9 @@ const PowerRailProperties: FC<PowerRailPropertiesProps> = ({ position }) => {
   } = powerRailPropertiesForm
 
   useEffect(() => {
-    const subscription = watch(({ type, pinNumber }) => {
+    const subscription = watch(({ pinPosition, pinNumber }) => {
       if (pinNumber) setPinNumber(pinNumber)
-      if (type) setType(type)
+      if (pinPosition) setPinPosition(pinPosition)
     })
     return () => subscription.unsubscribe()
   }, [watch])
@@ -75,12 +72,16 @@ const PowerRailProperties: FC<PowerRailPropertiesProps> = ({ position }) => {
           <div className="mb-8 flex h-full w-full items-center justify-between">
             <div className="h-full w-full">
               <Form.Field className="col-span-full">
-                <Form.Radio name="type" label={t('left')} value="left" />
-                <Form.ErrorMessage field="type" />
+                <Form.Radio name="pinPosition" label={t('left')} value="left" />
+                <Form.ErrorMessage field="pinPosition" />
               </Form.Field>
               <Form.Field className="col-span-full">
-                <Form.Radio name="type" label={t('right')} value="right" />
-                <Form.ErrorMessage field="type" />
+                <Form.Radio
+                  name="pinPosition"
+                  label={t('right')}
+                  value="right"
+                />
+                <Form.ErrorMessage field="pinPosition" />
               </Form.Field>
               <Form.Field>
                 <Form.Label htmlFor="pinNumber"> {t('pinNumber')}</Form.Label>
@@ -94,7 +95,7 @@ const PowerRailProperties: FC<PowerRailPropertiesProps> = ({ position }) => {
                     key={index}
                     className={classNames(
                       'h-[0.125rem] w-6 bg-black',
-                      type === 'left' && '-ml-6',
+                      pinPosition === 'left' && '-ml-6',
                     )}
                   />
                 ))}

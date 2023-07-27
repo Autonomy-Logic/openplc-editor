@@ -20,7 +20,6 @@ export type ComboBoxProps = {
 const ComboBox: FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) => {
   const { control } = useFormContext()
   const [query, setQuery] = useState('')
-
   const filteredList =
     query === ''
       ? options
@@ -57,7 +56,7 @@ const ComboBox: FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) => {
                     value={option}
                     className={({ active }) =>
                       classNames(
-                        'relative cursor-default select-none py-2 pl-3 pr-9',
+                        'relative cursor-default select-none py-2 pl-3 pr-9 transition-colors duration-300',
                         active
                           ? 'bg-open-plc-blue text-gray-50'
                           : 'text-gray-500 dark:text-gray-400',

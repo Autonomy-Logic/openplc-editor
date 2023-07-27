@@ -1,6 +1,8 @@
 import { FC } from 'react'
 import { EdgeProps, getSmoothStepPath } from 'reactflow'
 
+import { classNames } from '@/utils'
+
 const DefaultEdge: FC<EdgeProps> = ({
   id,
   sourceX,
@@ -12,6 +14,7 @@ const DefaultEdge: FC<EdgeProps> = ({
   style = {},
   data,
   markerEnd,
+  selected,
 }) => {
   const [edgePath] = getSmoothStepPath({
     sourceX,
@@ -23,15 +26,16 @@ const DefaultEdge: FC<EdgeProps> = ({
   })
 
   return (
-    <>
-      <path
-        id={id}
-        style={style}
-        className="react-flow__edge-path stroke-zinc-300 stroke-2"
-        d={edgePath}
-        markerEnd={markerEnd}
-      />
-    </>
+    <path
+      id={id}
+      style={style}
+      className={classNames(
+        'react-flow__edge-path stroke-2',
+        selected ? 'stroke-open-plc-blue' : 'stroke-black',
+      )}
+      d={edgePath}
+      markerEnd={markerEnd}
+    />
   )
 }
 

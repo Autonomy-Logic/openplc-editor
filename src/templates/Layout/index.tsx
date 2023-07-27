@@ -8,6 +8,7 @@ import {
   HiBars3,
   HiOutlineBars3CenterLeft,
   HiOutlineCog6Tooth,
+  HiVariable,
 } from 'react-icons/hi2'
 import { RiNodeTree } from 'react-icons/ri'
 
@@ -15,7 +16,7 @@ import { Tooltip } from '@/components'
 import { CurrentProps } from '@/contexts/Sidebar'
 import { useFullScreen, useProject, useToggle } from '@/hooks'
 import useSidebar from '@/hooks/useSidebar'
-import { EditorTools, ProjectTree, Settings, Tools } from '@/pages'
+import { EditorTools, ProjectTree, Settings, Tools, Variables } from '@/pages'
 import { classNames } from '@/utils'
 
 const { languages } = CONSTANTS
@@ -66,6 +67,17 @@ const Layout: FC<LayoutProps> = ({ main }) => {
           },
         ]
       : []),
+    ...(project
+      ? [
+          {
+            key: 'variables',
+            name: t('variables'),
+            onClick: handleClick,
+            icon: HiVariable,
+            component: <Variables />,
+          },
+        ]
+      : []),
     {
       key: 'settings',
       name: t('settings'),
@@ -109,7 +121,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
             ))}
           </ul>
           <button
-            onClick={toggleIsSideBarOpen}
+            onClick={() => toggleIsSideBarOpen()}
             className="group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 text-gray-500 hover:text-open-plc-blue"
           >
             {isSidebarOpen ? (
@@ -129,7 +141,12 @@ const Layout: FC<LayoutProps> = ({ main }) => {
           // leaveFrom="translate-x-0"
           // leaveTo="-translate-x-full"
         >
-          <aside className="h-full w-96 overflow-y-auto border-r border-gray-100 bg-white px-8 shadow dark:border-white/5 dark:bg-gray-900">
+          <aside
+            className={classNames(
+              'h-full overflow-y-auto border-r border-gray-100 bg-white px-8 shadow dark:border-white/5 dark:bg-gray-900',
+              current === 'variables' ? 'w-auto' : 'w-96',
+            )}
+          >
             {getSidebar()}
           </aside>
         </Transition>

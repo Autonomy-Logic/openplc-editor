@@ -2,5 +2,6 @@
   "project": "Project",
   "tools": "Tools",
   "settings": "Settings",
-  "editorTools": "Editor Tools"
+  "editorTools": "Editor Tools",
+  "variables": "Variables"
 }
