@@ -2,7 +2,7 @@ import { CONSTANTS } from '@shared/constants'
 import { i18n } from '@shared/i18n'
 import { ipcMain, Menu, MenuItemConstructorOptions } from 'electron'
 
-import { click, handleCreateProject } from './actions'
+import { click, handleCreateProject, handleSaveProject } from './actions'
 
 type GetTemplate = {
   hasProject?: boolean
@@ -79,7 +79,7 @@ const getTemplate = (options?: GetTemplate): MenuItemConstructorOptions[] => {
           id: 'test',
           label: i18n.t('menu:file.submenu.save'),
           accelerator: 'CmdOrCtrl+S',
-          click,
+          click: handleSaveProject,
           enabled: hasProject,
         },
         {

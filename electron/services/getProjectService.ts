@@ -2,22 +2,19 @@ import { readFile } from 'node:fs'
 import { join } from 'node:path'
 
 import { i18n } from '@shared/i18n'
+import { XMLSerializedAsObjectProps } from '@shared/types/xmlSerializedAsObject'
 import { convert } from 'xmlbuilder2'
 
 import { ServiceResponse } from './types/response'
 
-type XmlSerialized = {
-  [key: string]: string | XmlSerialized
-}
-
-type GetProjectServiceResponse = ServiceResponse<XmlSerialized>
+type GetProjectServiceResponse = ServiceResponse<XMLSerializedAsObjectProps>
 
 const getProjectService = {
-  async execute(path: string): Promise<GetProjectServiceResponse> {
-    path = join(path, 'plc.xml')
+  async execute(filePath: string): Promise<GetProjectServiceResponse> {
+    filePath = join(filePath, 'plc.xml')
 
     const file = await new Promise((resolve, reject) =>
-      readFile(path, 'utf-8', (error, data) => {
+      readFile(filePath, 'utf-8', (error, data) => {
         if (error) return reject(error)
         return resolve(data)
       }),
@@ -28,10 +25,8 @@ const getProjectService = {
         ok: false,
         reason: {
           title: i18n.t('getProject:errors.readFile.title'),
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-ignore
           description: i18n.t('getProject:errors.readFile.description', {
-            path,
+            filePath,
           }),
         },
       }
@@ -39,7 +34,11 @@ const getProjectService = {
 
     return {
       ok: true,
-      data: convert(file, { format: 'object' }) as XmlSerialized,
+      data: {
+        xmlSerializedAsObject: convert(file, {
+          format: 'object',
+        }) as XMLSerializedAsObjectProps,
+      },
     }
   },
 }

@@ -1,4 +1,7 @@
-import { createProjectController } from '@electron/controllers'
+import {
+  createProjectController,
+  saveProjectController,
+} from '@electron/controllers'
 
 import { pou } from '../pou'
 import { project } from '../project'
@@ -17,4 +20,27 @@ export const handleCreateProject = async () => {
     pou.createWindow()
     await project.send(data)
   }
+}
+
+export const handleSaveProject = () => {
+  const responseListener = project.getProjectToSave()
+  responseListener(async (data) => {
+    if (!data) return
+    const { filePath, xmlSerializedAsObject } = data
+    const { ok, reason } = await saveProjectController.handle(
+      filePath,
+      xmlSerializedAsObject,
+    )
+    if (!ok && reason) {
+      toast.send({
+        type: 'error',
+        ...reason,
+      })
+    } else if (ok && reason) {
+      toast.send({
+        type: 'success',
+        ...reason,
+      })
+    }
+  })
 }

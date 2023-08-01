@@ -38,7 +38,7 @@ const CreateNewPOU: FC = () => {
     ),
   })
 
-  type createPOUSchemaData = z.infer<typeof createPOUSchema>
+  type CreatePOUSchemaData = z.infer<typeof createPOUSchema>
 
   const typeOptions = [{ id: 0, label: types.PROGRAM, value: types.PROGRAM }]
 
@@ -51,7 +51,7 @@ const CreateNewPOU: FC = () => {
     handleCloseModal()
   }
 
-  const createPouForm = useForm<createPOUSchemaData>({
+  const createPouForm = useForm<CreatePOUSchemaData>({
     resolver: zodResolver(createPOUSchema),
     defaultValues: {
       name: 'program0',
@@ -59,7 +59,7 @@ const CreateNewPOU: FC = () => {
     },
   })
 
-  const handleCreatePOU = async (data: createPOUSchemaData) => {
+  const handleCreatePOU = async (data: CreatePOUSchemaData) => {
     const {
       type: { value: type },
       language: { value: language },

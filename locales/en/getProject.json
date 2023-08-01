@@ -2,7 +2,7 @@
   "errors": {
     "readFile": {
       "title": "Failed to read file!",
-      "description": "Could not read the file: {{path}}"
+      "description": "Could not read the file: {{filePath}}"
     }
   }
 }

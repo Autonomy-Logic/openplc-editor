@@ -9,6 +9,7 @@ export const CONSTANTS = {
     get: {
       THEME: 'get_theme',
       PROJECT: 'get_project',
+      SAVE_PROJECT: 'get_project_to_save',
       CREATE_POU_WINDOW: 'get_create_pou_window',
       TOAST: 'get_toast',
     },
@@ -17,6 +18,7 @@ export const CONSTANTS = {
       CREATE_CHILD_WINDOW: 'set_create_child_window',
       CREATE_PROJECT_FROM_TOOLBAR: 'set_create_project_from_toolbar',
       UPDATE_MENU_PROJECT: 'set_update_menu_project',
+      SAVE_PROJECT: 'set_project_to_save',
     },
   },
   paths: {

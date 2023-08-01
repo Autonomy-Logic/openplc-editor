@@ -2,6 +2,7 @@ import { promises, writeFile } from 'node:fs'
 import { join } from 'node:path'
 
 import { i18n } from '@shared/i18n'
+import { formatDate } from '@shared/utils'
 import { BrowserWindow, dialog } from 'electron'
 import { create } from 'xmlbuilder2'
 
@@ -41,21 +42,6 @@ const createProjectService = {
         },
       }
     }
-
-    const padTo2Digits = (num: number) => num.toString().padStart(2, '0')
-
-    const formatDate = (date: Date) =>
-      [
-        date.getFullYear(),
-        padTo2Digits(date.getMonth() + 1),
-        padTo2Digits(date.getDate()),
-      ].join('-') +
-      'T' +
-      [
-        padTo2Digits(date.getHours()),
-        padTo2Digits(date.getMinutes()),
-        padTo2Digits(date.getSeconds()),
-      ].join(':')
 
     const date = formatDate(new Date())
 
@@ -120,7 +106,7 @@ const createProjectService = {
     let failedToCreateFile = false
 
     writeFile(join(filePath, 'plc.xml'), plc, (error) => {
-      if (error) failedToCreateFile = false
+      if (error) failedToCreateFile = true
     })
 
     if (failedToCreateFile)

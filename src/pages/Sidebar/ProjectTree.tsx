@@ -1,4 +1,5 @@
 import { CONSTANTS } from '@shared/constants'
+import { XMLSerializedAsObjectProps } from '@shared/types/xmlSerializedAsObject'
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -11,22 +12,25 @@ import { convertToPath } from '@/utils'
 const { paths } = CONSTANTS
 
 const ProjectTree: FC = () => {
-  const { project } = useProject()
+  const { project, getXmlSerializedValueByPath } = useProject()
   const { addTab } = useTabs()
   const [root, setRoot] = useState<RootProps>()
   const { t } = useTranslation()
   const navigate = useNavigate()
 
   const productName =
-    project?.xmlSerialized?.project?.fileHeader?.['@productName']
+    (getXmlSerializedValueByPath(
+      'project.fileHeader.@productName',
+    ) as string) || ''
 
   useEffect(() => {
-    if (project && project?.xmlSerialized) {
-      const { xmlSerialized } = project
-      const pous = xmlSerialized?.project?.types?.pous
-      const resourceName =
-        xmlSerialized?.project?.instances?.configurations?.configuration
-          ?.resource?.['@name']
+    if (project && project?.xmlSerializedAsObject) {
+      const pous = getXmlSerializedValueByPath(
+        'project.types.pous',
+      ) as XMLSerializedAsObjectProps
+      const resourceName = getXmlSerializedValueByPath(
+        'project.instances.configurations.configuration.resource.@name',
+      ) as string | ''
 
       const handleClick = (data: {
         id: number | string
@@ -61,7 +65,10 @@ const ProjectTree: FC = () => {
                 isOpen: true,
                 children: [
                   ...Object.keys(pous).map((key) => {
-                    const pouName = pous?.[key]?.['@name']
+                    const pouName =
+                      (getXmlSerializedValueByPath(
+                        `project.types.pous.${key}.@name`,
+                      ) as string) || ''
                     return {
                       id: pouName,
                       title: pouName,
@@ -92,7 +99,7 @@ const ProjectTree: FC = () => {
     } else {
       navigate(paths.MAIN)
     }
-  }, [addTab, navigate, productName, project, t])
+  }, [addTab, getXmlSerializedValueByPath, navigate, productName, project, t])
 
   return (
     <>

@@ -1,8 +1,8 @@
 import { getProjectService } from '../services'
 
 const getProjectController = {
-  async handle(path: string) {
-    const result = await getProjectService.execute(path)
+  async handle(filePath: string) {
+    const result = await getProjectService.execute(filePath)
     return result
   },
 }

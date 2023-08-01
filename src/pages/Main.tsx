@@ -19,38 +19,38 @@ const MainComponent: FC = () => {
   const navigate = useNavigate()
   const { theme } = useTheme()
   const { navigate: sidebarNavigate } = useSidebar()
-  const { project } = useProject()
+  const { project, getXmlSerializedValueByPath } = useProject()
   const { addTab } = useTabs()
   const { handleOpenModal } = useModal({
     content: <CreatePOU />,
     hideCloseButton: true,
   })
 
-  useIpcRender<undefined, boolean>({
+  useIpcRender<undefined, void>({
     channel: get.CREATE_POU_WINDOW,
-    callback: (createPOUWindow) => {
-      if (createPOUWindow) handleOpenModal()
-    },
+    callback: () => handleOpenModal(),
   })
 
   useEffect(() => {
-    const pouName = project?.xmlSerialized?.project?.types?.pous.pou?.['@name']
+    const pouName = getXmlSerializedValueByPath(
+      'project.types.pous.pou.@name',
+    ) as string
+
     if (pouName) {
       sidebarNavigate('projectTree')
-      navigate(convertToPath([paths.POU, pouName]))
       addTab({
         id: pouName,
         title: pouName,
         onClick: () => navigate(convertToPath([paths.POU, pouName])),
         onClickCloseButton: () => navigate(paths.MAIN),
       })
+      navigate(convertToPath([paths.POU, pouName]))
     }
-  }, [
-    addTab,
-    navigate,
-    project?.xmlSerialized?.project?.types?.pous.pou,
-    sidebarNavigate,
-  ])
+  }, [addTab, getXmlSerializedValueByPath, navigate, sidebarNavigate])
+
+  useEffect(() => {
+    if (!project?.xmlSerializedAsObject) navigate(paths.MAIN)
+  }, [navigate, project?.xmlSerializedAsObject])
 
   if (!theme) return <></>
 

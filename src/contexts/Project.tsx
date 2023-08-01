@@ -1,5 +1,7 @@
 import { CONSTANTS } from '@shared/constants'
-import { merge } from 'lodash'
+import { XMLSerializedAsObjectProps } from '@shared/types/xmlSerializedAsObject'
+import { formatDate } from '@shared/utils'
+import { isObject, merge } from 'lodash'
 import {
   createContext,
   FC,
@@ -13,23 +15,29 @@ import { useIpcRender, useToast } from '@/hooks'
 const {
   types,
   languages,
-  channels: { get },
+  channels: { get, set },
 } = CONSTANTS
-
-type XmlSerialized = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any
-}
 
 type ProjectProps = {
   language?: (typeof languages)[keyof typeof languages]
-  xmlSerialized?: XmlSerialized
+  xmlSerializedAsObject?: XMLSerializedAsObjectProps
+  filePath?: string
 }
 
-type CreatePouDataProps = {
+type CreatePouData = {
   name?: string
   type: (typeof types)[keyof typeof types]
   language?: (typeof languages)[keyof typeof languages]
+}
+
+type SendProjectToSaveData = {
+  project?: XMLSerializedAsObjectProps
+  filePath?: string
+}
+
+type UpdateDocumentationData = {
+  pouName: string
+  description: string
 }
 
 type GetProjectProps = {
@@ -40,8 +48,12 @@ type GetProjectProps = {
 
 export type ProjectContextData = {
   project?: ProjectProps
+  getXmlSerializedValueByPath: (
+    propertyPath: string,
+  ) => XMLSerializedAsObjectProps | string | undefined
   getProject: (path: string) => Promise<void>
-  createPOU: (data: CreatePouDataProps) => void
+  createPOU: (data: CreatePouData) => void
+  updateDocumentation: (data: UpdateDocumentationData) => void
 }
 
 export const ProjectContext = createContext<ProjectContextData>(
@@ -124,7 +136,7 @@ const mockProject = {
 }
 
 const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
-  const [project, setProject] = useState<ProjectProps>(mockProject)
+  const [project, setProject] = useState<ProjectProps>()
   const { createToast } = useToast()
   const { invoke } = useIpcRender<string, GetProjectProps>({
     channel: get.PROJECT,
@@ -135,49 +147,146 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
           ...reason,
         })
       } else if (ok && data) {
-        setProject((state) => ({ ...state, xmlSerialized: data }))
+        const { xmlSerializedAsObject, filePath } = data
+        setProject((state) => ({
+          ...state,
+          xmlSerializedAsObject,
+          filePath,
+        }))
       }
     },
   })
 
+  const { invoke: sendProjectToSave } = useIpcRender<SendProjectToSaveData>()
+
+  useIpcRender<void, void>({
+    channel: get.SAVE_PROJECT,
+    callback: () => {
+      if (!project) return
+      sendProjectToSave(set.SAVE_PROJECT, project)
+    },
+  })
+
+  const getXmlSerializedValueByPath = useCallback(
+    (propertyPath: string): XMLSerializedAsObjectProps | string | undefined => {
+      const properties = propertyPath.split('.')
+      let xmlSerializedAsObject = { ...project?.xmlSerializedAsObject }
+
+      for (const property of properties) {
+        if (
+          isObject(xmlSerializedAsObject) &&
+          Object.prototype.hasOwnProperty.call(xmlSerializedAsObject, property)
+        ) {
+          xmlSerializedAsObject = xmlSerializedAsObject[
+            property
+          ] as XMLSerializedAsObjectProps
+        } else {
+          return undefined
+        }
+      }
+
+      return xmlSerializedAsObject
+    },
+    [project?.xmlSerializedAsObject],
+  )
+
+  const updateModificationDateTime = useCallback(
+    () =>
+      setProject((state) => {
+        if (state?.xmlSerializedAsObject?.project) {
+          const date = formatDate(new Date())
+
+          const project = state.xmlSerializedAsObject
+            .project as XMLSerializedAsObjectProps
+
+          project.contentHeader = {
+            ...(project.contentHeader as XMLSerializedAsObjectProps),
+            '@modificationDateTime': date,
+          }
+        }
+
+        return state
+      }),
+    [],
+  )
+
   const createPOU = useCallback(
-    ({ name, type, language }: CreatePouDataProps) =>
-      setProject((state) => ({
-        language,
-        xmlSerialized: merge(state?.xmlSerialized, {
-          project: {
-            types: {
-              pous: {
-                pou: {
-                  ...(name && { '@name': name }),
-                  '@pouType': type,
-                  body: {
-                    ...(language && { [language]: {} }),
+    ({ name, type, language }: CreatePouData) => {
+      setProject((state) => {
+        if (!state?.xmlSerializedAsObject) return state
+        updateModificationDateTime()
+        return {
+          ...state,
+          language,
+          xmlSerializedAsObject: merge(
+            {
+              project: {
+                types: {
+                  pous: {
+                    pou: {
+                      ...(name && { '@name': name }),
+                      '@pouType': type,
+                      body: {
+                        ...(language && { [language]: {} }),
+                      },
+                    },
                   },
                 },
-              },
-            },
-            instances: {
-              configurations: {
-                configuration: {
-                  resource: {
-                    task: {
-                      '@name': 'task0',
-                      '@priority': '0',
-                      '@interval': 'T#20ms',
-                      pouInstance: {
-                        '@name': 'instance0',
-                        '@typeName': name,
+                instances: {
+                  configurations: {
+                    configuration: {
+                      resource: {
+                        task: {
+                          '@name': 'task0',
+                          '@priority': '0',
+                          '@interval': 'T#20ms',
+                          pouInstance: {
+                            '@name': 'instance0',
+                            '@typeName': name,
+                          },
+                        },
                       },
                     },
                   },
                 },
               },
             },
-          },
-        }),
-      })),
-    [],
+            state?.xmlSerializedAsObject,
+          ),
+        }
+      })
+    },
+    [updateModificationDateTime],
+  )
+
+  const updateDocumentation = useCallback(
+    ({ pouName, description }: UpdateDocumentationData) => {
+      setProject((state) => {
+        if (!state?.xmlSerializedAsObject?.project) return state
+        const pous = (
+          (state.xmlSerializedAsObject.project as XMLSerializedAsObjectProps)
+            ?.types as XMLSerializedAsObjectProps
+        )?.pous as XMLSerializedAsObjectProps
+
+        Object.keys(pous).forEach((key) => {
+          const pou = pous[key] as XMLSerializedAsObjectProps
+          if (pou?.['@name'] === pouName) {
+            pous[key] = {
+              ...pou,
+              documentation: {
+                'xhtml:p': {
+                  $: description,
+                },
+              },
+            }
+          }
+        })
+        updateModificationDateTime()
+
+        return state
+      })
+    },
+    [updateModificationDateTime],
   )
 
   const getProject = useCallback(
@@ -189,14 +298,26 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
           ...reason,
         })
       } else if (ok && data) {
-        setProject((state) => ({ ...state, xmlSerialized: data }))
+        setProject((state) => ({
+          ...state,
+          xmlSerialized: data,
+          filePath: path,
+        }))
       }
     },
     [createToast, invoke],
   )
 
   return (
-    <ProjectContext.Provider value={{ project, getProject, createPOU }}>
+    <ProjectContext.Provider
+      value={{
+        project,
+        getProject,
+        getXmlSerializedValueByPath,
+        createPOU,
+        updateDocumentation,
+      }}
+    >
       {children}
     </ProjectContext.Provider>
   )

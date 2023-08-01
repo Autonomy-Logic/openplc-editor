@@ -9,12 +9,14 @@ export type ComboBoxOption = {
   id: number | string
   label: string
   value: number | string
+  className?: string
 }
 
 export type ComboBoxProps = {
   options: ComboBoxOption[]
   name: string
   showOptions?: number
+  optionsClassName?: string
 }
 
 const ComboBox: FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) => {
@@ -50,10 +52,10 @@ const ComboBox: FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) => {
                 className={`absolute z-10 mt-1 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:bg-gray-800 sm:text-sm`}
                 style={{ maxHeight: `${Math.round(showOptions) * 2.75}rem` }}
               >
-                {filteredList.map((option) => (
+                {filteredList.map(({ id, label, value, className }) => (
                   <Combobox.Option
-                    key={option.id}
-                    value={option}
+                    key={id}
+                    value={{ id, label, value }}
                     className={({ active }) =>
                       classNames(
                         'relative cursor-default select-none py-2 pl-3 pr-9 transition-colors duration-300',
@@ -69,9 +71,10 @@ const ComboBox: FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) => {
                           className={classNames(
                             'block truncate',
                             selected && 'font-semibold',
+                            !!className && className,
                           )}
                         >
-                          {option.label}
+                          {label}
                         </span>
                         {selected && (
                           <span

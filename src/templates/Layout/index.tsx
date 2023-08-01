@@ -1,6 +1,6 @@
 import { Transition } from '@headlessui/react'
 import { CONSTANTS } from '@shared/constants'
-import { FC, ReactNode } from 'react'
+import { FC, ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FaDrawPolygon } from 'react-icons/fa'
 import { HiOutlineSquares2X2 } from 'react-icons/hi2'
@@ -11,6 +11,8 @@ import {
   HiVariable,
 } from 'react-icons/hi2'
 import { RiNodeTree } from 'react-icons/ri'
+import { ResizableBox, ResizeCallbackData } from 'react-resizable'
+import { useLocation } from 'react-router-dom'
 
 import { Tooltip } from '@/components'
 import { CurrentProps } from '@/contexts/Sidebar'
@@ -19,18 +21,21 @@ import useSidebar from '@/hooks/useSidebar'
 import { EditorTools, ProjectTree, Settings, Tools, Variables } from '@/pages'
 import { classNames } from '@/utils'
 
-const { languages } = CONSTANTS
+const { languages, paths } = CONSTANTS
 
 type LayoutProps = {
   main: ReactNode
 }
 
 const Layout: FC<LayoutProps> = ({ main }) => {
+  const INITIAL_SIDEBAR_WIDTH = 384
   const { t } = useTranslation('navigation')
   const { project } = useProject()
+  const { pathname } = useLocation()
   const { current, navigate } = useSidebar()
   const { isFullScreen } = useFullScreen()
   const [isSidebarOpen, toggleIsSideBarOpen] = useToggle(true)
+  const [sidebarWidth, setSidebarWidth] = useState(INITIAL_SIDEBAR_WIDTH)
 
   const handleClick = (key?: CurrentProps) => {
     if (!isSidebarOpen) toggleIsSideBarOpen()
@@ -45,7 +50,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
       icon: HiOutlineSquares2X2,
       component: <Tools />,
     },
-    ...(project?.xmlSerialized
+    ...(project?.xmlSerializedAsObject
       ? [
           {
             key: 'projectTree',
@@ -67,7 +72,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
           },
         ]
       : []),
-    ...(project
+    ...(project && pathname.includes(paths.POU)
       ? [
           {
             key: 'variables',
@@ -87,6 +92,9 @@ const Layout: FC<LayoutProps> = ({ main }) => {
       component: <Settings />,
     },
   ]
+
+  const onResize = (data: ResizeCallbackData) =>
+    setSidebarWidth(data.size.width)
 
   const getSidebar = () =>
     navigation.find(({ key }) => key === current)?.component
@@ -141,14 +149,17 @@ const Layout: FC<LayoutProps> = ({ main }) => {
           // leaveFrom="translate-x-0"
           // leaveTo="-translate-x-full"
         >
-          <aside
-            className={classNames(
-              'h-full overflow-y-auto border-r border-gray-100 bg-white px-8 shadow dark:border-white/5 dark:bg-gray-900',
-              current === 'variables' ? 'w-auto' : 'w-96',
-            )}
+          <ResizableBox
+            width={sidebarWidth}
+            height={Infinity}
+            className="h-full border-r border-gray-100 bg-white px-8 shadow dark:border-white/5 dark:bg-gray-900"
+            minConstraints={[INITIAL_SIDEBAR_WIDTH, Infinity]}
+            resizeHandles={['e']}
+            axis="x"
+            onResize={(_, data) => onResize(data)}
           >
             {getSidebar()}
-          </aside>
+          </ResizableBox>
         </Transition>
       </div>
 

@@ -7,5 +7,5 @@ const {
 } = CONSTANTS
 
 export const pou = {
-  createWindow: () => mainWindow?.webContents.send(get.CREATE_POU_WINDOW, true),
+  createWindow: () => mainWindow?.webContents.send(get.CREATE_POU_WINDOW),
 }

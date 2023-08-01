@@ -1,4 +1,5 @@
 import { CONSTANTS } from '@shared/constants'
+import { XMLSerializedAsObjectProps } from '@shared/types/xmlSerializedAsObject'
 import { ipcMain } from 'electron'
 
 import { createProjectController, getProjectController } from '../controllers'
@@ -8,16 +9,40 @@ const {
   channels: { get, set },
 } = CONSTANTS
 
+type GetProjectToSaveData = {
+  xmlSerializedAsObject: XMLSerializedAsObjectProps
+  filePath: string
+}
+
 export const project = {
-  send: async (path: string) => {
-    const response = await getProjectController.handle(path)
-    mainWindow?.webContents.send(get.PROJECT, response)
+  send: async (filePath: string) => {
+    const response = await getProjectController.handle(filePath)
+
+    mainWindow?.webContents.send(get.PROJECT, {
+      ...response,
+      data: { ...response.data, filePath },
+    })
+  },
+  getProjectToSave: () => {
+    mainWindow?.webContents.send(get.SAVE_PROJECT)
+    const responseListener = (
+      callback: (data?: GetProjectToSaveData) => void,
+    ) => {
+      ipcMain.handle(
+        set.SAVE_PROJECT,
+        async (_event, data: GetProjectToSaveData) => {
+          callback(data)
+          ipcMain.removeHandler(set.SAVE_PROJECT)
+        },
+      )
+    }
+    return responseListener
   },
 }
 
 export const projectIpc = () => {
-  ipcMain.handle(get.PROJECT, async (_event, path) => {
-    const response = await getProjectController.handle(path)
+  ipcMain.handle(get.PROJECT, async (_event, filePath: string) => {
+    const response = await getProjectController.handle(filePath)
     return response
   })
 
