@@ -2,15 +2,15 @@ import { writeFile } from 'node:fs'
 import { join } from 'node:path'
 
 import { i18n } from '@shared/i18n'
-import { XMLSerializedAsObjectProps } from '@shared/types/xmlSerializedAsObject'
 import { create } from 'xmlbuilder2'
+import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
 import { ServiceResponse } from './types/response'
 
 const saveProjectService = {
   async execute(
     filePath: string,
-    xmlSerializedAsObject: XMLSerializedAsObjectProps,
+    xmlSerializedAsObject: XMLSerializedAsObject,
   ): Promise<ServiceResponse<string>> {
     if (!filePath || !xmlSerializedAsObject)
       return {

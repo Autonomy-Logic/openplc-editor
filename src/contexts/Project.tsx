@@ -1,5 +1,4 @@
 import { CONSTANTS } from '@shared/constants'
-import { XMLSerializedAsObjectProps } from '@shared/types/xmlSerializedAsObject'
 import { formatDate } from '@shared/utils'
 import { isObject, merge } from 'lodash'
 import {
@@ -9,6 +8,7 @@ import {
   useCallback,
   useState,
 } from 'react'
+import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
 import { useIpcRender, useToast } from '@/hooks'
 
@@ -20,7 +20,7 @@ const {
 
 type ProjectProps = {
   language?: (typeof languages)[keyof typeof languages]
-  xmlSerializedAsObject?: XMLSerializedAsObjectProps
+  xmlSerializedAsObject?: XMLSerializedAsObject
   filePath?: string
 }
 
@@ -31,7 +31,7 @@ type CreatePouData = {
 }
 
 type SendProjectToSaveData = {
-  project?: XMLSerializedAsObjectProps
+  project?: XMLSerializedAsObject
   filePath?: string
 }
 
@@ -50,7 +50,7 @@ export type ProjectContextData = {
   project?: ProjectProps
   getXmlSerializedValueByPath: (
     propertyPath: string,
-  ) => XMLSerializedAsObjectProps | string | undefined
+  ) => XMLSerializedAsObject | string | undefined
   getProject: (path: string) => Promise<void>
   createPOU: (data: CreatePouData) => void
   updateDocumentation: (data: UpdateDocumentationData) => void
@@ -61,10 +61,10 @@ export const ProjectContext = createContext<ProjectContextData>(
 )
 
 // TODO: Remove mock project
-
-const mockProject = {
+const mockProject: ProjectProps = {
+  filePath: 'C:\\Users\\SILU\\Downloads\\electron',
   language: 'LD',
-  xmlSerialized: {
+  xmlSerializedAsObject: {
     project: {
       '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6.xsd',
       '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
@@ -107,7 +107,52 @@ const mockProject = {
             '@name': 'program0',
             '@pouType': 'program',
             body: {
-              LD: {},
+              LD: {
+                leftPowerRail: {
+                  '@localId': '1',
+                  '@heigh': '40',
+                  '@width': '10',
+                  position: {
+                    '@x': '200',
+                    '@y': '200',
+                  },
+                  connectionPointOut: {
+                    '@formalParameter': '',
+                    relPosition: {
+                      '@x': '10',
+                      '@y': '20',
+                    },
+                  },
+                },
+                rightPowerRail: {
+                  '@localId': '2',
+                  '@heigh': '40',
+                  '@width': '10',
+                  position: {
+                    '@x': '800',
+                    '@y': '200',
+                  },
+                  connectionPointIn: {
+                    relPosition: {
+                      '@x': '0',
+                      '@y': '20',
+                    },
+                    connection: {
+                      '@refLocalId': '1',
+                      position: [
+                        {
+                          '@x': '800',
+                          '@y': '220',
+                        },
+                        {
+                          '@x': '210',
+                          '@y': '220',
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -168,7 +213,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
   })
 
   const getXmlSerializedValueByPath = useCallback(
-    (propertyPath: string): XMLSerializedAsObjectProps | string | undefined => {
+    (propertyPath: string): XMLSerializedAsObject | string | undefined => {
       const properties = propertyPath.split('.')
       let xmlSerializedAsObject = { ...project?.xmlSerializedAsObject }
 
@@ -179,7 +224,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
         ) {
           xmlSerializedAsObject = xmlSerializedAsObject[
             property
-          ] as XMLSerializedAsObjectProps
+          ] as XMLSerializedAsObject
         } else {
           return undefined
         }
@@ -197,10 +242,10 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
           const date = formatDate(new Date())
 
           const project = state.xmlSerializedAsObject
-            .project as XMLSerializedAsObjectProps
+            .project as XMLSerializedAsObject
 
           project.contentHeader = {
-            ...(project.contentHeader as XMLSerializedAsObjectProps),
+            ...(project.contentHeader as XMLSerializedAsObject),
             '@modificationDateTime': date,
           }
         }
@@ -213,7 +258,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
   const createPOU = useCallback(
     ({ name, type, language }: CreatePouData) => {
       setProject((state) => {
-        if (!state?.xmlSerializedAsObject) return state
+        if (!state?.xmlSerializedAsObject && language) return state
         updateModificationDateTime()
         return {
           ...state,
@@ -227,7 +272,56 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
                       ...(name && { '@name': name }),
                       '@pouType': type,
                       body: {
-                        ...(language && { [language]: {} }),
+                        ...(language && {
+                          [language]: {
+                            ...(language === languages.LD && {
+                              leftPowerRail: {
+                                '@localId': '1',
+                                '@heigh': '40',
+                                '@width': '10',
+                                position: {
+                                  '@x': '200',
+                                  '@y': '200',
+                                },
+                                connectionPointOut: {
+                                  '@formalParameter': '',
+                                  relPosition: {
+                                    '@x': '10',
+                                    '@y': '20',
+                                  },
+                                },
+                              },
+                              rightPowerRail: {
+                                '@localId': '2',
+                                '@heigh': '40',
+                                '@width': '10',
+                                position: {
+                                  '@x': '800',
+                                  '@y': '200',
+                                },
+                                connectionPointIn: {
+                                  relPosition: {
+                                    '@x': '0',
+                                    '@y': '20',
+                                  },
+                                  connection: {
+                                    '@refLocalId': '1',
+                                    position: [
+                                      {
+                                        '@x': '800',
+                                        '@y': '220',
+                                      },
+                                      {
+                                        '@x': '210',
+                                        '@y': '220',
+                                      },
+                                    ],
+                                  },
+                                },
+                              },
+                            }),
+                          },
+                        }),
                       },
                     },
                   },
@@ -264,12 +358,12 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
       setProject((state) => {
         if (!state?.xmlSerializedAsObject?.project) return state
         const pous = (
-          (state.xmlSerializedAsObject.project as XMLSerializedAsObjectProps)
-            ?.types as XMLSerializedAsObjectProps
-        )?.pous as XMLSerializedAsObjectProps
+          (state.xmlSerializedAsObject.project as XMLSerializedAsObject)
+            ?.types as XMLSerializedAsObject
+        )?.pous as XMLSerializedAsObject
 
         Object.keys(pous).forEach((key) => {
-          const pou = pous[key] as XMLSerializedAsObjectProps
+          const pou = pous[key] as XMLSerializedAsObject
           if (pou?.['@name'] === pouName) {
             pous[key] = {
               ...pou,

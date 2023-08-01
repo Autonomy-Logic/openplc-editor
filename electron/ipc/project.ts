@@ -1,6 +1,6 @@
 import { CONSTANTS } from '@shared/constants'
-import { XMLSerializedAsObjectProps } from '@shared/types/xmlSerializedAsObject'
 import { ipcMain } from 'electron'
+import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
 import { createProjectController, getProjectController } from '../controllers'
 import { mainWindow } from '../main'
@@ -10,7 +10,7 @@ const {
 } = CONSTANTS
 
 type GetProjectToSaveData = {
-  xmlSerializedAsObject: XMLSerializedAsObjectProps
+  xmlSerializedAsObject: XMLSerializedAsObject
   filePath: string
 }
 

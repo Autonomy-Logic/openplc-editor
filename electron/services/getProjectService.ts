@@ -2,12 +2,12 @@ import { readFile } from 'node:fs'
 import { join } from 'node:path'
 
 import { i18n } from '@shared/i18n'
-import { XMLSerializedAsObjectProps } from '@shared/types/xmlSerializedAsObject'
 import { convert } from 'xmlbuilder2'
+import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
 import { ServiceResponse } from './types/response'
 
-type GetProjectServiceResponse = ServiceResponse<XMLSerializedAsObjectProps>
+type GetProjectServiceResponse = ServiceResponse<XMLSerializedAsObject>
 
 const getProjectService = {
   async execute(filePath: string): Promise<GetProjectServiceResponse> {
@@ -37,7 +37,7 @@ const getProjectService = {
       data: {
         xmlSerializedAsObject: convert(file, {
           format: 'object',
-        }) as XMLSerializedAsObjectProps,
+        }) as XMLSerializedAsObject,
       },
     }
   },

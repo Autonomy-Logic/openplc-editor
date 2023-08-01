@@ -1,8 +1,8 @@
 import { CONSTANTS } from '@shared/constants'
-import { XMLSerializedAsObjectProps } from '@shared/types/xmlSerializedAsObject'
 import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
 import { Tabs } from '@/components'
 import Tree, { RootProps } from '@/components/Tree'
@@ -27,7 +27,7 @@ const ProjectTree: FC = () => {
     if (project && project?.xmlSerializedAsObject) {
       const pous = getXmlSerializedValueByPath(
         'project.types.pous',
-      ) as XMLSerializedAsObjectProps
+      ) as XMLSerializedAsObject
       const resourceName = getXmlSerializedValueByPath(
         'project.instances.configurations.configuration.resource.@name',
       ) as string | ''
