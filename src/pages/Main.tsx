@@ -3,7 +3,14 @@ import { FC, useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 
 import { SidebarProvider, TabsProvider } from '@/contexts'
-import { useIpcRender, useModal, useProject, useTabs, useTheme } from '@/hooks'
+import {
+  useIpcRender,
+  useModal,
+  useProject,
+  useTabs,
+  useTheme,
+  useTitlebar,
+} from '@/hooks'
 import useSidebar from '@/hooks/useSidebar'
 import { Layout } from '@/templates'
 import { convertToPath } from '@/utils'
@@ -17,10 +24,11 @@ const {
 
 const MainComponent: FC = () => {
   const navigate = useNavigate()
-  const { theme } = useTheme()
   const { navigate: sidebarNavigate } = useSidebar()
   const { project, getXmlSerializedValueByPath } = useProject()
   const { addTab } = useTabs()
+  const { theme } = useTheme()
+  const { titlebar } = useTitlebar()
   const { handleOpenModal } = useModal({
     content: <CreatePOU />,
     hideCloseButton: true,
@@ -52,7 +60,7 @@ const MainComponent: FC = () => {
     if (!project?.xmlSerializedAsObject) navigate(paths.MAIN)
   }, [navigate, project?.xmlSerializedAsObject])
 
-  if (!theme) return <></>
+  if (!theme || !titlebar) return <></>
 
   return <Layout main={<Outlet />} />
 }

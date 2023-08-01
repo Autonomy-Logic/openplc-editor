@@ -181,7 +181,7 @@ const mockProject: ProjectProps = {
 }
 
 const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
-  const [project, setProject] = useState<ProjectProps>()
+  const [project, setProject] = useState<ProjectProps>(mockProject)
   const { createToast } = useToast()
   const { invoke } = useIpcRender<string, GetProjectProps>({
     channel: get.PROJECT,

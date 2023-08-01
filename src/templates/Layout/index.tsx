@@ -16,7 +16,7 @@ import { useLocation } from 'react-router-dom'
 
 import { Tooltip } from '@/components'
 import { CurrentProps } from '@/contexts/Sidebar'
-import { useFullScreen, useProject, useToggle } from '@/hooks'
+import { useProject, useToggle } from '@/hooks'
 import useSidebar from '@/hooks/useSidebar'
 import { EditorTools, ProjectTree, Settings, Tools, Variables } from '@/pages'
 import { classNames } from '@/utils'
@@ -33,7 +33,6 @@ const Layout: FC<LayoutProps> = ({ main }) => {
   const { project } = useProject()
   const { pathname } = useLocation()
   const { current, navigate } = useSidebar()
-  const { isFullScreen } = useFullScreen()
   const [isSidebarOpen, toggleIsSideBarOpen] = useToggle(true)
   const [sidebarWidth, setSidebarWidth] = useState(INITIAL_SIDEBAR_WIDTH)
 
@@ -100,14 +99,9 @@ const Layout: FC<LayoutProps> = ({ main }) => {
     navigation.find(({ key }) => key === current)?.component
 
   return (
-    <div
-      className={classNames(
-        isFullScreen ? 'h-full' : 'h-[calc(100vh_-_4rem)]',
-        'flex',
-      )}
-    >
+    <div className="flex h-full">
       <div className="flex h-full">
-        <nav className="z-10 flex h-full w-20 flex-col items-center justify-between border-r border-gray-100 bg-white px-4 py-4 dark:border-white/5 dark:bg-gray-900">
+        <nav className="flex h-full w-20 flex-col items-center justify-between border-r border-gray-100 bg-white px-4 py-4 dark:border-white/5 dark:bg-gray-900">
           <ul className="mb-auto flex h-full flex-col items-center gap-2">
             {navigation.map(({ key, name, onClick, icon: Icon, className }) => (
               <li key={name} className={className}>
@@ -140,15 +134,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
           </button>
         </nav>
 
-        <Transition
-          show={isSidebarOpen}
-          // enter="transition-transform duration-300"
-          // enterFrom="-translate-x-full"
-          // enterTo="translate-x-0"
-          // leave="transition-transform duration-300"
-          // leaveFrom="translate-x-0"
-          // leaveTo="-translate-x-full"
-        >
+        <Transition show={isSidebarOpen}>
           <ResizableBox
             width={sidebarWidth}
             height={Infinity}

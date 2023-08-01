@@ -44,20 +44,6 @@ const useFullScreen = (): FullScreenProps => {
     return () => window.removeEventListener('resize', fullscreenchange)
   }, [])
 
-  useEffect(() => {
-    const [titlebar] = document.getElementsByClassName('cet-titlebar')
-    const [container] = document.getElementsByClassName('cet-container')
-
-    if (titlebar && container) {
-      if (isFullScreen) {
-        container.classList.replace('top-16', 'top-0')
-      } else {
-        container.classList.add('top-16')
-        container.classList.replace('top-0', 'top-16')
-      }
-    }
-  }, [isFullScreen])
-
   return {
     requestFullscreen,
     exitFullScreen,
