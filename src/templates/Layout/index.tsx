@@ -149,7 +149,8 @@ const Layout: FC<LayoutProps> = ({ main }) => {
         </Transition>
       </div>
 
-      <main className="h-full w-full bg-gray-100 px-8 py-6 dark:bg-gray-800">
+      <main className="h-full w-full bg-gray-100 dark:bg-gray-800">
+        {/* <Tools /> */}
         {main}
       </main>
     </div>

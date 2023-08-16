@@ -1,5 +1,9 @@
 export { ModalContext, default as ModalProvider } from './Modal'
 export { ProjectContext, default as ProjectProvider } from './Project'
+export {
+  ReactFlowElementsContext,
+  default as ReactFlowElementsProvider,
+} from './ReactFlowElements'
 export { default as RouterProvider } from './Router'
 export { SidebarContext, default as SidebarProvider } from './Sidebar'
 export { TabsContext, default as TabsProvider } from './Tabs'

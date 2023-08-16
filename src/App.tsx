@@ -7,6 +7,7 @@ import { ReactFlowProvider } from 'reactflow'
 import {
   ModalProvider,
   ProjectProvider,
+  ReactFlowElementsProvider,
   RouterProvider,
   ThemeProvider,
   TitlebarProvider,
@@ -20,12 +21,14 @@ const App: FC = () => {
         <ProjectProvider>
           <TitlebarProvider>
             <ReactFlowProvider>
-              <ModalProvider>
-                <DndProvider backend={HTML5Backend}>
-                  <RouterProvider />
-                </DndProvider>
-                <ToastContainer closeButton={false} closeOnClick={false} />
-              </ModalProvider>
+              <ReactFlowElementsProvider>
+                <ModalProvider>
+                  <DndProvider backend={HTML5Backend}>
+                    <RouterProvider />
+                  </DndProvider>
+                  <ToastContainer closeButton={false} closeOnClick={false} />
+                </ModalProvider>
+              </ReactFlowElementsProvider>
             </ReactFlowProvider>
           </TitlebarProvider>
         </ProjectProvider>

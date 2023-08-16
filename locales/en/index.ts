@@ -1,3 +1,4 @@
+export { default as controls } from './controls.json'
 export { default as createPOU } from './createPOU.json'
 export { default as createProject } from './createProject.json'
 export { default as editorTools } from './editorTools.json'

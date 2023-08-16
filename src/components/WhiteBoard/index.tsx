@@ -1,27 +1,57 @@
-import 'reactflow/dist/style.css'
-
 import { CONSTANTS } from '@shared/constants'
-import { DragEvent, useCallback, useEffect, useRef, useState } from 'react'
+import {
+  DragEvent,
+  FC,
+  Fragment,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
+import { useTranslation } from 'react-i18next'
+import { IconType } from 'react-icons'
+import { BiLockAlt, BiLockOpenAlt } from 'react-icons/bi'
+import { CgRedo, CgUndo } from 'react-icons/cg'
+import { HiMinusSmall, HiPlusSmall } from 'react-icons/hi2'
+import { MdFullscreen } from 'react-icons/md'
 import ReactFlow, {
   addEdge,
+  applyEdgeChanges,
+  applyNodeChanges,
   Background,
   Connection,
   ConnectionMode,
-  Controls,
   Edge,
-  MiniMap,
+  EdgeChange,
   Node,
+  NodeChange,
   ReactFlowInstance,
-  useEdgesState,
-  useNodesState,
+  SelectionMode,
   useStore,
 } from 'reactflow'
 import { gray } from 'tailwindcss/colors'
 
-import { useTheme } from '@/hooks'
+import { useReactFlowElements, useTheme, useToggle } from '@/hooks'
+import { classNames } from '@/utils'
 
+import Tooltip from '../Tooltip'
 import { DefaultEdge } from './edges'
 import { Comment, PowerRail } from './nodes'
+
+export type ControlsProps = {
+  id: number
+  icon: IconType
+  className?: string
+  onClick?: () => void
+  tooltip: string
+  divider?: boolean
+  disabled?: boolean
+}
+
+export type CustomControlsProps = {
+  controls: ControlsProps[]
+  className: string
+}
 
 const {
   theme: { variants },
@@ -36,71 +66,159 @@ const EDGE_TYPES = {
   default: DefaultEdge,
 }
 
-const INITIAL_NODES: Node[] = [
-  {
-    id: crypto.randomUUID(),
-    type: 'powerRail',
-    position: {
-      x: 200,
-      y: 200,
-    },
-    data: {
-      pins: [
-        {
-          id: crypto.randomUUID(),
-          position: 'right',
-        },
-      ],
-    },
-  },
-  {
-    id: crypto.randomUUID(),
-    type: 'powerRail',
-    position: {
-      x: 800,
-      y: 200,
-    },
-    data: {
-      pins: [
-        {
-          id: crypto.randomUUID(),
-          position: 'left',
-        },
-      ],
-    },
-  },
-]
+const CustomControls: FC<CustomControlsProps> = ({ controls, className }) => {
+  return (
+    <div
+      className={classNames(
+        'absolute z-10 m-4 flex items-center gap-2 rounded-lg bg-white p-3 shadow-lg dark:bg-gray-900',
+        className,
+      )}
+    >
+      {controls.map(
+        ({
+          id,
+          onClick,
+          icon: Icon,
+          className,
+          tooltip,
+          divider,
+          disabled,
+        }) => (
+          <Fragment key={id}>
+            <Tooltip id={tooltip} label={tooltip} place="bottom">
+              <button
+                className="press-animated border-none outline-none"
+                onClick={() => onClick && onClick()}
+                disabled={disabled}
+              >
+                <Icon
+                  className={classNames(
+                    'h-6 w-6',
+                    disabled
+                      ? 'text-gray-300'
+                      : 'text-gray-400 hover:opacity-90',
+                    !!className && className,
+                  )}
+                />
+              </button>
+            </Tooltip>
+            {divider && <div className="h-6 w-[1px] bg-gray-300" />}
+          </Fragment>
+        ),
+      )}
+    </div>
+  )
+}
 
-const INITIAL_EDGES: Edge[] = [
-  {
-    id: crypto.randomUUID(),
-    type: 'default',
-    source: INITIAL_NODES[0].id,
-    target: INITIAL_NODES[1].id,
-    sourceHandle: INITIAL_NODES[0].data.pins[0].id,
-    targetHandle: INITIAL_NODES[1].data.pins[0].id,
-  },
-]
+const WhiteBoard: FC = () => {
+  const { t } = useTranslation('controls')
+  const { nodes, edges, undo, redo, canRedo, canUndo, triggerUpdate } =
+    useReactFlowElements()
 
-const WhiteBoard = () => {
   const width = useStore(({ width }) => width)
   const height = useStore(({ height }) => height)
 
-  const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES)
-  const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES)
+  const defaultViewport = { x: 0, y: 0, zoom: 0 }
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const [reactFlowInstance, setReactFlowInstance] =
     useState<ReactFlowInstance | null>(null)
 
   const { theme } = useTheme()
+  const [interactivity, toggleInteractivity] = useToggle(true)
+
+  const handleUndo = () => canUndo && undo()
+
+  const handleRedo = () => canRedo && redo()
+
+  const actionsControls: ControlsProps[] = [
+    {
+      id: 0,
+      onClick: handleUndo,
+      icon: CgUndo,
+      tooltip: t('undo'),
+      divider: true,
+      disabled: !canUndo,
+    },
+    {
+      id: 1,
+      onClick: handleRedo,
+      icon: CgRedo,
+      tooltip: t('redo'),
+      disabled: !canRedo,
+    },
+  ]
+  const zoomControls: ControlsProps[] = [
+    {
+      id: 0,
+      onClick: () => reactFlowInstance?.zoomOut({ duration: 300 }),
+      icon: HiMinusSmall,
+      tooltip: t('zoomOut'),
+      divider: true,
+    },
+    {
+      id: 1,
+      onClick: () => reactFlowInstance?.zoomIn({ duration: 300 }),
+      icon: HiPlusSmall,
+      tooltip: t('zoomIn'),
+    },
+  ]
+  const whiteboardControls: ControlsProps[] = [
+    {
+      id: 0,
+      onClick: () => reactFlowInstance?.fitView(),
+      icon: MdFullscreen,
+      tooltip: t('fitView'),
+    },
+    {
+      id: 1,
+      onClick: toggleInteractivity,
+      icon: interactivity ? BiLockOpenAlt : BiLockAlt,
+      tooltip: t('toggleInteractivity'),
+    },
+  ]
 
   useEffect(() => {
     reactFlowInstance?.fitView()
   }, [height, reactFlowInstance, width])
 
+  useEffect(() => {
+    reactFlowInstance?.zoomTo(0)
+  }, [reactFlowInstance])
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      const ignoreAction = !!changes.find(
+        ({ type }) =>
+          type === 'select' || type === 'position' || type === 'dimensions',
+      )
+      triggerUpdate(
+        'nodes',
+        applyNodeChanges(changes, nodes),
+        undefined,
+        ignoreAction,
+      )
+    },
+    [nodes, triggerUpdate],
+  )
+
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      const ignoreAction = !!changes.find(({ type }) => type === 'select')
+      triggerUpdate(
+        'edges',
+        applyEdgeChanges(changes, edges),
+        undefined,
+        ignoreAction,
+      )
+    },
+    [triggerUpdate, edges],
+  )
+
   const onConnect = useCallback(
-    (connection: Connection) => setEdges((edges) => addEdge(connection, edges)),
-    [setEdges],
+    (connection: Connection) => {
+      triggerUpdate('edges', addEdge(connection, edges))
+    },
+    [triggerUpdate, edges],
   )
 
   const onEdgesDelete = useCallback(
@@ -109,8 +227,9 @@ const WhiteBoard = () => {
       const source = nodes.find(({ id }) => edge.source === id) as Node
 
       if (target.type === 'powerRail' && source.type === 'powerRail') {
-        setNodes((state) =>
-          state.map((node) => {
+        triggerUpdate(
+          'nodes',
+          nodes.map((node) => {
             if (node.id === source.id) {
               node.data.pins = node.data.pins.filter(
                 ({ id }: Node<'powerRail'>) => id !== edge.sourceHandle,
@@ -126,7 +245,7 @@ const WhiteBoard = () => {
         )
       }
     },
-    [nodes, setNodes],
+    [nodes, triggerUpdate],
   )
 
   const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
@@ -142,7 +261,6 @@ const WhiteBoard = () => {
       const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect()
       const type = event.dataTransfer.getData('application/reactflow')
 
-      // check if the dropped element is valid
       if (typeof type === 'undefined' || !type) {
         return
       }
@@ -158,9 +276,9 @@ const WhiteBoard = () => {
         data: { label: `${type} node` },
       }
 
-      setNodes((nds) => nds.concat(newNode))
+      triggerUpdate('nodes', nodes.concat(newNode))
     },
-    [reactFlowInstance, setNodes],
+    [nodes, reactFlowInstance, triggerUpdate],
   )
 
   return (
@@ -178,6 +296,15 @@ const WhiteBoard = () => {
         onInit={setReactFlowInstance}
         onDrop={onDrop}
         onDragOver={onDragOver}
+        defaultViewport={defaultViewport}
+        // onNodeDragStop={(e) => console.log('onNodeDragStop ->', e)}
+        nodesDraggable={interactivity}
+        nodesConnectable={interactivity}
+        elementsSelectable={interactivity}
+        panOnScroll
+        selectionOnDrag
+        panOnDrag={[1, 2]}
+        selectionMode={SelectionMode.Partial}
         fitView
         defaultEdgeOptions={{
           type: 'default',
@@ -188,8 +315,12 @@ const WhiteBoard = () => {
           size={2}
           color={theme === variants.DARK ? gray[600] : gray[300]}
         />
-        <MiniMap />
-        <Controls />
+        <CustomControls className="" controls={actionsControls} />
+        <CustomControls className="right-0" controls={zoomControls} />
+        <CustomControls
+          className="right-32 gap-3"
+          controls={whiteboardControls}
+        />
       </ReactFlow>
     </div>
   )

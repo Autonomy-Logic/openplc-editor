@@ -1,4 +1,4 @@
-import { FC, useCallback } from 'react'
+import { FC, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   addEdge,
@@ -7,12 +7,11 @@ import {
   Node,
   NodeProps,
   Position,
-  useReactFlow,
   useStore,
 } from 'reactflow'
 
 import { Dropdown } from '@/components'
-import { useToggle } from '@/hooks'
+import { useReactFlowElements, useToggle } from '@/hooks'
 import { classNames } from '@/utils'
 
 type PinProps = {
@@ -38,18 +37,19 @@ const PowerRail: FC<NodeProps<PowerRailProps>> = ({
 
   const edgesCount = useStore((store) => store.edges.length)
   const [showDropdown, toggleShowDropdown] = useToggle(false)
-  const { getNode, getEdges, setNodes, setEdges } = useReactFlow()
+  const { nodes, edges, triggerUpdate, getNode } = useReactFlowElements()
+
   const node = getNode(id) as Node
 
   const isConnectable = useCallback(() => {
     if (!node || edgesCount === 0) return
 
     return !(
-      getConnectedEdges([node], getEdges()).filter(
+      getConnectedEdges([node], edges).filter(
         (e) => e.source === id || e.target === id,
       ).length > 0
     )
-  }, [edgesCount, getEdges, id, node])
+  }, [edges, edgesCount, id, node])
 
   const onAuxClick = () => {
     if (!selected) return
@@ -61,7 +61,7 @@ const PowerRail: FC<NodeProps<PowerRailProps>> = ({
   }
 
   const handleAddNewPin = useCallback(() => {
-    const [connectedNode] = getConnectedEdges([node], getEdges()).filter(
+    const [connectedNode] = getConnectedEdges([node], edges).filter(
       (e) => e.source === id || e.target === id,
     )
     const connectedNodeId =
@@ -70,8 +70,9 @@ const PowerRail: FC<NodeProps<PowerRailProps>> = ({
     const sourceHandleId = crypto.randomUUID()
     const targetHandleId = crypto.randomUUID()
 
-    setNodes((state) =>
-      state.map((node) => {
+    triggerUpdate(
+      'nodes',
+      nodes.map((node) => {
         if (node.id === id) {
           node.data.pins = [
             ...node.data.pins,
@@ -90,12 +91,12 @@ const PowerRail: FC<NodeProps<PowerRailProps>> = ({
             },
           ]
         }
-
         return node
       }),
     )
 
-    setEdges((edges) =>
+    triggerUpdate(
+      'edges',
       addEdge(
         {
           id: crypto.randomUUID(),
@@ -108,8 +109,11 @@ const PowerRail: FC<NodeProps<PowerRailProps>> = ({
         edges,
       ),
     )
-  }, [getEdges, id, node, setEdges, setNodes])
+  }, [edges, id, node, nodes, triggerUpdate])
 
+  useEffect(() => {
+    console.log('edges ->', nodes)
+  }, [nodes])
   return (
     <Dropdown
       show={showDropdown}

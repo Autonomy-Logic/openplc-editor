@@ -2,6 +2,7 @@ import { CONSTANTS } from '@shared/constants'
 import { FC, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { IconType } from 'react-icons'
+import { CgRedo, CgUndo } from 'react-icons/cg'
 import {
   HiArrowDownOnSquareStack,
   HiArrowDownTray,
@@ -43,6 +44,7 @@ export type ToolsProps = {
   className?: string
   onClick?: () => void
   tooltip: string
+  divider?: boolean
 }
 
 const Tools: FC = () => {
@@ -77,83 +79,84 @@ const Tools: FC = () => {
   }
 
   const tools: ToolsProps[] = [
-    {
-      id: 1,
-      onClick: handleCreateProjectFromToolbar,
-      icon: HiDocumentPlus,
-      tooltip: t('menuToolbar.new'),
-    },
-    {
-      id: 2,
-      onClick,
-      icon: HiFolderOpen,
-      tooltip: t('menuToolbar.open'),
-    },
-    {
-      id: 3,
-      onClick,
-      icon: HiArrowDownTray,
-      tooltip: t('menuToolbar.save'),
-    },
-    {
-      id: 4,
-      onClick,
-      icon: HiArrowDownOnSquareStack,
-      tooltip: t('menuToolbar.saveAs'),
-    },
-    {
-      id: 5,
-      onClick,
-      icon: HiPrinter,
-      tooltip: t('menuToolbar.print'),
-    },
+    // {
+    //   id: 1,
+    //   onClick: handleCreateProjectFromToolbar,
+    //   icon: HiDocumentPlus,
+    //   tooltip: t('menuToolbar.new'),
+    // },
+    // {
+    //   id: 2,
+    //   onClick,
+    //   icon: HiFolderOpen,
+    //   tooltip: t('menuToolbar.open'),
+    // },
+    // {
+    //   id: 3,
+    //   onClick,
+    //   icon: HiArrowDownTray,
+    //   tooltip: t('menuToolbar.save'),
+    // },
+    // {
+    //   id: 4,
+    //   onClick,
+    //   icon: HiArrowDownOnSquareStack,
+    //   tooltip: t('menuToolbar.saveAs'),
+    // },
+    // {
+    //   id: 5,
+    //   onClick,
+    //   icon: HiPrinter,
+    //   tooltip: t('menuToolbar.print'),
+    // },
     {
       id: 6,
       onClick,
-      icon: HiArrowUturnLeft,
+      icon: CgUndo,
       tooltip: t('menuToolbar.undo'),
+      divider: true,
     },
     {
       id: 7,
       onClick,
-      icon: HiArrowUturnRight,
+      icon: CgRedo,
       tooltip: t('menuToolbar.redo'),
     },
-    {
-      id: 8,
-      onClick,
-      icon: HiScissors,
-      tooltip: t('menuToolbar.cut'),
-    },
-    {
-      id: 9,
-      onClick,
-      icon: HiDocumentDuplicate,
-      tooltip: t('menuToolbar.copy'),
-    },
-    {
-      id: 10,
-      onClick,
-      icon: HiClipboard,
-      tooltip: t('menuToolbar.paste'),
-    },
-    {
-      id: 11,
-      onClick,
-      icon: HiDocumentMagnifyingGlass,
-      tooltip: t('menuToolbar.search'),
-    },
-    {
-      id: 12,
-      onClick: () => (isFullScreen ? exitFullScreen() : requestFullscreen()),
-      icon: isFullScreen ? HiArrowsPointingIn : HiArrowsPointingOut,
-      tooltip: t('menuToolbar.fullScreen'),
-    },
+    // {
+    //   id: 8,
+    //   onClick,
+    //   icon: HiScissors,
+    //   tooltip: t('menuToolbar.cut'),
+    // },
+    // {
+    //   id: 9,
+    //   onClick,
+    //   icon: HiDocumentDuplicate,
+    //   tooltip: t('menuToolbar.copy'),
+    // },
+    // {
+    //   id: 10,
+    //   onClick,
+    //   icon: HiClipboard,
+    //   tooltip: t('menuToolbar.paste'),
+    // },
+    // {
+    //   id: 11,
+    //   onClick,
+    //   icon: HiDocumentMagnifyingGlass,
+    //   tooltip: t('menuToolbar.search'),
+    // },
+    // {
+    //   id: 12,
+    //   onClick: () => (isFullScreen ? exitFullScreen() : requestFullscreen()),
+    //   icon: isFullScreen ? HiArrowsPointingIn : HiArrowsPointingOut,
+    //   tooltip: t('menuToolbar.fullScreen'),
+    // },
   ]
 
   return (
     <>
-      <Tabs
+      {/* <Tabs
         tabs={[
           {
             id: t('common.tabName'),
@@ -161,22 +164,25 @@ const Tools: FC = () => {
             current: true,
           },
         ]}
-      />
-      <div className="mt-10 grid grid-cols-6 gap-4">
-        {tools.map(({ id, onClick, icon: Icon, className, tooltip }) => (
-          <Fragment key={id}>
-            <Tooltip id={tooltip} label={tooltip} place="bottom">
-              <button
-                className="press-animated border-none outline-none"
-                onClick={() => onClick && onClick()}
-              >
-                <Icon
-                  className={`h-6 w-6 text-gray-500 hover:opacity-90 ${className}`}
-                />
-              </button>
-            </Tooltip>
-          </Fragment>
-        ))}
+      /> */}
+      <div className="absolute z-10 m-4 flex gap-2 rounded-lg bg-white p-3 shadow-lg dark:bg-gray-900">
+        {tools.map(
+          ({ id, onClick, icon: Icon, className, tooltip, divider }) => (
+            <Fragment key={id}>
+              <Tooltip id={tooltip} label={tooltip} place="bottom">
+                <button
+                  className="press-animated border-none outline-none"
+                  onClick={() => onClick && onClick()}
+                >
+                  <Icon
+                    className={`h-6 w-6 text-gray-400 hover:opacity-90 ${className}`}
+                  />
+                </button>
+              </Tooltip>
+              {divider && <div className="h-6 w-[1px] bg-gray-300" />}
+            </Fragment>
+          ),
+        )}
       </div>
     </>
   )
