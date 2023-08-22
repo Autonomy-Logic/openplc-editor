@@ -14,7 +14,14 @@ type GetProjectToSaveData = {
   filePath: string
 }
 
+/**
+ * Represents actions related to project data and IPC communication.
+ */
 export const project = {
+  /**
+   * Sends project data to the main window.
+   * @param filePath - The path to the project file.
+   */
   send: async (filePath: string) => {
     const response = await getProjectController.handle(filePath)
 
@@ -23,6 +30,11 @@ export const project = {
       data: { ...response.data, filePath },
     })
   },
+
+  /**
+   * Returns a response listener for getting project data to save.
+   * @returns A response listener function.
+   */
   getProjectToSave: () => {
     mainWindow?.webContents.send(get.SAVE_PROJECT)
     const responseListener = (
@@ -40,6 +52,9 @@ export const project = {
   },
 }
 
+/**
+ * Sets up IPC event handling related to project actions.
+ */
 export const projectIpc = () => {
   ipcMain.handle(get.PROJECT, async (_event, filePath: string) => {
     const response = await getProjectController.handle(filePath)

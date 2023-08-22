@@ -19,6 +19,11 @@ const developOptions: MenuItemConstructorOptions[] = [
   { role: 'toggleDevTools' },
 ]
 
+/**
+ * Generates the menu template based on provided options.
+ * @param options - Menu options.
+ * @returns The generated menu template.
+ */
 const getTemplate = (options?: GetTemplate): MenuItemConstructorOptions[] => {
   const { hasProject = false } = options || ({} as GetTemplate)
   return [
@@ -264,6 +269,9 @@ const getTemplate = (options?: GetTemplate): MenuItemConstructorOptions[] => {
   ]
 }
 
+/**
+ * Creates the application menu from the template and sets it.
+ */
 export const menu = {
   createMenu: () => {
     const template = getTemplate()
@@ -271,8 +279,13 @@ export const menu = {
     Menu.setApplicationMenu(menu)
   },
 }
-
+/**
+ * Sets up IPC event handling for menu-related actions.
+ */
 export const menuIpc = () => {
+  /**
+   * Handles the IPC event to update the menu with project-related options.
+   */
   ipcMain.handle(set.UPDATE_MENU_PROJECT, async () => {
     const template = getTemplate({ hasProject: true })
     const menu = Menu.buildFromTemplate(template)

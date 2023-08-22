@@ -1,6 +1,14 @@
 import logoSvg from './assets/logo'
 
+/**
+ * Waits for the specified document ready states before resolving.
+ * @param condition - The document ready states to wait for.
+ * @returns A promise that resolves when the specified ready states are reached.
+ */
 const domReady = (
+  /**
+   * Represents the possible ready states of the document.
+   */
   condition: DocumentReadyState[] = ['complete', 'interactive'],
 ) => {
   return new Promise((resolve) => {
@@ -16,12 +24,25 @@ const domReady = (
   })
 }
 
+/**
+ * Utility functions for safely manipulating the DOM.
+ */
 const safeDOM = {
+  /**
+   * Appends a child element to a parent element, only if not already present.
+   * @param parent - The parent element to append to.
+   * @param child - The child element to append.
+   */
   append(parent: HTMLElement, child: HTMLElement | Document) {
     if (!Array.from(parent.children).find((e) => e === child)) {
       return parent.appendChild(child)
     }
   },
+  /**
+   * Removes a child element from a parent element, if present.
+   * @param parent - The parent element to remove from.
+   * @param child - The child element to remove.
+   */
   remove(parent: HTMLElement, child: HTMLElement) {
     if (Array.from(parent.children).find((e) => e === child)) {
       return parent.removeChild(child)
@@ -29,6 +50,10 @@ const safeDOM = {
   },
 }
 
+/**
+ * Creates loading screen components and methods.
+ * @returns Loading screen utility methods.
+ */
 const useLoading = () => {
   const preloadClassName = 'preload'
   const logoClassName = 'logo'
@@ -71,10 +96,16 @@ const useLoading = () => {
   container.className = preloadClassName
   container.innerHTML = content
   return {
+    /**
+     * Appends the loading screen elements to the document.
+     */
     appendLoading() {
       safeDOM.append(document.head, style)
       safeDOM.append(document.body, container)
     },
+    /**
+     * Removes the loading screen elements from the document.
+     */
     removeLoading() {
       safeDOM.remove(document.head, style)
       safeDOM.remove(document.body, container)
@@ -84,12 +115,19 @@ const useLoading = () => {
 
 // eslint-disable-next-line react-hooks/rules-of-hooks
 const { appendLoading, removeLoading } = useLoading()
+
+// Wait for the DOM to be ready before appending the loading screen.
 domReady().then(appendLoading)
 
+/**
+ * Handles the 'message' event sent to the window.
+ * @param event - The message event.
+ */
 window.onmessage = (event) => {
   if (event.data.payload === 'removeLoading') removeLoading()
 }
 
+// Remove the loading screen after a certain timeout.
 setTimeout(removeLoading, 4999)
 
 export {}

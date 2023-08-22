@@ -7,6 +7,7 @@ import { app, BrowserWindow } from 'electron'
 import { ipc } from '../ipc'
 import { createWindow } from './createWindow'
 
+// Set environment variables for paths
 process.env.DIST_ELECTRON = join(__dirname, '../')
 process.env.DIST = join(process.env.DIST_ELECTRON, '../dist')
 process.env.PUBLIC = process.env.VITE_DEV_SERVER_URL
@@ -19,6 +20,7 @@ if (release().startsWith('6.1')) app.disableHardwareAcceleration()
 // Set application name for Windows 10+ notifications
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
+// Ensure only one instance of the application is running
 if (!app.requestSingleInstanceLock()) {
   app.quit()
   process.exit(0)
@@ -30,20 +32,25 @@ if (!app.requestSingleInstanceLock()) {
 // process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
 // console.log(app.getPath('userData'));
 
+// Initialize the main window instance
 export let mainWindow: BrowserWindow | null = null
 
+// Set up the custom title bar
 setupTitlebar()
 
+// Create the main window when the app is ready
 app.whenReady().then(() => {
   mainWindow = createWindow()
   ipc.menu.createMenu()
 })
 
+// Quit the app when all windows are closed
 app.on('window-all-closed', () => {
   mainWindow = null
   if (process.platform !== 'darwin') app.quit()
 })
 
+// Handle second instance of the app
 app.on('second-instance', () => {
   if (mainWindow) {
     // Focus on the main window if the user tried to open another
@@ -52,6 +59,7 @@ app.on('second-instance', () => {
   }
 })
 
+// Handle the app activation event
 app.on('activate', () => {
   const allWindows = BrowserWindow.getAllWindows()
   if (allWindows.length) {
@@ -61,4 +69,5 @@ app.on('activate', () => {
   }
 })
 
+// Set up IPC listeners
 ipc.setupListeners()

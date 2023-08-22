@@ -5,6 +5,10 @@ import {
   type UpdateDownloadedEvent,
 } from 'electron-updater'
 
+/**
+ * Configures and handles the application update process.
+ * @param win - The browser window instance.
+ */
 export const update = (win: Electron.BrowserWindow) => {
   // When set to false, the update download will be triggered through the API
   autoUpdater.autoDownload = false

@@ -8,18 +8,25 @@ import { create } from 'xmlbuilder2'
 
 import { mainWindow } from '../main'
 import { ServiceResponse } from './types/response'
-
+/**
+ * Service responsible for creating and initializing a new project XML file.
+ */
 const createProjectService = {
+  /**
+   * Executes the service to create a new project XML file.
+   * @returns A promise containing the service response.
+   */
   async execute(): Promise<ServiceResponse<string>> {
+    // Show a dialog to select the project directory.
     const response = await dialog.showOpenDialog(mainWindow as BrowserWindow, {
       title: i18n.t('createProject:dialog.title'),
       properties: ['openDirectory'],
     })
-
+    // If the dialog is canceled, return an unsuccessful response.
     if (response.canceled) return { ok: false }
 
     const [filePath] = response.filePaths
-
+    // Checks if the selected directory is empty.
     const isEmptyDir = async () => {
       try {
         const directory = await promises.opendir(filePath)
@@ -30,7 +37,7 @@ const createProjectService = {
         return false
       }
     }
-
+    // If the selected directory is not empty, return an error response.
     if (!(await isEmptyDir())) {
       return {
         ok: false,
@@ -44,7 +51,7 @@ const createProjectService = {
     }
 
     const date = formatDate(new Date())
-
+    // Create the project XML structure using xmlbuilder2.
     const project = create(
       { version: '1.0', encoding: 'utf-8' },
       {
@@ -100,7 +107,7 @@ const createProjectService = {
         },
       },
     )
-
+    // Serialize the XML structure and write it to a file.
     const plc = project.end({ prettyPrint: true })
 
     let failedToCreateFile = false
@@ -108,7 +115,7 @@ const createProjectService = {
     writeFile(join(filePath, 'plc.xml'), plc, (error) => {
       if (error) failedToCreateFile = true
     })
-
+    // If the file creation failed, return an error response.
     if (failedToCreateFile)
       return {
         ok: false,
@@ -119,7 +126,7 @@ const createProjectService = {
           ),
         },
       }
-
+    // Return a successful response with the created file path.
     return { ok: true, data: filePath }
   },
 }
