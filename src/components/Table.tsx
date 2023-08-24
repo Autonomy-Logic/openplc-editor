@@ -14,12 +14,16 @@ import { useFullScreen } from '@/hooks'
 import { classNames } from '@/utils'
 
 import Form from './Form'
-
+/**
+ * Props for the Table component.
+ */
 type TableProps<T> = {
   columns: ColumnDef<T>[]
   data: T[]
 }
-
+/**
+ * Data structure for variables in the table.
+ */
 export type VariablesTable = {
   id: string
   name: string
@@ -30,7 +34,9 @@ export type VariablesTable = {
   option: string
   documentation: string
 }
-
+/**
+ * Extend the TableMeta interface to include the updateData method.
+ */
 declare module '@tanstack/react-table' {
   interface TableMeta<TData extends RowData> {
     updateData: (rowIndex: number, columnId: string, value: unknown) => void
@@ -38,6 +44,9 @@ declare module '@tanstack/react-table' {
 }
 
 // Give our default column cell renderer editing superpowers!
+/**
+ * Default cell renderer for table columns.
+ */
 const defaultColumn: Partial<ColumnDef<VariablesTable>> = {
   cell: ({ getValue, row: { index }, column, table }) => {
     const initialValue = getValue()
@@ -55,11 +64,16 @@ const defaultColumn: Partial<ColumnDef<VariablesTable>> = {
     return <input readOnly value={initialValue as string} />
   },
 }
-
+/**
+ * Define a draggable row component.
+ */
 const DraggableRow: FC<{
   row: Row<VariablesTable>
   reorderRow: (draggedRowIndex: number, targetRowIndex: number) => void
 }> = ({ row, reorderRow }) => {
+  /**
+   * Refs for drop and drag actions.
+   */
   const trRef = useRef<HTMLTableRowElement>(null)
 
   const [, dropRef] = useDrop({
@@ -77,7 +91,9 @@ const DraggableRow: FC<{
   })
 
   previewRef(trRef)
-
+  /**
+   * Render draggable row with cells and buttons.
+   */
   return (
     <tr ref={trRef}>
       {row.getVisibleCells().map((cell) => (
@@ -99,10 +115,15 @@ const DraggableRow: FC<{
     </tr>
   )
 }
-
+/**
+ * Main Table component that displays the table.
+ * @returns a JSX component with the mounted table.
+ */
 const Table: FC = () => {
   const { isFullScreen } = useFullScreen()
-
+  /**
+   * Define the table columns and initial data.
+   */
   const columns = useMemo<ColumnDef<VariablesTable>[]>(
     () => [
       {
@@ -154,7 +175,9 @@ const Table: FC = () => {
       documentation: '',
     })),
   )
-
+  /**
+   * Function to reorder rows.
+   */
   const reorderRow = (draggedRowIndex: number, targetRowIndex: number) => {
     data.splice(
       targetRowIndex,
@@ -163,7 +186,9 @@ const Table: FC = () => {
     )
     setData([...data])
   }
-
+  /**
+   * Get header groups and row model using useReactTable.
+   */
   const { getHeaderGroups, getRowModel } = useReactTable({
     data,
     columns,

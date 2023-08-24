@@ -6,12 +6,22 @@ import { NodeProps } from 'reactflow'
 import { gray } from 'tailwindcss/colors'
 
 import { classNames } from '@/utils'
-
+/**
+ * Comment component used for displaying and editing comments within a React Flow diagram node.
+ * @param selected - Indicates if the node is currently selected.
+ * @param data - Additional data associated with the node.
+ */
 const Comment: FC<NodeProps> = ({ selected, data }) => {
+  // State to manage the number of rows in the textarea.
   const [rows, setRows] = useState(1)
+  // State to manage the content of the comment.
   const [comment, setComment] = useState(data.comment)
+  // State to track whether the textarea is in focus.
   const [isOnFocus, setIsOnFocus] = useState(false)
-
+  /**
+   * Handles the change event when the comment text is modified.
+   * @param event - The change event of the textarea.
+   */
   const onChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     const textareaLineHeight = 24
     const previousRows = event.target.rows

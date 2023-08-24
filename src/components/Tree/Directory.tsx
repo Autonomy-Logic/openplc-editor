@@ -7,22 +7,33 @@ import { classNames } from '@/utils'
 
 import Tree, { RootProps } from './index'
 import Item from './Item'
-
+/**
+ * Props for the Directory component.
+ */
 export type DirectoryProps = {
   item: RootProps
   isChild?: boolean
   isMainDirectory?: boolean
 }
-
+/**
+ * Directory component used to render a directory item with collapsible behavior.
+ * @param item - The root item of the directory.
+ * @param isChild - Whether the directory is a child directory.
+ * @param isMainDirectory - Whether the directory is the main directory.
+ */
 export const Directory: FC<PropsWithChildren<DirectoryProps>> = ({
   item,
   isChild = false,
   isMainDirectory = false,
 }) => {
   const { title, icon: Icon, onClick } = item
-
+  /**
+   *  Toggle state for controlling the open/collapsed state of the directory
+   */
   const [open, toggleOpen] = useToggle(false)
-
+  /**
+   * Handler for the collapse button click
+   */
   const onCollapseClicked = useCallback(
     (event: MouseEvent<HTMLButtonElement, globalThis.MouseEvent>) => {
       event.stopPropagation()

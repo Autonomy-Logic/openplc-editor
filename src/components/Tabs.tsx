@@ -1,7 +1,9 @@
 import { FC } from 'react'
 
 import { classNames } from '@/utils'
-
+/**
+ * Props for the Tabs component.
+ */
 export type TabsProps = {
   tabs: {
     id: number | string
@@ -10,7 +12,10 @@ export type TabsProps = {
     current: boolean
   }[]
 }
-
+/**
+ * Tabs component to display a tab navigation bar.
+ * @returns a JSX component with the tab wrapper for the navigation bar.
+ */
 const Tabs: FC<TabsProps> = ({ tabs }) => {
   return (
     <div className="border-b border-gray-900/10 bg-white px-4 dark:border-white/5 dark:bg-gray-900">

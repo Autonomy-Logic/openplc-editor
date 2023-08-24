@@ -27,17 +27,33 @@ import {
   useProject,
   useToast,
 } from '@/hooks'
-
+/**
+ * Destructure necessary values from the CONSTANTS module
+ */
 const {
   channels: { set },
 } = CONSTANTS
-
+/**
+ * Type for data passed to the handleCreateProjectFromToolbar function
+ * @typedef {Object} CreateProjectFromToolbarProps
+ * @property {boolean} ok - Whether the creation was successful or not
+ * @property {Object} [reason] - Reason for failure with title and description
+ * @property {string} [data] - Additional data related to the creation
+ */
 type CreateProjectFromToolbarProps = {
   ok: boolean
   reason?: { title: string; description?: string }
   data?: string
 }
-
+/**
+ * Type for individual tools in the toolbar
+ * @typedef {Object} ToolsProps
+ * @property {number} id - Unique identifier for the tool
+ * @property {IconType} icon - Icon component representing the tool
+ * @property {string} [className] - Additional CSS class for the tool
+ * @property {Function} [onClick] - Function to execute on tool click
+ * @property {string} tooltip - Tooltip text for the tool
+ */
 export type ToolsProps = {
   id: number
   icon: IconType
@@ -46,23 +62,57 @@ export type ToolsProps = {
   tooltip: string
   divider?: boolean
 }
-
+/**
+ * Functional component for displaying tools in the toolbar
+ * @component
+ */
 const Tools: FC = () => {
+  /**
+   * Access the translation function from 'react-i18next'
+   * @useTranslation
+   */
   const { t } = useTranslation('tools')
+  /**
+   * Access the createToast function from custom hook
+   * @useToast
+   */
   const { createToast } = useToast()
+  /**
+   * Access fullscreen-related functions and states from custom hook
+   * @useFullScreen
+   */
   const { requestFullscreen, exitFullScreen, isFullScreen } = useFullScreen()
+  /**
+   * Access IPC render function for creating a project from custom hook
+   * @useIpcRender
+   */
   const { invoke: createProjectFromToolbar } = useIpcRender<
     undefined,
     CreateProjectFromToolbarProps
   >()
+  /**
+   * Access project-related functions from custom hook
+   * @useProject
+   */
   const { getProject } = useProject()
+  /**
+   * Access modal-related functions from custom hook and open a modal for creating a POU
+   * @useModal
+   */
   const { handleOpenModal } = useModal({
     content: <CreatePOU />,
     hideCloseButton: true,
   })
-
+  /**
+   * Handle click event for tools that are not yet implemented
+   * @function
+   */
   const onClick = () => console.log('will be created soon')
-
+  /**
+   * Handle the creation of a project from the toolbar
+   * @async
+   * @function
+   */
   const handleCreateProjectFromToolbar = async () => {
     const { ok, reason, data } = await createProjectFromToolbar(
       set.CREATE_PROJECT_FROM_TOOLBAR,
@@ -77,7 +127,10 @@ const Tools: FC = () => {
       await getProject(data)
     }
   }
-
+  /**
+   * Array of tool objects with their respective properties
+   * @type {ToolsProps[]}
+   */
   const tools: ToolsProps[] = [
     // {
     //   id: 1,

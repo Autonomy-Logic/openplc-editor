@@ -1,14 +1,18 @@
 import { ButtonHTMLAttributes, FC } from 'react'
 
 import { classNames } from '@/utils'
-
+/**
+ * Props for the Button component.
+ */
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   appearance?: 'primary' | 'secondary'
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   label?: string
   widthFull?: boolean
 }
-
+/**
+ * The Button component renders a button element with customizable appearance, size, and other properties.
+ */
 const Button: FC<ButtonProps> = ({
   appearance = 'primary',
   size = 'md',

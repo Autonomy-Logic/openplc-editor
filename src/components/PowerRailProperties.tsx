@@ -8,11 +8,16 @@ import { z } from 'zod'
 import { Button, Form } from '@/components'
 import { useModal } from '@/hooks'
 import { classNames } from '@/utils'
-
+/**
+ * Props for the PowerRailProperties component
+ */
 type PowerRailPropertiesProps = {
   position: XYPosition
 }
-
+/**
+ * Component to manage the properties of a power rail.
+ * @returns a JSX component to manage the properties of a power rail.
+ */
 const PowerRailProperties: FC<PowerRailPropertiesProps> = ({ position }) => {
   const { addNodes } = useReactFlow()
   const { handleCloseModal } = useModal()
@@ -20,14 +25,20 @@ const PowerRailProperties: FC<PowerRailPropertiesProps> = ({ position }) => {
   const { t } = useTranslation('powerRailProperties')
   const [pinNumber, setPinNumber] = useState(1)
   const [pinPosition, setPinPosition] = useState('left')
-
+  /**
+   * Schema for validating power rail properties.
+   */
   const powerRailPropertiesSchema = z.object({
     pinPosition: z.string(),
     pinNumber: z.number(),
   })
-
+  /**
+   * Type for power rail properties form data.
+   */
   type PowerRailPropertiesSchemaData = z.infer<typeof powerRailPropertiesSchema>
-
+  /**
+   * Form instance for power rail properties.
+   */
   const powerRailPropertiesForm = useForm<PowerRailPropertiesSchemaData>({
     resolver: zodResolver(powerRailPropertiesSchema),
     defaultValues: {
@@ -35,7 +46,9 @@ const PowerRailProperties: FC<PowerRailPropertiesProps> = ({ position }) => {
       pinNumber: 1,
     },
   })
-
+  /**
+   * Function to create the power rail properties.
+   */
   const handleCreatePowerRailProperties = async (
     data: PowerRailPropertiesSchemaData,
   ) => {
@@ -53,7 +66,9 @@ const PowerRailProperties: FC<PowerRailPropertiesProps> = ({ position }) => {
     formState: { isSubmitting },
     watch,
   } = powerRailPropertiesForm
-
+  /**
+   *  Subscribe to changes in form data.
+   */
   useEffect(() => {
     const subscription = watch(({ pinPosition, pinNumber }) => {
       if (pinNumber) setPinNumber(pinNumber)

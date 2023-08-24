@@ -2,7 +2,9 @@ import { Switch } from '@headlessui/react'
 import { FC, ReactElement } from 'react'
 
 import { classNames } from '@/utils'
-
+/**
+ * Props for the Toggle component.
+ */
 export type ToggleProps = {
   enabled: boolean
   setEnabled: () => void
@@ -11,7 +13,10 @@ export type ToggleProps = {
     disabled: ReactElement
   }
 }
-
+/**
+ * Toggle component to create a switch with customizable icons.
+ * @returns a JSX component of a toggle with customizable icons
+ */
 const Toggle: FC<ToggleProps> = ({ enabled, setEnabled, icons }) => {
   return (
     <Switch

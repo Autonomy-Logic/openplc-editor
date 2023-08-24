@@ -3,7 +3,9 @@ import { HiXMark } from 'react-icons/hi2'
 import ScrollContainer from 'react-indiana-drag-scroll'
 
 import { classNames } from '@/utils'
-
+/**
+ * Props for the TitlebarTabs component.
+ */
 export type TitlebarTabsProps = {
   tabs: {
     id: number | string
@@ -13,7 +15,10 @@ export type TitlebarTabsProps = {
     current?: boolean
   }[]
 }
-
+/**
+ * TitlebarTabs component to display tabs in the titlebar.
+ * @returns a JSX component with the tabs in the titlebar
+ */
 const TitlebarTabs: FC<TitlebarTabsProps> = ({ tabs }) => {
   return (
     <ScrollContainer className="mx-4">

@@ -5,7 +5,9 @@ import { classNames } from '@/utils'
 
 import { Directory } from './Directory'
 import Item from './Item'
-
+/**
+ * Props for the root item of the tree.
+ */
 export type RootProps = {
   id: string | number
   title: string
@@ -14,13 +16,22 @@ export type RootProps = {
   isOpen?: boolean
   children?: RootProps[]
 }
-
+/**
+ * Props for the Tree component.
+ */
 export type TreeProps = {
   root?: RootProps
   isChild?: boolean
 }
-
+/**
+ * Tree component used to render a hierarchical tree structure.
+ * @param root - The root item of the tree.
+ * @param isChild - Whether the tree is a child tree.
+ */
 const Tree: FC<TreeProps> = ({ root, isChild = false }) => {
+  /**
+   *  Handler for item click event
+   */
   const onItemClicked = useCallback(
     (
       event: React.MouseEvent<HTMLLIElement, MouseEvent>,

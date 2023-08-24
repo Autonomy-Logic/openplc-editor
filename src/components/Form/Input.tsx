@@ -1,11 +1,19 @@
 import { isEmpty } from 'lodash'
 import { FC, InputHTMLAttributes } from 'react'
 import { useFormContext } from 'react-hook-form'
-
+/**
+ * Props for the Input component.
+ * Inherits HTML attributes for an `input` element.
+ */
 type InputProps = InputHTMLAttributes<HTMLInputElement> & {
   name: string
 }
-
+/**
+ * Input component used to render input fields within a form.
+ * @param name - The name of the input element.
+ * @param type - The type of input (e.g., 'text', 'number', 'password').
+ * @param rest - Other HTML attributes for the input element.
+ */
 const Input: FC<InputProps> = ({ name, type, ...rest }) => {
   const { register } = useFormContext()
 

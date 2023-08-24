@@ -8,14 +8,32 @@ import {
   SetStateAction,
 } from 'react'
 import { HiXMark } from 'react-icons/hi2'
-
+/**
+ * Props for the Modal component.
+ */
 export type ModalProps = {
+  /**
+   * Determines whether the modal is open.
+   */
   open: boolean
+  /**
+   * Callback to close the modal.
+   */
   onClose: Dispatch<SetStateAction<boolean>> | (() => void)
+  /**
+   * Content to be displayed in the modal.
+   */
   content?: ReactNode | JSX.Element
+  /**
+   * Determines whether the close button is hidden.
+   */
   hideCloseButton?: boolean
 }
 
+/**
+ * Modal component that displays content in a dialog.
+ * @returns a JSX modal component.
+ */
 const Modal: FC<PropsWithChildren<ModalProps>> = ({
   children,
   open,
@@ -23,6 +41,9 @@ const Modal: FC<PropsWithChildren<ModalProps>> = ({
   content,
   hideCloseButton = false,
 }) => {
+  /**
+   * If there's no children and no content, render nothing
+   */
   if (!children && !content) return <></>
   return (
     <Transition.Root show={open} as={Fragment}>

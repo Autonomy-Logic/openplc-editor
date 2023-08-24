@@ -7,15 +7,21 @@ import { z } from 'zod'
 
 import { Button, Form } from '@/components'
 import { useModal, useProject } from '@/hooks'
-
+/**
+ * Destructure needed constants from the shared CONSTANTS module
+ */
 const { languages, types } = CONSTANTS
-
+/**
+ * Component to create a new POU (Program Organization Unit).
+ */
 const CreateNewPOU: FC = () => {
   const { createPOU } = useProject()
   const { handleCloseModal } = useModal()
   const { t: translate } = useTranslation()
   const { t } = useTranslation('createPOU')
-
+  /**
+   * Define a schema for validating the form data
+   */
   const createPOUSchema = z.object({
     name: z.string().nonempty({
       message: t('errors.name'),
@@ -39,18 +45,24 @@ const CreateNewPOU: FC = () => {
   })
 
   type CreatePOUSchemaData = z.infer<typeof createPOUSchema>
-
+  /**
+   * Prepare options for the type and language dropdowns
+   */
   const typeOptions = [{ id: 0, label: types.PROGRAM, value: types.PROGRAM }]
 
   const languageOptions = [{ id: 0, label: languages.LD, value: languages.LD }]
-
+  /**
+   *  Handler for cancel button
+   */
   const handleCancel = () => {
     createPOU({
       type: typeOptions[0].value as string,
     })
     handleCloseModal()
   }
-
+  /**
+   * Initialize the form using react-hook-form
+   */
   const createPouForm = useForm<CreatePOUSchemaData>({
     resolver: zodResolver(createPOUSchema),
     defaultValues: {
@@ -58,7 +70,9 @@ const CreateNewPOU: FC = () => {
       type: typeOptions[0],
     },
   })
-
+  /**
+   * Handler for form submission
+   */
   const handleCreatePOU = async (data: CreatePOUSchemaData) => {
     const {
       type: { value: type },
@@ -72,7 +86,9 @@ const CreateNewPOU: FC = () => {
     })
     handleCloseModal()
   }
-
+  /**
+   * Extract necessary functions and data from the form
+   */
   const {
     handleSubmit,
     formState: { isSubmitting },

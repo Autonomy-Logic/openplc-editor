@@ -37,7 +37,9 @@ import { classNames } from '@/utils'
 import Tooltip from '../Tooltip'
 import { DefaultEdge } from './edges'
 import { Comment, PowerRail } from './nodes'
-
+/**
+ * Type for individual control items.
+ */
 export type ControlsProps = {
   id: number
   icon: IconType
@@ -47,25 +49,39 @@ export type ControlsProps = {
   divider?: boolean
   disabled?: boolean
 }
-
+/**
+ * Type for custom controls container.
+ */
 export type CustomControlsProps = {
   controls: ControlsProps[]
   className: string
 }
-
+/**
+ * Destructure the `variants` property from the `theme` object in `CONSTANTS`.
+ */
 const {
   theme: { variants },
 } = CONSTANTS
-
+/**
+ * Definition of node types for the React Flow component.
+ */
 const NODE_TYPES = {
+  // Node type for comments.
   comment: Comment,
+  // Node type for power rails.
   powerRail: PowerRail,
 }
-
+/**
+ * Definition of edge types for the React Flow component.
+ */
 const EDGE_TYPES = {
   default: DefaultEdge,
 }
-
+/**
+ * Component for rendering custom controls.
+ *
+ * @returns a JSX component with the custom controls
+ */
 const CustomControls: FC<CustomControlsProps> = ({ controls, className }) => {
   return (
     <div
@@ -109,9 +125,15 @@ const CustomControls: FC<CustomControlsProps> = ({ controls, className }) => {
     </div>
   )
 }
-
+/**
+ * Component for rendering the whiteboard.
+ *
+ * @returns a JSX component with the whiteboard mounted
+ */
 const WhiteBoard: FC = () => {
+  // Get the translation function from the i18next library.
   const { t } = useTranslation('controls')
+  // Destructuring variables from the result of the `useReactFlowElements` hook.
   const { nodes, edges, undo, redo, canRedo, canUndo, triggerUpdate } =
     useReactFlowElements()
 
@@ -126,10 +148,12 @@ const WhiteBoard: FC = () => {
   const { theme } = useTheme()
   const [interactivity, toggleInteractivity] = useToggle(true)
 
+  // Event handles
   const handleUndo = () => canUndo && undo()
 
   const handleRedo = () => canRedo && redo()
 
+  // Control item definitions
   const actionsControls: ControlsProps[] = [
     {
       id: 0,
@@ -177,6 +201,7 @@ const WhiteBoard: FC = () => {
     },
   ]
 
+  // Use effects hooks
   useEffect(() => {
     reactFlowInstance?.fitView()
   }, [height, reactFlowInstance, width])
@@ -185,6 +210,11 @@ const WhiteBoard: FC = () => {
     reactFlowInstance?.zoomTo(0)
   }, [reactFlowInstance])
 
+  /**
+   * Callback for handling changes to nodes.
+   *
+   * @param changes - Array of node changes.
+   */
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       const ignoreAction = !!changes.find(
@@ -201,6 +231,11 @@ const WhiteBoard: FC = () => {
     [nodes, triggerUpdate],
   )
 
+  /**
+   * Callback for handling changes to edges.
+   *
+   * @param changes - Array of edge changes.
+   */
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       const ignoreAction = !!changes.find(({ type }) => type === 'select')
@@ -214,6 +249,11 @@ const WhiteBoard: FC = () => {
     [triggerUpdate, edges],
   )
 
+  /**
+   * Callback for handling new connections.
+   *
+   * @param connection - The new connection.
+   */
   const onConnect = useCallback(
     (connection: Connection) => {
       triggerUpdate('edges', addEdge(connection, edges))
@@ -221,6 +261,11 @@ const WhiteBoard: FC = () => {
     [triggerUpdate, edges],
   )
 
+  /**
+   * Callback for handling edge deletion.
+   *
+   * @param edges - The deleted edges.
+   */
   const onEdgesDelete = useCallback(
     ([edge]: Edge[]) => {
       const target = nodes.find(({ id }) => edge.target === id) as Node
@@ -248,11 +293,21 @@ const WhiteBoard: FC = () => {
     [nodes, triggerUpdate],
   )
 
+  /**
+   * Callback for handling drag over event.
+   *
+   * @param event - The drag event.
+   */
   const onDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
   }, [])
 
+  /**
+   * Callback for handling drop event.
+   *
+   * @param event - The drop event.
+   */
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
       event.preventDefault()
@@ -315,6 +370,7 @@ const WhiteBoard: FC = () => {
           size={2}
           color={theme === variants.DARK ? gray[600] : gray[300]}
         />
+        {/* Custom control components */}
         <CustomControls className="" controls={actionsControls} />
         <CustomControls className="right-0" controls={zoomControls} />
         <CustomControls

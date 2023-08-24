@@ -1,10 +1,18 @@
 import { FC } from 'react'
 import { useFormContext } from 'react-hook-form'
 
+/**
+ * Props for the ErrorMessage component.
+ */
 type ErrorMessageProps = {
   field: string
 }
-
+/**
+ * Get a nested property value from an object using a dot-separated path.
+ * @param obj - The object to traverse.
+ * @param path - The dot-separated path of the nested property.
+ * @returns The value of the nested property, or undefined if not found.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const get = (obj: Record<any, any>, path: string) => {
   const travel = (regexp: RegExp) =>
@@ -20,7 +28,10 @@ const get = (obj: Record<any, any>, path: string) => {
 
   return result
 }
-
+/**
+ * ErrorMessage component to display validation error messages for form fields.
+ * @param field - The name of the field to display the error message for.
+ */
 const ErrorMessage: FC<ErrorMessageProps> = ({ field }) => {
   const {
     formState: { errors },

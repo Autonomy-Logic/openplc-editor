@@ -11,41 +11,55 @@ import {
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
 import { useIpcRender, useToast } from '@/hooks'
-
+/**
+ * Extract properties from the imported CONSTANTS object.
+ */
 const {
   types,
   languages,
   channels: { get, set },
 } = CONSTANTS
-
+/**
+ * Represents the properties of a project.
+ */
 type ProjectProps = {
   language?: (typeof languages)[keyof typeof languages]
   xmlSerializedAsObject?: XMLSerializedAsObject
   filePath?: string
 }
-
+/**
+ * Represents the data needed to create a new POU.
+ */
 type CreatePouData = {
   name?: string
   type: (typeof types)[keyof typeof types]
   language?: (typeof languages)[keyof typeof languages]
 }
-
+/**
+ * Represents the data needed to send a project for saving.
+ */
 type SendProjectToSaveData = {
   project?: XMLSerializedAsObject
   filePath?: string
 }
-
+/**
+ * Represents the data needed to update the documentation of a POU.
+ */
 type UpdateDocumentationData = {
   pouName: string
   description: string
 }
-
+/**
+ * Represents the response when fetching project properties.
+ */
 type GetProjectProps = {
   ok: boolean
   reason?: { title: string; description?: string }
   data?: ProjectProps
 }
-
+/**
+ * The context for managing project-related data.
+ */
 export type ProjectContextData = {
   project?: ProjectProps
   getXmlSerializedValueByPath: (
@@ -61,6 +75,9 @@ export const ProjectContext = createContext<ProjectContextData>(
 )
 
 // TODO: Remove mock project
+/**
+ * Mock project data used for initialization.
+ */
 const mockProject: ProjectProps = {
   filePath: 'C:\\Users\\SILU\\Downloads\\electron',
   language: 'LD',
@@ -179,19 +196,41 @@ const mockProject: ProjectProps = {
     },
   },
 }
-
+/**
+ * Provides the project context to the application.
+ * @param children The children components wrapped by the context provider.
+ * @returns A JSX Component with the project context provider
+ */
 const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
+  /**
+   * Define state to hold project data and a function to update it.
+   */
   const [project, setProject] = useState<ProjectProps>(mockProject)
+  /**
+   * Destructure the createToast function from the useToast hook.
+   */
   const { createToast } = useToast()
+  /**
+   * Use the useIpcRender hook to invoke a renderer process event.
+   */
   const { invoke } = useIpcRender<string, GetProjectProps>({
     channel: get.PROJECT,
+    /**
+     * Callback function for handling the response from the renderer process.
+     */
     callback: ({ ok, data, reason }) => {
       if (!ok && reason) {
+        /**
+         *  Display an error toast if the request is not successful.
+         */
         createToast({
           type: 'error',
           ...reason,
         })
       } else if (ok && data) {
+        /**
+         *  Update the project state with the received data.
+         */
         const { xmlSerializedAsObject, filePath } = data
         setProject((state) => ({
           ...state,
@@ -201,17 +240,28 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
       }
     },
   })
-
+  /**
+   * Destructure the `sendProjectToSave` function from the `useIpcRender` hook.
+   */
   const { invoke: sendProjectToSave } = useIpcRender<SendProjectToSaveData>()
-
+  /**
+   * Use the `useIpcRender` hook to send a project save request to the renderer process.
+   */
   useIpcRender<void, void>({
     channel: get.SAVE_PROJECT,
+    /**
+     * Callback function for handling the response from the renderer process.
+     */
     callback: () => {
       if (!project) return
       sendProjectToSave(set.SAVE_PROJECT, project)
     },
   })
-
+  /**
+   * Retrieves the XMLSerialized value by the given property path.
+   * @param propertyPath The path to the property in the XMLSerialized object.
+   * @returns The value at the specified property path.
+   */
   const getXmlSerializedValueByPath = useCallback(
     (propertyPath: string): XMLSerializedAsObject | string | undefined => {
       const properties = propertyPath.split('.')
@@ -234,7 +284,9 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
     },
     [project?.xmlSerializedAsObject],
   )
-
+  /**
+   * Updates the modification date and time of the project.
+   */
   const updateModificationDateTime = useCallback(
     () =>
       setProject((state) => {
@@ -243,7 +295,9 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
 
           const project = state.xmlSerializedAsObject
             .project as XMLSerializedAsObject
-
+          /**
+           *  Update the modification date and time in the project's contentHeader.
+           */
           project.contentHeader = {
             ...(project.contentHeader as XMLSerializedAsObject),
             '@modificationDateTime': date,
@@ -254,7 +308,10 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
       }),
     [],
   )
-
+  /**
+   * Creates a new POU (Program Organization Unit) within the project.
+   * @param data The data required to create the POU.
+   */
   const createPOU = useCallback(
     ({ name, type, language }: CreatePouData) => {
       setProject((state) => {
@@ -352,7 +409,10 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
     },
     [updateModificationDateTime],
   )
-
+  /**
+   * Updates the documentation of a POU within the project.
+   * @param data The data required to update the documentation.
+   */
   const updateDocumentation = useCallback(
     ({ pouName, description }: UpdateDocumentationData) => {
       setProject((state) => {
@@ -382,16 +442,27 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
     },
     [updateModificationDateTime],
   )
-
+  /**
+   * Fetches a project from the given path.
+   */
   const getProject = useCallback(
     async (path: string) => {
+      /**
+       *  Use the `invoke` function to send a request to the renderer process.
+       */
       const { ok, data, reason } = await invoke(get.PROJECT, path)
       if (!ok && reason) {
+        /**
+         * Display an error toast if the request is not successful.
+         */
         createToast({
           type: 'error',
           ...reason,
         })
       } else if (ok && data) {
+        /**
+         *  Update the project state with the received data.
+         */
         setProject((state) => ({
           ...state,
           xmlSerialized: data,
@@ -401,7 +472,9 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
     },
     [createToast, invoke],
   )
-
+  /**
+   * Wrap the children components with the ProjectContext.Provider.
+   */
   return (
     <ProjectContext.Provider
       value={{

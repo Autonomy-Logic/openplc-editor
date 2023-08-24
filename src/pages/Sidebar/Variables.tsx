@@ -9,11 +9,29 @@ import { z } from 'zod'
 import { Button, Form, Table } from '@/components'
 import { useProject } from '@/hooks'
 
+/**
+ * Functional component for managing variables in a POUs documentation
+ * @component
+ */
 const Variables: FC = () => {
+  /**
+   * Access the translation function from 'react-i18next'
+   * @useTranslation('variables')
+   */
   const { t } = useTranslation('variables')
+  /**
+   * Extract the `pouName` from the route parameters
+   */
   const { pouName } = useParams()
+  /**
+   * Access the `updateDocumentation` function from the custom hook
+   * @useProject
+   */
   const { updateDocumentation } = useProject()
-
+  /**
+   * Options for the 'class' field in the variables form
+   * @type {Array<Object>}
+   */
   const classesOptions = [
     {
       id: 0,
@@ -68,6 +86,9 @@ const Variables: FC = () => {
     },
   ]
 
+  /**
+   * Zod schema for variables form data
+   */
   const variablesSchema = z.object({
     description: z.string(),
     class: z.object({
@@ -76,9 +97,13 @@ const Variables: FC = () => {
       value: z.union([z.number(), z.string()]),
     }),
   })
-
+  /**
+   * Type for the data structure represented by the `variablesSchema`
+   */
   type VariablesSchemaData = z.infer<typeof variablesSchema>
-
+  /**
+   * Initialize the variables form using the `useForm` hook
+   */
   const variablesForm = useForm<VariablesSchemaData>({
     resolver: zodResolver(variablesSchema),
     defaultValues: {
@@ -86,9 +111,14 @@ const Variables: FC = () => {
       class: classesOptions[0],
     },
   })
-
+  /**
+   * Destructure `watch` from the `variablesForm` hook
+   */
   const { watch } = variablesForm
-
+  /**
+   * Debounce the `updateDocumentation` function to update the documentation for the POU
+   * @function
+   */
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedDescription = useCallback(
     debounce(
@@ -102,14 +132,19 @@ const Variables: FC = () => {
     ),
     [],
   )
-
+  /**
+   * Listen to changes in the `description` field and debounce the updates
+   */
   useEffect(() => {
     const subscription = watch(({ description }) => {
       debouncedDescription(description)
     })
     return () => subscription.unsubscribe()
   }, [debouncedDescription, watch])
-
+  /**
+   * Render the Variables component
+   * @returns JSX Element
+   */
   return (
     <div className="w-full py-4">
       <FormProvider {...variablesForm}>

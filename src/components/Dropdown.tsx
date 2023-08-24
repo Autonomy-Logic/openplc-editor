@@ -2,12 +2,16 @@ import { Menu, Transition } from '@headlessui/react'
 import { FC, Fragment, PropsWithChildren, useEffect, useRef } from 'react'
 
 import { classNames } from '@/utils'
-
+/**
+ * Defines the structure of a dropdown option.
+ */
 type DropdownOption = {
   label: string
   onClick: () => void
 }
-
+/**
+ * Props for the Dropdown component.
+ */
 type DropdownProps = {
   show: boolean
   options: DropdownOption[]
@@ -15,7 +19,9 @@ type DropdownProps = {
   onAuxClick?: () => void
   onClose?: () => void
 }
-
+/**
+ * Dropdown component that displays a list of options in a dropdown menu.
+ */
 const Dropdown: FC<PropsWithChildren<DropdownProps>> = ({
   children,
   options,
@@ -27,6 +33,9 @@ const Dropdown: FC<PropsWithChildren<DropdownProps>> = ({
   const divRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    /**
+     * Event handler for detecting clicks outside the dropdown.
+     */
     const handleOutsideClick = (event: MouseEvent) => {
       if (
         show &&
@@ -36,8 +45,13 @@ const Dropdown: FC<PropsWithChildren<DropdownProps>> = ({
         onClose && onClose()
       }
     }
-
+    /**
+     * Add event listener to handle outside clicks
+     */
     document.addEventListener('click', handleOutsideClick)
+    /**
+     * Remove event listener when component unmounts
+     */
     return () => {
       document.removeEventListener('click', handleOutsideClick)
     }

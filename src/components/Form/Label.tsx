@@ -1,7 +1,14 @@
 import { FC, LabelHTMLAttributes } from 'react'
-
+/**
+ * Props for the Label component.
+ * Inherits HTML attributes for a `label` element.
+ */
 type LabelProps = LabelHTMLAttributes<HTMLLabelElement>
-
+/**
+ * Label component used to render label elements for form fields.
+ * @param htmlFor - The ID of the input element associated with the label.
+ * @param rest - Other HTML attributes for the label element.
+ */
 const Label: FC<LabelProps> = ({ htmlFor, ...rest }) => {
   return (
     <label

@@ -1,11 +1,19 @@
 import { FC, InputHTMLAttributes } from 'react'
 import { useFormContext } from 'react-hook-form'
-
+/**
+ * Props for the Radio component.
+ * Inherits HTML attributes for an `input` element of type "radio".
+ */
 type RadioProps = InputHTMLAttributes<HTMLInputElement> & {
   name: string
   label?: string
 }
-
+/**
+ * Radio component used to render radio input elements.
+ * @param name - The name of the radio input.
+ * @param label - The label text for the radio input.
+ * @param rest - Other HTML attributes for the radio input element.
+ */
 const Radio: FC<RadioProps> = ({ name, label, ...rest }) => {
   const { register } = useFormContext()
 

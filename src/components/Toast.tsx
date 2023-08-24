@@ -9,11 +9,16 @@ import {
 } from 'react-icons/hi2'
 
 import { classNames } from '@/utils'
-
+/**
+ * Props for the Toast component.
+ */
 export type ToastProps = SharedToastProps & {
   closeToast?: () => void
 }
-
+/**
+ * Toast component to display different types of toasts.
+ * @returns a toast component with the given properties data
+ */
 const Toast: FC<ToastProps> = ({ type, title, description, closeToast }) => {
   const icons = {
     success: <HiCheckCircle className="h-6 w-6 text-green-400" />,

@@ -4,21 +4,30 @@ import { Controller, useFormContext } from 'react-hook-form'
 import { HiCheck, HiChevronUpDown } from 'react-icons/hi2'
 
 import { classNames } from '@/utils'
-
+/**
+ * Represents an option for the ComboBox component.
+ */
 export type ComboBoxOption = {
   id: number | string
   label: string
   value: number | string
   className?: string
 }
-
+/**
+ * Props for the ComboBox component.
+ */
 export type ComboBoxProps = {
   options: ComboBoxOption[]
   name: string
   showOptions?: number
   optionsClassName?: string
 }
-
+/**
+ * ComboBox component that provides a searchable and selectable combobox input.
+ * @param options - An array of ComboBoxOption objects representing selectable options.
+ * @param name - The name for the ComboBox input element, used for form control.
+ * @param showOptions - The maximum number of options to show in the dropdown.
+ */
 const ComboBox: FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) => {
   const { control } = useFormContext()
   const [query, setQuery] = useState('')

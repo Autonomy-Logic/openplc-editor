@@ -1,12 +1,17 @@
 import { cloneElement, FC, PropsWithChildren } from 'react'
 import { PlacesType, Tooltip as ReactTooltip } from 'react-tooltip'
-
+/**
+ * Props for the Tooltip component.
+ */
 export type TooltipProps = {
   id: string
   label: string
   place?: PlacesType
 }
-
+/**
+ * Tooltip component that wraps a child element with a tooltip.
+ * @returns a JSX component with the tooltip.
+ */
 const Tooltip: FC<PropsWithChildren<TooltipProps>> = ({
   id,
   children,

@@ -21,26 +21,37 @@ import useSidebar from '@/hooks/useSidebar'
 import { EditorTools, ProjectTree, Settings, Tools, Variables } from '@/pages'
 import { classNames } from '@/utils'
 
+// Extract necessary constants from the imported CONSTANTS object.
 const { languages, paths } = CONSTANTS
 
+// Define the type of props for the Layout component.
 type LayoutProps = {
   main: ReactNode
 }
-
+// Define the Layout component.
 const Layout: FC<LayoutProps> = ({ main }) => {
+  // Define an initial width for the sidebar.
   const INITIAL_SIDEBAR_WIDTH = 384
+  // Get the translation function from the i18next library.
   const { t } = useTranslation('navigation')
+  // Use the useProject hook to get project-related information.
   const { project } = useProject()
+  // Get the current pathname from the location.
   const { pathname } = useLocation()
+  // Use the useSidebar hook to manage sidebar state.
   const { current, navigate } = useSidebar()
+  // Use the useToggle hook to manage the sidebar open/close state.
   const [isSidebarOpen, toggleIsSideBarOpen] = useToggle(true)
+  // State to manage the width of the resizable sidebar.
   const [sidebarWidth, setSidebarWidth] = useState(INITIAL_SIDEBAR_WIDTH)
 
+  // Handle clicking on navigation items and updating the sidebar state.
   const handleClick = (key?: CurrentProps) => {
     if (!isSidebarOpen) toggleIsSideBarOpen()
     if (key) navigate(key)
   }
 
+  // Define an array of navigation items with their associated data.
   const navigation = [
     {
       key: 'tools',
@@ -92,12 +103,16 @@ const Layout: FC<LayoutProps> = ({ main }) => {
     },
   ]
 
+  // Handle the sidebar resizing.
   const onResize = (data: ResizeCallbackData) =>
     setSidebarWidth(data.size.width)
 
+  // Determine which component should be displayed in the sidebar.
   const getSidebar = () =>
     navigation.find(({ key }) => key === current)?.component
-
+  /**
+   * @returns A JSX element with the Layout component
+   */
   return (
     <div className="flex h-full">
       <div className="flex h-full">

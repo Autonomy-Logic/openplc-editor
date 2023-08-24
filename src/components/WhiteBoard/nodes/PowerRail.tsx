@@ -14,33 +14,51 @@ import { Dropdown } from '@/components'
 import { useReactFlowElements, useToggle } from '@/hooks'
 import { classNames } from '@/utils'
 
+/**
+ * Properties for each individual pin in a PowerRail node.
+ */
 type PinProps = {
   id: string
   position: 'right' | 'left'
 }
-
+/**
+ * Properties for the PowerRail node.
+ */
 type PowerRailProps = {
   pins: PinProps[]
 }
-
+/**
+ * PowerRail component representing a node with pins.
+ * @param id - The ID of the node.
+ * @param selected - Indicates if the node is currently selected.
+ * @param data - Additional data associated with the node.
+ */
 const PowerRail: FC<NodeProps<PowerRailProps>> = ({
   id,
   selected,
   data: { pins },
 }) => {
+  /**
+   * Constants for handling spacing and sizing of handles
+   */
   const HANDLE_HEIGHT = 5
   const HANDLE_SPACE = HANDLE_HEIGHT
   const POWER_RAIL_HEIGHT =
     HANDLE_HEIGHT * HANDLE_SPACE * pins.length + HANDLE_HEIGHT * HANDLE_SPACE
-
+  // Get the translation function from the i18next library.
   const { t } = useTranslation('powerRail')
-
+  // Store information about the number of edges
   const edgesCount = useStore((store) => store.edges.length)
+  // State and function to manage the dropdown visibility
   const [showDropdown, toggleShowDropdown] = useToggle(false)
+  // React Flow hook for managing nodes and edges
   const { nodes, edges, triggerUpdate, getNode } = useReactFlowElements()
 
   const node = getNode(id) as Node
-
+  /**
+   * Checks if the node can be connected to.
+   * @returns True if the node can be connected to, otherwise false.
+   */
   const isConnectable = useCallback(() => {
     if (!node || edgesCount === 0) return
 
@@ -50,16 +68,22 @@ const PowerRail: FC<NodeProps<PowerRailProps>> = ({
       ).length > 0
     )
   }, [edges, edgesCount, id, node])
-
+  /**
+   * Handles the auxiliary click event (usually middle mouse button click).
+   */
   const onAuxClick = () => {
     if (!selected) return
     toggleShowDropdown()
   }
-
+  /**
+   * Closes the dropdown menu.
+   */
   const onCloseMenu = () => {
     toggleShowDropdown(false)
   }
-
+  /**
+   * Adds a new pin and edge to the PowerRail node.
+   */
   const handleAddNewPin = useCallback(() => {
     const [connectedNode] = getConnectedEdges([node], edges).filter(
       (e) => e.source === id || e.target === id,

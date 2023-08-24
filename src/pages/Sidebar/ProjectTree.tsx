@@ -8,16 +8,43 @@ import { Tabs } from '@/components'
 import Tree, { RootProps } from '@/components/Tree'
 import { useProject, useTabs } from '@/hooks'
 import { convertToPath } from '@/utils'
-
+/**
+ * Destructure necessary values from the CONSTANTS module
+ */
 const { paths } = CONSTANTS
-
+/**
+ * Functional component for displaying the project tree
+ * @component
+ */
 const ProjectTree: FC = () => {
+  /**
+   * Access the project and related functions from custom hook
+   * @useProject
+   */
   const { project, getXmlSerializedValueByPath } = useProject()
+  /**
+   * Access the addTab function from custom hook
+   * @useTabs
+   */
   const { addTab } = useTabs()
+  /**
+   * State for holding the root structure of the tree
+   * @type {RootProps | undefined}
+   */
   const [root, setRoot] = useState<RootProps>()
+  /**
+   * Access the translation function from 'react-i18next'
+   * @useTranslation
+   */
   const { t } = useTranslation()
+  /**
+   * Access the navigation function from 'react-router-dom'
+   * @useNavigate
+   */
   const navigate = useNavigate()
-
+  /**
+   * Extract the product name from the project XML or use an empty string
+   */
   const productName =
     (getXmlSerializedValueByPath(
       'project.fileHeader.@productName',
@@ -31,7 +58,10 @@ const ProjectTree: FC = () => {
       const resourceName = getXmlSerializedValueByPath(
         'project.instances.configurations.configuration.resource.@name',
       ) as string | ''
-
+      /**
+       * Handle click events for tree nodes and add corresponding tabs
+       * @function
+       */
       const handleClick = (data: {
         id: number | string
         title: string
@@ -43,7 +73,9 @@ const ProjectTree: FC = () => {
         })
         navigate(data.path)
       }
-
+      /**
+       * Construct the root structure of the tree
+       */
       setRoot({
         id: 'root',
         title: 'root',
@@ -100,7 +132,10 @@ const ProjectTree: FC = () => {
       navigate(paths.MAIN)
     }
   }, [addTab, getXmlSerializedValueByPath, navigate, productName, project, t])
-
+  /**
+   * Render the ProjectTree component
+   * @returns JSX Element
+   */
   return (
     <>
       <Tabs
