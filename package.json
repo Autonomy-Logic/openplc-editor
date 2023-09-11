@@ -85,5 +85,6 @@
   "engines": {
     "node": "^14.18.0 || >=16.0.0"
   },
-  "pre-commit": "lint"
+  "pre-commit": "lint",
+  "trustedDependencies": ["electron"]
 }
