@@ -7,7 +7,5 @@
       "url": "https://json.schemastore.org/electron-builder"
     }
   ],
-  "cSpell.words": [
-    "Titlebar"
-  ]
+  "cSpell.words": ["Titlebar"]
 }
