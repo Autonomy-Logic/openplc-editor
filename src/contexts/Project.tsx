@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
+import { createStore, StoreApi } from 'zustand'
 
 import { useIpcRender, useToast } from '@/hooks'
 /**
@@ -34,6 +35,7 @@ type CreatePouData = {
   name?: string
   type: (typeof types)[keyof typeof types]
   language?: (typeof languages)[keyof typeof languages]
+  body?: string
 }
 /**
  * Represents the data needed to send a project for saving.
@@ -68,6 +70,12 @@ export type ProjectContextData = {
   getProject: (path: string) => Promise<void>
   createPOU: (data: CreatePouData) => void
   updateDocumentation: (data: UpdateDocumentationData) => void
+  pouStore: StoreApi<PouStore>
+}
+
+type PouStore = {
+  pouState: CreatePouData
+  writeInObj: (bodyData: CreatePouData) => void
 }
 
 export const ProjectContext = createContext<ProjectContextData>(
@@ -202,6 +210,25 @@ const mockProject: ProjectProps = {
  * @returns A JSX Component with the project context provider
  */
 const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
+  const pouStore = createStore<PouStore>()((set) => ({
+    pouState: {
+      name: 'program0',
+      type: 'PROGRAM',
+      language: 'IL',
+      body: 'Dummy Data for Body',
+    },
+    writeInObj: (bodyData: CreatePouData) =>
+      set((state) => ({
+        pouState: {
+          ...state.pouState,
+          pouState:
+            ((state.pouState.body = bodyData.body),
+            (state.pouState.name = bodyData.name),
+            (state.pouState.language = bodyData.language),
+            (state.pouState.type = bodyData.type)),
+        },
+      })),
+  }))
   /**
    * Define state to hold project data and a function to update it.
    */
@@ -483,6 +510,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
         getXmlSerializedValueByPath,
         createPOU,
         updateDocumentation,
+        pouStore,
       }}
     >
       {children}

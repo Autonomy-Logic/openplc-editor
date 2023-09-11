@@ -1,6 +1,6 @@
 import { FC } from 'react'
 
-import { WhiteBoard } from '@/components'
+import { TextEditor, WhiteBoard } from '@/components'
 /**
  * Functional component representing a POU (Program Organization Unit)
  * @component
@@ -10,7 +10,7 @@ const Pou: FC = () => {
    * Render the WhiteBoard component
    * @returns JSX Element
    */
-  return <WhiteBoard />
+  return <TextEditor />
 }
 
 export default Pou

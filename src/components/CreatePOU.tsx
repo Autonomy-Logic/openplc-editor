@@ -4,6 +4,7 @@ import { FC } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
+import { useStore } from 'zustand'
 
 import { Button, Form } from '@/components'
 import { useModal, useProject } from '@/hooks'
@@ -15,10 +16,11 @@ const { languages, types } = CONSTANTS
  * Component to create a new POU (Program Organization Unit).
  */
 const CreateNewPOU: FC = () => {
-  const { createPOU } = useProject()
+  const { createPOU, pouStore } = useProject()
   const { handleCloseModal } = useModal()
   const { t: translate } = useTranslation()
   const { t } = useTranslation('createPOU')
+  const pouDraft = useStore(pouStore)
   /**
    * Define a schema for validating the form data
    */
@@ -79,7 +81,7 @@ const CreateNewPOU: FC = () => {
       language: { value: language },
       name,
     } = data
-    createPOU({
+    pouDraft.writeInObj({
       name,
       type: type as string,
       language: language as string,

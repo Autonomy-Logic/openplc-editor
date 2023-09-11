@@ -68,3 +68,8 @@ export { default as Tree } from './Tree'
  * @module Components
  */
 export { default as WhiteBoard } from './WhiteBoard'
+/**
+ * Re-exports the TextEditor component from the corresponding module.
+ * @module Components
+ */
+export { default as TextEditor } from './TextEditor'

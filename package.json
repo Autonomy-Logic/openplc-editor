@@ -27,6 +27,7 @@
   "dependencies": {
     "@headlessui/react": "^1.7.14",
     "@hookform/resolvers": "^3.1.0",
+    "@monaco-editor/react": "^4.5.2",
     "@tailwindcss/forms": "^0.5.3",
     "@tanstack/react-table": "^8.9.3",
     "@types/lodash": "^4.14.195",
@@ -35,6 +36,7 @@
     "electron-updater": "^5.3.0",
     "i18next": "^22.4.14",
     "lodash": "^4.17.21",
+    "monaco-editor": "^0.43.0",
     "react": "^18.2.0",
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
@@ -50,7 +52,8 @@
     "reactflow": "^11.7.4",
     "use-undoable": "^3.3.12",
     "xmlbuilder2": "^3.1.1",
-    "zod": "^3.21.4"
+    "zod": "^3.21.4",
+    "zustand": "^4.4.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.32.0",
