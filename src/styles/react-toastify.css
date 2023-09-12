@@ -5,7 +5,7 @@
   @apply bg-transparent p-0;
 }
 .Toastify__toast-container--top-right {
-  @apply right-[1em] top-[2em];
+  @apply right-[1em] top-[4em];
 }
 .Toastify__toast-icon {
   @apply hidden;

@@ -8,6 +8,8 @@ import { useStore } from 'zustand'
 
 import { Button, Form } from '@/components'
 import { useModal, useProject } from '@/hooks'
+import OpenPlcEditorStore from '@/store'
+
 /**
  * Destructure needed constants from the shared CONSTANTS module
  */
@@ -16,11 +18,11 @@ const { languages, types } = CONSTANTS
  * Component to create a new POU (Program Organization Unit).
  */
 const CreateNewPOU: FC = () => {
-  const { createPOU, pouStore } = useProject()
+  const { createPOU } = useProject()
   const { handleCloseModal } = useModal()
   const { t: translate } = useTranslation()
   const { t } = useTranslation('createPOU')
-  const pouDraft = useStore(pouStore)
+  const { setPouData } = useStore(OpenPlcEditorStore)
   /**
    * Define a schema for validating the form data
    */
@@ -81,7 +83,7 @@ const CreateNewPOU: FC = () => {
       language: { value: language },
       name,
     } = data
-    pouDraft.writeInObj({
+    setPouData({
       name,
       type: type as string,
       language: language as string,
