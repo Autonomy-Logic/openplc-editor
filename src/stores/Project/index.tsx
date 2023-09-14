@@ -2,76 +2,28 @@ import { CONSTANTS } from '@shared/constants'
 import { formatDate } from '@shared/utils'
 import { isObject, merge } from 'lodash'
 import { useCallback } from 'react'
-import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
 import { useIpcRender, useToast } from '@/hooks'
 
-// $ Types
-// ---------------------------------------------------------------- //
-/**
- * Represents the properties of a project.
- */
-type ProjectProps = {
-  language?: (typeof languages)[keyof typeof languages]
-  xmlSerializedAsObject?: XMLSerializedAsObject
-  filePath?: string
-}
-/**
- * Represents the data needed to create a new POU.
- */
-type CreatePouData = {
-  name?: string
-  type: (typeof types)[keyof typeof types]
-  language?: (typeof languages)[keyof typeof languages]
-}
-/**
- * Represents the data needed to send a project for saving.
- */
-type SendProjectToSaveData = {
-  project?: XMLSerializedAsObject
-  filePath?: string
-}
-/**
- * Represents the data needed to update the documentation of a POU.
- */
-type UpdateDocumentationData = {
-  pouName: string
-  description: string
-}
-/**
- * Represents the response when fetching project properties.
- */
-type GetProjectProps = {
-  ok: boolean
-  reason?: { title: string; description?: string }
-  data?: ProjectProps
-}
+import { GetProjectProps } from '../types/ProjectSlice'
 
-//  ------------------------------------------------------------------------------------------------  //
-
-// $ Functions and utilities
-// ---------------------------------------------------------------- //
-
-// * Simple destruction of createToast function.
-const { createToast } = useToast()
-
-// * Extract properties from the imported CONSTANTS object.
 const {
-  types,
-  languages,
   channels: { get, set },
 } = CONSTANTS
 
-const createProjectStore = () => {}
+const createProjectSlice = () => ({
+
+  
+})
+
+// * Simple destruction of createToast function.
+const { createToast } = useToast()
 
 // ****************************************************************
 // $ Get the initial project data and path (Channel: get.PROJECT)
 // $ Use the invoke method
 const { invoke } = useIpcRender<string, GetProjectProps>({
   channel: get.PROJECT,
-  /**
-   * Callback function for handling the response from the renderer process.
-   */
   callback: ({ ok, data, reason }) => {
     if (!ok && reason) {
       /**

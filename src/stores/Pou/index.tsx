@@ -1,6 +1,6 @@
 import { StateCreator } from 'zustand'
 
-import { PouSlice } from './types/PouSlice'
+import { PouSlice } from '../types/PouSlice'
 
 const createPouSlice: StateCreator<PouSlice> = (set) => ({
   pouData: {
