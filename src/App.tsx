@@ -4,6 +4,8 @@ import { HTML5Backend } from 'react-dnd-html5-backend'
 import { ToastContainer } from 'react-toastify'
 import { ReactFlowProvider } from 'reactflow'
 
+import Project2Provider from '@/store/ProjectStore'
+
 import {
   ModalProvider,
   ProjectProvider,
@@ -20,27 +22,29 @@ const App: FC = () => {
     <ThemeProvider>
       {/** Provide context for toast notifications throughout the app. */}
       <ToastProvider>
-        {/** Manage project-related state and data with this context. */}
-        <ProjectProvider>
-          {/** Manage the application title bar with this context */}
-          <TitlebarProvider>
-            {/** Provide React Flow diagram functionality. */}
-            <ReactFlowProvider>
-              <ReactFlowElementsProvider>
-                {/** Manage modal-related state and actions with this context. */}
-                <ModalProvider>
-                  {/** Enable HTML5-based drag-and-drop functionality. */}
-                  <DndProvider backend={HTML5Backend}>
-                    {/** Manage routing and navigation within the app. */}
-                    <RouterProvider />
-                  </DndProvider>
-                  {/** Displays toast notification using the ToastContainer component. */}
-                  <ToastContainer closeButton={false} closeOnClick={false} />
-                </ModalProvider>
-              </ReactFlowElementsProvider>
-            </ReactFlowProvider>
-          </TitlebarProvider>
-        </ProjectProvider>
+        <Project2Provider project={{}}>
+          {/** Manage project-related state and data with this context. */}
+          <ProjectProvider>
+            {/** Manage the application title bar with this context */}
+            <TitlebarProvider>
+              {/** Provide React Flow diagram functionality. */}
+              <ReactFlowProvider>
+                <ReactFlowElementsProvider>
+                  {/** Manage modal-related state and actions with this context. */}
+                  <ModalProvider>
+                    {/** Enable HTML5-based drag-and-drop functionality. */}
+                    <DndProvider backend={HTML5Backend}>
+                      {/** Manage routing and navigation within the app. */}
+                      <RouterProvider />
+                    </DndProvider>
+                    {/** Displays toast notification using the ToastContainer component. */}
+                    <ToastContainer closeButton={false} closeOnClick={false} />
+                  </ModalProvider>
+                </ReactFlowElementsProvider>
+              </ReactFlowProvider>
+            </TitlebarProvider>
+          </ProjectProvider>
+        </Project2Provider>
       </ToastProvider>
     </ThemeProvider>
   )

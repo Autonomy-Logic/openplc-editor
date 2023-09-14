@@ -62,6 +62,8 @@ const {
   channels: { get, set },
 } = CONSTANTS
 
+const createProjectStore = () => {}
+
 // ****************************************************************
 // $ Get the initial project data and path (Channel: get.PROJECT)
 // $ Use the invoke method
