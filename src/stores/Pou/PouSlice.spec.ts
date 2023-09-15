@@ -1,4 +1,4 @@
-import { expect, test, chromium, Page, Browser } from '@playwright/test'
+import { Browser, chromium, expect, Page, test } from '@playwright/test'
 
 // Import your createPouSlice function
 import createPouSlice from '../types/PouSlice'

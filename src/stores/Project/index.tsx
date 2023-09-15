@@ -2,18 +2,30 @@ import { CONSTANTS } from '@shared/constants'
 import { formatDate } from '@shared/utils'
 import { isObject, merge } from 'lodash'
 import { useCallback } from 'react'
+import { createStore, StateCreator } from 'zustand'
 
 import { useIpcRender, useToast } from '@/hooks'
 
-import { GetProjectProps } from '../types/ProjectSlice'
+import { GetProjectProps, ProjectProps } from '../types/ProjectSlice'
 
 const {
   channels: { get, set },
 } = CONSTANTS
 
-const createProjectSlice = () => ({
+interface IProjectDt {
+  name: string
+}
+interface IProjectStore {
+  project: IProjectDt
+  writeDataInProject: (data: IProjectDt) => void
+}
 
-  
+const createProjectSlice: StateCreator<IProjectStore> = (set) => ({
+  project: { name: 'Dummy' },
+  writeDataInProject: (data: IProjectDt) =>
+    set((state) => ({
+      project: { ...state.project, name: data.name },
+    })),
 })
 
 // * Simple destruction of createToast function.
@@ -103,7 +115,7 @@ const getXmlSerializedValueByPath = useCallback(
 // ? Maybe can be moved to another file?
 const updateModificationDateTime = useCallback(
   () =>
-    setProject((state) => {
+    setProject((state: { xmlSerializedAsObject: { project: any } }) => {
       if (state?.xmlSerializedAsObject?.project) {
         const date = formatDate(new Date())
 
@@ -129,7 +141,7 @@ const updateModificationDateTime = useCallback(
 // TODO: Remove unused function.
 const createPOU = useCallback(
   ({ name, type, language }: CreatePouData) => {
-    setProject((state) => {
+    setProject((state: { xmlSerializedAsObject: any }) => {
       if (!state?.xmlSerializedAsObject && language) return state
       updateModificationDateTime()
       return {
@@ -231,7 +243,7 @@ const createPOU = useCallback(
 // ? Is it a needed function?
 const updateDocumentation = useCallback(
   ({ pouName, description }: UpdateDocumentationData) => {
-    setProject((state) => {
+    setProject((state: { xmlSerializedAsObject: { project: any } }) => {
       if (!state?.xmlSerializedAsObject?.project) return state
       const pous = (
         (state.xmlSerializedAsObject.project as XMLSerializedAsObject)
@@ -281,7 +293,7 @@ const getProject = useCallback(
       /**
        *  Update the project state with the received data.
        */
-      setProject((state) => ({
+      setProject((state: any) => ({
         ...state,
         xmlSerialized: data,
         filePath: path,
@@ -292,5 +304,4 @@ const getProject = useCallback(
 )
 // ****************************************************************
 
-const createProjectSlice = () => {}
 export default createProjectSlice

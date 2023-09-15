@@ -1,10 +1,12 @@
-import { create } from 'zustand'
+import { createStore } from 'zustand'
 
-import createPouSlice from './Pou/index'
+import createPouSlice from './Pou'
+// import createProjectSlice from './Project'
 import { PouSlice } from './types/PouSlice'
 
-const OpenPlcEditorStore = create<PouSlice>()((...a) => ({
+const OpenPlcEditorStore = createStore<PouSlice & unknown>()((...a) => ({
   ...createPouSlice(...a),
+  /// ...createProjectSlice(...a),
 }))
 
 export default OpenPlcEditorStore

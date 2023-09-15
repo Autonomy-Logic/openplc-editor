@@ -8,7 +8,7 @@ import { useStore } from 'zustand'
 
 import { Button, Form } from '@/components'
 import { useModal, useProject } from '@/hooks'
-import OpenPlcEditorStore from '@/store'
+import OpenPlcEditorStore from '@/stores/store'
 
 /**
  * Destructure needed constants from the shared CONSTANTS module

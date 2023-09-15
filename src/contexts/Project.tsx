@@ -8,9 +8,13 @@ import {
   useCallback,
   useState,
 } from 'react'
+import { useRef } from 'react'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
+import { useStore } from 'zustand'
 
 import { useIpcRender, useToast } from '@/hooks'
+import createProjectSlice from '@/stores/Project'
+import OpenPlcEditorStore from '@/stores/store'
 /**
  * Extract properties from the imported CONSTANTS object.
  */
