@@ -4,12 +4,9 @@ import { FC } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
-import { useStore } from 'zustand'
 
 import { Button, Form } from '@/components'
 import { useModal, useProject } from '@/hooks'
-import OpenPlcEditorStore from '@/store'
-
 /**
  * Destructure needed constants from the shared CONSTANTS module
  */
@@ -22,7 +19,6 @@ const CreateNewPOU: FC = () => {
   const { handleCloseModal } = useModal()
   const { t: translate } = useTranslation()
   const { t } = useTranslation('createPOU')
-  const { setPouData } = useStore(OpenPlcEditorStore)
   /**
    * Define a schema for validating the form data
    */
@@ -83,7 +79,7 @@ const CreateNewPOU: FC = () => {
       language: { value: language },
       name,
     } = data
-    setPouData({
+    createPOU({
       name,
       type: type as string,
       language: language as string,

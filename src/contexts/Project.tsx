@@ -1,16 +1,12 @@
 import { CONSTANTS } from '@shared/constants'
 import { formatDate } from '@shared/utils'
 import { isObject, merge } from 'lodash'
-import {
-  createContext,
-  FC,
-  PropsWithChildren,
-  useCallback,
-  useState,
-} from 'react'
+import { createContext, FC, PropsWithChildren, useCallback } from 'react'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
+import { useStore } from 'zustand'
 
 import { useIpcRender, useToast } from '@/hooks'
+import projectStore from '@/stores/Project'
 /**
  * Extract properties from the imported CONSTANTS object.
  */
@@ -61,7 +57,7 @@ type GetProjectProps = {
  * The context for managing project-related data.
  */
 export type ProjectContextData = {
-  project?: ProjectProps
+  currentProject?: ProjectProps
   getXmlSerializedValueByPath: (
     propertyPath: string,
   ) => XMLSerializedAsObject | string | undefined
@@ -78,7 +74,7 @@ export const ProjectContext = createContext<ProjectContextData>(
 /**
  * Mock project data used for initialization.
  */
-const mockProject: ProjectProps = {
+export const mockProject: ProjectProps = {
   filePath: 'C:\\Users\\SILU\\Downloads\\electron',
   language: 'LD',
   xmlSerializedAsObject: {
@@ -202,10 +198,11 @@ const mockProject: ProjectProps = {
  * @returns A JSX Component with the project context provider
  */
 const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
+  const { currentProject, setCurrentProject } = useStore(projectStore)
   /**
    * Define state to hold project data and a function to update it.
    */
-  const [project, setProject] = useState<ProjectProps>(mockProject)
+  // const [project, setProject] = useState<ProjectProps>(mockProject)
   /**
    * Destructure the createToast function from the useToast hook.
    */
@@ -232,11 +229,12 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
          *  Update the project state with the received data.
          */
         const { xmlSerializedAsObject, filePath } = data
-        setProject((state) => ({
-          ...state,
-          xmlSerializedAsObject,
-          filePath,
-        }))
+        setCurrentProject({ xmlSerializedAsObject, filePath })
+        //   (state: any) => ({
+        //   ...state,
+        //   xmlSerializedAsObject,
+        //   filePath,
+        // }))
       }
     },
   })
@@ -253,8 +251,8 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
      * Callback function for handling the response from the renderer process.
      */
     callback: () => {
-      if (!project) return
-      sendProjectToSave(set.SAVE_PROJECT, project)
+      if (!currentProject) return
+      sendProjectToSave(set.SAVE_PROJECT, currentProject)
     },
   })
   /**
@@ -265,7 +263,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
   const getXmlSerializedValueByPath = useCallback(
     (propertyPath: string): XMLSerializedAsObject | string | undefined => {
       const properties = propertyPath.split('.')
-      let xmlSerializedAsObject = { ...project?.xmlSerializedAsObject }
+      let xmlSerializedAsObject = { ...currentProject?.xmlSerializedAsObject }
 
       for (const property of properties) {
         if (
@@ -282,18 +280,18 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
 
       return xmlSerializedAsObject
     },
-    [project?.xmlSerializedAsObject],
+    [currentProject?.xmlSerializedAsObject],
   )
   /**
    * Updates the modification date and time of the project.
    */
   const updateModificationDateTime = useCallback(
     () =>
-      setProject((state) => {
-        if (state?.xmlSerializedAsObject?.project) {
+      
+        if (currentProject?.xmlSerializedAsObject?.project) {
           const date = formatDate(new Date())
 
-          const project = state.xmlSerializedAsObject
+          const project = currentProject.xmlSerializedAsObject
             .project as XMLSerializedAsObject
           /**
            *  Update the modification date and time in the project's contentHeader.
@@ -304,9 +302,9 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
           }
         }
 
-        return state
-      }),
-    [],
+        return currentProject
+      },
+    [setCurrentProject],
   )
   /**
    * Creates a new POU (Program Organization Unit) within the project.
@@ -314,7 +312,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
    */
   const createPOU = useCallback(
     ({ name, type, language }: CreatePouData) => {
-      setProject((state) => {
+      setCurrentProject((state: any) => {
         if (!state?.xmlSerializedAsObject && language) return state
         updateModificationDateTime()
         return {
@@ -407,7 +405,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
         }
       })
     },
-    [updateModificationDateTime],
+    [updateModificationDateTime, setCurrentProject],
   )
   /**
    * Updates the documentation of a POU within the project.
@@ -415,7 +413,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
    */
   const updateDocumentation = useCallback(
     ({ pouName, description }: UpdateDocumentationData) => {
-      setProject((state) => {
+      setCurrentProject((state: any) => {
         if (!state?.xmlSerializedAsObject?.project) return state
         const pous = (
           (state.xmlSerializedAsObject.project as XMLSerializedAsObject)
@@ -440,7 +438,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
         return state
       })
     },
-    [updateModificationDateTime],
+    [updateModificationDateTime, setCurrentProject],
   )
   /**
    * Fetches a project from the given path.
@@ -463,14 +461,14 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
         /**
          *  Update the project state with the received data.
          */
-        setProject((state) => ({
+        setCurrentProject((state: any) => ({
           ...state,
           xmlSerialized: data,
           filePath: path,
         }))
       }
     },
-    [createToast, invoke],
+    [createToast, invoke, setCurrentProject],
   )
   /**
    * Wrap the children components with the ProjectContext.Provider.
@@ -478,7 +476,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
   return (
     <ProjectContext.Provider
       value={{
-        project,
+        currentProject,
         getProject,
         getXmlSerializedValueByPath,
         createPOU,

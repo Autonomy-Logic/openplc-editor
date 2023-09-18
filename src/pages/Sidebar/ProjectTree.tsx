@@ -21,7 +21,7 @@ const ProjectTree: FC = () => {
    * Access the project and related functions from custom hook
    * @useProject
    */
-  const { project, getXmlSerializedValueByPath } = useProject()
+  const { currentProject, getXmlSerializedValueByPath } = useProject()
   /**
    * Access the addTab function from custom hook
    * @useTabs
@@ -51,7 +51,7 @@ const ProjectTree: FC = () => {
     ) as string) || ''
 
   useEffect(() => {
-    if (project && project?.xmlSerializedAsObject) {
+    if (currentProject && currentProject?.xmlSerializedAsObject) {
       const pous = getXmlSerializedValueByPath(
         'project.types.pous',
       ) as XMLSerializedAsObject
@@ -131,7 +131,14 @@ const ProjectTree: FC = () => {
     } else {
       navigate(paths.MAIN)
     }
-  }, [addTab, getXmlSerializedValueByPath, navigate, productName, project, t])
+  }, [
+    addTab,
+    getXmlSerializedValueByPath,
+    navigate,
+    productName,
+    currentProject,
+    t,
+  ])
   /**
    * Render the ProjectTree component
    * @returns JSX Element

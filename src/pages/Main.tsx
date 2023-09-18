@@ -42,7 +42,7 @@ const MainComponent: FC = () => {
    * Access project-related functions and values from the custom hook
    * @useProject
    */
-  const { project, getXmlSerializedValueByPath } = useProject()
+  const { currentProject, getXmlSerializedValueByPath } = useProject()
   /**
    * Access tab-related functions from the custom hook
    * @useTabs
@@ -96,8 +96,8 @@ const MainComponent: FC = () => {
    * Navigate to the main path if the project data is not available
    */
   useEffect(() => {
-    if (!project?.xmlSerializedAsObject) navigate(paths.MAIN)
-  }, [navigate, project?.xmlSerializedAsObject])
+    if (!currentProject?.xmlSerializedAsObject) navigate(paths.MAIN)
+  }, [navigate, currentProject?.xmlSerializedAsObject])
 
   if (!theme || !titlebar) return <></>
 

@@ -2,15 +2,17 @@ import Editor from '@monaco-editor/react'
 import { FC, useRef } from 'react'
 import { useStore } from 'zustand'
 
-import OpenPlcEditorStore from '@/store'
+import projectStore from '@/stores/Project'
 
 import monacoConfig from './config/config'
 
 monacoConfig()
 const TextEditor: FC = () => {
-  const StoreTo = useStore(OpenPlcEditorStore)
+  const { currentProject } = useStore(projectStore)
   // const editorRef = useRef(null)
-  const editorVal = useRef<string | undefined>(StoreTo.pouData.body ?? '')
+  const editorVal = useRef<string | undefined>(
+    (currentProject.xmlSerializedAsObject as unknown as string) ?? '',
+  )
 
   // function handleEditorInstance(editor, monaco) {
   //   editorRef.current = monaco
@@ -18,7 +20,7 @@ const TextEditor: FC = () => {
   // }
 
   const handleEditorValue = (val: string | undefined) => {
-    StoreTo.updateBody(val)
+    console.log(val)
   }
 
   return (
