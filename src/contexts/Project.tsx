@@ -285,27 +285,27 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
   /**
    * Updates the modification date and time of the project.
    */
-  const updateModificationDateTime = useCallback(
-    () =>
+  // const updateModificationDateTime = useCallback(
+  //   () =>
       
-        if (currentProject?.xmlSerializedAsObject?.project) {
-          const date = formatDate(new Date())
+  //       if (currentProject?.xmlSerializedAsObject?.project) {
+  //         const date = formatDate(new Date())
 
-          const project = currentProject.xmlSerializedAsObject
-            .project as XMLSerializedAsObject
-          /**
-           *  Update the modification date and time in the project's contentHeader.
-           */
-          project.contentHeader = {
-            ...(project.contentHeader as XMLSerializedAsObject),
-            '@modificationDateTime': date,
-          }
-        }
+  //         const project = currentProject.xmlSerializedAsObject
+  //           .project as XMLSerializedAsObject
+  //         /**
+  //          *  Update the modification date and time in the project's contentHeader.
+  //          */
+  //         project.contentHeader = {
+  //           ...(project.contentHeader as XMLSerializedAsObject),
+  //           '@modificationDateTime': date,
+  //         }
+  //       }
 
-        return currentProject
-      },
-    [setCurrentProject],
-  )
+  //       return currentProject
+  //     },
+  //   [setCurrentProject],
+  // )
   /**
    * Creates a new POU (Program Organization Unit) within the project.
    * @param data The data required to create the POU.
