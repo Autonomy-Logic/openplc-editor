@@ -87,10 +87,12 @@
     "vite-plugin-electron-renderer": "^0.14.1"
   },
   "engines": {
-    "node": "^14.18.0 || >=16.0.0"
+    "node": "^14.18.0 || >=16.0.0",
+    "bun": "^1.0.0"
   },
   "pre-commit": "lint",
   "trustedDependencies": [
-    "electron"
+    "electron",
+    "electron-builder"
   ]
 }

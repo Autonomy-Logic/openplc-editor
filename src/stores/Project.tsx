@@ -1,3 +1,4 @@
+import { merge } from 'lodash'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
@@ -11,6 +12,7 @@ interface IProjectProps {
 
 interface IProjectState extends IProjectProps {
   setCurrentProject: (project: any) => void
+  addPou: (pou: any) => void
 }
 
 const projectStore = create<IProjectState>()(
@@ -18,8 +20,11 @@ const projectStore = create<IProjectState>()(
     currentProject: {},
     setCurrentProject: (project: any) =>
       set((s) => {
-        console.log('Current', s.currentProject),
-          console.log('Incoming', project)
+        s.currentProject = project
+      }),
+    addPou: (pou: any) =>
+      set((s) => {
+        s.currentProject.xmlSerializedAsObject = merge(pou)
       }),
   })),
 )

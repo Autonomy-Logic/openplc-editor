@@ -77,9 +77,7 @@ const MainComponent: FC = () => {
    * Handle navigation and tab addition based on POU data
    */
   useEffect(() => {
-    const pouName = getXmlSerializedValueByPath(
-      'project.types.pous.pou.@name',
-    ) as string
+    const pouName = getXmlSerializedValueByPath('project.types.pous') as string
 
     if (pouName) {
       sidebarNavigate('projectTree')

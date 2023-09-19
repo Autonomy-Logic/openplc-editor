@@ -6,6 +6,7 @@ import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 import { useStore } from 'zustand'
 
 import { useIpcRender, useToast } from '@/hooks'
+import pouStore from '@/stores/Pou'
 import projectStore from '@/stores/Project'
 /**
  * Extract properties from the imported CONSTANTS object.
@@ -198,7 +199,8 @@ export const mockProject: ProjectProps = {
  * @returns A JSX Component with the project context provider
  */
 const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
-  const { currentProject, setCurrentProject } = useStore(projectStore)
+  const { currentProject, addPou, setCurrentProject } = useStore(projectStore)
+  const { programOrganizationUnity, setPouData } = useStore(pouStore)
   /**
    * Define state to hold project data and a function to update it.
    */
@@ -239,7 +241,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
     },
   })
   /**
-   * Destructure the `sendProjectToSave` function from the `useIpcRender` hook.
+   * * Update the invoke function to receive project to save
    */
   const { invoke: sendProjectToSave } = useIpcRender<SendProjectToSaveData>()
   /**
@@ -255,6 +257,8 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
       sendProjectToSave(set.SAVE_PROJECT, currentProject)
     },
   })
+
+  // * ------------------------------------------------------------------------------------- <- Start from here
   /**
    * Retrieves the XMLSerialized value by the given property path.
    * @param propertyPath The path to the property in the XMLSerialized object.
@@ -285,127 +289,129 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
   /**
    * Updates the modification date and time of the project.
    */
-  // const updateModificationDateTime = useCallback(
-  //   () =>
-      
-  //       if (currentProject?.xmlSerializedAsObject?.project) {
-  //         const date = formatDate(new Date())
+  const updateModificationDateTime = useCallback(
+    () =>
+      ({ pouName, description }: UpdateDocumentationData) => {
+        if (currentProject?.xmlSerializedAsObject?.project) {
+          const date = formatDate(new Date())
 
-  //         const project = currentProject.xmlSerializedAsObject
-  //           .project as XMLSerializedAsObject
-  //         /**
-  //          *  Update the modification date and time in the project's contentHeader.
-  //          */
-  //         project.contentHeader = {
-  //           ...(project.contentHeader as XMLSerializedAsObject),
-  //           '@modificationDateTime': date,
-  //         }
-  //       }
+          const project = currentProject.xmlSerializedAsObject
+            .project as XMLSerializedAsObject
+          /**
+           *  Update the modification date and time in the project's contentHeader.
+           */
+          project.contentHeader = {
+            ...(project.contentHeader as XMLSerializedAsObject),
+            '@modificationDateTime': date,
+          }
+        }
 
-  //       return currentProject
-  //     },
-  //   [setCurrentProject],
-  // )
+        return currentProject
+      },
+    [currentProject],
+  )
   /**
    * Creates a new POU (Program Organization Unit) within the project.
    * @param data The data required to create the POU.
    */
   const createPOU = useCallback(
     ({ name, type, language }: CreatePouData) => {
-      setCurrentProject((state: any) => {
-        if (!state?.xmlSerializedAsObject && language) return state
-        updateModificationDateTime()
-        return {
-          ...state,
-          language,
-          xmlSerializedAsObject: merge(
-            {
-              project: {
-                types: {
-                  pous: {
-                    pou: {
-                      ...(name && { '@name': name }),
-                      '@pouType': type,
-                      body: {
-                        ...(language && {
-                          [language]: {
-                            ...(language === languages.LD && {
-                              leftPowerRail: {
-                                '@localId': '1',
-                                '@heigh': '40',
-                                '@width': '10',
-                                position: {
-                                  '@x': '200',
-                                  '@y': '200',
-                                },
-                                connectionPointOut: {
-                                  '@formalParameter': '',
-                                  relPosition: {
-                                    '@x': '10',
-                                    '@y': '20',
-                                  },
-                                },
-                              },
-                              rightPowerRail: {
-                                '@localId': '2',
-                                '@heigh': '40',
-                                '@width': '10',
-                                position: {
-                                  '@x': '800',
-                                  '@y': '200',
-                                },
-                                connectionPointIn: {
-                                  relPosition: {
-                                    '@x': '0',
-                                    '@y': '20',
-                                  },
-                                  connection: {
-                                    '@refLocalId': '1',
-                                    position: [
-                                      {
-                                        '@x': '800',
-                                        '@y': '220',
-                                      },
-                                      {
-                                        '@x': '210',
-                                        '@y': '220',
-                                      },
-                                    ],
-                                  },
-                                },
-                              },
-                            }),
-                          },
-                        }),
-                      },
-                    },
-                  },
-                },
-                instances: {
-                  configurations: {
-                    configuration: {
-                      resource: {
-                        task: {
-                          '@name': 'task0',
-                          '@priority': '0',
-                          '@interval': 'T#20ms',
-                          pouInstance: {
-                            '@name': 'instance0',
-                            '@typeName': name,
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            state?.xmlSerializedAsObject,
-          ),
-        }
-      })
+      setPouData({ name, type, language })
+      addPou(programOrganizationUnity)
+      // setCurrentProject((state: any) => {
+      //   if (!state?.xmlSerializedAsObject && language) return state
+      //   updateModificationDateTime()
+      //   return {
+      //     ...state,
+      //     language,
+      //     xmlSerializedAsObject: merge(
+      //       {
+      //         project: {
+      //           types: {
+      //             pous: {
+      //               pou: {
+      //                 ...(name && { '@name': name }),
+      //                 '@pouType': type,
+      //                 body: {
+      //                   ...(language && {
+      //                     [language]: {
+      //                       ...(language === languages.LD && {
+      //                         leftPowerRail: {
+      //                           '@localId': '1',
+      //                           '@heigh': '40',
+      //                           '@width': '10',
+      //                           position: {
+      //                             '@x': '200',
+      //                             '@y': '200',
+      //                           },
+      //                           connectionPointOut: {
+      //                             '@formalParameter': '',
+      //                             relPosition: {
+      //                               '@x': '10',
+      //                               '@y': '20',
+      //                             },
+      //                           },
+      //                         },
+      //                         rightPowerRail: {
+      //                           '@localId': '2',
+      //                           '@heigh': '40',
+      //                           '@width': '10',
+      //                           position: {
+      //                             '@x': '800',
+      //                             '@y': '200',
+      //                           },
+      //                           connectionPointIn: {
+      //                             relPosition: {
+      //                               '@x': '0',
+      //                               '@y': '20',
+      //                             },
+      //                             connection: {
+      //                               '@refLocalId': '1',
+      //                               position: [
+      //                                 {
+      //                                   '@x': '800',
+      //                                   '@y': '220',
+      //                                 },
+      //                                 {
+      //                                   '@x': '210',
+      //                                   '@y': '220',
+      //                                 },
+      //                               ],
+      //                             },
+      //                           },
+      //                         },
+      //                       }),
+      //                     },
+      //                   }),
+      //                 },
+      //               },
+      //             },
+      //           },
+      //           instances: {
+      //             configurations: {
+      //               configuration: {
+      //                 resource: {
+      //                   task: {
+      //                     '@name': 'task0',
+      //                     '@priority': '0',
+      //                     '@interval': 'T#20ms',
+      //                     pouInstance: {
+      //                       '@name': 'instance0',
+      //                       '@typeName': name,
+      //                     },
+      //                   },
+      //                 },
+      //               },
+      //             },
+      //           },
+      //         },
+      //       },
+      //       state?.xmlSerializedAsObject,
+      //     ),
+      //   }
+      // })
     },
-    [updateModificationDateTime, setCurrentProject],
+    [addPou, programOrganizationUnity, setPouData],
   )
   /**
    * Updates the documentation of a POU within the project.
@@ -461,11 +467,10 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
         /**
          *  Update the project state with the received data.
          */
-        setCurrentProject((state: any) => ({
-          ...state,
+        setCurrentProject({
           xmlSerialized: data,
           filePath: path,
-        }))
+        })
       }
     },
     [createToast, invoke, setCurrentProject],
