@@ -9,8 +9,10 @@ import {
   useState,
 } from 'react'
 import colors from 'tailwindcss/colors'
+import { useStore } from 'zustand'
 
-import { useFullScreen, useIpcRender, useProject } from '@/hooks'
+import { useFullScreen, useIpcRender } from '@/hooks'
+import projectStore from '@/stores/Project'
 /**
  * Destructure necessary properties from the CONSTANTS module.
  */
@@ -52,7 +54,7 @@ const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
   /**
    * Get project data from hooks
    */
-  const { project } = useProject()
+  const { projectXmlAsObj } = useStore(projectStore)
   /**
    * Get fullscreen mode state from hooks
    */
@@ -85,13 +87,13 @@ const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
      * Updates the menu when the project is updated.
      */
     const updateMenu = async () => {
-      if (titlebar && project) {
+      if (titlebar && projectXmlAsObj) {
         const { ok } = await invoke(set.UPDATE_MENU_PROJECT)
         if (ok) titlebar.refreshMenu()
       }
     }
     updateMenu()
-  }, [invoke, titlebar, project])
+  }, [invoke, titlebar, projectXmlAsObj])
 
   useEffect(() => {
     /**

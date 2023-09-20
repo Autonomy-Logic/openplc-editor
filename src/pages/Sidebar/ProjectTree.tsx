@@ -3,10 +3,12 @@ import { FC, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
+import { useStore } from 'zustand'
 
 import { Tabs } from '@/components'
 import Tree, { RootProps } from '@/components/Tree'
 import { useProject, useTabs } from '@/hooks'
+import projectStore from '@/stores/Project'
 import { convertToPath } from '@/utils'
 /**
  * Destructure necessary values from the CONSTANTS module
@@ -21,7 +23,9 @@ const ProjectTree: FC = () => {
    * Access the project and related functions from custom hook
    * @useProject
    */
-  const { currentProject, getXmlSerializedValueByPath } = useProject()
+  const { getXmlSerializedValueByPath } = useProject()
+  // && Experimental: Using projectStore.
+  const { projectXmlAsObj } = useStore(projectStore)
   /**
    * Access the addTab function from custom hook
    * @useTabs
@@ -46,17 +50,15 @@ const ProjectTree: FC = () => {
    * Extract the product name from the project XML or use an empty string
    */
   const productName =
-    (getXmlSerializedValueByPath(
-      'project.fileHeader.@productName',
-    ) as string) || ''
+    (getXmlSerializedValueByPath('fileHeader.@productName') as string) || ''
 
   useEffect(() => {
-    if (currentProject && currentProject?.xmlSerializedAsObject) {
+    if (projectXmlAsObj) {
       const pous = getXmlSerializedValueByPath(
-        'project.types.pous',
+        'types.pous',
       ) as XMLSerializedAsObject
       const resourceName = getXmlSerializedValueByPath(
-        'project.instances.configurations.configuration.resource.@name',
+        'instances.configurations.configuration.resource.@name',
       ) as string | ''
       /**
        * Handle click events for tree nodes and add corresponding tabs
@@ -99,7 +101,7 @@ const ProjectTree: FC = () => {
                   ...Object.keys(pous).map((key) => {
                     const pouName =
                       (getXmlSerializedValueByPath(
-                        `project.types.pous.${key}.@name`,
+                        `types.pous.${key}.@name`,
                       ) as string) || ''
                     return {
                       id: pouName,
@@ -136,7 +138,7 @@ const ProjectTree: FC = () => {
     getXmlSerializedValueByPath,
     navigate,
     productName,
-    currentProject,
+    projectXmlAsObj,
     t,
   ])
   /**

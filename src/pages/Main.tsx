@@ -1,6 +1,7 @@
 import { CONSTANTS } from '@shared/constants'
 import { FC, useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
+import { useStore } from 'zustand'
 
 import { SidebarProvider, TabsProvider } from '@/contexts'
 import {
@@ -12,6 +13,7 @@ import {
   useTitlebar,
 } from '@/hooks'
 import useSidebar from '@/hooks/useSidebar'
+import projectStore from '@/stores/Project'
 import { Layout } from '@/templates'
 import { convertToPath } from '@/utils'
 
@@ -42,7 +44,11 @@ const MainComponent: FC = () => {
    * Access project-related functions and values from the custom hook
    * @useProject
    */
-  const { currentProject, getXmlSerializedValueByPath } = useProject()
+  const { getXmlSerializedValueByPath } = useProject()
+  /**
+   * && Experimental: Using project store
+   */
+  const { projectXmlAsObj } = useStore(projectStore)
   /**
    * Access tab-related functions from the custom hook
    * @useTabs
@@ -77,7 +83,7 @@ const MainComponent: FC = () => {
    * Handle navigation and tab addition based on POU data
    */
   useEffect(() => {
-    const pouName = getXmlSerializedValueByPath('project.types.pous') as string
+    const pouName = getXmlSerializedValueByPath('types.pous') as string
 
     if (pouName) {
       sidebarNavigate('projectTree')
@@ -94,8 +100,8 @@ const MainComponent: FC = () => {
    * Navigate to the main path if the project data is not available
    */
   useEffect(() => {
-    if (!currentProject?.xmlSerializedAsObject) navigate(paths.MAIN)
-  }, [navigate, currentProject?.xmlSerializedAsObject])
+    if (!projectXmlAsObj) navigate(paths.MAIN)
+  }, [navigate, projectXmlAsObj])
 
   if (!theme || !titlebar) return <></>
 

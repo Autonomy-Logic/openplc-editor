@@ -1,6 +1,5 @@
 import { CONSTANTS } from '@shared/constants'
 import { produce } from 'immer'
-import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 import { create } from 'zustand'
 
 import { xmlProject } from '@/@types/xmlProject'
@@ -14,11 +13,7 @@ interface IPouProps {
 }
 interface IProjectProps {
   filePath?: string
-  projectXmlAsObj?: xmlProject | XMLSerializedAsObject
-}
-
-type xmlForDraft<T> = {
-  [Property in keyof T as keyof XMLSerializedAsObject]: T[Property]
+  projectXmlAsObj?: xmlProject
 }
 
 interface IProjectState extends IProjectProps {
@@ -38,14 +33,15 @@ const projectStore = create<IProjectState>()((set) => ({
   addPouInProject: async (pou: IPouProps) =>
     set(
       produce((s) => {
-        s.currentProject.projectXmlAsObj.project.type.pous = pou
+        s.currentProject.projectXmlAsObj.types['pous'] = pou
       }),
     ),
   updateDateTime: (updateDate: string) =>
     set(
       produce((s) => {
-        s.currentProject.projectXmlAsObj.fileHeader['@modificationDateTime'] =
-          updateDate
+        s.currentProject.projectXmlAsObj.contentHeader[
+          '@modificationDateTime'
+        ] = updateDate
       }),
     ),
 }))

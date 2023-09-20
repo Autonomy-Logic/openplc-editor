@@ -13,12 +13,14 @@ import {
 import { RiNodeTree } from 'react-icons/ri'
 import { ResizableBox, ResizeCallbackData } from 'react-resizable'
 import { useLocation } from 'react-router-dom'
+import { useStore } from 'zustand'
 
 import { Tooltip } from '@/components'
 import { CurrentProps } from '@/contexts/Sidebar'
-import { useProject, useToggle } from '@/hooks'
+import { useToggle } from '@/hooks'
 import useSidebar from '@/hooks/useSidebar'
 import { EditorTools, ProjectTree, Settings, Tools, Variables } from '@/pages'
+import projectStore from '@/stores/Project'
 import { classNames } from '@/utils'
 
 // Extract necessary constants from the imported CONSTANTS object.
@@ -35,7 +37,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
   // Get the translation function from the i18next library.
   const { t } = useTranslation('navigation')
   // Use the useProject hook to get project-related information.
-  const { project } = useProject()
+  const { projectXmlAsObj } = useStore(projectStore)
   // Get the current pathname from the location.
   const { pathname } = useLocation()
   // Use the useSidebar hook to manage sidebar state.
@@ -60,7 +62,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
       icon: HiOutlineSquares2X2,
       component: <Tools />,
     },
-    ...(project?.xmlSerializedAsObject
+    ...(projectXmlAsObj
       ? [
           {
             key: 'projectTree',
@@ -71,7 +73,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
           },
         ]
       : []),
-    ...(project?.language === languages.LD
+    ...(projectXmlAsObj?.types?.pous?.pou // === languages.LD
       ? [
           {
             key: 'editorTools',
@@ -82,7 +84,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
           },
         ]
       : []),
-    ...(project && pathname.includes(paths.POU)
+    ...(projectXmlAsObj && pathname.includes(paths.POU)
       ? [
           {
             key: 'variables',

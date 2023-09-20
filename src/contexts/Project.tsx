@@ -60,11 +60,11 @@ type GetProjectProps = {
  */
 export type ProjectContextData = {
   currentProject?: ProjectProps
-  getXmlSerializedValueByPath?: (
+  getXmlSerializedValueByPath: (
     propertyPath: string,
-  ) => XMLSerializedAsObject | xmlProject | string | undefined
-  getProject?: (path: string) => Promise<void>
-  createProgramOrganizationUnits?: (data: CreatePouData) => void
+  ) => XMLSerializedAsObject | xmlProject | string
+  getProject: (path: string) => Promise<void>
+  createProgramOrganizationUnit: (data: CreatePouData) => void
   updateDocumentation?: (data: UpdateDocumentationData) => void
 }
 
@@ -76,124 +76,124 @@ export const ProjectContext = createContext<ProjectContextData>(
 /**
  * Mock project data used for initialization.
  */
-export const mockProject: ProjectProps = {
-  filePath: 'C:\\Users\\SILU\\Downloads\\electron',
-  language: 'LD',
-  xmlSerializedAsObject: {
-    project: {
-      '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6.xsd',
-      '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
-      '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
-      '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
-      fileHeader: {
-        '@companyName': 'Unknown',
-        '@productName': 'Unnamed',
-        '@productVersion': '1',
-        '@creationDateTime': '2023-07-03T20:25:15',
-      },
-      contentHeader: {
-        '@name': 'Unnamed',
-        '@modificationDateTime': '2023-07-03T20:25:15',
-        coordinateInfo: {
-          fbd: {
-            scaling: {
-              '@x': '10',
-              '@y': '10',
-            },
-          },
-          ld: {
-            scaling: {
-              '@x': '10',
-              '@y': '10',
-            },
-          },
-          sfc: {
-            scaling: {
-              '@x': '10',
-              '@y': '10',
-            },
-          },
-        },
-      },
-      types: {
-        dataTypes: {},
-        pous: {
-          pou: {
-            '@name': 'program0',
-            '@pouType': 'program',
-            body: {
-              LD: {
-                leftPowerRail: {
-                  '@localId': '1',
-                  '@heigh': '40',
-                  '@width': '10',
-                  position: {
-                    '@x': '200',
-                    '@y': '200',
-                  },
-                  connectionPointOut: {
-                    '@formalParameter': '',
-                    relPosition: {
-                      '@x': '10',
-                      '@y': '20',
-                    },
-                  },
-                },
-                rightPowerRail: {
-                  '@localId': '2',
-                  '@heigh': '40',
-                  '@width': '10',
-                  position: {
-                    '@x': '800',
-                    '@y': '200',
-                  },
-                  connectionPointIn: {
-                    relPosition: {
-                      '@x': '0',
-                      '@y': '20',
-                    },
-                    connection: {
-                      '@refLocalId': '1',
-                      position: [
-                        {
-                          '@x': '800',
-                          '@y': '220',
-                        },
-                        {
-                          '@x': '210',
-                          '@y': '220',
-                        },
-                      ],
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      instances: {
-        configurations: {
-          configuration: {
-            '@name': 'Config0',
-            resource: {
-              '@name': 'Res0',
-              task: {
-                '@name': 'task0',
-                '@priority': '0',
-                '@interval': 'T#20ms',
-                pouInstance: {
-                  '@name': 'instance0',
-                  '@typeName': 'program0',
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  },
-}
+// export const mockProject: ProjectProps = {
+//   filePath: 'C:\\Users\\SILU\\Downloads\\electron',
+//   language: 'LD',
+//   xmlSerializedAsObject: {
+//     project: {
+//       '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6.xsd',
+//       '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
+//       '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
+//       '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
+//       fileHeader: {
+//         '@companyName': 'Unknown',
+//         '@productName': 'Unnamed',
+//         '@productVersion': '1',
+//         '@creationDateTime': '2023-07-03T20:25:15',
+//       },
+//       contentHeader: {
+//         '@name': 'Unnamed',
+//         '@modificationDateTime': '2023-07-03T20:25:15',
+//         coordinateInfo: {
+//           fbd: {
+//             scaling: {
+//               '@x': '10',
+//               '@y': '10',
+//             },
+//           },
+//           ld: {
+//             scaling: {
+//               '@x': '10',
+//               '@y': '10',
+//             },
+//           },
+//           sfc: {
+//             scaling: {
+//               '@x': '10',
+//               '@y': '10',
+//             },
+//           },
+//         },
+//       },
+//       types: {
+//         dataTypes: {},
+//         pous: {
+//           pou: {
+//             '@name': 'program0',
+//             '@pouType': 'program',
+//             body: {
+//               LD: {
+//                 leftPowerRail: {
+//                   '@localId': '1',
+//                   '@heigh': '40',
+//                   '@width': '10',
+//                   position: {
+//                     '@x': '200',
+//                     '@y': '200',
+//                   },
+//                   connectionPointOut: {
+//                     '@formalParameter': '',
+//                     relPosition: {
+//                       '@x': '10',
+//                       '@y': '20',
+//                     },
+//                   },
+//                 },
+//                 rightPowerRail: {
+//                   '@localId': '2',
+//                   '@heigh': '40',
+//                   '@width': '10',
+//                   position: {
+//                     '@x': '800',
+//                     '@y': '200',
+//                   },
+//                   connectionPointIn: {
+//                     relPosition: {
+//                       '@x': '0',
+//                       '@y': '20',
+//                     },
+//                     connection: {
+//                       '@refLocalId': '1',
+//                       position: [
+//                         {
+//                           '@x': '800',
+//                           '@y': '220',
+//                         },
+//                         {
+//                           '@x': '210',
+//                           '@y': '220',
+//                         },
+//                       ],
+//                     },
+//                   },
+//                 },
+//               },
+//             },
+//           },
+//         },
+//       },
+//       instances: {
+//         configurations: {
+//           configuration: {
+//             '@name': 'Config0',
+//             resource: {
+//               '@name': 'Res0',
+//               task: {
+//                 '@name': 'task0',
+//                 '@priority': '0',
+//                 '@interval': 'T#20ms',
+//                 pouInstance: {
+//                   '@name': 'instance0',
+//                   '@typeName': 'program0',
+//                 },
+//               },
+//             },
+//           },
+//         },
+//       },
+//     },
+//   },
+// }
 /**
  * Provides the project context to the application.
  * @param children The children components wrapped by the context provider.
@@ -219,7 +219,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
 
   /**
    * Experimental: --------------------------------------------------------------- Start Block.
-   * * Refactor form for invoke callback interaction with getProject function
+   * * Refactor format for invoke callback interaction with getProject function
    */
   // Function to handle response and display error toast
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -229,7 +229,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
     } else if (ok && data) {
       const { xmlSerializedAsObject, filePath } = data
       setWorkspaceProject({
-        projectXmlAsObj: xmlSerializedAsObject,
+        projectXmlAsObj: xmlSerializedAsObject as xmlProject,
         filePath,
       })
     }
@@ -284,9 +284,9 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
    * @returns The value at the specified property path.
    */
   const getXmlSerializedValueByPath = useCallback(
-    (propertyPath: string): XMLSerializedAsObject | string | undefined => {
+    (propertyPath: string): XMLSerializedAsObject | string => {
       const properties = propertyPath.split('.')
-      let xmlSerializedAsObject: XMLSerializedAsObject | undefined =
+      let xmlSerializedAsObject: XMLSerializedAsObject =
         projectXmlAsObj as XMLSerializedAsObject
 
       for (const property of properties) {
@@ -298,9 +298,13 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
             property
           ] as XMLSerializedAsObject
         } else {
-          return undefined
+          return 'Empty XML Serialized'
         }
       }
+      console.log(
+        'getXmlSerializedValueByPath function -> ',
+        xmlSerializedAsObject,
+      )
 
       return xmlSerializedAsObject
     },
@@ -343,7 +347,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
    * Creates a new POU (Program Organization Unit) within the project.
    * @param data The data required to create the POU.
    */
-  const createProgramOrganizationUnits = useCallback(
+  const createProgramOrganizationUnit = useCallback(
     ({ name, type, language }: CreatePouData) => {
       createNewPou({ name: name, type: type, language: language })
       const newPouToAddInProject = pous[name]
@@ -555,7 +559,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
         // currentProject,
         getProject,
         getXmlSerializedValueByPath,
-        createProgramOrganizationUnits,
+        createProgramOrganizationUnit,
         // updateDocumentation,
       }}
     >

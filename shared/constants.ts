@@ -29,6 +29,8 @@ export const CONSTANTS = {
   },
   types: {
     PROGRAM: 'program',
+    FUNCTION: 'function',
+    FUNCTION_BLOCK: 'function_block',
   },
   languages: {
     IL: 'IL',

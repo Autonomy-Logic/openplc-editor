@@ -1,30 +1,36 @@
 import Editor from '@monaco-editor/react'
-import { FC, useRef } from 'react'
+import { useRef } from 'react'
 import { useStore } from 'zustand'
 
 import { useTheme } from '@/hooks'
 import pouStore from '@/stores/Pou'
 
+// import projectStore from '@/stores/Project'
 import monacoConfig from './config/config'
 
 monacoConfig()
-const TextEditor: FC = () => {
+const TextEditor = ({ path }: { path: string }) => {
   const { theme } = useTheme()
-  const { pous, writeInPou } = useStore(pouStore)
+  const { pous } = useStore(pouStore)
   // const editorRef = useRef(null)
-  const editorVal = useRef<string | undefined>(pous?.program0?.body ?? '')
+
+  const pouToEditPath = pous?.[path].name ?? ''
+
+  const editorInstanceValue = useRef<string | undefined>(
+    pous?.[path].body ?? 'None in pou body',
+  )
 
   const handleEditorValue = (val: string | undefined) => {
-    writeInPou(val)
+    editorInstanceValue.current = val
   }
-  console.log(pous)
 
   return (
     <Editor
       height="100vh"
       defaultLanguage="st"
-      theme={theme == 'dark' ? 'vs-dark' : 'light'}
-      value={editorVal.current}
+      path={pouToEditPath}
+      theme={theme?.includes('dark') ? 'vs-dark' : 'light'}
+      value={editorInstanceValue.current}
       onChange={handleEditorValue}
     />
   )

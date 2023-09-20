@@ -15,7 +15,7 @@ const { languages, types } = CONSTANTS
  * Component to create a new POU (Program Organization Unit).
  */
 const CreateNewPOU: FC = () => {
-  const { createPOU } = useProject()
+  const { createProgramOrganizationUnit } = useProject()
   const { handleCloseModal } = useModal()
   const { t: translate } = useTranslation()
   const { t } = useTranslation('createPOU')
@@ -48,15 +48,26 @@ const CreateNewPOU: FC = () => {
   /**
    * Prepare options for the type and language dropdowns
    */
-  const typeOptions = [{ id: 0, label: types.PROGRAM, value: types.PROGRAM }]
+  const typeOptions = [
+    { id: 0, label: types.PROGRAM, value: types.PROGRAM },
+    { id: 1, label: types.FUNCTION, value: types.FUNCTION },
+    { id: 2, label: types.FUNCTION_BLOCK, value: types.FUNCTION_BLOCK },
+  ]
 
-  const languageOptions = [{ id: 0, label: languages.LD, value: languages.LD }]
+  const languageOptions = [
+    { id: 0, label: languages.LD, value: languages.LD },
+    { id: 1, label: languages.FBD, value: languages.FBD },
+    { id: 2, label: languages.SFC, value: languages.SFC },
+    { id: 3, label: languages.IL, value: languages.IL },
+    { id: 4, label: languages.ST, value: languages.ST },
+  ]
   /**
    *  Handler for cancel button
    */
   const handleCancel = () => {
-    createPOU({
+    createProgramOrganizationUnit({
       type: typeOptions[0].value as string,
+      name: 'DummyProgramOrganizationUnit',
     })
     handleCloseModal()
   }
@@ -79,7 +90,7 @@ const CreateNewPOU: FC = () => {
       language: { value: language },
       name,
     } = data
-    createPOU({
+    createProgramOrganizationUnit({
       name,
       type: type as string,
       language: language as string,

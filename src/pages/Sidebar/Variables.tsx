@@ -122,12 +122,11 @@ const Variables: FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedDescription = useCallback(
     debounce(
-      (description) =>
-        pouName &&
-        updateDocumentation({
-          pouName,
-          description,
-        }),
+      (description) => pouName && 'To be implemented', // todo: Create function to update pou documentation
+      // updateDocumentation({
+      //   pouName,
+      //   description,
+      // }),
       1000,
     ),
     [],
