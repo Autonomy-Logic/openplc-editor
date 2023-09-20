@@ -79,6 +79,7 @@ const CreateNewPOU: FC = () => {
     defaultValues: {
       name: 'program0',
       type: typeOptions[0],
+      language: languageOptions[0],
     },
   })
   /**

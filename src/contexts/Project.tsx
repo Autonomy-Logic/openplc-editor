@@ -204,8 +204,8 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
     filePath,
     projectXmlAsObj,
     setWorkspaceProject,
-    updateDateTime,
-    addPouInProject,
+    // updateDateTime,
+    // addPouInProject,
   } = useStore(projectStore)
   const { pous, createNewPou } = useStore(pouStore)
   /**
@@ -284,11 +284,10 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
    * @returns The value at the specified property path.
    */
   const getXmlSerializedValueByPath = useCallback(
-    (propertyPath: string): XMLSerializedAsObject | string => {
+    (propertyPath: string): XMLSerializedAsObject | string | xmlProject => {
       const properties = propertyPath.split('.')
       let xmlSerializedAsObject: XMLSerializedAsObject =
         projectXmlAsObj as XMLSerializedAsObject
-
       for (const property of properties) {
         if (
           isObject(xmlSerializedAsObject) &&
@@ -310,6 +309,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
     },
     [projectXmlAsObj],
   )
+
   /**
    * Updates the modification date and time of the project.
    */
@@ -343,18 +343,26 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
   //   // },
   //   [updateDateTime],
   // )
+
+  // Todo: Create `writePouInXML` function.
   /**
    * Creates a new POU (Program Organization Unit) within the project.
+   * @description The produced POU is initially added to application memory and is only written to XML when the `writePouInXML` method is used.
    * @param data The data required to create the POU.
    */
   const createProgramOrganizationUnit = useCallback(
     ({ name, type, language }: CreatePouData) => {
-      createNewPou({ name: name, type: type, language: language })
-      const newPouToAddInProject = pous[name]
-      if (newPouToAddInProject) {
-        updateDateTime(new Date().toISOString())
-        addPouInProject(newPouToAddInProject)
-      }
+      createNewPou({ name: name, type: type, language: language }),
+        console.log('Created POU -> ', pous)
+      // => {
+      //   await getProject(filePath)
+      // }
+      // const newPouToAddInProject = pous[name]
+      // console.log(newPouToAddInProject)
+      // if (newPouToAddInProject) {
+      //   addPouInProject(newPouToAddInProject)
+      //   updateDateTime(new Date().toISOString())
+      // }
       // setCurrentProject((state: any) => {
       //   if (!state?.xmlSerializedAsObject && language) return state
       //   updateModificationDateTime()
@@ -448,8 +456,9 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
       //   }
       // })
     },
-    [addPouInProject, createNewPou, pous, updateDateTime],
+    [createNewPou, pous],
   )
+  const addProgramCreatedInProject = ''
   /**
    * Updates the documentation of a POU within the project.
    * @param data The data required to update the documentation.

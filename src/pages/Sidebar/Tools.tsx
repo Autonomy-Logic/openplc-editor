@@ -108,12 +108,13 @@ const Tools: FC = () => {
    * @function
    */
   const onClick = () => console.log('will be created soon')
+  // Todo: Implement the functionality of creating pou inside the program.
   /**
-   * Handle the creation of a project from the toolbar
+   * Handle the creation of a POU from the toolbar
    * @async
    * @function
    */
-  const handleCreateProjectFromToolbar = async () => {
+  const handleCreateProgramOrganizationUnityFromSidebar = async () => {
     const { ok, reason, data } = await createProjectFromToolbar(
       set.CREATE_PROJECT_FROM_TOOLBAR,
     )

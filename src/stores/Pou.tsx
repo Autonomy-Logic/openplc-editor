@@ -36,12 +36,13 @@ const pouStore = create<IPousStore>()((set) => ({
       body: '',
     },
   },
-  createNewPou: (pouData: IPouProps) =>
+  createNewPou: (pouData: IPouProps) => {
     set(
       produce((s) => {
         s.pous[pouData.name] = pouData
       }),
-    ),
+    )
+  },
   writeInPou: (data: { pouName: string; body: string }) =>
     set(
       produce((s) => {
