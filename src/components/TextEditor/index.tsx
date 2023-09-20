@@ -4,23 +4,20 @@ import { useStore } from 'zustand'
 
 import { useTheme } from '@/hooks'
 import pouStore from '@/stores/Pou'
-import projectStore from '@/stores/Project'
 
 import monacoConfig from './config/config'
 
 monacoConfig()
 const TextEditor: FC = () => {
   const { theme } = useTheme()
-  const { programOrganizationUnity, writeInPou } = useStore(pouStore)
+  const { pous, writeInPou } = useStore(pouStore)
   // const editorRef = useRef(null)
-  const editorVal = useRef<string | undefined>(
-    programOrganizationUnity?.body ?? '',
-  )
+  const editorVal = useRef<string | undefined>(pous?.program0?.body ?? '')
 
   const handleEditorValue = (val: string | undefined) => {
     writeInPou(val)
   }
-  console.log(programOrganizationUnity)
+  console.log(pous)
 
   return (
     <Editor

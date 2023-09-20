@@ -1,40 +1,53 @@
 import { CONSTANTS } from '@shared/constants'
+import { produce } from 'immer'
 import { create } from 'zustand'
-import { immer } from 'zustand/middleware/immer'
 
 interface IPouProps {
-  programOrganizationUnity: {
-    id: number
-    name: string
-    type: (typeof CONSTANTS.types)[keyof typeof CONSTANTS.types]
-    language?: (typeof CONSTANTS.languages)[keyof typeof CONSTANTS.languages]
-    body: string | undefined
-  }
+  id?: number
+  name: string
+  type: (typeof CONSTANTS.types)[keyof typeof CONSTANTS.types]
+  language?: (typeof CONSTANTS.languages)[keyof typeof CONSTANTS.languages]
+  body?: string | undefined
 }
 
-interface IPouState extends IPouProps {
-  setPouData: (pouData: any) => void
-  writeInPou: (body: string | undefined) => void
+interface IPousState {
+  pous: Record<string, IPouProps>
 }
 
-const pouStore = create<IPouState>()(
-  immer((set) => ({
-    programOrganizationUnity: {
+interface IPousStore extends IPousState {
+  createNewPou: (pouData: IPouProps) => void
+  writeInPou: (data: { pouName: string; body: string }) => void
+}
+
+const pouStore = create<IPousStore>()((set) => ({
+  pous: {
+    program0: {
       id: 0,
       name: 'program0',
       type: 'program',
       language: 'ST',
       body: '',
     },
-    setPouData: (pouData: any) =>
-      set((s) => {
-        s.programOrganizationUnity = pouData
+    program1: {
+      id: 1,
+      name: 'program1',
+      type: 'program',
+      language: 'LD',
+      body: '',
+    },
+  },
+  createNewPou: (pouData: IPouProps) =>
+    set(
+      produce((s) => {
+        s.pous[pouData.name] = pouData
       }),
-    writeInPou: (body: string | undefined) =>
-      set((s) => {
-        s.programOrganizationUnity.body = body
+    ),
+  writeInPou: (data: { pouName: string; body: string }) =>
+    set(
+      produce((s) => {
+        s.pous[data.pouName].body = data.body
       }),
-  })),
-)
+    ),
+}))
 
 export default pouStore

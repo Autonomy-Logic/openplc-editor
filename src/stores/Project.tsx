@@ -1,32 +1,53 @@
-import { merge } from 'lodash'
+import { CONSTANTS } from '@shared/constants'
+import { produce } from 'immer'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 import { create } from 'zustand'
-import { immer } from 'zustand/middleware/immer'
 
+import { xmlProject } from '@/@types/xmlProject'
+
+interface IPouProps {
+  id?: number
+  name: string
+  type: (typeof CONSTANTS.types)[keyof typeof CONSTANTS.types]
+  language?: (typeof CONSTANTS.languages)[keyof typeof CONSTANTS.languages]
+  body?: string | undefined
+}
 interface IProjectProps {
-  currentProject: {
-    filePath?: string
-    xmlSerializedAsObject?: XMLSerializedAsObject
-  }
+  filePath?: string
+  projectXmlAsObj?: xmlProject | XMLSerializedAsObject
+}
+
+type xmlForDraft<T> = {
+  [Property in keyof T as keyof XMLSerializedAsObject]: T[Property]
 }
 
 interface IProjectState extends IProjectProps {
-  setCurrentProject: (project: any) => void
-  addPou: (pou: any) => void
+  setWorkspaceProject: (project: IProjectProps) => void
+  addPouInProject: (pou: IPouProps) => void
+  updateDateTime: (updateDate: string) => void
 }
 
-const projectStore = create<IProjectState>()(
-  immer((set) => ({
-    currentProject: {},
-    setCurrentProject: (project: any) =>
-      set((s) => {
+const projectStore = create<IProjectState>()((set) => ({
+  currentProject: {},
+  setWorkspaceProject: (project: IProjectProps) =>
+    set(
+      produce((s) => {
         s.currentProject = project
       }),
-    addPou: (pou: any) =>
-      set((s) => {
-        s.currentProject.xmlSerializedAsObject = merge(pou)
+    ),
+  addPouInProject: async (pou: IPouProps) =>
+    set(
+      produce((s) => {
+        s.currentProject.projectXmlAsObj.project.type.pous = pou
       }),
-  })),
-)
+    ),
+  updateDateTime: (updateDate: string) =>
+    set(
+      produce((s) => {
+        s.currentProject.projectXmlAsObj.fileHeader['@modificationDateTime'] =
+          updateDate
+      }),
+    ),
+}))
 
 export default projectStore
