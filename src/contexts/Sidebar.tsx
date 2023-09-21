@@ -14,6 +14,7 @@ export type CurrentProps =
   | 'settings'
   | 'editorTools'
   | 'variables'
+  | 'pou'
 /**
  * Represents the context data for the sidebar.
  */

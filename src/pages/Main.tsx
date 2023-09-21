@@ -17,7 +17,7 @@ import projectStore from '@/stores/Project'
 import { Layout } from '@/templates'
 import { convertToPath } from '@/utils'
 
-import CreatePOU from '../components/CreatePOU'
+import CreatePOU from '../components/CreatePouForm'
 /**
  * Destructure necessary values from the CONSTANTS module
  */

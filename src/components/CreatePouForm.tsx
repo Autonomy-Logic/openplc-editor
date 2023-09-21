@@ -14,7 +14,7 @@ const { languages, types } = CONSTANTS
 /**
  * Component to create a new POU (Program Organization Unit).
  */
-const CreateNewPOU: FC = () => {
+const CreatePouForm: FC = () => {
   const { createProgramOrganizationUnit } = useProject()
   const { handleCloseModal } = useModal()
   const { t: translate } = useTranslation()
@@ -153,4 +153,4 @@ const CreateNewPOU: FC = () => {
   )
 }
 
-export default CreateNewPOU
+export default CreatePouForm

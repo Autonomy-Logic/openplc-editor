@@ -24,8 +24,13 @@ export const handleCreateProject = async () => {
       ...reason,
     })
   } else if (ok && data) {
-    pou.createWindow()
     await project.send(data)
+    toast.send({
+      title: 'First steps',
+      type: 'info',
+      description:
+        'The project was successfully created. Create a new POU (Program Organization Unit) to get start.',
+    })
   }
 }
 

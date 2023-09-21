@@ -3,5 +3,6 @@
   "tools": "Tools",
   "settings": "Settings",
   "editorTools": "Editor Tools",
-  "variables": "Variables"
+  "variables": "Variables",
+  "createPou": "Create Pou"
 }

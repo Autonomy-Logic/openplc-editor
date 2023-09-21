@@ -1,6 +1,6 @@
 import { childWindowIpc } from './childWindow'
 import { menu, menuIpc } from './menu'
-import { pou } from './pou'
+import { pou, pouIpc } from './pou'
 import { project, projectIpc } from './project'
 import { themeIpc } from './theme'
 import { toast } from './toast'
@@ -17,6 +17,7 @@ export const ipc = {
     childWindowIpc()
     projectIpc()
     menuIpc()
+    pouIpc()
   },
   /**
    * Provides access to the toast module's functionality.

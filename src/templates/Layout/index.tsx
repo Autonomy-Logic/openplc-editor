@@ -3,11 +3,12 @@ import { CONSTANTS } from '@shared/constants'
 import { FC, ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FaDrawPolygon } from 'react-icons/fa'
-import { HiOutlineSquares2X2 } from 'react-icons/hi2'
 import {
   HiBars3,
   HiOutlineBars3CenterLeft,
+  HiOutlineCodeBracket,
   HiOutlineCog6Tooth,
+  HiOutlineSquares2X2,
   HiVariable,
 } from 'react-icons/hi2'
 import { RiNodeTree } from 'react-icons/ri'
@@ -15,16 +16,20 @@ import { ResizableBox, ResizeCallbackData } from 'react-resizable'
 import { useLocation } from 'react-router-dom'
 import { useStore } from 'zustand'
 
-import { Tooltip } from '@/components'
+import { CreatePouForm, Tooltip } from '@/components'
 import { CurrentProps } from '@/contexts/Sidebar'
-import { useToggle } from '@/hooks'
+import { useIpcRender, useModal, useToast, useToggle } from '@/hooks'
 import useSidebar from '@/hooks/useSidebar'
 import { EditorTools, ProjectTree, Settings, Tools, Variables } from '@/pages'
 import projectStore from '@/stores/Project'
 import { classNames } from '@/utils'
 
 // Extract necessary constants from the imported CONSTANTS object.
-const { languages, paths } = CONSTANTS
+const {
+  languages,
+  paths,
+  channels: { get },
+} = CONSTANTS
 
 // Define the type of props for the Layout component.
 type LayoutProps = {
@@ -46,12 +51,60 @@ const Layout: FC<LayoutProps> = ({ main }) => {
   const [isSidebarOpen, toggleIsSideBarOpen] = useToggle(true)
   // State to manage the width of the resizable sidebar.
   const [sidebarWidth, setSidebarWidth] = useState(INITIAL_SIDEBAR_WIDTH)
+  // Destruct the function to create a toast
+  const { createToast } = useToast()
 
   // Handle clicking on navigation items and updating the sidebar state.
   const handleClick = (key?: CurrentProps) => {
     if (!isSidebarOpen) toggleIsSideBarOpen()
     if (key) navigate(key)
   }
+
+  // Wip: Implementing the functionality of creating pou inside the program. ----- Beginning of the block //
+  /**
+   * Type for data passed to the `handleCreateProgramOrganizationUnitFromSidebar` function
+   * @property {boolean} ok - Whether the creation was successful or not
+   * @property {Object} [reason] - Reason for failure with title and description
+   * @property {string} [data] - Additional data related to the creation
+   */
+  type CreatePouFromSidebar = {
+    ok: boolean
+    message: any
+  }
+  /**
+   * Access IPC render function for creating a POU from custom hook
+   * @useIpcRender
+   */
+  const { invoke: createNewPou } = useIpcRender<
+    undefined,
+    CreatePouFromSidebar
+  >()
+  /**
+   * Access modal-related functions from custom hook and open a modal for creating a POU
+   * @useModal
+   */
+  const { handleOpenModal } = useModal({
+    content: <CreatePouForm />,
+    hideCloseButton: true,
+  })
+  /**
+   * Handle the creation of a POU from the sidebar
+   * @async
+   * @function
+   */
+  const handleCreateProgramOrganizationUnitFromSidebar = async () => {
+    const { ok, message } = await createNewPou(get.CREATE_POU_WINDOW)
+    if (!ok && message) {
+      createToast({
+        type: 'error',
+        ...message,
+      })
+    } else if (ok && message) {
+      handleOpenModal()
+      console.log(message)
+    }
+  }
+  // Wip: --------------------------------------------------------------------------- End of the block. //
 
   // Define an array of navigation items with their associated data.
   const navigation = [
@@ -95,6 +148,14 @@ const Layout: FC<LayoutProps> = ({ main }) => {
           },
         ]
       : []),
+    // {
+    //   key: 'pou',
+    //   name: t('createPou'),
+    //   onClick: handleClick,
+    //   icon: HiOutlineCodeBracket,
+    //   className: 'mt-auto',
+    //   // component: <CreatePou />,
+    // },
     {
       key: 'settings',
       name: t('settings'),
@@ -139,6 +200,12 @@ const Layout: FC<LayoutProps> = ({ main }) => {
               </li>
             ))}
           </ul>
+          <button
+            onClick={() => handleCreateProgramOrganizationUnitFromSidebar()}
+            className="group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 text-gray-500 hover:text-open-plc-blue"
+          >
+            <HiOutlineCodeBracket className="h-6 w-6 shrink-0" />
+          </button>
           <button
             onClick={() => toggleIsSideBarOpen()}
             className="group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 text-gray-500 hover:text-open-plc-blue"

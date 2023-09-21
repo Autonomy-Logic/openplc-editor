@@ -4,10 +4,10 @@
  */
 export { default as Button } from './Button'
 /**
- * Re-exports the CreatePOU component from the corresponding module.
+ * Re-exports the CreatePouForm component from the corresponding module.
  * @module Components
  */
-export { default as CreatePOU } from './CreatePOU'
+export { default as CreatePouForm } from './CreatePouForm'
 /**
  * Re-exports the Dropdown component from the corresponding module.
  * @module Components

@@ -19,32 +19,14 @@ import {
   HiScissors,
 } from 'react-icons/hi2'
 
-import { CreatePOU, Tabs, Tooltip } from '@/components'
-import {
-  useFullScreen,
-  useIpcRender,
-  useModal,
-  useProject,
-  useToast,
-} from '@/hooks'
+import { Tabs, Tooltip } from '@/components'
+import { useFullScreen, useModal, useProject, useToast } from '@/hooks'
 /**
  * Destructure necessary values from the CONSTANTS module
  */
 const {
   channels: { set },
 } = CONSTANTS
-/**
- * Type for data passed to the handleCreateProjectFromToolbar function
- * @typedef {Object} CreateProjectFromToolbarProps
- * @property {boolean} ok - Whether the creation was successful or not
- * @property {Object} [reason] - Reason for failure with title and description
- * @property {string} [data] - Additional data related to the creation
- */
-type CreateProjectFromToolbarProps = {
-  ok: boolean
-  reason?: { title: string; description?: string }
-  data?: string
-}
 /**
  * Type for individual tools in the toolbar
  * @typedef {Object} ToolsProps
@@ -83,51 +65,15 @@ const Tools: FC = () => {
    */
   const { requestFullscreen, exitFullScreen, isFullScreen } = useFullScreen()
   /**
-   * Access IPC render function for creating a project from custom hook
-   * @useIpcRender
-   */
-  const { invoke: createProjectFromToolbar } = useIpcRender<
-    undefined,
-    CreateProjectFromToolbarProps
-  >()
-  /**
    * Access project-related functions from custom hook
    * @useProject
    */
   const { getProject } = useProject()
   /**
-   * Access modal-related functions from custom hook and open a modal for creating a POU
-   * @useModal
-   */
-  const { handleOpenModal } = useModal({
-    content: <CreatePOU />,
-    hideCloseButton: true,
-  })
-  /**
    * Handle click event for tools that are not yet implemented
    * @function
    */
   const onClick = () => console.log('will be created soon')
-  // Todo: Implement the functionality of creating pou inside the program.
-  /**
-   * Handle the creation of a POU from the toolbar
-   * @async
-   * @function
-   */
-  const handleCreateProgramOrganizationUnityFromSidebar = async () => {
-    const { ok, reason, data } = await createProjectFromToolbar(
-      set.CREATE_PROJECT_FROM_TOOLBAR,
-    )
-    if (!ok && reason) {
-      createToast({
-        type: 'error',
-        ...reason,
-      })
-    } else if (ok && data) {
-      handleOpenModal()
-      await getProject(data)
-    }
-  }
   /**
    * Array of tool objects with their respective properties
    * @type {ToolsProps[]}
