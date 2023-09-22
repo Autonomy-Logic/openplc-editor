@@ -13,6 +13,7 @@ import {
   useTitlebar,
 } from '@/hooks'
 import useSidebar from '@/hooks/useSidebar'
+import pouStore from '@/stores/Pou'
 import projectStore from '@/stores/Project'
 import { Layout } from '@/templates'
 import { convertToPath } from '@/utils'
@@ -50,6 +51,11 @@ const MainComponent: FC = () => {
    */
   const { projectXmlAsObj } = useStore(projectStore)
   /**
+   * && Experimental: Using pous directly from pouStore for debug purposes.
+   * Todo: Remove
+   */
+  const { pous } = useStore(pouStore)
+  /**
    * Access tab-related functions from the custom hook
    * @useTabs
    */
@@ -83,7 +89,9 @@ const MainComponent: FC = () => {
    * Handle navigation and tab addition based on POU data
    */
   useEffect(() => {
-    const pouName = getXmlSerializedValueByPath('types.pous.pou') as string
+    console.warn('Pous on main page->', pous)
+    const pouName = ''
+    // getXmlSerializedValueByPath('types.pous.pou') as string
 
     if (pouName) {
       sidebarNavigate('projectTree')
@@ -95,13 +103,20 @@ const MainComponent: FC = () => {
       })
       navigate(convertToPath([paths.POU, pouName]))
     }
-  }, [addTab, getXmlSerializedValueByPath, navigate, sidebarNavigate])
+  }, [
+    addTab,
+    getXmlSerializedValueByPath,
+    navigate,
+    pous,
+    pous.pou,
+    sidebarNavigate,
+  ])
   /**
    * Navigate to the main path if the project data is not available
    */
-  useEffect(() => {
-    if (!projectXmlAsObj) navigate(paths.MAIN)
-  }, [navigate, projectXmlAsObj])
+  // useEffect(() => {
+  //   if (!projectXmlAsObj) navigate(paths.MAIN)
+  // }, [navigate, projectXmlAsObj])
 
   if (!theme || !titlebar) return <></>
 

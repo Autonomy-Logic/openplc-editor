@@ -218,7 +218,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
   const { createToast } = useToast()
 
   /**
-   * Experimental: --------------------------------------------------------------- Start Block.
+   * && Experimental: --------------------------------------------------------------- Start Block.
    * * Refactor format for invoke callback interaction with getProject function
    */
   // Function to handle response and display error toast
@@ -254,7 +254,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
   )
 
   /**
-   * Experimental: ------------------------------------------------------------------------------ End Block.
+   * && Experimental: ------------------------------------------------------------------------------ End Block.
    */
   /**
    * * Update the invoke function to receive project to save
@@ -315,32 +315,32 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
    */
   // const updateModificationDateTime = useCallback(
   //   () => updateDateTime(new Date().toISOString()),
-  //   // setWorkspaceProject({
-  //   //   projectXmlAsObj: {
-  //   //     ...projectXmlAsObj,
-  //   //     fileHeader: {
-  //   //       ...projectXmlAsObj.fileHeader,
-  //   //       '@modificationDateTime': new Date().toISOString(),
-  //   //     },
-  //   //   },
-  //   // }),
-  //   // ({ pouName, description }: UpdateDocumentationData) => {
-  //   //   if (currentProject?.xmlSerializedAsObject?.project) {
-  //   //     const date = formatDate(new Date())
+  // setWorkspaceProject({
+  //   projectXmlAsObj: {
+  //     ...projectXmlAsObj,
+  //     fileHeader: {
+  //       ...projectXmlAsObj.fileHeader,
+  //       '@modificationDateTime': new Date().toISOString(),
+  //     },
+  //   },
+  // }),
+  // ({ pouName, description }: UpdateDocumentationData) => {
+  //   if (currentProject?.xmlSerializedAsObject?.project) {
+  //     const date = formatDate(new Date())
 
-  //   //     const project = currentProject.xmlSerializedAsObject
-  //   //       .project as XMLSerializedAsObject
-  //   //     /**
-  //   //      *  Update the modification date and time in the project's contentHeader.
-  //   //      */
-  //   //     project.contentHeader = {
-  //   //       ...(project.contentHeader as XMLSerializedAsObject),
-  //   //       '@modificationDateTime': date,
-  //   //     }
-  //   //   }
+  //     const project = currentProject.xmlSerializedAsObject
+  //       .project as XMLSerializedAsObject
+  //     /**
+  //      *  Update the modification date and time in the project's contentHeader.
+  //      */
+  //     project.contentHeader = {
+  //       ...(project.contentHeader as XMLSerializedAsObject),
+  //       '@modificationDateTime': date,
+  //     }
+  //   }
 
-  //   //   return currentProject
-  //   // },
+  //   return currentProject
+  // },
   //   [updateDateTime],
   // )
 

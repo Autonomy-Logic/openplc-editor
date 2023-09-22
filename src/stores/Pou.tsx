@@ -22,17 +22,17 @@ interface IPousStore extends IPousState {
 const pouStore = create<IPousStore>()((set) => ({
   pous: {
     program0: {
-      id: 0,
+      id: 1,
       name: 'program0',
       type: 'program',
-      language: 'ST',
+      language: 'LD',
       body: '',
     },
-    program1: {
+    function0: {
       id: 1,
-      name: 'program1',
-      type: 'program',
-      language: 'LD',
+      name: 'function0',
+      type: 'function',
+      language: 'IL',
       body: '',
     },
   },

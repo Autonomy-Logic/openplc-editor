@@ -48,7 +48,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
   // Use the useSidebar hook to manage sidebar state.
   const { current, navigate } = useSidebar()
   // Use the useToggle hook to manage the sidebar open/close state.
-  const [isSidebarOpen, toggleIsSideBarOpen] = useToggle(true)
+  const [isSidebarOpen, toggleIsSideBarOpen] = useToggle(false)
   // State to manage the width of the resizable sidebar.
   const [sidebarWidth, setSidebarWidth] = useState(INITIAL_SIDEBAR_WIDTH)
   // Destruct the function to create a toast
@@ -148,14 +148,6 @@ const Layout: FC<LayoutProps> = ({ main }) => {
           },
         ]
       : []),
-    // {
-    //   key: 'pou',
-    //   name: t('createPou'),
-    //   onClick: handleClick,
-    //   icon: HiOutlineCodeBracket,
-    //   className: 'mt-auto',
-    //   // component: <CreatePou />,
-    // },
     {
       key: 'settings',
       name: t('settings'),
