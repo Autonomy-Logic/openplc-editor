@@ -90,18 +90,21 @@ const MainComponent: FC = () => {
    */
   useEffect(() => {
     console.warn('Pous on main page->', pous)
-    const pouName = ''
+
+    const pouName = Object.entries(pous).map(([key, value]) => {
+      return value.name
+    })
     // getXmlSerializedValueByPath('types.pous.pou') as string
 
     if (pouName) {
       sidebarNavigate('projectTree')
       addTab({
-        id: pouName,
-        title: pouName,
-        onClick: () => navigate(convertToPath([paths.POU, pouName])),
+        id: pouName[0],
+        title: pouName[0],
+        onClick: () => navigate(convertToPath([paths.POU, pouName[0]])),
         onClickCloseButton: () => navigate(paths.MAIN),
       })
-      navigate(convertToPath([paths.POU, pouName]))
+      navigate(convertToPath([paths.POU, pouName[0]]))
     }
   }, [
     addTab,
