@@ -98,11 +98,13 @@ const MainComponent: FC = () => {
 
     if (pouName) {
       sidebarNavigate('projectTree')
-      addTab({
-        id: pouName[0],
-        title: pouName[0],
-        onClick: () => navigate(convertToPath([paths.POU, pouName[0]])),
-        onClickCloseButton: () => navigate(paths.MAIN),
+      pouName.map((p) => {
+        addTab({
+          id: p,
+          title: p,
+          onClick: () => navigate(convertToPath([paths.POU, p])),
+          onClickCloseButton: () => navigate(paths.MAIN),
+        })
       })
       navigate(convertToPath([paths.POU, pouName[0]]))
     }

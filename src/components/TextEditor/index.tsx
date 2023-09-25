@@ -1,46 +1,89 @@
 import Editor from '@monaco-editor/react'
-import { useEffect, useRef, useState } from 'react'
+import { editor } from 'monaco-editor'
+import {
+  Dispatch,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import { useStore } from 'zustand'
 
-import { useTheme } from '@/hooks'
+import { useTabs, useTheme } from '@/hooks'
 import pouStore from '@/stores/Pou'
 
 // import projectStore from '@/stores/Project'
 import monacoConfig from './config/config'
 
+interface Pou {
+  body: string
+  id: number
+  language: string
+  name: string
+  type: string
+}
+
+interface TabsProps {
+  /**
+   * The ID of the tab. Can be a number or a string.
+   */
+  id?: number | string
+  /**
+   * The title of the tab.
+   */
+  title: string
+
+  current?: boolean
+}
+
 monacoConfig()
 const TextEditor = () => {
-  // const { theme } = useTheme()
-  // const { pous } = useStore(pouStore)
-  // const pousOnStage = useRef([])
+  const { theme } = useTheme()
+  const { pous, writeInPou } = useStore(pouStore)
+  const { tabs } = useTabs()
+  const [editor, setEditor] = useState<Pou>({
+    body: '',
+    id: 0,
+    language: '',
+    name: '',
+    type: '',
+  })
 
-  // useEffect(() => {
-  //   function setPousToEdit() {
-  //     pousOnStage.current.push(pous as unknown as never)
-  //     console.log(pousOnStage.current)
-  //   }
-  //   setPousToEdit()
-  // }, [pous])
+  const pouInCurrentTab = useRef<TabsProps>()
 
-  // const [pouEditing, setPouEditing] = useState('')
+  const getEditorValues = useCallback(() => {
+    for (const value of tabs.values()) {
+      if (value.current) {
+        pouInCurrentTab.current = value
+      }
+    }
+    const PouQuery = pouInCurrentTab.current?.id ?? ''
+    setEditor(pous[PouQuery] as Pou)
+  }, [pous, tabs])
 
-  // const file = pous[pouEditing]
+  useEffect(() => {
+    getEditorValues()
+  }, [getEditorValues])
 
-  // const pouBody = useRef<string | undefined>(file ? file.body : undefined)
+  const handleEditorValue = useCallback(
+    (val: string | undefined) => {
+      writeInPou({ pouName: editor.name, body: val as string })
+    },
+    [editor.name, writeInPou],
+  )
 
-  // const handleEditorValue = (val: string | undefined) => {
-  //   pouBody.current = val
-  // }
+  console.log('Pous', pous)
 
   return (
     <>
       <Editor
         height="100vh"
         defaultLanguage="st"
-        // path={file.name}
-        // theme={theme?.includes('dark') ? 'vs-dark' : 'light'}
-        // value={pouBody.current}
-        // onChange={handleEditorValue}
+        defaultValue={editor.body}
+        path={editor.name}
+        theme={theme?.includes('dark') ? 'vs-dark' : 'light'}
+        onChange={() => handleEditorValue}
       />
     </>
   )

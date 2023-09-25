@@ -26,14 +26,14 @@ const pouStore = create<IPousStore>()((set) => ({
       name: 'program0',
       type: 'program',
       language: 'LD',
-      body: '',
+      body: 'A simple string for program body',
     },
     function0: {
       id: 1,
       name: 'function0',
       type: 'function',
       language: 'IL',
-      body: '',
+      body: 'A simple string for function body',
     },
   },
   createNewPou: (pouData: IPouProps) => {
