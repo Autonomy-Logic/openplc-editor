@@ -89,8 +89,6 @@ const MainComponent: FC = () => {
    * Handle navigation and tab addition based on POU data
    */
   useEffect(() => {
-    console.warn('Pous on main page->', pous)
-
     const pouName = Object.entries(pous).map(([key, value]) => {
       return value.name
     })

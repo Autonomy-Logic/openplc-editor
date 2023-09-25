@@ -2,7 +2,7 @@ import { CONSTANTS } from '@shared/constants'
 import { produce } from 'immer'
 import { create } from 'zustand'
 
-interface IPouProps {
+export interface IPouProps {
   id?: number
   name: string
   type: (typeof CONSTANTS.types)[keyof typeof CONSTANTS.types]

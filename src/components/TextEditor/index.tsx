@@ -1,96 +1,56 @@
 import Editor from '@monaco-editor/react'
-import { editor } from 'monaco-editor'
-import {
-  Dispatch,
-  SetStateAction,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useStore } from 'zustand'
 
 import { useTabs, useTheme } from '@/hooks'
-import pouStore from '@/stores/Pou'
+import pouStore, { IPouProps } from '@/stores/Pou'
 
-// import projectStore from '@/stores/Project'
 import monacoConfig from './config/config'
-
-interface Pou {
-  body: string
-  id: number
-  language: string
-  name: string
-  type: string
-}
-
-interface TabsProps {
-  /**
-   * The ID of the tab. Can be a number or a string.
-   */
-  id?: number | string
-  /**
-   * The title of the tab.
-   */
-  title: string
-
-  current?: boolean
-}
 
 monacoConfig()
 const TextEditor = () => {
-  let valuesForEditor
   const { theme } = useTheme()
-  const { pous, writeInPou } = useStore(pouStore)
+  const { pous } = useStore(pouStore)
   const { tabs } = useTabs()
-  const [editor, setEditor] = useState<Pou>({
-    body: '',
+  const tabIterator = tabs[Symbol.iterator]()
+  const [currentPou, setCurrentPou] = useState<IPouProps>({
     id: 0,
-    language: '',
     name: '',
     type: '',
+    body: '',
+    language: '',
   })
-
-  const [pouInCurrentTab, setPouInCurrentTab] = useState<string | number>('')
-  const pousOnEditStage = useRef(Object.values(pous))
-  console.log('Variable -> ', pousOnEditStage.current)
-
-  const getPousToEditStage = useCallback(
-    () => (pousOnEditStage.current = Object.values(pous)),
-    [pous],
-  )
-
-  useEffect(() => {
-    const getEditorValues = () => {
-      for (const value of tabs.values()) {
-        if (value.current) {
-          setPouInCurrentTab(value.id)
-        }
+  /**
+   * @description Function to handle values and supply the editor instance with the basic props.
+   * @returns void
+   */
+  const setEditorValues = useCallback(() => {
+    for (const value of tabIterator) {
+      if (value.current) {
+        setCurrentPou(pous[value.title])
       }
     }
-    getEditorValues()
-    getPousToEditStage()
-  }, [getPousToEditStage, tabs])
+  }, [pous, tabIterator])
 
-  const handleEditorDidMount = () => {
-    valuesForEditor = editor
-  }
-
-  const handleEditorValue = (val: string | undefined) => {
-    // writeInPou({ pouName: editor.name, body: val as string })
-    console.log('Here')
-  }
-
+  const handleEditorValue = useCallback(
+    (val: string | undefined) => {
+      const data = { pouName: currentPou.name, body: val }
+      console.log(data)
+    },
+    [currentPou.name],
+  )
+  useEffect(() => {
+    setEditorValues()
+  }, [setEditorValues])
   return (
     <>
       <Editor
         height="100vh"
-        defaultLanguage="st"
-        path={valuesForEditor?.name}
-        value={valuesForEditor?.body}
-        theme={theme?.includes('dark') ? 'vs-dark' : 'light'}
+        defaultLanguage={currentPou.language}
+        path={currentPou.name}
+        defaultValue={currentPou.body}
         onChange={handleEditorValue}
-        onMount={handleEditorDidMount}
+        theme={theme?.includes('dark') ? 'vs-dark' : 'light'}
       />
     </>
   )
