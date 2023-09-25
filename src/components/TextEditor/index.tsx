@@ -39,6 +39,7 @@ interface TabsProps {
 
 monacoConfig()
 const TextEditor = () => {
+  let valuesForEditor
   const { theme } = useTheme()
   const { pous, writeInPou } = useStore(pouStore)
   const { tabs } = useTabs()
@@ -50,40 +51,46 @@ const TextEditor = () => {
     type: '',
   })
 
-  const pouInCurrentTab = useRef<TabsProps>()
+  const [pouInCurrentTab, setPouInCurrentTab] = useState<string | number>('')
+  const pousOnEditStage = useRef(Object.values(pous))
+  console.log('Variable -> ', pousOnEditStage.current)
 
-  const getEditorValues = useCallback(() => {
-    for (const value of tabs.values()) {
-      if (value.current) {
-        pouInCurrentTab.current = value
-      }
-    }
-    const PouQuery = pouInCurrentTab.current?.id ?? ''
-    setEditor(pous[PouQuery] as Pou)
-  }, [pous, tabs])
-
-  useEffect(() => {
-    getEditorValues()
-  }, [getEditorValues])
-
-  const handleEditorValue = useCallback(
-    (val: string | undefined) => {
-      writeInPou({ pouName: editor.name, body: val as string })
-    },
-    [editor.name, writeInPou],
+  const getPousToEditStage = useCallback(
+    () => (pousOnEditStage.current = Object.values(pous)),
+    [pous],
   )
 
-  console.log('Pous', pous)
+  useEffect(() => {
+    const getEditorValues = () => {
+      for (const value of tabs.values()) {
+        if (value.current) {
+          setPouInCurrentTab(value.id)
+        }
+      }
+    }
+    getEditorValues()
+    getPousToEditStage()
+  }, [getPousToEditStage, tabs])
+
+  const handleEditorDidMount = () => {
+    valuesForEditor = editor
+  }
+
+  const handleEditorValue = (val: string | undefined) => {
+    // writeInPou({ pouName: editor.name, body: val as string })
+    console.log('Here')
+  }
 
   return (
     <>
       <Editor
         height="100vh"
         defaultLanguage="st"
-        defaultValue={editor.body}
-        path={editor.name}
+        path={valuesForEditor?.name}
+        value={valuesForEditor?.body}
         theme={theme?.includes('dark') ? 'vs-dark' : 'light'}
-        onChange={() => handleEditorValue}
+        onChange={handleEditorValue}
+        onMount={handleEditorDidMount}
       />
     </>
   )
