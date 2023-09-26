@@ -46,7 +46,7 @@ const TextEditor = () => {
     <>
       <Editor
         height="100vh"
-        defaultLanguage={currentPou.language}
+        language={currentPou.language?.toLowerCase()}
         path={currentPou.name}
         defaultValue={currentPou.body}
         onChange={handleEditorValue}

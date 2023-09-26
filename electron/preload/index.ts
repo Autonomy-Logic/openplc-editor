@@ -1,3 +1,5 @@
+import { contextBridge } from 'electron'
+
 import logoSvg from './assets/logo'
 
 /**
