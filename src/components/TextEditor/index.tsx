@@ -4,11 +4,15 @@ import { useStore } from 'zustand'
 
 import { useTabs, useTheme } from '@/hooks'
 import pouStore, { IPouProps } from '@/stores/Pou'
+import projectStore from '@/stores/Project'
 
 import monacoConfig from './config/config'
 
+// ! Breaking full, need a fixes...
+
 monacoConfig()
 const TextEditor = () => {
+  const { projectXmlAsObj } = useStore(projectStore)
   const { theme } = useTheme()
   const { pous } = useStore(pouStore)
   const { tabs } = useTabs()
@@ -20,28 +24,41 @@ const TextEditor = () => {
     body: '',
     language: '',
   })
+
   /**
    * @description Function to handle values and supply the editor instance with the basic props.
    * @returns void
    */
   const setEditorValues = useCallback(() => {
-    for (const value of tabIterator) {
-      if (value.current) {
-        setCurrentPou(pous[value.title])
+    if (projectXmlAsObj?.project.types.pous) {
+      for (const value of tabIterator) {
+        if (value.current) {
+          setCurrentPou(projectXmlAsObj?.project.types.pous[value.title])
+          break
+        }
       }
     }
-  }, [pous, tabIterator])
+    setCurrentPou({
+      id: 0,
+      name: 'string',
+      type: 'string',
+      body: 'string',
+      language: 'ST',
+    })
+  }, [projectXmlAsObj, tabIterator])
 
   const handleEditorValue = useCallback(
     (val: string | undefined) => {
       const data = { pouName: currentPou.name, body: val }
-      console.log(data)
+      console.log('Aqui ->', data)
     },
-    [currentPou.name],
+    [currentPou?.name],
   )
   useEffect(() => {
-    setEditorValues()
-  }, [setEditorValues])
+    if (projectXmlAsObj) {
+      setEditorValues()
+    }
+  }, [projectXmlAsObj, setEditorValues])
   return (
     <>
       <Editor

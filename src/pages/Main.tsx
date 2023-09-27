@@ -54,7 +54,6 @@ const MainComponent: FC = () => {
    * && Experimental: Using pous directly from pouStore for debug purposes.
    * Todo: Remove
    */
-  const { pous } = useStore(pouStore)
   /**
    * Access tab-related functions from the custom hook
    * @useTabs
@@ -89,37 +88,33 @@ const MainComponent: FC = () => {
    * Handle navigation and tab addition based on POU data
    */
   useEffect(() => {
-    const pouName = Object.entries(pous).map(([key, value]) => {
-      return value.name
-    })
-    // getXmlSerializedValueByPath('types.pous.pou') as string
-
-    if (pouName) {
-      sidebarNavigate('projectTree')
-      pouName.map((p) => {
-        addTab({
-          id: p,
-          title: p,
-          onClick: () => navigate(convertToPath([paths.POU, p])),
-          onClickCloseButton: () => navigate(paths.MAIN),
+    const setPousPath = () => {
+      if (projectXmlAsObj?.project?.types?.pous) {
+        const pouName = Object.entries(
+          projectXmlAsObj?.project?.types?.pous,
+        ).map(([key, value]) => {
+          return value['@name']
         })
-      })
-      navigate(convertToPath([paths.POU, pouName[0]]))
+        sidebarNavigate('projectTree')
+        pouName.map((p) => {
+          addTab({
+            id: p,
+            title: p,
+            onClick: () => navigate(convertToPath([paths.POU, p])),
+            onClickCloseButton: () => navigate(paths.MAIN),
+          })
+        })
+        navigate(convertToPath([paths.POU, pouName[0]]))
+      }
     }
-  }, [
-    addTab,
-    getXmlSerializedValueByPath,
-    navigate,
-    pous,
-    pous.pou,
-    sidebarNavigate,
-  ])
+    setPousPath()
+  }, [addTab, navigate, projectXmlAsObj, sidebarNavigate])
   /**
    * Navigate to the main path if the project data is not available
    */
-  // useEffect(() => {
-  //   if (!projectXmlAsObj) navigate(paths.MAIN)
-  // }, [navigate, projectXmlAsObj])
+  useEffect(() => {
+    if (!projectXmlAsObj) navigate(paths.MAIN)
+  }, [navigate, projectXmlAsObj])
 
   if (!theme || !titlebar) return <></>
 

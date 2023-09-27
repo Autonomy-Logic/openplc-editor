@@ -72,128 +72,6 @@ export const ProjectContext = createContext<ProjectContextData>(
   {} as ProjectContextData,
 )
 
-// TODO: Remove mock project
-/**
- * Mock project data used for initialization.
- */
-// export const mockProject: ProjectProps = {
-//   filePath: 'C:\\Users\\SILU\\Downloads\\electron',
-//   language: 'LD',
-//   xmlSerializedAsObject: {
-//     project: {
-//       '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6.xsd',
-//       '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
-//       '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
-//       '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
-//       fileHeader: {
-//         '@companyName': 'Unknown',
-//         '@productName': 'Unnamed',
-//         '@productVersion': '1',
-//         '@creationDateTime': '2023-07-03T20:25:15',
-//       },
-//       contentHeader: {
-//         '@name': 'Unnamed',
-//         '@modificationDateTime': '2023-07-03T20:25:15',
-//         coordinateInfo: {
-//           fbd: {
-//             scaling: {
-//               '@x': '10',
-//               '@y': '10',
-//             },
-//           },
-//           ld: {
-//             scaling: {
-//               '@x': '10',
-//               '@y': '10',
-//             },
-//           },
-//           sfc: {
-//             scaling: {
-//               '@x': '10',
-//               '@y': '10',
-//             },
-//           },
-//         },
-//       },
-//       types: {
-//         dataTypes: {},
-//         pous: {
-//           pou: {
-//             '@name': 'program0',
-//             '@pouType': 'program',
-//             body: {
-//               LD: {
-//                 leftPowerRail: {
-//                   '@localId': '1',
-//                   '@heigh': '40',
-//                   '@width': '10',
-//                   position: {
-//                     '@x': '200',
-//                     '@y': '200',
-//                   },
-//                   connectionPointOut: {
-//                     '@formalParameter': '',
-//                     relPosition: {
-//                       '@x': '10',
-//                       '@y': '20',
-//                     },
-//                   },
-//                 },
-//                 rightPowerRail: {
-//                   '@localId': '2',
-//                   '@heigh': '40',
-//                   '@width': '10',
-//                   position: {
-//                     '@x': '800',
-//                     '@y': '200',
-//                   },
-//                   connectionPointIn: {
-//                     relPosition: {
-//                       '@x': '0',
-//                       '@y': '20',
-//                     },
-//                     connection: {
-//                       '@refLocalId': '1',
-//                       position: [
-//                         {
-//                           '@x': '800',
-//                           '@y': '220',
-//                         },
-//                         {
-//                           '@x': '210',
-//                           '@y': '220',
-//                         },
-//                       ],
-//                     },
-//                   },
-//                 },
-//               },
-//             },
-//           },
-//         },
-//       },
-//       instances: {
-//         configurations: {
-//           configuration: {
-//             '@name': 'Config0',
-//             resource: {
-//               '@name': 'Res0',
-//               task: {
-//                 '@name': 'task0',
-//                 '@priority': '0',
-//                 '@interval': 'T#20ms',
-//                 pouInstance: {
-//                   '@name': 'instance0',
-//                   '@typeName': 'program0',
-//                 },
-//               },
-//             },
-//           },
-//         },
-//       },
-//     },
-//   },
-// }
 /**
  * Provides the project context to the application.
  * @param children The children components wrapped by the context provider.
@@ -205,7 +83,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
     projectXmlAsObj,
     setWorkspaceProject,
     // updateDateTime,
-    // addPouInProject,
+    addPouInProject,
   } = useStore(projectStore)
   const { pous, createNewPou } = useStore(pouStore)
   /**
@@ -221,24 +99,31 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
    * && Experimental: --------------------------------------------------------------- Start Block.
    * * Refactor format for invoke callback interaction with getProject function
    */
+
+  // Success: Implemented.
   // Function to handle response and display error toast
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const handleResponse = ({ ok, data, reason }: GetProjectProps) => {
-    if (!ok && reason) {
-      createToast({ type: 'error', ...reason })
-    } else if (ok && data) {
-      const { xmlSerializedAsObject, filePath } = data
-      setWorkspaceProject({
-        projectXmlAsObj: xmlSerializedAsObject as xmlProject,
-        filePath,
-      })
-    }
-  }
+  const handleResponse = useCallback(
+    ({ ok, data, reason }: GetProjectProps) => {
+      if (!ok && reason) {
+        createToast({ type: 'error', ...reason })
+      } else if (ok && data) {
+        const { xmlSerializedAsObject, filePath } = data
+        setWorkspaceProject({
+          projectXmlAsObj: xmlSerializedAsObject as xmlProject,
+          filePath: filePath ?? '',
+        })
+      }
+    },
+    [createToast, setWorkspaceProject],
+  )
 
   const { invoke } = useIpcRender<string, GetProjectProps>({
     channel: get.PROJECT,
     callback: handleResponse,
   })
+
+  // todo: Resolve this code block
+  // ? What is missing? What is doing?
 
   const getProject = useCallback(
     async (path: string) => {
@@ -253,63 +138,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
     [handleResponse, invoke],
   )
 
-  /**
-   * && Experimental: ------------------------------------------------------------------------------ End Block.
-   */
-  /**
-   * * Update the invoke function to receive project to save
-   */
-  const { invoke: sendProjectToSave } = useIpcRender<SendProjectToSaveData>()
-  /**
-   * Use the `useIpcRender` hook to send a project save request to the renderer process.
-   */
-  useIpcRender<void, void>({
-    channel: get.SAVE_PROJECT,
-    /**
-     * Callback function for handling the response from the renderer process.
-     */
-    callback: () => {
-      if (!filePath || !projectXmlAsObj) return
-      sendProjectToSave(set.SAVE_PROJECT, {
-        project: projectXmlAsObj,
-        filePath,
-      })
-    },
-  })
-
-  // * ------------------------------------------------------------------------------------- <- Start from here
-  /**
-   * Retrieves the XMLSerialized value by the given property path.
-   * @param propertyPath The path to the property in the XMLSerialized object.
-   * @returns The value at the specified property path.
-   */
-  const getXmlSerializedValueByPath = useCallback(
-    (propertyPath: string): XMLSerializedAsObject | string | xmlProject => {
-      const properties = propertyPath.split('.')
-      let xmlSerializedAsObject: XMLSerializedAsObject =
-        projectXmlAsObj as XMLSerializedAsObject
-      for (const property of properties) {
-        if (
-          isObject(xmlSerializedAsObject) &&
-          Object.prototype.hasOwnProperty.call(xmlSerializedAsObject, property)
-        ) {
-          xmlSerializedAsObject = xmlSerializedAsObject[
-            property
-          ] as XMLSerializedAsObject
-        } else {
-          return 'Empty XML Serialized'
-        }
-      }
-      console.log(
-        'getXmlSerializedValueByPath function -> ',
-        xmlSerializedAsObject,
-      )
-
-      return xmlSerializedAsObject
-    },
-    [projectXmlAsObj],
-  )
-
+  // && Experimental: Create a new POU using projectStore
   /**
    * Updates the modification date and time of the project.
    */
@@ -352,8 +181,7 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
    */
   const createProgramOrganizationUnit = useCallback(
     ({ name, type, language }: CreatePouData) => {
-      createNewPou({ name: name, type: type, language: language }),
-        console.log('Created POU -> ', pous)
+      addPouInProject({ name: name, type: type, language: language })
       // => {
       //   await getProject(filePath)
       // }
@@ -456,8 +284,66 @@ const ProjectProvider: FC<PropsWithChildren> = ({ children }) => {
       //   }
       // })
     },
-    [createNewPou, pous],
+    [addPouInProject],
   )
+
+  /**
+   * && Experimental: ------------------------------------------------------------------------------ End Block.
+   */
+  /**
+   * * Update the invoke function to receive project to save
+   */
+  const { invoke: sendProjectToSave } = useIpcRender<SendProjectToSaveData>()
+  /**
+   * Use the `useIpcRender` hook to send a project save request to the renderer process.
+   */
+  useIpcRender<void, void>({
+    channel: get.SAVE_PROJECT,
+    /**
+     * Callback function for handling the response from the renderer process.
+     */
+    callback: () => {
+      if (!filePath || !projectXmlAsObj) return
+      sendProjectToSave(set.SAVE_PROJECT, {
+        project: projectXmlAsObj,
+        filePath,
+      })
+    },
+  })
+
+  // * ------------------------------------------------------------------------------------- <- Start from here
+  /**
+   * Retrieves the XMLSerialized value by the given property path.
+   * @param propertyPath The path to the property in the XMLSerialized object.
+   * @returns The value at the specified property path.
+   */
+  const getXmlSerializedValueByPath = useCallback(
+    (propertyPath: string): XMLSerializedAsObject | string | xmlProject => {
+      const properties = propertyPath.split('.')
+      let xmlSerializedAsObject: XMLSerializedAsObject =
+        projectXmlAsObj as XMLSerializedAsObject
+      for (const property of properties) {
+        if (
+          isObject(xmlSerializedAsObject) &&
+          Object.prototype.hasOwnProperty.call(xmlSerializedAsObject, property)
+        ) {
+          xmlSerializedAsObject = xmlSerializedAsObject[
+            property
+          ] as XMLSerializedAsObject
+        } else {
+          return 'Empty XML Serialized'
+        }
+      }
+      console.log(
+        'getXmlSerializedValueByPath function -> ',
+        xmlSerializedAsObject,
+      )
+
+      return xmlSerializedAsObject
+    },
+    [projectXmlAsObj],
+  )
+
   const addProgramCreatedInProject = ''
   /**
    * Updates the documentation of a POU within the project.

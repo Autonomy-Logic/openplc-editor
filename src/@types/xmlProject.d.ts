@@ -56,63 +56,65 @@ type BodyData<T extends IGraphicalPou | ITextualPou> = T extends IGraphicalPou
   : ITextualLangs
 
 export type xmlProject = {
-  '@xmlns:ns1': string // 'http://www.plcopen.org/xml/tc6.xsd'
-  '@xmlns:xhtml': string // 'http://www.w3.org/1999/xhtml'
-  '@xmlns:xsd': string // 'http://www.w3.org/2001/XMLSchema'
-  '@xmlns': string // 'http://www.plcopen.org/xml/tc6_0201'
-  fileHeader: {
-    '@companyName': string // 'Unknown'
-    '@productName': string // 'Unnamed'
-    '@productVersion': string // '1'
-    '@creationDateTime': string // '2023-07-03T20:25:15'
-  }
-  contentHeader: {
-    '@name': string // 'Unnamed'
-    '@modificationDateTime': string // '2023-07-03T20:25:15'
-    coordinateInfo: {
-      fbd: {
-        scaling: {
-          '@x': string // '10'
-          '@y': string // '10'
+  project: {
+    '@xmlns:ns1': string // 'http://www.plcopen.org/xml/tc6.xsd'
+    '@xmlns:xhtml': string // 'http://www.w3.org/1999/xhtml'
+    '@xmlns:xsd': string // 'http://www.w3.org/2001/XMLSchema'
+    '@xmlns': string // 'http://www.plcopen.org/xml/tc6_0201'
+    fileHeader: {
+      '@companyName': string // 'Unknown'
+      '@productName': string // 'Unnamed'
+      '@productVersion': string // '1'
+      '@creationDateTime': string // '2023-07-03T20:25:15'
+    }
+    contentHeader: {
+      '@name': string // 'Unnamed'
+      '@modificationDateTime': string // '2023-07-03T20:25:15'
+      coordinateInfo: {
+        fbd: {
+          scaling: {
+            '@x': string // '10'
+            '@y': string // '10'
+          }
         }
-      }
-      ld: {
-        scaling: {
-          '@x': string // '10'
-          '@y': string // '10'
+        ld: {
+          scaling: {
+            '@x': string // '10'
+            '@y': string // '10'
+          }
         }
-      }
-      sfc: {
-        scaling: {
-          '@x': string // '10'
-          '@y': string // '10'
+        sfc: {
+          scaling: {
+            '@x': string // '10'
+            '@y': string // '10'
+          }
         }
       }
     }
-  }
-  types: {
-    dataTypes: object // todo: Create the shape of this obj based on OpenPLC Editor xml
-    pous: {
-      pou: {
-        '@name': string // 'program0'
-        '@pouType': string // 'program'
-        body: BodyData
+    types: {
+      dataTypes: object // todo: Create the shape of this obj based on OpenPLC Editor xml
+      pous: {
+        pou: {
+          '@name': string // 'program0'
+          '@pouType': string // 'program'
+          body: BodyData
+        }
       }
     }
-  }
-  instances: {
-    configurations: {
-      configuration: {
-        '@name': string // 'Config0'
-        resource: {
-          '@name': string // 'Res0'
-          task: {
-            '@name': string // 'task0'
-            '@priority': string // '0'
-            '@interval': string // 'T#20ms'
-            pouInstance: {
-              '@name': string // 'instance0'
-              '@typeName': string // 'program0'
+    instances: {
+      configurations: {
+        configuration: {
+          '@name': string // 'Config0'
+          resource: {
+            '@name': string // 'Res0'
+            task: {
+              '@name': string // 'task0'
+              '@priority': string // '0'
+              '@interval': string // 'T#20ms'
+              pouInstance: {
+                '@name': string // 'instance0'
+                '@typeName': string // 'program0'
+              }
             }
           }
         }

@@ -126,7 +126,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
           },
         ]
       : []),
-    ...(projectXmlAsObj?.types?.pous?.pou // === languages.LD
+    ...(projectXmlAsObj?.project?.types?.pous?.pou // === languages.LD
       ? [
           {
             key: 'editorTools',
