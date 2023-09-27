@@ -130,6 +130,6 @@ window.onmessage = (event) => {
 }
 
 // Remove the loading screen after a certain timeout.
-setTimeout(removeLoading, 4999)
+setTimeout(removeLoading, 4000)
 
 export {}

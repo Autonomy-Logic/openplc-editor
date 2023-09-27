@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useStore } from 'zustand'
 
 import { useTabs, useTheme } from '@/hooks'
-import pouStore, { IPouProps } from '@/stores/Pou'
+import { IPouProps } from '@/stores/Pou'
 import projectStore from '@/stores/Project'
 
 import monacoConfig from './config/config'
@@ -14,7 +14,6 @@ monacoConfig()
 const TextEditor = () => {
   const { projectXmlAsObj } = useStore(projectStore)
   const { theme } = useTheme()
-  const { pous } = useStore(pouStore)
   const { tabs } = useTabs()
   const tabIterator = tabs[Symbol.iterator]()
   const [currentPou, setCurrentPou] = useState<IPouProps>({
