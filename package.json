@@ -51,6 +51,8 @@
     "react-toastify": "^9.1.3",
     "react-tooltip": "^5.16.1",
     "reactflow": "^11.7.4",
+    "reflect-metadata": "^0.1.13",
+    "tsyringe": "^4.8.0",
     "use-undoable": "^3.3.12",
     "xmlbuilder2": "^3.1.1",
     "zod": "^3.21.4",

@@ -1,34 +1,23 @@
-import { promises, readFile, writeFile } from 'node:fs'
+import { promises } from 'node:fs'
 import { join } from 'node:path'
 
 import { i18n } from '@shared/i18n'
-import { formatDate } from '@shared/utils'
-import { BrowserWindow, dialog } from 'electron'
+import { BrowserWindow } from 'electron'
+import { inject, injectable } from 'tsyringe'
 import { convert, create } from 'xmlbuilder2'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
 import { mainWindow } from '../main'
+import * as iocContainer from './ioc-container'
 import { ServiceResponse } from './types/response'
 
-// Wip: Implements dependencies.
-interface ServiceDependencies {
-  dialog: typeof dialog
-  readFile: typeof readFile
-  writeFile: typeof writeFile
-  formatDate: (date: Date) => string
-}
-
-// Wip: Implements dependencies.
-class ProjectDependencies implements ServiceDependencies {
-  dialog = dialog
-  readFile = readFile
-  writeFile = writeFile
-  formatDate = formatDate
-}
-
 // Wip: Refactoring project services.
+@injectable()
 export class ProjectService {
-  constructor(private readonly dependencies: ProjectDependencies) {}
+  constructor(
+    @inject('ProjectDependencies')
+    private readonly dependencies: iocContainer.IProjectServiceDependencies,
+  ) {}
 
   /**
    * @description Asynchronous function to create a PLC xml project based on selected directory.
@@ -36,10 +25,13 @@ export class ProjectService {
    */
   async createProject(): Promise<ServiceResponse<string>> {
     // Show a dialog to select the project directory.
-    const response = await dialog.showOpenDialog(mainWindow as BrowserWindow, {
-      title: i18n.t('createProject:dialog.title'),
-      properties: ['openDirectory'],
-    })
+    const response = await this.dependencies.dialog.showOpenDialog(
+      mainWindow as BrowserWindow,
+      {
+        title: i18n.t('createProject:dialog.title'),
+        properties: ['openDirectory'],
+      },
+    )
     // If the dialog is canceled, return an unsuccessful response
     // otherwise, create a constant containing the selected directory path as a string.
     if (response.canceled) return { ok: false }
@@ -70,20 +62,70 @@ export class ProjectService {
       }
     }
 
-    // ? Verify this: Utility function, maybe this can be done directly in the object body.
-    // Create a const containing infos about the time when the project was created.
-    const date = formatDate(new Date())
-
-    // Todo: Must create a project.
     // Create the project XML structure using xmlbuilder2.
-    const project = create()
+    const project = create(
+      { version: '1.0', encoding: 'utf-8' },
+      {
+        project: {
+          '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6.xsd',
+          '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
+          '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
+          '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
+          fileHeader: {
+            '@companyName': 'Unknown',
+            '@productName': 'Unnamed',
+            '@productVersion': '1',
+            '@creationDateTime': this.dependencies.formatDate(new Date()),
+          },
+          contentHeader: {
+            '@name': 'Unnamed',
+            '@modificationDateTime': this.dependencies.formatDate(new Date()),
+            coordinateInfo: {
+              fbd: {
+                scaling: {
+                  '@x': '10',
+                  '@y': '10',
+                },
+              },
+              ld: {
+                scaling: {
+                  '@x': '10',
+                  '@y': '10',
+                },
+              },
+              sfc: {
+                scaling: {
+                  '@x': '10',
+                  '@y': '10',
+                },
+              },
+            },
+          },
+          types: {
+            dataTypes: {},
+            pous: {},
+          },
+          instances: {
+            configurations: {
+              configuration: {
+                '@name': 'Config0',
+                resource: {
+                  '@name': 'Res0',
+                },
+              },
+            },
+          },
+        },
+      },
+    )
 
     /**
      * Serialize the XML structure and write it to a file.
      * If the file creation failed, return an error response,
      * otherwise return a successful response with the created file path.
      */
-    writeFile(
+
+    this.dependencies.writeFile(
       join(filePath, 'plc.xml'),
       project.end({ prettyPrint: true }),
       (error) => {
@@ -117,7 +159,7 @@ export class ProjectService {
     filePath = join(filePath, 'plc.xml')
     // Read the XML file asynchronously.
     const file = await new Promise((resolve, reject) =>
-      readFile(filePath, 'utf-8', (error, data) => {
+      this.dependencies.readFile(filePath, 'utf-8', (error, data) => {
         if (error) return reject(error)
         return resolve(data)
       }),
@@ -178,7 +220,7 @@ export class ProjectService {
      * If the file saving failed, return an error response,
      * otherwise return a successful response.
      */
-    writeFile(
+    this.dependencies.writeFile(
       join(filePath, 'plc.xml'),
       project.end({ prettyPrint: true }),
       (error) => {

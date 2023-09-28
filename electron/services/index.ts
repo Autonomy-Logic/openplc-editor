@@ -1,3 +1,12 @@
+import 'reflect-metadata'
+
+import { container } from 'tsyringe'
+
+import { ProjectService } from './project-service'
+
+// Resolve the ProjectService instance with dependencies injected.
+export const projectService = container.resolve(ProjectService)
+
 /**
  * Re-exports the createProjectService from the corresponding module.
  * @module Services
