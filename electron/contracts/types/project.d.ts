@@ -1,4 +1,4 @@
-interface xmlProject {
+export interface xmlProject {
   version: string
   encoding: string // {version: '1.0', encoding: 'utf-8'}
   project: {

@@ -2,7 +2,7 @@
  * Represents the response format for service operations.
  * @template T - The type of data included in the response.
  */
-export type ServiceResponse<T = unknown> = {
+export interface ServiceResponse<T = unknown> {
   /**
    * Indicates the success status of the service operation.
    */
