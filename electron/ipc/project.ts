@@ -1,8 +1,10 @@
+// import { createProjectController, getProjectController } from '../controllers'
+// Wip: Using service directly on ipc
+import { ProjectService } from '@electron/services'
 import { CONSTANTS } from '@shared/constants'
 import { ipcMain } from 'electron'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
-import { createProjectController, getProjectController } from '../controllers'
 import { mainWindow } from '../main'
 
 const {
@@ -23,14 +25,13 @@ export const project = {
    * @param filePath - The path to the project file.
    */
   send: async (filePath: string) => {
-    const response = await getProjectController.handle(filePath)
+    const response = await ProjectService.getProject(filePath)
 
     mainWindow?.webContents.send(get.PROJECT, {
       ...response,
       data: { ...response.data, filePath },
     })
   },
-
   /**
    * Returns a response listener for getting project data to save.
    * @returns A response listener function.
@@ -57,12 +58,17 @@ export const project = {
  */
 export const projectIpc = () => {
   ipcMain.handle(get.PROJECT, async (_event, filePath: string) => {
-    const response = await getProjectController.handle(filePath)
+    const response = await ProjectService.getProject(filePath)
+    return response
+  })
+
+  ipcMain.handle(set.CREATED_PROJECT, async (_, filePath: string) => {
+    const response = await ProjectService.getProject(filePath)
     return response
   })
 
   ipcMain.handle(set.CREATE_PROJECT_FROM_TOOLBAR, async () => {
-    const response = await createProjectController.handle()
+    const response = await ProjectService.createProject()
     return response
   })
 }

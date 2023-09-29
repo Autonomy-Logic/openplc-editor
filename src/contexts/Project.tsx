@@ -5,10 +5,10 @@ import { createContext, FC, PropsWithChildren, useCallback } from 'react'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 import { useStore } from 'zustand'
 
-import { xmlProject } from '@/@types/xmlProject'
 import { useIpcRender, useToast } from '@/hooks'
 import pouStore from '@/stores/Pou'
 import projectStore from '@/stores/Project'
+import { xmlProject } from '@/types/xmlProject'
 /**
  * Extract properties from the imported CONSTANTS object.
  */

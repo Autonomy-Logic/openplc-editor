@@ -1,7 +1,9 @@
-import {
-  createProjectController,
-  saveProjectController,
-} from '@electron/controllers'
+// import {
+//   createProjectController,
+//   saveProjectController,
+// } from '@electron/controllers'
+// Wip: Using service directly on ipc
+import { ProjectService } from '@electron/services'
 
 import { pou } from '../pou'
 import { project } from '../project'
@@ -17,7 +19,7 @@ export const click = () => console.log('Will be implemented soon')
  * Initiates the project creation process and updates the UI accordingly.
  */
 export const handleCreateProject = async () => {
-  const { ok, reason, data } = await createProjectController.handle()
+  const { ok, reason, data } = await ProjectService.createProject()
   if (!ok && reason) {
     toast.send({
       type: 'error',
@@ -43,7 +45,7 @@ export const handleSaveProject = () => {
   responseListener(async (data) => {
     if (!data) return
     const { filePath, xmlSerializedAsObject } = data
-    const { ok, reason } = await saveProjectController.handle(
+    const { ok, reason } = await ProjectService.saveProject(
       filePath,
       xmlSerializedAsObject,
     )

@@ -15,6 +15,7 @@ export const CONSTANTS = {
     },
     set: {
       THEME: 'set_theme',
+      CREATED_PROJECT: 'set_project',
       CREATE_CHILD_WINDOW: 'set_create_child_window',
       CREATE_PROJECT_FROM_TOOLBAR: 'set_create_project_from_toolbar',
       UPDATE_MENU_PROJECT: 'set_update_menu_project',

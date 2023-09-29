@@ -1,27 +1,9 @@
-import { CONSTANTS } from '@shared/constants'
 import { produce } from 'immer'
-import { create } from 'zustand'
+import { createStore } from 'zustand'
 
-import { xmlProject } from '@/@types/xmlProject'
+import { IPouProps, IProjectProps, IProjectState } from '@/types/project-store'
 
-interface IPouProps {
-  name: string
-  type: (typeof CONSTANTS.types)[keyof typeof CONSTANTS.types]
-  language?: (typeof CONSTANTS.languages)[keyof typeof CONSTANTS.languages]
-  body?: string | undefined
-}
-interface IProjectProps {
-  filePath: string | null
-  projectXmlAsObj: xmlProject | null
-}
-
-interface IProjectState extends IProjectProps {
-  setWorkspaceProject: (project: IProjectProps) => void
-  addPouInProject: (pou: IPouProps) => void
-  updateDateTime: (updateDate: string) => void
-}
-
-const projectStore = create<IProjectState>()((set, get) => ({
+const projectStore = createStore<IProjectState>()((set, get) => ({
   filePath: null,
   projectXmlAsObj: null,
   setWorkspaceProject: (project: IProjectProps) =>
