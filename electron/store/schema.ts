@@ -51,4 +51,7 @@ export const schema: Schema<DefaultStoreProps> = {
       },
     },
   },
+  projectPath: {
+    type: 'string',
+  },
 }

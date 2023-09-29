@@ -1,5 +1,5 @@
 import { CONSTANTS } from '@shared/constants'
-import { FC, useEffect } from 'react'
+import { FC, useCallback, useEffect } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { useStore } from 'zustand'
 
@@ -11,11 +11,13 @@ import {
   useTabs,
   useTheme,
   useTitlebar,
+  useToast,
 } from '@/hooks'
 import useSidebar from '@/hooks/useSidebar'
 import pouStore from '@/stores/Pou'
 import projectStore from '@/stores/Project'
 import { Layout } from '@/templates'
+import { GetProjectProps } from '@/types/dtos/getProject.dto'
 import { convertToPath } from '@/utils'
 
 import CreatePOU from '../components/CreatePouForm'
@@ -54,6 +56,8 @@ const MainComponent: FC = () => {
    * && Experimental: Using pous directly from pouStore for debug purposes.
    * Todo: Remove
    */
+  const { createToast } = useToast()
+
   /**
    * Access tab-related functions from the custom hook
    * @useTabs
@@ -109,6 +113,47 @@ const MainComponent: FC = () => {
     }
     setPousPath()
   }, [addTab, navigate, projectXmlAsObj, sidebarNavigate])
+
+  // && Experimental block --------------------------------------------------------------------> Start
+  const projectPath = invoke(get.PROJECT_PATH)
+  // Function to handle response and display error toast
+  const handleResponse = useCallback(
+    ({ ok, data, reason }: GetProjectProps) => {
+      if (!ok && reason) {
+        createToast({ type: 'error', ...reason })
+      } else if (ok && data) {
+        //const { xmlProject, filePath } = data
+        console.warn('Here -> ', data)
+      }
+    },
+    [createToast],
+  )
+
+  const { invoke } = useIpcRender<string, GetProjectProps>({
+    channel: get.PROJECT,
+    callback: handleResponse,
+  })
+
+  // todo: Resolve this code block
+  // ? What is missing? What is doing?
+
+  const getProject = useCallback(
+    async (path: string) => {
+      try {
+        const response = await invoke(get.PROJECT, path)
+        handleResponse(response)
+      } catch (error) {
+        // Handle any other errors if needed
+        console.error(error)
+      }
+    },
+    [handleResponse, invoke],
+  )
+  useEffect(() => {
+    getProject()
+  }, [])
+
+  // && Experimental block --------------------------------------------------------------------> End
   /**
    * Navigate to the main path if the project data is not available
    */

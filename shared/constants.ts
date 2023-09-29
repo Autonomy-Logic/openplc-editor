@@ -9,6 +9,7 @@ export const CONSTANTS = {
     get: {
       THEME: 'get_theme',
       PROJECT: 'get_project',
+      PROJECT_PATH: 'get_project_path',
       SAVE_PROJECT: 'get_project_to_save',
       CREATE_POU_WINDOW: 'get_create_pou_window',
       TOAST: 'get_toast',

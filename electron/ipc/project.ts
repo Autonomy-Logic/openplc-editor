@@ -1,6 +1,7 @@
 // import { createProjectController, getProjectController } from '../controllers'
 // Wip: Using service directly on ipc
 import { ProjectService } from '@electron/services'
+import { store } from '@electron/store'
 import { CONSTANTS } from '@shared/constants'
 import { ipcMain } from 'electron'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
@@ -62,9 +63,9 @@ export const projectIpc = () => {
     return response
   })
 
-  ipcMain.handle(set.CREATED_PROJECT, async (_, filePath: string) => {
-    const response = await ProjectService.getProject(filePath)
-    return response
+  ipcMain.handle(get.PROJECT_PATH, () => {
+    const projectPath = store.get('projectPath')
+    return projectPath
   })
 
   ipcMain.handle(set.CREATE_PROJECT_FROM_TOOLBAR, async () => {

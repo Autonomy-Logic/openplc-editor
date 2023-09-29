@@ -1,6 +1,7 @@
 import { promises, readFile, writeFile } from 'node:fs'
 import { join } from 'node:path'
 
+import { store } from '@electron/store'
 import { i18n } from '@shared/i18n'
 import { formatDate } from '@shared/utils'
 import { BrowserWindow, dialog } from 'electron'
@@ -110,6 +111,7 @@ class ProjectService implements IProjectService {
       },
     )
 
+    store.set('projectPath', filePath)
     /**
      * Serialize the XML structure and write it to a file.
      * If the file creation failed, return an error response,
