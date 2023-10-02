@@ -35,7 +35,6 @@ export const defaultStoreSchema = z.object({
       })
       .optional(), // The window bounds are optional.
   }),
-  projectPath: z.string(),
 })
 /**
  * Type definition for the inferred properties of the default store schema.
@@ -49,6 +48,5 @@ export const getDefaultStore = (): DefaultStoreProps => {
   return {
     theme: 'light',
     window: {},
-    projectPath: 'C:\\Users\\user1234567890',
   }
 }

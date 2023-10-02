@@ -1,3 +1,4 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { release } from 'node:os'
 import { join } from 'node:path'
 
@@ -26,11 +27,62 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0)
 }
 
+const userDataPath = app.getPath('userData')
+const workspaceDataPath = join(userDataPath, '/User/workspaceStorage')
+const workspaceFile = join(workspaceDataPath, 'workspace.json')
+
+// Function to ensure the folder and file exist
+const ensureWorkspaceFileExists = () => {
+  try {
+    // Create the user data folder if it doesn't exist
+    if (!existsSync(userDataPath)) {
+      mkdirSync(userDataPath, { recursive: true })
+    }
+    // Create the workspace data folder if it doesn't exist
+    if (!existsSync(workspaceDataPath)) {
+      mkdirSync(workspaceDataPath, { recursive: true })
+    }
+    // Create the workspace file if it doesn't exist
+    if (!existsSync(workspaceFile)) {
+      writeFileSync(
+        workspaceFile,
+        JSON.stringify(workspaceStorage, null, 2),
+        'utf-8',
+      )
+    }
+  } catch (error) {
+    // Handle any errors that may occur during file/folder creation
+    console.error('Error creating config file:', error)
+  }
+}
+
+// Load the workspace file at app startup
+let workspaceStorage: { folder: string }
+
+try {
+  const data = readFileSync(workspaceFile, 'utf-8')
+  workspaceStorage = JSON.parse(data)
+} catch (error) {
+  // If the file doesn't exist or is corrupted, use default settings
+  workspaceStorage = {
+    folder: '',
+  }
+  ensureWorkspaceFileExists()
+}
+
+// Function to save configuration
+const setWorkspace = (arg: any) => {
+  writeFileSync(workspaceFile, JSON.stringify(arg, null, 2), 'utf-8')
+}
+
+// Set the workspace folder
+setWorkspace(workspaceStorage)
+
 // Remove electron security warnings
 // This warning only shows in development mode
 // Read more on https://www.electronjs.org/docs/latest/tutorial/security
 // process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
-// console.log(app.getPath('userData'));
+// console.log(app.getPath('userData'))
 
 // Initialize the main window instance
 export let mainWindow: BrowserWindow | null = null

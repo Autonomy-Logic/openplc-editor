@@ -63,7 +63,7 @@ export const projectIpc = () => {
     return response
   })
 
-  ipcMain.handle(get.PROJECT_PATH, () => {
+  ipcMain.handle('info:projectPath', () => {
     const projectPath = store.get('projectPath')
     return projectPath
   })

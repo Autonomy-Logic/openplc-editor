@@ -1,6 +1,16 @@
-import { contextBridge } from 'electron'
+// import { contextBridge, ipcRenderer } from 'electron'
 
 import logoSvg from './assets/logo'
+
+// const getProjectPath = async () => {
+//   const result = await ipcRenderer.invoke('info:projectPath')
+//   return result
+// }
+
+// const bridge = {
+//   getProjectPath,
+// }
+// contextBridge.exposeInMainWorld('Bridge', bridge)
 
 /**
  * Waits for the specified document ready states before resolving.
