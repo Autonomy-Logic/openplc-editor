@@ -28,8 +28,8 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 const userDataPath = app.getPath('userData')
-const workspaceDataPath = join(userDataPath, '/User/workspaceStorage')
-const workspaceFile = join(workspaceDataPath, 'workspace.json')
+const workspacePath = join(userDataPath, '/User/workspaceStorage')
+const workspaceFile = join(workspacePath, 'workspace.json')
 
 // Function to ensure the folder and file exist
 const ensureWorkspaceFileExists = () => {
@@ -39,8 +39,8 @@ const ensureWorkspaceFileExists = () => {
       mkdirSync(userDataPath, { recursive: true })
     }
     // Create the workspace data folder if it doesn't exist
-    if (!existsSync(workspaceDataPath)) {
-      mkdirSync(workspaceDataPath, { recursive: true })
+    if (!existsSync(workspacePath)) {
+      mkdirSync(workspacePath, { recursive: true })
     }
     // Create the workspace file if it doesn't exist
     if (!existsSync(workspaceFile)) {
@@ -71,12 +71,17 @@ try {
 }
 
 // Function to save configuration
-const setWorkspace = (arg: any) => {
-  writeFileSync(workspaceFile, JSON.stringify(arg, null, 2), 'utf-8')
+export const setWorkspace = (workspaceData: { folder: string }) => {
+  writeFileSync(workspaceFile, JSON.stringify(workspaceData, null, 2), 'utf-8')
 }
 
-// Set the workspace folder
+// Set the workspace configs
 setWorkspace(workspaceStorage)
+
+// Get the workspace configs
+export const getWorkspace = () => {
+  return workspaceStorage
+}
 
 // Remove electron security warnings
 // This warning only shows in development mode

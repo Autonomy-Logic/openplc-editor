@@ -1,14 +1,13 @@
 import { promises, readFile, writeFile } from 'node:fs'
 import { join } from 'node:path'
 
-import { store } from '@electron/store'
 import { i18n } from '@shared/i18n'
 import { formatDate } from '@shared/utils'
 import { BrowserWindow, dialog } from 'electron'
 import { convert, create } from 'xmlbuilder2'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
-import { mainWindow } from '../main'
+import { mainWindow, setWorkspace } from '../main'
 import { IProjectService } from './types/projectService'
 import { ServiceResponse } from './types/response'
 
@@ -111,7 +110,7 @@ class ProjectService implements IProjectService {
       },
     )
 
-    store.set('projectPath', filePath)
+    setWorkspace({ folder: join(filePath, 'plc.xml') })
     /**
      * Serialize the XML structure and write it to a file.
      * If the file creation failed, return an error response,

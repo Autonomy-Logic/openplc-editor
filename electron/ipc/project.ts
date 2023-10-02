@@ -6,7 +6,7 @@ import { CONSTANTS } from '@shared/constants'
 import { ipcMain } from 'electron'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
-import { mainWindow } from '../main'
+import { getWorkspace, mainWindow } from '../main'
 
 const {
   channels: { get, set },
@@ -64,7 +64,7 @@ export const projectIpc = () => {
   })
 
   ipcMain.handle('info:projectPath', () => {
-    const projectPath = store.get('projectPath')
+    const projectPath = getWorkspace()
     return projectPath
   })
 
