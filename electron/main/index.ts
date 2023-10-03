@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  watchFile,
+  writeFileSync,
+} from 'node:fs'
 import { release } from 'node:os'
 import { join } from 'node:path'
 
@@ -74,6 +80,25 @@ try {
 export const setWorkspace = (workspaceData: { folder: string }) => {
   writeFileSync(workspaceFile, JSON.stringify(workspaceData, null, 2), 'utf-8')
 }
+
+// todo: How to react to this change in renderer process?
+// Watch for changes in the config file
+watchFile(workspaceFile, (curr, prev) => {
+  if (curr.mtime !== prev.mtime) {
+    // The file has changed; you can now react to the changes
+    console.log('Config file changed. Reloading...')
+    try {
+      const data = readFileSync(workspaceFile, 'utf-8')
+      workspaceStorage = JSON.parse(data)
+      // Now you can update your application based on the new config
+      // For example, apply theme changes dynamically
+      // Send a message to the renderer process
+      mainWindow?.webContents.send('info:workspace-updated', workspaceStorage)
+    } catch (error) {
+      console.error('Error reloading config:', error)
+    }
+  }
+})
 
 // Set the workspace configs
 setWorkspace(workspaceStorage)

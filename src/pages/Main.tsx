@@ -15,7 +15,6 @@ import {
   useToast,
 } from '@/hooks'
 import useSidebar from '@/hooks/useSidebar'
-import pouStore from '@/stores/Pou'
 import projectStore from '@/stores/Project'
 import { Layout } from '@/templates'
 import { GetProjectProps } from '@/types/dtos/getProject.dto'
@@ -35,7 +34,6 @@ const {
  * @component
  */
 const MainComponent: FC = () => {
-  const [pro, setPro] = useState<xmlProject | undefined>()
   /**
    * Access the navigate function from 'react-router-dom'
    * @useNavigate
@@ -94,28 +92,34 @@ const MainComponent: FC = () => {
   /**
    * Handle navigation and tab addition based on POU data
    */
-  useEffect(() => {
-    const setPousPath = () => {
-      if (pro?.project?.types?.pous) {
-        const pouName = Object.entries(pro?.project?.types?.pous).map(
-          ([key, value]) => {
-            return value['@name']
-          },
-        )
-        sidebarNavigate('projectTree')
-        pouName.map((p) => {
-          addTab({
-            id: p,
-            title: p,
-            onClick: () => navigate(convertToPath([paths.POU, p])),
-            onClickCloseButton: () => navigate(paths.MAIN),
-          })
-        })
-        navigate(convertToPath([paths.POU, pouName[0]]))
-      }
-    }
-    setPousPath()
-  }, [addTab, navigate, projectXmlAsObj, sidebarNavigate])
+  // useEffect(() => {
+  //   const setPousPath = () => {
+  //     if (pro?.project?.types?.pous) {
+  //       const pouName = Object.entries(pro?.project?.types?.pous).map(
+  //         ([key, value]) => {
+  //           return value['@name']
+  //         },
+  //       )
+  //       sidebarNavigate('projectTree')
+  //       pouName.map((p) => {
+  //         addTab({
+  //           id: p,
+  //           title: p,
+  //           onClick: () => navigate(convertToPath([paths.POU, p])),
+  //           onClickCloseButton: () => navigate(paths.MAIN),
+  //         })
+  //       })
+  //       navigate(convertToPath([paths.POU, pouName[0]]))
+  //     }
+  //   }
+  //   setPousPath()
+  // }, [
+  //   addTab,
+  //   navigate,
+  //   pro?.project?.types?.pous,
+  //   projectXmlAsObj,
+  //   sidebarNavigate,
+  // ])
 
   /**
    * Wip --------------------------------------------------------------------------------------> Start
@@ -125,60 +129,67 @@ const MainComponent: FC = () => {
    * Wip --------------------------------------------------------------------------------------> End
    */
   // && Experimental block --------------------------------------------------------------------> Start
-  // Function to handle response and display error toast
-  const handleResponse = useCallback(
-    ({ ok, data, reason }: GetProjectProps) => {
-      if (!ok && reason) {
-        createToast({ type: 'error', ...reason })
-      } else if (ok && data) {
-        // const { xmlSerializedAsObject } = data
-        console.warn('Here -> ', data.xmlSerializedAsObject)
-        setWorkspaceProject(data.xmlSerializedAsObject)
-        setPro(data.xmlSerializedAsObject)
-      }
-    },
-    [createToast, setWorkspaceProject],
-  )
+  // // Function to handle response and display error toast
+  // const handleResponse = useCallback(
+  //   ({ ok, data, reason }: GetProjectProps) => {
+  //     if (!ok && reason) {
+  //       createToast({ type: 'error', ...reason })
+  //     } else if (ok && data) {
+  //       // const { xmlSerializedAsObject } = data
+  //       setWorkspaceProject(data.xmlSerializedAsObject)
+  //     }
+  //   },
+  //   [createToast, setWorkspaceProject],
+  // )
 
-  // Custom hook to use an IPC channel to get the project
-  const { invoke } = useIpcRender<string, GetProjectProps>({
-    channel: get.PROJECT,
-    callback: handleResponse,
-  })
+  // // Custom hook to use an IPC channel to get the project
+  // const { invoke } = useIpcRender<string, GetProjectProps>({
+  //   channel: get.PROJECT,
+  //   callback: handleResponse,
+  // })
 
-  // Function to get the project using the given path
-  const getProject = useCallback(
-    async (path: string) => {
-      try {
-        const response = await invoke(get.PROJECT, path)
-        handleResponse(response)
-      } catch (error) {
-        // Handle any other errors if needed
-        console.error(error)
-      }
-    },
-    [handleResponse, invoke],
-  )
+  // // Function to get the project using the given path
+  // const getProjectByPath = useCallback(
+  //   async (path: string) => {
+  //     try {
+  //       const response = await invoke(get.PROJECT, path)
+  //       handleResponse(response)
+  //     } catch (error) {
+  //       // Handle any other errors if needed
+  //       console.error(error)
+  //     }
+  //   },
+  //   [handleResponse, invoke],
+  // )
+
+  // const test = useCallback(() => {
+  //   verifyIfWorkspaceHasProject()
+  //   console.log(workspacePath)
+  // }, [verifyIfWorkspaceHasProject, workspacePath])
+
   useEffect(() => {
-    const getProjectByPath = async () => {
-      const path = await ipcRenderer.invoke('info:workspace')
-      console.log('Project path -> ', path.folder)
-      if (path.folder === '') {
-        console.log('Workspace does not has an initial folder')
-      }
-      const pathNormalized = path.folder.replace('/plc.xml', '') as string
-      getProject(pathNormalized)
-    }
-    getProjectByPath()
-  }, [getProject])
+    const pouName = getXmlSerializedValueByPath(
+      'project.types.pous.pou.@name',
+    ) as string
 
+    if (pouName) {
+      sidebarNavigate('projectTree')
+      addTab({
+        id: pouName,
+        title: pouName,
+        onClick: () => navigate(convertToPath([paths.POU, pouName])),
+        onClickCloseButton: () => navigate(paths.MAIN),
+      })
+      navigate(convertToPath([paths.POU, pouName]))
+    }
+  }, [addTab, getXmlSerializedValueByPath, navigate, sidebarNavigate])
   // && Experimental block --------------------------------------------------------------------> End
   /**
    * Navigate to the main path if the project data is not available
    */
   useEffect(() => {
-    if (projectXmlAsObj === null && pro === undefined) navigate(paths.MAIN)
-  }, [navigate, pro, projectXmlAsObj])
+    if (projectXmlAsObj === null) navigate(paths.MAIN)
+  }, [navigate, projectXmlAsObj])
 
   if (!theme || !titlebar) return <></>
 

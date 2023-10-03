@@ -110,7 +110,7 @@ class ProjectService implements IProjectService {
       },
     )
 
-    setWorkspace({ folder: join(filePath, 'plc.xml') })
+    setWorkspace({ folder: filePath })
     /**
      * Serialize the XML structure and write it to a file.
      * If the file creation failed, return an error response,
@@ -148,7 +148,7 @@ class ProjectService implements IProjectService {
     filePath: string,
   ): Promise<ServiceResponse<XMLSerializedAsObject>> {
     // Construct the full path to the 'plc.xml' file.
-    filePath = join(filePath, 'plc.xml')
+    //filePath = join(filePath, 'plc.xml')
     // Read the XML file asynchronously.
     const file = await new Promise((resolve, reject) =>
       readFile(filePath, 'utf-8', (error, data) => {

@@ -3,7 +3,7 @@ import { createStore } from 'zustand'
 
 import { IPouProps, IProjectProps, IProjectState } from '@/types/project-store'
 
-const projectStore = createStore<IProjectState>()((set, get) => ({
+const projectStore = createStore<IProjectState>()((set) => ({
   filePath: null,
   projectXmlAsObj: null,
   setWorkspaceProject: (project: IProjectProps) =>
@@ -16,9 +16,7 @@ const projectStore = createStore<IProjectState>()((set, get) => ({
   addPouInProject: (pou: IPouProps) => {
     set(
       produce((s) => {
-        console.log(s.projectXmlAsObj)
-        console.error('Here crash -> ', pou)
-        // s.projectXmlAsObj.project.types.pous[pou.name] = pou
+        s.projectXmlAsObj.project.types.pous[pou.name] = pou
       }),
     )
   },
