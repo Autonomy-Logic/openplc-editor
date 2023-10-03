@@ -16,8 +16,9 @@ const projectStore = createStore<IProjectState>()((set, get) => ({
   addPouInProject: (pou: IPouProps) => {
     set(
       produce((s) => {
-        console.log(get().projectXmlAsObj)
-        s.projectXmlAsObj.project.types.pous[pou.name] = pou
+        console.log(s.projectXmlAsObj)
+        console.error('Here crash -> ', pou)
+        // s.projectXmlAsObj.project.types.pous[pou.name] = pou
       }),
     )
   },

@@ -1,6 +1,6 @@
 import { CONSTANTS } from '@shared/constants'
 import { ipcRenderer } from 'electron'
-import { FC, useCallback, useEffect } from 'react'
+import { FC, useCallback, useEffect, useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { useStore } from 'zustand'
 
@@ -19,6 +19,7 @@ import pouStore from '@/stores/Pou'
 import projectStore from '@/stores/Project'
 import { Layout } from '@/templates'
 import { GetProjectProps } from '@/types/dtos/getProject.dto'
+import { xmlProject } from '@/types/xmlProject'
 import { convertToPath } from '@/utils'
 
 import CreatePOU from '../components/CreatePouForm'
@@ -34,6 +35,7 @@ const {
  * @component
  */
 const MainComponent: FC = () => {
+  const [pro, setPro] = useState<xmlProject | undefined>()
   /**
    * Access the navigate function from 'react-router-dom'
    * @useNavigate
@@ -52,7 +54,7 @@ const MainComponent: FC = () => {
   /**
    * && Experimental: Using project store
    */
-  const { projectXmlAsObj } = useStore(projectStore)
+  const { projectXmlAsObj, setWorkspaceProject } = useStore(projectStore)
   /**
    * && Experimental: Using pous directly from pouStore for debug purposes.
    * Todo: Remove
@@ -94,12 +96,12 @@ const MainComponent: FC = () => {
    */
   useEffect(() => {
     const setPousPath = () => {
-      if (projectXmlAsObj?.project?.types?.pous) {
-        const pouName = Object.entries(
-          projectXmlAsObj?.project?.types?.pous,
-        ).map(([key, value]) => {
-          return value['@name']
-        })
+      if (pro?.project?.types?.pous) {
+        const pouName = Object.entries(pro?.project?.types?.pous).map(
+          ([key, value]) => {
+            return value['@name']
+          },
+        )
         sidebarNavigate('projectTree')
         pouName.map((p) => {
           addTab({
@@ -115,59 +117,68 @@ const MainComponent: FC = () => {
     setPousPath()
   }, [addTab, navigate, projectXmlAsObj, sidebarNavigate])
 
+  /**
+   * Wip --------------------------------------------------------------------------------------> Start
+   * || On the first launch of the application, gather basic project information.
+   * || Then collecting them as they update to avoid having to reload everything every time
+   * || we switch projects or tabs...
+   * Wip --------------------------------------------------------------------------------------> End
+   */
   // && Experimental block --------------------------------------------------------------------> Start
-  useEffect(() => {
-    const getProjectPath = async () => {
-      const path = await ipcRenderer.invoke('info:projectPath')
-      console.log('Project path -> ', path)
-    }
-    getProjectPath()
-  }, [])
-
   // Function to handle response and display error toast
-  // const handleResponse = useCallback(
-  //   ({ ok, data, reason }: GetProjectProps) => {
-  //     if (!ok && reason) {
-  //       createToast({ type: 'error', ...reason })
-  //     } else if (ok && data) {
-  //       //const { xmlProject, filePath } = data
-  //       console.warn('Here -> ', data)
-  //     }
-  //   },
-  //   [createToast],
-  // )
+  const handleResponse = useCallback(
+    ({ ok, data, reason }: GetProjectProps) => {
+      if (!ok && reason) {
+        createToast({ type: 'error', ...reason })
+      } else if (ok && data) {
+        // const { xmlSerializedAsObject } = data
+        console.warn('Here -> ', data.xmlSerializedAsObject)
+        setWorkspaceProject(data.xmlSerializedAsObject)
+        setPro(data.xmlSerializedAsObject)
+      }
+    },
+    [createToast, setWorkspaceProject],
+  )
 
-  // const { invoke } = useIpcRender<string, GetProjectProps>({
-  //   channel: get.PROJECT,
-  //   callback: handleResponse,
-  // })
+  // Custom hook to use an IPC channel to get the project
+  const { invoke } = useIpcRender<string, GetProjectProps>({
+    channel: get.PROJECT,
+    callback: handleResponse,
+  })
 
-  // // todo: Resolve this code block
-  // // ? What is missing? What is doing?
-
-  // const getProject = useCallback(
-  //   async (path: string) => {
-  //     try {
-  //       const response = await invoke(get.PROJECT, path)
-  //       handleResponse(response)
-  //     } catch (error) {
-  //       // Handle any other errors if needed
-  //       console.error(error)
-  //     }
-  //   },
-  //   [handleResponse, invoke],
-  // )
-  // useEffect(() => {
-  //   getProject()
-  // }, [])
+  // Function to get the project using the given path
+  const getProject = useCallback(
+    async (path: string) => {
+      try {
+        const response = await invoke(get.PROJECT, path)
+        handleResponse(response)
+      } catch (error) {
+        // Handle any other errors if needed
+        console.error(error)
+      }
+    },
+    [handleResponse, invoke],
+  )
+  useEffect(() => {
+    const getProjectByPath = async () => {
+      const path = await ipcRenderer.invoke('info:workspace')
+      console.log('Project path -> ', path.folder)
+      if (path.folder === '') {
+        console.log('Workspace does not has an initial folder')
+      }
+      const pathNormalized = path.folder.replace('/plc.xml', '') as string
+      getProject(pathNormalized)
+    }
+    getProjectByPath()
+  }, [getProject])
 
   // && Experimental block --------------------------------------------------------------------> End
   /**
    * Navigate to the main path if the project data is not available
    */
   useEffect(() => {
-    if (!projectXmlAsObj) navigate(paths.MAIN)
-  }, [navigate, projectXmlAsObj])
+    if (projectXmlAsObj === null && pro === undefined) navigate(paths.MAIN)
+  }, [navigate, pro, projectXmlAsObj])
 
   if (!theme || !titlebar) return <></>
 

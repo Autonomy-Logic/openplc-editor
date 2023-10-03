@@ -115,7 +115,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
       icon: HiOutlineSquares2X2,
       component: <Tools />,
     },
-    ...(projectXmlAsObj
+    ...(projectXmlAsObj?.project
       ? [
           {
             key: 'projectTree',
@@ -137,7 +137,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
           },
         ]
       : []),
-    ...(projectXmlAsObj && pathname.includes(paths.POU)
+    ...(projectXmlAsObj?.project && pathname.includes(paths.POU)
       ? [
           {
             key: 'variables',

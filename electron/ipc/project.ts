@@ -63,9 +63,9 @@ export const projectIpc = () => {
     return response
   })
 
-  ipcMain.handle('info:projectPath', () => {
-    const projectPath = getWorkspace()
-    return projectPath
+  ipcMain.handle('info:workspace', () => {
+    const response = getWorkspace()
+    return response
   })
 
   ipcMain.handle(set.CREATE_PROJECT_FROM_TOOLBAR, async () => {

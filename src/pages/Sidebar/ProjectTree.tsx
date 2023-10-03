@@ -50,15 +50,17 @@ const ProjectTree: FC = () => {
    * Extract the product name from the project XML or use an empty string
    */
   const productName =
-    (getXmlSerializedValueByPath('fileHeader.@productName') as string) || ''
+    (getXmlSerializedValueByPath(
+      'project.fileHeader.@productName',
+    ) as string) || ''
 
   useEffect(() => {
-    if (projectXmlAsObj) {
+    if (projectXmlAsObj !== null) {
       const pous = getXmlSerializedValueByPath(
-        'types.pous',
+        'project.types.pous',
       ) as XMLSerializedAsObject
       const resourceName = getXmlSerializedValueByPath(
-        'instances.configurations.configuration.resource.@name',
+        'project.instances.configurations.configuration.resource.@name',
       ) as string | ''
       /**
        * Handle click events for tree nodes and add corresponding tabs
@@ -101,7 +103,7 @@ const ProjectTree: FC = () => {
                   ...Object.keys(pous).map((key) => {
                     const pouName =
                       (getXmlSerializedValueByPath(
-                        `types.pous.${key}.@name`,
+                        `project.types.pous.${key}.@name`,
                       ) as string) || ''
                     return {
                       id: pouName,
