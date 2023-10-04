@@ -74,11 +74,12 @@ const Layout: FC<LayoutProps> = ({ main }) => {
   /**
    * Access IPC render function for creating a POU from custom hook
    * @useIpcRender
+   * !Broken
    */
-  const { invoke: createNewPou } = useIpcRender<
-    undefined,
-    CreatePouFromSidebar
-  >()
+  // const { invoke: createNewPou } = useIpcRender<
+  //   undefined,
+  //   CreatePouFromSidebar
+  // >()
   /**
    * Access modal-related functions from custom hook and open a modal for creating a POU
    * @useModal
@@ -91,19 +92,20 @@ const Layout: FC<LayoutProps> = ({ main }) => {
    * Handle the creation of a POU from the sidebar
    * @async
    * @function
+   * !Broken
    */
-  const handleCreateProgramOrganizationUnitFromSidebar = async () => {
-    const { ok, message } = await createNewPou(get.CREATE_POU_WINDOW)
-    if (!ok && message) {
-      createToast({
-        type: 'error',
-        ...message,
-      })
-    } else if (ok && message) {
-      handleOpenModal()
-      console.log(message)
-    }
-  }
+  // const handleCreateProgramOrganizationUnitFromSidebar = async () => {
+  //   const { ok, message } = await createNewPou(get.CREATE_POU_WINDOW)
+  //   if (!ok && message) {
+  //     createToast({
+  //       type: 'error',
+  //       ...message,
+  //     })
+  //   } else if (ok && message) {
+  //     handleOpenModal()
+  //     console.log(message)
+  //   }
+  // }
   // Wip: --------------------------------------------------------------------------- End of the block. //
 
   // Define an array of navigation items with their associated data.
@@ -193,7 +195,7 @@ const Layout: FC<LayoutProps> = ({ main }) => {
             ))}
           </ul>
           <button
-            onClick={() => handleCreateProgramOrganizationUnitFromSidebar()}
+            }
             className="group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 text-gray-500 hover:text-open-plc-blue"
           >
             <HiOutlineCodeBracket className="h-6 w-6 shrink-0" />
