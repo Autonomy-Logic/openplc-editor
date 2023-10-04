@@ -1,12 +1,11 @@
 // import { createProjectController, getProjectController } from '../controllers'
 // Wip: Using service directly on ipc
-import { ProjectService } from '@electron/services'
-import { store } from '@electron/store'
-import { CONSTANTS } from '@shared/constants'
 import { ipcMain } from 'electron'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
-import { getWorkspace, mainWindow } from '../main'
+import { CONSTANTS } from '../../shared/constants'
+import { mainWindow } from '../main'
+import { ProjectService } from '../services/index'
 
 const {
   channels: { get, set },
@@ -60,11 +59,6 @@ export const project = {
 export const projectIpc = () => {
   ipcMain.handle(get.PROJECT, async (_event, filePath: string) => {
     const response = await ProjectService.getProject(filePath)
-    return response
-  })
-
-  ipcMain.handle('info:workspace', () => {
-    const response = getWorkspace()
     return response
   })
 

@@ -3,8 +3,6 @@
     "target": "ESNext",
     "useDefineForClassFields": true,
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
     "allowJs": false,
     "skipLibCheck": true,
     "esModuleInterop": false,

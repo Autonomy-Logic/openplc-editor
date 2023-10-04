@@ -1,9 +1,9 @@
 import { join } from 'node:path'
 
-import { appConfig } from '@shared/app.config'
 import { attachTitlebarToWindow } from 'custom-electron-titlebar/main'
 import { BrowserWindow, shell } from 'electron'
 
+import { appConfig } from '../../shared/app.config'
 import { store } from '../store'
 import { update } from './update'
 
@@ -36,8 +36,8 @@ export const createWindow = () => {
       // Consider using contextBridge.exposeInMainWorld
       // Read more on https://www.electronjs.org/docs/latest/tutorial/context-isolation
       sandbox: false,
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
     },
   })
 
@@ -46,29 +46,13 @@ export const createWindow = () => {
     window.webContents.send('main-process-message', new Date().toLocaleString())
   })
 
-  /**
-   * Code section refactoring suggestion. - Create an unique function to handle all save bounds events.
-   *
-   *  const saveBounds = () => {
-   *    store.set('window.bounds', window?.getBounds());
-   *  };
-   *  window.on('resize', saveBounds);
-   *  window.on('close', saveBounds);
-   *  window.on('move', saveBounds);
-   */
-
   // Save window bounds on resize, close, and move events
-  window.on('resize', () => {
+  const saveBounds = () => {
     store.set('window.bounds', window?.getBounds())
-  })
-
-  window.on('close', () => {
-    store.set('window.bounds', window?.getBounds())
-  })
-
-  window.on('move', () => {
-    store.set('window.bounds', window?.getBounds())
-  })
+  }
+  window.on('resize', saveBounds)
+  window.on('close', saveBounds)
+  window.on('move', saveBounds)
 
   // Maximize the window if bounds are not set
   if (!bounds) {

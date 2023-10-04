@@ -3,9 +3,7 @@
 //   saveProjectController,
 // } from '@electron/controllers'
 // Wip: Using service directly on ipc
-import { ProjectService } from '@electron/services'
-
-import { pou } from '../pou'
+import { ProjectService } from '../../services'
 import { project } from '../project'
 import { toast } from '../toast'
 

@@ -1,8 +1,11 @@
-import { CONSTANTS } from '@shared/constants'
-import { ChildWindowProps, childWindowSchema } from '@shared/types/childWindow'
 import { BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 
+import { CONSTANTS } from '../../shared/constants'
+import {
+  ChildWindowProps,
+  childWindowSchema,
+} from '../../shared/types/childWindow'
 import { mainWindow } from '../main'
 
 const {
@@ -25,8 +28,8 @@ export const childWindowIpc = () => {
       icon: join(process.env.PUBLIC, 'favicon.ico'),
       parent: mainWindow as BrowserWindow,
       webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false,
+        nodeIntegration: false,
+        contextIsolation: true,
       },
       ...newWindow,
     })

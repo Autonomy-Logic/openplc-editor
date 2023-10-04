@@ -1,6 +1,6 @@
-import { CONSTANTS } from '@shared/constants'
 import { ipcMain } from 'electron'
 
+import { CONSTANTS } from '../../shared/constants'
 import { mainWindow } from '../main'
 
 const {

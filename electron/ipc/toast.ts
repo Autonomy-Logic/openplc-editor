@@ -1,6 +1,5 @@
-import { CONSTANTS } from '@shared/constants'
-import { ToastProps, toastSchema } from '@shared/types/toast'
-
+import { CONSTANTS } from '../../shared/constants'
+import { ToastProps, toastSchema } from '../../shared/types/toast'
 import { mainWindow } from '../main'
 
 const {

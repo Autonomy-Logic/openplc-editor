@@ -1,7 +1,7 @@
-import { CONSTANTS } from '@shared/constants'
-import { ThemeProps, themeSchema } from '@shared/types/theme'
 import { ipcMain } from 'electron'
 
+import { CONSTANTS } from '../../shared/constants'
+import { ThemeProps, themeSchema } from '../../shared/types/theme'
 import { store } from '../store'
 
 const {

@@ -1,17 +1,10 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  watchFile,
-  writeFileSync,
-} from 'node:fs'
 import { release } from 'node:os'
 import { join } from 'node:path'
 
 import { setupTitlebar } from 'custom-electron-titlebar/main'
 import { app, BrowserWindow } from 'electron'
 
-import { ipc } from '../ipc'
+import { bridge } from '../ipc'
 import { createWindow } from './createWindow'
 
 // Set environment variables for paths
@@ -33,80 +26,8 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0)
 }
 
-const userDataPath = app.getPath('userData')
-const workspacePath = join(userDataPath, '/User/workspaceStorage')
-const workspaceFile = join(workspacePath, 'workspace.json')
-
-// Function to ensure the folder and file exist
-const ensureWorkspaceFileExists = () => {
-  try {
-    // Create the user data folder if it doesn't exist
-    if (!existsSync(userDataPath)) {
-      mkdirSync(userDataPath, { recursive: true })
-    }
-    // Create the workspace data folder if it doesn't exist
-    if (!existsSync(workspacePath)) {
-      mkdirSync(workspacePath, { recursive: true })
-    }
-    // Create the workspace file if it doesn't exist
-    if (!existsSync(workspaceFile)) {
-      writeFileSync(
-        workspaceFile,
-        JSON.stringify(workspaceStorage, null, 2),
-        'utf-8',
-      )
-    }
-  } catch (error) {
-    // Handle any errors that may occur during file/folder creation
-    console.error('Error creating config file:', error)
-  }
-}
-
-// Load the workspace file at app startup
-let workspaceStorage: { folder: string }
-
-try {
-  const data = readFileSync(workspaceFile, 'utf-8')
-  workspaceStorage = JSON.parse(data)
-} catch (error) {
-  // If the file doesn't exist or is corrupted, use default settings
-  workspaceStorage = {
-    folder: '',
-  }
-  ensureWorkspaceFileExists()
-}
-
-// Function to save configuration
-export const setWorkspace = (workspaceData: { folder: string }) => {
-  writeFileSync(workspaceFile, JSON.stringify(workspaceData, null, 2), 'utf-8')
-}
-
-// todo: How to react to this change in renderer process?
-// Watch for changes in the config file
-watchFile(workspaceFile, (curr, prev) => {
-  if (curr.mtime !== prev.mtime) {
-    // The file has changed; you can now react to the changes
-    console.log('Config file changed. Reloading...')
-    try {
-      const data = readFileSync(workspaceFile, 'utf-8')
-      workspaceStorage = JSON.parse(data)
-      // Now you can update your application based on the new config
-      // For example, apply theme changes dynamically
-      // Send a message to the renderer process
-      mainWindow?.webContents.send('info:workspace-updated', workspaceStorage)
-    } catch (error) {
-      console.error('Error reloading config:', error)
-    }
-  }
-})
-
-// Set the workspace configs
-setWorkspace(workspaceStorage)
-
-// Get the workspace configs
-export const getWorkspace = () => {
-  return workspaceStorage
-}
+// Load the user's initial configurations; if they don't exist, create them.
+bridge.userConfigIpc.setInitialWorkspaceConfigs()
 
 // Remove electron security warnings
 // This warning only shows in development mode
@@ -123,7 +44,7 @@ setupTitlebar()
 // Create the main window when the app is ready
 app.whenReady().then(() => {
   mainWindow = createWindow()
-  ipc.menu.createMenu()
+  bridge.menu.createMenu()
 })
 
 // Quit the app when all windows are closed
@@ -150,6 +71,3 @@ app.on('activate', () => {
     createWindow()
   }
 })
-
-// Set up IPC listeners
-ipc.setupListeners()

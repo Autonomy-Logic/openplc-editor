@@ -1,5 +1,6 @@
-import { CONSTANTS } from '@shared/constants'
 import { z } from 'zod'
+
+import { CONSTANTS } from '../constants'
 
 const { paths } = CONSTANTS
 

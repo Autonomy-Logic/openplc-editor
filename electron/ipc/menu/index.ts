@@ -1,7 +1,7 @@
-import { CONSTANTS } from '@shared/constants'
-import { i18n } from '@shared/i18n'
 import { ipcMain, Menu, MenuItemConstructorOptions } from 'electron'
 
+import { CONSTANTS } from '../../../shared/constants'
+import { i18n } from '../../../shared/i18n'
 import { click, handleCreateProject, handleSaveProject } from './actions'
 
 type GetTemplate = {

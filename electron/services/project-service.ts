@@ -1,13 +1,14 @@
 import { promises, readFile, writeFile } from 'node:fs'
 import { join } from 'node:path'
 
-import { i18n } from '@shared/i18n'
-import { formatDate } from '@shared/utils'
 import { BrowserWindow, dialog } from 'electron'
 import { convert, create } from 'xmlbuilder2'
 import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces'
 
-import { mainWindow, setWorkspace } from '../main'
+import { i18n } from '../../shared/i18n'
+import { formatDate } from '../../shared/utils'
+import { bridge } from '../ipc'
+import { mainWindow } from '../main'
 import { IProjectService } from './types/projectService'
 import { ServiceResponse } from './types/response'
 
@@ -110,7 +111,7 @@ class ProjectService implements IProjectService {
       },
     )
 
-    setWorkspace({ folder: filePath })
+    bridge.userConfigIpc.setWorkspaceInfos({ folder: filePath })
     /**
      * Serialize the XML structure and write it to a file.
      * If the file creation failed, return an error response,
