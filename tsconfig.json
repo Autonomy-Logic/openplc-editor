@@ -3,26 +3,28 @@
     "target": "ESNext",
     "useDefineForClassFields": true,
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "allowJs": false,
+    "allowJs": true,
     "skipLibCheck": true,
-    "esModuleInterop": false,
+    "esModuleInterop": true,
     "strictPropertyInitialization": false,
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "ESNext",
+    "module": "CommonJS",
     "moduleResolution": "Node",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
     "baseUrl": "./",
+    "outDir": "dist-electron",
+    "sourceMap": true,
     "paths": {
       "@/*": ["src/*"],
       "@shared/*": ["shared/*"],
       "@electron/*": ["electron/*"]
     }
   },
-  "include": ["src", "electron", "shared", "src/components/Form/Label/.tsx"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src", "electron", "shared", "src/components/Form/Label/.tsx"]
+  // "references": [{ "path": "./tsconfig.node.json" }]
 }

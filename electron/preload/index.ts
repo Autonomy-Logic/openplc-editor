@@ -1,10 +1,11 @@
 import { contextBridge } from 'electron'
 
-import { bridge } from '../ipc/index'
 import logoSvg from './assets/logo'
 
 // Context isolation.
-contextBridge.exposeInMainWorld('Bridge', bridge)
+contextBridge.exposeInMainWorld('Bridge', {
+  getLogo: () => ({ svg: logoSvg, name: 'Electron-Vue' }),
+})
 
 /**
  * Waits for the specified document ready states before resolving.
