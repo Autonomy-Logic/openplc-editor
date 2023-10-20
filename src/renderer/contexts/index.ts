@@ -13,3 +13,9 @@ export { SidebarContext, default as SidebarProvider } from './Sidebar';
  * @module Context
  */
 export { TabsContext, default as TabsProvider } from './Tabs';
+
+/**
+ * Re-exports the Modal context from the corresponding module.
+ * @module Context
+ */
+export { ModalContext, default as ModalProvider } from './Modal';

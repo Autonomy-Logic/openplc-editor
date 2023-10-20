@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ReactNode, useState } from 'react';
 import { Transition } from '@headlessui/react';
-import { ResizableCallbackData, ResizableBox } from 'react-resizable';
+import { ResizeCallbackData, ResizableBox } from 'react-resizable';
 import {
   HiOutlineSquares2X2,
   HiVariable,
@@ -11,6 +12,7 @@ import {
 import { FaDrawPolygon } from 'react-icons/fa';
 import { RiNodeTree } from 'react-icons/ri';
 import { LayoutProps } from '../../../types/renderer/layout';
+import { useSidebar, useToggle } from '../../hooks';
 import {
   Tools,
   ProjectTree,
@@ -18,16 +20,16 @@ import {
   Variables,
   Settings,
 } from '../../pages';
+import { CurrentProps } from '../../contexts/Sidebar';
 
 function Layout(): ReactNode {
   // Todo
   // Use the useProject hook to get project-related information. <---- Review
   // --- const { project } = useProject()
   // Use the useSidebar hook to manage sidebar state.
-  // --- const { current, navigate } = useSidebar();
+  const { current, navigate } = useSidebar();
   // Use the useToggle hook to manage the sidebar open/close state.
-  // --- const [isSidebarOpen, toggleIsSideBarOpen] = useToggle(true);
-  // Todo
+  const [isSidebarOpen, toggleIsSideBarOpen] = useToggle(true);
 
   // Define an initial width for the sidebar.
   const INITIAL_SIDEBAR_WIDTH = 384;
@@ -38,17 +40,15 @@ function Layout(): ReactNode {
   // State to manage the width of the resizable sidebar.
   const [sidebarWidth, setSidebarWidth] = useState(INITIAL_SIDEBAR_WIDTH);
 
-  // Todo
   // Handle clicking on navigation items and updating the sidebar state.
-  // const handleClick = (key?: CurrentProps) => {
-  //   if (!isSidebarOpen) toggleIsSideBarOpen();
-  //   if (key) navigate(key);
-  // };
+  const handleClick = (key?: CurrentProps) => {
+    if (!isSidebarOpen) toggleIsSideBarOpen();
+    if (key) navigate(key);
+  };
 
-  // Todo
   // Handle the sidebar resizing.
-  // const onResize = (data: ResizeCallbackData) =>
-  //   setSidebarWidth(data.size.width);
+  const onResize = (data: ResizeCallbackData) =>
+    setSidebarWidth(data.size.width);
 
   // Todo: Set the project global state and define the handle click function
   // Define an array of navigation items with their associated data.
@@ -103,7 +103,7 @@ function Layout(): ReactNode {
   //   },
   // ];
 
-  // Todo
+  // Todo - Depends on the project data
   // Determine which component should be displayed in the sidebar.
   // const getSidebar = () =>
   //   navigation.find(({ key }) => key === current)?.component;

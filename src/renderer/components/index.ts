@@ -8,3 +8,8 @@ export { default as Tabs } from './Tabs';
  * @module Components
  */
 export { default as TitlebarTabs } from './TitlebarTabs';
+/**
+ * Re-exports the Modal component from the corresponding module.
+ * @module Components
+ */
+export { default as Modal } from './Modal';
