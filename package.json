@@ -10,11 +10,10 @@
     "hot",
     "reload"
   ],
-  "homepage": "https://gitlab.com/joaogspe/openplc-editor",
+  "homepage": "https://github.com/Autonomy-Logic/OpenPLC_Editor",
   "license": "MIT",
   "author": {
-    "name": "Joao GS Pereira",
-    "email": "joaogspe@outlook.com"
+    "name": "Autonomy Logic"
   },
   "main": "./src/main/main.ts",
   "scripts": {
@@ -174,7 +173,7 @@
     "webpack-merge": "^5.9.0"
   },
   "build": {
-    "productName": "ElectronReact",
+    "productName": "OpenPLCEditor",
     "appId": "org.erb.ElectronReact",
     "asar": true,
     "asarUnpack": "**\\*.{node,dll}",
