@@ -1,6 +1,6 @@
 import { FC } from 'react';
 
-import classNames from '../../utils/className';
+import classNames from '../../utils/classNames';
 /**
  * Props for the Tabs component.
  */

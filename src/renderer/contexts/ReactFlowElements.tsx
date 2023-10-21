@@ -1,4 +1,10 @@
-import { createContext, FC, PropsWithChildren, useCallback } from 'react';
+import {
+  createContext,
+  FC,
+  PropsWithChildren,
+  useCallback,
+  useMemo,
+} from 'react';
 import { Edge, Node } from 'reactflow';
 import useUndoable, { MutationBehavior } from 'use-undoable';
 
@@ -68,7 +74,8 @@ const INITIAL_EDGES: Edge[] = [
     targetHandle: INITIAL_NODES[1].data.pins[0].id,
   },
 ];
-
+// Review this eslint rule
+// eslint-disable-next-line react/function-component-definition
 const ReactFlowElementsProvider: FC<PropsWithChildren> = ({ children }) => {
   const [elements, setElements, { undo, redo, canRedo, canUndo }] = useUndoable(
     {
@@ -104,19 +111,23 @@ const ReactFlowElementsProvider: FC<PropsWithChildren> = ({ children }) => {
     (id: string) => elements.nodes.find((node) => node.id === id),
     [elements.nodes],
   );
-
+  /**
+   * Memoize the default values.
+   */
+  const defaultValues = useMemo(
+    () => ({
+      ...elements,
+      getNode,
+      undo,
+      redo,
+      canRedo,
+      canUndo,
+      triggerUpdate,
+    }),
+    [elements, getNode, undo, redo, canRedo, canUndo, triggerUpdate],
+  );
   return (
-    <ReactFlowElementsContext.Provider
-      value={{
-        ...elements,
-        getNode,
-        undo,
-        redo,
-        canRedo,
-        canUndo,
-        triggerUpdate,
-      }}
-    >
+    <ReactFlowElementsContext.Provider value={defaultValues}>
       {children}
     </ReactFlowElementsContext.Provider>
   );
