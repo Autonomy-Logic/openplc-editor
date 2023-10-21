@@ -28,7 +28,10 @@
     "*.{css,sass,scss}.d.ts": true
   },
   "cSpell.words": [
+    "Dropup",
     "headlessui",
+    "hookform",
+    "tanstack",
     "titlebar",
     "toastify"
   ]

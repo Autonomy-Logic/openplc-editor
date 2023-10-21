@@ -1,9 +1,13 @@
 // Review this eslint rule
+/* eslint-disable @typescript-eslint/no-shadow */
+// Review this eslint rule
+/* eslint-disable no-unused-expressions */
+// Review this eslint rule
 /* eslint-disable react/require-default-props */
 import { Menu, Transition } from '@headlessui/react';
 import { FC, Fragment, PropsWithChildren, useEffect, useRef } from 'react';
 
-import classNames from '../../utils';
+import { classNames } from '../../utils';
 /**
  * Defines the structure of a dropdown option.
  */
@@ -24,6 +28,8 @@ type DropdownProps = {
 /**
  * Dropdown component that displays a list of options in a dropdown menu.
  */
+// Review this eslint rule
+// eslint-disable-next-line react/function-component-definition
 const Dropdown: FC<PropsWithChildren<DropdownProps>> = ({
   children,
   options,
@@ -44,6 +50,8 @@ const Dropdown: FC<PropsWithChildren<DropdownProps>> = ({
         divRef.current &&
         !divRef.current.contains(event.target as Node)
       ) {
+        // Review eslint rule
+        // eslint-disable-next-line no-unused-expressions
         onClose && onClose();
       }
     };
@@ -87,8 +95,12 @@ const Dropdown: FC<PropsWithChildren<DropdownProps>> = ({
         >
           <div className="py-1">
             {options.map(({ onClick, label }, index) => (
+              // Review eslint rule
+              // eslint-disable-next-line react/no-array-index-key
               <Menu.Item key={index}>
                 {({ active }) => (
+                  // Review eslint rule
+                  // eslint-disable-next-line react/button-has-type
                   <button
                     onClick={() => {
                       onClick && onClick();

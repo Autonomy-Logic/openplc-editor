@@ -12,4 +12,16 @@ export const CONSTANTS = {
     EDITOR: 'editor',
     RES: 'resources',
   },
+  types: {
+    PROGRAM: 'program',
+    FUNCTION: 'function',
+    FUNCTION_BLOCK: 'functionBlock',
+  },
+  languages: {
+    IL: 'IL',
+    ST: 'ST',
+    LD: 'LD',
+    FBD: 'FBD',
+    SFC: 'SFC',
+  },
 };
