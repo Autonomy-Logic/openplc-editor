@@ -51,7 +51,7 @@ export type DefaultStoreProps = z.infer<typeof defaultStoreSchema>;
  */
 export const getDefaultStore = (): DefaultStoreProps => {
   return {
-    recentProjects: [],
+    recentProjects: ['dummyPath'],
     theme: 'light',
     window: {},
   };

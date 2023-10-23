@@ -1,7 +1,12 @@
+// Review this eslint rule
 /* eslint-disable @typescript-eslint/no-unused-vars */
+// Review this eslint rule
 /* eslint-disable import/named */
+// Review this eslint rule
 /* eslint-disable import/no-cycle */
+// Review this eslint rule
 /* eslint-disable react/jsx-props-no-spreading */
+// Review this eslint rule
 /* eslint-disable react/function-component-definition */
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FC } from 'react';
@@ -29,9 +34,7 @@ const CreateNewPOU: FC = () => {
    * Define a schema for validating the form data
    */
   const createPOUSchema = z.object({
-    name: z.string().nonempty({
-      message: t('errors.name'),
-    }),
+    name: z.string().min(1, { message: t('errors.name') }),
     type: z.object(
       {
         id: z.union([z.number(), z.string()]),
