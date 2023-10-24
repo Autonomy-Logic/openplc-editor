@@ -60,6 +60,9 @@ const installExtensions = async () => {
     .catch(console.log);
 };
 
+// Set up the custom title bar;
+setupTitlebar();
+
 const createWindow = async () => {
   // Check if the application is on debug method, install the extensions
   if (isDebug) {
@@ -77,9 +80,9 @@ const createWindow = async () => {
 
   mainWindow = new BrowserWindow({
     show: false,
-    width: 480,
+    width: 1280,
     minWidth: 1280,
-    height: 300,
+    height: 800,
     minHeight: 800,
     icon: getAssetPath('icon.png'),
     frame: false,
@@ -125,14 +128,15 @@ const createWindow = async () => {
     mainWindow = null;
   });
 
-  const menuBuilder = new MenuBuilder(mainWindow);
-  menuBuilder.buildMenu();
-
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
     shell.openExternal(edata.url);
     return { action: 'deny' };
   });
+
+  // Handles the creation of the menu
+  const menuBuilder = new MenuBuilder(mainWindow);
+  menuBuilder.buildMenu();
 
   // Remove this if your app does not use auto updates;
   // eslint-disable-next-line
@@ -154,9 +158,6 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
 }
-
-// Set up the custom title bar;
-setupTitlebar();
 
 // Quit the app when all windows are closed;
 app.on('window-all-closed', () => {
@@ -181,6 +182,7 @@ app
   .whenReady()
   .then(() => {
     createWindow();
+
     // Handle the app activation event;
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the

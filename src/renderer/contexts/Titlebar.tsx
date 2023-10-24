@@ -1,5 +1,6 @@
-// Fixme: Full broken code
-
+/* eslint-disable @typescript-eslint/no-shadow */
+/* eslint-disable import/no-cycle */
+/* eslint-disable react/function-component-definition */
 import { TitlebarColor, Titlebar } from 'custom-electron-titlebar';
 import {
   createContext,
@@ -7,20 +8,13 @@ import {
   PropsWithChildren,
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from 'react';
 import colors from 'tailwindcss/colors';
-import { useStore } from 'zustand';
-import { CONSTANTS } from '../../constants';
 
-import { useFullScreen, useIpcRender } from '@/hooks';
-import projectStore from '@/stores/Project';
-/**
- * Destructure necessary properties from the CONSTANTS module.
- */
-const {
-  channels: { set },
-} = CONSTANTS;
+import { useFullScreen } from '../hooks';
+
 /**
  * Type representing the props of the custom Titlebar.
  */
@@ -55,8 +49,9 @@ const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
   const [titlebar, setTitlebar] = useState<TitlebarProps>();
   /**
    * Get project data from hooks
+   * Todo: Use project data from store
    */
-  const { projectXmlAsObj } = useStore(projectStore);
+  // const { projectXmlAsObj } = useStore(projectStore);
   /**
    * Get fullscreen mode state from hooks
    */
@@ -64,38 +59,37 @@ const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
   /**
    * IPC renderer for invoking communication with the main process
    */
-  const { invoke } = useIpcRender<undefined, { ok: boolean }>();
+
   /**
    * Disposes of the custom Titlebar instance.
    */
   const dispose = useCallback(() => titlebar && titlebar.dispose(), [titlebar]);
 
   useEffect(() => {
+    const titleBarInstance = new Titlebar({
+      containerOverflow: 'hidden',
+      backgroundColor: TitlebarColor?.fromHex(colors.gray['900']),
+    });
+
     /**
      * Initialize the custom Titlebar instance
      */
-    setTitlebar(
-      (state) =>
-        state ||
-        new Titlebar({
-          containerOverflow: 'hidden',
-          backgroundColor: TitlebarColor?.fromHex(colors.gray['900']),
-        }),
-    );
+    setTitlebar((state) => state || titleBarInstance);
   }, []);
 
-  useEffect(() => {
-    /**
-     * Updates the menu when the project is updated.
-     */
-    const updateMenu = async () => {
-      if (titlebar && projectXmlAsObj) {
-        const { ok } = await invoke(set.UPDATE_MENU_PROJECT);
-        if (ok) titlebar.refreshMenu();
-      }
-    };
-    updateMenu();
-  }, [invoke, titlebar, projectXmlAsObj]);
+  // Review: Add ipc listener to update the menu when the project is updated
+  // useEffect(() => {
+  //   /**
+  //    * Updates the menu when the project is updated.
+  //    */
+  //   const updateMenu = async () => {
+  //     if (titlebar && projectXmlAsObj) {
+  //       const { ok } = await invoke(set.UPDATE_MENU_PROJECT);
+  //       if (ok) titlebar.refreshMenu();
+  //     }
+  //   };
+  //   updateMenu();
+  // }, [invoke, titlebar, projectXmlAsObj]);
 
   useEffect(() => {
     /**
@@ -114,11 +108,18 @@ const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
     }
   }, [isFullScreen]);
 
+  const defaultValues = useMemo(
+    () => ({
+      dispose,
+      titlebar,
+    }),
+    [dispose, titlebar],
+  );
   /**
    * Provide the context with Titlebar data.
    */
   return (
-    <TitlebarContext.Provider value={{ dispose, titlebar }}>
+    <TitlebarContext.Provider value={defaultValues}>
       {children}
     </TitlebarContext.Provider>
   );

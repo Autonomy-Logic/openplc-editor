@@ -1,6 +1,6 @@
 /* eslint-disable class-methods-use-this */
-import { promises, readFile, writeFile } from 'node:fs';
-import { join } from 'node:path';
+import { promises, readFile, writeFile } from 'fs';
+import { join } from 'path';
 
 import { BrowserWindow, dialog } from 'electron';
 import { convert, create } from 'xmlbuilder2';

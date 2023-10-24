@@ -34,7 +34,7 @@ export { default as Dropdown } from './Dropdown';
  * Re-exports the Table component from the corresponding module.
  * @module Components
  */
-export { default as Table } from './Table';
+// export { default as Table } from './Table';
 /**
  * Re-exports the Toggle component from the corresponding module.
  * @module Components
