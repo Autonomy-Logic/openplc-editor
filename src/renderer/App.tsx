@@ -1,3 +1,5 @@
+import 'tailwindcss/tailwind.css';
+import './styles/index.css';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { ToastContainer } from 'react-toastify';
 import { ReactFlowProvider } from 'reactflow';
