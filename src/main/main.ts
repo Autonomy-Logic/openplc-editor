@@ -102,7 +102,7 @@ const createWindow = async () => {
   });
 
   // Load the Url or index.html file;
-  mainWindow.loadURL(resolveHtmlPath('index.html'));
+  mainWindow.loadURL(resolveHtmlPath(''));
 
   // Open devtools if the app is not packaged;
   if (isDebug) {

@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import {
   createBrowserRouter,
-  RouterProvider as ReactRouterDomRouterProvider,
+  RouterProvider as ReactRouterProvider,
 } from 'react-router-dom';
 import { CONSTANTS } from '../../constants';
 
@@ -18,7 +18,7 @@ const router = createBrowserRouter([
     /**
      * Configure the main path.
      */
-    path: paths.MAIN,
+    path: '/',
     /**
      * Specify the Main component to render at the main path.
      */
@@ -62,7 +62,7 @@ const router = createBrowserRouter([
  * @returns A JSX Component with the router context provider
  */
 function RouterProvider(): ReactNode {
-  return <ReactRouterDomRouterProvider router={router} />;
+  return <ReactRouterProvider router={router} />;
 }
 
 export default RouterProvider;

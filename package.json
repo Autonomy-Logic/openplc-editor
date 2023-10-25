@@ -258,5 +258,9 @@
       "src/main/**"
     ],
     "logLevel": "quiet"
-  }
+  },
+  "trustedDependencies": [
+    "electron",
+    "electron-builder"
+  ]
 }
