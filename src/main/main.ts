@@ -78,15 +78,19 @@ const createWindow = async () => {
     return path.join(RESOURCES_PATH, ...paths);
   };
 
+  const { bounds } = store.get('window');
+
   mainWindow = new BrowserWindow({
-    show: false,
-    width: 1280,
     minWidth: 1280,
-    height: 800,
     minHeight: 800,
+    width: 1280,
+    height: 800,
+    ...bounds,
+    show: false,
     icon: getAssetPath('icon.png'),
     titleBarStyle: 'hidden',
     titleBarOverlay: true,
+    frame: false,
     webPreferences: {
       sandbox: false,
       preload: app.isPackaged
@@ -102,6 +106,19 @@ const createWindow = async () => {
       new Date().toLocaleString(),
     );
   });
+
+  // Save window bounds on resize, close, and move events
+  const saveBounds = () => {
+    store.set('window.bounds', mainWindow?.getBounds());
+  };
+  mainWindow.on('resize', saveBounds);
+  mainWindow.on('close', saveBounds);
+  mainWindow.on('move', saveBounds);
+
+  // Maximize the window if bounds are not set
+  if (!bounds) {
+    mainWindow.maximize();
+  }
 
   // Load the Url or index.html file;
   mainWindow.loadURL(resolveHtmlPath(''));
@@ -140,6 +157,15 @@ const createWindow = async () => {
   const menuBuilder = new MenuBuilder(mainWindow);
   menuBuilder.buildMenu();
 
+  const projectService = new ProjectService(mainWindow);
+
+  const mainIpcModule = new MainProcessBridge({
+    mainWindow,
+    ipcMain,
+    projectService,
+    store,
+  } as unknown as MainIpcModuleConstructor);
+  mainIpcModule.setupMainIpcListener();
   // Remove this if your app does not use auto updates;
   // eslint-disable-next-line
   new AppUpdater();
@@ -184,28 +210,11 @@ app
   .whenReady()
   .then(() => {
     createWindow();
-
     // Handle the app activation event;
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
       // dock icon is clicked and there are no other windows open.
       if (mainWindow === null) createWindow();
     });
-
-    // Refactor: This should work in a most efficient way
-    if (mainWindow) {
-      // New project service instance
-      const projectService = new ProjectService(mainWindow);
-
-      // New main ipc instance
-      const mainIpcModule = new MainProcessBridge({
-        mainWindow,
-        ipcMain,
-        projectService,
-        store,
-      } as unknown as MainIpcModuleConstructor);
-
-      mainIpcModule.setupMainIpcListener();
-    }
   })
   .catch(console.log);

@@ -1,5 +1,8 @@
 import 'tailwindcss/tailwind.css';
-import './styles/index.css';
+import './styles/tailwind.css';
+import './styles/react-resizable.css';
+import './styles/react-toastify.css';
+import './styles/titlebar.css';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { ToastContainer } from 'react-toastify';
 import { ReactFlowProvider } from 'reactflow';
@@ -9,6 +12,7 @@ import {
   ReactFlowElementsProvider,
   RouterProvider,
   ThemeProvider,
+  TitlebarProvider,
   ToastProvider,
 } from './contexts';
 
@@ -21,22 +25,23 @@ export default function App() {
         {/** Manage project-related state and data with this context. */}
 
         {/** Manage the application title bar with this context */}
-
-        {/** Provide React Flow diagram functionality. */}
-        <ReactFlowProvider>
-          <ReactFlowElementsProvider>
-            {/** Manage modal-related state and actions with this context. */}
-            <ModalProvider>
-              {/** Enable HTML5-based drag-and-drop functionality. */}
-              <DndProvider backend={HTML5Backend}>
-                {/** Manage routing and navigation within the app. */}
-                <RouterProvider />
-              </DndProvider>
-              {/** Displays toast notification using the ToastContainer component. */}
-              <ToastContainer closeButton={false} closeOnClick={false} />
-            </ModalProvider>
-          </ReactFlowElementsProvider>
-        </ReactFlowProvider>
+        <TitlebarProvider>
+          {/** Provide React Flow diagram functionality. */}
+          <ReactFlowProvider>
+            <ReactFlowElementsProvider>
+              {/** Manage modal-related state and actions with this context. */}
+              <ModalProvider>
+                {/** Enable HTML5-based drag-and-drop functionality. */}
+                <DndProvider backend={HTML5Backend}>
+                  {/** Manage routing and navigation within the app. */}
+                  <RouterProvider />
+                </DndProvider>
+                {/** Displays toast notification using the ToastContainer component. */}
+                <ToastContainer closeButton={false} closeOnClick={false} />
+              </ModalProvider>
+            </ReactFlowElementsProvider>
+          </ReactFlowProvider>
+        </TitlebarProvider>
       </ToastProvider>
     </ThemeProvider>
   );

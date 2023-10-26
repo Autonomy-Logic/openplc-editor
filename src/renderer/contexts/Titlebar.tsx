@@ -1,118 +1,119 @@
-// /* eslint-disable @typescript-eslint/no-shadow */
-// /* eslint-disable import/no-cycle */
-// /* eslint-disable react/function-component-definition */
-// import {
-//   createContext,
-//   FC,
-//   PropsWithChildren,
-//   useCallback,
-//   useEffect,
-//   useMemo,
-//   useState,
-// } from 'react';
+/* eslint-disable @typescript-eslint/no-shadow */
+/* eslint-disable react/function-component-definition */
+/* eslint-disable import/no-cycle */
+import {
+  createContext,
+  FC,
+  PropsWithChildren,
+  useCallback,
+  useEffect,
+  useMemo,
+} from 'react';
 
-// import { useFullScreen } from '../hooks';
+import { Titlebar } from 'custom-electron-titlebar';
+import { useFullScreen } from '../hooks';
+/**
+ * Destructure necessary properties from the CONSTANTS module.
+ */
+/**
+ * Type representing the props of the custom Titlebar.
+ */
+export type TitlebarProps = InstanceType<typeof Titlebar>;
+/**
+ * Context data type for managing the custom Titlebar.
+ */
+export type TitlebarContextData = {
+  /**
+   * The custom Titlebar instance.
+   */
+  titlebar?: TitlebarProps | null;
+  /**
+   * Function to dispose of the custom Titlebar.
+   */
+  dispose: () => void;
+};
+/**
+ * Context for managing the custom Titlebar state.
+ */
+export const TitlebarContext = createContext<TitlebarContextData>(
+  {} as TitlebarContextData,
+);
+/**
+ * Provider component for managing the custom Titlebar.
+ * @returns A JSX Component with the titlebar context provider
+ */
+const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
+  // TODO: Retrieve the custom Titlebar instance
+  /**
+   * State to hold the custom Titlebar instance
+   */
+  // const [titlebar, setTitlebar] = useState<TitlebarProps>();
+  /**
+   * TODO: Fix this
+   * Get project data from hooks
+   */
+  //   const { project } = useProject();
+  /**
+   * Get fullscreen mode state from hooks
+   */
+  const { isFullScreen } = useFullScreen();
+  /**
+   * TODO: Depends on titlebar custom element
+   * Disposes of the custom Titlebar instance.
+   */
+  // const dispose = useCallback(() => titlebar && titlebar.dispose(), [titlebar]);
 
-// /**
-//  * Type representing the props of the custom Titlebar.
-//  */
-// export type TitlebarProps = any;
-// /**
-//  * Context data type for managing the custom Titlebar.
-//  */
-// export type TitlebarContextData = {
-//   /**
-//    * The custom Titlebar instance.
-//    */
-//   titlebar?: TitlebarProps;
-//   /**
-//    * Function to dispose of the custom Titlebar.
-//    */
-//   dispose: () => void;
-// };
-// /**
-//  * Context for managing the custom Titlebar state.
-//  */
-// export const TitlebarContext = createContext<TitlebarContextData>(
-//   {} as TitlebarContextData,
-// );
-// /**
-//  * Provider component for managing the custom Titlebar.
-//  * @returns A JSX Component with the titlebar context provider
-//  */
-// const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
-//   /**
-//    * State to hold the custom Titlebar instance
-//    */
-//   const [titlebar, setTitlebar] = useState<TitlebarProps>();
-//   /**
-//    * Get project data from hooks
-//    * Todo: Use project data from store
-//    */
-//   // const { projectXmlAsObj } = useStore(projectStore);
-//   /**
-//    * Get fullscreen mode state from hooks
-//    */
-//   const { isFullScreen } = useFullScreen();
-//   /**
-//    * IPC renderer for invoking communication with the main process
-//    */
+  // TODO: Enable process communication
+  // useEffect(() => {
+  //   /**
+  //    * Updates the menu when the project is updated.
+  //    */
+  //   const updateMenu = async () => {
+  //     if (titlebar && project) {
+  //       const { ok } = await invoke(set.UPDATE_MENU_PROJECT);
+  //       if (ok) titlebar.refreshMenu();
+  //     }
+  //   };
+  //   updateMenu();
+  // }, [invoke, titlebar, project]);
 
-//   /**
-//    * Disposes of the custom Titlebar instance.
-//    */
-//   const dispose = useCallback(() => titlebar && titlebar.dispose(), [titlebar]);
-//     /**
-//      * Initialize the custom Titlebar instance
-//      */
-//   }, []);
+  useEffect(() => {
+    /**
+     * Updates the container style based on fullscreen mode.
+     */
+    const titlebarIterator = Array.from(
+      document.getElementsByClassName('cet-titlebar'),
+    );
+    const containerIterator = Array.from(
+      document.getElementsByClassName('cet-container'),
+    );
+    const [titlebar] = titlebarIterator;
+    const [container] = containerIterator;
 
-//   // Review: Add ipc listener to update the menu when the project is updated
-//   // useEffect(() => {
-//   //   /**
-//   //    * Updates the menu when the project is updated.
-//   //    */
-//   //   const updateMenu = async () => {
-//   //     if (titlebar && projectXmlAsObj) {
-//   //       const { ok } = await invoke(set.UPDATE_MENU_PROJECT);
-//   //       if (ok) titlebar.refreshMenu();
-//   //     }
-//   //   };
-//   //   updateMenu();
-//   // }, [invoke, titlebar, projectXmlAsObj]);
+    if (titlebar && container) {
+      if (isFullScreen) {
+        container.classList.replace('!top-16', '!top-0');
+      } else {
+        container.classList.add('!top-16');
+        container.classList.replace('!top-0', '!top-16');
+      }
+    }
+  }, [isFullScreen]);
 
-//   useEffect(() => {
-//     /**
-//      * Updates the container style based on fullscreen mode.
-//      */
-//     const [titlebar] = document.getElementsByClassName('cet-titlebar');
-//     const [container] = document.getElementsByClassName('cet-container');
+  const dispose = useCallback(() => {}, []);
+  const titlebarValue = null;
+  const defaultValues = useMemo(
+    () => ({ dispose, titlebarValue }),
+    [dispose, titlebarValue],
+  );
+  /**
+   * Provide the context with Titlebar data.
+   */
+  return (
+    <TitlebarContext.Provider value={defaultValues}>
+      {children}
+    </TitlebarContext.Provider>
+  );
+};
 
-//     if (titlebar && container) {
-//       if (isFullScreen) {
-//         container.classList.replace('!top-16', '!top-0');
-//       } else {
-//         container.classList.add('!top-16');
-//         container.classList.replace('!top-0', '!top-16');
-//       }
-//     }
-//   }, [isFullScreen]);
-
-//   const defaultValues = useMemo(
-//     () => ({
-//       dispose,
-//       titlebar,
-//     }),
-//     [dispose, titlebar],
-//   );
-//   /**
-//    * Provide the context with Titlebar data.
-//    */
-//   return (
-//     <TitlebarContext.Provider value={defaultValues}>
-//       {children}
-//     </TitlebarContext.Provider>
-//   );
-// };
-
-// export default TitlebarProvider;
+export default TitlebarProvider;

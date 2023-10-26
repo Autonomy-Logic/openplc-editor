@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { ThemeProps, ThemeSchema } from '../../../types/theme';
 import { ToastProps, ToastSchema } from '../../../types/main/modules/ipc/toast';
 import {
