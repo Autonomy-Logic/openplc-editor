@@ -1,5 +1,8 @@
+/* eslint-disable promise/always-return */
+/* eslint-disable no-console */
 import { Menu, BrowserWindow, MenuItemConstructorOptions } from 'electron';
 import { i18n } from '../utils/i18n';
+import { ProjectService } from './services';
 
 /**
  * Todo: Can be used to construct a different menu for mac machines.
@@ -16,6 +19,8 @@ import { i18n } from '../utils/i18n';
 export default class MenuBuilder {
   mainWindow: BrowserWindow;
 
+  projectService: InstanceType<typeof ProjectService>;
+
   developOptions: MenuItemConstructorOptions[] = [
     { type: 'separator' },
     { role: 'reload' },
@@ -25,6 +30,7 @@ export default class MenuBuilder {
 
   constructor(mainWindow: BrowserWindow) {
     this.mainWindow = mainWindow;
+    this.projectService = new ProjectService(mainWindow);
   }
 
   buildMenu(): Menu {
@@ -46,6 +52,21 @@ export default class MenuBuilder {
 
     return menu;
   }
+
+  handleCreateProject = async () =>
+    this.projectService
+      .createProject()
+      .then(({ ok, data }) => {
+        if (ok && data) {
+          this.mainWindow.webContents.send('project:create', data);
+          console.log(data);
+        } else if (!ok) {
+          console.warn('error in creating project');
+        }
+      })
+      .catch((err) => {
+        console.warn(err);
+      });
 
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
@@ -211,6 +232,7 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.new'),
             accelerator: 'CmdOrCtrl+N',
+            click: this.handleCreateProject,
           },
           {
             label: i18n.t('menu:file.submenu.open'),

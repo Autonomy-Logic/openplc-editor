@@ -146,7 +146,7 @@ class ProjectService implements TProjectService {
     );
     return {
       ok: true,
-      data: { projectAsObj, filePath },
+      data: { filePath, projectAsObj },
     };
   }
   async openProject() {

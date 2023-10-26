@@ -4,7 +4,7 @@ import { ResponseService } from './response';
 type Service = {};
 export type ProjectDto = {
   filePath: string;
-  projectAsObj: object;
+  projectAsObj?: object;
 };
 
 export type TProjectService = Service & {

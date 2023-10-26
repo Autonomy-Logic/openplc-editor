@@ -3,14 +3,14 @@
 /* eslint-disable import/no-cycle */
 import { FC, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
+import { Event } from 'electron/renderer';
 import { CONSTANTS } from '../../constants';
 
 import { SidebarProvider, TabsProvider } from '../contexts';
-import { useModal, useTabs, useTheme, useSidebar } from '../hooks';
+import { useTabs, useTheme, useSidebar } from '../hooks';
 import { Layout } from '../templates';
 import { convertToPath } from '../../utils';
 
-import CreatePOU from '../components/CreatePOU';
 /**
  * Destructure necessary values from the CONSTANTS module
  */
@@ -65,6 +65,14 @@ const MainComponent: FC = () => {
   //   channel: get.CREATE_POU_WINDOW,
   //   callback: () => handleOpenModal(),
   // });
+  useEffect(() => {
+    function getProjectData() {
+      window.bridge.createProject((_event: Event, value: any) => {
+        console.log(value);
+      });
+    }
+    getProjectData();
+  }, []);
   /**
    * Handle navigation and tab addition based on POU data
    */

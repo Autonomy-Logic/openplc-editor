@@ -23,7 +23,7 @@
 }
 
 .cet-menubar-menu-container {
-  @apply !mt-4;
+  @apply !mt-4 flex-col;
 }
 
 .inactive {
