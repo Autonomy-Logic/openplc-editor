@@ -68,7 +68,7 @@ const MainComponent: FC = () => {
   useEffect(() => {
     function getProjectData() {
       window.bridge.createProject((_event: Event, value: any) => {
-        console.log(value);
+        console.log('In renderer ->', value);
       });
     }
     getProjectData();
