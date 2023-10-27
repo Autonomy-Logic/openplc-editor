@@ -10,6 +10,9 @@ import { SidebarProvider, TabsProvider } from '../contexts';
 import { useTabs, useTheme, useSidebar } from '../hooks';
 import { Layout } from '../templates';
 import { convertToPath } from '../../utils';
+import { ProjectDto } from '../../types/main/services/project.service';
+import { ProjectDTO } from '../../types/common/project';
+import useOpenPLCStore from '../store';
 
 /**
  * Destructure necessary values from the CONSTANTS module
@@ -20,6 +23,8 @@ const { paths } = CONSTANTS;
  * @component
  */
 const MainComponent: FC = () => {
+  const setWorkspaceData = useOpenPLCStore.useSetWorkspace();
+  const project = useOpenPLCStore.useProjectData();
   /**
    * Access the navigate function from 'react-router-dom'
    * @useNavigate
@@ -34,7 +39,7 @@ const MainComponent: FC = () => {
    * Access project-related functions and values from the custom hook
    * @useProject
    */
-  const project = null;
+  // const project = null
   /**
    * Access tab-related functions from the custom hook
    * @useTabs
@@ -66,13 +71,16 @@ const MainComponent: FC = () => {
   //   callback: () => handleOpenModal(),
   // });
   useEffect(() => {
-    function getProjectData() {
-      window.bridge.createProject((_event: Event, value: any) => {
-        console.log('In renderer ->', value);
+    function listenForProjectUpdate() {
+      window.bridge.createProject((_event: Event, value: ProjectDto) => {
+        const { filePath, projectAsObj } = value;
+        const projectPath = filePath;
+        const projectData = projectAsObj as ProjectDTO;
+        setWorkspaceData({ projectPath, projectData });
       });
     }
-    getProjectData();
-  }, []);
+    listenForProjectUpdate();
+  }, [setWorkspaceData]);
   /**
    * Handle navigation and tab addition based on POU data
    */

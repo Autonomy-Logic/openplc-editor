@@ -68,6 +68,8 @@ export default class MenuBuilder {
         console.warn(err);
       });
 
+  handleOpenProject = async () => this.projectService.openProject();
+
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props;
@@ -237,6 +239,7 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.open'),
             accelerator: 'CmdOrCtrl+O',
+            click: this.handleOpenProject,
           },
           { label: i18n.t('menu:file.submenu.recentProjects'), submenu: [] },
           { type: 'separator' },

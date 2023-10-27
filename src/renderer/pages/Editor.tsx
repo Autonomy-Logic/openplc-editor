@@ -1,8 +1,11 @@
 /* eslint-disable no-console */
 import { ReactNode } from 'react';
+import useOpenPLCStore from '../store';
 
 function Editor(): ReactNode {
-  return <h1>editor</h1>;
+  const project = useOpenPLCStore.useProjectData();
+
+  return <p>{project ? project.toString() : 'Null'}</p>;
 }
 
 export default Editor;

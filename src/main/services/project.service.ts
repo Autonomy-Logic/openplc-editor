@@ -150,11 +150,11 @@ class ProjectService implements TProjectService {
     };
   }
   async openProject() {
-    const response = await new Promise(() => {
-      // eslint-disable-next-line no-console
-      console.log('To be implemented');
+    const response = await dialog.showOpenDialog(this.mainWindow, {
+      title: i18n.t('openProject:dialog.title'),
+      properties: ['openFile'],
+      filters: [{ name: 'plc', extensions: ['xml'] }],
     });
-    return response;
   }
 
   // Review: Is necessary?
