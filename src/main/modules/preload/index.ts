@@ -1,8 +1,8 @@
 import { contextBridge } from 'electron';
-import rendererProcessBridge from './modules/ipc/renderer';
+import rendererProcessBridge from '../ipc/renderer';
 
-import './loading/index';
-import './titlebar/index';
+import './scripts/loading/index';
+import './scripts/titlebar/index';
 
 contextBridge.exposeInMainWorld('bridge', rendererProcessBridge);
 
