@@ -31,6 +31,7 @@
     "Dropup",
     "headlessui",
     "hookform",
+    "mimetypes",
     "tanstack",
     "titlebar",
     "toastify"

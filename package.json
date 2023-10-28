@@ -81,6 +81,7 @@
   "dependencies": {
     "@headlessui/react": "^1.7.17",
     "@hookform/resolvers": "^3.3.2",
+    "@monaco-editor/react": "^4.6.0",
     "@tailwindcss/forms": "^0.5.6",
     "@tanstack/react-table": "^8.10.7",
     "auto-zustand-selectors-hook": "^2.0.0",
@@ -92,6 +93,7 @@
     "i18next": "^23.5.1",
     "immer": "^10.0.3",
     "lodash": "^4.17.21",
+    "monaco-editor": "^0.44.0",
     "path-browserify": "^1.0.1",
     "react": "^18.2.0",
     "react-dnd": "^16.0.1",
