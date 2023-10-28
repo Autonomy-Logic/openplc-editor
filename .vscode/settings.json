@@ -32,6 +32,7 @@
     "headlessui",
     "hookform",
     "mimetypes",
+    "openplc",
     "tanstack",
     "titlebar",
     "toastify"
