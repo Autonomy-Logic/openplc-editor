@@ -3,14 +3,14 @@ import { ResponseService } from './response';
 
 type Service = {};
 export type ProjectDto = {
-  filePath: string;
+  projectPath: string;
   projectAsObj?: object;
 };
 
 export type TProjectService = Service & {
   createProject: () => Promise<ResponseService<ProjectDto>>;
   getProject: (
-    filePath: string,
+    projectPath: string,
   ) => Promise<ResponseService<XMLSerializedAsObject>>;
   saveProject: (data: ProjectDto) => Promise<ResponseService>;
 };

@@ -7,3 +7,9 @@ import './scripts/titlebar/index';
 contextBridge.exposeInMainWorld('bridge', rendererProcessBridge);
 
 export type ElectronHandler = typeof rendererProcessBridge;
+
+declare global {
+  interface Window {
+    bridge: ElectronHandler;
+  }
+}

@@ -1,17 +1,16 @@
 /* eslint-disable react/jsx-no-useless-fragment */
 /* eslint-disable react/function-component-definition */
 /* eslint-disable import/no-cycle */
-import { FC, useEffect } from 'react';
+import { FC, useCallback, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { Event } from 'electron/renderer';
+
 import { CONSTANTS } from '../../constants';
 
 import { SidebarProvider, TabsProvider } from '../contexts';
 import { useTabs, useTheme, useSidebar } from '../hooks';
 import { Layout } from '../templates';
 import { convertToPath } from '../../utils';
-import { ProjectDto } from '../../types/main/services/project.service';
-import { ProjectDTO } from '../../types/common/project';
+
 import useOpenPLCStore from '../store';
 
 /**
@@ -70,17 +69,38 @@ const MainComponent: FC = () => {
   //   channel: get.CREATE_POU_WINDOW,
   //   callback: () => handleOpenModal(),
   // });
-  useEffect(() => {
-    function listenForProjectUpdate() {
-      window.bridge.createProject((_event: Event, value: ProjectDto) => {
-        const { filePath, projectAsObj } = value;
-        const projectPath = filePath;
-        const projectData = projectAsObj as ProjectDTO;
-        setWorkspaceData({ projectPath, projectData });
-      });
-    }
-    listenForProjectUpdate();
+
+  /**
+   * Asynchronous function to fetch project data and update the workspace.
+   *
+   * This function uses the bridge to create a new project and open an existing project.
+   * It then updates the workspace data with the obtained projectPath and projectAsObj.
+   *
+   * @remarks
+   * This function is designed to be used as a callback with the `useCallback` hook.
+   *
+   * @example
+   * const getProjectData = useCallback(() => {
+   *   // Usage of the function
+   *   getProjectData();
+   * }, [setWorkspaceData]);
+   */
+  const getProjectData = useCallback(() => {
+    window.bridge.createProject((_event, value) => {
+      const { projectPath, projectAsObj } = value;
+      setWorkspaceData({ projectPath, projectData: projectAsObj });
+    });
+    window.bridge.openProject((_event, value) => {
+      const { projectPath, projectAsObj } = value;
+      setWorkspaceData({ projectPath, projectData: projectAsObj });
+    });
   }, [setWorkspaceData]);
+  /**
+   * Get project data on mount
+   */
+  useEffect(() => {
+    getProjectData();
+  }, [getProjectData]);
   /**
    * Handle navigation and tab addition based on POU data
    */

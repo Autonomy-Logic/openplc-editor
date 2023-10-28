@@ -24,8 +24,6 @@ class MainProcessBridge implements MainIpcModule {
     this.store = store;
   }
   setupMainIpcListener() {
-    this.ipcMain.handle('project:open', this.projectService.openProject);
-
     this.ipcMain.handle('project:save', (_event, data: ProjectDto) =>
       this.projectService.saveProject(data),
     );

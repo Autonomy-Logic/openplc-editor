@@ -115,11 +115,14 @@ class ProjectService implements TProjectService {
         },
       },
     };
+
     // Create the project XML structure using xmlbuilder2.
     const projectAsXml = create(
       { version: '1.0', encoding: 'utf-8' },
       projectAsObj,
     );
+
+    const projectPath = join(filePath, 'plc.xml');
 
     // bridge.userConfigIpc.setWorkspaceInfos({ folder: filePath });
     /**
@@ -128,33 +131,75 @@ class ProjectService implements TProjectService {
      * otherwise return a successful response with the created file path.
      */
 
-    writeFile(
-      join(filePath, 'plc.xml'),
-      projectAsXml.end({ prettyPrint: true }),
-      (error) => {
-        if (error) throw error;
-        return {
-          ok: false,
-          reason: {
-            title: i18n.t('createProject:errors.failedToCreateFile.title'),
-            description: i18n.t(
-              'createProject:errors.failedToCreateFile.description',
-            ),
-          },
-        };
-      },
-    );
+    writeFile(projectPath, projectAsXml.end({ prettyPrint: true }), (error) => {
+      if (error) throw error;
+      return {
+        ok: false,
+        reason: {
+          title: i18n.t('createProject:errors.failedToCreateFile.title'),
+          description: i18n.t(
+            'createProject:errors.failedToCreateFile.description',
+          ),
+        },
+      };
+    });
     return {
       ok: true,
-      data: { filePath, projectAsObj },
+      data: { projectPath, projectAsObj },
     };
   }
-  async openProject() {
+  // eslint-disable-next-line consistent-return
+  async openProject(): Promise<
+    ResponseService<{
+      projectPath: string;
+      projectAsObj: object;
+    }>
+  > {
     const response = await dialog.showOpenDialog(this.mainWindow, {
       title: i18n.t('openProject:dialog.title'),
       properties: ['openFile'],
-      filters: [{ name: 'plc', extensions: ['xml'] }],
+      filters: [{ name: 'XML', extensions: ['xml'] }],
     });
+    // If the dialog is canceled, return an unsuccessful response
+    // otherwise, create a constant containing the selected directory path as a string.
+    if (response.canceled) return { ok: false };
+    const [filePath] = response.filePaths;
+
+    const file = await new Promise((resolve, reject) => {
+      readFile(filePath, 'utf-8', (error, data) => {
+        if (error) return reject(error);
+        return resolve(data);
+      });
+    });
+
+    // If the file content is empty or not available, return an error response.
+    if (!file) {
+      return {
+        ok: false,
+        reason: {
+          title: i18n.t('openProject:errors.readFile.title'),
+          description: i18n.t('openProject:errors.readFile.description', {
+            filePath,
+          }),
+        },
+      };
+    }
+    // Convert the XML file content into a serialized object.
+    const projectAsObj = convert(file, {
+      format: 'object',
+    });
+
+    /**
+     * Return a successful response with the project data,
+     * which is the path to the XML file and the content serialized as a JavaScript object.
+     */
+    return {
+      ok: true,
+      data: {
+        projectPath: filePath,
+        projectAsObj,
+      },
+    };
   }
 
   // Review: Is necessary?
@@ -205,9 +250,9 @@ class ProjectService implements TProjectService {
    * @returns A `promise` of `ResponseService` type.
    */
   async saveProject(data: ProjectDto): Promise<ResponseService> {
-    const { filePath, projectAsObj } = data;
+    const { projectPath, projectAsObj } = data;
     // Check if required parameters are provided.
-    if (!filePath || !projectAsObj)
+    if (!projectPath || !projectAsObj)
       return {
         ok: false,
         reason: {
@@ -230,7 +275,7 @@ class ProjectService implements TProjectService {
      * otherwise return a successful response.
      */
     writeFile(
-      join(filePath, 'plc.xml'),
+      join(projectPath, 'plc.xml'),
       projectAsXml.end({ prettyPrint: true }),
       (error) => {
         if (error) throw error;

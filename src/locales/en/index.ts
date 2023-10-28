@@ -12,3 +12,4 @@ export { default as settings } from './settings.json';
 export { default as tools } from './tools.json';
 export { default as translation } from './translation.json';
 export { default as variables } from './variables.json';
+export { default as openProject } from './openProject.json';

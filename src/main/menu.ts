@@ -53,22 +53,37 @@ export default class MenuBuilder {
     return menu;
   }
 
-  handleCreateProject = async () =>
-    this.projectService
-      .createProject()
-      .then(({ ok, data }) => {
-        if (ok && data) {
-          this.mainWindow.webContents.send('project:create', data);
-          console.log(data);
-        } else if (!ok) {
-          console.warn('error in creating project');
-        }
-      })
-      .catch((err) => {
-        console.warn(err);
-      });
-
-  handleOpenProject = async () => this.projectService.openProject();
+  handleProject(channel: string): void {
+    if (channel === 'project:create') {
+      this.projectService
+        .createProject()
+        .then(({ ok, data }) => {
+          if (ok && data) {
+            this.mainWindow.webContents.send(channel, data);
+            console.log(data);
+          } else if (!ok) {
+            console.warn('error in creating project');
+          }
+        })
+        .catch((err) => {
+          console.warn(err);
+        });
+    } else if (channel === 'project:open') {
+      this.projectService
+        .openProject()
+        .then(({ ok, data, reason }) => {
+          if (ok && data) {
+            this.mainWindow.webContents.send(channel, data);
+            console.log(data);
+          } else if (!ok && reason) {
+            console.warn('error in opening project', reason);
+          }
+        })
+        .catch((err) => {
+          console.warn(err);
+        });
+    }
+  }
 
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
@@ -234,12 +249,12 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.new'),
             accelerator: 'CmdOrCtrl+N',
-            click: this.handleCreateProject,
+            click: () => this.handleProject('project:create'),
           },
           {
             label: i18n.t('menu:file.submenu.open'),
             accelerator: 'CmdOrCtrl+O',
-            click: this.handleOpenProject,
+            click: () => this.handleProject('project:open'),
           },
           { label: i18n.t('menu:file.submenu.recentProjects'), submenu: [] },
           { type: 'separator' },
