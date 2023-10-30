@@ -28,19 +28,23 @@ import {
 import { CurrentProps } from '../../contexts/Sidebar';
 import { Tooltip } from '../../components';
 import { classNames } from '../../../utils';
+import useOpenPLCStore from '../../store';
+import { CONSTANTS } from '../../../constants';
 
 function Layout({ main }: any): ReactNode {
-  const [project, setProject] = useState(null);
-  // Todo
-  // Use the useProject hook to get project-related information. <---- Review
-  // --- const { project } = useProject()
+  const { paths } = CONSTANTS;
+  /**
+   * Access the project and related functions from custom hook
+   * @useProject
+   */
+  const project = useOpenPLCStore.useProjectData();
   // Use the useSidebar hook to manage sidebar state.
   const { current, navigate } = useSidebar();
   // Use the useToggle hook to manage the sidebar open/close state.
   const [isSidebarOpen, toggleIsSideBarOpen] = useToggle(true);
 
   // Define an initial width for the sidebar.
-  const INITIAL_SIDEBAR_WIDTH = 384;
+  const INITIAL_SIDEBAR_WIDTH = 275;
   // Get the translation function from the i18next library.
   const { t } = useTranslation('navigation');
   // Get the current pathname from the location.
@@ -68,40 +72,39 @@ function Layout({ main }: any): ReactNode {
       icon: HiOutlineSquares2X2,
       component: <Tools />,
     },
-    // },
-    // ...(project?.xmlSerializedAsObject
-    //   ? [
-    //       {
-    //         key: 'projectTree',
-    //         name: t('project'),
-    //         onClick: handleClick,
-    //         icon: RiNodeTree,
-    //         component: <ProjectTree />,
-    //       },
-    //     ]
-    //   : []),
-    // ...(project?.language
-    //   ? [
-    //       {
-    //         key: 'editorTools',
-    //         name: t('editorTools'),
-    //         onClick: handleClick,
-    //         icon: FaDrawPolygon,
-    //         component: <EditorTools />,
-    //       },
-    //     ]
-    //   : []),
-    // ...(project && pathname.includes(paths.POU)
-    //   ? [
-    //       {
-    //         key: 'variables',
-    //         name: t('variables'),
-    //         onClick: handleClick,
-    //         icon: HiVariable,
-    //         component: <Variables />,
-    //       },
-    //     ]
-    //   : []),
+    ...(project?.project
+      ? [
+          {
+            key: 'projectTree',
+            name: t('project'),
+            onClick: handleClick,
+            icon: RiNodeTree,
+            component: <ProjectTree />,
+          },
+        ]
+      : []),
+    ...(project?.project
+      ? [
+          {
+            key: 'editorTools',
+            name: t('editorTools'),
+            onClick: handleClick,
+            icon: FaDrawPolygon,
+            component: <EditorTools />,
+          },
+        ]
+      : []),
+    ...(project && pathname.includes(paths.EDITOR)
+      ? [
+          {
+            key: 'variables',
+            name: t('variables'),
+            onClick: handleClick,
+            icon: HiVariable,
+            component: <Variables />,
+          },
+        ]
+      : []),
     {
       key: 'settings',
       name: t('settings'),

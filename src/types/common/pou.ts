@@ -1,11 +1,29 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 const DefaultPOUShape = {
-  pou: {
-    '@name': 'program0',
-    '@pouType': 'program',
-    body: {},
+  '@name': 'program0',
+  '@pouType': 'program',
+  interface: {
+    returnType: 'BOOL',
+    localVars: {
+      variable: {
+        '@name': 'LocalVar0',
+        type: 'INT',
+        initialValue: { simpleValue: { '@value': '0' } },
+      },
+    },
+  },
+  body: {
+    IL: {
+      'xhtml:p': '<![CDATA[]]>',
+    },
+  },
+  documentation: {
+    'xhtml:p': '<![CDATA[]]>',
   },
 };
+
+export type PouShape = typeof DefaultPOUShape;
+
 const ILPouAttributes = {
   interface: {
     returnType: ['BOOL', 'INT', 'DINT'],
@@ -25,9 +43,6 @@ const DefaultTextualPOUBody = {
     'xhtml:p': '<![CDATA[Dummy body data for pou mock]]>',
   },
 };
-
-export type PouDTO = typeof DefaultPOUShape;
-
 // interface: {
 //   returnType: { BOOL: {} },
 //   localVars: {

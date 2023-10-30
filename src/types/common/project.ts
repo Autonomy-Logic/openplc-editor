@@ -38,7 +38,32 @@ const DefaultProjectShape = {
     },
     types: {
       dataTypes: {},
-      pous: {},
+      pous: {
+        pou: [
+          {
+            '@name': 'program0',
+            '@pouType': 'program',
+            interface: {
+              returnType: 'BOOL',
+              localVars: {
+                variable: {
+                  '@name': 'LocalVar0',
+                  type: 'INT',
+                  initialValue: { simpleValue: { '@value': '0' } },
+                },
+              },
+            },
+            body: {
+              IL: {
+                'xhtml:p': '<![CDATA[]]>',
+              },
+            },
+            documentation: {
+              'xhtml:p': '<![CDATA[]]>',
+            },
+          },
+        ],
+      },
     },
     instances: {
       configurations: {

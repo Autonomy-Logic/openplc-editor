@@ -22,8 +22,6 @@ const { paths } = CONSTANTS;
  * @component
  */
 const MainComponent: FC = () => {
-  const setWorkspaceData = useOpenPLCStore.useSetWorkspace();
-  const project = useOpenPLCStore.useProjectData();
   /**
    * Access the navigate function from 'react-router-dom'
    * @useNavigate
@@ -35,10 +33,11 @@ const MainComponent: FC = () => {
    */
   const { navigate: sidebarNavigate } = useSidebar();
   /**
-   * Access project-related functions and values from the custom hook
-   * @useProject
+   * Access project-related functions and values from the custom store hook
+   * @useOpenPLCStore
    */
-  // const project = null
+  const setWorkspaceData = useOpenPLCStore.useSetWorkspace();
+  const project = useOpenPLCStore.useProjectData();
   /**
    * Access tab-related functions from the custom hook
    * @useTabs
@@ -81,7 +80,6 @@ const MainComponent: FC = () => {
    *
    * @example
    * const getProjectData = useCallback(() => {
-   *   // Usage of the function
    *   getProjectData();
    * }, [setWorkspaceData]);
    */
@@ -95,29 +93,36 @@ const MainComponent: FC = () => {
       setWorkspaceData({ projectPath, projectData: projectAsObj });
     });
   }, [setWorkspaceData]);
+
+  const getPousToEdit = useCallback(() => {
+    if (project) {
+      const pous = project.project.types.pous.pou;
+      if (pous.length > 0) {
+        sidebarNavigate('projectTree');
+        pous.map((pou) => {
+          addTab({
+            id: pou['@name'],
+            title: pou['@name'],
+            onClick: () =>
+              navigate(convertToPath([paths.EDITOR, pou['@name']])),
+            onClickCloseButton: () => navigate(paths.MAIN),
+          });
+          return true;
+        });
+        navigate(convertToPath([paths.EDITOR, pous[0]['@name']]));
+      }
+    }
+  }, [addTab, navigate, project, sidebarNavigate]);
+
   /**
    * Get project data on mount
-   */
-  useEffect(() => {
-    getProjectData();
-  }, [getProjectData]);
-  /**
    * Handle navigation and tab addition based on POU data
    */
   useEffect(() => {
-    const pouName = 'dummyPou';
+    getProjectData();
+    getPousToEdit();
+  }, [getProjectData, getPousToEdit]);
 
-    if (pouName) {
-      sidebarNavigate('projectTree');
-      addTab({
-        id: pouName,
-        title: pouName,
-        onClick: () => navigate(convertToPath([paths.EDITOR, pouName])),
-        onClickCloseButton: () => navigate(paths.MAIN),
-      });
-      navigate(convertToPath([paths.EDITOR, pouName]));
-    }
-  }, [addTab, navigate, sidebarNavigate]);
   /**
    * Navigate to the main path if the project data is not available
    */

@@ -189,8 +189,8 @@
     "webpack-merge": "^5.9.0"
   },
   "build": {
-    "productName": "OpenPLCEditor",
-    "appId": "org.erb.ElectronReact",
+    "productName": "OpenPLC Editor",
+    "appId": "tobedetermined.openplceditor",
     "asar": true,
     "asarUnpack": "**\\*.{node,dll}",
     "files": [

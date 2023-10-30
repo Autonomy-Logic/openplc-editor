@@ -101,7 +101,55 @@ class ProjectService implements TProjectService {
         },
         types: {
           dataTypes: {},
-          pous: {},
+          pous: {
+            // TODO: Remove mock pou data
+            pou: [
+              {
+                '@name': 'program0',
+                '@pouType': 'program',
+                interface: {
+                  returnType: 'BOOL',
+                  localVars: {
+                    variable: {
+                      '@name': 'LocalVar0',
+                      type: 'INT',
+                      initialValue: { simpleValue: { '@value': '0' } },
+                    },
+                  },
+                },
+                body: {
+                  IL: {
+                    'xhtml:p': '<![CDATA[]]>',
+                  },
+                },
+                documentation: {
+                  'xhtml:p': '<![CDATA[]]>',
+                },
+              },
+              {
+                '@name': 'function0',
+                '@pouType': 'function',
+                interface: {
+                  returnType: 'INT',
+                  localVars: {
+                    variable: {
+                      '@name': 'LocalVar0',
+                      type: 'DINT',
+                      initialValue: { simpleValue: { '@value': '1' } },
+                    },
+                  },
+                },
+                body: {
+                  ST: {
+                    'xhtml:p': '<![CDATA[]]>',
+                  },
+                },
+                documentation: {
+                  'xhtml:p': '<![CDATA[]]>',
+                },
+              },
+            ],
+          },
         },
         instances: {
           configurations: {

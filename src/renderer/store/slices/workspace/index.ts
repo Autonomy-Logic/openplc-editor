@@ -1,6 +1,7 @@
 import { produce } from 'immer';
 import { StateCreator } from 'zustand';
 import { ProjectDTO } from '../../../../types/common/project';
+import { PouShape } from '../../../../types/common/pou';
 
 export type WorkspaceProps = {
   projectPath: string | null;
@@ -26,6 +27,13 @@ const createWorkspaceSlice: StateCreator<
         state.projectData = workspaceData.projectData;
       }),
     ),
+  addPou: (pou: PouShape): void => {
+    setState(
+      produce((state) => {
+        state.projectData.project.types.pous.pou['@name'] = pou;
+      }),
+    );
+  },
 });
 
 export default createWorkspaceSlice;

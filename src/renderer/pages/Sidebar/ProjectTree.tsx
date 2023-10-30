@@ -9,6 +9,8 @@ import { Tabs } from '../../components';
 import Tree, { RootProps } from '../../components/Tree';
 import { useTabs } from '../../hooks';
 import { convertToPath } from '../../../utils';
+import useOpenPLCStore from '../../store';
+import { PouShape } from '../../../types/common/pou';
 /**
  * Destructure necessary values from the CONSTANTS module
  */
@@ -22,7 +24,7 @@ const ProjectTree: FC = () => {
    * Access the project and related functions from custom hook
    * @useProject
    */
-  const project = null;
+  const project = useOpenPLCStore.useProjectData();
   /**
    * Access the addTab function from custom hook
    * @useTabs
@@ -30,9 +32,8 @@ const ProjectTree: FC = () => {
   const { addTab } = useTabs();
   /**
    * State for holding the root structure of the tree
-   * @type {RootProps | undefined}
    */
-  const [root, setRoot] = useState<RootProps>();
+  const [root, setRoot] = useState<RootProps | undefined>();
   /**
    * Access the translation function from 'react-i18next'
    * @useTranslation
@@ -46,12 +47,15 @@ const ProjectTree: FC = () => {
   /**
    * Extract the product name from the project XML or use an empty string
    */
-  const productName = 'dummyProduct';
+  const productName = project?.project.fileHeader['@productName'] || '';
 
   useEffect(() => {
     if (project) {
-      const pous = {};
-      const resourceName = 'dummyResource';
+      const pous = [] as PouShape[];
+      const resourceName =
+        project?.project.instances.configurations.configuration.resource[
+          '@name'
+        ];
       /**
        * Handle click events for tree nodes and add corresponding tabs
        * @function
@@ -86,12 +90,14 @@ const ProjectTree: FC = () => {
             isOpen: true,
             children: [
               {
+                // TODO: This must differ from pou type
                 id: 'programs',
                 title: t('programs'),
                 isOpen: true,
                 children: [
-                  ...Object.keys(pous).map((_key) => {
-                    const pouName = 'dummyPou';
+                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                  ...pous.map((pou) => {
+                    const pouName = pou['@name'];
                     return {
                       id: pouName,
                       title: pouName,
