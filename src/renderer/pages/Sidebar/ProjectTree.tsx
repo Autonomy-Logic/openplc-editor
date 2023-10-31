@@ -3,14 +3,13 @@
 import { FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { CONSTANTS } from '../../../constants';
 
-import { Tabs } from '../../components';
-import Tree, { RootProps } from '../../components/Tree';
-import { useTabs } from '../../hooks';
-import { convertToPath } from '../../../utils';
-import useOpenPLCStore from '../../store';
-import { PouShape } from '../../../types/common/pou';
+import { Tabs } from 'renderer/components';
+import Tree, { RootProps } from 'renderer/components/Tree';
+import { useTabs } from 'renderer/hooks';
+import useOpenPLCStore from 'renderer/store';
+import { convertToPath } from '@/utils';
+import { CONSTANTS } from '@/constants';
 /**
  * Destructure necessary values from the CONSTANTS module
  */
@@ -20,10 +19,7 @@ const { paths } = CONSTANTS;
  * @component
  */
 const ProjectTree: FC = () => {
-  /**
-   * Access the project and related functions from custom hook
-   * @useProject
-   */
+  // Access the project and related functions from store hook
   const project = useOpenPLCStore.useProjectData();
   /**
    * Access the addTab function from custom hook
@@ -51,7 +47,7 @@ const ProjectTree: FC = () => {
 
   useEffect(() => {
     if (project) {
-      const pous = [] as PouShape[];
+      const pous = project?.project.types.pous.pou;
       const resourceName =
         project?.project.instances.configurations.configuration.resource[
           '@name'

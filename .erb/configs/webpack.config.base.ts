@@ -51,6 +51,11 @@ const configuration: webpack.Configuration = {
       path: require.resolve('path-browserify'),
       url: require.resolve('url/'),
     },
+    alias: {
+      '@': webpackPaths.srcPath,
+      '@renderer': webpackPaths.srcRendererPath,
+      '@main': webpackPaths.srcMainPath,
+    },
   },
 
   plugins: [

@@ -1,18 +1,10 @@
-// Review this eslint rule
-/* eslint-disable react/jsx-no-useless-fragment */
-// Review this eslint rule
-/* eslint-disable no-unused-expressions */
-// Review this eslint rule
-/* eslint-disable react/function-component-definition */
-// Review this eslint rule
-/* eslint-disable react/require-default-props */
-// Review this eslint rule
-/* eslint-disable import/no-cycle */
-import React, { FC, useCallback } from 'react';
+import React, { ReactNode, useCallback } from 'react';
 import { IconType } from 'react-icons';
 
 import { classNames } from '../../../utils';
 
+// REFACTOR: Find the module that is causing this error
+/* eslint-disable import/no-cycle */
 import { Directory } from './Directory';
 import Item from './Item';
 /**
@@ -38,7 +30,7 @@ export type TreeProps = {
  * @param root - The root item of the tree.
  * @param isChild - Whether the tree is a child tree.
  */
-const Tree: FC<TreeProps> = ({ root, isChild = false }) => {
+function Tree({ root, isChild = false }: TreeProps): ReactNode {
   /**
    *  Handler for item click event
    */
@@ -48,11 +40,13 @@ const Tree: FC<TreeProps> = ({ root, isChild = false }) => {
       callback?: () => void,
     ) => {
       event.stopPropagation();
-      callback && callback();
+      callback?.();
     },
     [],
   );
 
+  // IMPORTANT: This is a workaround for a strict rule that can dangerous if globally disabled.
+  /* eslint-disable react/jsx-no-useless-fragment */
   if (!root) return <></>;
 
   return (
@@ -100,6 +94,6 @@ const Tree: FC<TreeProps> = ({ root, isChild = false }) => {
         })}
     </ul>
   );
-};
+}
 
 export default Tree;
