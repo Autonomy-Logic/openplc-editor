@@ -93,7 +93,6 @@ const ProjectXMLShape = z.object({
       '@productVersion': z.string().default('1'),
       '@creationDateTime': z.string().default(formatDate(new Date())),
     }),
-
     contentHeader: z.object({
       '@name': z.string().default('Unnamed'),
       '@modificationDateTime': z.string().default(formatDate(new Date())),
@@ -119,11 +118,11 @@ const ProjectXMLShape = z.object({
       }),
     }),
     types: z.object({
-      dataTypes: z.object({}),
+      dataTypes: z.object({
+        dataType: z.array(z.object({})).optional(),
+      }),
       pous: z.object({
-        pou: z.array(
-          z.object({})
-        ).optional()
+        pou: z.array(z.object({})).optional(),
       }),
     }),
     instances: z.object({
@@ -131,10 +130,10 @@ const ProjectXMLShape = z.object({
         configuration: z.object({
           '@name': z.string().default('Config0'),
           resource: z.object({
-            '@name': z.string().default('Res0'),
+            '@name': z.string(),
           }),
         }),
       }),
-    })
+    }),
   }),
 });
