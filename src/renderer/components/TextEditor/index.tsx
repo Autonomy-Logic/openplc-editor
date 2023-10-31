@@ -1,43 +1,43 @@
-/* eslint-disable import/no-cycle */
-/* eslint-disable no-console */
+/* eslint-disable react-hooks/exhaustive-deps */
+import { ReactNode, useEffect, useRef } from 'react';
 import './config/index';
-import { Editor } from '@monaco-editor/react';
-import useOpenPLCStore from 'renderer/store';
-import useTabs from 'renderer/hooks/useTabs';
-import { useCallback, useEffect, useState } from 'react';
+import * as monaco from 'monaco-editor';
 
-function TextEditor() {
-  const [editorValues, setEditorValues] = useState<string | any>('null');
-  const pous = useOpenPLCStore.useProjectData();
-  const pousDt = pous?.project.types.pous.pou;
-  const { tabs } = useTabs();
-
-  const getValues = useCallback(() => {
-    const tab = tabs.find((tb) => tb.current)?.title;
-    const it = pousDt?.filter((p) => p['@name'] === tab)[0];
-    if (it) {
-      setEditorValues(it['@name']);
+// eslint-disable-next-line no-restricted-globals
+self.MonacoEnvironment = {
+  getWorkerUrl(_moduleId: any, label: string) {
+    if (label === 'json') {
+      return './json.worker.bundle.js';
     }
-  }, [pousDt, tabs]);
+    if (label === 'css' || label === 'scss' || label === 'less') {
+      return './css.worker.bundle.js';
+    }
+    if (label === 'html' || label === 'handlebars' || label === 'razor') {
+      return './html.worker.bundle.js';
+    }
+    if (label === 'typescript' || label === 'javascript') {
+      return './ts.worker.bundle.js';
+    }
+    return './editor.worker.bundle.js';
+  },
+};
 
+// eslint-disable-next-line react/function-component-definition, import/prefer-default-export
+export function TextEditor(): ReactNode {
+  const divEl = useRef<HTMLDivElement>(null);
+  let editor: monaco.editor.IStandaloneCodeEditor;
   useEffect(() => {
-    getValues();
-  }, [getValues]);
-  // useEffect(() => {
-  //   console.log('found', tabs.find((tb) => tb.current)?.title);
-
-  //   // if (tabs.length === 0) {
-  //   //   pous.forEach((pou) => {
-  //   //     tabs.push({
-  //   //       id: pou['@name'],
-  //   //       title: pou['@name'],
-  //   //       current: true,
-  //   //     });
-  //   //   });
-  //   // }
-  // }, [pous, tabs]);
-
-  return <Editor height="100vh" theme="openplc-light" value={editorValues} />;
+    if (divEl.current) {
+      editor = monaco.editor.create(divEl.current, {
+        value: ['function x() {', '\tconsole.log("Hello world!");', '}'].join(
+          '\n',
+        ),
+        language: 'typescript',
+      });
+    }
+    return () => {
+      editor.dispose();
+    };
+  }, []);
+  return <div className="Editor" ref={divEl} />;
 }
-
-export default TextEditor;

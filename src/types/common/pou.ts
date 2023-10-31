@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /* eslint-disable @typescript-eslint/no-unused-vars */
 const DefaultPOUShape = {
   '@name': 'program0',
@@ -22,7 +24,43 @@ const DefaultPOUShape = {
   },
 };
 
-export type PouShape = typeof DefaultPOUShape;
+const pouSchema = z.object({
+  '@name': z.string(),
+  '@pouType': z.enum(['program', 'function']),
+  interface: z.object({
+    returnType: z.enum(['BOOL', 'INT', 'DINT']),
+    localVars: z
+      .object({
+        variables: z.array(
+          z.object({
+            '@name': z.string(),
+            type: z.enum(['BOOL', 'INT', 'DINT']),
+            initialValue: z.any(),
+          }),
+        ),
+      })
+      .optional(),
+  }),
+  body: z.object({
+    IL: z
+      .object({
+        'xhtml:p': z.string(),
+      })
+      .optional(),
+    ST: z
+      .object({
+        'xhtml:p': z.string(),
+      })
+      .optional(),
+  }),
+  documentation: z
+    .object({
+      'xhtml:p': z.string(),
+    })
+    .optional(),
+});
+
+export type PouShape = z.infer<typeof pouSchema>;
 
 const ILPouAttributes = {
   interface: {
