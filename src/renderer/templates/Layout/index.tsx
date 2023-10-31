@@ -1,6 +1,4 @@
 /* eslint-disable import/no-cycle */
-/* eslint-disable react/prop-types */
-/* eslint-disable react/button-has-type */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -33,16 +31,12 @@ import { CONSTANTS } from '../../../constants';
 
 function Layout({ main }: any): ReactNode {
   const { paths } = CONSTANTS;
-  /**
-   * Access the project and related functions from custom hook
-   * @useProject
-   */
+  // Access the project and related functions from custom store.
   const project = useOpenPLCStore.useProjectData();
   // Use the useSidebar hook to manage sidebar state.
   const { current, navigate } = useSidebar();
   // Use the useToggle hook to manage the sidebar open/close state.
   const [isSidebarOpen, toggleIsSideBarOpen] = useToggle(true);
-
   // Define an initial width for the sidebar.
   const INITIAL_SIDEBAR_WIDTH = 275;
   // Get the translation function from the i18next library.
@@ -115,13 +109,12 @@ function Layout({ main }: any): ReactNode {
     },
   ];
 
-  // Todo - Depends on the project data
   // Determine which component should be displayed in the sidebar.
   const getSidebar = () =>
     navigation.find(({ key }) => key === current)?.component;
 
   /**
-   * Todo
+   * Render the layout component.
    * @returns A JSX element with the Layout component
    */
   return (
@@ -133,6 +126,7 @@ function Layout({ main }: any): ReactNode {
               <li key={name} className={className}>
                 <Tooltip id={name} label={name} place="right">
                   <button
+                    type="button"
                     className={classNames(
                       current === key
                         ? 'bg-blue-100 text-open-plc-blue dark:bg-gray-800'
@@ -149,6 +143,7 @@ function Layout({ main }: any): ReactNode {
             ))}
           </ul>
           <button
+            type="button"
             onClick={() => toggleIsSideBarOpen()}
             className="group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 text-gray-500 hover:text-open-plc-blue"
           >

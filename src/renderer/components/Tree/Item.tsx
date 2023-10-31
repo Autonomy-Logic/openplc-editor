@@ -1,12 +1,10 @@
 // Review this eslint rule
 /* eslint-disable react/jsx-props-no-spreading */
-// Review this eslint rule
-/* eslint-disable react/function-component-definition */
 import {
   DetailedHTMLProps,
-  FC,
   LiHTMLAttributes,
   PropsWithChildren,
+  ReactNode,
 } from 'react';
 
 /**
@@ -20,8 +18,8 @@ export type ItemProps = PropsWithChildren<
  * @param children - The content within the item.
  * @param rest - Additional attributes for the LI element.
  */
-const Item: FC<ItemProps> = ({ children, ...rest }) => {
+function Item({ children, ...rest }: ItemProps): ReactNode {
   return <li {...rest}>{children}</li>;
-};
+}
 
 export default Item;

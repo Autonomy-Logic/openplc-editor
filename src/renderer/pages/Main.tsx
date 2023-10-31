@@ -4,14 +4,13 @@
 import { FC, useCallback, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 
-import { CONSTANTS } from '../../constants';
+import useOpenPLCStore from 'renderer/store';
+import { SidebarProvider, TabsProvider } from 'renderer/contexts';
+import { useTabs, useTheme, useSidebar } from 'renderer/hooks';
+import { Layout } from 'renderer/templates';
 
-import { SidebarProvider, TabsProvider } from '../contexts';
-import { useTabs, useTheme, useSidebar } from '../hooks';
-import { Layout } from '../templates';
-import { convertToPath } from '../../utils';
-
-import useOpenPLCStore from '../store';
+import { CONSTANTS } from '@/constants';
+import { convertToPath } from '@/utils';
 
 /**
  * Destructure necessary values from the CONSTANTS module

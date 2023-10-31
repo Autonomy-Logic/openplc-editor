@@ -20,6 +20,16 @@ const distRendererPath = path.join(distPath, 'renderer');
 
 const buildPath = path.join(releasePath, 'build');
 
+const typesPath = path.join(srcPath, 'types');
+
+const monacoPath = {
+  'editor.worker': 'monaco-editor/esm/vs/editor/editor.worker.js',
+  'json.worker': 'monaco-editor/esm/vs/language/json/json.worker',
+  'css.worker': 'monaco-editor/esm/vs/language/css/css.worker',
+  'html.worker': 'monaco-editor/esm/vs/language/html/html.worker',
+  'ts.worker': 'monaco-editor/esm/vs/language/typescript/ts.worker',
+};
+
 export default {
   rootPath,
   dllPath,
@@ -35,4 +45,6 @@ export default {
   distMainPath,
   distRendererPath,
   buildPath,
+  typesPath,
+  monacoPath,
 };
