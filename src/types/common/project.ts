@@ -91,12 +91,12 @@ const ProjectXMLShape = z.object({
       '@companyName': z.string().default('Unknown'),
       '@productName': z.string().default('Unnamed'),
       '@productVersion': z.string().default('1'),
-      '@creationDateTime': formatDate(new Date()),
+      '@creationDateTime': z.string().default(formatDate(new Date())),
     }),
 
     contentHeader: z.object({
       '@name': z.string().default('Unnamed'),
-      '@modificationDateTime': formatDate(new Date()),
+      '@modificationDateTime': z.string().default(formatDate(new Date())),
       coordinateInfo: z.object({
         fbd: z.object({
           scaling: z.object({
@@ -104,7 +104,37 @@ const ProjectXMLShape = z.object({
             '@y': z.string().default('10'),
           }),
         }),
+        ld: z.object({
+          scaling: z.object({
+            '@x': z.string().default('10'),
+            '@y': z.string().default('10'),
+          }),
+          sfd: z.object({
+            scaling: z.object({
+              '@x': z.string().default('10'),
+              '@y': z.string().default('10'),
+            }),
+          }),
+        }),
       }),
     }),
+    types: z.object({
+      dataTypes: z.object({}),
+      pous: z.object({
+        pou: z.array(
+          z.object({})
+        ).optional()
+      }),
+    }),
+    instances: z.object({
+      configurations: z.object({
+        configuration: z.object({
+          '@name': z.string().default('Config0'),
+          resource: z.object({
+            '@name': z.string().default('Res0'),
+          }),
+        }),
+      }),
+    })
   }),
 });
