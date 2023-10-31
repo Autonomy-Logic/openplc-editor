@@ -1,27 +1,45 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useRef, useState } from 'react';
+import useOpenPLCStore from '@/renderer/store';
 import './config/index';
-import * as monaco from 'monaco-editor';
+import { Editor } from '@monaco-editor/react';
+import { useCallback, useEffect, useState } from 'react';
+// eslint-disable-next-line import/no-cycle
+import { useTabs } from '@/renderer/hooks';
+import { PouShape } from '@/types/common/pou';
 
-function TextEditor() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  let editor: monaco.editor.IStandaloneCodeEditor;
+export default function TextEditor() {
+  const [fileToEdit, setFileToEdit] = useState<PouShape | null>();
+  const project = useOpenPLCStore.useProjectData();
+  const { tabs } = useTabs();
+
+  const getCurrentTab = useCallback(() => {
+    return tabs.find((tab) => tab.current);
+  }, [tabs]);
+
+  const getCurrentPou = useCallback(
+    (tb: string) => {
+      if (project) {
+        return project.project.types.pous.pou.find(
+          (pou) => pou['@name'] === tb,
+        );
+      }
+      return null;
+    },
+    [project],
+  );
+
   useEffect(() => {
-    if (containerRef.current) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      editor = monaco.editor.create(containerRef.current, {
-        value: 'Hello, World!',
-        language: 'il',
-        theme: 'OpenPLC',
-      });
-    }
+    const tab = getCurrentTab();
+    if (!tab) return;
+    const pou = getCurrentPou(tab.title);
+    if (!pou) return;
+    setFileToEdit(pou);
 
-    return () => {
-      editor.dispose();
-    };
-  }, []);
+    console.log(fileToEdit);
 
-  return <div ref={containerRef} id="editor" className="h-screen w-screen" />;
+    // eslint-disable-next-line consistent-return
+    return () => setFileToEdit(null);
+  }, [fileToEdit, getCurrentPou, getCurrentTab]);
+  return (
+    <Editor path={fileToEdit?.['@name']} value={fileToEdit?.['@pouType']} />
+  );
 }
-
-export default TextEditor;
