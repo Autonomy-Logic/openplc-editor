@@ -75,7 +75,9 @@ const DefaultGraphicalPOUBody = {
 };
 const DefaultTextualPOUBody = {
   IL: {
-    'xhtml:p': '<![CDATA[Dummy body data for pou mock]]>',
+    'xhtml:p': {
+      $: '', // REVIEW: Must turn this node into a CDATA tag with xmlbuilder
+    },
   },
   ST: {
     'xhtml:p': '<![CDATA[Dummy body data for pou mock]]>',

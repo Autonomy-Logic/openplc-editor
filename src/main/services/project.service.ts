@@ -103,6 +103,7 @@ class ProjectService implements TProjectService {
           dataTypes: {},
           pous: {
             // TODO: Remove mock pou data
+            // IMPORTANT: The "$" character defines a CDATA field in XML.
             pou: [
               {
                 '@name': 'program0',
@@ -119,11 +120,15 @@ class ProjectService implements TProjectService {
                 },
                 body: {
                   IL: {
-                    'xhtml:p': '<![CDATA[]]>',
+                    'xhtml:p': {
+                      $: 'Data test',
+                    },
                   },
                 },
                 documentation: {
-                  'xhtml:p': '<![CDATA[]]>',
+                  'xhtml:p': {
+                    $: 'Doc test',
+                  },
                 },
               },
               {
@@ -141,11 +146,15 @@ class ProjectService implements TProjectService {
                 },
                 body: {
                   ST: {
-                    'xhtml:p': '<![CDATA[]]>',
+                    'xhtml:p': {
+                      $: '',
+                    },
                   },
                 },
                 documentation: {
-                  'xhtml:p': '<![CDATA[]]>',
+                  'xhtml:p': {
+                    $: '',
+                  },
                 },
               },
             ],

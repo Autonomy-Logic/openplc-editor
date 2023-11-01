@@ -1,16 +1,20 @@
 import { produce } from 'immer';
 import { StateCreator } from 'zustand';
 import { ProjectDTO } from '@/types/common/project';
-import { PouShape } from '../../../../types/common/pou';
 
 export type WorkspaceProps = {
   projectPath: string | null;
   projectData: ProjectDTO | null;
+  test: { editorForProgram?: string; editorForFunction?: string };
 };
 
 export type WorkspaceSlice = WorkspaceProps & {
   setWorkspace: (workspaceData: WorkspaceProps) => void;
-  getPous: () => PouShape[];
+  updateProject: (projectData?: ProjectDTO) => void;
+  setTest: (test: {
+    editorForProgram?: string;
+    editorForFunction?: string;
+  }) => void;
 };
 
 const createWorkspaceSlice: StateCreator<
@@ -18,9 +22,13 @@ const createWorkspaceSlice: StateCreator<
   [],
   [],
   WorkspaceSlice
-> = (setState, getState) => ({
+> = (setState) => ({
   projectData: null,
   projectPath: null,
+  test: {
+    editorForProgram: 'Data for editor 1',
+    editorForFunction: 'Data for editor 2',
+  },
   setWorkspace: (workspaceData: WorkspaceProps): void =>
     setState(
       produce((state: WorkspaceProps) => {
@@ -28,12 +36,25 @@ const createWorkspaceSlice: StateCreator<
         state.projectData = workspaceData.projectData;
       }),
     ),
-  getPous: (): PouShape[] => {
-    const state = getState();
-    if (!state.projectData) {
-      return [];
-    }
-    return state.projectData.project.types.pous.pou;
+  updateProject: (projectData) => {
+    setState(
+      produce((state: WorkspaceProps) => {
+        if (!projectData) return;
+        state.projectData = projectData;
+      }),
+    );
+  },
+  setTest(test) {
+    setState(
+      produce((state: WorkspaceProps) => {
+        if (test.editorForProgram) {
+          state.test.editorForProgram = test.editorForProgram;
+        }
+        if (test.editorForFunction) {
+          state.test.editorForFunction = test.editorForFunction;
+        }
+      }),
+    );
   },
 });
 
