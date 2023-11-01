@@ -85,6 +85,9 @@ export default class MenuBuilder {
     }
   }
 
+  handleSaveProject(channel: string): void {
+    this.mainWindow.webContents.send(channel, 'Save project functionality');
+  }
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props;
@@ -295,6 +298,7 @@ export default class MenuBuilder {
             id: 'test',
             label: i18n.t('menu:file.submenu.save'),
             accelerator: 'CmdOrCtrl+S',
+            click: () => this.handleSaveProject('project:save'),
           },
           {
             label: i18n.t('menu:file.submenu.saveAs'),

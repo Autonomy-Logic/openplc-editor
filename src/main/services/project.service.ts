@@ -1,10 +1,10 @@
+/* eslint-disable prettier/prettier */
 /* eslint-disable class-methods-use-this */
 import { promises, readFile, writeFile } from 'fs';
 import { join } from 'path';
 
 import { BrowserWindow, dialog } from 'electron';
 import { convert, create } from 'xmlbuilder2';
-import { XMLSerializedAsObject } from 'xmlbuilder2/lib/interfaces';
 
 import { i18n } from '../../utils/i18n';
 import formatDate from '../../utils/formatDate';
@@ -258,48 +258,6 @@ class ProjectService implements TProjectService {
       },
     };
   }
-
-  // Review: Is necessary?
-  /**
-   * @description Executes the service to read and process the project XML file.
-   * @param filePath - The path to the project XML file.
-   * @returns A `promise` of `ResponseService` type.
-   */
-  async getProject(
-    filePath: string,
-  ): Promise<ResponseService<XMLSerializedAsObject>> {
-    // Construct the full path to the 'plc.xml' file.
-    // filePath = join(filePath, 'plc.xml')
-    // Read the XML file asynchronously.
-    const file = await new Promise((resolve, reject) => {
-      readFile(filePath, 'utf-8', (error, data) => {
-        if (error) return reject(error);
-        return resolve(data);
-      });
-    });
-    // If the file content is empty or not available, return an error response.
-    if (!file) {
-      return {
-        ok: false,
-        reason: {
-          title: i18n.t('getProject:errors.readFile.title'),
-          description: i18n.t('getProject:errors.readFile.description', {
-            filePath,
-          }),
-        },
-      };
-    }
-    // Convert the XML file content into a serialized object.
-    return {
-      ok: true,
-      data: {
-        projectAsObj: convert(file, {
-          format: 'object',
-        }) as XMLSerializedAsObject,
-      },
-    };
-  }
-
   /**
    * @description   Executes the service to save a project as an XML file.
    * @param filePath - The path where the XML file should be saved.
@@ -331,22 +289,18 @@ class ProjectService implements TProjectService {
      * If the file saving failed, return an error response,
      * otherwise return a successful response.
      */
-    writeFile(
-      join(projectPath, 'plc.xml'),
-      projectAsXml.end({ prettyPrint: true }),
-      (error) => {
-        if (error) throw error;
-        return {
-          ok: false,
-          reason: {
-            title: i18n.t('saveProject:errors.failedToSaveFile.title'),
-            description: i18n.t(
-              'saveProject:errors.failedToSaveFile.description',
-            ),
-          },
-        };
-      },
-    );
+    writeFile(projectPath, projectAsXml.end({ prettyPrint: true }), (error) => {
+      if (error) throw error;
+      return {
+        ok: false,
+        reason: {
+          title: i18n.t('saveProject:errors.failedToSaveFile.title'),
+          description: i18n.t(
+            'saveProject:errors.failedToSaveFile.description',
+          ),
+        },
+      };
+    });
     return {
       ok: true,
       reason: {

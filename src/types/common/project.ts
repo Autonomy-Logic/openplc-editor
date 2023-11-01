@@ -56,11 +56,20 @@ const DefaultProjectShape = {
             },
             body: {
               IL: {
-                'xhtml:p': '<![CDATA[]]>',
+                'xhtml:p': {
+                  $: 'Data test',
+                },
+              },
+              ST: {
+                'xhtml:p': {
+                  $: 'Data test',
+                },
               },
             },
             documentation: {
-              'xhtml:p': '<![CDATA[]]>',
+              'xhtml:p': {
+                $: 'Doc test',
+              },
             },
           },
         ],

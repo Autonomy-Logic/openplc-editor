@@ -6,15 +6,14 @@
 import useOpenPLCStore from '@/renderer/store';
 import './config/index';
 import { Editor } from '@monaco-editor/react';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTabs } from '@/renderer/hooks';
 import * as monaco from 'monaco-editor';
 import _ from 'lodash';
 
 export default function TextEditor() {
   const project = useOpenPLCStore.useProjectData();
-  const test = useOpenPLCStore.useTest();
-  const setTest = useOpenPLCStore.useSetTest();
+  const updatePou = useOpenPLCStore.useUpdatePou();
   const { tabs } = useTabs();
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 
@@ -23,15 +22,6 @@ export default function TextEditor() {
     // you can store it in `useRef` for further usage
     editorRef.current = editor;
   }
-
-  const setEditor = useCallback(() => {
-    const currentTab = tabs.find((tab) => tab.current);
-    if (currentTab?.title === 'program0') {
-      return 'program0';
-    }
-    return 'function0';
-  }, [test, tabs]);
-
   const verifyEditor = useCallback(() => {
     if (editorRef.current) {
       const normalizedUri = editorRef.current
@@ -45,30 +35,50 @@ export default function TextEditor() {
   const debounce = useCallback(
     _.debounce((_editorValue) => {
       const fileToEdit = verifyEditor();
-      if (fileToEdit === 'program0') {
-        setTest({
-          editorForProgram: _editorValue,
-        });
-      } else {
-        setTest({
-          editorForFunction: _editorValue,
-        });
-      }
+      if (!fileToEdit) return;
+      updatePou(fileToEdit, _editorValue);
     }, 750),
     [],
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleChange = (value: any, _event: any) => {
+  const handleChange = (
+    value: string | undefined,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _ev: monaco.editor.IModelContentChangedEvent,
+  ) => {
     debounce(value);
   };
 
-  // console.log('State ->', fileToEdit);
-  console.log('Store ->', project);
+  const setEditorPath = useCallback(() => {
+    const currentTab = tabs.find((tab) => tab.current);
+    if (currentTab) {
+      return currentTab.title;
+    }
+    return '';
+  }, [tabs]);
+
+  const setPouInStage = useCallback(() => {
+    const currentTab = setEditorPath();
+    if (!currentTab || !project) return 'Empty pou in stage';
+    const pouInStage = project.project.types.pous.pou.find(
+      (p) => p['@name'] === currentTab,
+    );
+    const res = JSON.stringify(pouInStage?.body);
+    return res;
+  }, [tabs]);
+
+  useEffect(() => {
+    setPouInStage();
+  }, [tabs]);
+
+  window.bridge.saveProject((_event, value) => {
+    console.warn(value);
+  });
 
   return (
     <Editor
-      path={setEditor()}
+      path={setEditorPath()}
+      defaultValue={setPouInStage()}
       onMount={handleEditorInstance}
       onChange={handleChange}
     />

@@ -66,19 +66,23 @@ class MainProcessBridge implements MainIpcModule {
       this.store.set('theme', theme);
     },
 
-    // Wip: From here
-
-    getProject: async (_: Event, filePath: string) => {
-      const response = await this.projectService.getProject(filePath);
+    saveProject: async (_: Event, arg: ProjectDto) => {
+      const response = await this.projectService.saveProject(arg);
       return response;
     },
-    sendProjectData: async (filePath: string) => {
-      const response = await this.projectService.getProject(filePath);
-      this.mainWindow?.webContents.send('Data/Get:project', {
-        ...response,
-        data: { ...response.data, filePath },
-      });
-    },
+    // Wip: From here
+
+    // getProject: async (_: Event, filePath: string) => {
+    //   const response = await this.projectService.getProject(filePath);
+    //   return response;
+    // },
+    // sendProjectData: async (filePath: string) => {
+    //   const response = await this.projectService.getProject(filePath);
+    //   this.mainWindow?.webContents.send('Data/Get:project', {
+    //     ...response,
+    //     data: { ...response.data, filePath },
+    //   });
+    // },
     sendToast: (arg: ToastProps) => {
       const message = ToastSchema.parse(arg);
       this.mainWindow?.webContents.send('get-toast', message);

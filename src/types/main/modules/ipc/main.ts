@@ -3,6 +3,7 @@ import { ProjectService } from '../../../../main/services';
 import { ThemeProps } from '../../../theme';
 import { ToastProps } from './toast';
 import { StoreType } from '../../../../main/store';
+import { ProjectDto } from '../../services/project.service';
 
 export type MainIpcModule = {
   ipcMain: IpcMain;
@@ -14,8 +15,7 @@ export type MainIpcModule = {
     createPou: () => void;
     getTheme: () => ThemeProps;
     setTheme: (event: any, arg: ThemeProps) => void;
-    getProject: (event: any, filePath: string) => Promise<any>;
-    sendProjectData: (filePath: string) => Promise<void>;
+    saveProject: (_event: any, arg: ProjectDto) => void;
     sendToast: (arg: ToastProps) => void;
   };
 };
