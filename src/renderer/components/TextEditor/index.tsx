@@ -10,8 +10,10 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useTabs } from '@/renderer/hooks';
 import * as monaco from 'monaco-editor';
 import _ from 'lodash';
+import { IpcRendererEvent } from 'electron/renderer';
 
 export default function TextEditor() {
+  const projectPath = useOpenPLCStore.useProjectPath();
   const project = useOpenPLCStore.useProjectData();
   const updatePou = useOpenPLCStore.useUpdatePou();
   const { tabs } = useTabs();
@@ -71,8 +73,15 @@ export default function TextEditor() {
     setPouInStage();
   }, [tabs]);
 
-  window.bridge.saveProject((_event, value) => {
-    console.warn(value);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  window.bridge.saveProject(async (event: IpcRendererEvent, _value: string) => {
+    if (!_value) return;
+    const dataToSave = {
+      projectPath,
+      projectAsObj: project,
+    };
+    const res = await event.sender.invoke('project:save-response', dataToSave);
+    console.log(res);
   });
 
   return (

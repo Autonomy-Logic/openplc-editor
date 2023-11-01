@@ -1,6 +1,6 @@
-import { Event, ipcRenderer } from 'electron';
+import { IpcRendererEvent, ipcRenderer } from 'electron';
 
-type IpcRendererCallbacks = (_event: Event, ...args: any) => void;
+type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void;
 
 const rendererProcessBridge = {
   createProject: (callback: IpcRendererCallbacks) =>
@@ -8,7 +8,7 @@ const rendererProcessBridge = {
   openProject: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:open', callback),
   saveProject: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:save', callback),
+    ipcRenderer.on('project:save-request', callback),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
   setStoreValue: (key: string, val: string) =>
     ipcRenderer.send('app:store-set', key, val),

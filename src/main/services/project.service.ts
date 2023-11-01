@@ -264,7 +264,7 @@ class ProjectService implements TProjectService {
    * @param xmlSerializedAsObject - The XML data to be serialized and saved.
    * @returns A `promise` of `ResponseService` type.
    */
-  async saveProject(data: ProjectDto): Promise<ResponseService> {
+  async saveProject(data: ProjectDto): Promise<any> {
     const { projectPath, projectAsObj } = data;
     // Check if required parameters are provided.
     if (!projectPath || !projectAsObj)

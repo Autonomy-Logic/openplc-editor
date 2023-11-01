@@ -32,16 +32,15 @@ class MainProcessBridge implements MainIpcModule {
   }
   setupMainIpcListener() {
     this.ipcMain.handle(
-      'project:save',
-      async (_event: Event, data: ProjectDto) =>
-        this.projectService.saveProject(data),
-    );
-    this.ipcMain.handle(
       'app:store-get',
       this.mainIpcEventHandlers.getStoreValue,
     );
     this.ipcMain.on('app:store-set', this.mainIpcEventHandlers.setStoreValue);
 
+    this.ipcMain.handle(
+      'project:save-response',
+      async (_event, data: ProjectDto) => this.projectService.saveProject(data),
+    );
     // Wip: From here
 
     this.ipcMain.handle('app:get-theme', this.mainIpcEventHandlers.getTheme);
