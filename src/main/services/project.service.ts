@@ -65,19 +65,20 @@ class ProjectService implements TProjectService {
     // Create a JS Object with the project base structure
     const projectAsObj = {
       project: {
+        '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
         '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6.xsd',
         '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
-        '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
-        '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
+        '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema-instance',
+        '@xsi:schemaLocation':
+          'http://www.plcopen.org/xml/tc6_0200 http://www.plcopen.org/xml/tc6_0200',
         fileHeader: {
           '@companyName': 'Unknown',
+          '@creationDateTime': formatDate(new Date()),
           '@productName': 'Unnamed',
           '@productVersion': '1',
-          '@creationDateTime': formatDate(new Date()),
         },
         contentHeader: {
           '@name': 'Unnamed',
-          '@modificationDateTime': formatDate(new Date()),
           coordinateInfo: {
             fbd: {
               scaling: {

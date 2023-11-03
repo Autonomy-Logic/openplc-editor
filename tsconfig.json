@@ -19,6 +19,5 @@
       "renderer/*": ["./src/renderer/*"]
     }
   },
-  "exclude": ["test", "release/build", "release/app/dist", ".erb/dll"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "exclude": ["test", "release/build", "release/app/dist", ".erb/dll"]
 }
