@@ -19,9 +19,10 @@ Technologies required.
 
 - Node 18.\* minimum<br>
   https://nodejs.org/en/download
-
 - A package manager such as npm, yarn or pnpm.
 - Corepack which is a built-in tool that comes with the latests version of Node, can be used to set or download a package manager for your preference.
+
+- *Yarn is recommended as a choice that tries to preserve compatibility (such as **npm**) and performance (such as **pnpm**).*
 
 ### Configuration and usage
 
@@ -44,11 +45,11 @@ Technologies required.
 3. Run the development server
 
    ```sh
-   npm run dev
+   npm run start:dev
    # or
-   yarn dev
+   yarn start:dev
    # or
-   pnpm dev
+   pnpm start:dev
    ```
 
 <p align="right"><a href="#readme-top">Go back to top⬆️</a></p>

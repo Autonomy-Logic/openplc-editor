@@ -1,18 +1,15 @@
 {
-  "name": "electron-react-boilerplate",
-  "version": "4.6.0",
-  "description": "A foundation for scalable desktop apps",
+  "name": "open-plc-editor",
+  "version": "0.0.1",
+  "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
   "license": "MIT",
   "author": {
-    "name": "Electron React Boilerplate Maintainers",
-    "email": "electronreactboilerplate@gmail.com",
-    "url": "https://github.com/electron-react-boilerplate"
+    "name": "Autonomy Logic"
   },
   "main": "./dist/main/main.js",
   "scripts": {
-    "rebuild": "node -r ts-node/register ../../.erb/scripts/electron-rebuild.js",
+    "rebuild": "node -r ts-node/register ../../.oplc/scripts/electron-rebuild.js",
     "postinstall": "npm run rebuild && npm run link-modules",
-    "link-modules": "node -r ts-node/register ../../.erb/scripts/link-modules.ts"
-  },
-  "dependencies": {}
+    "link-modules": "node -r ts-node/register ../../.oplc/scripts/link-modules.ts"
+  }
 }

@@ -95,7 +95,7 @@ const createWindow = async () => {
       sandbox: false,
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')
-        : path.join(__dirname, '../../.erb/dll/preload.js'),
+        : path.join(__dirname, '../../.oplc/dll/preload.js'),
     },
   });
 

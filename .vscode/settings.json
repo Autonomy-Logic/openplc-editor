@@ -19,7 +19,7 @@
   "search.exclude": {
     ".git": true,
     ".eslintcache": true,
-    ".erb/dll": true,
+    ".oplc/dll": true,
     "release/{build,app/dist}": true,
     "node_modules": true,
     "npm-debug.log.*": true,
@@ -35,6 +35,7 @@
     "openplc",
     "tanstack",
     "titlebar",
-    "toastify"
+    "toastify",
+    "oplc"
   ]
 }
