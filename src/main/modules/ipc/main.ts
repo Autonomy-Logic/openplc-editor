@@ -37,7 +37,7 @@ class MainProcessBridge implements MainIpcModule {
     );
     this.ipcMain.on('app:store-set', this.mainIpcEventHandlers.setStoreValue);
 
-    this.ipcMain.handle(
+    this.ipcMain.on(
       'project:save-response',
       async (_event, data: ProjectDto) => this.projectService.saveProject(data),
     );

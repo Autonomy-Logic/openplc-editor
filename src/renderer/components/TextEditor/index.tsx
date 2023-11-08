@@ -73,15 +73,13 @@ export default function TextEditor() {
     setPouInStage();
   }, [tabs]);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   window.bridge.saveProject(async (event: IpcRendererEvent, _value: string) => {
     if (!_value) return;
     const dataToSave = {
       projectPath,
       projectAsObj: project,
     };
-    const res = await event.sender.invoke('project:save-response', dataToSave);
-    console.log(res);
+    event.sender.send('project:save-response', dataToSave);
   });
 
   return (

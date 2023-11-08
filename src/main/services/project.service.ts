@@ -265,7 +265,7 @@ class ProjectService implements TProjectService {
    * @param xmlSerializedAsObject - The XML data to be serialized and saved.
    * @returns A `promise` of `ResponseService` type.
    */
-  async saveProject(data: ProjectDto): Promise<any> {
+  async saveProject(data: ProjectDto): Promise<any | void> {
     const { projectPath, projectAsObj } = data;
     // Check if required parameters are provided.
     if (!projectPath || !projectAsObj)
@@ -302,6 +302,8 @@ class ProjectService implements TProjectService {
         },
       };
     });
+    console.log('Works!');
+
     return {
       ok: true,
       reason: {
