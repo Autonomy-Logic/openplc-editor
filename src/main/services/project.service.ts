@@ -111,24 +111,12 @@ class ProjectService implements TProjectService {
                 '@pouType': 'program',
                 interface: {
                   returnType: 'BOOL',
-                  localVars: {
-                    variable: {
-                      '@name': 'LocalVar0',
-                      type: 'INT',
-                      initialValue: { simpleValue: { '@value': '0' } },
-                    },
-                  },
                 },
                 body: {
                   IL: {
                     'xhtml:p': {
                       $: 'Data test',
                     },
-                  },
-                },
-                documentation: {
-                  'xhtml:p': {
-                    $: 'Doc test',
                   },
                 },
               },

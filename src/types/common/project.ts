@@ -127,11 +127,37 @@ const ProjectXMLShape = z.object({
       }),
     }),
     types: z.object({
-      dataTypes: z.object({
-        dataType: z.array(z.object({})).optional(),
-      }),
+      dataTypes: z.object({}),
       pous: z.object({
-        pou: z.array(z.object({})).optional(),
+        pou: z.array(
+          z
+            .object({
+              '@name': z.string(),
+              '@pouType': z.enum(['program', 'function', 'function-block']),
+              interface: z.object({
+                returnType: z.enum(['BOOL']),
+              }),
+              body: z.object({
+                TextualLang: z.union([
+                  z.object({
+                    IL: z.object({
+                      'xhtml:p': z.object({
+                        $: z.string(),
+                      }),
+                    }),
+                  }),
+                  z.object({
+                    ST: z.object({
+                      'xhtml:p': z.object({
+                        $: z.string(),
+                      }),
+                    }),
+                  }),
+                ]),
+              }),
+            })
+            .optional(),
+        ),
       }),
     }),
     instances: z.object({
