@@ -6,7 +6,29 @@ const dataTypeSchema = z.object({
     z.object({
       derivationType: z.object({
         directly: z.object({
-          type: z.enum(['BOOL', 'INT', 'DINT']),
+          type: z.enum([
+            'BOOL',
+            'SINT',
+            'INT',
+            'DINT',
+            'LINT',
+            'USINT',
+            'UINT',
+            'UDINT',
+            'ULINT',
+            'REAL',
+            'LREAL',
+            'TIME',
+            'DATE',
+            'TOD',
+            'DT',
+            'STRING',
+            'BYTE',
+            'WORD',
+            'DWORD',
+            'LWORD',
+            'LOGLEVEL',
+          ]),
         }),
         subrange: z.object({
           subrangeUnsigned: z.object({
@@ -15,7 +37,16 @@ const dataTypeSchema = z.object({
                 '@lower': z.string().default('0'),
                 '@upper': z.string().default('0'),
                 baseType: z.object({
-                  type: z.enum(['BOOL', 'INT', 'DINT']),
+                  type: z.enum([
+                    'UDINT',
+                    'INT',
+                    'USINT',
+                    'LINT',
+                    'DINT',
+                    'UINT',
+                    'ULINT',
+                    'SINT',
+                  ]),
                 }),
               }),
             ),
