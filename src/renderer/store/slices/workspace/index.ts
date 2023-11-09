@@ -41,6 +41,9 @@ const createWorkspaceSlice: StateCreator<
     setState(
       produce((state: WorkspaceProps) => {
         if (state.projectData) {
+          // const teste = state.projectData.project.types.pous.pou.find(
+          //   (p) => p?.body.IL
+          // );
           const pou = state.projectData.project.types.pous.pou.find(
             (p) => p['@name'] === pouToUpdate,
           );

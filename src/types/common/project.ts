@@ -88,7 +88,7 @@ const DefaultProjectShape = {
   },
 };
 
-export type ProjectDTO = typeof DefaultProjectShape;
+export type ProjectDTO = z.infer<typeof ProjectXMLShape>;
 
 const ProjectXMLShape = z.object({
   project: z.object({
@@ -130,33 +130,25 @@ const ProjectXMLShape = z.object({
       dataTypes: z.object({}),
       pous: z.object({
         pou: z.array(
-          z
-            .object({
-              '@name': z.string(),
-              '@pouType': z.enum(['program', 'function', 'function-block']),
-              interface: z.object({
-                returnType: z.enum(['BOOL']),
+          z.object({
+            '@name': z.string(),
+            '@pouType': z.enum(['program', 'function', 'function-block']),
+            interface: z.object({
+              returnType: z.enum(['BOOL']),
+            }),
+            body: z.object({
+              IL: z.object({
+                'xhtml:p': z.object({
+                  $: z.string(),
+                }),
               }),
-              body: z.object({
-                TextualLang: z.union([
-                  z.object({
-                    IL: z.object({
-                      'xhtml:p': z.object({
-                        $: z.string(),
-                      }),
-                    }),
-                  }),
-                  z.object({
-                    ST: z.object({
-                      'xhtml:p': z.object({
-                        $: z.string(),
-                      }),
-                    }),
-                  }),
-                ]),
+              ST: z.object({
+                'xhtml:p': z.object({
+                  $: z.string(),
+                }),
               }),
-            })
-            .optional(),
+            }),
+          }),
         ),
       }),
     }),
