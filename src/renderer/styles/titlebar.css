@@ -2,6 +2,10 @@
   @apply !z-10 !h-16 !px-5 shadow dark:border-b dark:border-white/5;
 }
 
+.cet-container {
+  @apply !top-16
+}
+
 .cet-window-title {
   @apply !max-w-none;
 }

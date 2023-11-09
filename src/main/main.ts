@@ -115,24 +115,24 @@ const createWindow = async () => {
   mainWindow.on('close', saveBounds);
   mainWindow.on('move', saveBounds);
 
-  // Apply the top position to the container in the fullscreen mode
-  mainWindow.on('enter-full-screen', () => {
-    const containerIterator = Array.from(
-      document.getElementsByClassName('cet-container'),
-    );
-    const [container] = containerIterator;
-    container.classList.replace('!top-16', '!top-0');
-  });
+  // // Apply the top position to the container in the fullscreen mode
+  // mainWindow.on('enter-full-screen', () => {
+  //   const containerIterator = Array.from(
+  //     document.getElementsByClassName('cet-container'),
+  //   );
+  //   const [container] = containerIterator;
+  //   container.classList.replace('!top-16', '!top-0');
+  // });
 
-  // Apply the top position to the container when leaving the fullscreen mode
-  mainWindow.on('leave-full-screen', () => {
-    const containerIterator = Array.from(
-      document.getElementsByClassName('cet-container'),
-    );
-    const [container] = containerIterator;
-    container.classList.add('!top-16');
-    container.classList.replace('!top-0', '!top-16');
-  });
+  // // Apply the top position to the container when leaving the fullscreen mode
+  // mainWindow.on('leave-full-screen', () => {
+  //   const containerIterator = Array.from(
+  //     document.getElementsByClassName('cet-container'),
+  //   );
+  //   const [container] = containerIterator;
+  //   container.classList.add('!top-16');
+  //   container.classList.replace('!top-0', '!top-16');
+  // });
 
   // Maximize the window if bounds are not set
   if (!bounds) {

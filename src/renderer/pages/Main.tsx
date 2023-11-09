@@ -9,7 +9,7 @@ import { SidebarProvider, TabsProvider } from 'renderer/contexts';
 import { useTabs, useTheme, useSidebar } from 'renderer/hooks';
 import { Layout } from 'renderer/templates';
 
-import { CONSTANTS } from '@/constants';
+import { CONSTANTS } from '@/utils';
 import { convertToPath } from '@/utils';
 
 /**

@@ -9,7 +9,7 @@ import Tree, { RootProps } from 'renderer/components/Tree';
 import { useTabs } from 'renderer/hooks';
 import useOpenPLCStore from 'renderer/store';
 import { convertToPath } from '@/utils';
-import { CONSTANTS } from '@/constants';
+import { CONSTANTS } from '@/utils';
 /**
  * Destructure necessary values from the CONSTANTS module
  */

@@ -27,7 +27,7 @@ import { CurrentProps } from '../../contexts/Sidebar';
 import { Tooltip } from '../../components';
 import { classNames } from '../../../utils';
 import useOpenPLCStore from '../../store';
-import { CONSTANTS } from '../../../constants';
+import { CONSTANTS } from '@/utils';
 
 function Layout({ main }: any): ReactNode {
   const { paths } = CONSTANTS;
@@ -59,13 +59,17 @@ function Layout({ main }: any): ReactNode {
   // Todo: Set the project global state and define the handle click function
   // Define an array of navigation items with their associated data.
   const navigation = [
-    {
-      key: 'tools',
-      name: t('tools'),
-      onClick: handleClick,
-      icon: HiOutlineSquares2X2,
-      component: <Tools />,
-    },
+    ...(project?.project
+      ? [
+          {
+            key: 'tools',
+            name: t('tools'),
+            onClick: handleClick,
+            icon: HiOutlineSquares2X2,
+            component: <Tools />,
+          },
+        ]
+      : []),
     ...(project?.project
       ? [
           {

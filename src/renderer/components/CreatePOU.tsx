@@ -13,7 +13,7 @@ import { FC } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { CONSTANTS } from '../../constants';
+import { CONSTANTS } from '@/utils';
 
 import { Button, Form } from '.';
 import { useModal } from '../hooks';

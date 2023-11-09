@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CONSTANTS } from '../constants';
+import { CONSTANTS } from '../utils';
 
 const {
   theme: { variants },

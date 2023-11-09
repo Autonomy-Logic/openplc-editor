@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { useNavigate } from 'react-router-dom';
-import { CONSTANTS } from '../../constants';
+import { CONSTANTS } from '@/utils';
 
 import { TitlebarTabs } from '../components';
 

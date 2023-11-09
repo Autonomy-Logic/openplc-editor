@@ -75,30 +75,30 @@ const TitlebarProvider: FC<PropsWithChildren> = ({ children }) => {
   //     }
   //   };
   //   updateMenu();
-  // }, [invoke, titlebar, project]);
+  // // }, [invoke, titlebar, project]);
 
-  useEffect(() => {
-    /**
-     * Updates the container style based on fullscreen mode.
-     */
-    const titlebarIterator = Array.from(
-      document.getElementsByClassName('cet-titlebar'),
-    );
-    const containerIterator = Array.from(
-      document.getElementsByClassName('cet-container'),
-    );
-    const [titlebar] = titlebarIterator;
-    const [container] = containerIterator;
+  // useEffect(() => {
+  //   /**
+  //    * Updates the container style based on fullscreen mode.
+  //    */
+  //   const titlebarIterator = Array.from(
+  //     document.getElementsByClassName('cet-titlebar'),
+  //   );
+  //   const containerIterator = Array.from(
+  //     document.getElementsByClassName('cet-container'),
+  //   );
+  //   const [titlebar] = titlebarIterator;
+  //   const [container] = containerIterator;
 
-    if (titlebar && container) {
-      if (isFullScreen) {
-        container.classList.replace('!top-16', '!top-0');
-      } else {
-        container.classList.add('!top-16');
-        container.classList.replace('!top-0', '!top-16');
-      }
-    }
-  }, [isFullScreen]);
+  //   if (titlebar && container) {
+  //     if (isFullScreen) {
+  //       container.classList.replace('!top-16', '!top-0');
+  //     } else {
+  //       container.classList.add('!top-16');
+  //       container.classList.replace('!top-0', '!top-16');
+  //     }
+  //   }
+  // }, [isFullScreen]);
 
   const dispose = useCallback(() => {}, []);
   const titlebarValue = null;

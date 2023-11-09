@@ -22,10 +22,11 @@ import {
   HiPrinter,
   HiScissors,
 } from 'react-icons/hi2';
-import { CONSTANTS } from '../../../constants';
+import { CONSTANTS } from '@/utils';
 
-import { CreatePOU, Tabs, Tooltip } from '../../components';
-import { useFullScreen, useModal, useToast } from '../../hooks';
+import { CreatePOU, Tabs, Tooltip } from 'renderer/components';
+import { useFullScreen, useModal, useToast } from 'renderer/hooks';
+import useOpenPLCStore from '@/renderer/store';
 /**
  * Destructure necessary values from the CONSTANTS module
  */
@@ -64,6 +65,7 @@ export type ToolsProps = {
  * @component
  */
 const Tools: FC = () => {
+  const project = useOpenPLCStore.useProjectData();
   /**
    * Access the translation function from 'react-i18next'
    * @useTranslation
@@ -103,35 +105,25 @@ const Tools: FC = () => {
    */
   const onClick = () => console.log('will be created soon');
   /**
-   * Handle the creation of a project from the toolbar
+   * Handle the creation of a POU from the toolbar
    * @async
    * @function
    */
-  // const handleCreateProjectFromToolbar = async () => {
-  //   const { ok, reason, data } = await createProjectFromToolbar(
-  //     set.CREATE_PROJECT_FROM_TOOLBAR,
-  //   );
-  //   if (!ok && reason) {
-  //     createToast({
-  //       type: 'error',
-  //       ...reason,
-  //     });
-  //   } else if (ok && data) {
-  //     handleOpenModal();
-  //     await getProject(data);
-  //   }
-  // };
+  const handleCreatePOU = async () => {
+    handleOpenModal();
+  };
   /**
    * Array of tool objects with their respective properties
    * @type {ToolsProps[]}
    */
   const tools: ToolsProps[] = [
-    // {
-    //   id: 1,
-    //   onClick: handleCreateProjectFromToolbar,
-    //   icon: HiDocumentPlus,
-    //   tooltip: t('menuToolbar.new'),
-    // },
+    {
+      id: 1,
+      onClick: onClick,
+      icon: HiDocumentPlus,
+      tooltip: t('menuToolbar.new'),
+    },
+
     // {
     //   id: 2,
     //   onClick,

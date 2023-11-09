@@ -254,7 +254,7 @@
   },
   "devEngines": {
     "node": ">=18.x",
-    "yarn": ">=4  .x"
+    "yarn": ">=4.x"
   },
   "electronmon": {
     "patterns": [
