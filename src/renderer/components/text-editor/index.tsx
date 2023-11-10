@@ -38,7 +38,7 @@ export default function TextEditor() {
     _.debounce((_editorValue) => {
       const fileToEdit = verifyEditor();
       if (!fileToEdit) return;
-      updatePou(fileToEdit, _editorValue);
+      updatePou({ name: fileToEdit, body: _editorValue });
     }, 750),
     [],
   );

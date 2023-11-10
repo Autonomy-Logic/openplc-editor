@@ -49,7 +49,7 @@ export { default as Tooltip } from './Tooltip';
  * Re-exports the CreatePOU component from the corresponding module.
  * @module Components
  */
-export { default as CreatePOU } from './CreatePOU';
+export { default as CreatePOU } from './create-pou';
 /**
  * Re-exports the Tree component from the corresponding module.
  * @module Components

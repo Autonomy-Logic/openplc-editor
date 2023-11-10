@@ -14,7 +14,7 @@ import {
 } from 'react-icons/hi2';
 import { FaDrawPolygon } from 'react-icons/fa';
 import { RiNodeTree } from 'react-icons/ri';
-import { LayoutProps } from '../../../types/renderer/layout';
+import { LayoutProps } from './layout';
 import { useSidebar, useToggle } from '../../hooks';
 import {
   Tools,

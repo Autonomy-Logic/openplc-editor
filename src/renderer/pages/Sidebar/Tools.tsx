@@ -109,7 +109,7 @@ const Tools: FC = () => {
    * @async
    * @function
    */
-  const handleCreatePOU = async () => {
+  const handleCreatePOU = () => {
     handleOpenModal();
   };
   /**
@@ -119,7 +119,7 @@ const Tools: FC = () => {
   const tools: ToolsProps[] = [
     {
       id: 1,
-      onClick: onClick,
+      onClick: handleCreatePOU,
       icon: HiDocumentPlus,
       tooltip: t('menuToolbar.new'),
     },

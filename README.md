@@ -18,7 +18,7 @@ This is what you need to work in this project!
 Technologies required.
 
 - Node 18.\* minimum<br>
-  https://nodejs.org/en/download
+  <https://nodejs.org/en/download>
 - A package manager such as npm, yarn or pnpm.
 - Corepack which is a built-in tool that comes with the latests version of Node, can be used to set or download a package manager for your preference.
 
@@ -56,16 +56,16 @@ Technologies required.
 
 ### Workflow guides
 
-> 1.**Whenever you are going to develop a new functionality or fix, go to the branch _main_ and do a pull _(git pull)_ <br>
+> 1.**Whenever you are going to develop a new functionality or fix, go to the branch *main* and do a pull *(git pull)* <br>
 > to ensure that your version of code is up to date with regard to the Github repository, avoiding conflicts.**
 >
 > 2.**When developing a feature, make a branch for it.<br>
-> Except in exceptional cases, avoid pushing directly to the _main_ branch.**
+> Except in exceptional cases, avoid pushing directly to the *main* branch.**
 >
 > 3.**Do periodic commits; don't wait until you've completed the task to do it.<br>
-> This may make code rastreability difficult.**
+<!-- > This may make code rastreability difficult.** -->
 
-### Naming Conventions :
+### Naming Conventions
 
 > For branch names, use the group name in uppercase, followed by the branch's purpose in lowercase, and a hyphen as a separator.
 >
@@ -80,6 +80,11 @@ Technologies required.
 > > HOTFIX - A problem that has arisen in the production environment;<br>
 > > FEATURE - A new feature that has been approved and is fully ready for development;<br>
 > > WIP - A newly approved feature that is dependent on other functionality but is ready for development.
+>
+>
+> Use kebab-case for files and folders:
+>
+> - ***(This approach is used to ensure compatibility between the various OS's, since systems like Windows and Mac the standard behavior is to be case insensitive.)***
 >
 > Use camelCase for files:
 >
@@ -97,12 +102,3 @@ Technologies required.
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-
-[product-screenshot]: public/home.png
-[next.js]: https://img.shields.io/badge/next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white
-[react.js]: https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB
-[nodejs.io]: https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white&
-[tailwindcss]: https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white&
-[typescript]: https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white&
-[figma]: https://img.shields.io/badge/figma-%23F24E1E.svg?style=for-the-badge&logo=figma&logoColor=white
-[figma-url]: https://www.figma.com/file/etiwmsjeevhgfsmqfyfaam/ethics-net-v2?node-id=119-1533&t=xjh1bguimpzgnllp-0

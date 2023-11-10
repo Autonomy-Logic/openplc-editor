@@ -1,6 +1,7 @@
 import { produce } from 'immer';
 import { StateCreator } from 'zustand';
 import { ProjectDTO } from '@/types/common/project';
+import { CreatePouDto, UpdatePouDto } from '@/renderer/contracts/dtos';
 
 export type WorkspaceProps = {
   projectPath: string | null;
@@ -10,7 +11,8 @@ export type WorkspaceProps = {
 export type WorkspaceSlice = WorkspaceProps & {
   setWorkspace: (workspaceData: WorkspaceProps) => void;
   updateProject: (projectData?: ProjectDTO) => void;
-  updatePou: (pouToUpdate: string, pouData: string) => void;
+  updatePou: (pouData: UpdatePouDto) => void;
+  addPou: (pouData: CreatePouDto) => void;
 };
 
 const createWorkspaceSlice: StateCreator<
@@ -37,22 +39,40 @@ const createWorkspaceSlice: StateCreator<
       }),
     );
   },
-  updatePou: (pouToUpdate, pouData) => {
+  updatePou: ({ name, body }) => {
     setState(
       produce((state: WorkspaceProps) => {
-        if (state.projectData) {
-          // const teste = state.projectData.project.types.pous.pou.find(
-          //   (p) => p?.body.IL
-          // );
-          const pou = state.projectData.project.types.pous.pou.find(
-            (p) => p['@name'] === pouToUpdate,
-          );
-          if (pou?.body.IL) {
-            pou.body.IL['xhtml:p'].$ = pouData;
-          } else if (pou?.body.ST) {
-            pou.body.ST['xhtml:p'].$ = pouData;
-          }
-        }
+        if (!state.projectData) return state;
+        const pouToUpdate = state.projectData.project.types.pous.pou.find(
+          (p) => p['@name'] === name,
+        );
+        if (!pouToUpdate) return state;
+        if (pouToUpdate.body.IL)
+          pouToUpdate.body.IL = { 'xhtml:p': { $: body } };
+        if (pouToUpdate.body.ST)
+          pouToUpdate.body.ST = { 'xhtml:p': { $: body } };
+      }),
+    );
+  },
+  addPou: ({ name, type, language }) => {
+    const pouDraft = {
+      '@name': name,
+      '@pouType': type,
+      body: {
+        [language]: {
+          'xhtml:p': {
+            $: '',
+          },
+        },
+      },
+    };
+    setState(
+      produce((state: WorkspaceProps) => {
+        if (!state.projectData) return state;
+        const pous = state.projectData.project.types.pous;
+        if (pous.pou.find((p) => p['@name'] === pouDraft['@name']))
+          return state;
+        pous.pou.push(pouDraft);
       }),
     );
   },

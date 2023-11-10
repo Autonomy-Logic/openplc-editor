@@ -1,6 +1,5 @@
 /* eslint-disable react/jsx-no-useless-fragment */
 /* eslint-disable react/function-component-definition */
-/* eslint-disable import/no-cycle */
 import { FC, useCallback, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 
@@ -52,14 +51,6 @@ const MainComponent: FC = () => {
    * @useTitlebar
    */
   // const { titlebar } = useTitlebar();
-  /**
-   * Access modal-related functions from the custom hook and open a modal for creating a POU
-   * @useModal
-   */
-  // const { handleOpenModal } = useModal({
-  //   content: <CreatePOU />,
-  //   hideCloseButton: true,
-  // });
   // /**
   //  * Listen for IPC render event to open the CreatePOU modal
   //  */
@@ -122,6 +113,7 @@ const MainComponent: FC = () => {
     getPousToEdit();
   }, [getProjectData, getPousToEdit]);
 
+  console.table(project?.project.types.pous.pou);
   /**
    * Navigate to the main path if the project data is not available
    */

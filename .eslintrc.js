@@ -1,5 +1,10 @@
+// eslint-disable-next-line no-undef
 module.exports = {
-  extends: 'oplc',
+  extends: [
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
+    'plugin:react/recommended',
+  ],
   plugins: ['@typescript-eslint'],
   rules: {
     // A temporary hack related to IDE not resolving correct package.json

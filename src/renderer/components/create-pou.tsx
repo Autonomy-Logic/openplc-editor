@@ -1,10 +1,4 @@
 // Review this eslint rule
-/* eslint-disable @typescript-eslint/no-unused-vars */
-// Review this eslint rule
-/* eslint-disable import/named */
-// Review this eslint rule
-/* eslint-disable import/no-cycle */
-// Review this eslint rule
 /* eslint-disable react/jsx-props-no-spreading */
 // Review this eslint rule
 /* eslint-disable react/function-component-definition */
@@ -16,7 +10,10 @@ import { z } from 'zod';
 import { CONSTANTS } from '@/utils';
 
 import { Button, Form } from '.';
-import { useModal } from '../hooks';
+import { useModal } from 'renderer/hooks';
+import useOpenPLCStore from 'renderer/store';
+
+import { CreatePouDto } from 'renderer/contracts/dtos';
 /**
  * Destructure needed constants from the shared CONSTANTS module
  */
@@ -25,8 +22,7 @@ const { languages, types } = CONSTANTS;
  * Component to create a new POU (Program Organization Unit).
  */
 const CreateNewPOU: FC = () => {
-  // Todo: Use project data from store
-  // const { createPOU } = useProject();
+  const createPou = useOpenPLCStore.useAddPou();
   const { handleCloseModal } = useModal();
   const { t: translate } = useTranslation();
   const { t } = useTranslation('createPOU');
@@ -34,67 +30,59 @@ const CreateNewPOU: FC = () => {
    * Define a schema for validating the form data
    */
   const createPOUSchema = z.object({
-    name: z.string().min(1, { message: t('errors.name') }),
-    type: z.object(
-      {
-        id: z.union([z.number(), z.string()]),
-        label: z.string(),
-        value: z.union([z.number(), z.string()]),
-      },
-      { required_error: t('errors.type') },
-    ),
-    language: z.object(
-      {
-        id: z.union([z.number(), z.string()]),
-        label: z.string(),
-        value: z.union([z.number(), z.string()]),
-      },
-      { required_error: t('errors.language') },
+    '@name': z.string(),
+    '@pouType': z
+      .string()
+      .refine((type) => Object.values(types).includes(type), {
+        message: 'Invalid POU type',
+      }),
+    body: z.record(
+      z.enum(['IL', 'ST']),
+      z.object({
+        'xhtml:p': z.object({
+          $: z.string(),
+        }),
+      }),
     ),
   });
-
-  type CreatePOUSchemaData = z.infer<typeof createPOUSchema>;
   /**
    * Prepare options for the type and language dropdowns
    */
-  const typeOptions = [{ id: 0, label: types.PROGRAM, value: types.PROGRAM }];
+  const typeOptions = [
+    { id: 0, label: types.PROGRAM, value: types.PROGRAM },
+    { id: 1, label: types.FUNCTION, value: types.FUNCTION },
+    { id: 2, label: types.FUNCTION_BLOCK, value: types.FUNCTION_BLOCK },
+  ];
 
-  const languageOptions = [{ id: 0, label: languages.LD, value: languages.LD }];
+  const languageOptions = [
+    { id: 0, label: languages.IL, value: languages.IL },
+    { id: 1, label: languages.ST, value: languages.ST },
+  ];
   /**
    *  Handler for cancel button
    */
   const handleCancel = () => {
-    // Todo: Use project data from store
-    // createPOU({
-    //   type: typeOptions[0].value as string,
-    // });
     handleCloseModal();
   };
   /**
    * Initialize the form using react-hook-form
    */
-  const createPouForm = useForm<CreatePOUSchemaData>({
+  const createPouForm = useForm<CreatePouDto>({
     resolver: zodResolver(createPOUSchema),
     defaultValues: {
       name: 'program0',
-      type: typeOptions[0],
+      type: typeOptions[0].value,
     },
   });
   /**
    * Handler for form submission
    */
-  const handleCreatePOU = async (data: CreatePOUSchemaData) => {
-    const {
-      type: { value: type },
-      language: { value: language },
+  const handleCreatePOU = async ({ type, language, name }: CreatePouDto) => {
+    createPou({
       name,
-    } = data;
-    // Todo: Use project data from store
-    // createPOU({
-    //   name,
-    //   type: type as string,
-    //   language: language as string,
-    // });
+      type,
+      language,
+    });
     handleCloseModal();
   };
   /**

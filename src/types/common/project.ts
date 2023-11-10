@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import formatDate from '../../utils/formatDate';
+import { CONSTANTS, formatDate } from '@/utils';
+
+const { types } = CONSTANTS;
 
 const DefaultProjectShape = {
   project: {
@@ -132,22 +134,19 @@ const ProjectXMLShape = z.object({
         pou: z.array(
           z.object({
             '@name': z.string(),
-            '@pouType': z.enum(['program', 'function', 'function-block']),
-            interface: z.object({
-              returnType: z.enum(['BOOL']),
-            }),
-            body: z.object({
-              IL: z.object({
+            '@pouType': z
+              .string()
+              .refine((t) => Object.values(types).includes(t), {
+                message: 'Invalid POU type',
+              }),
+            body: z.record(
+              z.enum(['IL', 'ST']),
+              z.object({
                 'xhtml:p': z.object({
                   $: z.string(),
                 }),
               }),
-              ST: z.object({
-                'xhtml:p': z.object({
-                  $: z.string(),
-                }),
-              }),
-            }),
+            ),
           }),
         ),
       }),

@@ -1,5 +1,3 @@
-// Review this eslint rule
-/* eslint-disable import/no-cycle */
 import { ReactElement, ReactNode, useContext, useEffect } from 'react';
 
 import { ModalContext } from '../contexts';
@@ -43,7 +41,6 @@ const useModal = (props?: UseModalProps): ModalContextData => {
       if (hideCloseButton && setModalHideCloseButton)
         setModalHideCloseButton(hideCloseButton);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return rest;
