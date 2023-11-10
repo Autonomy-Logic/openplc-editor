@@ -69,10 +69,6 @@ const CreateNewPOU: FC = () => {
    */
   const createPouForm = useForm<CreatePouDto>({
     resolver: zodResolver(createPOUSchema),
-    defaultValues: {
-      name: 'program0',
-      type: typeOptions[0].value,
-    },
   });
   /**
    * Handler for form submission
@@ -83,6 +79,7 @@ const CreateNewPOU: FC = () => {
       type,
       language,
     });
+    console.log({ type, language, name });
     handleCloseModal();
   };
   /**

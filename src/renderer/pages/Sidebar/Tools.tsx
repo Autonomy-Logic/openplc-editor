@@ -109,9 +109,7 @@ const Tools: FC = () => {
    * @async
    * @function
    */
-  const handleCreatePOU = () => {
-    handleOpenModal();
-  };
+
   /**
    * Array of tool objects with their respective properties
    * @type {ToolsProps[]}
@@ -119,7 +117,7 @@ const Tools: FC = () => {
   const tools: ToolsProps[] = [
     {
       id: 1,
-      onClick: handleCreatePOU,
+      onClick: handleOpenModal,
       icon: HiDocumentPlus,
       tooltip: t('menuToolbar.new'),
     },

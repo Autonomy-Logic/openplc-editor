@@ -1,5 +1,3 @@
-// Review Eslint rule
-/* eslint-disable react/require-default-props */
 import { Dialog, Transition } from '@headlessui/react';
 import {
   Dispatch,

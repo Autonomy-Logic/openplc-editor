@@ -1,5 +1,3 @@
-// Review this eslint rule
-/* eslint-disable import/no-cycle */
 /**
  * Re-exports the Tabs component from the corresponding module.
  * @module Components

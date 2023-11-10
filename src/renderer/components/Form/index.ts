@@ -1,4 +1,3 @@
-/* eslint-disable import/no-named-default */
 /**
  * Re-exports the ComboBox component from the corresponding module.
  * Re-exports the ErrorMessage component from the corresponding module.
