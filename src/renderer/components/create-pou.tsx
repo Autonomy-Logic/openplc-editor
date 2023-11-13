@@ -4,16 +4,15 @@
 /* eslint-disable react/function-component-definition */
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FC } from 'react';
-import { FormProvider, useForm } from 'react-hook-form';
+import { FormProvider, SubmitHandler, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { useModal } from 'renderer/hooks';
+import useOpenPLCStore from 'renderer/store';
 import { z } from 'zod';
+
 import { CONSTANTS } from '@/utils';
 
 import { Button, Form } from '.';
-import { useModal } from 'renderer/hooks';
-import useOpenPLCStore from 'renderer/store';
-
-import { CreatePouDto } from 'renderer/contracts/dtos';
 /**
  * Destructure needed constants from the shared CONSTANTS module
  */
@@ -30,21 +29,27 @@ const CreateNewPOU: FC = () => {
    * Define a schema for validating the form data
    */
   const createPOUSchema = z.object({
-    '@name': z.string(),
-    '@pouType': z
-      .string()
-      .refine((type) => Object.values(types).includes(type), {
-        message: 'Invalid POU type',
-      }),
-    body: z.record(
-      z.enum(['IL', 'ST']),
-      z.object({
-        'xhtml:p': z.object({
-          $: z.string(),
-        }),
-      }),
+    name: z.string().nonempty({
+      message: t('errors.name'),
+    }),
+    type: z.object(
+      {
+        id: z.union([z.number(), z.string()]),
+        label: z.string(),
+        value: z.union([z.number(), z.string()]),
+      },
+      { required_error: t('errors.type') },
+    ),
+    language: z.object(
+      {
+        id: z.union([z.number(), z.string()]),
+        label: z.string(),
+        value: z.union([z.number(), z.string()]),
+      },
+      { required_error: t('errors.language') },
     ),
   });
+  type formSchema = z.infer<typeof createPOUSchema>;
   /**
    * Prepare options for the type and language dropdowns
    */
@@ -67,19 +72,24 @@ const CreateNewPOU: FC = () => {
   /**
    * Initialize the form using react-hook-form
    */
-  const createPouForm = useForm<CreatePouDto>({
+  const createPouForm = useForm<formSchema>({
     resolver: zodResolver(createPOUSchema),
+    defaultValues: {
+      name: '',
+      type: typeOptions[0],
+      language: languageOptions[0],
+    },
   });
   /**
    * Handler for form submission
    */
-  const handleCreatePOU = async ({ type, language, name }: CreatePouDto) => {
+  const handleCreatePOU: SubmitHandler<formSchema> = (data: formSchema) => {
+    const { language, name, type } = data;
     createPou({
       name,
-      type,
-      language,
+      type: type.value as string,
+      language: language.value as string,
     });
-    console.log({ type, language, name });
     handleCloseModal();
   };
   /**
@@ -118,6 +128,7 @@ const CreateNewPOU: FC = () => {
           </Form.Field>
           <Form.Field className="col-start-2 mt-auto flex h-10 flex-row gap-4">
             <Button
+              type="submit"
               label={translate('buttons.ok')}
               disabled={isSubmitting}
               widthFull
