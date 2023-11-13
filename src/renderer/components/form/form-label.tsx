@@ -15,14 +15,12 @@ type LabelProps = LabelHTMLAttributes<HTMLLabelElement>;
  * @param htmlFor - The ID of the input element associated with the label.
  * @param rest - Other HTML attributes for the label element.
  */
-const Label: FC<LabelProps> = ({ htmlFor, ...rest }) => {
-  return (
+const Label: FC<LabelProps> = ({ htmlFor, ...rest }) => (
     <label
       htmlFor={htmlFor}
       className="flex items-center justify-between text-sm font-medium leading-6 text-gray-500 dark:text-gray-400"
       {...rest}
     />
   );
-};
 
 export default Label;
