@@ -1,10 +1,12 @@
 /**
  * Base webpack config used across other specific configs
  */
+/* eslint-disable import/no-named-as-default */
 
 import webpack from 'webpack';
 import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin';
 import webpackPaths from './webpack.paths';
+// eslint-disable-next-line import/no-extraneous-dependencies
 import { dependencies as externals } from '../../release/app/package.json';
 
 const configuration: webpack.Configuration = {

@@ -57,4 +57,4 @@ export { default as Tree } from './Tree';
  * Re-exports the Form component from the corresponding module.
  * @module Components
  */
-export { default as Form } from './Form';
+export { default as Form } from './form';

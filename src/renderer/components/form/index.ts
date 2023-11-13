@@ -7,11 +7,11 @@
  * Re-exports the Radio component from the corresponding module.
  * @module Form
  */
-import { default as ComboBox } from './ComboBox';
-import { default as ErrorMessage } from './ErrorMessage';
-import { default as Field } from './Field';
-import { default as Input } from './Input';
-import { default as Label } from './Label';
-import { default as Radio } from './Radio';
+import ComboBox from './ComboBox';
+import ErrorMessage from './ErrorMessage';
+import Field from './Field';
+import Input from './Input';
+import Label from './Label';
+import Radio from './Radio';
 
 export default { ComboBox, ErrorMessage, Field, Input, Label, Radio };
