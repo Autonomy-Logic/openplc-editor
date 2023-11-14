@@ -69,10 +69,14 @@ const createWorkspaceSlice: StateCreator<
     setState(
       produce((state: WorkspaceProps) => {
         if (!state.projectData) return state;
-        const pous = state.projectData.project.types.pous;
-        if (pous.pou.find((p) => p['@name'] === pouDraft['@name']))
-          return state;
-        pous.pou.push(pouDraft);
+        console.log('pouDraft', pouDraft);
+
+        // if (!state.projectData.project.types.pous.pou) {
+        //   state.projectData.project.types.pous.pou = []
+        // }
+        const pous = state.projectData.project.types.pous.pou;
+        if (pous.find((p) => p['@name'] === pouDraft['@name'])) return state;
+        state.projectData.project.types.pous.pou.push(pouDraft);
       }),
     );
   },

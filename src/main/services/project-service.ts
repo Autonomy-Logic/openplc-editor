@@ -103,50 +103,7 @@ class ProjectService implements TProjectService {
         types: {
           dataTypes: {},
           pous: {
-            // TODO: Remove mock pou data
-            // IMPORTANT: The "$" character defines a CDATA field in XML.
-            pou: [
-              {
-                '@name': 'program0',
-                '@pouType': 'program',
-                interface: {
-                  returnType: 'BOOL',
-                },
-                body: {
-                  IL: {
-                    'xhtml:p': {
-                      $: 'Data test',
-                    },
-                  },
-                },
-              },
-              {
-                '@name': 'function0',
-                '@pouType': 'function',
-                interface: {
-                  returnType: 'INT',
-                  localVars: {
-                    variable: {
-                      '@name': 'LocalVar0',
-                      type: 'DINT',
-                      initialValue: { simpleValue: { '@value': '1' } },
-                    },
-                  },
-                },
-                body: {
-                  ST: {
-                    'xhtml:p': {
-                      $: '',
-                    },
-                  },
-                },
-                documentation: {
-                  'xhtml:p': {
-                    $: '',
-                  },
-                },
-              },
-            ],
+            pou: [],
           },
         },
         instances: {

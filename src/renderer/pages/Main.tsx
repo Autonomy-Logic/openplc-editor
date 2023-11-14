@@ -1,6 +1,6 @@
 /* eslint-disable react/jsx-no-useless-fragment */
 /* eslint-disable react/function-component-definition */
-import { FC, useCallback, useEffect } from 'react';
+import { FC, useCallback, useEffect, useMemo } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 
 import useOpenPLCStore from 'renderer/store';
@@ -46,18 +46,6 @@ const MainComponent: FC = () => {
    * @useTheme
    */
   const { theme } = useTheme();
-  /**
-   * Access titlebar-related functions and values from the custom hook
-   * @useTitlebar
-   */
-  // const { titlebar } = useTitlebar();
-  // /**
-  //  * Listen for IPC render event to open the CreatePOU modal
-  //  */
-  // useIpcRender<undefined, void>({
-  //   channel: get.CREATE_POU_WINDOW,
-  //   callback: () => handleOpenModal(),
-  // });
 
   /**
    * Asynchronous function to fetch project data and update the workspace.
@@ -87,6 +75,7 @@ const MainComponent: FC = () => {
   const getPousToEdit = useCallback(() => {
     if (project) {
       const pous = project.project.types.pous.pou;
+      if (!pous) return;
       if (pous.length > 0) {
         sidebarNavigate('projectTree');
         pous.map((pou) => {

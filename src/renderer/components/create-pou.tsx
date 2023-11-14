@@ -1,14 +1,10 @@
-// Review this eslint rule
-/* eslint-disable react/jsx-props-no-spreading */
-// Review this eslint rule
-/* eslint-disable react/function-component-definition */
 import { zodResolver } from '@hookform/resolvers/zod';
-import { FC } from 'react';
+import { ReactNode } from 'react';
 import { FormProvider, SubmitHandler, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { useModal } from 'renderer/hooks';
 import useOpenPLCStore from 'renderer/store';
-import { z } from 'zod';
+import { z, ZodSchema } from 'zod';
 
 import { CONSTANTS } from '@/utils';
 
@@ -20,7 +16,7 @@ const { languages, types } = CONSTANTS;
 /**
  * Component to create a new POU (Program Organization Unit).
  */
-const CreateNewPOU: FC = () => {
+function CreateNewPOU(): ReactNode {
   const createPou = useOpenPLCStore.useAddPou();
   const { handleCloseModal } = useModal();
   const { t: translate } = useTranslation();
@@ -28,8 +24,8 @@ const CreateNewPOU: FC = () => {
   /**
    * Define a schema for validating the form data
    */
-  const createPOUSchema = z.object({
-    name: z.string().nonempty({
+  const createPOUSchema: ZodSchema = z.object({
+    name: z.string().min(1, {
       message: t('errors.name'),
     }),
     type: z.object(
@@ -146,6 +142,6 @@ const CreateNewPOU: FC = () => {
       </FormProvider>
     </div>
   );
-};
+}
 
 export default CreateNewPOU;
