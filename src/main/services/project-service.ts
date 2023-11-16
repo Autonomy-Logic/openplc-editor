@@ -8,14 +8,10 @@ import { convert, create } from 'xmlbuilder2';
 
 import { i18n } from '../../utils/i18n';
 import formatDate from '../../utils/formatDate';
-import {
-  ProjectDto,
-  TProjectService,
-} from '../../types/main/services/project.service';
-import { ResponseService } from '../../types/main/services/response';
+import { api } from '../contracts/api';
 
 // Wip: Refactoring project services.
-class ProjectService implements TProjectService {
+class ProjectService implements api.Types.IProjectService {
   mainWindow: InstanceType<typeof BrowserWindow>;
   constructor(mainWindow: InstanceType<typeof BrowserWindow>) {
     this.mainWindow = mainWindow;
@@ -25,7 +21,7 @@ class ProjectService implements TProjectService {
    * @returns A `promise` of `ServiceResponse` type.
    */
   // eslint-disable-next-line class-methods-use-this
-  async createProject(): Promise<ResponseService<ProjectDto>> {
+  async createProject() {
     // Show a dialog to select the project directory.
     const response = await dialog.showOpenDialog(this.mainWindow, {
       title: i18n.t('createProject:dialog.title'),
@@ -152,12 +148,7 @@ class ProjectService implements TProjectService {
     };
   }
   // eslint-disable-next-line consistent-return
-  async openProject(): Promise<
-    ResponseService<{
-      projectPath: string;
-      projectAsObj: object;
-    }>
-  > {
+  async openProject() {
     const response = await dialog.showOpenDialog(this.mainWindow, {
       title: i18n.t('openProject:dialog.title'),
       properties: ['openFile'],
@@ -210,10 +201,9 @@ class ProjectService implements TProjectService {
    * @param xmlSerializedAsObject - The XML data to be serialized and saved.
    * @returns A `promise` of `ResponseService` type.
    */
-  async saveProject(data: ProjectDto): Promise<any | void> {
-    const { projectPath, projectAsObj } = data;
+  async saveProject({ path, data }: api.Dtos.IProjectData) {
     // Check if required parameters are provided.
-    if (!projectPath || !projectAsObj)
+    if (!path || !data)
       return {
         ok: false,
         reason: {
@@ -227,7 +217,7 @@ class ProjectService implements TProjectService {
     // Serialize the XML data using xmlbuilder2.
     const projectAsXml = create(
       // { parser: { cdata: (projectAsObj) => projectAsObj } },
-      projectAsObj,
+      data,
     );
 
     /**
@@ -235,7 +225,7 @@ class ProjectService implements TProjectService {
      * If the file saving failed, return an error response,
      * otherwise return a successful response.
      */
-    writeFile(projectPath, projectAsXml.end({ prettyPrint: true }), (error) => {
+    writeFile(path, projectAsXml.end({ prettyPrint: true }), (error) => {
       if (error) throw error;
       return {
         ok: false,

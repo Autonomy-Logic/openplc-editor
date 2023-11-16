@@ -1,4 +1,3 @@
-/* eslint-disable promise/always-return */
 /* eslint-disable no-console */
 import { Menu, BrowserWindow, MenuItemConstructorOptions } from 'electron';
 import { i18n } from '../utils/i18n';
@@ -28,9 +27,12 @@ export default class MenuBuilder {
     { role: 'toggleDevTools' },
   ];
 
-  constructor(mainWindow: BrowserWindow) {
+  constructor(
+    mainWindow: BrowserWindow,
+    projectService: InstanceType<typeof ProjectService>,
+  ) {
     this.mainWindow = mainWindow;
-    this.projectService = new ProjectService(mainWindow);
+    this.projectService = projectService;
   }
 
   buildMenu(): Menu {
@@ -53,41 +55,38 @@ export default class MenuBuilder {
     return menu;
   }
 
-  handleProject(channel: string): void {
-    if (channel === 'project:create') {
-      this.projectService
-        .createProject()
-        .then(({ ok, data }) => {
-          if (ok && data) {
-            this.mainWindow.webContents.send(channel, data);
-            console.log(data);
-          } else if (!ok) {
-            console.warn('error in creating project');
-          }
-        })
-        .catch((err) => {
-          console.warn(err);
-        });
-    } else if (channel === 'project:open') {
-      this.projectService
-        .openProject()
-        .then(({ ok, data, reason }) => {
-          if (ok && data) {
-            this.mainWindow.webContents.send(channel, data);
-            console.log(data);
-          } else if (!ok && reason) {
-            console.warn('error in opening project', reason);
-          }
-        })
-        .catch((err) => {
-          console.warn(err);
-        });
+  async handleProject(channel: string): Promise<void> {
+    switch (channel) {
+      case 'project:create': {
+        const { ok, data, reason } = await this.projectService.createProject();
+        if (ok && data) {
+          this.mainWindow.webContents.send(channel, data);
+          console.log(data);
+        } else if (!ok && reason) {
+          console.warn('error in creating project', reason);
+        }
+        break;
+      }
+      case 'project:open': {
+        const { ok, data, reason } = await this.projectService.openProject();
+        if (ok && data) {
+          this.mainWindow.webContents.send(channel, data);
+          console.log(data);
+        } else if (!ok && reason) {
+          console.warn('error in opening project', reason);
+        }
+        break;
+      }
+      case 'project:save': {
+        this.mainWindow.webContents.send(channel, 'Save project request');
+        break;
+      }
+      default:
+        console.warn('Unknown channel', channel);
+        break;
     }
   }
 
-  handleSaveProject(channel: string): void {
-    this.mainWindow.webContents.send(channel, 'Save project request');
-  }
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props;
@@ -298,7 +297,7 @@ export default class MenuBuilder {
             id: 'test',
             label: i18n.t('menu:file.submenu.save'),
             accelerator: 'CmdOrCtrl+S',
-            click: () => this.handleSaveProject('project:save-request'),
+            click: () => this.handleProject('project:save-request'),
           },
           {
             label: i18n.t('menu:file.submenu.saveAs'),

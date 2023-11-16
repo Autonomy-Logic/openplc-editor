@@ -33,9 +33,10 @@
     "hookform",
     "mimetypes",
     "openplc",
+    "oplc",
     "tanstack",
     "titlebar",
     "toastify",
-    "oplc"
+    "togglefullscreen"
   ]
 }
