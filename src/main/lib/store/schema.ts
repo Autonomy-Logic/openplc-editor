@@ -7,7 +7,7 @@ import { z } from 'zod';
  */
 export const defaultStoreSchema = z.object({
   /** An array containing the most recent projects path. */
-  recentProjects: z.string().optional(),
+  recentProjects: z.array(z.string()).optional(),
   /**
    * Represents the application's theme configuration.
    */
@@ -51,14 +51,14 @@ export type DefaultStoreProps = z.infer<typeof defaultStoreSchema>;
  */
 export const getDefaultStore = (): DefaultStoreProps => {
   return {
-    recentProjects: '',
+    recentProjects: [''],
     theme: 'light',
     window: {},
   };
 };
 
 export const schema: Schema<DefaultStoreProps> = {
-  recentProjects: { type: 'string' },
+  recentProjects: { type: 'array' },
   /**
    * Schema definition for the 'theme' property.
    */
