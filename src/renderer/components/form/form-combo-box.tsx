@@ -9,7 +9,7 @@ import { FC, useState } from 'react';
 import { Controller, useFormContext } from 'react-hook-form';
 import { HiCheck, HiChevronUpDown } from 'react-icons/hi2';
 
-import { classNames } from '../../../utils';
+import { classNames } from '../../../shared/utils';
 /**
  * Represents an option for the ComboBox component.
  */

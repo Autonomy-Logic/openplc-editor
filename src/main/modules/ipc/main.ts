@@ -2,7 +2,7 @@
 import { Event } from 'electron';
 import { IpcMainEvent } from 'electron/main';
 import * as validations from '../../../main/contracts/validations';
-import { OplcMainProcess } from '../../contracts/main';
+import { OplcMainProcess } from '../../contracts/types';
 
 class MainProcessBridge extends OplcMainProcess.IpcMainModule {
   ipcMain;

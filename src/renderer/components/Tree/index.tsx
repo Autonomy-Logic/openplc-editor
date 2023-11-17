@@ -1,7 +1,7 @@
 import React, { ReactNode, useCallback } from 'react';
 import { IconType } from 'react-icons';
 
-import { classNames } from '../../../utils';
+import { classNames } from '../../../shared/utils';
 
 // REFACTOR: Find the module that is causing this error
 /* eslint-disable import/no-cycle */

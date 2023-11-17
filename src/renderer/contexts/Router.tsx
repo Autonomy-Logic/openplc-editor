@@ -4,7 +4,7 @@ import {
   createBrowserRouter,
   RouterProvider as ReactRouterProvider,
 } from 'react-router-dom';
-import { CONSTANTS } from '@/utils';
+import { CONSTANTS } from '@/shared/utils';
 
 import { Main, Editor, Project, Resources } from '../pages';
 /**

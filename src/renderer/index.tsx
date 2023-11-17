@@ -1,4 +1,4 @@
-import '@/utils/i18n';
+import '@/shared/utils/i18n';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 

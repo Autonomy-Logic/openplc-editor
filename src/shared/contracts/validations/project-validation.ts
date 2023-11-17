@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { CONSTANTS, formatDate } from '@/utils';
+import { formatDate } from '../../utils';
+import { constants } from '../../data';
 
-const { types } = CONSTANTS;
+const { types } = constants;
 
 const DefaultProjectShape = {
   project: {

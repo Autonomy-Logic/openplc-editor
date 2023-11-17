@@ -6,7 +6,7 @@
 /* eslint-disable react/require-default-props */
 import React, { ButtonHTMLAttributes, FC } from 'react';
 
-import { classNames } from '../../utils';
+import { classNames } from '../../shared/utils';
 /**
  * Props for the Button component.
  */

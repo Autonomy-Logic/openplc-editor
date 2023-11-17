@@ -8,8 +8,8 @@ import { Tabs } from 'renderer/components';
 import Tree, { RootProps } from 'renderer/components/Tree';
 import { useTabs } from 'renderer/hooks';
 import useOpenPLCStore from 'renderer/store';
-import { convertToPath } from '@/utils';
-import { CONSTANTS } from '@/utils';
+import { convertToPath } from '@/shared/utils';
+import { CONSTANTS } from '@/shared/utils';
 /**
  * Destructure necessary values from the CONSTANTS module
  */

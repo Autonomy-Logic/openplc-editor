@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { CONSTANTS } from '../../../utils';
+import { CONSTANTS } from '../../../shared/utils';
 
 const { paths } = CONSTANTS;
 

@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import { Menu, BrowserWindow, MenuItemConstructorOptions } from 'electron';
-import { i18n } from '../utils/i18n';
+import { i18n } from '../shared/utils/i18n';
 import { ProjectService } from './services';
 
 /**

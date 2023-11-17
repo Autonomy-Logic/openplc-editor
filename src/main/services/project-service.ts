@@ -6,12 +6,13 @@ import { join } from 'path';
 import { BrowserWindow, dialog } from 'electron';
 import { convert, create } from 'xmlbuilder2';
 
-import { i18n } from '../../utils/i18n';
-import formatDate from '../../utils/formatDate';
-import { api } from '../contracts/main';
+import { i18n } from '../../shared/utils/i18n';
+import formatDate from '../../shared/utils/formatDate';
+import * as MainProcessTypes from '../contracts/types';
+import * as MainProcessDtos from '../contracts/dtos';
 
 // Wip: Refactoring project services.
-class ProjectService implements api.Types.IProjectService {
+class ProjectService implements MainProcessTypes.IProjectService {
   mainWindow: InstanceType<typeof BrowserWindow>;
   constructor(mainWindow: InstanceType<typeof BrowserWindow>) {
     this.mainWindow = mainWindow;
@@ -144,7 +145,9 @@ class ProjectService implements api.Types.IProjectService {
     });
     return {
       ok: true,
-      data: { projectPath, projectAsObj },
+      data: {
+        project: { path: projectPath, data: projectAsObj },
+      },
     };
   }
   // eslint-disable-next-line consistent-return
@@ -190,8 +193,10 @@ class ProjectService implements api.Types.IProjectService {
     return {
       ok: true,
       data: {
-        projectPath: filePath,
-        projectAsObj,
+        project: {
+          path: filePath,
+          data: projectAsObj,
+        },
       },
     };
   }
@@ -201,7 +206,7 @@ class ProjectService implements api.Types.IProjectService {
    * @param xmlSerializedAsObject - The XML data to be serialized and saved.
    * @returns A `promise` of `ResponseService` type.
    */
-  async saveProject({ path, data }: api.Dtos.IProjectData) {
+  async saveProject({ path, data }: MainProcessDtos.IProjectData) {
     // Check if required parameters are provided.
     if (!path || !data)
       return {

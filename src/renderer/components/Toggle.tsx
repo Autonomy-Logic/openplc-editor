@@ -5,7 +5,7 @@
 import { Switch } from '@headlessui/react';
 import { FC, ReactElement } from 'react';
 
-import { classNames } from '../../utils';
+import { classNames } from '../../shared/utils';
 /**
  * Props for the Toggle component.
  */
