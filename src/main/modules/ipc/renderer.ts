@@ -1,7 +1,7 @@
-import { OplcMainProcess } from '../../contracts/types';
+import * as MainProcessTypes from '../../contracts/types';
 import { ipcRenderer } from 'electron';
 
-const rendererProcessBridge: OplcMainProcess.Types.IpcRendererModule = {
+const rendererProcessBridge: MainProcessTypes.IpcRendererModule = {
   createProject: (callback) => ipcRenderer.on('project:create', callback),
   openProject: (callback) => ipcRenderer.on('project:open', callback),
   saveProject: (callback) => ipcRenderer.on('project:save-request', callback),

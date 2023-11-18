@@ -1,16 +1,16 @@
 import { produce } from 'immer';
 import { StateCreator } from 'zustand';
-import { ProjectDTO } from '@/types/common/project';
-import { CreatePouDto, UpdatePouDto } from '@/renderer/contracts/dtos';
+import * as projectValidation from '@/shared/contracts/validations/project-validation';
+import { CreatePouDto, UpdatePouDto } from 'renderer/contracts/dtos';
 
 export type WorkspaceProps = {
   projectPath: string | null;
-  projectData: ProjectDTO | null;
+  projectData: projectValidation.ProjectDTO | null;
 };
 
 export type WorkspaceSlice = WorkspaceProps & {
   setWorkspace: (workspaceData: WorkspaceProps) => void;
-  updateProject: (projectData?: ProjectDTO) => void;
+  updateProject: (projectData?: projectValidation.ProjectDTO) => void;
   updatePou: (pouData: UpdatePouDto) => void;
   addPou: (pouData: CreatePouDto) => void;
 };

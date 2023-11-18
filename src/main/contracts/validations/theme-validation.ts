@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { CONSTANTS } from '../../../shared/utils';
+import { constants } from '../../../shared/data';
 const {
   theme: { variants },
-} = CONSTANTS;
+} = constants;
 
 export const ThemeSchema = z
   .string()

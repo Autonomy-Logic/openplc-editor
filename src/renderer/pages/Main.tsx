@@ -8,13 +8,14 @@ import { SidebarProvider, TabsProvider } from 'renderer/contexts';
 import { useTabs, useTheme, useSidebar } from 'renderer/hooks';
 import { Layout } from 'renderer/templates';
 
-import { CONSTANTS } from '@/shared/utils';
-import { convertToPath } from '@/shared/utils';
+import { constants } from '../../shared/data';
+import { convertToPath } from '../../shared/utils';
+import { store } from '../../main/lib/store';
 
 /**
  * Destructure necessary values from the CONSTANTS module
  */
-const { paths } = CONSTANTS;
+const { paths } = constants;
 /**
  * Main functional component for the application
  * @component
@@ -98,6 +99,11 @@ const MainComponent: FC = () => {
    * Handle navigation and tab addition based on POU data
    */
   useEffect(() => {
+    const getStore = () => {
+      console.warn(store.store);
+    };
+
+    getStore();
     getProjectData();
     getPousToEdit();
   }, [getProjectData, getPousToEdit]);

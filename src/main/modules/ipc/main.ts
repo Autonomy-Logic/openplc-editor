@@ -2,9 +2,10 @@
 import { Event } from 'electron';
 import { IpcMainEvent } from 'electron/main';
 import * as validations from '../../../main/contracts/validations';
-import { OplcMainProcess } from '../../contracts/types';
+import * as MainProcessTypes from '../../contracts/types';
+import * as MainProcessDtos from '../../contracts/dtos';
 
-class MainProcessBridge extends OplcMainProcess.IpcMainModule {
+class MainProcessBridge extends MainProcessTypes.IpcMainModule {
   ipcMain;
   mainWindow;
   projectService;
@@ -14,7 +15,7 @@ class MainProcessBridge extends OplcMainProcess.IpcMainModule {
     mainWindow,
     projectService,
     store,
-  }: OplcMainProcess.Types.IpcMainModuleConstructor) {
+  }: MainProcessTypes.IpcMainModuleConstructor) {
     super();
     this.ipcMain = ipcMain;
     this.mainWindow = mainWindow;
@@ -30,7 +31,7 @@ class MainProcessBridge extends OplcMainProcess.IpcMainModule {
 
     this.ipcMain.on(
       'project:save-response',
-      async (_, data: OplcMainProcess.Dtos.IProjectData) =>
+      async (_, data: MainProcessDtos.IProjectData) =>
         this.projectService.saveProject(data),
     );
 
@@ -52,14 +53,14 @@ class MainProcessBridge extends OplcMainProcess.IpcMainModule {
       const theme = this.store.get('theme');
       return theme;
     },
-    setTheme: (_: IpcMainEvent, arg: OplcMainProcess.Types.IThemeProps) => {
+    setTheme: (_: IpcMainEvent, arg: MainProcessTypes.IThemeProps) => {
       const theme = validations.ThemeSchema.parse(arg);
       this.store.set('theme', theme);
     },
 
     saveProject: async (
       _: IpcMainEvent,
-      args: OplcMainProcess.Dtos.IProjectData,
+      args: MainProcessDtos.IProjectData,
     ) => {
       const response = await this.projectService.saveProject(args);
       return response;
@@ -77,7 +78,7 @@ class MainProcessBridge extends OplcMainProcess.IpcMainModule {
     //     data: { ...response.data, filePath },
     //   });
     // },
-    sendToast: (args: OplcMainProcess.Types.IToastProps) => {
+    sendToast: (args: MainProcessTypes.IToastProps) => {
       const message = validations.ToastSchema.parse(args);
       this.mainWindow?.webContents.send('get-toast', message);
     },
