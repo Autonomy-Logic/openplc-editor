@@ -9,5 +9,3 @@ window.addEventListener('DOMContentLoaded', () => {
     backgroundColor: TitlebarColor?.fromHex(colors.gray['900']),
   });
 });
-
-export {};

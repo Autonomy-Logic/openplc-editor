@@ -20,9 +20,9 @@ import {
 import { resolveHtmlPath } from '../shared/utils/resolveHtmlPath';
 import MenuBuilder from './menu';
 import MainProcessBridge from './modules/ipc/main';
+import mainIpcEventHandlers from './modules/handlers';
 import { ProjectService } from './services';
 import { store } from './lib/store';
-import { session } from 'electron/main';
 
 class AppUpdater {
   constructor() {
@@ -96,7 +96,6 @@ const createWindow = async () => {
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')
         : path.join(__dirname, '../../.oplc/dll/preload.js'),
-      webviewTag: true,
     },
   });
 
@@ -197,20 +196,6 @@ const createWindow = async () => {
  * Add event listeners...
  */
 
-const defineCSP = () =>
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "img-src 'self'",
-          "style-src 'self'",
-          "script-src 'self'",
-        ],
-      },
-    });
-  });
-
 // Disable GPU Acceleration for Windows 7;
 if (release().startsWith('6.1')) app.disableHardwareAcceleration();
 
@@ -246,7 +231,6 @@ app
   .whenReady()
   .then(() => {
     createWindow();
-    defineCSP();
     // Handle the app activation event;
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
