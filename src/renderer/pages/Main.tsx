@@ -8,8 +8,8 @@ import { SidebarProvider, TabsProvider } from 'renderer/contexts';
 import { useTabs, useTheme, useSidebar } from 'renderer/hooks';
 import { Layout } from 'renderer/templates';
 
-import { CONSTANTS } from '@/shared/utils';
-import { convertToPath } from '@/shared/utils';
+import { CONSTANTS } from '@/utils';
+import { convertToPath } from '@/utils';
 
 /**
  * Destructure necessary values from the CONSTANTS module

@@ -6,7 +6,7 @@ import { useModal } from 'renderer/hooks';
 import useOpenPLCStore from 'renderer/store';
 import { z, ZodSchema } from 'zod';
 
-import { CONSTANTS } from '@/shared/utils';
+import { CONSTANTS } from '@/utils';
 
 import { Button, Form } from '.';
 /**

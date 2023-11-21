@@ -18,7 +18,7 @@ import {
   attachTitlebarToWindow,
 } from 'custom-electron-titlebar/main';
 import { MainIpcModuleConstructor } from '../types/main/modules/ipc/main';
-import { resolveHtmlPath } from '../shared/utils/resolveHtmlPath';
+import { resolveHtmlPath } from '../utils/resolveHtmlPath';
 import MenuBuilder from './menu';
 import MainProcessBridge from './modules/ipc/main';
 import { ProjectService } from './services';

@@ -2,7 +2,7 @@ import { FC } from 'react';
 import { HiXMark } from 'react-icons/hi2';
 import ScrollContainer from 'react-indiana-drag-scroll';
 
-import { classNames } from '../../shared/utils';
+import { classNames } from '../../utils';
 /**
  * Props for the TitlebarTabs component.
  */

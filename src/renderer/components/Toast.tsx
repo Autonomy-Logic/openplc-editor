@@ -8,7 +8,7 @@ import {
 } from 'react-icons/hi2';
 import { ToastProps as SharedToastProps } from '../../types/toast';
 
-import { classNames } from '../../shared/utils';
+import { classNames } from '../../utils';
 /**
  * Props for the Toast component.
  */

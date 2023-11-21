@@ -2,7 +2,7 @@ import { Transition } from '@headlessui/react';
 import { MouseEvent, ReactNode, useCallback } from 'react';
 import { IoMdArrowDropdown, IoMdArrowDropup } from 'react-icons/io';
 
-import { classNames } from '../../../shared/utils';
+import { classNames } from '../../../utils';
 // REFACTOR: Find the module that is causing this error
 // eslint-disable-next-line import/no-cycle
 import { useToggle } from '../../hooks';

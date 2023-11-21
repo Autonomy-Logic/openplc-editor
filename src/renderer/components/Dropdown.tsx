@@ -7,7 +7,7 @@
 import { Menu, Transition } from '@headlessui/react';
 import { FC, Fragment, PropsWithChildren, useEffect, useRef } from 'react';
 
-import { classNames } from '../../shared/utils';
+import { classNames } from '../../utils';
 /**
  * Defines the structure of a dropdown option.
  */

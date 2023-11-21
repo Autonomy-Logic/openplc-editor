@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { darkTheme, lightTheme } from '../../../assets';
 import { useTheme } from '../../../hooks';
-import { classNames } from '../../../../shared/utils';
+import { classNames } from '../../../../utils';
 /**
  * Functional component for managing the theme settings
  * @component

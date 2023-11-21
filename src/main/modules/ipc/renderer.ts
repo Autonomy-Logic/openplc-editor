@@ -1,4 +1,4 @@
-import { OplcMainProcess } from '../../contracts/types';
+import { OplcMainProcess } from '../../contracts/main';
 import { ipcRenderer } from 'electron';
 
 const rendererProcessBridge: OplcMainProcess.Types.IpcRendererModule = {

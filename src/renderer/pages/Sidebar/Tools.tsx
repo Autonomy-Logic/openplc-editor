@@ -22,7 +22,7 @@ import {
   HiPrinter,
   HiScissors,
 } from 'react-icons/hi2';
-import { CONSTANTS } from '@/shared/utils';
+import { CONSTANTS } from '@/utils';
 
 import { CreatePOU, Tabs, Tooltip } from 'renderer/components';
 import { useFullScreen, useModal, useToast } from 'renderer/hooks';

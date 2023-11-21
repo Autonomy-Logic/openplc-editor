@@ -25,9 +25,9 @@ import {
 } from '../../pages';
 import { CurrentProps } from '../../contexts/Sidebar';
 import { Tooltip } from '../../components';
-import { classNames } from '../../../shared/utils';
+import { classNames } from '../../../utils';
 import useOpenPLCStore from '../../store';
-import { CONSTANTS } from '@/shared/utils';
+import { CONSTANTS } from '@/utils';
 
 function Layout({ main }: any): ReactNode {
   const { paths } = CONSTANTS;
