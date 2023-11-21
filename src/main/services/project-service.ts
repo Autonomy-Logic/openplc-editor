@@ -8,10 +8,14 @@ import { convert, create } from 'xmlbuilder2';
 
 import { i18n } from '../../utils/i18n';
 import formatDate from '../../utils/formatDate';
-import { api } from '../contracts/api';
+import {
+  ProjectDto,
+  TProjectService,
+} from '../../types/main/services/project.service';
+import { ResponseService } from '../../types/main/services/response';
 
 // Wip: Refactoring project services.
-class ProjectService implements api.Types.IProjectService {
+class ProjectService implements TProjectService {
   mainWindow: InstanceType<typeof BrowserWindow>;
   constructor(mainWindow: InstanceType<typeof BrowserWindow>) {
     this.mainWindow = mainWindow;
@@ -21,7 +25,7 @@ class ProjectService implements api.Types.IProjectService {
    * @returns A `promise` of `ServiceResponse` type.
    */
   // eslint-disable-next-line class-methods-use-this
-  async createProject() {
+  async createProject(): Promise<ResponseService<ProjectDto>> {
     // Show a dialog to select the project directory.
     const response = await dialog.showOpenDialog(this.mainWindow, {
       title: i18n.t('createProject:dialog.title'),
@@ -148,7 +152,12 @@ class ProjectService implements api.Types.IProjectService {
     };
   }
   // eslint-disable-next-line consistent-return
-  async openProject() {
+  async openProject(): Promise<
+    ResponseService<{
+      projectPath: string;
+      projectAsObj: object;
+    }>
+  > {
     const response = await dialog.showOpenDialog(this.mainWindow, {
       title: i18n.t('openProject:dialog.title'),
       properties: ['openFile'],
@@ -201,9 +210,10 @@ class ProjectService implements api.Types.IProjectService {
    * @param xmlSerializedAsObject - The XML data to be serialized and saved.
    * @returns A `promise` of `ResponseService` type.
    */
-  async saveProject({ path, data }: api.Dtos.IProjectData) {
+  async saveProject(data: ProjectDto): Promise<any | void> {
+    const { projectPath, projectAsObj } = data;
     // Check if required parameters are provided.
-    if (!path || !data)
+    if (!projectPath || !projectAsObj)
       return {
         ok: false,
         reason: {
@@ -217,7 +227,7 @@ class ProjectService implements api.Types.IProjectService {
     // Serialize the XML data using xmlbuilder2.
     const projectAsXml = create(
       // { parser: { cdata: (projectAsObj) => projectAsObj } },
-      data,
+      projectAsObj,
     );
 
     /**
@@ -225,7 +235,7 @@ class ProjectService implements api.Types.IProjectService {
      * If the file saving failed, return an error response,
      * otherwise return a successful response.
      */
-    writeFile(path, projectAsXml.end({ prettyPrint: true }), (error) => {
+    writeFile(projectPath, projectAsXml.end({ prettyPrint: true }), (error) => {
       if (error) throw error;
       return {
         ok: false,

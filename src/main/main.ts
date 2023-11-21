@@ -172,12 +172,11 @@ const createWindow = async () => {
     return { action: 'deny' };
   });
 
-  // Create an instance of the project service to be used by the main process.
-  const projectService = new ProjectService(mainWindow);
-
   // Handles the creation of the menu
-  const menuBuilder = new MenuBuilder(mainWindow, projectService);
+  const menuBuilder = new MenuBuilder(mainWindow);
   menuBuilder.buildMenu();
+
+  const projectService = new ProjectService(mainWindow);
 
   const mainIpcModule = new MainProcessBridge({
     mainWindow,

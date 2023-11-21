@@ -11,7 +11,7 @@
     "reload"
   ],
   "homepage": "https://github.com/Autonomy-Logic/OpenPLC_Editor",
-  "license": "GPL-3.0-or-later",
+  "license": "MIT",
   "author": {
     "name": "Autonomy Logic"
   },
@@ -268,5 +268,5 @@
     "electron",
     "electron-builder"
   ],
-  "packageManager": "yarn@4.0.2"
+  "packageManager": "yarn@4.0.1"
 }
