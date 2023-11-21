@@ -1,5 +1,9 @@
 import Store from 'electron-store';
-import { DefaultStoreProps, getDefaultStore, schema } from './schema';
+import {
+  DefaultStoreProps,
+  getDefaultStore,
+  schema,
+} from '../../types/main/store/schema';
 
 // eslint-disable-next-line import/prefer-default-export
 export const store = new Store<DefaultStoreProps>({

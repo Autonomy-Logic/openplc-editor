@@ -1,10 +1,20 @@
 /* eslint-disable no-console */
 import { Event } from 'electron';
-import { IpcMainEvent } from 'electron/main';
-import * as validations from '../../../main/contracts/validations';
-import { OplcMainProcess } from '../../contracts/main';
+import { ThemeProps, ThemeSchema } from '../../../types/theme';
+import { ToastProps, ToastSchema } from '../../../types/main/modules/ipc/toast';
+import {
+  MainIpcModule,
+  MainIpcModuleConstructor,
+} from '../../../types/main/modules/ipc/main';
+import { ProjectDto } from '../../../types/main/services/project.service';
 
-class MainProcessBridge extends OplcMainProcess.IpcMainModule {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type StoreResponse = {
+  ok: boolean;
+  message: string;
+};
+
+class MainProcessBridge implements MainIpcModule {
   ipcMain;
   mainWindow;
   projectService;
@@ -14,8 +24,7 @@ class MainProcessBridge extends OplcMainProcess.IpcMainModule {
     mainWindow,
     projectService,
     store,
-  }: OplcMainProcess.Types.IpcMainModuleConstructor) {
-    super();
+  }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain;
     this.mainWindow = mainWindow;
     this.projectService = projectService;
@@ -30,11 +39,10 @@ class MainProcessBridge extends OplcMainProcess.IpcMainModule {
 
     this.ipcMain.on(
       'project:save-response',
-      async (_, data: OplcMainProcess.Dtos.IProjectData) =>
-        this.projectService.saveProject(data),
+      async (_event, data: ProjectDto) => this.projectService.saveProject(data),
     );
-
     // Wip: From here
+
     this.ipcMain.handle('app:get-theme', this.mainIpcEventHandlers.getTheme);
     this.ipcMain.on('app:set-theme', this.mainIpcEventHandlers.setTheme);
   }
@@ -44,24 +52,21 @@ class MainProcessBridge extends OplcMainProcess.IpcMainModule {
       const response = this.store.get(key) as unknown as string;
       return response;
     },
-    setStoreValue: (_: IpcMainEvent, key: string, val: string): void =>
+    setStoreValue: (_: Event, key: string, val: string): void =>
       this.store.set(key, val),
     createPou: () =>
       this.mainWindow?.webContents.send('pou:createPou', { ok: true }),
     getTheme: () => {
-      const theme = this.store.get('theme');
+      const theme = this.store.get('theme') as ThemeProps;
       return theme;
     },
-    setTheme: (_: IpcMainEvent, arg: OplcMainProcess.Types.IThemeProps) => {
-      const theme = validations.ThemeSchema.parse(arg);
+    setTheme: (_: Event, arg: ThemeProps) => {
+      const theme = ThemeSchema.parse(arg);
       this.store.set('theme', theme);
     },
 
-    saveProject: async (
-      _: IpcMainEvent,
-      args: OplcMainProcess.Dtos.IProjectData,
-    ) => {
-      const response = await this.projectService.saveProject(args);
+    saveProject: async (_: Event, arg: ProjectDto) => {
+      const response = await this.projectService.saveProject(arg);
       return response;
     },
     // Wip: From here
@@ -77,8 +82,8 @@ class MainProcessBridge extends OplcMainProcess.IpcMainModule {
     //     data: { ...response.data, filePath },
     //   });
     // },
-    sendToast: (args: OplcMainProcess.Types.IToastProps) => {
-      const message = validations.ToastSchema.parse(args);
+    sendToast: (arg: ToastProps) => {
+      const message = ToastSchema.parse(arg);
       this.mainWindow?.webContents.send('get-toast', message);
     },
   };

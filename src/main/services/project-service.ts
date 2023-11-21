@@ -8,7 +8,7 @@ import { convert, create } from 'xmlbuilder2';
 
 import { i18n } from '../../utils/i18n';
 import formatDate from '../../utils/formatDate';
-import { api } from '../contracts/main';
+import { api } from '../contracts/api';
 
 // Wip: Refactoring project services.
 class ProjectService implements api.Types.IProjectService {

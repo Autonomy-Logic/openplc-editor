@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { CONSTANTS } from '../../../utils';
+import { CONSTANTS } from '@/utils';
 
 const { paths } = CONSTANTS;
 
@@ -41,3 +41,5 @@ export const ChildWindowSchema = z.object({
     .enum(['default', 'hidden', 'hiddenInset', 'customButtonsOnHover'])
     .optional(),
 });
+
+export type ChildWindowProps = z.infer<typeof ChildWindowSchema>;

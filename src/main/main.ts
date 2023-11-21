@@ -22,7 +22,7 @@ import { resolveHtmlPath } from '../utils/resolveHtmlPath';
 import MenuBuilder from './menu';
 import MainProcessBridge from './modules/ipc/main';
 import { ProjectService } from './services';
-import { store } from './lib/store';
+import { store } from './store';
 
 class AppUpdater {
   constructor() {
