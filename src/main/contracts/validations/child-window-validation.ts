@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import { constants } from '../../../shared/data';
+import { CONSTANTS } from '../../../shared/utils';
 
-const { paths } = constants;
+const { paths } = CONSTANTS;
 
 export const ChildWindowSchema = z.object({
   parentWindow: z.any().optional(),

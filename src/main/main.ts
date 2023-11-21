@@ -17,10 +17,10 @@ import {
   setupTitlebar,
   attachTitlebarToWindow,
 } from 'custom-electron-titlebar/main';
+import { MainIpcModuleConstructor } from '../types/main/modules/ipc/main';
 import { resolveHtmlPath } from '../shared/utils/resolveHtmlPath';
 import MenuBuilder from './menu';
 import MainProcessBridge from './modules/ipc/main';
-import mainIpcEventHandlers from './modules/handlers';
 import { ProjectService } from './services';
 import { store } from './lib/store';
 
@@ -175,9 +175,8 @@ const createWindow = async () => {
   // Create an instance of the project service to be used by the main process.
   const projectService = new ProjectService(mainWindow);
 
-  // Create an instance of the menu builder to be used by the main process.
-  const menuBuilder = new MenuBuilder(mainWindow, projectService);
   // Handles the creation of the menu
+  const menuBuilder = new MenuBuilder(mainWindow, projectService);
   menuBuilder.buildMenu();
 
   const mainIpcModule = new MainProcessBridge({
@@ -185,7 +184,7 @@ const createWindow = async () => {
     ipcMain,
     projectService,
     store,
-  });
+  } as unknown as MainIpcModuleConstructor);
   mainIpcModule.setupMainIpcListener();
   // Remove this if your app does not use auto updates;
   // eslint-disable-next-line
