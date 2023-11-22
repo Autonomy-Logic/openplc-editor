@@ -5,7 +5,6 @@
 import { DragEvent, FC, Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconType } from 'react-icons';
-
 import { gray } from 'tailwindcss/colors';
 
 import { Tooltip } from '../../components';

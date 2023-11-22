@@ -21,8 +21,7 @@ export type TitlebarTabsProps = {
  */
 // Review this eslint rule
 // eslint-disable-next-line react/function-component-definition
-const TitlebarTabs: FC<TitlebarTabsProps> = ({ tabs }) => {
-  return (
+const TitlebarTabs: FC<TitlebarTabsProps> = ({ tabs }) => (
     <ScrollContainer className="mx-4">
       <div className="flex items-center">
         <nav className="flex space-x-2" aria-label="Tabs">
@@ -63,6 +62,5 @@ const TitlebarTabs: FC<TitlebarTabsProps> = ({ tabs }) => {
       </div>
     </ScrollContainer>
   );
-};
 
 export default TitlebarTabs;

@@ -12,12 +12,12 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "allowJs": true,
-    "outDir": ".oplc/dll",
+    "outDir": "configs/dll",
     "paths": {
       "@/*": ["./src/*"],
       "main/*": ["./src/main/*"],
       "renderer/*": ["./src/renderer/*"]
     }
   },
-  "exclude": ["test", "release/build", "release/app/dist", ".oplc/dll"]
+  "exclude": ["test", "release/build", "release/app/dist", "configs/dll"]
 }

@@ -18,8 +18,7 @@ export type TabsProps = {
  */
 // Review this eslint rule
 // eslint-disable-next-line react/function-component-definition
-const Tabs: FC<TabsProps> = ({ tabs }) => {
-  return (
+const Tabs: FC<TabsProps> = ({ tabs }) => (
     <div className="border-b border-gray-900/10 bg-white px-4 dark:border-white/5 dark:bg-gray-900">
       <nav className="-mb-px flex space-x-8" aria-label="Tabs">
         {tabs.map(({ id, title, current, onClick }) => (
@@ -41,6 +40,5 @@ const Tabs: FC<TabsProps> = ({ tabs }) => {
       </nav>
     </div>
   );
-};
 
 export default Tabs;

@@ -39,4 +39,4 @@ const darkThemeData: monaco.editor.IStandaloneThemeData = {
   },
 };
 
-export { lightThemeData, darkThemeData };
+export { darkThemeData,lightThemeData };

@@ -6,9 +6,9 @@ import {
   useMemo,
 } from 'react';
 import { toast } from 'react-toastify';
+
 import { ToastProps as SharedToastMessageProps } from '../../types/toast';
 // import { CONSTANTS } from '../../constants';
-
 import { Toast } from '../components';
 // Todo: Resolve ipc communication
 // import { useIpcRender } from '@/hooks';

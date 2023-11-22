@@ -3,13 +3,12 @@
 import { FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-
 import { Tabs } from 'renderer/components';
 import Tree, { RootProps } from 'renderer/components/Tree';
 import { useTabs } from 'renderer/hooks';
 import useOpenPLCStore from 'renderer/store';
-import { convertToPath } from '@/utils';
-import { CONSTANTS } from '@/utils';
+
+import { CONSTANTS,convertToPath  } from '@/utils';
 /**
  * Destructure necessary values from the CONSTANTS module
  */

@@ -4,7 +4,6 @@ import { FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Tabs } from '../../../components';
-
 import Theme from './Theme';
 /**
  * Functional component for managing settings

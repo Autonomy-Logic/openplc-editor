@@ -2,12 +2,13 @@
  * Base webpack config used across other specific configs
  */
 /* eslint-disable import/no-named-as-default */
+/* eslint import/no-unresolved: [2, { ignore: ['\\.release/app/package.json$'] }] */
 
-import webpack from 'webpack';
 import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin';
-import webpackPaths from './webpack.paths';
-// eslint-disable-next-line import/no-extraneous-dependencies
+import webpack from 'webpack';
+
 import { dependencies as externals } from '../../release/app/package.json';
+import webpackPaths from './webpack.paths';
 
 const configuration: webpack.Configuration = {
   externals: [...Object.keys(externals || {}), 'terser-webpack-plugin'],

@@ -1,33 +1,34 @@
 /* eslint-disable import/no-cycle */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { useLocation } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { ReactNode, useState } from 'react';
 import { Transition } from '@headlessui/react';
-import { ResizeCallbackData, ResizableBox } from 'react-resizable';
+import { ReactNode, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { FaDrawPolygon } from 'react-icons/fa';
 import {
+  HiBars3,
+  HiOutlineBars3CenterLeft,
+  HiOutlineCog6Tooth,
   HiOutlineSquares2X2,
   HiVariable,
-  HiOutlineCog6Tooth,
-  HiOutlineBars3CenterLeft,
-  HiBars3,
 } from 'react-icons/hi2';
-import { FaDrawPolygon } from 'react-icons/fa';
 import { RiNodeTree } from 'react-icons/ri';
-import { LayoutProps } from './layout';
+import { ResizableBox,ResizeCallbackData } from 'react-resizable';
+import { useLocation } from 'react-router-dom';
+
+import { classNames,CONSTANTS  } from '@/utils';
+
+import { Tooltip } from '../../components';
+import { CurrentProps } from '../../contexts/Sidebar';
 import { useSidebar, useToggle } from '../../hooks';
 import {
-  Tools,
-  ProjectTree,
   EditorTools,
-  Variables,
+  ProjectTree,
   Settings,
+  Tools,
+  Variables,
 } from '../../pages';
-import { CurrentProps } from '../../contexts/Sidebar';
-import { Tooltip } from '../../components';
-import { classNames } from '../../../utils';
 import useOpenPLCStore from '../../store';
-import { CONSTANTS } from '@/utils';
+import { LayoutProps } from './layout';
 
 function Layout({ main }: any): ReactNode {
   const { paths } = CONSTANTS;

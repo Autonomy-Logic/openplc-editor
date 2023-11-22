@@ -1,4 +1,4 @@
-import { TitlebarColor, Titlebar } from 'custom-electron-titlebar';
+import { Titlebar,TitlebarColor } from 'custom-electron-titlebar';
 import colors from 'tailwindcss/colors';
 
 // Wip: Should export the titlebar instance

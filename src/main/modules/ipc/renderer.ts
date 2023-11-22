@@ -1,4 +1,4 @@
-import { IpcRendererEvent, ipcRenderer } from 'electron';
+import { ipcRenderer,IpcRendererEvent } from 'electron';
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void;
 

@@ -1,16 +1,18 @@
 import 'webpack-dev-server';
+
+import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin';
+import chalk from 'chalk';
+import { execSync, spawn } from 'child_process';
 import fs from 'fs';
+import HtmlWebpackPlugin from 'html-webpack-plugin';
+import MonacoEditorWebpackPlugin from 'monaco-editor-webpack-plugin';
 import path from 'path';
 import webpack from 'webpack';
-import HtmlWebpackPlugin from 'html-webpack-plugin';
-import chalk from 'chalk';
 import { merge } from 'webpack-merge';
-import { execSync, spawn } from 'child_process';
-import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin';
-import MonacoEditorWebpackPlugin from 'monaco-editor-webpack-plugin';
+
+import checkNodeEnv from '../scripts/check-node-env';
 import baseConfig from './webpack.config.base';
 import webpackPaths from './webpack.paths';
-import checkNodeEnv from '../scripts/check-node-env';
 
 // When an ESLint server is running, we can't set the NODE_ENV so we'll check if it's
 // at the dev webpack config is not accidentally run in a production environment

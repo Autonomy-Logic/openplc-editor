@@ -3,10 +3,12 @@ import './styles/tailwind.css';
 import './styles/react-resizable.css';
 import './styles/react-toastify.css';
 import './styles/titlebar.css';
+
+import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { ToastContainer } from 'react-toastify';
 import { ReactFlowProvider } from 'reactflow';
-import { DndProvider } from 'react-dnd';
+
 import {
   ModalProvider,
   ReactFlowElementsProvider,

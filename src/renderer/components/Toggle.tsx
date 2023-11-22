@@ -21,8 +21,7 @@ export type ToggleProps = {
  * Toggle component to create a switch with customizable icons.
  * @returns a JSX component of a toggle with customizable icons
  */
-const Toggle: FC<ToggleProps> = ({ enabled, setEnabled, icons }) => {
-  return (
+const Toggle: FC<ToggleProps> = ({ enabled, setEnabled, icons }) => (
     <Switch
       checked={enabled}
       onChange={setEnabled}
@@ -63,6 +62,5 @@ const Toggle: FC<ToggleProps> = ({ enabled, setEnabled, icons }) => {
       </span>
     </Switch>
   );
-};
 
 export default Toggle;

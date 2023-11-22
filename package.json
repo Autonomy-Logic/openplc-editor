@@ -18,17 +18,18 @@
   "main": "./src/main/main.ts",
   "scripts": {
     "build": "concurrently \"npm run build:main\" \"npm run build:renderer\"",
-    "build:dll": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.oplc/configs/webpack.config.renderer.dev.dll.ts",
-    "build:main": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.oplc/configs/webpack.config.main.prod.ts",
-    "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.oplc/configs/webpack.config.renderer.prod.ts",
-    "postinstall": "ts-node .oplc/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
+    "build:dll": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.dev.dll.ts",
+    "build:main": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.prod.ts",
+    "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.prod.ts",
+    "postinstall": "ts-node configs/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
-    "package": "ts-node ./.oplc/scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
+    "lint:fix": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "package": "ts-node ./configs/scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
-    "start:dev": "ts-node ./.oplc/scripts/check-port-in-use.js && npm run start:renderer",
+    "start:dev": "ts-node ./configs/scripts/check-port-in-use.js && npm run start:renderer",
     "start:main": "cross-env NODE_ENV=development electronmon -r ts-node/register/transpile-only .",
-    "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.oplc/configs/webpack.config.preload.dev.ts",
-    "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.oplc/configs/webpack.config.renderer.dev.ts",
+    "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
+    "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
     "test": "jest"
   },
   "browserslist": [],
@@ -60,11 +61,11 @@
       "json"
     ],
     "moduleNameMapper": {
-      "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/.oplc/mocks/fileMock.js",
+      "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/configs/mocks/fileMock.js",
       "\\.(css|less|sass|scss)$": "identity-obj-proxy"
     },
     "setupFiles": [
-      "./.oplc/scripts/check-build-exists.ts"
+      "./configs/scripts/check-build-exists.ts"
     ],
     "testEnvironment": "jsdom",
     "testEnvironmentOptions": {
@@ -72,7 +73,7 @@
     },
     "testPathIgnorePatterns": [
       "release/app/dist",
-      ".oplc/dll"
+      "configs/dll"
     ],
     "transform": {
       "\\.(ts|tsx|js|jsx)$": "ts-jest"
@@ -199,7 +200,7 @@
       "node_modules",
       "package.json"
     ],
-    "afterSign": ".oplc/scripts/notarize.js",
+    "afterSign": "configs/scripts/notarize.js",
     "mac": {
       "target": {
         "target": "default",
@@ -246,12 +247,7 @@
     },
     "extraResources": [
       "./assets/**"
-    ],
-    "publish": {
-      "provider": "github",
-      "owner": "electron-react-boilerplate",
-      "repo": "electron-react-boilerplate"
-    }
+    ]
   },
   "devEngines": {
     "node": ">=18.x",

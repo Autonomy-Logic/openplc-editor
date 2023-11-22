@@ -12,8 +12,7 @@ const domReady = (
    */
   // eslint-disable-next-line no-undef
   condition: DocumentReadyState[] = ['complete', 'interactive'],
-) => {
-  return new Promise((resolve) => {
+) => new Promise((resolve) => {
     if (condition.includes(document.readyState)) {
       resolve(true);
     } else {
@@ -24,7 +23,6 @@ const domReady = (
       });
     }
   });
-};
 
 /**
  * Utility functions for safely manipulating the DOM.

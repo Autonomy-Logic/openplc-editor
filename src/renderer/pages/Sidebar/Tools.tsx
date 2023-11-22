@@ -22,11 +22,11 @@ import {
   HiPrinter,
   HiScissors,
 } from 'react-icons/hi2';
-import { CONSTANTS } from '@/utils';
-
 import { CreatePOU, Tabs, Tooltip } from 'renderer/components';
 import { useFullScreen, useModal, useToast } from 'renderer/hooks';
+
 import useOpenPLCStore from '@/renderer/store';
+import { CONSTANTS } from '@/utils';
 /**
  * Destructure necessary values from the CONSTANTS module
  */

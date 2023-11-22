@@ -1,5 +1,4 @@
 import { Schema } from 'electron-store';
-
 import { z } from 'zod';
 
 /**
@@ -49,13 +48,11 @@ export type DefaultStoreProps = z.infer<typeof defaultStoreSchema>;
  * Generates the default store configuration.
  * @returns {DefaultStoreProps} The default store configuration.
  */
-export const getDefaultStore = (): DefaultStoreProps => {
-  return {
+export const getDefaultStore = (): DefaultStoreProps => ({
     recentProjects: '',
     theme: 'light',
     window: {},
-  };
-};
+  });
 
 export const schema: Schema<DefaultStoreProps> = {
   recentProjects: { type: 'string' },

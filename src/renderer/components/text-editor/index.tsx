@@ -3,14 +3,16 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-console */
 /* eslint-disable import/no-cycle */
-import useOpenPLCStore from '@/renderer/store';
 import './config/index';
+
 import { Editor } from '@monaco-editor/react';
-import { useCallback, useEffect, useRef } from 'react';
-import { useTabs } from '@/renderer/hooks';
-import * as monaco from 'monaco-editor';
-import _ from 'lodash';
 import { IpcRendererEvent } from 'electron/renderer';
+import _ from 'lodash';
+import * as monaco from 'monaco-editor';
+import { useCallback, useEffect, useRef } from 'react';
+
+import { useTabs } from '@/renderer/hooks';
+import useOpenPLCStore from '@/renderer/store';
 
 export default function TextEditor() {
   const projectPath = useOpenPLCStore.useProjectPath();

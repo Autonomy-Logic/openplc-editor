@@ -30,8 +30,7 @@ const Button: FC<ButtonProps> = ({
   label,
   widthFull = false,
   ...rest
-}) => {
-  return (
+}) => (
     <button
       type="button"
       disabled={disabled}
@@ -64,6 +63,5 @@ const Button: FC<ButtonProps> = ({
         ))}
     </button>
   );
-};
 
 export default Button;

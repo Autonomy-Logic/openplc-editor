@@ -1,18 +1,17 @@
 /* eslint-disable prettier/prettier */
 /* eslint-disable class-methods-use-this */
+import { BrowserWindow, dialog } from 'electron';
 import { promises, readFile, writeFile } from 'fs';
 import { join } from 'path';
-
-import { BrowserWindow, dialog } from 'electron';
 import { convert, create } from 'xmlbuilder2';
 
-import { i18n } from '../../utils/i18n';
-import formatDate from '../../utils/formatDate';
 import {
   ProjectDto,
   TProjectService,
 } from '../../types/main/services/project.service';
 import { ResponseService } from '../../types/main/services/response';
+import formatDate from '../../utils/formatDate';
+import { i18n } from '../../utils/i18n';
 
 // Wip: Refactoring project services.
 class ProjectService implements TProjectService {

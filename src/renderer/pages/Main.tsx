@@ -2,14 +2,12 @@
 /* eslint-disable react/function-component-definition */
 import { FC, useCallback, useEffect, useMemo } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-
-import useOpenPLCStore from 'renderer/store';
 import { SidebarProvider, TabsProvider } from 'renderer/contexts';
-import { useTabs, useTheme, useSidebar } from 'renderer/hooks';
+import { useSidebar,useTabs, useTheme } from 'renderer/hooks';
+import useOpenPLCStore from 'renderer/store';
 import { Layout } from 'renderer/templates';
 
-import { CONSTANTS } from '@/utils';
-import { convertToPath } from '@/utils';
+import { CONSTANTS , convertToPath } from '@/utils';
 
 /**
  * Destructure necessary values from the CONSTANTS module

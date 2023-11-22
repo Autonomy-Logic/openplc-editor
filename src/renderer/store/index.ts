@@ -1,5 +1,6 @@
-import { create } from 'zustand';
 import { createSelectorHooks } from 'auto-zustand-selectors-hook';
+import { create } from 'zustand';
+
 import createWorkspaceSlice, {
   WorkspaceSlice as WorkspaceSliceType,
 } from './slices/workspace';

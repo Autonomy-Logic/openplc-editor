@@ -20,7 +20,7 @@ node_modules
 
 release/app/dist
 release/build
-.oplc/dll
+configs/dll
 
 .idea
 npm-debug.log.*
@@ -30,4 +30,4 @@ npm-debug.log.*
 
 # eslint ignores hidden directories by default:
 # https://github.com/eslint/eslint/issues/8429
-!.oplc
+# !.oplc

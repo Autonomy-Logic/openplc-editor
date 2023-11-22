@@ -52,7 +52,7 @@ module.exports = {
       node: {},
       typescript: {},
       webpack: {
-        config: require.resolve('./.oplc/configs/webpack.config.eslint.ts'),
+        config: require.resolve('./configs/webpack/webpack.config.eslint.ts'),
       },
     },
     'import/parsers': {

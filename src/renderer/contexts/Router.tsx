@@ -4,9 +4,10 @@ import {
   createBrowserRouter,
   RouterProvider as ReactRouterProvider,
 } from 'react-router-dom';
+
 import { CONSTANTS } from '@/utils';
 
-import { Main, Editor, Project, Resources } from '../pages';
+import { Editor, Main, Project, Resources } from '../pages';
 /**
  * Destructure necessary property from the CONSTANTS module.
  */

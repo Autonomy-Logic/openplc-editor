@@ -2,19 +2,20 @@
  * Build config for electron renderer process
  */
 
-import path from 'path';
-import webpack from 'webpack';
+import CssMinimizerPlugin from 'css-minimizer-webpack-plugin';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
-import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
-import CssMinimizerPlugin from 'css-minimizer-webpack-plugin';
-import { merge } from 'webpack-merge';
-import TerserPlugin from 'terser-webpack-plugin';
 import MonacoEditorWebpackPlugin from 'monaco-editor-webpack-plugin';
-import baseConfig from './webpack.config.base';
-import webpackPaths from './webpack.paths';
+import path from 'path';
+import TerserPlugin from 'terser-webpack-plugin';
+import webpack from 'webpack';
+import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
+import { merge } from 'webpack-merge';
+
 import checkNodeEnv from '../scripts/check-node-env';
 import deleteSourceMaps from '../scripts/delete-source-maps';
+import baseConfig from './webpack.config.base';
+import webpackPaths from './webpack.paths';
 
 checkNodeEnv('production');
 deleteSourceMaps();

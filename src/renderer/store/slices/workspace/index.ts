@@ -1,7 +1,8 @@
 import { produce } from 'immer';
 import { StateCreator } from 'zustand';
-import { ProjectDTO } from '@/types/common/project';
+
 import { CreatePouDto, UpdatePouDto } from '@/renderer/contracts/dtos';
+import { ProjectDTO } from '@/types/common/project';
 
 export type WorkspaceProps = {
   projectPath: string | null;

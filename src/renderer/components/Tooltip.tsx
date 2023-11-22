@@ -21,8 +21,7 @@ const Tooltip: FC<PropsWithChildren<TooltipProps>> = ({
   children,
   label,
   place,
-}) => {
-  return (
+}) => (
     <>
       {cloneElement(children as ReactElement, {
         'data-tooltip-id': id,
@@ -35,6 +34,5 @@ const Tooltip: FC<PropsWithChildren<TooltipProps>> = ({
       />
     </>
   );
-};
 
 export default Tooltip;

@@ -1,4 +1,5 @@
 import Store from 'electron-store';
+
 import {
   DefaultStoreProps,
   getDefaultStore,

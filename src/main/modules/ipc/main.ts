@@ -1,12 +1,13 @@
 /* eslint-disable no-console */
 import { Event } from 'electron';
-import { ThemeProps, ThemeSchema } from '../../../types/theme';
-import { ToastProps, ToastSchema } from '../../../types/main/modules/ipc/toast';
+
 import {
   MainIpcModule,
   MainIpcModuleConstructor,
 } from '../../../types/main/modules/ipc/main';
+import { ToastProps, ToastSchema } from '../../../types/main/modules/ipc/toast';
 import { ProjectDto } from '../../../types/main/services/project.service';
+import { ThemeProps, ThemeSchema } from '../../../types/theme';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type StoreResponse = {

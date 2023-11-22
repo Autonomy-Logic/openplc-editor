@@ -8,15 +8,16 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
-import path from 'path';
-import { app, BrowserWindow, shell, ipcMain } from 'electron';
-import { autoUpdater } from 'electron-updater';
-import log from 'electron-log';
-import { release } from 'os';
 import {
-  setupTitlebar,
   attachTitlebarToWindow,
+  setupTitlebar,
 } from 'custom-electron-titlebar/main';
+import { app, BrowserWindow, ipcMain,shell } from 'electron';
+import log from 'electron-log';
+import { autoUpdater } from 'electron-updater';
+import { release } from 'os';
+import path from 'path';
+
 import { MainIpcModuleConstructor } from '../types/main/modules/ipc/main';
 import { resolveHtmlPath } from '../utils/resolveHtmlPath';
 import MenuBuilder from './menu';
@@ -74,9 +75,7 @@ const createWindow = async () => {
     : path.join(__dirname, '../../assets');
 
   // Create a function that return the asset that the name was given;
-  const getAssetPath = (...paths: string[]): string => {
-    return path.join(RESOURCES_PATH, ...paths);
-  };
+  const getAssetPath = (...paths: string[]): string => path.join(RESOURCES_PATH, ...paths);
 
   const { bounds } = store.get('window');
 
@@ -95,7 +94,7 @@ const createWindow = async () => {
       sandbox: false,
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')
-        : path.join(__dirname, '../../.oplc/dll/preload.js'),
+        : path.join(__dirname, '../../configs/dll/preload.js'),
     },
   });
 

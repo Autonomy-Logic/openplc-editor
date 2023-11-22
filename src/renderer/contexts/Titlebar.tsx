@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-shadow */
 /* eslint-disable react/function-component-definition */
 /* eslint-disable import/no-cycle */
+import { Titlebar } from 'custom-electron-titlebar';
 import {
   createContext,
   FC,
@@ -10,7 +11,6 @@ import {
   useMemo,
 } from 'react';
 
-import { Titlebar } from 'custom-electron-titlebar';
 import { useFullScreen } from '../hooks';
 /**
  * Destructure necessary properties from the CONSTANTS module.
