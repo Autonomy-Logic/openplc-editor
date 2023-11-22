@@ -41,7 +41,11 @@ if (
   execSync('npm run postinstall');
 }
 
-const configuration: webpack.Configuration = {
+interface ICustomConfiguration extends webpack.Configuration {
+  devServer?: object;
+}
+
+const configuration: ICustomConfiguration = {
   devtool: 'inline-source-map',
 
   mode: 'development',
@@ -197,7 +201,7 @@ const configuration: webpack.Configuration = {
     historyApiFallback: {
       verbose: true,
     },
-    setupMiddlewares(middlewares) {
+    setupMiddlewares(middlewares: never) {
       console.log('Starting preload.js builder...');
       const preloadProcess = spawn('npm', ['run', 'start:preload'], {
         shell: true,
