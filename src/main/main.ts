@@ -1,5 +1,5 @@
-/* eslint global-require: off, no-console: off, promise/always-return: off */
-
+/* eslint-disable @typescript-eslint/no-var-requires */
+/* eslint global-require: off, no-console: off */
 /**
  * This module executes inside of electron's main process. You can start
  * electron renderer process from here and communicate with the other processes
@@ -12,7 +12,7 @@ import {
   attachTitlebarToWindow,
   setupTitlebar,
 } from 'custom-electron-titlebar/main';
-import { app, BrowserWindow, ipcMain,shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
 import { release } from 'os';
@@ -75,10 +75,10 @@ const createWindow = async () => {
     : path.join(__dirname, '../../assets');
 
   // Create a function that return the asset that the name was given;
-  const getAssetPath = (...paths: string[]): string => path.join(RESOURCES_PATH, ...paths);
+  const getAssetPath = (...paths: string[]): string =>
+    path.join(RESOURCES_PATH, ...paths);
 
   const { bounds } = store.get('window');
-
   mainWindow = new BrowserWindow({
     minWidth: 1280,
     minHeight: 800,

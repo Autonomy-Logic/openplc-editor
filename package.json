@@ -1,4 +1,5 @@
 {
+  "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
   "keywords": [
     "electron",
