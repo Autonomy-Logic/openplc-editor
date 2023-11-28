@@ -1,0 +1,16 @@
+{
+  "name": "open-plc-editor",
+  "version": "0.0.1",
+  "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
+  "license": "MIT",
+  "author": {
+    "name": "Autonomy Logic"
+  },
+  "main": "./dist/main/main.js",
+  "scripts": {
+    "rebuild": "node -r ts-node/register ../../configs/scripts/electron-rebuild.js",
+    "postinstall": "npm run rebuild && npm run link-modules",
+    "link-modules": "node -r ts-node/register ../../configs/scripts/link-modules.ts"
+  },
+  "dependencies": {}
+}

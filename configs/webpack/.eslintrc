@@ -1,0 +1,10 @@
+/*
+ * The lint rules that the webpack configuration files will be using.
+ */
+{
+  "rules": {
+    "no-console": "off",
+    "global-require": "off",
+    "import/no-dynamic-require": "off"
+  }
+}

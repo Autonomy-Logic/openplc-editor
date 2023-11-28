@@ -1,0 +1,15 @@
+{
+  "dialog": {
+    "title": "Select a PLC project to open"
+  },
+  "errors": {
+    "failedToOpenFile": {
+      "title": "Failed to open file",
+      "description": "Unable to open project files"
+    },
+    "readFile": {
+      "title": "Failed to read file!",
+      "description": "Could not read the file: {{filePath}}"
+    }
+  }
+}
