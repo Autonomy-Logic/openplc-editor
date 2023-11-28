@@ -7,7 +7,7 @@ import {
   HiXMark,
 } from 'react-icons/hi2';
 
-import { ToastProps as SharedToastProps } from '../../types/toast';
+import { ToastProps as SharedToastProps } from '../../main/contracts/types/toast';
 import { classNames } from '../../utils';
 /**
  * Props for the Toast component.

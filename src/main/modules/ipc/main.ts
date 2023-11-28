@@ -4,10 +4,13 @@ import { Event } from 'electron';
 import {
   MainIpcModule,
   MainIpcModuleConstructor,
-} from '../../../types/main/modules/ipc/main';
-import { ToastProps, ToastSchema } from '../../../types/main/modules/ipc/toast';
-import { ProjectDto } from '../../../types/main/services/project.service';
-import { ThemeProps, ThemeSchema } from '../../../types/theme';
+} from '../../contracts/types/modules/ipc/main';
+import {
+  ToastProps,
+  ToastSchema,
+} from '../../contracts/types/modules/ipc/toast';
+import { ProjectDto } from '../../contracts/types/services/project.service';
+import { ThemeProps, ThemeSchema } from '../../contracts/types/theme';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type StoreResponse = {
@@ -38,9 +41,8 @@ class MainProcessBridge implements MainIpcModule {
     );
     this.ipcMain.on('app:store-set', this.mainIpcEventHandlers.setStoreValue);
 
-    this.ipcMain.on(
-      'project:save-response',
-      async (_event, data: ProjectDto) => this.projectService.saveProject(data),
+    this.ipcMain.on('project:save-response', async (_event, data: ProjectDto) =>
+      this.projectService.saveProject(data),
     );
     // Wip: From here
 

@@ -7,7 +7,7 @@ import {
 } from 'react';
 import { toast } from 'react-toastify';
 
-import { ToastProps as SharedToastMessageProps } from '../../types/toast';
+import { ToastProps as SharedToastMessageProps } from '../../main/contracts/types/toast';
 // import { CONSTANTS } from '../../constants';
 import { Toast } from '../components';
 // Todo: Resolve ipc communication

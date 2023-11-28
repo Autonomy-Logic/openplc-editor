@@ -4,7 +4,7 @@ import {
   DefaultStoreProps,
   getDefaultStore,
   schema,
-} from '../../types/main/store/schema';
+} from '../contracts/types/store/schema';
 
 // eslint-disable-next-line import/prefer-default-export
 export const store = new Store<DefaultStoreProps>({

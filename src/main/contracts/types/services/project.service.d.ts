@@ -1,6 +1,6 @@
 import { ResponseService } from './response';
 
-type Service = {};
+type Service = object;
 export type ProjectDto = {
   projectPath: string;
   projectAsObj?: object;

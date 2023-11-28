@@ -5,13 +5,13 @@ import { promises, readFile, writeFile } from 'fs';
 import { join } from 'path';
 import { convert, create } from 'xmlbuilder2';
 
+import formatDate from '../../utils/formatDate';
+import { i18n } from '../../utils/i18n';
 import {
   ProjectDto,
   TProjectService,
-} from '../../types/main/services/project.service';
-import { ResponseService } from '../../types/main/services/response';
-import formatDate from '../../utils/formatDate';
-import { i18n } from '../../utils/i18n';
+} from '../contracts/types/services/project.service';
+import { ResponseService } from '../contracts/types/services/response';
 
 // Wip: Refactoring project services.
 class ProjectService implements TProjectService {
@@ -209,7 +209,8 @@ class ProjectService implements TProjectService {
    * @param xmlSerializedAsObject - The XML data to be serialized and saved.
    * @returns A `promise` of `ResponseService` type.
    */
-  async saveProject(data: ProjectDto): Promise<any | void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async saveProject(data: ProjectDto): Promise< any | void> {
     const { projectPath, projectAsObj } = data;
     // Check if required parameters are provided.
     if (!projectPath || !projectAsObj)
@@ -246,6 +247,7 @@ class ProjectService implements TProjectService {
         },
       };
     });
+    // eslint-disable-next-line no-console
     console.log('Works!');
 
     return {

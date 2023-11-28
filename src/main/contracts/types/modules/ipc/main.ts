@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { BrowserWindow, IpcMain } from 'electron/main';
 
-import { StoreType } from '../../../../main/store';
+import { ThemeProps } from '../../../../../types/theme';
 import { ProjectService } from '../../../../services';
-import { ThemeProps } from '../../../theme';
+import { StoreType } from '../../../../store';
 import { ProjectDto } from '../../services/project.service';
 import { ToastProps } from './toast';
 

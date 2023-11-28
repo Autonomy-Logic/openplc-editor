@@ -18,8 +18,9 @@ import { autoUpdater } from 'electron-updater';
 import { release } from 'os';
 import path from 'path';
 
-import { MainIpcModuleConstructor } from '../types/main/modules/ipc/main';
 import { resolveHtmlPath } from '../utils/resolveHtmlPath';
+// TODO: Refactor this type declaration
+import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main';
 import MenuBuilder from './menu';
 import MainProcessBridge from './modules/ipc/main';
 import { ProjectService } from './services';
