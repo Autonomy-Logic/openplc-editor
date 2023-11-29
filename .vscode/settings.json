@@ -29,13 +29,14 @@
   },
   "cSpell.words": [
     "Dropup",
+    "electronmon",
     "headlessui",
     "hookform",
     "mimetypes",
     "openplc",
+    "oplc",
     "tanstack",
     "titlebar",
-    "toastify",
-    "oplc"
+    "toastify"
   ]
 }

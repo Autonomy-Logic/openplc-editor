@@ -35,10 +35,7 @@ export default class MenuBuilder {
   }
 
   buildMenu(): Menu {
-    if (
-      process.env.NODE_ENV === 'development' ||
-      process.env.DEBUG_PROD === 'true'
-    ) {
+    if (process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true') {
       this.setupDevelopmentEnvironment();
     }
 
@@ -275,22 +272,16 @@ export default class MenuBuilder {
                 label: i18n.t('menu:file.submenu.examples.submenu.blinkP1AM'),
               },
               {
-                label: i18n.t(
-                  'menu:file.submenu.examples.submenu.multiLanguage',
-                ),
+                label: i18n.t('menu:file.submenu.examples.submenu.multiLanguage'),
               },
               {
-                label: i18n.t(
-                  'menu:file.submenu.examples.submenu.randomGeneratorPragma',
-                ),
+                label: i18n.t('menu:file.submenu.examples.submenu.randomGeneratorPragma'),
               },
               {
                 label: i18n.t('menu:file.submenu.examples.submenu.tcpSocket'),
               },
               {
-                label: i18n.t(
-                  'menu:file.submenu.examples.submenu.trafficLightFBD',
-                ),
+                label: i18n.t('menu:file.submenu.examples.submenu.trafficLightFBD'),
               },
             ],
           },
@@ -432,9 +423,7 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:display.submenu.sortAlpha'),
           },
-          ...(process.env.NODE_ENV === 'development'
-            ? this.developOptions
-            : []),
+          ...(process.env.NODE_ENV === 'development' ? this.developOptions : []),
         ],
       },
       {

@@ -1,17 +1,6 @@
 {
   "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
-  "keywords": [
-    "electron",
-    "react",
-    "typescript",
-    "ts",
-    "sass",
-    "webpack",
-    "hot",
-    "reload"
-  ],
-  "homepage": "https://github.com/Autonomy-Logic/OpenPLC_Editor",
   "license": "MIT",
   "author": {
     "name": "Autonomy Logic"
@@ -25,6 +14,8 @@
     "postinstall": "ts-node configs/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:fix": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "format:check": "prettier src/**/*.{js,jsx,ts,tsx,json,css} --check",
+    "format:fix": "prettier src/**/*.{js,jsx,ts,tsx,json,css} --write",
     "package": "ts-node ./configs/scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "start:dev": "ts-node ./configs/scripts/check-port-in-use.js && npm run start:renderer",
@@ -34,20 +25,6 @@
     "test": "jest"
   },
   "browserslist": [],
-  "prettier": {
-    "singleQuote": true,
-    "overrides": [
-      {
-        "files": [
-          ".prettierrc",
-          ".eslintrc"
-        ],
-        "options": {
-          "parser": "json"
-        }
-      }
-    ]
-  },
   "dependencies": {
     "@headlessui/react": "^1.7.17",
     "@hookform/resolvers": "^3.3.2",
@@ -159,73 +136,16 @@
     "webpack-dev-server": "^4.15.1",
     "webpack-merge": "^5.9.0"
   },
-  "build": {
-    "productName": "OpenPLC Editor",
-    "appId": "tobedetermined.openplceditor",
-    "asar": true,
-    "asarUnpack": "**\\*.{node,dll}",
-    "files": [
-      "dist",
-      "node_modules",
-      "package.json"
-    ],
-    "afterSign": "configs/scripts/notarize.js",
-    "mac": {
-      "target": {
-        "target": "default",
-        "arch": [
-          "arm64",
-          "x64"
-        ]
-      },
-      "type": "distribution",
-      "hardenedRuntime": true,
-      "entitlements": "assets/entitlements.mac.plist",
-      "entitlementsInherit": "assets/entitlements.mac.plist",
-      "gatekeeperAssess": false
-    },
-    "dmg": {
-      "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    },
-    "win": {
-      "target": [
-        "nsis"
-      ]
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "category": "Development"
-    },
-    "directories": {
-      "app": "release/app",
-      "buildResources": "assets",
-      "output": "release/build"
-    },
-    "extraResources": [
-      "./assets/**"
-    ]
-  },
   "devEngines": {
     "node": ">=18.x",
     "yarn": ">=4.x"
   },
   "electronmon": {
     "patterns": [
-      "!**/**",
-      "src/main/**"
+      "!node_modules",
+      "!node_modules/**/*",
+      "!.*",
+      "src/**/*"
     ],
     "logLevel": "quiet"
   },

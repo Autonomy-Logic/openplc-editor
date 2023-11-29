@@ -8,10 +8,7 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
-import {
-  attachTitlebarToWindow,
-  setupTitlebar,
-} from 'custom-electron-titlebar/main';
+import { attachTitlebarToWindow, setupTitlebar } from 'custom-electron-titlebar/main';
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
@@ -42,8 +39,7 @@ if (process.env.NODE_ENV === 'production') {
   sourceMapSupport.install();
 }
 
-const isDebug =
-  process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
+const isDebug = process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
 
 if (isDebug) {
   require('electron-debug')();
@@ -57,7 +53,7 @@ const installExtensions = async () => {
   return installer
     .default(
       extensions.map((name) => installer[name]),
-      forceDownload,
+      forceDownload
     )
     .catch(console.log);
 };
@@ -76,8 +72,7 @@ const createWindow = async () => {
     : path.join(__dirname, '../../assets');
 
   // Create a function that return the asset that the name was given;
-  const getAssetPath = (...paths: string[]): string =>
-    path.join(RESOURCES_PATH, ...paths);
+  const getAssetPath = (...paths: string[]): string => path.join(RESOURCES_PATH, ...paths);
 
   const { bounds } = store.get('window');
   mainWindow = new BrowserWindow({
@@ -101,10 +96,7 @@ const createWindow = async () => {
 
   // Send a message to the renderer process when the content finishes loading;
   mainWindow.webContents.on('did-finish-load', () => {
-    mainWindow?.webContents.send(
-      'main-process-message',
-      new Date().toLocaleString(),
-    );
+    mainWindow?.webContents.send('main-process-message', new Date().toLocaleString());
   });
 
   // Save window bounds on resize, close, and move events

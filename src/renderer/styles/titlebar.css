@@ -3,7 +3,7 @@
 }
 
 .cet-container {
-  @apply !top-16
+  @apply !top-16;
 }
 
 .cet-window-title {
