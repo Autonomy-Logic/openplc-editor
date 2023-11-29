@@ -1,6 +1,7 @@
 {
   "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
+  "version": "0.0.1",
   "license": "MIT",
   "author": {
     "name": "Autonomy Logic"
@@ -14,8 +15,8 @@
     "postinstall": "ts-node configs/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:fix": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx --fix",
-    "format:check": "prettier src/**/*.{js,jsx,ts,tsx,json,css} --check",
-    "format:fix": "prettier src/**/*.{js,jsx,ts,tsx,json,css} --write",
+    "lint:format": "prettier  --loglevel warn --write \"./**/*.{js,jsx,ts,tsx,css,md,json}\" ",
+    "lint:format-check": "prettier src/**/*.{js,jsx,ts,tsx,json,css} --check",
     "package": "ts-node ./configs/scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "start:dev": "ts-node ./configs/scripts/check-port-in-use.js && npm run start:renderer",

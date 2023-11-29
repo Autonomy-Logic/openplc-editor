@@ -20,7 +20,8 @@
     "hardenedRuntime": true,
     "entitlements": "assets/entitlements.mac.plist",
     "entitlementsInherit": "assets/entitlements.mac.plist",
-    "gatekeeperAssess": false
+    "gatekeeperAssess": false,
+    "artifactName": "${productName}_${version}.${ext}"
   },
   "dmg": {
     "contents": [
@@ -37,7 +38,11 @@
     ]
   },
   "win": {
-    "target": ["nsis"]
+    "target": {
+      "target": "default",
+      "arch": ["x64"]
+    },
+    "artifactName": "${productName}_${version}.${ext}"
   },
   "linux": {
     "target": ["AppImage"],
