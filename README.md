@@ -1,7 +1,7 @@
 # Open PLC Editor - IDE
 
-![GitHub stars](https://img.shields.io/github/stars/Autonomy-Logic/OpenPLC_Editor?color=fa6470)
-![GitHub issues](https://img.shields.io/github/issues/Autonomy-Logic/OpenPLC_Editor?color=d8b22d)
+![GitHub stars](https://img.shields.io/github/stars/Autonomy-Logic/openplc-editor?color=fa6470)
+![GitHub issues](https://img.shields.io/github/issues/Autonomy-Logic/openplc-editor?color=d8b22d)
 
 <p align="center">
 <img alt="draft-cover" src="assets/images/github-background.png">
