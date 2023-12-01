@@ -1,5 +1,5 @@
 {
-  "appId": "com.electron.${productName}",
+  "appId": "autonomy-logic.openplc-editor",
   "productName": "OpenPLC Editor",
   "asar": true,
   "asarUnpack": "**\\*.{node,dll}",
