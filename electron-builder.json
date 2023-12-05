@@ -4,7 +4,7 @@
   "asar": true,
   "asarUnpack": "**\\*.{node,dll}",
   "files": ["dist", "node_modules", "package.json"],
-  "afterSign": "configs/scripts/notarize.js",
+  "afterSign": "scripts/notarize.js",
   "directories": {
     "app": "release/app",
     "buildResources": "assets",
