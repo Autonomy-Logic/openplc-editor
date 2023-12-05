@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { rimrafSync } from 'rimraf';
 
-import webpackPaths from '../webpack/webpack.paths';
+import webpackPaths from '../configs/webpack/webpack.paths';
 
 const foldersToRemove = [
   webpackPaths.distPath,

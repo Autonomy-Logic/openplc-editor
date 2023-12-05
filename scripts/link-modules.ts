@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import webpackPaths from '../webpack/webpack.paths';
+import webpackPaths from '../configs/webpack/webpack.paths';
 
 const { srcNodeModulesPath } = webpackPaths;
 const { appNodeModulesPath } = webpackPaths;

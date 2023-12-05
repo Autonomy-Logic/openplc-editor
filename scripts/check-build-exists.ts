@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 
-import webpackPaths from '../webpack/webpack.paths';
+import webpackPaths from '../configs/webpack/webpack.paths';
 
 const mainPath = path.join(webpackPaths.distMainPath, 'main.js');
 const rendererPath = path.join(webpackPaths.distRendererPath, 'renderer.js');
