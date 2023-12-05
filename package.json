@@ -137,9 +137,9 @@
     "webpack-dev-server": "^4.15.1",
     "webpack-merge": "^5.9.0"
   },
-  "devEngines": {
-    "node": ">=18.x",
-    "yarn": ">=4.x"
+  "engines": {
+    "node": ">=18.x <20.x",
+    "npm": ">=9.x <10.x"
   },
   "electronmon": {
     "patterns": [
@@ -153,6 +153,5 @@
   "trustedDependencies": [
     "electron",
     "electron-builder"
-  ],
-  "packageManager": "yarn@4.0.1"
+  ]
 }
