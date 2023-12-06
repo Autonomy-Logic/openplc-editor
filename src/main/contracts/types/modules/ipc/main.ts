@@ -3,7 +3,7 @@ import { BrowserWindow, IpcMain } from 'electron/main';
 
 import { ThemeProps } from '../../../../../types/theme';
 import { ProjectService } from '../../../../services';
-import { StoreType } from '../../../../store';
+import { StoreType } from '../../../../modules/store';
 import { ProjectDto } from '../../services/project.service';
 import { ToastProps } from './toast';
 

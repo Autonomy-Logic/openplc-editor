@@ -20,8 +20,8 @@ import { resolveHtmlPath } from '../utils/resolveHtmlPath';
 import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main';
 import MenuBuilder from './menu';
 import MainProcessBridge from './modules/ipc/main';
+import { store } from './modules/store';
 import { ProjectService } from './services';
-import { store } from './store';
 
 class AppUpdater {
   constructor() {
