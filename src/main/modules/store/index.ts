@@ -11,7 +11,7 @@ export const store = new Store<TStoreType>({
       items: {
         type: 'string',
       },
-      maxLength: 2, // TODO: Change to 10 in the future.
+      maxItems: 2, // TODO: Change to 10 in the future.
       uniqueItems: true,
       default: [],
     },
