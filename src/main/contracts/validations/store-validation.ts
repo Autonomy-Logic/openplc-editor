@@ -2,7 +2,7 @@ import z from 'zod';
 
 // eslint-disable-next-line import/prefer-default-export
 export const StoreSchema = z.object({
-  projects: z.array(z.string()),
+  last_projects: z.array(z.string()),
   theme: z.string(),
   window: z
     .object({

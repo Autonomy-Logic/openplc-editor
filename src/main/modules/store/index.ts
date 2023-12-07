@@ -6,11 +6,13 @@ import { TStoreType } from '../../contracts/types/modules/store';
 // eslint-disable-next-line import/prefer-default-export
 export const store = new Store<TStoreType>({
   schema: {
-    projects: {
+    last_projects: {
       type: 'array',
       items: {
         type: 'string',
       },
+      maxLength: 2, // TODO: Change to 10 in the future.
+      uniqueItems: true,
       default: [],
     },
     theme: {
