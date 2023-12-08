@@ -1,8 +1,7 @@
 {
   "moduleDirectories": [
     "node_modules",
-    "release/app/node_modules",
-    "src"
+    "release/app/node_modules"
   ],
   "moduleFileExtensions": [
     "js",
@@ -16,7 +15,7 @@
     "\\.(css|less|sass|scss)$": "identity-obj-proxy"
   },
   "setupFiles": [
-    "./configs/scripts/check-build-exists.ts"
+    "./scripts/check-build-exists.ts"
   ],
   "testEnvironment": "jsdom",
   "testEnvironmentOptions": {
