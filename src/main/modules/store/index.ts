@@ -1,4 +1,5 @@
 import Store from 'electron-store';
+import { nativeTheme } from 'electron/main';
 
 // import { DefaultStoreProps, schema } from '../contracts/types/store/schema';
 import { TStoreType } from '../../contracts/types/modules/store';
@@ -11,13 +12,11 @@ export const store = new Store<TStoreType>({
       items: {
         type: 'string',
       },
-      maxItems: 2, // TODO: Change to 10 in the future.
+      maxItems: 10,
       uniqueItems: true,
-      default: [],
     },
     theme: {
       type: 'string',
-      default: 'light',
     },
     window: {
       type: 'object',
@@ -53,13 +52,19 @@ export const store = new Store<TStoreType>({
               type: 'number',
             },
           },
-          default: {
-            width: 800,
-            height: 600,
-            x: 0,
-            y: 0,
-          },
         },
+      },
+    },
+  },
+  defaults: {
+    last_projects: [],
+    theme: 'system',
+    window: {
+      bounds: {
+        width: 1280,
+        height: 800,
+        x: 0,
+        y: 0,
       },
     },
   },

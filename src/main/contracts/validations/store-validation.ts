@@ -4,16 +4,12 @@ import z from 'zod';
 export const StoreSchema = z.object({
   last_projects: z.array(z.string()),
   theme: z.string(),
-  window: z
-    .object({
-      bounds: z
-        .object({
-          width: z.number(),
-          height: z.number(),
-          x: z.number(),
-          y: z.number(),
-        })
-        .optional(),
-    })
-    .optional(),
+  window: z.object({
+    bounds: z.object({
+      width: z.number(),
+      height: z.number(),
+      x: z.number(),
+      y: z.number(),
+    }),
+  }),
 });

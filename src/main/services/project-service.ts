@@ -121,14 +121,13 @@ class ProjectService implements TProjectService {
 
     // WIP: Add the path to the store that will be used for the recent projects data.
     const lastProjects = store.get('last_projects');
-    console.log(lastProjects);
-    if (lastProjects.length < 4) {
+    if (lastProjects.length == 10) {
+      lastProjects.splice(9, 1);
       lastProjects.unshift(projectPath);
       store.set('last_projects', lastProjects);
+    } else {
+      store.set('last_projects', [projectPath, ...lastProjects]);
     }
-
-    console.log('After -> ', store.get('last_projects'));
-
 
     /**
      * Serialize the XML structure and write it to a file.
