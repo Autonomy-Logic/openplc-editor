@@ -121,7 +121,7 @@ class ProjectService implements TProjectService {
 
     // WIP: Add the path to the store that will be used for the recent projects data.
     const lastProjects = store.get('last_projects');
-    if (lastProjects.length == 10) {
+    if (lastProjects.length === 10) {
       lastProjects.splice(9, 1);
       lastProjects.unshift(projectPath);
       store.set('last_projects', lastProjects);
