@@ -2,10 +2,10 @@
 import { BrowserWindow, IpcMain } from 'electron/main';
 
 import { ProjectService } from '../../../../services';
-import { TStoreType } from '../store';
+import { ThemeDto } from "../../../dtos/theme.dto";
 import { ProjectDto } from '../../services/project.service';
+import { TStoreType } from '../store';
 import { ToastProps } from './toast';
-import { ThemeDto } from '../../../../contracts/dtos/theme.dto';
 
 export type MainIpcModule = {
   ipcMain: IpcMain;

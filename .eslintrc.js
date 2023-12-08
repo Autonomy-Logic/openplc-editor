@@ -16,7 +16,7 @@ module.exports = {
     'no-shadow': 'off',
     'no-unused-vars': 'off',
     'lines-between-class-members': 'off',
-    'import/no-cycle': 'warn ',
+    'import/no-cycle': 'warn',
     'import/named': 'off',
     'import/no-named-as-default': 'off',
     // REVIEW: enable
