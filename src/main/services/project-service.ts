@@ -7,11 +7,9 @@ import { convert, create } from 'xmlbuilder2';
 
 import formatDate from '../../utils/formatDate';
 import { i18n } from '../../utils/i18n';
-import {
-  ProjectDto,
-  TProjectService,
-} from '../contracts/types/services/project.service';
+import { ProjectDto, TProjectService } from '../contracts/types/services/project.service';
 import { ResponseService } from '../contracts/types/services/response';
+import { store } from '../modules/store';
 
 // Wip: Refactoring project services.
 class ProjectService implements TProjectService {
@@ -55,9 +53,7 @@ class ProjectService implements TProjectService {
         ok: false,
         reason: {
           title: i18n.t('createProject:errors.directoryNotEmpty.title'),
-          description: i18n.t(
-            'createProject:errors.directoryNotEmpty.description',
-          ),
+          description: i18n.t('createProject:errors.directoryNotEmpty.description'),
         },
       };
     }
@@ -119,14 +115,20 @@ class ProjectService implements TProjectService {
     };
 
     // Create the project XML structure using xmlbuilder2.
-    const projectAsXml = create(
-      { version: '1.0', encoding: 'utf-8' },
-      projectAsObj,
-    );
+    const projectAsXml = create({ version: '1.0', encoding: 'utf-8' }, projectAsObj);
 
     const projectPath = join(filePath, 'plc.xml');
 
-    // bridge.userConfigIpc.setWorkspaceInfos({ folder: filePath });
+    // WIP: Add the path to the store that will be used for the recent projects data.
+    const lastProjects = store.get('last_projects');
+    if (lastProjects.length == 10) {
+      lastProjects.splice(9, 1);
+      lastProjects.unshift(projectPath);
+      store.set('last_projects', lastProjects);
+    } else {
+      store.set('last_projects', [projectPath, ...lastProjects]);
+    }
+
     /**
      * Serialize the XML structure and write it to a file.
      * If the file creation failed, return an error response,
@@ -139,9 +141,7 @@ class ProjectService implements TProjectService {
         ok: false,
         reason: {
           title: i18n.t('createProject:errors.failedToCreateFile.title'),
-          description: i18n.t(
-            'createProject:errors.failedToCreateFile.description',
-          ),
+          description: i18n.t('createProject:errors.failedToCreateFile.description'),
         },
       };
     });
@@ -210,7 +210,7 @@ class ProjectService implements TProjectService {
    * @returns A `promise` of `ResponseService` type.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async saveProject(data: ProjectDto): Promise< any | void> {
+  async saveProject(data: ProjectDto): Promise<any | void> {
     const { projectPath, projectAsObj } = data;
     // Check if required parameters are provided.
     if (!projectPath || !projectAsObj)
@@ -218,16 +218,14 @@ class ProjectService implements TProjectService {
         ok: false,
         reason: {
           title: i18n.t('saveProject:errors.failedToSaveFile.title'),
-          description: i18n.t(
-            'saveProject:errors.failedToSaveFile.description',
-          ),
+          description: i18n.t('saveProject:errors.failedToSaveFile.description'),
         },
       };
 
     // Serialize the XML data using xmlbuilder2.
     const projectAsXml = create(
       // { parser: { cdata: (projectAsObj) => projectAsObj } },
-      projectAsObj,
+      projectAsObj
     );
 
     /**
@@ -241,9 +239,7 @@ class ProjectService implements TProjectService {
         ok: false,
         reason: {
           title: i18n.t('saveProject:errors.failedToSaveFile.title'),
-          description: i18n.t(
-            'saveProject:errors.failedToSaveFile.description',
-          ),
+          description: i18n.t('saveProject:errors.failedToSaveFile.description'),
         },
       };
     });
@@ -254,9 +250,7 @@ class ProjectService implements TProjectService {
       ok: true,
       reason: {
         title: i18n.t('saveProject:success.successToSaveFile.title'),
-        description: i18n.t(
-          'saveProject:success.successToSaveFile.description',
-        ),
+        description: i18n.t('saveProject:success.successToSaveFile.description'),
       },
     };
   }
