@@ -1,8 +1,8 @@
 import { TXmlProject } from '../../../../../shared/contracts/types';
 import { BaseResponse } from '../base-response.dto';
 
-export type response = BaseResponse;
-export type request = {
+export type SaveProjectRequestData = {
   projectPath: string;
   projectAsObj: TXmlProject;
 };
+export type SaveProjectResponse = BaseResponse;

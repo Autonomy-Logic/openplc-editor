@@ -1,7 +1,6 @@
 import z from 'zod';
 
-// eslint-disable-next-line import/prefer-default-export
-export const StoreSchema = z.object({
+const StoreSchema = z.object({
   last_projects: z.array(z.string()),
   theme: z.string(),
   window: z.object({
@@ -13,3 +12,5 @@ export const StoreSchema = z.object({
     }),
   }),
 });
+
+export default StoreSchema;

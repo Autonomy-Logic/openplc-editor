@@ -1,37 +1,38 @@
-/* eslint-disable prettier/prettier */
 /* eslint-disable class-methods-use-this */
 import { BrowserWindow, dialog } from 'electron';
 import { promises, readFile, writeFile } from 'fs';
 import { join } from 'path';
 import { convert, create } from 'xmlbuilder2';
 
-import formatDate from '../../utils/formatDate';
+// import { TXmlProject } from '../../shared/contracts/types';
+import { ProjectSchema } from '../../shared/contracts/validations';
+import xmlProjectAsObject from '../../shared/data/mock/object-to-create-project';
 import { i18n } from '../../utils/i18n';
-import { ProjectDto, TProjectService } from '../contracts/types/services/project.service';
-import { ResponseService } from '../contracts/types/services/response';
+import { ProjectDto } from '../contracts/types/services/project.service';
+import { BaseProjectService } from '../contracts/validations';
 import { store } from '../modules/store';
 
 // Wip: Refactoring project services.
-class ProjectService implements TProjectService {
-  mainWindow: InstanceType<typeof BrowserWindow>;
+class ProjectService extends BaseProjectService {
+  // eslint-disable-next-line no-useless-constructor
   constructor(mainWindow: InstanceType<typeof BrowserWindow>) {
-    this.mainWindow = mainWindow;
+    super(mainWindow);
   }
   /**
    * @description Asynchronous function to create a PLC xml project based on selected directory.
    * @returns A `promise` of `ServiceResponse` type.
    */
   // eslint-disable-next-line class-methods-use-this
-  async createProject(): Promise<ResponseService<ProjectDto>> {
+  async createProject() {
     // Show a dialog to select the project directory.
-    const response = await dialog.showOpenDialog(this.mainWindow, {
+    const res = await dialog.showOpenDialog(this.mainWindow, {
       title: i18n.t('createProject:dialog.title'),
       properties: ['openDirectory'],
     });
     // If the dialog is canceled, return an unsuccessful response
     // otherwise, create a constant containing the selected directory path as a string.
-    if (response.canceled) return { ok: false };
-    const [filePath] = response.filePaths;
+    if (res.canceled) return { ok: false };
+    const [filePath] = res.filePaths;
 
     // Checks asynchronously if the selected directory is empty.
     const isEmptyDir = async () => {
@@ -45,8 +46,6 @@ class ProjectService implements TProjectService {
       }
     };
 
-    // Todo: Add the path to the store that will be used for the recent projects data.
-
     // If the selected directory is not empty, return an error response.
     if (!(await isEmptyDir())) {
       return {
@@ -57,69 +56,17 @@ class ProjectService implements TProjectService {
         },
       };
     }
-    // Create a JS Object with the project base structure
-    const projectAsObj = {
-      project: {
-        '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
-        '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6.xsd',
-        '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
-        '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema-instance',
-        '@xsi:schemaLocation':
-          'http://www.plcopen.org/xml/tc6_0200 http://www.plcopen.org/xml/tc6_0200',
-        fileHeader: {
-          '@companyName': 'Unknown',
-          '@creationDateTime': formatDate(new Date()),
-          '@productName': 'Unnamed',
-          '@productVersion': '1',
-        },
-        contentHeader: {
-          '@name': 'Unnamed',
-          coordinateInfo: {
-            fbd: {
-              scaling: {
-                '@x': '10',
-                '@y': '10',
-              },
-            },
-            ld: {
-              scaling: {
-                '@x': '10',
-                '@y': '10',
-              },
-            },
-            sfc: {
-              scaling: {
-                '@x': '10',
-                '@y': '10',
-              },
-            },
-          },
-        },
-        types: {
-          dataTypes: {},
-          pous: {
-            pou: [],
-          },
-        },
-        instances: {
-          configurations: {
-            configuration: {
-              '@name': 'Config0',
-              resource: {
-                '@name': 'Res0',
-              },
-            },
-          },
-        },
-      },
-    };
+
+    // Check if the data provided is valid, then create a JS Object with the project base structure
+    const createdXmlAsObject = ProjectSchema.parse(xmlProjectAsObject);
 
     // Create the project XML structure using xmlbuilder2.
-    const projectAsXml = create({ version: '1.0', encoding: 'utf-8' }, projectAsObj);
+    const projectAsXml = create({ version: '1.0', encoding: 'utf-8' }, xmlProjectAsObject);
 
+    // Create the path to the project file.
     const projectPath = join(filePath, 'plc.xml');
 
-    // WIP: Add the path to the store that will be used for the recent projects data.
+    // Add the path to the store that will be used for the recent projects data.
     const lastProjects = store.get('last_projects');
     if (lastProjects.length === 10) {
       lastProjects.splice(9, 1);
@@ -147,16 +94,11 @@ class ProjectService implements TProjectService {
     });
     return {
       ok: true,
-      data: { projectPath, projectAsObj },
+      data: { path: projectPath, xmlAsObject: createdXmlAsObject },
     };
   }
   // eslint-disable-next-line consistent-return
-  async openProject(): Promise<
-    ResponseService<{
-      projectPath: string;
-      projectAsObj: object;
-    }>
-  > {
+  async openProject() {
     const response = await dialog.showOpenDialog(this.mainWindow, {
       title: i18n.t('openProject:dialog.title'),
       properties: ['openFile'],
@@ -186,10 +128,18 @@ class ProjectService implements TProjectService {
         },
       };
     }
+    /**
+     * TODO: Verify the content of the XML file,
+     * TODO: This probably return an file with properties that don't exist in the original schema.
+     * TODO: Needs to be implemented another validation schema.
+     */
+
     // Convert the XML file content into a serialized object.
-    const projectAsObj = convert(file, {
-      format: 'object',
-    });
+    const openXmlProjectAsObj = ProjectSchema.parse(
+      convert(file, {
+        format: 'object',
+      })
+    );
 
     /**
      * Return a successful response with the project data,
@@ -198,8 +148,8 @@ class ProjectService implements TProjectService {
     return {
       ok: true,
       data: {
-        projectPath: filePath,
-        projectAsObj,
+        path: filePath,
+        xmlAsObject: openXmlProjectAsObj,
       },
     };
   }
