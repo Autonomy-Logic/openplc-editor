@@ -1,4 +1,3 @@
-/* eslint-disable import/no-cycle */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Transition } from '@headlessui/react';
 import { ReactNode, useState } from 'react';
@@ -14,17 +13,16 @@ import {
 import { RiNodeTree } from 'react-icons/ri';
 import { ResizableBox, ResizeCallbackData } from 'react-resizable';
 import { useLocation } from 'react-router-dom';
+import { Tooltip } from 'renderer/components';
+import { CurrentProps } from 'renderer/contexts/Sidebar';
+import { TLayoutProps } from 'renderer/contracts/types';
+import { useSidebar, useToggle } from 'renderer/hooks';
+import { EditorTools, ProjectTree, Settings, Tools, Variables } from 'renderer/pages';
+import useOpenPLCStore from 'renderer/store';
+import { CONSTANTS } from 'srcRoot/shared/data';
+import { classNames } from 'srcRoot/utils';
 
-import { classNames, CONSTANTS } from '@/utils';
-
-import { Tooltip } from '../../components';
-import { CurrentProps } from '../../contexts/Sidebar';
-import { useSidebar, useToggle } from '../../hooks';
-import { EditorTools, ProjectTree, Settings, Tools, Variables } from '../../pages';
-import useOpenPLCStore from '../../store';
-import { LayoutProps } from './layout';
-
-function Layout({ main }: any): ReactNode {
+function Layout({ main }: TLayoutProps): ReactNode {
   const { paths } = CONSTANTS;
   // Access the project and related functions from custom store.
   const project = useOpenPLCStore.useProjectData();

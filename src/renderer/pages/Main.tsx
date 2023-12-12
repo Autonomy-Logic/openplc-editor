@@ -3,11 +3,11 @@
 import { FC, useCallback, useEffect, useMemo } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { SidebarProvider, TabsProvider } from 'renderer/contexts';
-import { useSidebar,useTabs, useTheme } from 'renderer/hooks';
+import { useSidebar, useTabs, useTheme } from 'renderer/hooks';
 import useOpenPLCStore from 'renderer/store';
 import { Layout } from 'renderer/templates';
-
-import { CONSTANTS , convertToPath } from '@/utils';
+import { CONSTANTS } from 'srcRoot/shared/data';
+import { convertToPath } from 'srcRoot/utils';
 
 /**
  * Destructure necessary values from the CONSTANTS module
@@ -80,8 +80,7 @@ const MainComponent: FC = () => {
           addTab({
             id: pou['@name'],
             title: pou['@name'],
-            onClick: () =>
-              navigate(convertToPath([paths.EDITOR, pou['@name']])),
+            onClick: () => navigate(convertToPath([paths.EDITOR, pou['@name']])),
             onClickCloseButton: () => navigate(paths.MAIN),
           });
           return true;
