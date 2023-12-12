@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /* eslint-disable react/jsx-no-useless-fragment */
 /* eslint-disable react/function-component-definition */
 import { FC, useCallback, useEffect, useMemo } from 'react';
@@ -61,8 +62,8 @@ const MainComponent: FC = () => {
    */
   const getProjectData = useCallback(() => {
     window.bridge.createProject((_event, value) => {
-      const { projectPath, projectAsObj } = value;
-      setWorkspaceData({ projectPath, projectData: projectAsObj });
+      const { path, xmlAsObject } = value;
+      setWorkspaceData({ projectPath: path, projectData: xmlAsObject });
     });
     window.bridge.openProject((_event, value) => {
       const { projectPath, projectAsObj } = value;

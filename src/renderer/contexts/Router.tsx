@@ -1,11 +1,7 @@
 /* eslint-disable import/no-cycle */
 import { ReactNode } from 'react';
-import {
-  createBrowserRouter,
-  RouterProvider as ReactRouterProvider,
-} from 'react-router-dom';
-
-import { CONSTANTS } from '@/utils';
+import { createBrowserRouter, RouterProvider as ReactRouterProvider } from 'react-router-dom';
+import { CONSTANTS } from 'srcRoot/shared/data';
 
 import { Editor, Main, Project, Resources } from '../pages';
 /**
