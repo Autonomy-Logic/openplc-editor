@@ -1,29 +1,6 @@
 import { z } from 'zod';
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
-const DefaultPOUShape = {
-  '@name': 'program0',
-  '@pouType': 'program',
-  interface: {
-    returnType: 'BOOL',
-    localVars: {
-      variable: {
-        '@name': 'LocalVar0',
-        type: 'INT',
-        initialValue: { simpleValue: { '@value': '0' } },
-      },
-    },
-  },
-  body: {
-    IL: {
-      'xhtml:p': '<![CDATA[]]>',
-    },
-  },
-  documentation: {
-    'xhtml:p': '<![CDATA[]]>',
-  },
-};
-
 const pouSchema = z.object({
   '@name': z.string(),
   '@pouType': z.enum(['program', 'function']),

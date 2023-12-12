@@ -14,9 +14,9 @@
     "allowJs": true,
     "outDir": "configs/dll",
     "paths": {
-      "root*": ["./src/*"],
       "main/*": ["./src/main/*"],
-      "renderer/*": ["./src/renderer/*"]
+      "renderer/*": ["./src/renderer/*"],
+      "shared/*": ["./src/shared/*"]
     }
   },
   "exclude": ["test", "release/build", "release/app/dist", "configs/dll"]

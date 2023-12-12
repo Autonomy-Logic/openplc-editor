@@ -1,6 +1,7 @@
 import z from 'zod';
 
 import { formatDate } from '../../../utils';
+import { PouSchema } from './pou-validation';
 
 // eslint-disable-next-line import/prefer-default-export
 export const ProjectSchema = z.object({
@@ -53,7 +54,7 @@ export const ProjectSchema = z.object({
     types: z.object({
       dataTypes: z.object({}),
       pous: z.object({
-        pou: z.array(z.object({}).optional()),
+        pou: z.array(z.lazy(() => PouSchema)),
       }),
     }),
     instances: z.object({
