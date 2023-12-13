@@ -12,24 +12,23 @@ import {
   HiVariable,
 } from 'react-icons/hi2';
 import { RiNodeTree } from 'react-icons/ri';
-import { ResizableBox,ResizeCallbackData } from 'react-resizable';
+import { ResizableBox, ResizeCallbackData } from 'react-resizable';
 import { useLocation } from 'react-router-dom';
 
-import { classNames,CONSTANTS  } from '@/utils';
+import { classNames, CONSTANTS } from '@/utils';
 
 import { Tooltip } from '../../components';
 import { CurrentProps } from '../../contexts/Sidebar';
 import { useSidebar, useToggle } from '../../hooks';
-import {
-  EditorTools,
-  ProjectTree,
-  Settings,
-  Tools,
-  Variables,
-} from '../../pages';
+import { EditorTools, ProjectTree, Settings, Tools, Variables } from '../../pages';
 import useOpenPLCStore from '../../store';
 import { LayoutProps } from './layout';
-
+import {
+  SearchIcon,
+  ZoomInOutIcon,
+  FileAndFolderIcon,
+  ArrowTransferIcon,
+} from '../../assets/icons';
 function Layout({ main }: any): ReactNode {
   const { paths } = CONSTANTS;
   // Access the project and related functions from custom store.
@@ -54,8 +53,7 @@ function Layout({ main }: any): ReactNode {
   };
 
   // Handle the sidebar resizing.
-  const onResize = (data: ResizeCallbackData) =>
-    setSidebarWidth(data.size.width);
+  const onResize = (data: ResizeCallbackData) => setSidebarWidth(data.size.width);
 
   // Todo: Set the project global state and define the handle click function
   // Define an array of navigation items with their associated data.
@@ -63,10 +61,10 @@ function Layout({ main }: any): ReactNode {
     ...(project?.project
       ? [
           {
-            key: 'tools',
-            name: t('tools'),
+            key: 'search',
+            name: t('Search'),
             onClick: handleClick,
-            icon: HiOutlineSquares2X2,
+            icon: SearchIcon,
             component: <Tools />,
           },
         ]
@@ -74,22 +72,77 @@ function Layout({ main }: any): ReactNode {
     ...(project?.project
       ? [
           {
-            key: 'projectTree',
-            name: t('project'),
+            key: 'transfer',
+            name: t('Transfer'),
             onClick: handleClick,
-            icon: RiNodeTree,
-            component: <ProjectTree />,
+            icon: ArrowTransferIcon,
+            component: '',
           },
         ]
       : []),
     ...(project?.project
       ? [
           {
-            key: 'editorTools',
-            name: t('editorTools'),
+            key: 'filesAndFolders',
+            name: t('Files and Folders'),
             onClick: handleClick,
-            icon: FaDrawPolygon,
-            component: <EditorTools />,
+            icon: FileAndFolderIcon,
+            component: '',
+          },
+        ]
+      : []),
+    // ...(project?.project
+    //   ? [
+    //       {
+    //         key: 'tools',
+    //         name: t('tools'),
+    //         onClick: handleClick,
+    //         icon: HiOutlineSquares2X2,
+    //         component: <Tools />,
+    //       },
+    //     ]
+    //   : []),
+    ...(project?.project
+      ? [
+          {
+            key: 'zoomInOut',
+            name: t('Zoom'),
+            onClick: handleClick,
+            icon: ZoomInOutIcon,
+            component: <ProjectTree />,
+          },
+        ]
+      : []),
+    // ...(project?.project
+    //   ? [
+    //       {
+    //         key: 'projectTree',
+    //         name: t('project'),
+    //         onClick: handleClick,
+    //         icon: ZoomInOut,
+    //         component: <ProjectTree />,
+    //       },
+    //     ]
+    //   : []),
+    // ...(project?.project
+    //   ? [
+    //       {
+    //         key: 'editorTools',
+    //         name: t('editorTools'),
+    //         onClick: handleClick,
+    //         icon: FaDrawPolygon,
+    //         component: <EditorTools />,
+    //       },
+    //     ]
+    //   : []),
+    ...(project && pathname.includes(paths.EDITOR)
+      ? [
+          {
+            key: 'variables',
+            name: t('variables'),
+            onClick: handleClick,
+            icon: HiVariable,
+            component: <Variables />,
           },
         ]
       : []),
@@ -115,47 +168,49 @@ function Layout({ main }: any): ReactNode {
   ];
 
   // Determine which component should be displayed in the sidebar.
-  const getSidebar = () =>
-    navigation.find(({ key }) => key === current)?.component;
+  const getSidebar = () => navigation.find(({ key }) => key === current)?.component;
 
   /**
    * Render the layout component.
    * @returns A JSX element with the Layout component
    */
   return (
-    <div className="flex h-full">
-      <div className="flex h-full">
-        <nav className="flex h-full w-20 flex-col items-center justify-between border-r border-gray-100 bg-white px-4 py-4 dark:border-white/5 dark:bg-gray-900">
-          <ul className="mb-auto flex h-full flex-col items-center gap-2">
+    <div className='flex h-full'>
+      <div className='flex h-full'>
+        <nav className='flex h-full w-20 flex-col items-center justify-between border-r border-gray-100 bg-white px-4 py-4 dark:border-white/5 dark:bg-open-plc-dark'>
+          <ul className='mb-auto flex h-full flex-col items-center gap-2'>
+            {/** Render the navigation items in sidebar */}
             {navigation.map(({ key, name, onClick, icon: Icon, className }) => (
               <li key={name} className={className}>
-                <Tooltip id={name} label={name} place="right">
+                <Tooltip id={name} label={name} place='right'>
                   <button
-                    type="button"
+                    type='button'
                     className={classNames(
                       current === key
                         ? 'bg-blue-100 text-open-plc-blue dark:bg-gray-800'
                         : 'text-gray-500 hover:bg-blue-100 hover:text-open-plc-blue dark:hover:bg-gray-800',
-                      'group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6',
+                      'group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6'
                     )}
                     onClick={() => onClick(key as CurrentProps)}
                   >
-                    <Icon className="h-6 w-6 shrink-0" aria-hidden="true" />
-                    <span className="sr-only">{name}</span>
+                    {/** Render the icon of the navigation item in sidebar */}
+                    <Icon className='h-6  w-6 shrink-0 stroke-1' aria-hidden='true' />
+                    {/** Render the name of the navigation item */}
+                    <span className='sr-only'>{name}</span>
                   </button>
                 </Tooltip>
               </li>
             ))}
           </ul>
           <button
-            type="button"
+            type='button'
             onClick={() => toggleIsSideBarOpen()}
-            className="group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 text-gray-500 hover:text-open-plc-blue"
+            className='group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 text-gray-500 hover:text-open-plc-blue'
           >
             {isSidebarOpen ? (
-              <HiOutlineBars3CenterLeft className="h-6 w-6 shrink-0" />
+              <HiOutlineBars3CenterLeft className='h-6 w-6 shrink-0' />
             ) : (
-              <HiBars3 className="h-6 w-6 shrink-0" />
+              <HiBars3 className='h-6 w-6 shrink-0' />
             )}
           </button>
         </nav>
@@ -164,10 +219,10 @@ function Layout({ main }: any): ReactNode {
           <ResizableBox
             width={sidebarWidth}
             height={Infinity}
-            className="h-full border-r border-gray-100 bg-white px-8 shadow dark:border-white/5 dark:bg-gray-900"
+            className='h-full border-r border-gray-100 bg-white px-8 shadow dark:border-white/5 dark:bg-gray-900'
             minConstraints={[INITIAL_SIDEBAR_WIDTH, Infinity]}
             resizeHandles={['e']}
-            axis="x"
+            axis='x'
             onResize={(_, data) => onResize(data)}
           >
             {getSidebar()}
@@ -175,7 +230,7 @@ function Layout({ main }: any): ReactNode {
         </Transition>
       </div>
 
-      <main className="h-full w-full bg-gray-100 dark:bg-gray-800">
+      <main className='h-full w-full bg-gray-100 dark:bg-gray-800'>
         {/* <Tools /> */}
         {main}
       </main>
