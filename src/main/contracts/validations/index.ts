@@ -1,2 +1,3 @@
-export { StoreSchema } from './store-validation';
-export { ThemeSchema } from './theme-validation';
+export { default as BaseProjectService } from './classes/base-service-validation';
+export { default as StoreSchema } from './store-validation';
+export { default as ThemeSchema } from './theme-validation';

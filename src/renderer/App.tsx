@@ -12,11 +12,11 @@ import { ReactFlowProvider } from 'reactflow';
 import {
   ModalProvider,
   ReactFlowElementsProvider,
-  RouterProvider,
   ThemeProvider,
   TitlebarProvider,
   ToastProvider,
 } from './contexts';
+import RouterProvider from './routes';
 
 export default function App() {
   return (

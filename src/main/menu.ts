@@ -1,4 +1,3 @@
-/* eslint-disable promise/always-return */
 /* eslint-disable no-console */
 import { BrowserWindow, Menu, MenuItemConstructorOptions } from 'electron';
 
