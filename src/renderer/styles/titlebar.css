@@ -1,5 +1,5 @@
 .cet-titlebar {
-  @apply !z-10 !h-16 !px-5 shadow dark:border-b dark:border-white/5;
+  @apply !z-10 !h-16 ;
 }
 
 .cet-container {
@@ -7,7 +7,7 @@
 }
 
 .cet-window-title {
-  @apply !max-w-none;
+  @apply !max-w-full;
 }
 
 .cet-controls-container div {
@@ -21,13 +21,23 @@
 .cet-window-icon img {
   @apply !h-10 !w-auto;
 }
-
+.cet-menubar{
+  @apply flex items-center mx-3.5
+}
 .cet-menubar div {
-  @apply flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 hover:!bg-blue-100 hover:text-open-plc-blue dark:hover:!bg-gray-800;
+  @apply flex rounded-md p-2  text-sm font-semibold leading-6 hover:!bg-blue-100 hover:text-open-plc-blue dark:hover:!bg-gray-800;
 }
 
 .cet-menubar-menu-container {
   @apply !mt-4 flex-col;
+}
+
+.cet-menubar-menu-button {
+  @apply ml-4;
+}
+
+.cet-menubar-logo{
+  @apply !h-12 !w-auto flex !order-first;
 }
 
 .inactive {
