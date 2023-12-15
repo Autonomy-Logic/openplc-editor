@@ -176,8 +176,8 @@ function Layout({ main }: any): ReactNode {
    */
   return (
     <div className='flex h-full'>
-      <div className='flex h-full'>
-        <nav className='flex h-full w-20 flex-col items-center justify-between border-r border-gray-100 bg-white px-4 py-4 dark:border-white/5 dark:bg-open-plc-dark'>
+      <div className='flex h-full w-full'>
+        <nav className='flex h-full z-20 w-20 flex-col items-center justify-between  bg-white px-4 py-4 dark:bg-open-plc-dark'>
           <ul className='mb-auto flex h-full flex-col items-center gap-2'>
             {/** Render the navigation items in sidebar */}
             {navigation.map(({ key, name, onClick, icon: Icon, className }) => (
@@ -214,26 +214,36 @@ function Layout({ main }: any): ReactNode {
             )}
           </button>
         </nav>
+        <div className='bg-open-plc-dark   w-full h-full'>
+          <div className='p-2 w-full h-full rounded-tl-xl bg-[#2E3038]'>
+            <div className='w-full h-full flex gap-2'>
+              <Transition
+                show={isSidebarOpen}
+                enter='transition-transform ease-out duration-100'
+                enterFrom='transform translate-x-[-100%]'
+                enterTo='transform translate-x-0'
+              >
+                <ResizableBox
+                  width={sidebarWidth}
+                  height={Infinity}
+                  className='h-full  bg-white px-8 shadow dark:bg-[#1D1D1D] z-10'
+                  minConstraints={[INITIAL_SIDEBAR_WIDTH, Infinity]}
+                  resizeHandles={['e']}
+                  axis='x'
+                  onResize={(_, data) => onResize(data)}
+                >
+                  {getSidebar()}
+                </ResizableBox>
+              </Transition>
 
-        <Transition show={isSidebarOpen}>
-          <ResizableBox
-            width={sidebarWidth}
-            height={Infinity}
-            className='h-full border-r border-gray-100 bg-white px-8 shadow dark:border-white/5 dark:bg-gray-900'
-            minConstraints={[INITIAL_SIDEBAR_WIDTH, Infinity]}
-            resizeHandles={['e']}
-            axis='x'
-            onResize={(_, data) => onResize(data)}
-          >
-            {getSidebar()}
-          </ResizableBox>
-        </Transition>
+              <main className={`h-full w-full bg-gray-100 dark:bg-gray-800  rounded-xl `}>
+                {/* <Tools /> */}
+                {main}
+              </main>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <main className='h-full w-full bg-gray-100 dark:bg-gray-800'>
-        {/* <Tools /> */}
-        {main}
-      </main>
     </div>
   );
 }

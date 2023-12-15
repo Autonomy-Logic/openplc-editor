@@ -1,5 +1,5 @@
 .react-resizable {
-  @apply relative;
+  @apply relative rounded-xl;
 }
 .react-resizable-handle {
   @apply absolute h-1 w-1 pb-[0.188rem] pl-0 pr-[0.188rem] pt-0 transition-all duration-[0.3s];
