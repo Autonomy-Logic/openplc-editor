@@ -5,21 +5,13 @@ import { editorRoutes, startRoute } from '../routes';
 import useOpenPLCStore from '../store';
 
 export default function RouterProvider(): ReactNode {
-  const haveProject = useOpenPLCStore.useProjectPath;
-  // eslint-disable-next-line no-console
-  console.log('First render => ', haveProject());
-
+  const haveProject = useOpenPLCStore.useProjectData();
   const setRouter = useCallback(() => {
-    let routerArray;
-    // Refactor: update the condition that handle the render route
-    if (haveProject() !== null) {
-      routerArray = startRoute;
-    } else {
-      routerArray = editorRoutes;
+    if (haveProject === null) {
+      return createBrowserRouter(startRoute);
     }
-    const router = createBrowserRouter(routerArray);
-    return router;
+    return createBrowserRouter(editorRoutes);
   }, [haveProject]);
 
-  return <ReactRouterProvider router={setRouter()} />;
+  return <ReactRouterProvider router={createBrowserRouter(editorRoutes)} />;
 }

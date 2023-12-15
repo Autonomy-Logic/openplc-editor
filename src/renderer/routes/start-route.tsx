@@ -1,9 +1,11 @@
 import { RouteObject } from 'react-router-dom';
 
+import { StartPage } from '../pages';
+
 const startRoute: RouteObject[] = [
   {
     path: '/',
-    element: <h1> Start Page</h1>,
+    element: <StartPage />,
   },
 ];
 

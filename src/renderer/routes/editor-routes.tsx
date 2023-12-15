@@ -6,7 +6,7 @@ import { Editor, Main, Project, Resources } from '../pages';
 const { paths } = CONSTANTS;
 const editorRoutes: RouteObject[] = [
   {
-    path: '/',
+    path: 'main',
     element: <Main />,
     children: [
       {
