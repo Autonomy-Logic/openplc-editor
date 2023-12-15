@@ -12,7 +12,7 @@ import * as monaco from 'monaco-editor';
 import { useCallback, useEffect, useRef } from 'react';
 
 import { useTabs } from '@/renderer/hooks';
-import useOpenPLCStore from '@/renderer/store';
+import { useOpenPLCStore } from '@/renderer/store';
 
 export default function TextEditor() {
   const projectPath = useOpenPLCStore.useProjectPath();
@@ -28,9 +28,7 @@ export default function TextEditor() {
   }
   const verifyEditor = useCallback(() => {
     if (editorRef.current) {
-      const normalizedUri = editorRef.current
-        .getModel()
-        ?.uri.path.replace('/', '');
+      const normalizedUri = editorRef.current.getModel()?.uri.path.replace('/', '');
       return normalizedUri;
     }
     return null;
@@ -42,13 +40,13 @@ export default function TextEditor() {
       if (!fileToEdit) return;
       updatePou({ name: fileToEdit, body: _editorValue });
     }, 750),
-    [],
+    []
   );
 
   const handleChange = (
     value: string | undefined,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _ev: monaco.editor.IModelContentChangedEvent,
+    _ev: monaco.editor.IModelContentChangedEvent
   ) => {
     debounce(value);
   };
@@ -64,9 +62,7 @@ export default function TextEditor() {
   const setPouInStage = useCallback(() => {
     const currentTab = setEditorPath();
     if (!currentTab || !project) return 'Empty pou in stage';
-    const pouInStage = project.project.types.pous.pou.find(
-      (p) => p['@name'] === currentTab,
-    );
+    const pouInStage = project.project.types.pous.pou.find((p) => p['@name'] === currentTab);
     const res = JSON.stringify(pouInStage?.body);
     return res;
   }, [tabs]);

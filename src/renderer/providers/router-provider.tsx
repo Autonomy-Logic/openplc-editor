@@ -1,17 +1,45 @@
-import { ReactNode, useCallback } from 'react';
+import { ReactNode } from 'react';
 import { createBrowserRouter, RouterProvider as ReactRouterProvider } from 'react-router-dom';
 
-import { editorRoutes, startRoute } from '../routes';
-import useOpenPLCStore from '../store';
+import { EditorLayout, StartLayout } from '../layouts';
+import { StartPage } from '../pages';
 
+const router = createBrowserRouter([
+  {
+    id: 'root',
+    path: '/',
+    element: <StartLayout />,
+    children: [
+      {
+        index: true,
+        element: <StartPage />,
+      },
+    ],
+  },
+  {
+    id: 'editor',
+    path: 'editor',
+    element: <EditorLayout />,
+    /**
+     * TODO: Fill the children array with the correct elements
+     *
+     * children: [
+     *  {
+     *    path: 'project'
+     *    element: <Project />
+     *  },
+     *  {
+     *    path: `:${pouName}`
+     *    element: Should provide a proper name
+     *  },
+     *  {
+     *    path: 'resources'
+     *    element: <Resources />
+     *  }
+     * ]
+     */
+  },
+]);
 export default function RouterProvider(): ReactNode {
-  const haveProject = useOpenPLCStore.useProjectData();
-  const setRouter = useCallback(() => {
-    if (haveProject === null) {
-      return createBrowserRouter(startRoute);
-    }
-    return createBrowserRouter(editorRoutes);
-  }, [haveProject]);
-
-  return <ReactRouterProvider router={createBrowserRouter(editorRoutes)} />;
+  return <ReactRouterProvider router={router} />;
 }

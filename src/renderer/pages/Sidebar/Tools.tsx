@@ -25,7 +25,7 @@ import {
 import { CreatePOU, Tabs, Tooltip } from 'renderer/components';
 import { useFullScreen, useModal, useToast } from 'renderer/hooks';
 
-import useOpenPLCStore from '@/renderer/store';
+import { useOpenPLCStore } from '@/renderer/store';
 import { CONSTANTS } from '@/utils';
 /**
  * Destructure necessary values from the CONSTANTS module
@@ -202,24 +202,20 @@ const Tools: FC = () => {
           },
         ]}
       /> */}
-      <div className="absolute z-10 m-4 flex gap-2 rounded-lg bg-white p-3 shadow-lg dark:bg-gray-900">
-        {tools.map(
-          ({ id, onClick, icon: Icon, className, tooltip, divider }) => (
-            <Fragment key={id}>
-              <Tooltip id={tooltip} label={tooltip} place="bottom">
-                <button
-                  className="press-animated border-none outline-none"
-                  onClick={() => onClick && onClick()}
-                >
-                  <Icon
-                    className={`h-6 w-6 text-gray-400 hover:opacity-90 ${className}`}
-                  />
-                </button>
-              </Tooltip>
-              {divider && <div className="h-6 w-[1px] bg-gray-300" />}
-            </Fragment>
-          ),
-        )}
+      <div className='absolute z-10 m-4 flex gap-2 rounded-lg bg-white p-3 shadow-lg dark:bg-gray-900'>
+        {tools.map(({ id, onClick, icon: Icon, className, tooltip, divider }) => (
+          <Fragment key={id}>
+            <Tooltip id={tooltip} label={tooltip} place='bottom'>
+              <button
+                className='press-animated border-none outline-none'
+                onClick={() => onClick && onClick()}
+              >
+                <Icon className={`h-6 w-6 text-gray-400 hover:opacity-90 ${className}`} />
+              </button>
+            </Tooltip>
+            {divider && <div className='h-6 w-[1px] bg-gray-300' />}
+          </Fragment>
+        ))}
       </div>
     </>
   );

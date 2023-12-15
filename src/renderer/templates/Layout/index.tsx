@@ -18,7 +18,7 @@ import { CurrentProps } from 'renderer/contexts/Sidebar';
 import { TLayoutProps } from 'renderer/contracts/types';
 import { useSidebar, useToggle } from 'renderer/hooks';
 import { EditorTools, ProjectTree, Settings, Tools, Variables } from 'renderer/pages';
-import useOpenPLCStore from 'renderer/store';
+import { useOpenPLCStore } from 'renderer/store';
 import { CONSTANTS } from 'srcRoot/shared/data';
 import { classNames } from 'srcRoot/utils';
 

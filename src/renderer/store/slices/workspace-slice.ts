@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /* eslint-disable no-param-reassign */
 import { produce } from 'immer';
 import { CreatePouDto, UpdatePouDto } from 'renderer/contracts/dtos';

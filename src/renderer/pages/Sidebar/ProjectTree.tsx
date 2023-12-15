@@ -6,9 +6,9 @@ import { useNavigate } from 'react-router-dom';
 import { Tabs } from 'renderer/components';
 import Tree, { RootProps } from 'renderer/components/Tree';
 import { useTabs } from 'renderer/hooks';
-import useOpenPLCStore from 'renderer/store';
+import { useOpenPLCStore } from 'renderer/store';
 
-import { CONSTANTS,convertToPath  } from '@/utils';
+import { CONSTANTS, convertToPath } from '@/utils';
 /**
  * Destructure necessary values from the CONSTANTS module
  */
@@ -48,18 +48,12 @@ const ProjectTree: FC = () => {
     if (project) {
       const pous = project?.project.types.pous.pou;
       const resourceName =
-        project?.project.instances.configurations.configuration.resource[
-          '@name'
-        ];
+        project?.project.instances.configurations.configuration.resource['@name'];
       /**
        * Handle click events for tree nodes and add corresponding tabs
        * @function
        */
-      const handleClick = (data: {
-        id: number | string;
-        title: string;
-        path: string;
-      }) => {
+      const handleClick = (data: { id: number | string; title: string; path: string }) => {
         addTab({
           ...data,
           onClick: () => navigate(data.path),
@@ -139,7 +133,7 @@ const ProjectTree: FC = () => {
           },
         ]}
       />
-      <div className="py-4">
+      <div className='py-4'>
         <Tree root={root} />
       </div>
     </>

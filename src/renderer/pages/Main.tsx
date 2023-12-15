@@ -5,7 +5,7 @@ import { FC, useCallback, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { SidebarProvider, TabsProvider } from 'renderer/contexts';
 import { useSidebar, useTabs, useTheme } from 'renderer/hooks';
-import useOpenPLCStore from 'renderer/store';
+import { useOpenPLCStore } from 'renderer/store';
 import { Layout } from 'renderer/templates';
 import { CONSTANTS } from 'srcRoot/shared/data';
 import { convertToPath } from 'srcRoot/utils';
