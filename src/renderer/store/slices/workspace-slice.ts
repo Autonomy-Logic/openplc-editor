@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /* eslint-disable no-param-reassign */
 import { produce } from 'immer';
 import { CreatePouDto, UpdatePouDto } from 'renderer/contracts/dtos';
@@ -20,9 +21,8 @@ export type WorkspaceSlice = WorkspaceProps & {
 
 // TODO: Add validations
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
-  projectData: null,
   projectPath: null,
-
+  projectData: null,
   /**
    * Sets the workspace data.
    *
@@ -89,7 +89,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
    * @param {string} options.name - The name of the pou to update.
    * @param {string} options.body - The new body of the pou.
    */
-  updatePou: ({ name, body }: { name: string; body: string; }) => {
+  updatePou: ({ name, body }: { name: string; body: string }) => {
     setState(
       produce((state: WorkspaceProps) => {
         if (!state.projectData) return;

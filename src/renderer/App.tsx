@@ -16,7 +16,7 @@ import {
   TitlebarProvider,
   ToastProvider,
 } from './contexts';
-import RouterProvider from './routes';
+import { RouterProvider } from './providers';
 
 export default function App() {
   return (

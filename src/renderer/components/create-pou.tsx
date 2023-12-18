@@ -3,7 +3,7 @@ import { ReactNode } from 'react';
 import { FormProvider, SubmitHandler, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { useModal } from 'renderer/hooks';
-import useOpenPLCStore from 'renderer/store';
+import { useOpenPLCStore } from 'renderer/store';
 import { z, ZodSchema } from 'zod';
 
 import { CONSTANTS } from '@/utils';
@@ -34,7 +34,7 @@ function CreateNewPOU(): ReactNode {
         label: z.string(),
         value: z.union([z.number(), z.string()]),
       },
-      { required_error: t('errors.type') },
+      { required_error: t('errors.type') }
     ),
     language: z.object(
       {
@@ -42,7 +42,7 @@ function CreateNewPOU(): ReactNode {
         label: z.string(),
         value: z.union([z.number(), z.string()]),
       },
-      { required_error: t('errors.language') },
+      { required_error: t('errors.language') }
     ),
   });
   type formSchema = z.infer<typeof createPOUSchema>;
@@ -97,41 +97,37 @@ function CreateNewPOU(): ReactNode {
   } = createPouForm;
 
   return (
-    <div className="p-8">
+    <div className='p-8'>
       <FormProvider {...createPouForm}>
         <form
           onSubmit={handleSubmit(handleCreatePOU)}
-          className="grid w-full grid-cols-2 grid-rows-3 gap-x-4"
+          className='grid w-full grid-cols-2 grid-rows-3 gap-x-4'
         >
-          <Form.Field className="col-span-full">
-            <Form.Label htmlFor="name"> {t('labels.name')}</Form.Label>
-            <Form.Input type="name" name="name" />
-            <Form.ErrorMessage field="name" />
+          <Form.Field className='col-span-full'>
+            <Form.Label htmlFor='name'> {t('labels.name')}</Form.Label>
+            <Form.Input type='name' name='name' />
+            <Form.ErrorMessage field='name' />
           </Form.Field>
           <Form.Field>
-            <Form.Label htmlFor="type"> {t('labels.type')}</Form.Label>
-            <Form.ComboBox name="type" options={typeOptions} />
-            <Form.ErrorMessage field="type" />
+            <Form.Label htmlFor='type'> {t('labels.type')}</Form.Label>
+            <Form.ComboBox name='type' options={typeOptions} />
+            <Form.ErrorMessage field='type' />
           </Form.Field>
           <Form.Field>
-            <Form.Label htmlFor="language"> {t('labels.language')}</Form.Label>
-            <Form.ComboBox
-              name="language"
-              options={languageOptions}
-              showOptions={2}
-            />
-            <Form.ErrorMessage field="language" />
+            <Form.Label htmlFor='language'> {t('labels.language')}</Form.Label>
+            <Form.ComboBox name='language' options={languageOptions} showOptions={2} />
+            <Form.ErrorMessage field='language' />
           </Form.Field>
-          <Form.Field className="col-start-2 mt-auto flex h-10 flex-row gap-4">
+          <Form.Field className='col-start-2 mt-auto flex h-10 flex-row gap-4'>
             <Button
-              type="submit"
+              type='submit'
               label={translate('buttons.ok')}
               disabled={isSubmitting}
               widthFull
             />
             <Button
-              type="button"
-              appearance="secondary"
+              type='button'
+              appearance='secondary'
               label={translate('buttons.cancel')}
               disabled={isSubmitting}
               onClick={handleCancel}

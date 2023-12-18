@@ -53,3 +53,4 @@ export { default as Tools } from './Sidebar/Tools';
  * @module Sidebar
  */
 export { default as Variables } from './Sidebar/Variables';
+export { default as StartPage } from './start';

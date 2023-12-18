@@ -11,7 +11,7 @@ import {
 import { createRoot, Root } from 'react-dom/client';
 import { useNavigate } from 'react-router-dom';
 
-import { CONSTANTS } from '@/utils';
+import { CONSTANTS } from '@/shared/data';
 
 import { TitlebarTabs } from '../components';
 
@@ -66,9 +66,7 @@ export type TabsContextData = {
 /**
  * Create a context for managing tabs.
  */
-export const TabsContext = createContext<TabsContextData>(
-  {} as TabsContextData,
-);
+export const TabsContext = createContext<TabsContextData>({} as TabsContextData);
 /**
  * Provider component for managing tabs.
  * @returns A JSX Component with the tabs context provider
@@ -109,16 +107,15 @@ const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
         }
         return tabsState;
       }),
-    [],
+    []
   );
   /**
    * Removes a tab from the list of tabs.
    * @param id - The ID of the tab to remove.
    */
   const removeTab = useCallback(
-    (id: number | string) =>
-      setTabs((state) => [...state.filter((tab) => tab.id !== id)]),
-    [],
+    (id: number | string) => setTabs((state) => [...state.filter((tab) => tab.id !== id)]),
+    []
   );
   /**
    * Sets the currently active tab.
@@ -127,21 +124,14 @@ const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
   const setCurrentTab = useCallback(
     (id: number | string) =>
       setTabs((state) =>
-        state.map((tab) =>
-          tab.id === id
-            ? { ...tab, current: true }
-            : { ...tab, current: false },
-        ),
+        state.map((tab) => (tab.id === id ? { ...tab, current: true } : { ...tab, current: false }))
       ),
-    [],
+    []
   );
   /**
    * Gets the currently active tab.
    */
-  const getCurrentTab = useCallback(
-    () => tabs.find(({ current }) => current),
-    [tabs],
-  );
+  const getCurrentTab = useCallback(() => tabs.find(({ current }) => current), [tabs]);
   /**
    * Use effect hook to create and render the titlebar tabs.
    */
@@ -178,30 +168,18 @@ const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
               getCurrentTab()?.id === tab.id && navigate(paths.MAIN);
             },
           }))}
-        />,
+        />
       );
     }
-  }, [
-    getCurrentTab,
-    navigate,
-    removeTab,
-    rootTitlebarTabs,
-    setCurrentTab,
-    tabs,
-  ]);
+  }, [getCurrentTab, navigate, removeTab, rootTitlebarTabs, setCurrentTab, tabs]);
   /**
    * Memoize the tabs context data.
    */
-  const defaultValue = useMemo(
-    () => ({ tabs, addTab, removeTab }),
-    [tabs, addTab, removeTab],
-  );
+  const defaultValue = useMemo(() => ({ tabs, addTab, removeTab }), [tabs, addTab, removeTab]);
   /**
    * Provide the context with tabs data.
    */
-  return (
-    <TabsContext.Provider value={defaultValue}>{children}</TabsContext.Provider>
-  );
+  return <TabsContext.Provider value={defaultValue}>{children}</TabsContext.Provider>;
 };
 
 export default TabsProvider;

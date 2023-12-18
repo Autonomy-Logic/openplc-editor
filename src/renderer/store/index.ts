@@ -18,9 +18,4 @@ export const openPLCStoreBase = create<WorkspaceSliceType>()((...a) => ({
 /**
  * Create the store as a hook and generate the selectors using the createSelectorHooks function.
  */
-const useOpenPLCStore = createSelectorHooks(openPLCStoreBase);
-
-/**
- * @exports useOpenPLCStore
- */
-export default useOpenPLCStore;
+export const useOpenPLCStore = createSelectorHooks(openPLCStoreBase);
