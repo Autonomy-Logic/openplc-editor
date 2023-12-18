@@ -4,21 +4,14 @@ import {
   FC,
   PropsWithChildren,
   useCallback,
-  useEffect,
   useMemo,
   useState,
 } from 'react';
-import { createRoot, Root } from 'react-dom/client';
-import { useNavigate } from 'react-router-dom';
 
-import { CONSTANTS } from '@/utils';
 
-import { TitlebarTabs } from '../components';
-import OpenPLCIcon from '../assets/icons/openPLCIcon.svg';
 /**
  * Extracted 'path' property from the imported CONSTANTS object.
  */
-const { paths } = CONSTANTS;
 /**
  * Type definition for individual tab properties.
  */
@@ -74,18 +67,8 @@ export const TabsContext = createContext<TabsContextData>({} as TabsContextData)
 // Review this eslint rule
 // eslint-disable-next-line react/function-component-definition
 const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
-  /**
-   * State to hold the root element for titlebar tabs.
-   */
-  const [rootTitlebarTabs, setRootTitlebarTabs] = useState<Root>();
-  /**
-   * State to store the list of tabs.
-   */
   const [tabs, setTabs] = useState<TabsProps[]>([]);
-  /**
-   * Hook to navigate between routes.
-   */
-  const navigate = useNavigate();
+
   /**
    * Adds a new tab to the list of tabs.
    * @param tab - The tab properties to add.
@@ -117,73 +100,6 @@ const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
     (id: number | string) => setTabs((state) => [...state.filter((tab) => tab.id !== id)]),
     []
   );
-  /**
-   * Sets the currently active tab.
-   * @param id - The ID of the tab to set as active.
-   */
-  const setCurrentTab = useCallback(
-    (id: number | string) =>
-      setTabs((state) =>
-        state.map((tab) => (tab.id === id ? { ...tab, current: true } : { ...tab, current: false }))
-      ),
-    []
-  );
-  /**
-   * Gets the currently active tab.
-   */
-  const getCurrentTab = useCallback(() => tabs.find(({ current }) => current), [tabs]);
-  /**
-   * Use effect hook to create and render the titlebar tabs.
-   */
-  useEffect(() => {
-    const [menubar] = document.getElementsByClassName('cet-menubar');
-    const titlebarTabs = document.createElement('div');
-
-    titlebarTabs.className = 'flex flex-1 items-center overflow-hidden';
-    titlebarTabs.id = 'titlebar-windows';
-  
-    if (menubar) {
-    const menuButtonDiv = document.createElement('div');
-    menuButtonDiv.className = 'cet-menubar-logo';
-    const logo = document.createElement('img');
-    logo.src = OpenPLCIcon; 
-    logo.alt = 'OpenPLC logo'; 
-
-
-
-    menuButtonDiv.appendChild(logo);
-
-    menubar.appendChild(menuButtonDiv);
-
-      menubar.after(titlebarTabs);
-      const root = createRoot(titlebarTabs as HTMLElement);
-      root.render(<TitlebarTabs tabs={[]} />);
-      setRootTitlebarTabs(root);
-    }
-  }, []);
-  /**
-   * Use effect hook to update the titlebar tabs when tabs change.
-   */
-  useEffect(() => {
-    if (rootTitlebarTabs) {
-      rootTitlebarTabs.render(
-        <TitlebarTabs
-          tabs={tabs.map((tab) => ({
-            ...tab,
-            onClick: () => {
-              tab.onClick && tab.onClick();
-              setCurrentTab(tab.id);
-            },
-            onClickCloseButton: () => {
-              tab.onClickCloseButton && tab.onClickCloseButton();
-              removeTab(tab.id);
-              getCurrentTab()?.id === tab.id && navigate(paths.MAIN);
-            },
-          }))}
-        />
-      );
-    }
-  }, [getCurrentTab, navigate, removeTab, rootTitlebarTabs, setCurrentTab, tabs]);
   /**
    * Memoize the tabs context data.
    */

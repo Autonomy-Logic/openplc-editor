@@ -14,6 +14,12 @@
   @apply flex items-center justify-center rounded-md;
 }
 
+.cet-icon{
+  @apply !w-20 h-fit;
+}
+.cet-icon img {
+  @apply  !h-8 !w-fit;
+}
 .cet-window-icon {
   @apply !mr-5;
 }
