@@ -8,7 +8,6 @@
     "^renderer/(.*)$": "<rootDir>/src/renderer/$1",
     "^main/(.*)$": "<rootDir>/src/main/$1"
   },
-
   "testEnvironment": "jsdom",
   "testEnvironmentOptions": {
     "url": "http://localhost/"
