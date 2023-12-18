@@ -1,11 +1,11 @@
 /* eslint-disable no-console */
-import { useCallback, useEffect } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useOpenPLCStore } from 'srcRoot/renderer/store';
-import { TXmlProject } from 'srcRoot/shared/contracts/types';
+import { ReactNode, useCallback, useEffect } from 'react';
+import { Outlet, useNavigate } from 'react-router-dom';
+import { useOpenPLCStore } from 'renderer/store';
 
-export default function StartLayout() {
-  const location = useLocation();
+import { TXmlProject } from '@/shared/contracts/types';
+
+export default function StartLayout(): ReactNode {
   const navigate = useNavigate();
   const setWorkspaceData = useOpenPLCStore.useSetWorkspace();
   const setDataForWorkspace = useCallback(() => {
@@ -20,8 +20,7 @@ export default function StartLayout() {
 
   useEffect(() => {
     setDataForWorkspace();
-    console.log(location.pathname);
-  }, [location.pathname, setDataForWorkspace]);
+  }, [setDataForWorkspace]);
 
   return (
     <>

@@ -6,9 +6,10 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { SidebarProvider, TabsProvider } from 'renderer/contexts';
 import { useSidebar, useTabs, useTheme } from 'renderer/hooks';
 import { useOpenPLCStore } from 'renderer/store';
-import { Layout } from 'renderer/templates';
-import { CONSTANTS } from 'srcRoot/shared/data';
-import { convertToPath } from 'srcRoot/utils';
+
+// todo: => import { Layout } from 'renderer/templates';
+import { CONSTANTS } from '@/shared/data';
+import { convertToPath } from '@/utils';
 
 /**
  * Destructure necessary values from the CONSTANTS module
@@ -76,7 +77,7 @@ const MainComponent: FC = () => {
   console.table(project?.project.types.pous.pou);
   if (!theme) return <></>;
 
-  return <Layout main={<Outlet />} />;
+  return <Outlet />;
 };
 /**
  * Wrapper component providing context providers for tabs and sidebar
