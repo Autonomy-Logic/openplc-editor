@@ -17,6 +17,7 @@ import {
   ToastProvider,
 } from './contexts';
 import { RouterProvider } from './providers';
+import Draft from './pages/draft';
 
 export default function App() {
   return (
@@ -36,7 +37,7 @@ export default function App() {
                 {/** Enable HTML5-based drag-and-drop functionality. */}
                 <DndProvider backend={HTML5Backend}>
                   {/** Manage routing and navigation within the app. */}
-                  <RouterProvider />
+                  <Draft />
                 </DndProvider>
                 {/** Displays toast notification using the ToastContainer component. */}
                 <ToastContainer closeButton={false} closeOnClick={false} />
