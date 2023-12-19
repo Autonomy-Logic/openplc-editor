@@ -1,29 +1,35 @@
 import { Titlebar, TitlebarColor } from 'custom-electron-titlebar';
-// import colors from 'tailwindcss/colors';
-import logoIcon from './assets/logoIcon'
-// Wip: Should export the titlebar instance
+import { logoIcon, darkThemeIcon, lightThemeIcon } from './assets/base64Icons';
+
 window.addEventListener('DOMContentLoaded', () => {
   const options = {
     containerOverflow: 'hidden',
     backgroundColor: TitlebarColor?.fromHex('#121316'),
     icon: logoIcon,
   };
-  // eslint-disable-next-line no-new
   new Titlebar(options);
+
+  const iconContainer = document.querySelector('.cet-title');
+  if (iconContainer) {
+    iconContainer.classList.replace('cet-title', 'cet-icon-container');
+
+    const toggleTheme = document.createElement('button');
+    toggleTheme.classList.add('cet-toggle-theme');
+    iconContainer.appendChild(toggleTheme);
+
+    const toggleThemeIcon = document.createElement('img');
+    toggleThemeIcon.classList.add('toggle-theme-icon');
+    toggleThemeIcon.src = darkThemeIcon;
+    toggleTheme.appendChild(toggleThemeIcon);
+
+    let isDarkTheme = true;
+
+    function toggleThemeHandler() {
+      toggleThemeIcon.src = isDarkTheme ? lightThemeIcon : darkThemeIcon;
+      isDarkTheme = !isDarkTheme;
+      
+    }
+
+    toggleTheme.addEventListener('click', toggleThemeHandler);
+  }
 });
-
-//
-
-// const [menubar] = document.getElementsByClassName('cet-menubar');
-
-// if (menubar) {
-//   const menuButtonDiv = document.createElement('div');
-//   menuButtonDiv.className = 'cet-menubar-logo';
-//   const logo = document.createElement('img');
-//   logo.src = OpenPLCIcon;
-//   logo.alt = 'OpenPLC logo';
-
-//   menuButtonDiv.appendChild(logo);
-
-//   menubar.appendChild(menuButtonDiv);
-// }

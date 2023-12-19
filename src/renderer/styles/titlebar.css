@@ -1,7 +1,9 @@
 .cet-titlebar {
-  @apply !z-10 !h-16 ;
+  @apply !z-10 !h-16;
 }
-
+.cet-titlebar .cet-window{
+  @apply !bg-red-500
+}
 .cet-container {
   @apply !top-16;
 }
@@ -48,4 +50,10 @@
 
 .inactive {
   @apply !bg-gray-900;
+}
+.cet-icon-container {
+  @apply !cursor-pointer  flex justify-center items-center
+}
+.cet-toggle-theme{
+ -webkit-app-region: no-drag;
 }

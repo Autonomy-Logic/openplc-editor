@@ -92,6 +92,7 @@ const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
       }),
     []
   );
+  
   /**
    * Removes a tab from the list of tabs.
    * @param id - The ID of the tab to remove.
