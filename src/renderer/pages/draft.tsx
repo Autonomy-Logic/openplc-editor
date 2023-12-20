@@ -1,11 +1,7 @@
-import ScrollAreaDemo from '../components/ui/recent-projects';
+import Folder from '../components/ui/recent-projects/elements/folder';
 
 function Draft() {
-  return (
-    <div className='h-full w-full items-center justify-center'>
-      <ScrollAreaDemo />
-    </div>
-  );
+  return <Folder />;
 }
 
 export default Draft;

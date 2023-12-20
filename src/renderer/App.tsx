@@ -1,5 +1,5 @@
 import 'tailwindcss/tailwind.css';
-import './styles/tailwind.css';
+import './styles/globals.css';
 import './styles/react-resizable.css';
 import './styles/react-toastify.css';
 import './styles/titlebar.css';
@@ -16,8 +16,8 @@ import {
   TitlebarProvider,
   ToastProvider,
 } from './contexts';
-import { RouterProvider } from './providers';
 import Draft from './pages/draft';
+import { RouterProvider } from './providers';
 
 export default function App() {
   return (

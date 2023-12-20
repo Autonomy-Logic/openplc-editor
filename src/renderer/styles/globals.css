@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --primary: #0464fb;
+    --primary-light: #b4d0fe;
+    --primary-medium: #0350c9;
+    --primary-medium-dark: #023c97;
+    --primary-dark: #011e4b;
+  }
+}
+
 @layer utilities {
   .press-animated {
     @apply border-[none] transition-[0.2s] duration-[all] active:scale-[0.90];
