@@ -1,0 +1,42 @@
+.folder-wrapper {
+  display: flex;
+  position: relative;
+  width: 224px;
+  height: 160px;
+}
+
+.folder-wrapper p {
+  color: white;
+  font-size: 12px;
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  bottom: 16px;
+  left: 12px;
+  cursor: pointer;
+}
+
+.folder-wrapper span {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+#last-modified {
+  font-size: 10px;
+  opacity: 40%;
+}
+
+#folder-path {
+  fill: #0350c9;
+  cursor: pointer;
+}
+
+#folder-path:hover {
+  fill: #0464fb;
+}
+
+.folder-wrapper p:hover ~ svg #folder-path {
+  fill: #0464fb;
+}

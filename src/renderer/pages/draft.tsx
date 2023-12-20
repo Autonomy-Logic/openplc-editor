@@ -1,4 +1,4 @@
-import Folder from '../components/ui/recent-projects/elements/folder';
+import Folder from 'renderer/components/ui/recent-projects/elements/folder';
 
 function Draft() {
   return <Folder />;
