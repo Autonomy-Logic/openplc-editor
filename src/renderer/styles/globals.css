@@ -10,6 +10,9 @@
     --primary-medium-dark: #023c97;
     --primary-dark: #011e4b;
   }
+  #folder-root p:hover ~ svg #folder-path {
+    fill: #2866f7;
+  }
 }
 
 @layer utilities {

@@ -1,17 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { JSXElementConstructor, ReactElement, ReactNode, ReactPortal } from 'react';
+import { HTMLAttributes } from 'react';
 
-export default function Root(
-  children:
-    | string
-    | number
-    | boolean
-    | ReactElement<any, string | JSXElementConstructor<any>>
-    | Iterable<ReactNode>
-    | ReactPortal
-    | Iterable<ReactNode>
-    | null
-    | undefined
-) {
-  return <div className='folder-wrapper'>{children}</div>;
+type FolderRootProps = HTMLAttributes<HTMLDivElement> & Record<string, never>;
+// {
+//   size?: 'sm' | 'md' | 'lg';
+// };
+
+export default function Root({ ...props }: FolderRootProps) {
+  // eslint-disable-next-line react/jsx-props-no-spreading
+  return <div id='folder-root' className='flex relative w-56 h-40' {...props} />;
 }

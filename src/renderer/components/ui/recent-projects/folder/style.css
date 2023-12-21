@@ -1,11 +1,11 @@
-.folder-wrapper {
+/* .folder-wrapper {
   display: flex;
   position: relative;
   width: 224px;
   height: 160px;
-}
+} */
 
-.folder-wrapper p {
+/* .folder-wrapper p {
   color: white;
   font-size: 12px;
   position: absolute;
@@ -26,17 +26,17 @@
 #last-modified {
   font-size: 10px;
   opacity: 40%;
-}
-
+} */
+/*
 #folder-path {
-  fill: #0350c9;
+  fill: #1e52c6;
   cursor: pointer;
-}
-
+} */
+/*
 #folder-path:hover {
   fill: #0464fb;
-}
+} */
 
-.folder-wrapper p:hover ~ svg #folder-path {
-  fill: #0464fb;
+#folder-root p:hover ~ svg #folder-path {
+  fill: #2866f7;
 }
