@@ -15,5 +15,6 @@
   "testPathIgnorePatterns": ["release/app/dist", "configs/dll"],
   "transform": {
     "\\.(ts|tsx|js|jsx)$": "ts-jest"
-  }
+  },
+  "collectCoverage": true
 }
