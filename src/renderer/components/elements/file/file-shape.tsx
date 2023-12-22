@@ -4,7 +4,7 @@ type ShapeProps = SVGProps<SVGSVGElement> & Record<string, never>;
 export default function Shape({ ...props }: ShapeProps) {
   return (
     // eslint-disable-next-line react/jsx-props-no-spreading
-    <svg viewBox='0 0 224 160' xmlns='http://www.w3.org/2000/svg' {...props}>
+    <svg role='figure' viewBox='0 0 224 160' xmlns='http://www.w3.org/2000/svg' {...props}>
       <path
         id='folder-path'
         className='fill-[#1e52c6] cursor-pointer hover:fill-[#2866f7]'
