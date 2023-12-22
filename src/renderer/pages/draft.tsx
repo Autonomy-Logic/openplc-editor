@@ -1,11 +1,11 @@
-import { Folder } from 'renderer/components/ui/recent-projects/folder';
+import RecentProjects from '../../shared/data/mock/projects-data.json';
+import RecentProjectViewer from '../components/recent-project';
 
 function Draft() {
   return (
-    <Folder.Root>
-      <Folder.Label projectName='Project Draft' lastModified='Within 30 minutes' />
-      <Folder.Shape />
-    </Folder.Root>
+    <div className='w-full h-full flex justify-center items-center'>
+      <RecentProjectViewer dataToRender={RecentProjects} />
+    </div>
   );
 }
 

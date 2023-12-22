@@ -9,6 +9,6 @@ type FolderRootProps = HTMLAttributes<HTMLDivElement> & unknown;
 export default function Root({ ...props }: FolderRootProps) {
   return (
     // eslint-disable-next-line react/jsx-props-no-spreading
-    <div id='folder-root' className='flex relative w-56 h-40' {...props} />
+    <div id='folder-root' className='flex relative w-60 h-32' {...props} />
   );
 }
