@@ -10,7 +10,11 @@ module.exports = {
     extend: {
       colors: {
         'open-plc-blue': 'rgb(3, 102, 255)',
-        'open-plc-dark': '#121316',
+        primary: 'var(--primary)',
+        'primary-light': 'var(--primary-light)',
+        'primary-dark': 'var(--primary-dark)',
+        'primary-medium': 'var(--primary-medium)',
+        'primary-medium-dark': 'var(--primary-medium-dark)',
       },
     },
   },

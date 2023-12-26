@@ -12,27 +12,31 @@
     "build:dll": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.dev.dll.ts",
     "build:main": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.prod.ts",
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.prod.ts",
-    "postinstall": "ts-node configs/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
+    "postinstall": "ts-node scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:main": "cross-env NODE_ENV=development eslint \"./src/main/**/*\" --ext .js,.jsx,.ts,.tsx",
+    "lint:renderer": "cross-env NODE_ENV=development eslint \"./src/renderer/**/*\" --ext .js,.jsx,.ts,.tsx",
     "lint:fix": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx --fix",
-    "lint:format": "prettier  --loglevel warn --write \"./**/*.{js,jsx,ts,tsx,css,md,json}\" ",
-    "lint:format-check": "prettier src/**/*.{js,jsx,ts,tsx,json,css} --check",
-    "package": "ts-node ./configs/scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
+    "format": "prettier  --loglevel warn --write \"./**/*.{js,jsx,ts,tsx,css,md,json}\" ",
+    "format-check": "prettier src/**/*.{js,jsx,ts,tsx,json,css} --check",
+    "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
-    "start:dev": "ts-node ./configs/scripts/check-port-in-use.js && npm run start:renderer",
+    "start:dev": "ts-node scripts/check-port-in-use.js && npm run start:renderer",
     "start:main": "cross-env NODE_ENV=development electronmon -r ts-node/register/transpile-only .",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
-    "test": "jest"
+    "test:unit": "jest --watch"
   },
   "browserslist": [],
   "dependencies": {
     "@headlessui/react": "^1.7.17",
     "@hookform/resolvers": "^3.3.2",
     "@monaco-editor/react": "^4.6.0",
+    "@radix-ui/react-scroll-area": "^1.0.5",
     "@tailwindcss/forms": "^0.5.6",
     "@tanstack/react-table": "^8.10.7",
     "auto-zustand-selectors-hook": "^2.0.0",
+    "clsx": "^2.0.0",
     "custom-electron-titlebar": "^4.2.7",
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",
@@ -57,8 +61,10 @@
     "react-toastify": "^9.1.3",
     "react-tooltip": "^5.21.5",
     "reactflow": "^11.9.4",
+    "tailwind-merge": "^2.1.0",
     "url": "^0.11.3",
     "use-undoable": "^4.0.0",
+    "uuid": "^9.0.1",
     "xmlbuilder2": "^3.1.1",
     "zod": "^3.22.4",
     "zustand": "^4.4.3"
@@ -78,6 +84,7 @@
     "@types/react-dom": "^18.2.7",
     "@types/react-resizable": "^3.0.5",
     "@types/react-test-renderer": "^18.0.1",
+    "@types/uuid": "^9.0.7",
     "@types/webpack-bundle-analyzer": "^4.6.0",
     "@typescript-eslint/eslint-plugin": "^6.7.0",
     "@typescript-eslint/parser": "^6.7.0",
@@ -137,9 +144,9 @@
     "webpack-dev-server": "^4.15.1",
     "webpack-merge": "^5.9.0"
   },
-  "devEngines": {
-    "node": ">=18.x",
-    "yarn": ">=4.x"
+  "engines": {
+    "node": ">=18.x <20.x",
+    "npm": ">=9.x <10.x"
   },
   "electronmon": {
     "patterns": [
@@ -153,6 +160,5 @@
   "trustedDependencies": [
     "electron",
     "electron-builder"
-  ],
-  "packageManager": "yarn@4.0.1"
+  ]
 }

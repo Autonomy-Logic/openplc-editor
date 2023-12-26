@@ -1,6 +1,5 @@
+import { CONSTANTS } from 'shared/data';
 import { z } from 'zod';
-
-import { CONSTANTS } from '@/utils';
 
 const { types, languages } = CONSTANTS;
 const CreatePouDtoSchema = z.object({

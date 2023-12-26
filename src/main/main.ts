@@ -20,8 +20,8 @@ import { resolveHtmlPath } from '../utils/resolveHtmlPath';
 import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main';
 import MenuBuilder from './menu';
 import MainProcessBridge from './modules/ipc/main';
+import { store } from './modules/store';
 import { ProjectService } from './services';
-import { store } from './store';
 
 class AppUpdater {
   constructor() {
@@ -71,15 +71,22 @@ const createWindow = async () => {
     ? path.join(process.resourcesPath, 'assets')
     : path.join(__dirname, '../../assets');
 
-  // Create a function that return the asset that the name was given;
+  /**
+   * Create a function that return the asset that the name was given;
+   */
   const getAssetPath = (...paths: string[]): string => path.join(RESOURCES_PATH, ...paths);
 
+  /**
+   * Get the window bounds from the store.
+   */
   const { bounds } = store.get('window');
+
+  /**
+   * Create the main window instance.
+   */
   mainWindow = new BrowserWindow({
     minWidth: 1280,
     minHeight: 800,
-    width: 1280,
-    height: 800,
     ...bounds,
     show: false,
     icon: getAssetPath('icon.png'),
@@ -106,25 +113,6 @@ const createWindow = async () => {
   mainWindow.on('resize', saveBounds);
   mainWindow.on('close', saveBounds);
   mainWindow.on('move', saveBounds);
-
-  // // Apply the top position to the container in the fullscreen mode
-  // mainWindow.on('enter-full-screen', () => {
-  //   const containerIterator = Array.from(
-  //     document.getElementsByClassName('cet-container'),
-  //   );
-  //   const [container] = containerIterator;
-  //   container.classList.replace('!top-16', '!top-0');
-  // });
-
-  // // Apply the top position to the container when leaving the fullscreen mode
-  // mainWindow.on('leave-full-screen', () => {
-  //   const containerIterator = Array.from(
-  //     document.getElementsByClassName('cet-container'),
-  //   );
-  //   const [container] = containerIterator;
-  //   container.classList.add('!top-16');
-  //   container.classList.replace('!top-0', '!top-16');
-  // });
 
   // Maximize the window if bounds are not set
   if (!bounds) {

@@ -8,6 +8,9 @@ import {
   useState,
 } from 'react';
 
+import { CONSTANTS } from '@/shared/data';
+
+import { TitlebarTabs } from '../components';
 
 /**
  * Extracted 'path' property from the imported CONSTANTS object.
@@ -100,7 +103,64 @@ const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
   const removeTab = useCallback(
     (id: number | string) => setTabs((state) => [...state.filter((tab) => tab.id !== id)]),
     []
+    (id: number | string) => setTabs((state) => [...state.filter((tab) => tab.id !== id)]),
+    []
   );
+  /**
+   * Sets the currently active tab.
+   * @param id - The ID of the tab to set as active.
+   */
+  const setCurrentTab = useCallback(
+    (id: number | string) =>
+      setTabs((state) =>
+        state.map((tab) => (tab.id === id ? { ...tab, current: true } : { ...tab, current: false }))
+      ),
+    []
+  );
+  /**
+   * Gets the currently active tab.
+   */
+  const getCurrentTab = useCallback(() => tabs.find(({ current }) => current), [tabs]);
+  /**
+   * Use effect hook to create and render the titlebar tabs.
+   */
+  useEffect(() => {
+    const [menubar] = document.getElementsByClassName('cet-menubar');
+    const titlebarTabs = document.createElement('div');
+
+    titlebarTabs.className = 'flex flex-1 items-center overflow-hidden';
+    titlebarTabs.id = 'titlebar-windows';
+
+    if (menubar) {
+      menubar.after(titlebarTabs);
+      const root = createRoot(titlebarTabs as HTMLElement);
+      root.render(<TitlebarTabs tabs={[]} />);
+      setRootTitlebarTabs(root);
+    }
+  }, []);
+  /**
+   * Use effect hook to update the titlebar tabs when tabs change.
+   */
+  useEffect(() => {
+    if (rootTitlebarTabs) {
+      rootTitlebarTabs.render(
+        <TitlebarTabs
+          tabs={tabs.map((tab) => ({
+            ...tab,
+            onClick: () => {
+              tab.onClick && tab.onClick();
+              setCurrentTab(tab.id);
+            },
+            onClickCloseButton: () => {
+              tab.onClickCloseButton && tab.onClickCloseButton();
+              removeTab(tab.id);
+              getCurrentTab()?.id === tab.id && navigate(paths.MAIN);
+            },
+          }))}
+        />
+      );
+    }
+  }, [getCurrentTab, navigate, removeTab, rootTitlebarTabs, setCurrentTab, tabs]);
   /**
    * Memoize the tabs context data.
    */

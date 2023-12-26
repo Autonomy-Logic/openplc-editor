@@ -1,4 +1,5 @@
 export { default as classNames } from './classNames';
+export { cn } from './cn';
 export { CONSTANTS } from './constants';
 export { default as convertToPath } from './convertToPath';
 export { default as formatDate } from './formatDate';

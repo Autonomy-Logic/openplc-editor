@@ -1,5 +1,5 @@
 import 'tailwindcss/tailwind.css';
-import './styles/tailwind.css';
+import './styles/globals.css';
 import './styles/react-resizable.css';
 import './styles/react-toastify.css';
 import './styles/titlebar.css';
@@ -12,11 +12,12 @@ import { ReactFlowProvider } from 'reactflow';
 import {
   ModalProvider,
   ReactFlowElementsProvider,
-  RouterProvider,
   ThemeProvider,
   TitlebarProvider,
   ToastProvider,
 } from './contexts';
+import Draft from './pages/draft';
+import { RouterProvider } from './providers';
 
 export default function App() {
   return (
@@ -36,7 +37,7 @@ export default function App() {
                 {/** Enable HTML5-based drag-and-drop functionality. */}
                 <DndProvider backend={HTML5Backend}>
                   {/** Manage routing and navigation within the app. */}
-                  <RouterProvider />
+                  <Draft />
                 </DndProvider>
                 {/** Displays toast notification using the ToastContainer component. */}
                 <ToastContainer closeButton={false} closeOnClick={false} />

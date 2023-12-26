@@ -1,12 +1,7 @@
-import {
-  createContext,
-  FC,
-  PropsWithChildren,
-  useCallback,
-  useMemo,
-} from 'react';
+import { createContext, FC, PropsWithChildren, useCallback, useMemo } from 'react';
 import { Edge, Node } from 'reactflow';
 import useUndoable, { MutationBehavior } from 'use-undoable';
+import { v4 as uuid4 } from 'uuid';
 
 export type ReactFlowElementsContextData = {
   nodes: Node[];
@@ -20,18 +15,17 @@ export type ReactFlowElementsContextData = {
     element: 'nodes' | 'edges',
     value: Node[] | Edge[],
     behavior?: MutationBehavior,
-    ignoreAction?: boolean,
+    ignoreAction?: boolean
   ) => void;
 };
 
-export const ReactFlowElementsContext =
-  createContext<ReactFlowElementsContextData>(
-    {} as ReactFlowElementsContextData,
-  );
+export const ReactFlowElementsContext = createContext<ReactFlowElementsContextData>(
+  {} as ReactFlowElementsContextData
+);
 
 const INITIAL_NODES: Node[] = [
   {
-    id: crypto.randomUUID(),
+    id: uuid4(),
     type: 'powerRail',
     position: {
       x: 200,
@@ -40,14 +34,14 @@ const INITIAL_NODES: Node[] = [
     data: {
       pins: [
         {
-          id: crypto.randomUUID(),
+          id: uuid4(),
           position: 'right',
         },
       ],
     },
   },
   {
-    id: crypto.randomUUID(),
+    id: uuid4(),
     type: 'powerRail',
     position: {
       x: 800,
@@ -56,7 +50,7 @@ const INITIAL_NODES: Node[] = [
     data: {
       pins: [
         {
-          id: crypto.randomUUID(),
+          id: uuid4(),
           position: 'left',
         },
       ],
@@ -66,7 +60,7 @@ const INITIAL_NODES: Node[] = [
 
 const INITIAL_EDGES: Edge[] = [
   {
-    id: crypto.randomUUID(),
+    id: uuid4(),
     type: 'default',
     source: INITIAL_NODES[0].id,
     target: INITIAL_NODES[1].id,
@@ -85,7 +79,7 @@ const ReactFlowElementsProvider: FC<PropsWithChildren> = ({ children }) => {
     {
       ignoreIdenticalMutations: true,
       cloneState: true,
-    },
+    }
   );
 
   const triggerUpdate = useCallback(
@@ -93,7 +87,7 @@ const ReactFlowElementsProvider: FC<PropsWithChildren> = ({ children }) => {
       element: 'nodes' | 'edges',
       value: Node[] | Edge[],
       behavior?: MutationBehavior,
-      ignoreAction?: boolean,
+      ignoreAction?: boolean
     ) => {
       setElements(
         (state) => ({
@@ -101,15 +95,15 @@ const ReactFlowElementsProvider: FC<PropsWithChildren> = ({ children }) => {
           edges: element === 'edges' ? (value as Edge[]) : state.edges,
         }),
         behavior,
-        ignoreAction,
+        ignoreAction
       );
     },
-    [setElements],
+    [setElements]
   );
 
   const getNode = useCallback(
     (id: string) => elements.nodes.find((node) => node.id === id),
-    [elements.nodes],
+    [elements.nodes]
   );
   /**
    * Memoize the default values.
@@ -124,7 +118,7 @@ const ReactFlowElementsProvider: FC<PropsWithChildren> = ({ children }) => {
       canUndo,
       triggerUpdate,
     }),
-    [elements, getNode, undo, redo, canRedo, canUndo, triggerUpdate],
+    [elements, getNode, undo, redo, canRedo, canUndo, triggerUpdate]
   );
   return (
     <ReactFlowElementsContext.Provider value={defaultValues}>

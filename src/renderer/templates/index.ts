@@ -3,4 +3,4 @@
  * @module Layout
  */
 // eslint-disable-next-line import/prefer-default-export
-export { default as Layout } from './Layout';
+// export { default as Layout } from './layout';

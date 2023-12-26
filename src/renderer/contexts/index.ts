@@ -1,9 +1,3 @@
-/* eslint-disable import/no-cycle */
-/**
- * Re-exports the Router context from the corresponding module.
- * @module Context
- */
-export { default as RouterProvider } from './Router';
 /**
  * Re-exports the Sidebar context from the corresponding module.
  * @module Context

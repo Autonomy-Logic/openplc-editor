@@ -7,6 +7,37 @@
 <img alt="draft-cover" src="assets/images/github-background.png">
 </p>
 
+## Running a preview version
+
+In order to run the development version, clone the repository, and install dependencies via `npm`, you need network access.
+
+You'll need the following tools:
+
+- [Git](https://git-scm.com/)
+- [NodeJS](https://nodejs.org/en/download/), **x64**, version `>=18.19.x and <20.x`
+
+### Step by step
+
+- Clone the repository locally and go to the project folder.
+
+```bash
+git clone https://github.com/Autonomy-Logic/openplc-editor.git
+
+cd openplc-editor
+```
+
+- Install the dependencies
+
+```bash
+npm install 
+```
+
+- Run the development script
+
+```bash
+npm run start:dev
+```
+
 ## Documentation
 
 Please go to the repository [wiki](https://github.com/Autonomy-Logic/openplc-editor/wiki) page to get instruction about the project.
