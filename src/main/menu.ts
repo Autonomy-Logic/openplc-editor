@@ -243,6 +243,7 @@ export default class MenuBuilder {
   // }
 
   buildDefaultTemplate() {
+    
     const templateDefault: MenuItemConstructorOptions[] = [
       {
         label: i18n.t('menu:file.label'),

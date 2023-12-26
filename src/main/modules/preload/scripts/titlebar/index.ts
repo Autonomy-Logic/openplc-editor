@@ -9,27 +9,34 @@ window.addEventListener('DOMContentLoaded', () => {
   };
   new Titlebar(options);
 
-  const iconContainer = document.querySelector('.cet-title');
-  if (iconContainer) {
-    iconContainer.classList.replace('cet-title', 'cet-icon-container');
+  const cetTitlebarLeft = document.createElement('div');
+  cetTitlebarLeft.className = 'cet-titlebar-left';
+  const cetIcon = document.querySelector('.cet-icon');
+  const cetMenubar = document.querySelector('.cet-menubar');
+  cetTitlebarLeft.appendChild(cetIcon!);
+  cetTitlebarLeft.appendChild(cetMenubar!);
+  const cetDragRegion = document.querySelector('.cet-drag-region');
+  cetDragRegion?.parentNode?.insertBefore(cetTitlebarLeft, cetDragRegion.nextSibling);
 
-    const toggleTheme = document.createElement('button');
-    toggleTheme.classList.add('cet-toggle-theme');
-    iconContainer.appendChild(toggleTheme);
+  const cetTitleCenter = document.querySelector('.cet-title');
+  const cetToggleContainer = document.createElement('div');
+  cetToggleContainer.className = 'cet-toggle-container';
+  const toggThemeleIcon = document.createElement('img');
+  toggThemeleIcon.src = darkThemeIcon;
+  toggThemeleIcon.className = 'cet-toggle-theme-icon';
+  cetToggleContainer.appendChild(toggThemeleIcon);
+  cetTitleCenter?.appendChild(cetToggleContainer);
 
-    const toggleThemeIcon = document.createElement('img');
-    toggleThemeIcon.classList.add('toggle-theme-icon');
-    toggleThemeIcon.src = darkThemeIcon;
-    toggleTheme.appendChild(toggleThemeIcon);
+  const cetTitlebarRight = document.createElement('div');
+  cetTitlebarRight.className = 'cet-titlebar-right';
 
-    let isDarkTheme = true;
+  cetTitleCenter?.insertAdjacentElement('afterend', cetTitlebarRight);
 
-    function toggleThemeHandler() {
-      toggleThemeIcon.src = isDarkTheme ? lightThemeIcon : darkThemeIcon;
-      isDarkTheme = !isDarkTheme;
-      
-    }
+  const cetTitlebarControlsContainer = document.createElement('div');
+  cetTitlebarControlsContainer.className = 'cet-titlebar-controls-container';
 
-    toggleTheme.addEventListener('click', toggleThemeHandler);
-  }
+  const cetWindowControls = document.querySelector('.cet-window-controls');
+  cetTitlebarControlsContainer.appendChild(cetWindowControls!);
+
+  cetTitlebarRight.insertAdjacentElement('afterend', cetTitlebarControlsContainer);
 });
