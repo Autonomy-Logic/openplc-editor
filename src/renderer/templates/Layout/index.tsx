@@ -20,28 +20,10 @@ import { useSidebar, useToggle } from 'renderer/hooks';
 import { EditorTools, ProjectTree, Settings, Tools, Variables } from 'renderer/pages';
 import { useOpenPLCStore } from 'renderer/store';
 
-<<<<<<< HEAD
-import { classNames, CONSTANTS } from '@/utils';
-
-import { Tooltip } from '../../components';
-import { CurrentProps } from '../../contexts/Sidebar';
-import { useSidebar, useToggle } from '../../hooks';
-import { EditorTools, ProjectTree, Settings, Tools, Variables } from '../../pages';
-import useOpenPLCStore from '../../store';
-import { LayoutProps } from './layout';
-import {
-  SearchIcon,
-  ZoomInOutIcon,
-  FileAndFolderIcon,
-  ArrowTransferIcon,
-} from '../../assets/icons';
-function Layout({ main }: any): ReactNode {
-=======
 import { CONSTANTS } from '@/shared/data';
 import { classNames } from '@/utils';
 
 function Layout({ main }: TLayoutProps): ReactNode {
->>>>>>> main
   const { paths } = CONSTANTS;
   // Access the project and related functions from custom store.
   const project = useOpenPLCStore.useProjectData();
@@ -70,61 +52,61 @@ function Layout({ main }: TLayoutProps): ReactNode {
   // Todo: Set the project global state and define the handle click function
   // Define an array of navigation items with their associated data.
   const navigation = [
-    ...(project?.project
-      ? [
-          {
-            key: 'search',
-            name: t('Search'),
-            onClick: handleClick,
-            icon: SearchIcon,
-            component: <Tools />,
-          },
-        ]
-      : []),
-    ...(project?.project
-      ? [
-          {
-            key: 'transfer',
-            name: t('Transfer'),
-            onClick: handleClick,
-            icon: ArrowTransferIcon,
-            component: '',
-          },
-        ]
-      : []),
-    ...(project?.project
-      ? [
-          {
-            key: 'filesAndFolders',
-            name: t('Files and Folders'),
-            onClick: handleClick,
-            icon: FileAndFolderIcon,
-            component: '',
-          },
-        ]
-      : []),
     // ...(project?.project
-    //   ? [
+      // ? [
     //       {
-    //         key: 'tools',
-    //         name: t('tools'),
+    //         key: 'search',
+    //         name: t('Search'),
     //         onClick: handleClick,
-    //         icon: HiOutlineSquares2X2,
+    //         icon: SearchIcon,
     //         component: <Tools />,
     //       },
     //     ]
     //   : []),
-    ...(project?.project
-      ? [
-          {
-            key: 'zoomInOut',
-            name: t('Zoom'),
-            onClick: handleClick,
-            icon: ZoomInOutIcon,
-            component: <ProjectTree />,
-          },
-        ]
-      : []),
+    // ...(project?.project
+    //   ? [
+    //       {
+    //         key: 'transfer',
+    //         name: t('Transfer'),
+    //         onClick: handleClick,
+    //         icon: ArrowTransferIcon,
+    //         component: '',
+    //       },
+    //     ]
+    //   : []),
+    // ...(project?.project
+    //   ? [
+    //       {
+    //         key: 'filesAndFolders',
+    //         name: t('Files and Folders'),
+    //         onClick: handleClick,
+    //         icon: FileAndFolderIcon,
+    //         component: '',
+    //       },
+    //     ]
+    //   : []),
+    // // ...(project?.project
+    // //   ? [
+    // //       {
+    // //         key: 'tools',
+    // //         name: t('tools'),
+    // //         onClick: handleClick,
+    // //         icon: HiOutlineSquares2X2,
+    // //         component: <Tools />,
+    // //       },
+    // //     ]
+    // //   : []),
+    // ...(project?.project
+    //   ? [
+    //       {
+    //         key: 'zoomInOut',
+    //         name: t('Zoom'),
+    //         onClick: handleClick,
+    //         icon: ZoomInOutIcon,
+    //         component: <ProjectTree />,
+    //       },
+    //     ]
+    //   : []),
     // ...(project?.project
     //   ? [
     //       {
@@ -189,14 +171,8 @@ function Layout({ main }: TLayoutProps): ReactNode {
   return (
     <div className='flex h-full'>
       <div className='flex h-full'>
-<<<<<<< HEAD
-        <nav className='flex h-full w-20 flex-col items-center justify-between border-r border-gray-100 bg-white px-4 py-4 dark:border-white/5 dark:bg-open-plc-dark'>
-          <ul className='mb-auto flex h-full flex-col items-center gap-2'>
-            {/** Render the navigation items in sidebar */}
-=======
         <nav className='flex h-full w-20 flex-col items-center justify-between border-r border-gray-100 bg-white px-4 py-4 dark:border-white/5 dark:bg-gray-900'>
           <ul className='mb-auto flex h-full flex-col items-center gap-2'>
->>>>>>> main
             {navigation.map(({ key, name, onClick, icon: Icon, className }) => (
               <li key={name} className={className}>
                 <Tooltip id={name} label={name} place='right'>
@@ -210,13 +186,7 @@ function Layout({ main }: TLayoutProps): ReactNode {
                     )}
                     onClick={() => onClick(key as CurrentProps)}
                   >
-<<<<<<< HEAD
-                    {/** Render the icon of the navigation item in sidebar */}
-                    <Icon className='h-6  w-6 shrink-0 stroke-1' aria-hidden='true' />
-                    {/** Render the name of the navigation item */}
-=======
                     <Icon className='h-6 w-6 shrink-0' aria-hidden='true' />
->>>>>>> main
                     <span className='sr-only'>{name}</span>
                   </button>
                 </Tooltip>
