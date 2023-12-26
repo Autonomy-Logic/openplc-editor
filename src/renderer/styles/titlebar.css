@@ -1,17 +1,17 @@
 .cet-titlebar {
-  @apply !z-10 !h-16 !flex;
+  @apply !z-10 !h-12 !flex;
 }
 .cet-container {
-  @apply !top-16;
+  @apply !top-12;
 }
 .cet-titlebar-left {
-  @apply !flex !flex-grow !items-center  !max-w-[20%] !w-fit  !justify-center ;
+  @apply !flex !flex-grow !items-center  !max-w-[20%] !w-fit   ;
 }
 .cet-icon {
-  @apply !w-20 !relative;
+  @apply !w-[65px] !relative;
 }
 .cet-icon img {
-  @apply !h-6 !w-fit;
+  @apply !h-7 !w-fit;
 }
 .cet-window-title {
   @apply !max-w-full;

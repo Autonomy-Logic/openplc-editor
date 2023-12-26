@@ -4,9 +4,12 @@ import {
   FC,
   PropsWithChildren,
   useCallback,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
+import { createRoot, Root } from 'react-dom/client';
+import { useNavigate } from 'react-router-dom';
 
 import { CONSTANTS } from '@/shared/data';
 
@@ -15,6 +18,7 @@ import { TitlebarTabs } from '../components';
 /**
  * Extracted 'path' property from the imported CONSTANTS object.
  */
+const { paths } = CONSTANTS;
 /**
  * Type definition for individual tab properties.
  */
@@ -70,8 +74,18 @@ export const TabsContext = createContext<TabsContextData>({} as TabsContextData)
 // Review this eslint rule
 // eslint-disable-next-line react/function-component-definition
 const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
+  /**
+   * State to hold the root element for titlebar tabs.
+   */
+  const [rootTitlebarTabs, setRootTitlebarTabs] = useState<Root>();
+  /**
+   * State to store the list of tabs.
+   */
   const [tabs, setTabs] = useState<TabsProps[]>([]);
-
+  /**
+   * Hook to navigate between routes.
+   */
+  const navigate = useNavigate();
   /**
    * Adds a new tab to the list of tabs.
    * @param tab - The tab properties to add.
@@ -95,14 +109,11 @@ const TabsProvider: FC<PropsWithChildren> = ({ children }) => {
       }),
     []
   );
-  
   /**
    * Removes a tab from the list of tabs.
    * @param id - The ID of the tab to remove.
    */
   const removeTab = useCallback(
-    (id: number | string) => setTabs((state) => [...state.filter((tab) => tab.id !== id)]),
-    []
     (id: number | string) => setTabs((state) => [...state.filter((tab) => tab.id !== id)]),
     []
   );
