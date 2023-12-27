@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/control-has-associated-label */
 import useEmblaCarousel from 'embla-carousel-react';
 
 // import LeftArrow from 'renderer/assets/icons/left-arrow-muted.svg';
@@ -7,10 +8,14 @@ import TestImage from '../assets/images/example.png';
 import Card from '../components/elements/card';
 
 function Draft() {
+  // It is imported on component implementation
   const [emblaRef] = useEmblaCarousel();
   return (
     <div className='w-full h-full flex justify-center items-center'>
-      <div className='embla' ref={emblaRef}>
+      {/* Container for buttons */}
+      <div className='flex items-center' />
+      {/* Container for cards */}
+      <div className='embla__viewport' ref={emblaRef}>
         <div className='embla__container'>
           {DataForExamples.map((ex) => (
             <Card.Root key={ex.example_id}>
