@@ -42,6 +42,7 @@
     "electron-log": "^4.4.8",
     "electron-store": "^8.1.0",
     "electron-updater": "^6.1.4",
+    "embla-carousel-react": "^8.0.0-rc17",
     "i18next": "^23.5.1",
     "immer": "^10.0.3",
     "lodash": "^4.17.21",
