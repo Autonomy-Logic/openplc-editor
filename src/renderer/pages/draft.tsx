@@ -6,14 +6,26 @@ import useEmblaCarousel from 'embla-carousel-react';
 import DataForExamples from '../../shared/data/mock/examples.json';
 import TestImage from '../assets/images/example.png';
 import Card from '../components/elements/card';
+import {
+  NextButton,
+  PrevButton,
+  UsePrevNextButton,
+} from '../components/ui/presentations/projects/examples/nav/nav-button';
 
 function Draft() {
   // It is imported on component implementation
-  const [emblaRef] = useEmblaCarousel();
+  const [emblaRef, emblaApi] = useEmblaCarousel();
+  const { prevBtnDisabled, nextBtnDisabled, onPrevButtonClick, onNextButtonClick } =
+    UsePrevNextButton(emblaApi);
   return (
-    <div className='w-full h-full flex justify-center items-center'>
+    <div className='w-full h-full flex justify-center items-center flex-col'>
       {/* Container for buttons */}
-      <div className='flex items-center' />
+      <div className='flex items-center'>
+        <div className='embla__buttons'>
+          <PrevButton onClick={onPrevButtonClick} disabled={prevBtnDisabled} />
+          <NextButton onClick={onNextButtonClick} disabled={nextBtnDisabled} />
+        </div>
+      </div>
       {/* Container for cards */}
       <div className='embla__viewport' ref={emblaRef}>
         <div className='embla__container'>

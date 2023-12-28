@@ -25,14 +25,14 @@
   }
 
   /* Explanation: Container for all buttons */
-  /* .embla__buttons {
+  .embla__buttons {
     display: flex;
     align-items: center;
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
     left: 1.6rem;
-  } */
+  }
 
   /* Explanation: Style for each button in the carousel */
   /* Code-Block - Start */
