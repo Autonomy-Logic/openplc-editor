@@ -1,6 +1,13 @@
-export default function NextButton() {
+import { ButtonHTMLAttributes } from 'react';
+
+type NextButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  goNext: () => void;
+};
+
+export default function NextButton(props: NextButtonProps) {
+  const { goNext, ...restProps } = props;
   return (
-    <button type='button' aria-label='Next button'>
+    <button type='button' aria-label='Next button' onClick={goNext} {...restProps}>
       <svg
         width='24'
         height='24'

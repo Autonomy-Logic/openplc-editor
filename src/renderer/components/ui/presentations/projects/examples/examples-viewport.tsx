@@ -1,4 +1,4 @@
-import { HTMLAttributes } from 'react';
+import { HTMLAttributes, JSX } from 'react';
 // TODO: Remove mock data
 import MockImage from 'renderer/assets/images/example.png';
 
@@ -13,7 +13,13 @@ type ExamplesViewportProps = HTMLAttributes<HTMLDivElement> & {
   exampleProjects?: object[];
   refProvider: EmblaViewportRefType;
 };
-export default function Viewport(props: ExamplesViewportProps) {
+/**
+ * Renders a viewport component.
+ *
+ * @param {ExamplesViewportProps} props - The properties for the component.
+ * @return {JSX.Element} The rendered component.
+ */
+export default function Viewport(props: ExamplesViewportProps): JSX.Element {
   const { refProvider, ...restProps } = props;
   return (
     <div className='overflow-hidden' ref={refProvider} {...restProps}>

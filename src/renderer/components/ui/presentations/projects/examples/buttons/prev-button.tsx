@@ -1,6 +1,13 @@
-export default function PrevButton() {
+import { ButtonHTMLAttributes } from 'react';
+
+type PrevButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  goPrev: () => void;
+};
+
+export default function PrevButton(props: PrevButtonProps) {
+  const { goPrev, ...restProps } = props;
   return (
-    <button type='button' aria-label='Previous button'>
+    <button type='button' aria-label='Previous button' onClick={goPrev} {...restProps}>
       <svg
         width='24'
         height='24'

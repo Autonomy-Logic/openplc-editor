@@ -1,7 +1,7 @@
 import * as Viewer from '@radix-ui/react-scroll-area';
 import { HTMLAttributes, ReactNode } from 'react';
 
-import { FileElement } from '../elements';
+import { FileElement } from '../../../../elements';
 
 type ProjectData = {
   project_id: string;
@@ -13,6 +13,12 @@ type RecentProjectViewerProps = HTMLAttributes<HTMLDivElement> & {
   dataToRender: ProjectData[];
 };
 
+/**
+ * Renders the RecentProjectViewer component.
+ *
+ * @param {RecentProjectViewerProps} dataToRender - The data to be rendered in the component.
+ * @returns {ReactNode} The rendered RecentProjectViewer component.
+ */
 export default function RecentProjectViewer({ dataToRender }: RecentProjectViewerProps): ReactNode {
   return (
     <Viewer.Root className='w-[994px] h-[600px] overflow-hidden rounded bg-white py-2'>
