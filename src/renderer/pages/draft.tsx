@@ -1,31 +1,8 @@
 /* eslint-disable jsx-a11y/control-has-associated-label */
-import useEmblaCarousel from 'embla-carousel-react';
-import { useCallback } from 'react';
-
-import Examples from '../components/ui/presentations/projects/examples';
+import DisplayExampleProjects from '../features/display-example-projects';
 
 function Draft() {
-  // It is imported on component implementation
-  const [emblaRef, emblaApi] = useEmblaCarousel();
-
-  const scrollPrev = useCallback(() => {
-    if (emblaApi) emblaApi.scrollPrev();
-  }, [emblaApi]);
-
-  const scrollNext = useCallback(() => {
-    if (emblaApi) emblaApi.scrollNext();
-  }, [emblaApi]);
-
-  return (
-    // <div className='w-full h-full flex justify-center items-center flex-col p-10'>
-
-    <Examples.Container>
-      <Examples.Header title='Examples' actions={{ prev: scrollPrev, next: scrollNext }} />
-      <Examples.Viewport refProvider={emblaRef} />
-    </Examples.Container>
-
-    // </div>
-  );
+  return <DisplayExampleProjects />;
 }
 
 export default Draft;
