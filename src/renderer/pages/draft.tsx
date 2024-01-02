@@ -1,8 +1,8 @@
 /* eslint-disable jsx-a11y/control-has-associated-label */
-import { DisplayExampleProjects } from '../features';
+import { DisplayRecentProjects } from '../features';
 
 function Draft() {
-  return <DisplayExampleProjects />;
+  return <DisplayRecentProjects />;
 }
 
 export default Draft;
