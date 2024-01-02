@@ -7,8 +7,8 @@ type ActionsSelectProps = HTMLAttributes<HTMLDivElement> & {
 export default function ActionsSelect({ children, ...props }: ActionsSelectProps) {
   return (
     <div
-    {...props}
-      className=' min-w-18 w-[180px] relative flex gap-2 rounded-lg  border-[#EDEFF2] border-[2px] items-center p-3 cursor-pointer '
+      {...props}
+      className='min-w-18 w-52  whitespace-nowrap text-base relative flex items-center rounded-lg justify-center border-[#EDEFF2] border-[2px] p-3 cursor-pointer '
     >
       {children}
     </div>

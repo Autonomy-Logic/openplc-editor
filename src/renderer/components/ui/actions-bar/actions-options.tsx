@@ -1,4 +1,4 @@
-export default function ActionsOptions({ options, setSelectedOption, selectedOptionLabel,setShowOptions }) {
+export default function ActionsOptions({ options, setSelectedOption, selectedOption,setShowOptions }) {
   const handleOptionClick = (option) => {
     setSelectedOption(option.label);
     option.onClick();
@@ -9,11 +9,11 @@ export default function ActionsOptions({ options, setSelectedOption, selectedOpt
     <div>
       {options.map((option) => (
         <div
-          className='cursor-pointer hover:bg-gray-100 p-1'
+          className='cursor-pointer hover:bg-gray-100 p-1 '
           key={option.label}
           onClick={() => handleOptionClick(option)}
           style={{
-            fontWeight: selectedOptionLabel === option.label ? 'bold' : 'normal',
+            fontWeight: selectedOption === option.label ? 'bold' : 'normal',
           }}
         >
           {option.label}
@@ -22,3 +22,5 @@ export default function ActionsOptions({ options, setSelectedOption, selectedOpt
     </div>
   );
 }
+
+
