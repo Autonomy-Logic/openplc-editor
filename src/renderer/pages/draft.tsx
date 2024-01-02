@@ -1,9 +1,44 @@
+import { useState } from 'react';
 import RecentProjects from '../../shared/data/mock/projects-data.json';
-import { OpenIcon, PlusIcon, QuitIcon, TutorialsIcon } from '../assets/icons';
+import {
+  OpenIcon,
+  PlusIcon,
+  QuitIcon,
+  RecentsIcon,
+  StartSearchIcon,
+  TutorialsIcon,
+} from '../assets/icons';
 import RecentProjectViewer from '../components/recent-project';
 import { MenuComponent } from '../components/ui';
+import ActionsOptions from '../components/ui/actions-bar/actions-options';
+import ActionsRoot from '../components/ui/actions-bar/actions-root';
+import ActionsSelect from '../components/ui/actions-bar/actions-select';
 
 function Draft() {
+  const options = [
+    {
+      label: 'most usageaaaaaaaaaaaa',
+      onClick: () => {
+        console.log('option 2 clicked');
+      },
+    },
+    {
+      label: 'Recent',
+      onClick: () => {
+        console.log('option 1 clicked');
+      },
+    },
+    {
+      label: 'Size',
+      onClick: () => {
+        console.log('option 2 clicked');
+      },
+    },
+  ];
+
+  const [selectedOptionLabel, setSelectedOptionLabel] = useState(options[0].label);
+  const [showOptions, setShowOptions] = useState<boolean>(false);
+
   return (
     <div className='w-full h-full bg-white flex justify-center items-center'>
       <div className='h-[600px]  w-48 flex flex-col justify-end py-24 mr-20'>
@@ -35,7 +70,36 @@ function Draft() {
           </MenuComponent.Section>
         </MenuComponent.Root>
       </div>
-      <RecentProjectViewer dataToRender={RecentProjects} />
+      <div>
+        <ActionsRoot>
+          <ActionsSelect onClick={() => setShowOptions(!showOptions)}>
+            <div className='flex items-center'>
+              <span className='whitespace-nowrap overflow-hidden text-ellipsis w-36'>
+                order by <span className='font-bold capitalize'>{selectedOptionLabel}</span>
+              </span>
+              <RecentsIcon className='absolute right-2' />
+            </div>
+          </ActionsSelect>
+          <div
+            className={`w-[180px] h-fit bg-white border-[#EDEFF2] border-[2px] absolute z-[999] top-14 ${
+              showOptions ? 'block' : 'hidden'
+            }`}
+          >
+            <ActionsOptions
+              setShowOptions={setShowOptions}
+              options={options}
+              selectedOptionLabel={selectedOptionLabel}
+              setSelectedOption={setSelectedOptionLabel}
+            />
+          </div>
+
+          <div className='flex flex-grow gap-2 rounded-lg border-[#EDEFF2] border-[2px] items-center p-3'>
+            <StartSearchIcon />
+            Search a project
+          </div>
+        </ActionsRoot>
+        <RecentProjectViewer dataToRender={RecentProjects} />
+      </div>
     </div>
   );
 }
