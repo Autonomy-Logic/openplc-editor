@@ -29,8 +29,8 @@ export default function DisplayExampleProjects() {
         <Carousel.Viewport>
           {Mock.map((project) => (
             <Card.Root key={project.id}>
-              <Card.Label title={project.name} description={project.description} />
               <Card.Preview source={MockImage} />
+              <Card.Label title={project.name} description={project.description} />
             </Card.Root>
           ))}
         </Carousel.Viewport>
