@@ -1,8 +1,8 @@
-import { ButtonHTMLAttributes } from 'react';
+import { ButtonHTMLAttributes, ReactNode } from 'react';
 
-type NextButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & unknown;
+export type ExampleNextButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & unknown;
 
-export default function NextButton(props: NextButtonProps) {
+export default function NextButton(props: ExampleNextButtonProps): ReactNode {
   const { ...restProps } = props;
   return (
     <button type='button' aria-label='Next button' {...restProps}>
@@ -24,3 +24,5 @@ export default function NextButton(props: NextButtonProps) {
     </button>
   );
 }
+
+export type ExampleNextButton = typeof NextButton;

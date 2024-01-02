@@ -1,6 +1,6 @@
-import { HTMLAttributes, JSX, ReactNode } from 'react';
+import { HTMLAttributes, ReactNode } from 'react';
 
-type ExamplesHeaderProps = HTMLAttributes<HTMLElement> & {
+export type ExampleHeaderProps = HTMLAttributes<HTMLElement> & {
   title: string;
   children: ReactNode;
 };
@@ -11,7 +11,7 @@ type ExamplesHeaderProps = HTMLAttributes<HTMLElement> & {
  * @param {ExamplesHeaderProps} props - The props for the header component.
  * @returns {JSX.Element} The rendered header component.
  */
-export default function Header(props: ExamplesHeaderProps): JSX.Element {
+export default function Header(props: ExampleHeaderProps): ReactNode {
   const { title, children, ...restProps } = props;
   return (
     <header
@@ -23,3 +23,5 @@ export default function Header(props: ExamplesHeaderProps): JSX.Element {
     </header>
   );
 }
+
+export type ExampleHeader = typeof Header;

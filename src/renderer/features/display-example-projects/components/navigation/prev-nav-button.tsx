@@ -1,8 +1,8 @@
 import { ButtonHTMLAttributes } from 'react';
 
-type PrevButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & unknown;
+export type ExamplePrevButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & unknown;
 
-export default function PrevButton(props: PrevButtonProps) {
+export default function PrevButton(props: ExamplePrevButtonProps) {
   const { ...restProps } = props;
   return (
     <button type='button' aria-label='Previous button' {...restProps}>
@@ -24,3 +24,5 @@ export default function PrevButton(props: PrevButtonProps) {
     </button>
   );
 }
+
+export type ExamplePrevButton = typeof PrevButton;

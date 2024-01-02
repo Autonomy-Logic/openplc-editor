@@ -38,3 +38,5 @@ export default function DisplayExampleProjects() {
     </Wrapper>
   );
 }
+
+export type DisplayExampleProjectsComponent = typeof DisplayExampleProjects;

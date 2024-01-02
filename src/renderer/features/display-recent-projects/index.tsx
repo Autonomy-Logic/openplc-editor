@@ -9,11 +9,11 @@ type ProjectData = {
   last_modified: string;
 };
 
-type RecentProjectViewerProps = HTMLAttributes<HTMLDivElement> & {
+export type DisplayRecentProjectProps = HTMLAttributes<HTMLDivElement> & {
   dataToRender: ProjectData[];
 };
 
-export default function DisplayRecentProjects({ dataToRender }: RecentProjectViewerProps) {
+export default function DisplayRecentProjects({ dataToRender }: DisplayRecentProjectProps) {
   return (
     <Viewer.Root className='w-[994px] h-[600px] overflow-hidden rounded bg-white py-2'>
       <Viewer.Viewport className='w-full h-full container mx-auto'>
@@ -32,3 +32,5 @@ export default function DisplayRecentProjects({ dataToRender }: RecentProjectVie
     </Viewer.Root>
   );
 }
+
+export type DisplayRecentProjectsComponent = typeof DisplayRecentProjects;
