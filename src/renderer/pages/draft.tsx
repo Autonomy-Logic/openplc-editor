@@ -1,5 +1,5 @@
 /* eslint-disable jsx-a11y/control-has-associated-label */
-import DisplayExampleProjects from '../features/display-example-projects';
+import { DisplayExampleProjects } from '../features';
 
 function Draft() {
   return <DisplayExampleProjects />;

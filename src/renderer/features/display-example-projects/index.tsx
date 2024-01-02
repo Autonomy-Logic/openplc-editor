@@ -28,8 +28,8 @@ export default function DisplayExampleProjects() {
       <Carousel.Container refProvider={emblaRef}>
         <Carousel.Viewport>
           {Mock.map((project) => (
-            <Card.Root key={project.example_id}>
-              <Card.Label title={project.example_name} description={project.example_description} />
+            <Card.Root key={project.id}>
+              <Card.Label title={project.name} description={project.description} />
               <Card.Preview source={MockImage} />
             </Card.Root>
           ))}

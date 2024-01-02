@@ -14,8 +14,11 @@ type ExamplesHeaderProps = HTMLAttributes<HTMLElement> & {
 export default function Header(props: ExamplesHeaderProps): JSX.Element {
   const { title, children, ...restProps } = props;
   return (
-    <header className='flex flex-1 w-full mb-6 justify-between' {...restProps}>
-      <h1>{title}</h1>
+    <header
+      className='flex flex-1 w-full mb-6 justify-between text-xl font-medium text-neutral-950'
+      {...restProps}
+    >
+      <h1 className='cursor-default'>{title}</h1>
       <nav className='flex w-fit gap-6'>{children}</nav>
     </header>
   );

@@ -1,92 +1,92 @@
 [
   {
-    "example_id": "e1182fc6-5886-4b6e-b5fb-071a48cb40b5",
-    "example_name": "Ligula.ppt",
-    "example_description": "This is a description for example",
+    "id": "e1182fc6-5886-4b6e-b5fb-071a48cb40b5",
+    "name": "Ligula.ppt",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "8a899345-522c-451a-a4bf-86b85880d839",
-    "example_name": "AmetLobortis.jpeg",
-    "example_description": "This is a description for example",
+    "id": "8a899345-522c-451a-a4bf-86b85880d839",
+    "name": "AmetLobortis.jpeg",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "468b6247-fc31-402b-a368-917756f8a97b",
-    "example_name": "Est.ppt",
-    "example_description": "This is a description for example",
+    "id": "468b6247-fc31-402b-a368-917756f8a97b",
+    "name": "Est.ppt",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "dfc0b806-dcac-46c0-a4d1-4801c06075c5",
-    "example_name": "MorbiVelLectus.avi",
-    "example_description": "This is a description for example",
+    "id": "dfc0b806-dcac-46c0-a4d1-4801c06075c5",
+    "name": "MorbiVelLectus.avi",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "c9a5c92b-6f05-4914-8169-1b16c5553b89",
-    "example_name": "Rhoncus.ppt",
-    "example_description": "This is a description for example",
+    "id": "c9a5c92b-6f05-4914-8169-1b16c5553b89",
+    "name": "Rhoncus.ppt",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "e2cec6b4-46b6-4edb-aff1-efc12de511fc",
-    "example_name": "SedAnte.xls",
-    "example_description": "This is a description for example",
+    "id": "e2cec6b4-46b6-4edb-aff1-efc12de511fc",
+    "name": "SedAnte.xls",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "f612da86-55b4-468b-8743-57f2803be706",
-    "example_name": "LeoOdioCondimentum.ppt",
-    "example_description": "This is a description for example",
+    "id": "f612da86-55b4-468b-8743-57f2803be706",
+    "name": "LeoOdioCondimentum.ppt",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "0d97670b-89cf-45ae-afd7-f92d297d4977",
-    "example_name": "Varius.jpeg",
-    "example_description": "This is a description for example",
+    "id": "0d97670b-89cf-45ae-afd7-f92d297d4977",
+    "name": "Varius.jpeg",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "120ca18d-8e00-4097-9e47-4afba2a52557",
-    "example_name": "MolestieHendrerit.xls",
-    "example_description": "This is a description for example",
+    "id": "120ca18d-8e00-4097-9e47-4afba2a52557",
+    "name": "MolestieHendrerit.xls",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "84066f0f-32d7-479c-8c10-3442fce5683e",
-    "example_name": "EratErosViverra.tiff",
-    "example_description": "This is a description for example",
+    "id": "84066f0f-32d7-479c-8c10-3442fce5683e",
+    "name": "EratErosViverra.tiff",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "3e58d688-bcd3-4553-9159-6390e7d6d0e1",
-    "example_name": "NamUltrices.xls",
-    "example_description": "This is a description for example",
+    "id": "3e58d688-bcd3-4553-9159-6390e7d6d0e1",
+    "name": "NamUltrices.xls",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "bf64d9d7-f5dd-4a99-87f8-323d74b10bfc",
-    "example_name": "Quisque.xls",
-    "example_description": "This is a description for example",
+    "id": "bf64d9d7-f5dd-4a99-87f8-323d74b10bfc",
+    "name": "Quisque.xls",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "d438ec6f-e3f4-448b-bb9c-43ffeac03ca1",
-    "example_name": "Quam.mp3",
-    "example_description": "This is a description for example",
+    "id": "d438ec6f-e3f4-448b-bb9c-43ffeac03ca1",
+    "name": "Quam.mp3",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "0ddb0a10-1311-47c7-bd33-3d4b49015dc8",
-    "example_name": "Vel.mp3",
-    "example_description": "This is a description for example",
+    "id": "0ddb0a10-1311-47c7-bd33-3d4b49015dc8",
+    "name": "Vel.mp3",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   },
   {
-    "example_id": "90dcb5d4-10c2-4271-9212-6a5b5404230a",
-    "example_name": "CumSociis.ppt",
-    "example_description": "This is a description for example",
+    "id": "90dcb5d4-10c2-4271-9212-6a5b5404230a",
+    "name": "CumSociis.ppt",
+    "description": "This is a description for example",
     "source_img": "../assets/images/example.png"
   }
 ]

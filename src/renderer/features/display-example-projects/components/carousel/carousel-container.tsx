@@ -9,5 +9,5 @@ type CarouselContainerProps = HTMLAttributes<HTMLDivElement> & {
 
 export default function Container(props: CarouselContainerProps): ReactNode {
   const { refProvider, ...restProps } = props;
-  return <div ref={refProvider} {...restProps} />;
+  return <div className='overflow-hidden' ref={refProvider} {...restProps} />;
 }

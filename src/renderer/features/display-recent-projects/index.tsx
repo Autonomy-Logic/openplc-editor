@@ -1,11 +1,11 @@
 import * as Viewer from '@radix-ui/react-scroll-area';
-import { HTMLAttributes, ReactNode } from 'react';
+import { HTMLAttributes } from 'react';
 
-import { FileElement } from '../../../../elements';
+import { FileElement } from '@/renderer/components/elements';
 
 type ProjectData = {
-  project_id: string;
-  project_name: string;
+  id: string;
+  name: string;
   last_modified: string;
 };
 
@@ -13,23 +13,14 @@ type RecentProjectViewerProps = HTMLAttributes<HTMLDivElement> & {
   dataToRender: ProjectData[];
 };
 
-/**
- * Renders the RecentProjectViewer component.
- *
- * @param {RecentProjectViewerProps} dataToRender - The data to be rendered in the component.
- * @returns {ReactNode} The rendered RecentProjectViewer component.
- */
-export default function RecentProjectViewer({ dataToRender }: RecentProjectViewerProps): ReactNode {
+export default function DisplayRecentProjects({ dataToRender }: RecentProjectViewerProps) {
   return (
     <Viewer.Root className='w-[994px] h-[600px] overflow-hidden rounded bg-white py-2'>
       <Viewer.Viewport className='w-full h-full container mx-auto'>
         <div className='w-full h-full grid grid-cols-5 px-3 gap-4'>
           {dataToRender.map((project) => (
-            <FileElement.Root key={project.project_id}>
-              <FileElement.Label
-                projectName={project.project_name}
-                lastModified={project.last_modified}
-              />
+            <FileElement.Root key={project.id}>
+              <FileElement.Label projectName={project.name} lastModified={project.last_modified} />
               <FileElement.Shape />
             </FileElement.Root>
           ))}
