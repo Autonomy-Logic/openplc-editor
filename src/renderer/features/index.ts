@@ -1,2 +1,2 @@
-export { default as DisplayExampleProjects } from './display-example-projects';
-export { default as DisplayRecentProjects } from './display-recent-projects';
+// eslint-disable-next-line import/prefer-default-export
+export { default as Screen } from './screens';
