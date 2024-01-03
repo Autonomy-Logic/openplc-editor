@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import RecentProjects from '../../shared/data/mock/projects-data.json';
 import {
   OpenIcon,
@@ -8,11 +9,31 @@ import {
   TutorialsIcon,
 } from '../assets/icons';
 import RecentProjectViewer from '../components/recent-project';
-import { MenuComponent } from '../components/ui';
-import ActionsRoot from '../components/ui/actions-bar/actions-root';
-import ActionsSelectRoot from '../components/ui/actions-bar/actions-select-root';
+import { MenuComponent, ActionsBar } from '../components/ui';
 
 function Draft() {
+  const options = [
+    {
+      label: 'Recent',
+      onClick: () => {
+        console.log('option 1 clicked');
+      },
+    },
+    {
+      label: 'Size',
+      onClick: () => {
+        console.log('option 2 clicked');
+      },
+    },
+    {
+      label: 'Name',
+      onClick: () => {
+        console.log('option 3 clicked');
+      },
+    },
+  ];
+  const [selectedOption, setSelectedOption] = useState(options[0].label);
+  const [showOptions, setShowOptions] = useState<boolean>(false);
   return (
     <div className='w-full h-full bg-white flex justify-center items-center'>
       <div className='h-[600px]  w-48 flex flex-col justify-end py-24 mr-20'>
@@ -45,14 +66,40 @@ function Draft() {
         </MenuComponent.Root>
       </div>
       <div>
-        <ActionsRoot>
-          <ActionsSelectRoot RecentsIcon={RecentsIcon} />
-
-          <div className='flex flex-grow gap-2 rounded-lg border-[#EDEFF2] border-[2px] items-center p-3'>
-            <StartSearchIcon />
-            Search a project
-          </div>
-        </ActionsRoot>
+        <ActionsBar.ActionsRoot className='w-full items-center flex gap-4 px-3 relative'>
+          <ActionsBar.DropDown>
+            <ActionsBar.Select
+              icon={<RecentsIcon />}
+              selectedOption={selectedOption}
+              setShowOptions={setShowOptions}
+              showOptions={showOptions}
+              placeholder='Order by'
+            />
+            <ActionsBar.Options
+              className={`w-52 rounded-md h-fit bg-white border-[#EDEFF2] border-[2px] absolute z-[999] top-14 ${
+                showOptions ? 'block' : 'hidden'
+              }`}
+              options={options}
+              selectedOption={selectedOption}
+              setSelectedOption={setSelectedOption}
+              setShowOptions={setShowOptions}
+            />
+          </ActionsBar.DropDown>
+          <ActionsBar.Search className='flex flex-grow border-[#EDEFF2] border-[2px] gap-2 rounded-lg text-base items-center h-12 '>
+            <ActionsBar.Label
+              htmlfor='startSearch'
+              icon={<StartSearchIcon />}
+              className='flex w-full h-full px-5 py-3 gap-5'
+            >
+              <ActionsBar.Input
+                id='startSearch'
+                className='w-full h-full bg-inherit outline-none text-black'
+                type='text'
+                placeholder='Search a project'
+              />
+            </ActionsBar.Label>
+          </ActionsBar.Search>
+        </ActionsBar.ActionsRoot>
         <RecentProjectViewer dataToRender={RecentProjects} />
       </div>
     </div>

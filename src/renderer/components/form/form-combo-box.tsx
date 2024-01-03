@@ -65,7 +65,7 @@ const ComboBox: FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) => {
               />
             </Combobox.Button>
             {filteredList.length > 0 && (
-              <Combobox.Options
+              <Combobox.Select
                 className="absolute z-10 mt-1 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:bg-gray-800 sm:text-sm"
                 style={{ maxHeight: `${Math.round(showOptions) * 2.75}rem` }}
               >
@@ -107,7 +107,7 @@ const ComboBox: FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) => {
                     )}
                   </Combobox.Option>
                 ))}
-              </Combobox.Options>
+              </Combobox.Select>
             )}
           </div>
         </Combobox>
