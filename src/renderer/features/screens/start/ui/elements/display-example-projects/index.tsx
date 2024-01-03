@@ -4,9 +4,9 @@ import { useCallback } from 'react';
 import MockImage from 'renderer/assets/images/example.png';
 
 import Card from '@/renderer/components/elements/card';
-// TODO: Remove mock data
-import Mock from '@/shared/data/mock/examples.json';
 
+// TODO: Remove mock data
+import Mock from '../../../../../../../shared/data/mock/examples.json';
 import { Carousel, Header, NextButton, PrevButton, Wrapper } from './components';
 
 export default function DisplayExampleProjects() {

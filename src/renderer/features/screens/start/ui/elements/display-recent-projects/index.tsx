@@ -2,7 +2,7 @@ import { HTMLAttributes } from 'react';
 
 import { FileElement } from '@/renderer/components/elements';
 
-import RecentProjects from '../../../shared/data/mock/projects-data.json';
+import RecentProjects from '../../../../../../../shared/data/mock/projects-data.json';
 import { Header, Viewer, Wrapper } from './components';
 
 export type DisplayRecentProjectProps = HTMLAttributes<HTMLDivElement>;

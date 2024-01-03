@@ -58,7 +58,7 @@ export const store = new Store<TStoreType>({
   },
   defaults: {
     last_projects: [],
-    theme: 'system',
+    theme: 'light',
     window: {
       bounds: {
         width: 1440,
