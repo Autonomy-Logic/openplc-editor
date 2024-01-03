@@ -24,7 +24,7 @@ const Input: FC<InputProps> = ({ name, type, ...rest }) => {
   return (
     <input
       id={name}
-      className="w-full flex-1 rounded-md border border-gray-900/10 px-3 py-2 text-gray-500 shadow-sm focus:outline-none focus:ring-2 focus:ring-open-plc-blue dark:border-white/5 dark:bg-white/5 dark:text-gray-400"
+      className="w-full flex-1 rounded-md border border-gray-900/10 px-3 py-2 text-gray-500 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand dark:border-white/5 dark:bg-white/5 dark:text-gray-400"
       type={type}
       {...register(
         name,

@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --primary: #0464fb;
+    --primary-default: #0464fb;
     --primary-light: #b4d0fe;
     --primary-medium: #0350c9;
     --primary-medium-dark: #023c97;
@@ -94,7 +94,7 @@
     @apply bg-transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply rounded-[0.625rem] border-4 border-solid border-transparent bg-open-plc-blue bg-clip-padding transition-all duration-[0.3s] hover:border-[0.188rem] hover:border-solid hover:border-transparent;
+    @apply rounded-[0.625rem] border-4 border-solid border-transparent bg-brand bg-clip-padding transition-all duration-[0.3s] hover:border-[0.188rem] hover:border-solid hover:border-transparent;
   }
   .dark ::-webkit-scrollbar {
     @apply bg-gray-900;

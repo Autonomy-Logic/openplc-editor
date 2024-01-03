@@ -109,7 +109,7 @@ const Dropdown: FC<PropsWithChildren<DropdownProps>> = ({
                     className={classNames(
                       'block w-full px-4 py-2 text-left text-sm transition-colors duration-300',
                       active
-                        ? 'bg-open-plc-blue text-gray-50'
+                        ? 'bg-brand text-gray-50'
                         : 'text-gray-500 dark:text-gray-400',
                     )}
                   >

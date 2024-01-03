@@ -36,7 +36,7 @@ const TitlebarTabs: FC<TitlebarTabsProps> = ({ tabs }) => (
               >
                 <div
                   className={classNames(
-                    current ? 'bg-open-plc-blue' : 'bg-white',
+                    current ? 'bg-brand' : 'bg-white',
                     'h-2 w-2 rounded-full transition-colors duration-300',
                   )}
                 />
