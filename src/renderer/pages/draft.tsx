@@ -1,43 +1,40 @@
-import RecentProjects from '../../shared/data/mock/projects-data.json';
+/* eslint-disable jsx-a11y/control-has-associated-label */
 import { OpenIcon, PlusIcon, QuitIcon, TutorialsIcon } from '../assets/icons';
-import RecentProjectViewer from '../components/recent-project';
+import { DisplayRecentProjects } from '../features';
 import { MenuComponent } from '../components/ui';
 
 function Draft() {
   return (
-    <div className='w-full h-full bg-white flex justify-center items-center'>
-      <div className='h-[600px]  w-48 flex flex-col justify-end py-24 mr-20'>
-        <MenuComponent.Root>
-          <MenuComponent.Section className='flex-col flex-grow justify-between'>
-            <MenuComponent.Button
-              className='w-full h-9 text-white  bg-[#0464FB] hover:opacity-90 rounded-md flex items-center'
-              label='New Project'
-              icon={<PlusIcon className='w-4 h-4 mx-2 my-2' />}
-            />
-            <MenuComponent.Button
-              className='w-full flex items-center  gap-2'
-              label='Open'
-              icon={<OpenIcon className='w-6 h-fit' />}
-            />
-            <MenuComponent.Button
-              className='w-full  flex items-center gap-2'
-              label='Tutorials'
-              icon={<TutorialsIcon className='w-6 h-fit' />}
-            />
-          </MenuComponent.Section>
-          <MenuComponent.Divider />
-          <MenuComponent.Section>
-            <MenuComponent.Button
-              className='  w-full flex items-center gap-2'
-              label='Quit'
-              icon={<QuitIcon className='w-6 h-fit' />}
-            />
-          </MenuComponent.Section>
-        </MenuComponent.Root>
-      </div>
+    <div className='w-full h-full flex justify-center items-center'>
       <RecentProjectViewer dataToRender={RecentProjects} />
     </div>
   );
 }
 
 export default Draft;
+
+/* <div className='relative flex flex-col items-start justify-start gap-6 text-left text-xl text-black w-full bg-white'>
+        <div className='flex flex-row items-start self-stretch justify-between'>
+          <h3 className='relative leading-6 font-medium'>Examples</h3>
+          <div className='flex flex-row flex-shrink-0 items-start justify-start gap-6'>
+            <img
+              alt='icon for nav left'
+              className='relative flex-shrink-0 w-6 h-6 overflow-hidden object-cover'
+              src={LeftArrow}
+            />
+            <img
+              alt='icon for nav right'
+              className='relative flex-shrink-0 w-6 h-6 overflow-hidden object-contain'
+              src={RightArrow}
+            />
+          </div>
+        </div>
+        <div className='flex flex-row self-stretch items-start justify-start gap-6 overflow-auto'>
+          {DataForExamples.map((ex) => (
+            <Card.Root key={ex.example_id}>
+              <Card.Preview source={TestImage} />
+              <Card.Label title={ex.example_name} description={ex.example_description} />
+            </Card.Root>
+          ))}
+        </div>
+      </div> */

@@ -13,6 +13,59 @@
   #folder-root p:hover ~ svg #folder-path {
     fill: #2866f7;
   }
+
+  /* Explanation: The recent projects carousel viewport (The visible part) */
+  .embla__viewport {
+    overflow: hidden;
+  }
+  /* Explanation: Container for each card */
+  .embla__container {
+    display: flex;
+    gap: 24px;
+  }
+
+  /* Explanation: Container for all buttons */
+  .embla__buttons {
+    display: flex;
+    align-items: center;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: 1.6rem;
+  }
+
+  /* Explanation: Style for each button in the carousel */
+  /* Code-Block - Start */
+  .embla__button {
+    z-index: 1;
+    color: #023c97;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    width: 4rem;
+    height: 4rem;
+  }
+  /* Review: Repeated class */
+  .embla__button {
+    -webkit-appearance: none;
+    background-color: transparent;
+    touch-action: manipulation;
+    display: inline-flex;
+    text-decoration: none;
+    cursor: pointer;
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+  .embla__button:disabled {
+    opacity: 0.3;
+  }
+  .embla__button__svg {
+    width: 65%;
+    height: 65%;
+  }
+  /* Code-Block - End */
 }
 
 @layer utilities {
