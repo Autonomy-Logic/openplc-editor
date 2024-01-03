@@ -1,8 +1,14 @@
 /* eslint-disable jsx-a11y/control-has-associated-label */
+import { OpenIcon, PlusIcon, QuitIcon, TutorialsIcon } from '../assets/icons';
 import { DisplayRecentProjects } from '../features';
+import { MenuComponent } from '../components/ui';
 
 function Draft() {
-  return <DisplayRecentProjects />;
+  return (
+    <div className='w-full h-full flex justify-center items-center'>
+      <RecentProjectViewer dataToRender={RecentProjects} />
+    </div>
+  );
 }
 
 export default Draft;

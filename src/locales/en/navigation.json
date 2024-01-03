@@ -3,5 +3,9 @@
   "tools": "Tools",
   "settings": "Settings",
   "editorTools": "Editor Tools",
-  "variables": "Variables"
+  "variables": "Variables",
+  "search": "Search",
+  "filesAndFolders": "Files and Folders",
+  "transfer": "Transfer",
+  "zoomInOut": "Zoom"
 }

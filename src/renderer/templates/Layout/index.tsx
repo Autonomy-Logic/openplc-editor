@@ -52,36 +52,91 @@ function Layout({ main }: TLayoutProps): ReactNode {
   // Todo: Set the project global state and define the handle click function
   // Define an array of navigation items with their associated data.
   const navigation = [
-    ...(project?.project
+    // ...(project?.project
+      // ? [
+    //       {
+    //         key: 'search',
+    //         name: t('Search'),
+    //         onClick: handleClick,
+    //         icon: SearchIcon,
+    //         component: <Tools />,
+    //       },
+    //     ]
+    //   : []),
+    // ...(project?.project
+    //   ? [
+    //       {
+    //         key: 'transfer',
+    //         name: t('Transfer'),
+    //         onClick: handleClick,
+    //         icon: ArrowTransferIcon,
+    //         component: '',
+    //       },
+    //     ]
+    //   : []),
+    // ...(project?.project
+    //   ? [
+    //       {
+    //         key: 'filesAndFolders',
+    //         name: t('Files and Folders'),
+    //         onClick: handleClick,
+    //         icon: FileAndFolderIcon,
+    //         component: '',
+    //       },
+    //     ]
+    //   : []),
+    // // ...(project?.project
+    // //   ? [
+    // //       {
+    // //         key: 'tools',
+    // //         name: t('tools'),
+    // //         onClick: handleClick,
+    // //         icon: HiOutlineSquares2X2,
+    // //         component: <Tools />,
+    // //       },
+    // //     ]
+    // //   : []),
+    // ...(project?.project
+    //   ? [
+    //       {
+    //         key: 'zoomInOut',
+    //         name: t('Zoom'),
+    //         onClick: handleClick,
+    //         icon: ZoomInOutIcon,
+    //         component: <ProjectTree />,
+    //       },
+    //     ]
+    //   : []),
+    // ...(project?.project
+    //   ? [
+    //       {
+    //         key: 'projectTree',
+    //         name: t('project'),
+    //         onClick: handleClick,
+    //         icon: ZoomInOut,
+    //         component: <ProjectTree />,
+    //       },
+    //     ]
+    //   : []),
+    // ...(project?.project
+    //   ? [
+    //       {
+    //         key: 'editorTools',
+    //         name: t('editorTools'),
+    //         onClick: handleClick,
+    //         icon: FaDrawPolygon,
+    //         component: <EditorTools />,
+    //       },
+    //     ]
+    //   : []),
+    ...(project && pathname.includes(paths.EDITOR)
       ? [
           {
-            key: 'tools',
-            name: t('tools'),
+            key: 'variables',
+            name: t('variables'),
             onClick: handleClick,
-            icon: HiOutlineSquares2X2,
-            component: <Tools />,
-          },
-        ]
-      : []),
-    ...(project?.project
-      ? [
-          {
-            key: 'projectTree',
-            name: t('project'),
-            onClick: handleClick,
-            icon: RiNodeTree,
-            component: <ProjectTree />,
-          },
-        ]
-      : []),
-    ...(project?.project
-      ? [
-          {
-            key: 'editorTools',
-            name: t('editorTools'),
-            onClick: handleClick,
-            icon: FaDrawPolygon,
-            component: <EditorTools />,
+            icon: HiVariable,
+            component: <Variables />,
           },
         ]
       : []),
