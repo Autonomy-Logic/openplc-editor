@@ -65,10 +65,11 @@ function Draft() {
           </MenuComponent.Section>
         </MenuComponent.Root>
       </div>
-      <div>
-        <ActionsBar.ActionsRoot className={`w-full items-center flex gap-4 px-3 relative `}>
+      <div className='flex flex-col items-center'>
+        <ActionsBar.ActionsRoot className={`w-[968px] items-center flex justify-between  relative `}>
           <ActionsBar.DropDown>
             <ActionsBar.Select
+              className='w-60 gap-3 whitespace-nowrap text-base justify-center pl-6 pr-2 relative flex items-center rounded-lg  border-[#EDEFF2] border-[2px] h-14 cursor-pointer '
               icon={<RecentsIcon />}
               selectedOption={selectedOption}
               setShowOptions={setShowOptions}
@@ -76,16 +77,16 @@ function Draft() {
               placeholder='Order by'
             />
             <ActionsBar.Options
-              className={`w-28  left-[92px] rounded-md h-fit bg-white border-[#EDEFF2] border-[2px] absolute z-[999] top-14 ${
+              className={`w-[138px]  right-0 rounded-md  bg-white border-[#EDEFF2] border-[2px] absolute z-[999] top-16 ${
                 showOptions ? 'block' : 'hidden'
               }`}
               options={options}
-              selectedOption={selectedOption}
               setSelectedOption={setSelectedOption}
               setShowOptions={setShowOptions}
+              selectedOption={selectedOption}
             />
           </ActionsBar.DropDown>
-          <ActionsBar.Search className='flex flex-grow border-[#EDEFF2] border-[2px] gap-2 rounded-lg text-base items-center h-12 '>
+          <ActionsBar.Search className='flex w-[704px] border-[#EDEFF2] border-[2px] gap-2 rounded-lg text-base items-center h-14 '>
             <ActionsBar.Label
               htmlfor='startSearch'
               icon={<StartSearchIcon />}

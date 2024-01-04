@@ -4,5 +4,5 @@ type ActionsDropDownProps = {
   children: ReactNode;
 };
 export default function DropDown({ children }: ActionsDropDownProps) {
-  return <div>{children}</div>;
+  return <div className='relative'>{children}</div>;
 }

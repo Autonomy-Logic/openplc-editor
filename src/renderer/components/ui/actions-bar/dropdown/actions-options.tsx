@@ -9,19 +9,18 @@ type ActionsSelectOptionsProps = {
     label: string;
     onClick: () => void;
   }[];
-  selectedOption: string;
   setSelectedOption: React.Dispatch<React.SetStateAction<string>>;
+  selectedOption?: string;
   showOptions?: boolean;
   className?: string;
 };
 export default function Options({
   setShowOptions,
   options,
-  selectedOption,
   setSelectedOption,
   ...props
 }: ActionsSelectOptionsProps) {
-  const { className } = props;
+  const { className, selectedOption } = props;
   const handleOptionClick = (option: ActionsSelectOptionsProps['options'][0]) => {
     setSelectedOption(option.label);
     option.onClick();
@@ -33,14 +32,11 @@ export default function Options({
       {options.map((option) => (
         // eslint-disable-next-line jsx-a11y/no-static-element-interactions
         <div
-          className='cursor-pointer hover:bg-gray-100 p-3'
+          className=' cursor-pointer  hover:bg-[#F5F7F8]  text-[#030303]'
           key={option.label}
           onClick={() => handleOptionClick(option)}
-          style={{
-            fontWeight: selectedOption === option.label ? 'bold' : 'normal',
-          }}
         >
-          {option.label}
+          <span className={` h-10 justify-center flex flex-col px-3 ${selectedOption === option.label ? 'bg-[#EDEFF2]' : ''}`}>{option.label}</span>
         </div>
       ))}
     </div>
