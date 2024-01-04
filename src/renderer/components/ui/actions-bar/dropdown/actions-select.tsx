@@ -19,12 +19,12 @@ export default function Select({
     <div
       onClick={() => setShowOptions(!showOptions)}
       style={{ userSelect: 'none' }}
-      className='min-w-18 w-52  whitespace-nowrap text-base relative flex items-center rounded-lg justify-center border-[#EDEFF2] border-[2px] h-12 p-3 cursor-pointer '
+      className='min-w-18 w-48 gap-2 whitespace-nowrap text-base relative flex items-center rounded-lg justify-center border-[#EDEFF2] border-[2px] h-12 p-3 cursor-pointer '
     >
       {placeholder}
       <div className='min-w-[50%] flex justify-between'>
-        <span className='text-black flex-grow flex justify-center'>{selectedOption}</span>
-        <span>{icon}</span>
+        <span className='text-black flex-grow flex '>{selectedOption}</span>
+        <span className={` ${showOptions ? '-rotate-180' : 'rotate-0'} transition-all`}>{icon}</span>
       </div>
     </div>
   );

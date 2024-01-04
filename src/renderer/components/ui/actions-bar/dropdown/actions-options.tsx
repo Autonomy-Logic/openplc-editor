@@ -33,7 +33,7 @@ export default function Options({
       {options.map((option) => (
         // eslint-disable-next-line jsx-a11y/no-static-element-interactions
         <div
-          className='cursor-pointer hover:bg-gray-100 p-1 '
+          className='cursor-pointer hover:bg-gray-100 p-3'
           key={option.label}
           onClick={() => handleOptionClick(option)}
           style={{

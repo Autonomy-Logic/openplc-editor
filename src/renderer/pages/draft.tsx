@@ -66,7 +66,7 @@ function Draft() {
         </MenuComponent.Root>
       </div>
       <div>
-        <ActionsBar.ActionsRoot className='w-full items-center flex gap-4 px-3 relative'>
+        <ActionsBar.ActionsRoot className={`w-full items-center flex gap-4 px-3 relative `}>
           <ActionsBar.DropDown>
             <ActionsBar.Select
               icon={<RecentsIcon />}
@@ -76,7 +76,7 @@ function Draft() {
               placeholder='Order by'
             />
             <ActionsBar.Options
-              className={`w-52 rounded-md h-fit bg-white border-[#EDEFF2] border-[2px] absolute z-[999] top-14 ${
+              className={`w-28  left-[92px] rounded-md h-fit bg-white border-[#EDEFF2] border-[2px] absolute z-[999] top-14 ${
                 showOptions ? 'block' : 'hidden'
               }`}
               options={options}
