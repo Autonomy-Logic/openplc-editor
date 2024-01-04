@@ -11,7 +11,7 @@
     --primary-dark: #011e4b;
   }
   #folder-root p:hover ~ svg #folder-path {
-    fill: #2866f7;
+    fill: var(--primary-medium-dark);
   }
 
   /* Explanation: The recent projects carousel viewport (The visible part) */
