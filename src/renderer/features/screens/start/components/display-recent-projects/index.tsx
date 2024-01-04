@@ -1,9 +1,10 @@
 import { HTMLAttributes } from 'react';
 
 import { FileElement } from '@/renderer/components/elements';
+import { ScrollArea, ScrollBar } from '@/renderer/components/ui/scroll-area';
 
-import RecentProjects from '../../../../../../../shared/data/mock/projects-data.json';
-import { Header, Viewer, Wrapper } from './components';
+import RecentProjects from '../../../../../../shared/data/mock/projects-data.json';
+import { Header, Wrapper } from './elements';
 
 export type DisplayRecentProjectProps = HTMLAttributes<HTMLDivElement>;
 
@@ -11,14 +12,15 @@ export default function DisplayRecentProjects() {
   return (
     <Wrapper>
       <Header title='Projects' />
-      <Viewer>
+      <ScrollArea className='h-[375px] w-full rounded-md'>
         {RecentProjects.map((project) => (
           <FileElement.Root key={project.id}>
             <FileElement.Label projectName={project.name} lastModified={project.last_modified} />
             <FileElement.Shape />
           </FileElement.Root>
         ))}
-      </Viewer>
+        <ScrollBar />
+      </ScrollArea>
     </Wrapper>
   );
 }

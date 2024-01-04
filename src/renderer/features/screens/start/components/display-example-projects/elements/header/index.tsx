@@ -15,7 +15,7 @@ export default function Header(props: ExampleHeaderProps): ReactNode {
   const { title, children, ...restProps } = props;
   return (
     <header
-      className='flex flex-1 w-full mb-6 justify-between text-xl font-medium text-neutral-950'
+      className='flex flex-1 w-full mb-6 justify-between text-xl leading-6 font-medium font-caption text-neutral-1000 dark:text-white'
       {...restProps}
     >
       <h1 className='cursor-default'>{title}</h1>
