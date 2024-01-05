@@ -1,14 +1,14 @@
 /* eslint-disable react/jsx-props-no-spreading */
-import { cn } from '@/utils';
-import React, { HTMLAttributes, ReactNode } from 'react';
+import { ButtonHTMLAttributes, Dispatch, ReactNode, SetStateAction } from 'react';
 
-type ActionsSelectProps = HTMLAttributes<HTMLDivElement> & {
+import { cn } from '@/utils';
+
+type DropdownSelectProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   selectedOption: string;
   icon: ReactNode;
-  setShowOptions: React.Dispatch<React.SetStateAction<boolean>>;
+  setShowOptions: Dispatch<SetStateAction<boolean>>;
   showOptions: boolean;
   placeholder: string;
-  className?: string;
 };
 export default function Select({
   selectedOption,
@@ -16,23 +16,24 @@ export default function Select({
   setShowOptions,
   showOptions,
   placeholder,
+  className,
   ...props
-}: ActionsSelectProps) {
-  const { className } = props;
+}: DropdownSelectProps) {
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
-    <div
-      className={cn(className)}
+    <button
+      type='button'
+      className={cn('select-none', className)}
       onClick={() => setShowOptions(!showOptions)}
-      style={{ userSelect: 'none' }}
+      {...props}
     >
       {placeholder}
-      <div className=' flex justify-between w-28'>
+      <p className='flex justify-between w-28'>
         <span className='text-black '>{selectedOption}</span>
         <span className={` ${showOptions ? '-rotate-180' : 'rotate-0'} transition-all `}>
           {icon}
         </span>
-      </div>
-    </div>
+      </p>
+    </button>
   );
 }

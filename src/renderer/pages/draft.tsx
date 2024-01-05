@@ -39,7 +39,7 @@ function Draft() {
         <MenuComponent.Root>
           <MenuComponent.Section className='flex-col flex-grow justify-between'>
             <MenuComponent.Button
-              className='w-full h-9 text-white  bg-[#0464FB] hover:opacity-90 rounded-md flex items-center'
+              className='w-full h-9 text-white  bg-brand hover:opacity-90 rounded-md flex items-center'
               label='New Project'
               icon={<PlusIcon className='w-4 h-4 mx-2 my-2' />}
             />
@@ -87,7 +87,7 @@ function Draft() {
               selectedOption={selectedOption}
             />
           </ActionsBar.DropDown>
-          <ActionsBar.Search className='flex w-[704px] border-[#EDEFF2] border-[1.5px] gap-2 rounded-lg text-base items-center h-14 '>
+          <ActionsBar.Search className='flex w-[704px] border-[#EDEFF2] border-[1.5px] gap-2 rounded-lg text-base font-caption items-center h-14 '>
             <ActionsBar.Label
               htmlfor='startSearch'
               icon={<StartSearchIcon />}
