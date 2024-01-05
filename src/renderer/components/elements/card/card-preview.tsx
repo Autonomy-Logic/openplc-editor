@@ -8,7 +8,7 @@ export default function Preview({ source, ...props }: CardPreviewProps) {
     <img
       alt='card-preview'
       src={source}
-      className='self-stretch flex-1 relative rounded-md max-w-full overflow-hidden max-h-full object-cover'
+      className='self-stretch flex-1 relative rounded-md max-w-full overflow-hidden max-h-full object-cover cursor-pointer'
       // eslint-disable-next-line react/jsx-props-no-spreading
       {...props}
     />
