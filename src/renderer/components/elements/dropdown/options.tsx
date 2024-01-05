@@ -31,22 +31,21 @@ export default function Options({
 
   return (
     <div className={cn(className)} {...props}>
-      {options.map((option) => (
-        <button
-          type='button'
-          className=' cursor-pointer  hover:bg-[#F5F7F8]  text-[#030303]'
-          key={option.label}
-          onClick={() => handleOptionClick(option)}
-        >
-          <span
-            className={` h-10 justify-center flex flex-col px-3 ${
-              selectedOption === option.label ? 'bg-[#EDEFF2]' : ''
-            }`}
+      <div className='w-full h-full flex flex-col'>
+        {options.map((option) => (
+          <button
+            type='button'
+            className={cn(
+              selectedOption === option.label && 'bg-neutral-100',
+              'cursor-pointer hover:bg-neutral-50'
+            )}
+            key={option.label}
+            onClick={() => handleOptionClick(option)}
           >
-            {option.label}
-          </span>
-        </button>
-      ))}
+            <p className='flex-1 text-neutral-1000 text-left py-[10px] pl-4'>{option.label}</p>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { OpenIcon, PlusIcon, QuitIcon, TutorialsIcon } from 'renderer/assets/icons';
 import { MenuComponent } from 'renderer/components/ui';
 
-import { DisplayExampleProjects, DisplayRecentProjects, Layout } from './components';
+import { ActionsBar, DisplayExampleProjects, DisplayRecentProjects, Layout } from './components';
 
 export default function Start() {
   return (
@@ -36,7 +36,7 @@ export default function Start() {
         </MenuComponent.Root>
       </aside>
       <div>
-        <div className='w-full h-14 flex items-center justify-center mb-4'> Actions Bar</div>
+        <ActionsBar />
         <DisplayExampleProjects />
         <DisplayRecentProjects />
       </div>
