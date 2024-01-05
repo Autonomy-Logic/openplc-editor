@@ -12,7 +12,7 @@ export default function DisplayRecentProjects() {
   return (
     <Wrapper>
       <Header title='Projects' />
-      <ScrollAreaComponent.Root className='h-[375px] w-full rounded-md'>
+      <ScrollAreaComponent.Root className='h-[300px] w-full rounded-md'>
         <ScrollAreaComponent.Viewport>
           <ScrollAreaComponent.CustomDisplay>
             {RecentProjects.map((project) => (

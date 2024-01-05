@@ -36,6 +36,7 @@ export default function Start() {
         </MenuComponent.Root>
       </aside>
       <div>
+        <div className='w-full h-14 flex items-center justify-center mb-4'> Actions Bar</div>
         <DisplayExampleProjects />
         <DisplayRecentProjects />
       </div>
