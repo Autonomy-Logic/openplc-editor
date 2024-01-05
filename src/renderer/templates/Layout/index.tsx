@@ -180,8 +180,8 @@ function Layout({ main }: TLayoutProps): ReactNode {
                     type='button'
                     className={classNames(
                       current === key
-                        ? 'bg-blue-100 text-open-plc-blue dark:bg-gray-800'
-                        : 'text-gray-500 hover:bg-blue-100 hover:text-open-plc-blue dark:hover:bg-gray-800',
+                        ? 'bg-blue-100 text-brand dark:bg-gray-800'
+                        : 'text-gray-500 hover:bg-blue-100 hover:text-brand dark:hover:bg-gray-800',
                       'group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6'
                     )}
                     onClick={() => onClick(key as CurrentProps)}
@@ -196,7 +196,7 @@ function Layout({ main }: TLayoutProps): ReactNode {
           <button
             type='button'
             onClick={() => toggleIsSideBarOpen()}
-            className='group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 text-gray-500 hover:text-open-plc-blue'
+            className='group flex gap-x-3 rounded-md p-3 text-sm font-semibold leading-6 text-gray-500 hover:text-brand'
           >
             {isSidebarOpen ? (
               <HiOutlineBars3CenterLeft className='h-6 w-6 shrink-0' />

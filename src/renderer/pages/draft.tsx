@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import RecentProjects from '../../shared/data/mock/projects-data.json';
 import {
   OpenIcon,
@@ -9,7 +10,7 @@ import {
   TutorialsIcon,
 } from '../assets/icons';
 import RecentProjectViewer from '../components/recent-project';
-import { MenuComponent, ActionsBar } from '../components/ui';
+import { ActionsBar, MenuComponent } from '../components/ui';
 
 function Draft() {
   const options = [
@@ -66,7 +67,9 @@ function Draft() {
         </MenuComponent.Root>
       </div>
       <div className='flex flex-col items-center'>
-        <ActionsBar.ActionsRoot className={`w-[968px] items-center flex justify-between  relative `}>
+        <ActionsBar.ActionsRoot
+          className={`w-[968px] items-center flex justify-between  relative `}
+        >
           <ActionsBar.DropDown>
             <ActionsBar.Select
               className='w-60 gap-3 whitespace-nowrap text-base justify-center pl-6 pr-2 relative flex items-center rounded-lg  border-[#EDEFF2] border-[2px] h-14 cursor-pointer '
@@ -108,3 +111,29 @@ function Draft() {
 }
 
 export default Draft;
+
+/* <div className='relative flex flex-col items-start justify-start gap-6 text-left text-xl text-black w-full bg-white'>
+        <div className='flex flex-row items-start self-stretch justify-between'>
+          <h3 className='relative leading-6 font-medium'>Examples</h3>
+          <div className='flex flex-row flex-shrink-0 items-start justify-start gap-6'>
+            <img
+              alt='icon for nav left'
+              className='relative flex-shrink-0 w-6 h-6 overflow-hidden object-cover'
+              src={LeftArrow}
+            />
+            <img
+              alt='icon for nav right'
+              className='relative flex-shrink-0 w-6 h-6 overflow-hidden object-contain'
+              src={RightArrow}
+            />
+          </div>
+        </div>
+        <div className='flex flex-row self-stretch items-start justify-start gap-6 overflow-auto'>
+          {DataForExamples.map((ex) => (
+            <Card.Root key={ex.example_id}>
+              <Card.Preview source={TestImage} />
+              <Card.Label title={ex.example_name} description={ex.example_description} />
+            </Card.Root>
+          ))}
+        </div>
+      </div> */

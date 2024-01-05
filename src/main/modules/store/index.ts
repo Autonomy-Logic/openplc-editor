@@ -1,5 +1,5 @@
-import Store from 'electron-store';
 import { nativeTheme } from 'electron/main';
+import Store from 'electron-store';
 
 // import { DefaultStoreProps, schema } from '../contracts/types/store/schema';
 import { TStoreType } from '../../contracts/types/modules/store';
@@ -58,11 +58,11 @@ export const store = new Store<TStoreType>({
   },
   defaults: {
     last_projects: [],
-    theme: 'system',
+    theme: 'light',
     window: {
       bounds: {
-        width: 1280,
-        height: 800,
+        width: 1440,
+        height: 768,
         x: 0,
         y: 0,
       },

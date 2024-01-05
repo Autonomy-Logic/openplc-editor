@@ -36,8 +36,8 @@ const Button: FC<ButtonProps> = ({
       disabled={disabled}
       className={classNames(
         appearance === 'primary'
-          ? 'border border-transparent bg-open-plc-blue text-white  focus:ring-open-plc-blue'
-          : 'border border-gray-300 bg-white text-gray-700 focus:ring-open-plc-blue dark:border-white/5 dark:bg-white/5 dark:text-gray-400',
+          ? 'border border-transparent bg-brand text-white  focus:ring-brand'
+          : 'border border-gray-300 bg-white text-gray-700 focus:ring-brand dark:border-white/5 dark:bg-white/5 dark:text-gray-400',
         disabled
           ? 'cursor-not-allowed opacity-50'
           : 'press-animated hover:opacity-90',
@@ -51,7 +51,7 @@ const Button: FC<ButtonProps> = ({
           ? 'rounded-md px-4 py-2 text-base'
           : 'rounded-md px-6 py-3 text-base',
         widthFull && 'w-full',
-        `inline-flex items-center font-medium shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-open-plc-blue ${className}`,
+        `inline-flex items-center font-medium shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${className}`,
       )}
       {...rest}
     >

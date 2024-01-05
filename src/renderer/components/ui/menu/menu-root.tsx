@@ -9,7 +9,7 @@ type MenuRootProps = HTMLAttributes<HTMLDivElement> & {
 export default function Root({ children, ...props }: MenuRootProps) {
   return (
     <div
-      className='flex flex-col h-52 mr-6 bg-white justify-between text-xl text-[#030303]'
+      className='flex flex-col h-fit min-h-[372px] w-[240px] max-w-[240px] bg-transparent justify-start text-xl text-[#030303] dark:text-white'
       {...props}
     >
       {children}

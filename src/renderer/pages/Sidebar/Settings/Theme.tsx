@@ -49,7 +49,7 @@ const Theme: FC = () => {
           onClick={handleSetLightTheme}
           className={classNames(
             'rounded p-1',
-            !isDark && ' border-2 border-open-plc-blue',
+            !isDark && ' border-2 border-brand',
           )}
         >
           <img src={lightTheme} className="h-16 w-16 text-gray-800" alt="" />
@@ -61,7 +61,7 @@ const Theme: FC = () => {
           onClick={handleSetDarkTheme}
           className={classNames(
             'rounded p-1',
-            isDark && 'border-2 border-open-plc-blue',
+            isDark && 'border-2 border-brand',
           )}
         >
           <img src={darkTheme} className="h-16 w-16 text-gray-800" alt="" />

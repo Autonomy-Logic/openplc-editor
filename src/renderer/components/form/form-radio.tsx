@@ -27,7 +27,7 @@ const Radio: FC<RadioProps> = ({ name, label, ...rest }) => {
     <div className="flex items-center">
       <input
         id={name}
-        className="h-4 w-4 border-gray-900/10 text-open-plc-blue focus:ring-open-plc-blue dark:border-white/5 dark:bg-white/5"
+        className="h-4 w-4 border-gray-900/10 text-brand focus:ring-brand dark:border-white/5 dark:bg-white/5"
         {...register(name)}
         {...rest}
         type="radio"

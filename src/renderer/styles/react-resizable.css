@@ -5,7 +5,7 @@
   @apply absolute h-1 w-1 pb-[0.188rem] pl-0 pr-[0.188rem] pt-0 transition-all duration-[0.3s];
 }
 .react-resizable-handle:active {
-  @apply bg-open-plc-blue transition-all duration-[0.3s];
+  @apply bg-brand transition-all duration-[0.3s];
 }
 .react-resizable-handle-sw {
   @apply bottom-0 left-0 rotate-90 cursor-sw-resize;

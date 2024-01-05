@@ -54,7 +54,7 @@ const ComboBox: FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) => {
             <Combobox.Input
               className="w-full flex-1 rounded-md border border-gray-900/10 px-3 py-2
                text-gray-500 shadow-sm focus:outline-none focus:ring-2
-               focus:ring-open-plc-blue dark:border-white/5 dark:bg-white/5 dark:text-gray-400"
+               focus:ring-brand dark:border-white/5 dark:bg-white/5 dark:text-gray-400"
               onChange={(event) => setQuery(event.target.value)}
               displayValue={(value: ComboBoxOption) => value?.label}
             />
@@ -77,7 +77,7 @@ const ComboBox: FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) => {
                       classNames(
                         'relative cursor-default select-none py-2 pl-3 pr-9 transition-colors duration-300',
                         active
-                          ? 'bg-open-plc-blue text-gray-50'
+                          ? 'bg-brand text-gray-50'
                           : 'text-gray-500 dark:text-gray-400',
                       )
                     }
@@ -97,7 +97,7 @@ const ComboBox: FC<ComboBoxProps> = ({ options, name, showOptions = 6 }) => {
                           <span
                             className={classNames(
                               'absolute inset-y-0 right-0 flex items-center pr-4',
-                              active ? 'text-white' : 'text-open-plc-blue',
+                              active ? 'text-white' : 'text-brand',
                             )}
                           >
                             <HiCheck className="h-5 w-5" aria-hidden="true" />

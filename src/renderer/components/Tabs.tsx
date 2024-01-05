@@ -28,7 +28,7 @@ const Tabs: FC<TabsProps> = ({ tabs }) => (
             type="button"
             className={classNames(
               current
-                ? 'border-open-plc-blue text-open-plc-blue'
+                ? 'border-brand text-brand'
                 : 'border-transparent text-gray-500 hover:border-gray-600 hover:text-gray-600 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-500',
               'whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium',
             )}

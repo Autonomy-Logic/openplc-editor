@@ -29,7 +29,7 @@
   @apply !m-0 !right-0 !relative;
 }
 .cet-menubar div {
-  @apply flex rounded-md p-2  text-sm font-semibold leading-6 hover:!bg-blue-100 hover:text-open-plc-blue dark:hover:!bg-gray-800;
+  @apply flex rounded-md p-2  text-sm font-semibold leading-6 hover:!bg-blue-100 hover:text-brand dark:hover:!bg-gray-800;
 }
 .cet-menubar-menu-container {
   @apply !mt-4 flex-col;
