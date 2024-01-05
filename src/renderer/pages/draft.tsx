@@ -1,6 +1,5 @@
 import { useState } from 'react';
 
-import RecentProjects from '../../shared/data/mock/projects-data.json';
 import {
   OpenIcon,
   PlusIcon,
@@ -9,7 +8,6 @@ import {
   StartSearchIcon,
   TutorialsIcon,
 } from '../assets/icons';
-import RecentProjectViewer from '../components/recent-project';
 import { ActionsBar, MenuComponent } from '../components/ui';
 
 function Draft() {
@@ -104,7 +102,6 @@ function Draft() {
             </ActionsBar.Label>
           </ActionsBar.Search>
         </ActionsBar.ActionsRoot>
-        <RecentProjectViewer dataToRender={RecentProjects} />
       </div>
     </div>
   );
