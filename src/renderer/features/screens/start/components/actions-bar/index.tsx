@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { RecentIcon, StartSearchIcon } from 'renderer/assets/icons';
 
 import { Dropdown } from '@/renderer/components/elements';
-import Search from '@/renderer/components/search';
+import { Search } from '@/renderer/features/screens/start/components/actions-bar/elements';
 
 export default function ActionsBar() {
   const options = [
@@ -28,9 +28,25 @@ export default function ActionsBar() {
   const [selectedOption, setSelectedOption] = useState(options[0].label);
   const [showOptions, setShowOptions] = useState<boolean>(false);
 
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowOptions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [setShowOptions]);
+
   return (
     <div className='w-full flex mb-4 items-center justify-between relative'>
-      <Dropdown.Root>
+      <Dropdown.Root ref={dropdownRef}>
         <Dropdown.Select
           className='w-60 h-full gap-3 whitespace-nowrap text-base font-caption text-neutral-700 font-normal justify-center pl-6 pr-2 relative flex items-center rounded-lg  border-neutral-100 border bg-white dark:bg-neutral-50 '
           icon={<RecentIcon />}
