@@ -7,6 +7,7 @@ import {
 import { MenuComponent } from 'renderer/components/ui'
 
 import {
+	ActionsBar,
 	Container,
 	DisplayExampleProjects,
 	DisplayRecentProjects,
@@ -65,10 +66,7 @@ export default function Start() {
 				</MenuComponent.Root>
 			</aside>
 			<div>
-				<div className='w-full h-14 flex items-center justify-center mb-4'>
-					{' '}
-					Actions Bar
-				</div>
+				<ActionsBar />
 				<DisplayExampleProjects />
 				<DisplayRecentProjects />
 			</div>
