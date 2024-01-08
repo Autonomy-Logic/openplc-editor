@@ -1,3 +1,3 @@
-import { TThemeType } from '../types/theme';
+import { TThemeType } from '../types/theme'
 
-export type ThemeDto = TThemeType;
+export type ThemeDto = TThemeType
