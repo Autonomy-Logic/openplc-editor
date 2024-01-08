@@ -1,5 +1,5 @@
-import { z } from 'zod';
+import { z } from 'zod'
 
-import { ThemeSchema } from '../validations';
+import { ThemeSchema } from '../validations'
 
-export type TThemeType = z.infer<typeof ThemeSchema>;
+export type TThemeType = z.infer<typeof ThemeSchema>

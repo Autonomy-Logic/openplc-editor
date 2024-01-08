@@ -1,12 +1,12 @@
-import { ResponseService } from './response';
+import { ResponseService } from './response'
 
-type Service = object;
+type Service = object
 export type ProjectDto = {
-  projectPath: string;
-  projectAsObj?: object;
-};
+	projectPath: string
+	projectAsObj?: object
+}
 
 export type TProjectService = Service & {
-  createProject: () => Promise<ResponseService<ProjectDto>>;
-  saveProject: (data: ProjectDto) => Promise<ResponseService>;
-};
+	createProject: () => Promise<ResponseService<ProjectDto>>
+	saveProject: (data: ProjectDto) => Promise<ResponseService>
+}

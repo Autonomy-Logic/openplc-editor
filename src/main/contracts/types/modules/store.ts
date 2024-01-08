@@ -1,5 +1,5 @@
-import { z } from 'zod';
+import { z } from 'zod'
 
-import { StoreSchema } from '../../validations';
+import { StoreSchema } from '../../validations'
 
-export type TStoreType = z.infer<typeof StoreSchema>;
+export type TStoreType = z.infer<typeof StoreSchema>
