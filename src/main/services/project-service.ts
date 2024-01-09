@@ -112,6 +112,7 @@ class ProjectService extends BaseProjectService {
 		if (response.canceled) return { ok: false }
 		const [filePath] = response.filePaths
 
+		// Read the file content asynchronously and store it in a constant.
 		const file = await new Promise((resolve, reject) => {
 			readFile(filePath, 'utf-8', (error, data) => {
 				if (error) return reject(error)

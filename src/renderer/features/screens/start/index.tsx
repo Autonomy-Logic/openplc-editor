@@ -42,7 +42,6 @@ export default function Start() {
 						<MenuComponent.Button
 							label='New Project'
 							icon={<PlusIcon />}
-							onClick={() => navigate('editor')}
 							className='w-48 h-12 text-white bg-brand rounded-md flex items-center hover:bg-brand-medium-dark focus:bg-brand-medium font-caption text-xl font-normal px-5 py-3 gap-3'
 						/>
 						<MenuComponent.Button

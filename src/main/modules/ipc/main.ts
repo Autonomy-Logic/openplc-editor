@@ -43,6 +43,13 @@ class MainProcessBridge implements MainIpcModule {
 		this.ipcMain.on('project:save-response', async (_event, data: ProjectDto) =>
 			this.projectService.saveProject(data)
 		)
+		/**
+		 * Wip: Open project from start screen button
+		 */
+		this.ipcMain.handle('project:open-project', async () => {
+			const response = await this.projectService.openProject()
+			return response
+		})
 		// Wip: From here
 
 		this.ipcMain.handle('app:get-theme', this.mainIpcEventHandlers.getTheme)
