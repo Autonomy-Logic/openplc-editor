@@ -7,12 +7,10 @@ export default function Editor() {
 	// const projectDataDraft = useOpenPLCStore.useProjectData();
 	// const projectPathDraft = useOpenPLCStore.useProjectPath();
 	return (
-		<div className='flex h-full'>
-			<div className='flex h-full'>
-				<nav className='flex h-full w-20 flex-col items-center justify-between border-r border-gray-100 bg-white px-4 py-4 dark:border-white/5 dark:bg-gray-900'>
-					<h1>Teste</h1>
-				</nav>
-			</div>
+		<div className='flex h-full items-center'>
+			<p className='w-96 h-44 rounded-lg bg-none text-lg font-display font-medium text-center text-neutral-50 mx-auto flex justify-center items-center border border-brand-medium-dark'>
+				This is a dummy screen that is mock for development purpose.
+			</p>
 		</div>
 	)
 }
