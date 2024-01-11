@@ -4,6 +4,9 @@ import { IpcRendererEvent, ipcRenderer } from 'electron'
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
 const rendererProcessBridge = {
+
+	startCreateNewProject: () =>
+		ipcRenderer.invoke('start-screen/project:create'),
 	createProject: (callback: IpcRendererCallbacks) =>
 		ipcRenderer.on('project:create', callback),
 	openProject: (callback: IpcRendererCallbacks) =>
