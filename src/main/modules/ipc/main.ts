@@ -34,6 +34,7 @@ class MainProcessBridge implements MainIpcModule {
     this.store = store;
   }
   setupMainIpcListener() {
+    
     this.ipcMain.handle("start-screen/project:create", async () => {
       const response = await this.projectService.createProject();
       return response;
