@@ -11,8 +11,8 @@ import _ from 'lodash';
 import * as monaco from 'monaco-editor';
 import { useCallback, useEffect, useRef } from 'react';
 
-import { useTabs } from '@/renderer/hooks';
-import { useOpenPLCStore } from '@/renderer/store';
+import { useTabs } from '~renderer/hooks';
+import { useOpenPLCStore } from '~renderer/store';
 
 export default function TextEditor() {
   const projectPath = useOpenPLCStore.useProjectPath();

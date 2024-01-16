@@ -3,8 +3,8 @@ import {
 	PlusIcon,
 	QuitIcon,
 	TutorialsIcon,
-} from 'renderer/assets/icons'
-import { MenuComponent } from 'renderer/components/ui'
+} from '~renderer/assets/icons'
+import { MenuComponent } from '~renderer/components/ui'
 
 import {
 	ActionsBar,
@@ -13,9 +13,9 @@ import {
 	DisplayRecentProjects,
 } from './components'
 import { useNavigate } from 'react-router-dom'
-import { useOpenPLCStore } from 'renderer/store'
+import { useOpenPLCStore } from '~renderer/store'
 import { useCallback, useEffect } from 'react'
-import { TXmlProject } from '@/shared/contracts/types'
+import { TXmlProject } from '~/shared/contracts/types'
 
 export default function Start() {
 	const navigate = useNavigate()

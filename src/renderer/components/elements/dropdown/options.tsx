@@ -1,7 +1,7 @@
 /* eslint-disable jsx-a11y/click-events-have-key-events */
 import { Dispatch, HTMLAttributes, SetStateAction } from 'react';
 
-import { cn } from '@/utils';
+import { cn } from '~/utils';
 
 type DropdownOptionProps = {
   label: string;

@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 /* eslint-disable no-param-reassign */
 import { produce } from 'immer';
-import { CreatePouDto, UpdatePouDto } from 'renderer/contracts/dtos';
+import { CreatePouDto, UpdatePouDto } from '~renderer/contracts/dtos';
 import { StateCreator } from 'zustand';
 
 import { TPou, TXmlProject } from '../../../shared/contracts/types';

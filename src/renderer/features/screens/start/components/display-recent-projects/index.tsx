@@ -1,7 +1,7 @@
 import { HTMLAttributes } from 'react';
 
-import { FileElement } from '@/renderer/components/elements';
-import { ScrollAreaComponent } from '@/renderer/components/ui';
+import { FileElement } from '~renderer/components/elements';
+import { ScrollAreaComponent } from '~renderer/components/ui';
 
 import RecentProjects from '../../../../../../shared/data/mock/projects-data.json';
 import { Header, Wrapper } from './elements';

@@ -17,7 +17,7 @@ import {
 	ToastProvider,
 } from './contexts'
 
-import { RouterProvider } from '@providers/index'
+import { RouterProvider } from '~providers/index'
 
 export default function App() {
 	return (

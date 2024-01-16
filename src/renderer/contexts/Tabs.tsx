@@ -11,7 +11,7 @@ import {
 import { createRoot, Root } from 'react-dom/client';
 import { useNavigate } from 'react-router-dom';
 
-import { CONSTANTS } from '@/shared/data';
+import { CONSTANTS } from '~/shared/data';
 
 import { TitlebarTabs } from '../components';
 

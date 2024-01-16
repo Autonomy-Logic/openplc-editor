@@ -1,7 +1,7 @@
 /* eslint-disable react/jsx-props-no-spreading */
 import { ButtonHTMLAttributes } from 'react';
 
-import { cn } from '@/utils';
+import { cn } from '~/utils';
 
 type IconsForMenu = string;
 type MenuButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {

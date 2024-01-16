@@ -8,7 +8,7 @@ import React, {
   useState,
 } from 'react';
 
-import { CONSTANTS } from '@/utils';
+import { CONSTANTS } from '~/utils';
 // import { ThemeProps } from '../../types/theme';
 
 // Todo: Create or use the ipc communication

@@ -5,7 +5,7 @@ import {
 } from 'react-router-dom'
 
 import { StartPage } from '../pages'
-import { Screen } from '@features/index'
+import { Screen } from '~features/index'
 
 const router = createBrowserRouter([
 	{
