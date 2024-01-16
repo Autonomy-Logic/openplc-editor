@@ -1,7 +1,7 @@
 /* eslint-disable react/jsx-props-no-spreading */
 import { InputHTMLAttributes } from 'react';
 
-import { cn } from '@/utils';
+import { cn } from '~/utils';
 
 type SearchInputProps = InputHTMLAttributes<HTMLInputElement>;
 // Refactor: Doesn't need to explicit apply props that are default from this element

@@ -1,9 +1,9 @@
 import useEmblaCarousel from 'embla-carousel-react';
 import { useCallback } from 'react';
 // TODO: Remove mock data
-import MockImage from 'renderer/assets/images/example.png';
+import MockImage from '~renderer/assets/images/example.png';
 
-import Card from '@/renderer/components/elements/card';
+import Card from '~renderer/components/elements/card';
 
 // TODO: Remove mock data
 import Mock from '../../../../../../shared/data/mock/examples.json';

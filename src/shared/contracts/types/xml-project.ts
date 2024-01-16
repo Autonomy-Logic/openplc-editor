@@ -1,5 +1,5 @@
-import z from 'zod';
+import z from 'zod'
 
-import { ProjectSchema } from '../validations';
+import { ProjectSchema } from '../validations'
 
-export type TXmlProject = z.infer<typeof ProjectSchema>;
+export type TXmlProject = z.infer<typeof ProjectSchema>
