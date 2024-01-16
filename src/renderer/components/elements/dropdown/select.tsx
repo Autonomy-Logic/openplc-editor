@@ -1,7 +1,7 @@
 /* eslint-disable react/jsx-props-no-spreading */
 import { ButtonHTMLAttributes, Dispatch, ReactNode, SetStateAction } from 'react';
 
-import { cn } from '@/utils';
+import { cn } from '~/utils';
 
 type DropdownSelectProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   selectedOption: string;

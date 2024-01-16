@@ -55,9 +55,9 @@ const configuration: webpack.Configuration = {
       url: require.resolve('url/'),
     },
     alias: {
-      '@': webpackPaths.srcPath,
-      '@renderer': webpackPaths.srcRendererPath,
-      '@main': webpackPaths.srcMainPath,
+      '~': webpackPaths.srcPath,
+      '~renderer': webpackPaths.srcRendererPath,
+      '~main': webpackPaths.srcMainPath,
     },
   },
 

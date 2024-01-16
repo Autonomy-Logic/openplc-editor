@@ -14,14 +14,14 @@
     "allowJs": true,
     "outDir": "configs/dll",
     "paths": {
-      "@/*": ["./src/*"],
-      "main/*": ["./src/main/*"],
-      "renderer/*": ["./src/renderer/*"],
-      "@features/*": ["./src/renderer/features/*"],
-      "@providers/*": ["./src/renderer/providers/*"],
-      "@contracts/*": ["./src/renderer/contracts/*"],
-      "@utils/*": ["./src/utils/*"],
-      "@shared": ["./src/shared/*"],
+      "~/*": ["./src/*"],
+      "~main/*": ["./src/main/*"],
+      "~renderer/*": ["./src/renderer/*"],
+      "~features/*": ["./src/renderer/features/*"],
+      "~providers/*": ["./src/renderer/providers/*"],
+      "~contracts/*": ["./src/renderer/contracts/*"],
+      "~utils/*": ["./src/utils/*"],
+      "~shared": ["./src/shared/*"],
     }
   },
   "exclude": ["test", "release/build", "release/app/dist", "configs/dll"]

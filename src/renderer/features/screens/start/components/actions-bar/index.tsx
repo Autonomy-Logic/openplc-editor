@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { RecentIcon, StartSearchIcon } from 'renderer/assets/icons'
+import { RecentIcon, StartSearchIcon } from '~renderer/assets/icons'
 
-import { Dropdown } from '@/renderer/components/elements'
-import { Search } from '@/renderer/features/screens/start/components/actions-bar/elements'
+import { Dropdown } from '~renderer/components/elements'
+import { Search } from '~renderer/features/screens/start/components/actions-bar/elements'
 
 export default function ActionsBar() {
 	const options = [

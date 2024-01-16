@@ -1,19 +1,21 @@
 import {
-  OpenIcon,
-  PlusIcon,
-  QuitIcon,
-  TutorialsIcon,
-} from "renderer/assets/icons";
-import { MenuComponent } from "renderer/components/ui";
+	OpenIcon,
+	PlusIcon,
+	QuitIcon,
+	TutorialsIcon,
+} from '~renderer/assets/icons'
+import { MenuComponent } from '~renderer/components/ui'
 
 import {
-  ActionsBar,
-  Container,
-  DisplayExampleProjects,
-  DisplayRecentProjects,
-} from "./components";
-import { useNavigate } from "react-router-dom";
-import { useOpenPLCStore } from "renderer/store";
+	ActionsBar,
+	Container,
+	DisplayExampleProjects,
+	DisplayRecentProjects,
+} from './components'
+import { useNavigate } from 'react-router-dom'
+import { useOpenPLCStore } from '~renderer/store'
+import { useCallback, useEffect } from 'react'
+import { TXmlProject } from '~/shared/contracts/types'
 
 export default function Start() {
   const navigate = useNavigate();
