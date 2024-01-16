@@ -1,4 +1,4 @@
-import { useOpenPLCStore } from "@/renderer/store";
+import { useOpenPLCStore } from "~/renderer/store";
 import { useLocation } from "react-router-dom";
 
 // Todo: Add children and the property to exclude the data from the current workspace
