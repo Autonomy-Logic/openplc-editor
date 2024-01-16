@@ -14,28 +14,19 @@ import {
 } from "./components";
 import { useNavigate } from "react-router-dom";
 import { useOpenPLCStore } from "renderer/store";
-import { useCallback, useEffect } from "react";
-import { TXmlProject } from "@/shared/contracts/types";
 
 export default function Start() {
   const navigate = useNavigate();
   const setWorkspaceData = useOpenPLCStore.useSetWorkspace();
-  const setDataForWorkspace = useCallback(() => {
-    window.bridge.createProject((_event, value) => {
-      const { path, xmlAsObject } = value;
-      const projectPath = path as unknown as string;
-      const projectData = xmlAsObject as unknown as TXmlProject;
-      setWorkspaceData({ projectPath, projectData });
+
+  const handleOpenProject = async () => {
+    const { ok, data } = await window.bridge.startOpenProject();
+    if (ok && data) {
+      const { path: projectPath, xmlAsObject: projectAsObj } = data;
+      setWorkspaceData({ projectPath, projectData: projectAsObj });
       navigate("editor");
-    });
-  }, [navigate, setWorkspaceData]);
-
-  useEffect(() => {
-    setDataForWorkspace();
-  }, [setDataForWorkspace]);
-
-  const handleOpenProject = () => {
-    window.bridge.startOpenProject();
+      console.log(data);
+    }
   };
 
   return (
