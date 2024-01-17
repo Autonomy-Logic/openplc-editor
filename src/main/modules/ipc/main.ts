@@ -34,10 +34,17 @@ class MainProcessBridge implements MainIpcModule {
     this.store = store;
   }
   setupMainIpcListener() {
-    this.ipcMain.handle("start/project:open", async () => {
+    
+    this.ipcMain.handle("start-screen/project:create", async () => {
+      const response = await this.projectService.createProject();
+      return response;
+    });
+
+    this.ipcMain.handle("start-screen/project:open", async () => {
       const response = await this.projectService.openProject();
       return response;
     });
+
     this.ipcMain.handle(
       "app:store-get",
       this.mainIpcEventHandlers.getStoreValue,
@@ -47,13 +54,6 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on("project:save-response", async (_event, data: ProjectDto) =>
       this.projectService.saveProject(data),
     );
-    /**
-     * Wip: Open project from start screen button
-     */
-    this.ipcMain.handle("project:open-project", async () => {
-      const response = await this.projectService.openProject();
-      return response;
-    });
     // Wip: From here
 
     this.ipcMain.handle("app:get-theme", this.mainIpcEventHandlers.getTheme);

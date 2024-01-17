@@ -21,7 +21,7 @@
       "~providers/*": ["./src/renderer/providers/*"],
       "~contracts/*": ["./src/renderer/contracts/*"],
       "~utils/*": ["./src/utils/*"],
-      "~shared": ["./src/shared/*"],
+      "~shared/*": ["./src/shared/*"],
     }
   },
   "exclude": ["test", "release/build", "release/app/dist", "configs/dll"]
