@@ -21,28 +21,40 @@ export default function Start() {
   const navigate = useNavigate();
   const setWorkspaceData = useOpenPLCStore.useSetWorkspace();
 
-  const handleCreateNewProject = async () => {
-    const { ok, data } = await window.bridge.startCreateProject();
-    if (ok && data) {
-      const { path, xmlAsObject } = data;
-      const projectPath = path;
-      const projectData = xmlAsObject;
-      setWorkspaceData({ projectPath, projectData });
-      navigate("editor");
+  const handleProject = async (channel: string) => {
+    if (channel === "project:create") {
+      const { ok, data } = await window.bridge.startCreateProject();
+      if (ok && data) {
+        const { path, xmlAsObject } = data;
+        setWorkspaceData({ projectPath: path, projectData: xmlAsObject });
+        navigate("editor");
+        console.log(data);
+        console.log("new project:",data);
+      }
+    } else if (channel === "project:open") {
+      const { ok, data } = await window.bridge.startOpenProject();
+      if (ok && data) {
+        const { path: projectPath, xmlAsObject: projectAsObj } = data;
+        setWorkspaceData({ projectPath, projectData: projectAsObj });
+        navigate("editor");
+        console.log("open:",data);
+      }
     }
   };
+
   return (
     <Container>
       <aside className="flex items-end w-full min-w-[240px]">
         <MenuComponent.Root>
           <MenuComponent.Section className="flex-col gap-2">
             <MenuComponent.Button
+              onClick={() => handleProject("project:create")}
               label="New Project"
               icon={<PlusIcon />}
-              onClick={handleCreateNewProject}
               className="w-48 h-12 text-white bg-brand rounded-md flex items-center hover:bg-brand-medium-dark focus:bg-brand-medium font-caption text-xl font-normal px-5 py-3 gap-3"
             />
             <MenuComponent.Button
+              onClick={() => handleProject("project:open")}
               label="Open"
               icon={<OpenIcon />}
               className="w-48 h-12 text-neutral-1000 dark:text-white dark:hover:text-brand hover:text-brand bg-transparent flex items-center justify-start hover:opacity-90 font-caption text-xl font-medium py-3 gap-3"

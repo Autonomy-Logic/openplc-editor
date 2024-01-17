@@ -40,6 +40,11 @@ class MainProcessBridge implements MainIpcModule {
       return response;
     });
 
+    this.ipcMain.handle("start-screen/project:open", async () => {
+      const response = await this.projectService.openProject();
+      return response;
+    });
+
     this.ipcMain.handle(
       "app:store-get",
       this.mainIpcEventHandlers.getStoreValue,
