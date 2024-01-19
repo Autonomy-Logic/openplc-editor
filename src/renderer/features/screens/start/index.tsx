@@ -44,7 +44,7 @@ export default function Start() {
 
   return (
     <Container>
-      <aside className="flex items-end w-full min-w-[240px]">
+      <aside className="flex items-end flex-grow min-w-[240px]">
         <MenuComponent.Root>
           <MenuComponent.Section className="flex-col gap-2">
             <MenuComponent.Button
@@ -75,7 +75,7 @@ export default function Start() {
           </MenuComponent.Section>
         </MenuComponent.Root>
       </aside>
-      <div>
+      <div className=" w-full max-w-[768px] xl:max-w-[1280px] 2xl:max-w-[1440px]">
         <ActionsBar />
         <DisplayExampleProjects />
         <DisplayRecentProjects />
