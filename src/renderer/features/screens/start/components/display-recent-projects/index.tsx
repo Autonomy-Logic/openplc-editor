@@ -12,9 +12,12 @@ export default function DisplayRecentProjects() {
   return (
     <Wrapper>
       <Header title="Projects" />
-      <div className="grid  grid-cols-3  xl:grid-cols-4 xxl:grid-cols-5 gap-4 w-auto h-[528px] overflow-auto ">
+      <div className="grid  grid-cols-3  xl:grid-cols-4 xxl:grid-cols-5  w-auto h-[528px] overflow-auto ">
         {RecentProjects.map((project) => (
-          <FileElement.Root key={project.id}>
+          <FileElement.Root
+            key={project.id}
+            className="mb-8 "
+          >
             <FileElement.Label
               projectName={project.name}
               lastModified={project.last_modified}
