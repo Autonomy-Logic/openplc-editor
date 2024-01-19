@@ -45,6 +45,9 @@ module.exports = {
         display: ['Poppins', 'sans-serif'] /* Font for body text, titles and displays */,
         caption: ['Inter', 'sans-serif'] /* Font for captions, labels, buttons and legends */,
       },
+      screens: {
+        'xxl':'1598px',
+      }
     },
   },
   variants: {
