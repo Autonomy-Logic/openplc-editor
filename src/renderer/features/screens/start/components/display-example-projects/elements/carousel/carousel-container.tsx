@@ -9,7 +9,7 @@ export type ExampleCarouselContainerProps = HTMLAttributes<HTMLDivElement> & {
 
 export default function Container(props: ExampleCarouselContainerProps): ReactNode {
   const { refProvider, ...restProps } = props;
-  return <div className='overflow-hidden' ref={refProvider} {...restProps} />;
+  return <div className='overflow-hidden w-full' ref={refProvider} {...restProps} />;
 }
 
 export type ExampleCarouselContainer = typeof Container;

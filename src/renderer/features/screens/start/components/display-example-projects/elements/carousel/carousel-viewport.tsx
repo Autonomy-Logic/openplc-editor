@@ -10,7 +10,7 @@ export type ExampleCarouselViewportProps = HTMLAttributes<HTMLDivElement> & {
  * @return {ReactNode} The rendered component.
  */
 export default function Viewport(props: ExampleCarouselViewportProps): ReactNode {
-  return <div className='flex gap-6' {...props} />;
+  return <div className='flex gap-8 xl:gap-5 xxl:gap-8' {...props} />;
 }
 
 export type ExampleCarouselViewport = typeof Viewport;
