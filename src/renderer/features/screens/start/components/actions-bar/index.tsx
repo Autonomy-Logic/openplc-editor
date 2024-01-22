@@ -45,7 +45,7 @@ export default function ActionsBar() {
 	}, [])
 
 	return (
-		<div className='w-full flex mb-4 items-center justify-between relative'>
+		<div className='w-full  pr-10 xl:pr-7 xxl:pr-10 flex mb-4 items-center justify-between relative'>
 			<Dropdown.Root ref={dropdownRef}>
 				<Dropdown.Select
 					className='w-60 h-full gap-3 whitespace-nowrap text-base font-caption text-neutral-700 font-normal justify-center pl-6 pr-2 relative flex items-center rounded-lg  border-neutral-100 border bg-white dark:bg-neutral-50 '
