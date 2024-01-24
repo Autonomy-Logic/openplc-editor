@@ -2,9 +2,9 @@ import '@testing-library/jest-dom';
 
 import { cleanup, render } from '@testing-library/react';
 
-import File from '../index';
+import File from './index';
 
-afterEach(cleanup);
+// afterEach(cleanup);w
 
 describe('file component tests suite', () => {
   it('should render root', () => {
