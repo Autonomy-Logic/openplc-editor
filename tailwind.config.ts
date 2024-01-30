@@ -47,6 +47,8 @@ module.exports = {
       },
       screens: {
         'xxl':'1598px',
+        'tall': { 'raw': '(max-height: 976px)' }, 
+        'small': { 'raw': '(max-height: 792px)' },
       }
     },
   },
