@@ -38,10 +38,6 @@ export default function DisplayRecentProjects() {
     };
   }, []);
 
-  console.log("containerHeight", containerHeight);
-  console.log("window.innerHeight", window.innerHeight);
-
-
   return (
     <Wrapper>
       <Header title="Projects" />
