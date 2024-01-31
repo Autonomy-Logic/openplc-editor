@@ -75,7 +75,7 @@ export default function Start() {
           </MenuComponent.Section>
         </MenuComponent.Root>
       </aside>
-      <div className=" w-full max-w-[768px] xl:max-w-[980px]  xxl:max-w-[1280px] h-full mb-2">
+      <div className=" w-full max-w-3xl xl:max-w-5xl 2xl:max-w-7xl xxl:max-w-[1536px] h-full mb-2">
         <ActionsBar />
         <DisplayExampleProjects />
         <DisplayRecentProjects />

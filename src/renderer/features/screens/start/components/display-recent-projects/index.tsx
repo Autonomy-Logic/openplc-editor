@@ -42,8 +42,13 @@ export default function DisplayRecentProjects() {
     <Wrapper>
       <Header title="Projects" />
       <div
-        className={`grid grid-cols-3 gap-y-6 xl:grid-cols-4 xxl:grid-cols-5 overflow-auto`}
-        style={{ height: `${containerHeight}px` }}
+  className={`grid grid-cols-3 gap-y-6 xl:grid-cols-4 2xl:grid-cols-5 xxl:grid-cols-6 overflow-auto`}
+        style={{
+          height:
+            containerHeight >= 1368
+              ? `1100px`
+              : `${containerHeight}px`,
+        }}
       >
         {RecentProjects.map((project) => (
           <FileElement.Root key={project.id}>
