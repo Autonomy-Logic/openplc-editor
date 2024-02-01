@@ -85,16 +85,16 @@
     @apply outline-none;
   }
   ::-webkit-scrollbar {
-    @apply h-3.5 w-3.5 bg-transparent;
+    @apply w-1 bg-neutral-200;
   }
   ::-webkit-scrollbar-corner {
-    @apply bg-transparent;
+    @apply bg-transparent  ;
   }
   :-webkit-scrollbar-track {
-    @apply bg-transparent;
+    @apply bg-transparent !w-full ;
   }
   ::-webkit-scrollbar-thumb {
-    @apply rounded-[0.625rem] border-4 border-solid border-transparent bg-brand bg-clip-padding transition-all duration-[0.3s] hover:border-[0.188rem] hover:border-solid hover:border-transparent;
+    @apply rounded-[0.625rem]  bg-brand bg-clip-padding hover:bg-brand-medium ;
   }
   .dark ::-webkit-scrollbar {
     @apply bg-gray-900;

@@ -1,0 +1,79 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Dropdown Root Component renders correctly 1`] = `
+<div>
+  <div
+    class="relative h-14"
+  />
+</div>
+`;
+
+exports[`Options Component renders correctly 1`] = `
+<div>
+  <div
+    class="custom-class"
+  >
+    <div
+      class="w-full h-full flex flex-col"
+    >
+      <button
+        class="cursor-pointer hover:bg-neutral-50"
+        type="button"
+      >
+        <p
+          class="flex-1 text-neutral-1000 text-left py-[10px] pl-4"
+        >
+          Option 1
+        </p>
+      </button>
+      <button
+        class="cursor-pointer hover:bg-neutral-50"
+        type="button"
+      >
+        <p
+          class="flex-1 text-neutral-1000 text-left py-[10px] pl-4"
+        >
+          Option 2
+        </p>
+      </button>
+      <button
+        class="cursor-pointer hover:bg-neutral-50"
+        type="button"
+      >
+        <p
+          class="flex-1 text-neutral-1000 text-left py-[10px] pl-4"
+        >
+          Option 3
+        </p>
+      </button>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`Select Component renders correctly 1`] = `
+<div>
+  <button
+    class="select-none"
+    type="button"
+  >
+    Select an option
+    <p
+      class="flex justify-between w-28"
+    >
+      <span
+        class="text-black "
+      >
+        Option 1
+      </span>
+      <span
+        class=" rotate-0 transition-all "
+      >
+        <span>
+          Icon
+        </span>
+      </span>
+    </p>
+  </button>
+</div>
+`;

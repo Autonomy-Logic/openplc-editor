@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "types": ["@testing-library/jest-dom"],
     "incremental": true,
     "target": "es2022",
     "module": "commonjs",

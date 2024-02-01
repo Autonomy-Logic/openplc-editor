@@ -29,7 +29,7 @@ export default function Start() {
         setWorkspaceData({ projectPath: path, projectData: xmlAsObject });
         navigate("editor");
         console.log(data);
-        console.log("new project:",data);
+        console.log("new project:", data);
       }
     } else if (channel === "project:open") {
       const { ok, data } = await window.bridge.startOpenProject();
@@ -37,14 +37,14 @@ export default function Start() {
         const { path: projectPath, xmlAsObject: projectAsObj } = data;
         setWorkspaceData({ projectPath, projectData: projectAsObj });
         navigate("editor");
-        console.log("open:",data);
+        console.log("open:", data);
       }
     }
   };
 
   return (
     <Container>
-      <aside className="flex items-end w-full min-w-[240px]">
+      <aside className="relative top-2/3 min-w-[240px]  ">
         <MenuComponent.Root>
           <MenuComponent.Section className="flex-col gap-2">
             <MenuComponent.Button
@@ -75,7 +75,7 @@ export default function Start() {
           </MenuComponent.Section>
         </MenuComponent.Root>
       </aside>
-      <div>
+      <div className=" w-full max-w-3xl xl:max-w-5xl 2xl:max-w-7xl 3xl:max-w-[1536px] 4xl:max-w-[1996px] h-full mb-2">
         <ActionsBar />
         <DisplayExampleProjects />
         <DisplayRecentProjects />

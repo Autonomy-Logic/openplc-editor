@@ -1,0 +1,38 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Label Component renders correctly 1`] = `
+<div>
+  <div
+    class="flex flex-col items-start justify-start gap-[2px] cursor-pointer"
+  >
+    <h3
+      class="relative leading-4"
+    >
+      Test title
+    </h3>
+    <p
+      class="relative text-[10px] leading-3 opacity-40"
+    >
+      Test description
+    </p>
+  </div>
+</div>
+`;
+
+exports[`Preview Component renders correctly 1`] = `
+<div>
+  <img
+    alt="card-preview"
+    class="self-stretch flex-1 relative rounded-md max-w-full overflow-hidden max-h-full object-cover cursor-pointer"
+    src="Test source"
+  />
+</div>
+`;
+
+exports[`Root Component renders correctly 1`] = `
+<div>
+  <div
+    class="mr-7 xl:mr-[15px] 3xl:mr-[30px] relative flex flex-1 flex-col items-start justify-start bg-brand-medium w-full min-w-[224px] h-[180px] rounded-lg px-[6px] pt-[6px] pb-[10px] gap-[10px] text-left text-xs text-white font-caption hover:bg-brand-medium-dark cursor-pointer"
+  />
+</div>
+`;
