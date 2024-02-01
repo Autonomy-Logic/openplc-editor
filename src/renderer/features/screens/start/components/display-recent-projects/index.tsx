@@ -5,51 +5,11 @@ import { Header, Wrapper } from "./elements";
 
 export type DisplayRecentProjectProps = HTMLAttributes<HTMLDivElement>;
 
-const initialHeight = 608;
-const heightIncrement = 184;
-const initialContainerHeight = 160;
-
 export default function DisplayRecentProjects() {
-  const [containerHeight, setContainerHeight] = useState(
-    initialContainerHeight,
-  );
-
-  const calculateHeight = (screenHeight: number) => {
-    const baseHeight = initialHeight;
-    const adjustedHeight =
-      Math.floor((screenHeight - baseHeight) / heightIncrement) *
-        heightIncrement +
-      initialContainerHeight;
-    return Math.max(initialContainerHeight, adjustedHeight);
-  };
-
-  const updateContainerHeight = () => {
-    const screenHeight = window.innerHeight;
-    const newHeight = calculateHeight(screenHeight);
-    setContainerHeight(newHeight);
-  };
-
-  useEffect(() => {
-    updateContainerHeight();
-    window.addEventListener("resize", updateContainerHeight);
-
-    return () => {
-      window.removeEventListener("resize", updateContainerHeight);
-    };
-  }, []);
-
   return (
     <Wrapper>
       <Header title="Projects" />
-      <div
-  className={`grid grid-cols-3 gap-y-6 xl:grid-cols-4 2xl:grid-cols-5 xxl:grid-cols-6 overflow-auto`}
-        style={{
-          height:
-            containerHeight >= 1368
-              ? `1100px`
-              : `${containerHeight}px`,
-        }}
-      >
+      <div className={`flex flex-wrap gap-6 overflow-auto h-full`}>
         {RecentProjects.map((project) => (
           <FileElement.Root key={project.id}>
             <FileElement.Label

@@ -6,7 +6,7 @@ export default function Container(props: StartScreenLayoutProps): ReactNode {
   //pl-[92px] pr-[70px]
   return (
     <main
-    className="w-full h-screen flex  py-4 justify-evenly px-16 min-h-[624px] min-w-[1024px] max-h-[1598px] "
+    className="w-full h-full flex  py-4 justify-evenly px-16 min-h-[624px] min-w-[1024px] "
       {...props}
     />
   );

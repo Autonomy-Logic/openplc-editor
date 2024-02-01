@@ -55,7 +55,8 @@ module.exports = {
         ] /* Font for captions, labels, buttons and legends */,
       },
       screens: {
-        xxl: "2048px",
+       '3xl': "2048px",
+       '4xl': "2560px",
       },
     },
   },
