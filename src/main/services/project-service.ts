@@ -1,4 +1,3 @@
-/* eslint-disable class-methods-use-this */
 import { BrowserWindow, dialog } from "electron";
 import { promises, readFile, writeFile } from "fs";
 import { join } from "path";
@@ -9,19 +8,18 @@ import { ProjectSchema } from "../../shared/contracts/validations";
 import xmlProjectAsObject from "../../shared/data/mock/object-to-create-project";
 import { i18n } from "../../utils/i18n";
 import { ProjectDto } from "../contracts/types/services/project.service";
-import { BaseProjectService } from "../contracts/validations";
+import { BaseServiceClass } from "../contracts/validations";
 import { store } from "../modules/store";
 
 // Wip: Refactoring project services.
-class ProjectService extends BaseProjectService {
+class ProjectService extends BaseServiceClass<InstanceType<typeof BrowserWindow>> {
   /**
    * @description Asynchronous function to create a PLC xml project based on selected directory.
    * @returns A `promise` of `ServiceResponse` type.
    */
-  // eslint-disable-next-line class-methods-use-this
   async createProject() {
     // Show a dialog to select the project directory.
-    const res = await dialog.showOpenDialog(this.mainWindow, {
+    const res = await dialog.showOpenDialog(this.serviceManager, {
       title: i18n.t("createProject:dialog.title"),
       properties: ["openDirectory"],
     });
@@ -102,7 +100,7 @@ class ProjectService extends BaseProjectService {
   }
   // eslint-disable-next-line consistent-return
   async openProject() {
-    const response = await dialog.showOpenDialog(this.mainWindow, {
+    const response = await dialog.showOpenDialog(this.serviceManager, {
       title: i18n.t("openProject:dialog.title"),
       properties: ["openFile"],
       filters: [{ name: "XML", extensions: ["xml"] }],

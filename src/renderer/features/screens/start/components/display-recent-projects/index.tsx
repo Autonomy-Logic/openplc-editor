@@ -9,7 +9,7 @@ export default function DisplayRecentProjects() {
   return (
     <Wrapper>
       <Header title="Projects" />
-      <div className={`flex flex-wrap gap-6 overflow-auto h-full`}>
+      <div className='flex flex-wrap gap-6 overflow-auto h-full'>
         {RecentProjects.map((project) => (
           <FileElement.Root key={project.id}>
             <FileElement.Label
