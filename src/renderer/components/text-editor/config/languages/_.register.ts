@@ -1,20 +1,20 @@
-import * as monaco from 'monaco-editor';
+import * as monaco from 'monaco-editor'
 
 /**
  * Information about a new language
  */
 export type TLang = {
-  def: {
-    id: string;
-    extensions: string[];
-    aliases: string[];
-    mimetypes: string[];
-  };
-};
+	def: {
+		id: string
+		extensions: string[]
+		aliases: string[]
+		mimetypes: string[]
+	}
+}
 
 interface ILangImp extends TLang {
-  conf: monaco.languages.LanguageConfiguration;
-  language: monaco.languages.IMonarchLanguage;
+	conf: monaco.languages.LanguageConfiguration
+	language: monaco.languages.IMonarchLanguage
 }
 /**
  * Registers a new language with Monaco editor.
@@ -23,10 +23,10 @@ interface ILangImp extends TLang {
  * @return {void} This function does not return anything.
  */
 export function registerLanguage({ def, conf, language }: ILangImp): void {
-  const languageId = def.id;
-  if (!monaco.languages.getLanguages().some((lang) => lang.id === languageId)) {
-    monaco.languages.register(def);
-    monaco.languages.setLanguageConfiguration(languageId, conf);
-    monaco.languages.setMonarchTokensProvider(languageId, language);
-  }
+	const languageId = def.id
+	if (!monaco.languages.getLanguages().some((lang) => lang.id === languageId)) {
+		monaco.languages.register(def)
+		monaco.languages.setLanguageConfiguration(languageId, conf)
+		monaco.languages.setMonarchTokensProvider(languageId, language)
+	}
 }

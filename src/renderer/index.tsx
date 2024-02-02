@@ -1,11 +1,11 @@
-import '~/utils/i18n';
+import '~/utils/i18n'
 
-import { createRoot } from 'react-dom/client';
+import { createRoot } from 'react-dom/client'
 
-import App from './app';
+import App from './app'
 
-const container = document.getElementById('root') as HTMLElement;
-const root = createRoot(container);
-root.render(<App />);
+const container = document.getElementById('root') as HTMLElement
+const root = createRoot(container)
+root.render(<App />)
 
-postMessage({ payload: 'removeLoading' }, '*');
+postMessage({ payload: 'removeLoading' }, '*')

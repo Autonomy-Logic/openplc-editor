@@ -1,11 +1,11 @@
-import { HTMLAttributes, forwardRef } from 'react';
+import { HTMLAttributes, forwardRef } from 'react'
 
-type DropdownRootProps = HTMLAttributes<HTMLDivElement>;
+type DropdownRootProps = HTMLAttributes<HTMLDivElement>
 
-const Root = forwardRef<HTMLDivElement, DropdownRootProps>((props, ref) => 
-   <div ref={ref} className='relative h-14' {...props} />
-);
+const Root = forwardRef<HTMLDivElement, DropdownRootProps>((props, ref) => (
+	<div ref={ref} className='relative h-14' {...props} />
+))
 
-Root.displayName = 'DropdownRoot';
+Root.displayName = 'DropdownRoot'
 
-export default Root;
+export default Root

@@ -1,16 +1,18 @@
-import { HTMLAttributes, ReactNode } from 'react';
+import { HTMLAttributes, ReactNode } from 'react'
 
 export type ExampleCarouselViewportProps = HTMLAttributes<HTMLDivElement> & {
-  exampleProjects?: object[];
-};
+	exampleProjects?: object[]
+}
 /**
  * Renders a viewport component.
  *
  * @param {ExampleCarouselViewportProps} props - The properties for the component.
  * @return {ReactNode} The rendered component.
  */
-export default function Viewport(props: ExampleCarouselViewportProps): ReactNode {
-  return <div className='flex gap-6' {...props} />;
+export default function Viewport(
+	props: ExampleCarouselViewportProps
+): ReactNode {
+	return <div className='flex gap-6' {...props} />
 }
 
-export type ExampleCarouselViewport = typeof Viewport;
+export type ExampleCarouselViewport = typeof Viewport

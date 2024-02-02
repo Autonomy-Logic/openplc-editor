@@ -1,9 +1,9 @@
-import Editor from './editor';
-import Start from './start';
+import Editor from './editor'
+import Start from './start'
 
 const Screen = {
-  Editor,
-  Start,
-};
+	Editor,
+	Start,
+}
 
-export default Screen;
+export default Screen

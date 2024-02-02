@@ -1,5 +1,5 @@
-import { registerTheme } from '../_.register';
-import { darkThemeData,lightThemeData } from './openplc';
+import { registerTheme } from '../_.register'
+import { darkThemeData, lightThemeData } from './openplc'
 
-registerTheme('openplc-light', lightThemeData);
-registerTheme('openplc-dark', darkThemeData);
+registerTheme('openplc-light', lightThemeData)
+registerTheme('openplc-dark', darkThemeData)

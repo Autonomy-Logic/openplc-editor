@@ -1,15 +1,15 @@
 {
-  "dialog": {
-    "title": "Choose an empty directory for new project"
-  },
-  "errors": {
-    "directoryNotEmpty": {
-      "title": "Directory is not empty",
-      "description": "Chosen folder isn't empty. You can't use it for a new project!"
-    },
-    "failedToCreateFile": {
-      "title": "Failed to create file",
-      "description": "Unable to create new project files"
-    }
-  }
+	"dialog": {
+		"title": "Choose an empty directory for new project"
+	},
+	"errors": {
+		"directoryNotEmpty": {
+			"title": "Directory is not empty",
+			"description": "Chosen folder isn't empty. You can't use it for a new project!"
+		},
+		"failedToCreateFile": {
+			"title": "Failed to create file",
+			"description": "Unable to create new project files"
+		}
+	}
 }

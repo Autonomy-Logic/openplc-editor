@@ -1,7 +1,7 @@
 {
-  "theme": {
-    "tabName": "Theme",
-    "light": "Light",
-    "dark": "Dark"
-  }
+	"theme": {
+		"tabName": "Theme",
+		"light": "Light",
+		"dark": "Dark"
+	}
 }

@@ -1,1 +1,4 @@
-export type { DisplayRecentProjectProps, DisplayRecentProjectsComponent } from '.';
+export type {
+	DisplayRecentProjectProps,
+	DisplayRecentProjectsComponent,
+} from '.'

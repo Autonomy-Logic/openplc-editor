@@ -1,33 +1,33 @@
-import React from 'react';
-import { render, screen } from '@testing-library/react';
-import '@testing-library/jest-dom';
-import Editor from './index';
-import { useOpenPLCStore } from '~/renderer/store';
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
+import React from 'react'
+import { useOpenPLCStore } from '~/renderer/store'
+import Editor from './index'
 
 // Mocking useOpenPLCStore
 jest.mock('~/renderer/store', () => ({
-  useOpenPLCStore: {
-    useProjectData: jest.fn(),
-    useProjectPath: jest.fn(),
-  },
-}));
+	useOpenPLCStore: {
+		useProjectData: jest.fn(),
+		useProjectPath: jest.fn(),
+	},
+}))
 
 // Mocking useLocation
 jest.mock('react-router-dom', () => ({
-  useLocation: jest.fn(),
-}));
+	useLocation: jest.fn(),
+}))
 
 describe('Editor Component', () => {
-  it('renders Editor component with default values', () => {
-    // Mocking hook responses
-    (useOpenPLCStore.useProjectData as jest.Mock).mockReturnValue(null);
-    (useOpenPLCStore.useProjectPath as jest.Mock).mockReturnValue('');
+	it('renders Editor component with default values', () => {
+		// Mocking hook responses
+		;(useOpenPLCStore.useProjectData as jest.Mock).mockReturnValue(null)
+		;(useOpenPLCStore.useProjectPath as jest.Mock).mockReturnValue('')
 
-    // Render the component
-    render(<Editor />);
+		// Render the component
+		render(<Editor />)
 
-    // Assert
-    expect(screen.getByText(/Path:/)).toBeInTheDocument();
-    expect(screen.getByText(/Data:/)).toBeInTheDocument();
-  });
-});
+		// Assert
+		expect(screen.getByText(/Path:/)).toBeInTheDocument()
+		expect(screen.getByText(/Data:/)).toBeInTheDocument()
+	})
+})

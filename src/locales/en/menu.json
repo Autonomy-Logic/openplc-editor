@@ -1,67 +1,67 @@
 {
-  "file": {
-    "label": "File",
-    "submenu": {
-      "new": "New",
-      "open": "Open",
-      "recentProjects": "Recent projects",
-      "examples": {
-        "label": "Tutorials and examples",
-        "submenu": {
-          "arduino": "1: Arduino_Cloud",
-          "blink": "2: Blink",
-          "blinkP1AM": "3: Blink_P1AM",
-          "multiLanguage": "4: Multi_Language",
-          "randomGeneratorPragma": "5: Random_Generator_Pragma",
-          "tcpSocket": "6: TCP_Socket",
-          "trafficLightFBD": "7: Traffic_Light_FBD"
-        }
-      },
-      "save": "Save",
-      "saveAs": "Save as",
-      "closeTab": "Close tab",
-      "closeProject": "Close project",
-      "pageSetup": "Page setup",
-      "preview": "Preview",
-      "print": "Print",
-      "updates": "Check for updates",
-      "quit": "Quit"
-    }
-  },
-  "edit": {
-    "label": "Edit",
-    "submenu": {
-      "undo": "Undo",
-      "redo": "Redo",
-      "cut": "Cut",
-      "copy": "Copy",
-      "paste": "Paste",
-      "find": "Find",
-      "findNext": "Find next",
-      "findPrevious": "Find previous",
-      "findInProject": "Find in project",
-      "addElement": "Add element",
-      "selectAll": "Select all",
-      "delete": "Delete"
-    }
-  },
-  "display": {
-    "label": "Display",
-    "submenu": {
-      "refresh": "Refresh",
-      "clearErrors": "Clear errors",
-      "zoom": "Zoom",
-      "switchPerspective": "Switch perspective",
-      "fullScreen": "Full screen",
-      "resetPerspective": "Reset perspective",
-      "sortAlpha": "Sort alpha"
-    }
-  },
-  "help": {
-    "label": "Help",
-    "submenu": {
-      "communitySupport": "Community support",
-      "about": "About"
-    }
-  }
+	"file": {
+		"label": "File",
+		"submenu": {
+			"new": "New",
+			"open": "Open",
+			"recentProjects": "Recent projects",
+			"examples": {
+				"label": "Tutorials and examples",
+				"submenu": {
+					"arduino": "1: Arduino_Cloud",
+					"blink": "2: Blink",
+					"blinkP1AM": "3: Blink_P1AM",
+					"multiLanguage": "4: Multi_Language",
+					"randomGeneratorPragma": "5: Random_Generator_Pragma",
+					"tcpSocket": "6: TCP_Socket",
+					"trafficLightFBD": "7: Traffic_Light_FBD"
+				}
+			},
+			"save": "Save",
+			"saveAs": "Save as",
+			"closeTab": "Close tab",
+			"closeProject": "Close project",
+			"pageSetup": "Page setup",
+			"preview": "Preview",
+			"print": "Print",
+			"updates": "Check for updates",
+			"quit": "Quit"
+		}
+	},
+	"edit": {
+		"label": "Edit",
+		"submenu": {
+			"undo": "Undo",
+			"redo": "Redo",
+			"cut": "Cut",
+			"copy": "Copy",
+			"paste": "Paste",
+			"find": "Find",
+			"findNext": "Find next",
+			"findPrevious": "Find previous",
+			"findInProject": "Find in project",
+			"addElement": "Add element",
+			"selectAll": "Select all",
+			"delete": "Delete"
+		}
+	},
+	"display": {
+		"label": "Display",
+		"submenu": {
+			"refresh": "Refresh",
+			"clearErrors": "Clear errors",
+			"zoom": "Zoom",
+			"switchPerspective": "Switch perspective",
+			"fullScreen": "Full screen",
+			"resetPerspective": "Reset perspective",
+			"sortAlpha": "Sort alpha"
+		}
+	},
+	"help": {
+		"label": "Help",
+		"submenu": {
+			"communitySupport": "Community support",
+			"about": "About"
+		}
+	}
 }

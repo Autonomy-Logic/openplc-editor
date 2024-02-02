@@ -1,13 +1,13 @@
 {
-  "all": "All",
-  "interface": "Interface",
-  "input": "Input",
-  "output": "Output",
-  "inOut": "InOut",
-  "externals": "Externals",
-  "variables": "Variables",
-  "local": "Local",
-  "temp": "Temp",
-  "description": "Description",
-  "addVariable": "Add variable"
+	"all": "All",
+	"interface": "Interface",
+	"input": "Input",
+	"output": "Output",
+	"inOut": "InOut",
+	"externals": "Externals",
+	"variables": "Variables",
+	"local": "Local",
+	"temp": "Temp",
+	"description": "Description",
+	"addVariable": "Add variable"
 }

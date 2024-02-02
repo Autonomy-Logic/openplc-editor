@@ -1,11 +1,11 @@
 {
-  "project": "Project",
-  "tools": "Tools",
-  "settings": "Settings",
-  "editorTools": "Editor Tools",
-  "variables": "Variables",
-  "search": "Search",
-  "filesAndFolders": "Files and Folders",
-  "transfer": "Transfer",
-  "zoomInOut": "Zoom"
+	"project": "Project",
+	"tools": "Tools",
+	"settings": "Settings",
+	"editorTools": "Editor Tools",
+	"variables": "Variables",
+	"search": "Search",
+	"filesAndFolders": "Files and Folders",
+	"transfer": "Transfer",
+	"zoomInOut": "Zoom"
 }

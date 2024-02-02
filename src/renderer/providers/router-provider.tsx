@@ -1,11 +1,11 @@
 import { ReactNode } from 'react'
 import {
-	createBrowserRouter,
 	RouterProvider as ReactRouterProvider,
+	createBrowserRouter,
 } from 'react-router-dom'
 
-import { StartPage } from '../pages'
 import { Screen } from '~features/index'
+import { StartPage } from '../pages'
 
 const router = createBrowserRouter([
 	{

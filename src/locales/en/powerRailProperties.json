@@ -1,7 +1,7 @@
 {
-  "type": "Type",
-  "left": "Left Power Rail",
-  "right": "Right Power Rail",
-  "pinNumber": "Pin number",
-  "preview": "Preview"
+	"type": "Type",
+	"left": "Left Power Rail",
+	"right": "Right Power Rail",
+	"pinNumber": "Pin number",
+	"preview": "Preview"
 }

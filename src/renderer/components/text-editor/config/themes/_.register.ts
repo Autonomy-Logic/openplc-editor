@@ -1,6 +1,6 @@
-import * as monaco from 'monaco-editor';
+import * as monaco from 'monaco-editor'
 
-export type IThemeData = monaco.editor.IStandaloneThemeData;
+export type IThemeData = monaco.editor.IStandaloneThemeData
 
 /**
  * Registers a theme with Monaco editor.
@@ -9,5 +9,5 @@ export type IThemeData = monaco.editor.IStandaloneThemeData;
  * @return {void} This function does not return anything.
  */
 export function registerTheme(themeName: string, themeData: IThemeData): void {
-  monaco.editor.defineTheme(themeName, themeData);
+	monaco.editor.defineTheme(themeName, themeData)
 }

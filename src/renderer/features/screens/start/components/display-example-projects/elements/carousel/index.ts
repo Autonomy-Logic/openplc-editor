@@ -1,9 +1,9 @@
-import Container from './carousel-container';
-import Viewport from './carousel-viewport';
+import Container from './carousel-container'
+import Viewport from './carousel-viewport'
 
 const Carousel = {
-  Container,
-  Viewport,
+	Container,
+	Viewport,
 }
 
 export default Carousel

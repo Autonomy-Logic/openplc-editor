@@ -1,2 +1,2 @@
-export { PouSchema } from './pou-validation';
-export { ProjectSchema } from './project-validation';
+export { PouSchema } from './pou-validation'
+export { ProjectSchema } from './project-validation'
