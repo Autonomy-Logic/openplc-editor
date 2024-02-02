@@ -1,5 +1,5 @@
 name: test
-run-name: OpenPLC CI pipeline - Step 1
+run-name: OpenPLC CI pipeline - Step 1/Version 0.0.1
 on: [push]
 jobs:
   check-jest-tests:
