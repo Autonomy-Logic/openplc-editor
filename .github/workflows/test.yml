@@ -1,6 +1,6 @@
 name: Jest test suite CI
 
-run-name: OpenPLC CI pipeline - Step 1/Version 0.0.1
+run-name: OpenPLC CI pipeline - Step 1 / Unit tests
 
 on: [ push ]
 

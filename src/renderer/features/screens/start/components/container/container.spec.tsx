@@ -11,7 +11,7 @@ describe('Container component', () => {
 		expect(mainElement).toBeInTheDocument()
 
 		expect(mainElement).toHaveClass(
-			'w-full h-screen flex py-4 justify-evenly px-16'
+			'w-full h-full flex  py-4 justify-evenly px-16 min-h-[624px] min-w-[1024px]'
 		)
 	})
 })
