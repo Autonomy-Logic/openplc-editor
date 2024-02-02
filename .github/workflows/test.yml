@@ -3,11 +3,11 @@ run-name: OpenPLC CI pipeline - Step 1
 on: [push]
 jobs:
   check-jest-tests:
-  runs-on: windows-latest
-  steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v3
-      with:
-        node-version: '18'
-    - run: npm install
-    - run: jest
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - run: npm install
+      - run: jest
