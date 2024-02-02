@@ -44,7 +44,7 @@ export default function Start() {
 
 	return (
 		<Container>
-			<aside className='relative top-2/3 min-w-[240px]  '>
+			<aside className='relative top-[63%] 2xl:top-2/3  min-w-[240px]  '>
 				<MenuComponent.Root>
 					<MenuComponent.Section className='flex-col gap-2'>
 						<MenuComponent.Button
