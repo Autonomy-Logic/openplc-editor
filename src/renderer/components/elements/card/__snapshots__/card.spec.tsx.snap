@@ -32,7 +32,7 @@ exports[`Preview Component renders correctly 1`] = `
 exports[`Root Component renders correctly 1`] = `
 <div>
   <div
-    class="mr-7 xl:mr-[15px] 3xl:mr-[30px] relative flex flex-1 flex-col items-start justify-start bg-brand-medium w-full min-w-[224px] h-[180px] rounded-lg px-[6px] pt-[6px] pb-[10px] gap-[10px] text-left text-xs text-white font-caption hover:bg-brand-medium-dark cursor-pointer"
+    class="  relative flex flex-1 flex-col items-start justify-start bg-brand-medium w-full min-w-[224px] h-[180px] rounded-lg px-[6px] pt-[6px] pb-[10px] gap-[10px] text-left text-xs text-white font-caption hover:bg-brand-medium-dark cursor-pointer"
   />
 </div>
 `;
