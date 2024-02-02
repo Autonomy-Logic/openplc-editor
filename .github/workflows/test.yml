@@ -10,4 +10,4 @@ jobs:
         with:
           node-version: '18'
       - run: npm install
-      - run: jest
+      - run: test:unit
