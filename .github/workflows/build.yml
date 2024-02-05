@@ -1,6 +1,6 @@
-name: Unit test suite
+name: Build test suite
 
-run-name: OpenPLC CI pipeline - Unit test
+run-name: OpenPLC CI pipeline - Build test
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
       - main
 
 jobs:
-  test:
+  build:
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -31,5 +31,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Jest Tests
-        run: npm test
+      - name: Run build
+        run: npm run build
