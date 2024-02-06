@@ -15,6 +15,9 @@ on:
 
 jobs:
   analyze:
+    permissions:
+      contents: read
+      security-events: write
     name: Analyze
     runs-on: ubuntu-latest
 
