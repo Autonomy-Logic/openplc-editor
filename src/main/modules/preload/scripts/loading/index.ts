@@ -1,5 +1,5 @@
 /* eslint-disable consistent-return */
-import logoSvg from './assets/logo'
+// import logoSvg from './assets/logo'
 
 /**
  * Waits for the specified document ready states before resolving.
@@ -89,13 +89,13 @@ const useLoading = () => {
 
 	const style = document.createElement('style')
 	const container = document.createElement('div')
-	const content = `<div class=${logoClassName}>${logoSvg}</div>`
+	// const content = `<div class=${logoClassName}>${logoSvg}</div>`
 
 	style.id = 'app-loading-style'
 	style.innerHTML = styleContent
 
 	container.className = preloadClassName
-	container.innerHTML = content
+	// container.innerHTML = content
 	return {
 		/**
 		 * Appends the loading screen elements to the document.
