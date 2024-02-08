@@ -1,12 +1,16 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap"
+    />
     <style>
       body {
-        font-family: Arial, sans-serif;
+        font-family: "Inter", sans-serif;
         background-color: #023c97;
         margin: 0;
         padding: 0;
@@ -14,6 +18,9 @@
         justify-content: center;
         align-items: center;
         height: 100vh;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 500;
       }
 
       .container {
@@ -39,18 +46,69 @@
         width: 0%;
         height: 100%;
         background: #0464fb;
-        transition: width 5s ease-in-out; 
+        transition: width 7.5s ease-out;
+      }
+      .loadingWrapper {
+        position: absolute;
+        bottom: 10px;
+        width: 95%;
+        margin-left: 10px;
+        margin-right: 10px;
+      }
+      .loadingText {
+        display: flex;
+        justify-content: space-between;
       }
     </style>
   </head>
   <body>
     <div class="container">
       <img src="assets/logo.svg" alt="OpenPLC Logo" />
+      <div class="loadingWrapper">
+        <div class="loadingText">
+          <span style="font-size: 12px; font-weight: 700">AUTONOMY</span>
+          <span>© 2021-2024</span>
+        </div>
+        <div class="loadingText">
+          <span id="initialLoading">Loading</span>
+          <span>All rights reserved.</span>
+        </div>
+      </div>
       <div class="loadContainer">
         <div class="loadbar" id="progressBar"></div>
       </div>
     </div>
 
-    <script src="splash.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        function updateProgressBar(progress) {
+          const progressBar = document.getElementById("progressBar");
+
+          progressBar.style.width = `${progress}%`;
+        }
+
+        let progress = 0;
+        const interval = setInterval(() => {
+          progress += 10;
+          if (progress > 100) {
+            clearInterval(interval);
+            return;
+          }
+
+          updateProgressBar(progress);
+        }, 500);
+
+        let dots = 0;
+        const loadingText = document.getElementById("initialLoading");
+        const loadingInterval = setInterval(() => {
+          dots++;
+          if (dots > 3) {
+            dots = 0;
+          }
+          const dotsString = ".".repeat(dots);
+          loadingText.textContent = "Loading" + dotsString;
+        }, 500);
+      });
+    </script>
   </body>
 </html>

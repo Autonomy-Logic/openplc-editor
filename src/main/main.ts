@@ -91,12 +91,14 @@ const createWindow = async () => {
   splash = new BrowserWindow({
     width: 580,
     height: 366,
+    resizable: false,
     frame: false,
     webPreferences: {
       sandbox: false,
     },
   });
 
+  splash.setIgnoreMouseEvents(true)
   splash
     .loadURL(
       `file://${path.join(
@@ -127,8 +129,12 @@ const createWindow = async () => {
 
   // Send a message to the renderer process when the content finishes loading;
   mainWindow.webContents.on("did-finish-load", () => {
-    splash?.close();
-    mainWindow?.show();
+
+    setTimeout(() => {
+      
+      splash?.close();
+      mainWindow?.show();
+    },150000)
     mainWindow?.webContents.send(
       "main-process-message",
       new Date().toLocaleString(),
