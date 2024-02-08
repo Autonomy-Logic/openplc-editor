@@ -98,7 +98,7 @@ const createWindow = async () => {
     },
   });
 
-  splash.setIgnoreMouseEvents(true)
+  splash.setIgnoreMouseEvents(true);
   splash
     .loadURL(
       `file://${path.join(
@@ -129,12 +129,11 @@ const createWindow = async () => {
 
   // Send a message to the renderer process when the content finishes loading;
   mainWindow.webContents.on("did-finish-load", () => {
-
-    setTimeout(() => {
-      
-      splash?.close();
-      mainWindow?.show();
-    },150000)
+    if(splash) {
+      splash?.destroy();
+ 
+    }
+    mainWindow?.show();
     mainWindow?.webContents.send(
       "main-process-message",
       new Date().toLocaleString(),
