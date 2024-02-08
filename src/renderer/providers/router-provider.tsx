@@ -11,12 +11,12 @@ const router = createBrowserRouter([
 	{
 		id: 'root',
 		path: '/',
-		element: <Screen.Start />,
+		element: <Screen.Editor />,
 	},
 	{
 		id: 'editor',
 		path: 'editor',
-		element: <Screen.Editor />,
+		element: <Screen.Start />,
 		/**
 		 * TODO: Fill the children array with the correct elements
 		 *
