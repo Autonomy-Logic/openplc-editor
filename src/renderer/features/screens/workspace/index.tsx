@@ -6,7 +6,10 @@ import { SidebarComponent } from './components'
 export default function Workspace() {
 	return (
 		<div className='flex h-full items-center w-full p-2'>
-			<SidebarComponent.Wrapper />
+			<SidebarComponent.Wrapper>
+				{' '}
+				<p>Sidebar Wrapper</p>
+			</SidebarComponent.Wrapper>
 		</div>
 	)
 }
