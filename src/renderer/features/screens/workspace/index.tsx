@@ -2,7 +2,7 @@ import { useLocation } from 'react-router-dom'
 import { useOpenPLCStore } from '~/renderer/store'
 
 // Todo: Add children and the property to exclude the data from the current workspace
-export default function Editor() {
+export default function Workspace() {
 	const location = useLocation()
 	// console.log(location.pathname);
 

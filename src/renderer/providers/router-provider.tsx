@@ -5,17 +5,16 @@ import {
 } from 'react-router-dom'
 
 import { Screen } from '~features/index'
-import { StartPage } from '../pages'
 
 const router = createBrowserRouter([
 	{
 		id: 'root',
 		path: '/',
-		element: <Screen.Editor />,
+		element: <Screen.Workspace />,
 	},
 	{
-		id: 'editor',
-		path: 'editor',
+		id: 'workspace',
+		path: 'workspace',
 		element: <Screen.Start />,
 		/**
 		 * TODO: Fill the children array with the correct elements

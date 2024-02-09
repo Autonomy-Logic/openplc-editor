@@ -1,8 +1,8 @@
-import Editor from './editor'
+import Workspace from './workspace'
 import Start from './start'
 
 const Screen = {
-	Editor,
+	Workspace,
 	Start,
 }
 
