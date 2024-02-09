@@ -28,7 +28,6 @@
   },
   "browserslist": [],
   "dependencies": {
-    "@headlessui/react": "^1.7.17",
     "@hookform/resolvers": "^3.3.2",
     "@monaco-editor/react": "^4.6.0",
     "@radix-ui/react-scroll-area": "^1.0.5",
