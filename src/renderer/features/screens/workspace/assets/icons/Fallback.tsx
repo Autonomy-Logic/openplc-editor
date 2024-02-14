@@ -1,14 +1,25 @@
 import { ComponentProps } from 'react'
+import { cn } from '~/utils'
 
-type IFallBackIconProps = ComponentProps<'svg'>
+type IFallBackIconProps = ComponentProps<'svg'> & {
+	size?: 'sm' | 'md' | 'lg'
+}
+
+const sizeClasses = {
+	sm: 'w-4 h-4',
+	md: 'w-8 h-8',
+	lg: 'w-12 h-12',
+}
 export const FallBackIcon = (props: IFallBackIconProps) => {
-	const { className, ...res } = props
+	const { className, size = 'sm', ...res } = props
 	return (
 		<svg
 			role='button'
 			viewBox='0 0 28 28'
 			fill='none'
 			xmlns='http://www.w3.org/2000/svg'
+			className={cn(`${sizeClasses[size]}`, className)}
+			{...res}
 		>
 			<path
 				d='M23.2696 17.8042C24.8013 19.3359 24.8013 21.8194 23.2696 23.3512C21.7378 24.8829 19.2543 24.8829 17.7226 23.3512C16.1908 21.8194 16.1908 19.3359 17.7226 17.8042C19.2543 16.2724 21.7378 16.2724 23.2696 17.8042Z'

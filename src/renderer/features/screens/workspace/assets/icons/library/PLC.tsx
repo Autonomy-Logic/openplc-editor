@@ -1,18 +1,26 @@
 import { ComponentProps } from 'react'
+import { cn } from '~/utils'
 
 type IPLCIconProps = ComponentProps<'svg'> & {
-	bgColor?: string
-	fgColor?: string
+	size?: 'sm' | 'md' | 'lg'
+}
+
+const sizeClasses = {
+	sm: 'w-4 h-4',
+	md: 'w-8 h-8',
+	lg: 'w-12 h-12',
 }
 
 export const PLCIcon = (props: IPLCIconProps) => {
-	const { className, ...res } = props
+	const { className, size = 'sm', ...res } = props
 	return (
 		<svg
 			role='button'
 			viewBox='0 0 28 28'
 			fill='none'
 			xmlns='http://www.w3.org/2000/svg'
+			className={cn(`${sizeClasses[size]}`, className)}
+			{...res}
 		>
 			<path
 				d='M23 3.5H5C3.34315 3.5 2 4.84315 2 6.5V21.5C2 23.1569 3.34315 24.5 5 24.5H23C24.6569 24.5 26 23.1569 26 21.5V6.5C26 4.84315 24.6569 3.5 23 3.5Z'
