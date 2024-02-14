@@ -9,6 +9,7 @@ export default function Workspace() {
 			<SidebarComponent.Wrapper>
 				{' '}
 				<p>Sidebar Wrapper</p>
+				<SidebarComponent.ProjectTree />
 			</SidebarComponent.Wrapper>
 		</div>
 	)
