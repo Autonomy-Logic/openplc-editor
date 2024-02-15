@@ -21,9 +21,9 @@ export default function Workspace() {
               isSidebarCollapsed ? "border-0" : ""
             }`}
           >
-            <div className="projects h-[40%] border-neutral-200 bg-white"></div>
+            <div className="projects h-[45%] border-neutral-200 bg-white"></div>
             <hr className="h-[1px] bg-neutral-600 w-full" />
-            <div className="h-[60%] border-neutral-200 bg-white"></div>
+            <div className="h-[55%] border-neutral-200 bg-white"></div>
           </Panel>
 
           <PanelResizeHandle
