@@ -6,7 +6,7 @@ type ISFCIconProps = ComponentProps<'svg'> & {
 }
 
 const sizeClasses = {
-	sm: 'w-4 h-4',
+	sm: 'w-5 h-5',
 	md: 'w-8 h-8',
 	lg: 'w-12 h-12',
 }

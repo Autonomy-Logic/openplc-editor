@@ -6,8 +6,15 @@ import {
 	ProgramIcon,
 	ResourceIcon,
 	DeviceIcon,
-	FallBackIcon,
+	DataTypeIcon,
+	ILIcon,
+	STIcon,
+	LDIcon,
+	SFCIcon,
+	FBDIcon,
 } from '../../../assets/icons'
+import { Wrapper } from './wrapper'
+import { Header } from './header'
 
 export const ProjectTree = () => {
 	const treeData = [
@@ -19,91 +26,90 @@ export const ProjectTree = () => {
 			children: [
 				{
 					key: '0.0',
-					label: 'Functions',
-					Icon: FunctionIcon,
-					title: 'Documents Folder',
-					children: [
-						{
-							key: '0-0',
-							label: 'Document 1-1',
-							Icon: FallBackIcon,
-							title: 'Documents Folder',
-							children: [
-								{
-									key: '0-1-1',
-									label: 'Document-0-1.doc',
-									Icon: FallBackIcon,
-									title: 'Documents Folder',
-								},
-								{
-									key: '0-1-2',
-									label: 'Document-0-2.doc',
-									Icon: FallBackIcon,
-									title: 'Documents Folder',
-								},
-								{
-									key: '0-1-3',
-									label: 'Document-0-3.doc',
-									Icon: FallBackIcon,
-									title: 'Documents Folder',
-								},
-								{
-									key: '0-1-4',
-									label: 'Document-0-4.doc',
-									Icon: FallBackIcon,
-									title: 'Documents Folder',
-								},
-							],
-						},
-					],
+					label: 'Data Types',
+					Icon: DataTypeIcon,
+					title: 'Data Types Tree Leaf',
+					children: [],
 				},
 				{
 					key: '0.1',
-					label: 'Functions Blocks',
-					Icon: FunctionBlockIcon,
-					title: 'Desktop Folder',
+					label: 'Functions',
+					Icon: FunctionIcon,
+					title: 'Functions Tree Leaf',
 					children: [
 						{
-							key: '1-0',
-							label: 'document1.doc',
-							Icon: FallBackIcon,
-							title: 'Documents Folder',
+							key: '0.1.0',
+							label: 'IL Function',
+							Icon: ILIcon,
+							title: 'IL Function Leaf',
+							children: [],
 						},
 						{
-							key: '0-0',
-							label: 'documennt-2.doc',
-							Icon: FallBackIcon,
-							title: 'Documents Folder',
+							key: '0.1.1',
+							label: 'ST Function',
+							Icon: STIcon,
+							title: 'ST Function Leaf',
+							children: [],
 						},
 					],
 				},
 				{
 					key: '0.2',
-					label: 'Programs',
-					Icon: ProgramIcon,
-					title: 'Downloads Folder',
+					label: 'Functions Blocks',
+					Icon: FunctionBlockIcon,
+					title: 'Functions Blocks Tree Leaf',
 					children: [],
 				},
 				{
 					key: '0.3',
-					label: 'Resources',
-					Icon: ResourceIcon,
-					title: 'Downloads Folder',
-					children: [],
+					label: 'Programs',
+					Icon: ProgramIcon,
+					title: 'Programs Tree Leaf',
+					children: [
+						{
+							key: '0.3.0',
+							label: 'LD Program',
+							Icon: LDIcon,
+							title: 'LD Program Leaf',
+							children: [],
+						},
+						{
+							key: '0.3.1',
+							label: 'SFC Program',
+							Icon: SFCIcon,
+							title: 'SFC Program Leaf',
+							children: [],
+						},
+						{
+							key: '0.3.2',
+							label: 'FBD Program',
+							Icon: FBDIcon,
+							title: 'FBD Program Leaf',
+							children: [],
+						},
+					],
 				},
 				{
 					key: '0.4',
+					label: 'Resource',
+					Icon: ResourceIcon,
+					title: 'Resource Tree Leaf',
+					children: [],
+				},
+				{
+					key: '0.5',
 					label: 'Device',
 					Icon: DeviceIcon,
-					title: 'Downloads Folder',
+					title: 'Device Tree Leaf',
 					children: [],
 				},
 			],
 		},
 	]
 	return (
-		<div className='w-full h-1/2 bg-neutral-50 dark:bg-neutral-950 border-none'>
+		<Wrapper>
+			<Header />
 			<Tree treeData={treeData} />
-		</div>
+		</Wrapper>
 	)
 }

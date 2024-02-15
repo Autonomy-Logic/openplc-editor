@@ -14,5 +14,6 @@ export * from './library/ST'
 export * from './library/Device'
 /** Reexport all icons from interface folder */
 export * from './interface/Arrow'
+export * from './interface/Folder'
 
 export * from './Fallback'

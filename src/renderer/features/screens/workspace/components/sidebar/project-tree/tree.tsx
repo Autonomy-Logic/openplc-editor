@@ -7,7 +7,7 @@ type ILeafData = {
 	label: string
 	Icon: ElementType
 	title: string
-	children?: ILeafData[]
+	children: ILeafData[]
 }
 
 type ILeafProps = ComponentProps<'li'> & {
@@ -34,14 +34,14 @@ export const Tree = (props: ITreeProps): ReactNode => {
 const Leaf = (props: ILeafProps) => {
 	const [childVisible, setChildVisible] = useState(false)
 	const { leafData } = props
-	const { Icon, children, key, label, title } = leafData
-	const hasChildren = children ? true : false
+	const { Icon, children, key, label } = leafData
+	const hasChildren = children.length > 0 ? true : false
 	return (
 		/** The leaf component */
-		<li className='p-1' key={key}>
+		<li className='py-1 pl-2' key={key}>
 			{/** The button component to render the arrow to open the tree */}
 			<button
-				className='flex items-center'
+				className='flex flex-row items-center'
 				type='button'
 				onClick={(e) => setChildVisible((v) => !v)}
 			>
@@ -54,20 +54,18 @@ const Leaf = (props: ILeafProps) => {
 						)}
 					/>
 				)}
-				<div>
-					<i>{/** Icon for the file/folder being rendered */}</i>
-					<Icon />
-					{/** Label for the file/folder being rendered */}
-					<span
-						className={cn(
-							`font-caption text-xs font-normal text-neutral-850 ${
-								childVisible && 'font-medium text-neutral-1000'
-							}`
-						)}
-					>
-						{label}
-					</span>
-				</div>
+				{/** Icon for the file/folder being rendered */}
+				<Icon className={`${!hasChildren && 'ml-4'}`} />
+				{/** Label for the file/folder being rendered */}
+				<span
+					className={cn(
+						`font-caption text-xs font-normal text-neutral-850 ml-1 ${
+							childVisible && 'font-medium text-neutral-1000'
+						}`
+					)}
+				>
+					{label}
+				</span>
 			</button>
 			{/** The children of the leaf */}
 			{hasChildren && childVisible && (
