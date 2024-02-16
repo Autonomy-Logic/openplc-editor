@@ -1,1 +1,2 @@
-export { SidebarComponent } from './sidebar'
+export { ContainerComponent } from './container'
+export { PanelsGroupComponent } from './panels'

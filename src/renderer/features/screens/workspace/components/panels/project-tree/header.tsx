@@ -2,7 +2,7 @@ import { FolderIcon } from '../../../assets'
 
 export const Header = () => {
 	return (
-		<div className='flex justify-around w-full mb-3 px-2 '>
+		<div className='flex justify-around w-full max-w-[200px] my-3 px-2 '>
 			<h2 className='flex items-center justify-around px-1.5 w-32 h-8 rounded-lg cursor-default select-none bg-neutral-100 dark:bg-brand-dark'>
 				<FolderIcon />
 				<span className='font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'>

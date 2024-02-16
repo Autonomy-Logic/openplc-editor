@@ -12,6 +12,7 @@ export * from './library/Resource'
 export * from './library/SFC'
 export * from './library/ST'
 export * from './library/Device'
+export * from './library/OpenFolder'
 /** Reexport all icons from interface folder */
 export * from './interface/Arrow'
 export * from './interface/Folder'

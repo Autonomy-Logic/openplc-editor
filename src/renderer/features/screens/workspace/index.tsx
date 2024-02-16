@@ -1,11 +1,11 @@
-import WorkspaceContainer from './components/workspace-container'
+import { ContainerComponent, PanelsGroupComponent } from './components'
 
 export default function Workspace() {
 	return (
-		<div className='containerWrapper bg-[#011E4B] flex h-full items-center w-full'>
+		<ContainerComponent>
 			<div className='activitybar h-full w-20 bg-[#011E4B]' />
-				<SidebarComponent.ProjectTree />
-			<WorkspaceContainer />
-		</div>
+			{/** Here goes the activity component */}
+			<PanelsGroupComponent />
+		</ContainerComponent>
 	)
 }
