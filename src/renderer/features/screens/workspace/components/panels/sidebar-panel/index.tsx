@@ -1,6 +1,7 @@
 import { ReactNode, useState } from 'react'
 import { Panel } from 'react-resizable-panels'
 import { ProjectTree } from './project-tree'
+import { LibraryTree } from './library-tree'
 
 export const SidebarPanel = (): ReactNode => {
 	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
@@ -19,9 +20,7 @@ export const SidebarPanel = (): ReactNode => {
 		>
 			<ProjectTree />
 			<hr className='h-[1px] bg-neutral-600 w-full' />
-			<div className='h-[55%] border-neutral-200 bg-white'>
-				{/** Here goes the library component */}
-			</div>
+			<LibraryTree />
 		</Panel>
 	)
 }

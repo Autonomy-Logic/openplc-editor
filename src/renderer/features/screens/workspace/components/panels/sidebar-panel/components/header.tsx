@@ -1,12 +1,18 @@
-import { FolderIcon } from '../../../assets'
+import { ComponentProps } from 'react'
+import { FolderIcon } from '~renderer/assets'
 
-export const Header = () => {
+type IHeaderProps = ComponentProps<'div'> & {
+	title: string
+}
+
+export const Header = (props: IHeaderProps) => {
+	const { title } = props
 	return (
 		<div className='flex justify-around w-full max-w-[200px] my-3 px-2 '>
 			<h2 className='flex items-center justify-around px-1.5 w-32 h-8 rounded-lg cursor-default select-none bg-neutral-100 dark:bg-brand-dark'>
 				<FolderIcon />
 				<span className='font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'>
-					Project Name
+					{title}
 				</span>
 			</h2>
 			<button

@@ -1,5 +1,5 @@
 import { ComponentProps, ElementType, ReactNode, useState } from 'react'
-import { ArrowIcon } from '../../../assets'
+import { ArrowIcon } from '~renderer/assets'
 import { cn } from '~/utils'
 
 type ILeafData = {

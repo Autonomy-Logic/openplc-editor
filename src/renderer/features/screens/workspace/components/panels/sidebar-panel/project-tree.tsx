@@ -1,22 +1,22 @@
-import { Tree } from './tree'
+import { ComponentProps, ReactNode } from 'react'
+import { Tree, Header } from './components'
 import {
+	DataTypeIcon,
+	DeviceIcon,
+	FBDIcon,
 	FunctionBlockIcon,
 	FunctionIcon,
+	ILIcon,
+	LDIcon,
 	PLCIcon,
 	ProgramIcon,
 	ResourceIcon,
-	DeviceIcon,
-	DataTypeIcon,
-	ILIcon,
-	STIcon,
-	LDIcon,
 	SFCIcon,
-	FBDIcon,
-} from '../../../assets/icons'
-import { Wrapper } from './wrapper'
-import { Header } from './header'
+	STIcon,
+} from '~renderer/assets'
 
-export const ProjectTree = () => {
+type IProjectTreeProps = ComponentProps<'div'>
+export const ProjectTree = (props: IProjectTreeProps): ReactNode => {
 	const treeData = [
 		{
 			key: '0',
@@ -107,9 +107,12 @@ export const ProjectTree = () => {
 		},
 	]
 	return (
-		<Wrapper>
-			<Header />
+		<div
+			className='w-full h-[45%] border-none bg-none overflow-auto flex flex-col'
+			{...props}
+		>
+			<Header title='Project Name' />
 			<Tree treeData={treeData} />
-		</Wrapper>
+		</div>
 	)
 }
