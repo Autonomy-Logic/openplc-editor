@@ -1,16 +1,11 @@
-import { useLocation } from 'react-router-dom'
-import { useOpenPLCStore } from '~/renderer/store'
-import { SidebarComponent } from './components'
+import WorkspaceContainer from './components/workspace-container'
 
-// Todo: Add children and the property to exclude the data from the current workspace
 export default function Workspace() {
 	return (
-		<div className='flex h-full items-center w-full p-2'>
-			<SidebarComponent.Wrapper>
-				{' '}
-				<p>Sidebar Wrapper</p>
+		<div className='containerWrapper bg-[#011E4B] flex h-full items-center w-full'>
+			<div className='activitybar h-full w-20 bg-[#011E4B]' />
 				<SidebarComponent.ProjectTree />
-			</SidebarComponent.Wrapper>
+			<WorkspaceContainer />
 		</div>
 	)
 }
