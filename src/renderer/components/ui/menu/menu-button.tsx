@@ -5,7 +5,7 @@ import { cn } from '~/utils'
 
 type IconsForMenu = string
 type MenuButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-	icon: unknown
+	icon?: unknown
 	label: string
 }
 

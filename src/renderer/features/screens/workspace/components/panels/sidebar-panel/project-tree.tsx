@@ -4,11 +4,13 @@ import {
 	DataTypeIcon,
 	DeviceIcon,
 	FBDIcon,
+	FolderIcon,
 	FunctionBlockIcon,
 	FunctionIcon,
 	ILIcon,
 	LDIcon,
 	PLCIcon,
+	PlusIcon,
 	ProgramIcon,
 	ResourceIcon,
 	SFCIcon,
@@ -107,12 +109,15 @@ export const ProjectTree = (props: IProjectTreeProps): ReactNode => {
 		},
 	]
 	return (
-		<div
-			className='w-full h-[45%] border-none bg-none overflow-auto flex flex-col'
-			{...props}
-		>
-			<Header title='Project Name' />
-			<Tree treeData={treeData} />
+		<div className='w-full h-2/5 border-none bg-none flex flex-col' {...props}>
+			<Header
+				title='Project Name'
+				TitleIcon={FolderIcon}
+				ButtonIcon={PlusIcon}
+			/>
+			<div className='overflow-y-auto overflow-x-hidden'>
+				<Tree treeData={treeData} />
+			</div>
 		</div>
 	)
 }

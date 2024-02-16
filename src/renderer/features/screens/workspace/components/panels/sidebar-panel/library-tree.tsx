@@ -1,13 +1,18 @@
-import { OpenFolderIcon } from '~renderer/assets'
+import {
+	BookIcon,
+	FolderIcon,
+	LibraryCloseFolderIcon,
+	MagnifierIcon,
+} from '~renderer/assets'
 import { Header, Tree } from './components'
-import { LibraryFileIcon } from '~/renderer/assets/icons/library/LibraryFile'
+import { LibraryFileIcon } from '~/renderer/assets/icons/library/File'
 
 export const LibraryTree = () => {
 	const treeData = [
 		{
 			key: '0',
 			label: 'P1AM_Modules',
-			Icon: OpenFolderIcon,
+			Icon: LibraryCloseFolderIcon,
 			title: 'Module Tree',
 			children: [
 				{
@@ -71,36 +76,38 @@ export const LibraryTree = () => {
 		{
 			key: '1',
 			label: 'Jaguar',
-			Icon: OpenFolderIcon,
+			Icon: LibraryCloseFolderIcon,
 			title: 'Module Tree',
 			children: [],
 		},
 		{
 			key: '2',
 			label: 'Arduino',
-			Icon: OpenFolderIcon,
+			Icon: LibraryCloseFolderIcon,
 			title: 'Module Tree',
 			children: [],
 		},
 		{
 			key: '3',
 			label: 'Communication',
-			Icon: OpenFolderIcon,
+			Icon: LibraryCloseFolderIcon,
 			title: 'Module Tree',
 			children: [],
 		},
 		{
 			key: '4',
 			label: 'Sequent Microsystems',
-			Icon: OpenFolderIcon,
+			Icon: LibraryCloseFolderIcon,
 			title: 'Module Tree',
 			children: [],
 		},
 	]
 	return (
-		<div className='w-full h-[55%] border-none bg-none overflow-auto flex flex-col'>
-			<Header title='Library' />
-			<Tree treeData={treeData} />
+		<div className='w-full h-[43%] border-none bg-none flex flex-col'>
+			<Header title='Library' TitleIcon={BookIcon} ButtonIcon={MagnifierIcon} />
+			<div className='overflow-y-auto overflow-x-hidden'>
+				<Tree treeData={treeData} />
+			</div>
 		</div>
 	)
 }

@@ -1,9 +1,9 @@
-import {
-	OpenIcon,
-	PlusIcon,
-	QuitIcon,
-	TutorialsIcon,
-} from '~renderer/assets/icons'
+// import {
+// 	OpenIcon,
+// 	PlusIcon,
+// 	QuitIcon,
+// 	TutorialsIcon,
+// } from '~renderer/assets/icons'
 import { MenuComponent } from '~renderer/components/ui'
 
 import { useCallback, useEffect } from 'react'
@@ -50,18 +50,18 @@ export default function Start() {
 						<MenuComponent.Button
 							onClick={() => handleProject('project:create')}
 							label='New Project'
-							icon={<PlusIcon />}
+							// icon={<PlusIcon />}
 							className='w-48 h-12 text-white bg-brand rounded-md flex items-center hover:bg-brand-medium-dark focus:bg-brand-medium font-caption text-xl font-normal px-5 py-3 gap-3'
 						/>
 						<MenuComponent.Button
 							onClick={() => handleProject('project:open')}
 							label='Open'
-							icon={<OpenIcon />}
+							// icon={<OpenIcon />}
 							className='w-48 h-12 text-neutral-1000 dark:text-white dark:hover:text-brand hover:text-brand bg-transparent flex items-center justify-start hover:opacity-90 font-caption text-xl font-medium py-3 gap-3'
 						/>
 						<MenuComponent.Button
 							label='Tutorials'
-							icon={<TutorialsIcon />}
+							// icon={<TutorialsIcon />}
 							className='w-48 h-12 text-neutral-1000 dark:text-white dark:hover:text-brand hover:text-brand bg-transparent flex items-center justify-start hover:opacity-90 font-caption text-xl font-medium py-3 gap-3'
 						/>
 					</MenuComponent.Section>
@@ -69,7 +69,7 @@ export default function Start() {
 					<MenuComponent.Section>
 						<MenuComponent.Button
 							label='Quit'
-							icon={<QuitIcon />}
+							// icon={<QuitIcon />}
 							className='w-48 h-12 text-neutral-1000 dark:text-white dark:hover:text-brand hover:text-brand bg-transparent flex items-center justify-start hover:opacity-90 font-caption text-xl font-medium py-3 gap-3'
 						/>
 					</MenuComponent.Section>
