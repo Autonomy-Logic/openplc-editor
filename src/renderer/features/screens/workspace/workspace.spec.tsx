@@ -8,7 +8,7 @@ describe('Workspace screen component', () => {
 		render(<Workspace />)
 
 		// Assert
-		// The component should render the text 'Sidebar Wrapper'
-		expect(screen.getByText('Sidebar Wrapper')).toBeInTheDocument()
+		// The component should render the main container
+		expect(screen.getByRole('main')).toBeInTheDocument()
 	})
 })
