@@ -9,7 +9,7 @@ import {
 import { ActivityExitIcon } from "../../assets/icons/interface/ActivityExit";
 
 export default function Activitybar() {
-  const items = [
+  const topItems = [
     {
       icon: <ActivitySearchIcon />,
       title: "Search",
@@ -47,7 +47,7 @@ export default function Activitybar() {
     },
   ];
 
-  const bottonItems = [
+  const bottomItems = [
     {
       icon: <ActivityLightTheme />,
       title: "ActivityLightTheme",
@@ -67,7 +67,7 @@ export default function Activitybar() {
   return (
     <div className="activitybar h-full w-20 bg-[#011E4B] flex flex-col justify-between pb-10">
       <div className=" w-full h-fit flex flex-col gap-6 my-5">
-        {items.map((item, index) => (
+        {topItems.map((item, index) => (
           <div
             onClick={item.onClick}
             key={index}
@@ -78,7 +78,7 @@ export default function Activitybar() {
         ))}
       </div>
       <div className=" h-20 w-full flex flex-col gap-3">
-        {bottonItems.map((item, index) => (
+        {bottomItems.map((item, index) => (
           <div
             onClick={item.onClick}
             key={index}
