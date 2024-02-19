@@ -1,8 +1,9 @@
 import { ArrowIcon, PLCIcon } from '~/renderer/assets'
 
 const pages = [
-	{ name: 'Projects', href: '#', current: false },
-	{ name: 'Project Nero', href: '#', current: true },
+	{ name: 'Project Name', href: '#', current: false },
+	{ name: 'LD Program', href: '#', current: false },
+	{ name: 'ST Function', href: '#', current: true },
 ]
 export const NavigationPanelBreadcrumbs = () => {
 	return (
@@ -10,7 +11,8 @@ export const NavigationPanelBreadcrumbs = () => {
 			<ol className='flex items-center space-x-4'>
 				<li>
 					<div>
-						<a href='#' className='text-gray-400 hover:text-gray-500'>
+						{/* biome-ignore lint/a11y/useValidAnchor: <explanation> */}
+						<a className='text-gray-400 hover:text-gray-500'>
 							<PLCIcon className='h-5 w-5 flex-shrink-0' aria-hidden='true' />
 							<span className='sr-only'>Home</span>
 						</a>
