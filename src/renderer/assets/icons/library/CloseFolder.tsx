@@ -1,23 +1,30 @@
 import { ComponentProps } from 'react'
 import { cn } from '~/utils'
 
-type FolderIconProps = ComponentProps<'svg'>
+type ILibraryCloseFolderIconProps = ComponentProps<'svg'> & {
+	size: 'sm' | 'md' | 'lg'
+}
 
-export const FolderIcon = (props: FolderIconProps) => {
-	const { className, ...res } = props
+const sizeClasses = {
+	sm: 'w-5 h-5',
+	md: 'w-8 h-8',
+	lg: 'w-12 h-12',
+}
+
+export const LibraryCloseFolderIcon = (props: ILibraryCloseFolderIconProps) => {
+	const { size = 'sm', className, ...res } = props
 	return (
 		<svg
-			aria-label='Folder icon'
 			role='button'
 			viewBox='0 0 28 28'
 			fill='none'
 			xmlns='http://www.w3.org/2000/svg'
-			className={cn('w-7 h-7', className)}
+			className={cn(`${sizeClasses[size]}`, className)}
 			{...res}
 		>
 			<path
-				fill-rule='evenodd'
-				clip-rule='evenodd'
+				fillRule='evenodd'
+				clipRule='evenodd'
 				d='M24.4962 8.57555C24.4407 5.1985 23.7428 4.66667 20.0667 4.66667H13.2222L15.0889 6.06667C15.8967 6.6725 16.8792 7 17.8889 7H21C22.3917 7 23.6412 7.60923 24.4962 8.57555Z'
 				fill='#0464FB'
 			/>

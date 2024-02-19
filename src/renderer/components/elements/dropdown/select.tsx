@@ -10,7 +10,7 @@ import { cn } from '~/utils'
 
 type DropdownSelectProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 	selectedOption: string
-	icon: ReactNode
+	icon?: ReactNode
 	setShowOptions: Dispatch<SetStateAction<boolean>>
 	showOptions: boolean
 	placeholder: string

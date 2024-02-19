@@ -1,7 +1,7 @@
 import { ComponentProps } from 'react'
 import { cn } from '~/utils'
 
-type IOpenFolderIconProps = ComponentProps<'svg'> & {
+type ILibraryOpenFolderIconProps = ComponentProps<'svg'> & {
 	size: 'sm' | 'md' | 'lg'
 }
 
@@ -11,7 +11,7 @@ const sizeClasses = {
 	lg: 'w-12 h-12',
 }
 
-export const OpenFolderIcon = (props: IOpenFolderIconProps) => {
+export const LibraryOpenFolderIcon = (props: ILibraryOpenFolderIconProps) => {
 	const { size = 'sm', className, ...res } = props
 	return (
 		<svg

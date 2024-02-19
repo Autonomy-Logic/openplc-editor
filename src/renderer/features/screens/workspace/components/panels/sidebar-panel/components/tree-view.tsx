@@ -1,5 +1,5 @@
 import { ComponentProps, ElementType, ReactNode, useState } from 'react'
-import { ArrowIcon } from '../../../assets'
+import { ArrowIcon } from '~renderer/assets'
 import { cn } from '~/utils'
 
 type ILeafData = {
@@ -59,7 +59,7 @@ const Leaf = (props: ILeafProps) => {
 				{/** Label for the file/folder being rendered */}
 				<span
 					className={cn(
-						`font-caption text-xs font-normal text-neutral-850 ml-1 ${
+						`font-caption text-xs font-normal text-neutral-850 ml-1 truncate ${
 							childVisible && 'font-medium text-neutral-1000'
 						}`
 					)}
