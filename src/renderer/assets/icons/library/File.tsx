@@ -32,14 +32,14 @@ export const LibraryFileIcon = (props: ILibraryFileIconProps) => {
 				fill='#023c97'
 			/>
 			<path
-				fill-rule='evenodd'
-				clip-rule='evenodd'
+				fillRule='evenodd'
+				clipRule='evenodd'
 				d='M7.29166 8.16666C7.29166 7.68341 7.68341 7.29166 8.16666 7.29166H17.5C17.9832 7.29166 18.375 7.68341 18.375 8.16666C18.375 8.64991 17.9832 9.04166 17.5 9.04166H8.16666C7.68341 9.04166 7.29166 8.64991 7.29166 8.16666Z'
 				fill='#023c97'
 			/>
 			<path
-				fill-rule='evenodd'
-				clip-rule='evenodd'
+				fillRule='evenodd'
+				clipRule='evenodd'
 				d='M7.29166 14C7.29166 13.5168 7.68341 13.125 8.16666 13.125L12.8333 13.125C13.3166 13.125 13.7083 13.5168 13.7083 14C13.7083 14.4832 13.3166 14.875 12.8333 14.875L8.16666 14.875C7.68341 14.875 7.29166 14.4832 7.29166 14Z'
 				fill='#023c97'
 			/>
