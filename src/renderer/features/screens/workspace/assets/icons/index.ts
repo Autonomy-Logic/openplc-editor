@@ -24,3 +24,4 @@ export * from "./interface/ActivityZoomInOut";
 export * from "./interface/ActivityTransfer";
 export * from "./interface/ActivityDownload";
 export * from "./interface/ActivityPlay";
+export * from "./interface/ActivityLightTheme";
