@@ -19,5 +19,7 @@ export * from './interface/Folder'
 export * from './interface/Book'
 export * from './interface/Magnifier'
 export * from './interface/Plus'
+export * from './interface/StickArrow'
+export * from './interface/Video'
 
 export * from './Fallback'
