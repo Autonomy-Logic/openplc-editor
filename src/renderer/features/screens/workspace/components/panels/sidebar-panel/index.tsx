@@ -21,6 +21,12 @@ export const SidebarPanel = (): ReactNode => {
 			<ProjectTree />
 			<hr className='h-[1px] bg-neutral-600 w-full' />
 			<LibraryTree />
+			<div className='w-full h-[17%] p-3'>
+				<p className='w-full h-full bg-white font-caption text-xs text-start p-2 overflow-y-auto text-neutral-850 font-normal rounded-lg border border-brand shadow-2xl'>
+					Reads temperature from one DS18B20 one-wire sensor connected to the
+					pin specified in PIN (SINT:PIN) =&gt; (REAL:OUT)
+				</p>
+			</div>
 		</Panel>
 	)
 }

@@ -59,7 +59,7 @@ const Leaf = (props: ILeafProps) => {
 				{/** Label for the file/folder being rendered */}
 				<span
 					className={cn(
-						`font-caption text-xs font-normal text-neutral-850 ml-1 ${
+						`font-caption text-xs font-normal text-neutral-850 ml-1 truncate ${
 							childVisible && 'font-medium text-neutral-1000'
 						}`
 					)}
