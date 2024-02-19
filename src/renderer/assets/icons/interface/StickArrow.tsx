@@ -25,9 +25,9 @@ export const StickArrowIcon = (props: IStickArrowIconProps) => {
 			<path
 				d='M22.1667 13.9999H5.8333M22.1667 13.9999L15.3611 6.9999M22.1667 13.9999L15.3611 20.9999'
 				stroke='#0464FB'
-				stroke-width='1.5'
-				stroke-linecap='round'
-				stroke-linejoin='round'
+				strokeWidth='1.5'
+				strokeLinecap='round'
+				strokeLinejoin='round'
 			/>
 		</svg>
 	)

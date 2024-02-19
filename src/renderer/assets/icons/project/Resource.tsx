@@ -31,14 +31,14 @@ export const ResourceIcon = (props: IResourceIconProps) => {
 				fill='white'
 			/>
 			<path
-				fill-rule='evenodd'
-				clip-rule='evenodd'
+				fillRule='evenodd'
+				clipRule='evenodd'
 				d='M7.5 10.3333C7.5 9.32081 8.32081 8.5 9.33333 8.5H12C12.2761 8.5 12.5 8.72386 12.5 9C12.5 9.27614 12.2761 9.5 12 9.5H9.33333C8.8731 9.5 8.5 9.8731 8.5 10.3333V13C8.5 13.2761 8.27614 13.5 8 13.5C7.72386 13.5 7.5 13.2761 7.5 13V10.3333Z'
 				fill='white'
 			/>
 			<path
-				fill-rule='evenodd'
-				clip-rule='evenodd'
+				fillRule='evenodd'
+				clipRule='evenodd'
 				d='M20.5 19.6667C20.5 20.6792 19.6792 21.5 18.6667 21.5H16C15.7239 21.5 15.5 21.2761 15.5 21C15.5 20.7239 15.7239 20.5 16 20.5H18.6667C19.1269 20.5 19.5 20.1269 19.5 19.6667V17C19.5 16.7239 19.7239 16.5 20 16.5C20.2761 16.5 20.5 16.7239 20.5 17V19.6667Z'
 				fill='white'
 			/>

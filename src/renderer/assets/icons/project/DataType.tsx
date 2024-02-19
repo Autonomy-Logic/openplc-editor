@@ -30,22 +30,22 @@ export const DataTypeIcon = (props: IDataTypeIconProps) => {
 				d='M14 10L9 12.5L14 15L19 12.5L14 10Z'
 				fill='white'
 				stroke='white'
-				stroke-linecap='round'
-				stroke-linejoin='round'
+				strokeLinecap='round'
+				strokeLinejoin='round'
 			/>
 			<path
 				opacity='0.4'
 				d='M9 17.5L14 20L19 17.5'
 				stroke='#B4D0FE'
-				stroke-linecap='round'
-				stroke-linejoin='round'
+				strokeLinecap='round'
+				strokeLinejoin='round'
 			/>
 			<path
 				opacity='0.4'
 				d='M9 15L14 17.5L19 15'
 				stroke='#B4D0FE'
-				stroke-linecap='round'
-				stroke-linejoin='round'
+				strokeLinecap='round'
+				strokeLinejoin='round'
 			/>
 		</svg>
 	)
