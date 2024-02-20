@@ -1,7 +1,7 @@
 import { ComponentProps } from "react";
 import { cn } from "~/utils";
 
-type IActivityZoomInOutProps = ComponentProps<"svg"> & {
+type IZoomInOutProps = ComponentProps<"svg"> & {
   size?: "sm" | "md" | "lg";
 };
 const sizeClasses = {
@@ -10,7 +10,7 @@ const sizeClasses = {
   lg: "w-14 h-14",
 };
 
-export const ActivityZoomInOut = (props: IActivityZoomInOutProps) => {
+export const ZoomInOut = (props: IZoomInOutProps) => {
   const { className, size = "sm", ...res } = props;
 
   return (

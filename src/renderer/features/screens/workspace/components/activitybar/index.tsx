@@ -1,14 +1,14 @@
 import { useState } from "react";
 import {
-  ActivitySearchIcon,
-  ActivityZoomInOut,
-  ActivyTransferIcon,
-  ActivityDownloadIcon,
-  ActivityPlayIcon,
-  ActivityLightTheme,
+  SearchIcon,
+  ZoomInOut,
+  TransferIcon,
+  DownloadIcon,
+  PlayIcon,
+  LightThemeIcon,
   DarkThemeIcon,
+  ExitIcon,
 } from "../../assets/icons";
-import { ActivityExitIcon } from "../../assets/icons/interface/ActivityExit";
 
 export default function Activitybar() {
   const prefersDarkMode =
@@ -19,35 +19,35 @@ export default function Activitybar() {
 
   const topItems = [
     {
-      icon: <ActivitySearchIcon />,
+      icon: <SearchIcon />,
       title: "Search",
       onClick: () => {
         console.log("search");
       },
     },
     {
-      icon: <ActivityZoomInOut />,
+      icon: <ZoomInOut />,
       title: "ActivityZoomInOut",
       onClick: () => {
         console.log("zoom");
       },
     },
     {
-      icon: <ActivityDownloadIcon />,
+      icon: <DownloadIcon />,
       title: "ActivityDownloadIcon",
       onClick: () => {
         console.log("download");
       },
     },
     {
-      icon: <ActivyTransferIcon />,
+      icon: <TransferIcon />,
       title: "ActivyTransferIcon",
       onClick: () => {
         console.log("transfer");
       },
     },
     {
-      icon: <ActivityPlayIcon />,
+      icon: <PlayIcon />,
       title: "ActivityPlayIcon",
       onClick: () => {
         console.log("play");
@@ -63,30 +63,30 @@ export default function Activitybar() {
   const bottomItems = [
     {
       key: "theme",
-      icon: theme === true ? <DarkThemeIcon /> : <ActivityLightTheme />,
+      icon: theme === true ? <DarkThemeIcon /> : <LightThemeIcon />,
       title: theme === true ? "ActivityLightTheme" : "ActivityDarkTheme",
     },
     {
       key: "exit",
-      icon: <ActivityExitIcon />,
+      icon: <ExitIcon />,
       title: "ActivityExitIcon",
     },
   ];
-  console.log(theme);
+
   return (
     <div className=" dark:bg-neutral-950 bg-brand-dark h-full w-20 flex flex-col justify-between pb-10">
-      <div className=" w-full h-fit flex flex-col gap-6 my-5">
+      <div className=" w-full h-fit flex flex-col gap-10 my-5">
         {topItems.map((item, index) => (
           <div
             onClick={item.onClick}
             key={index}
-            className="w-full h-10 flex items-center justify-center"
+            className="w-full h-10 flex items-center justify-center "
           >
             {item.icon}
           </div>
         ))}
       </div>
-      <div className=" h-20 w-full flex flex-col gap-3">
+      <div className=" h-20 w-full flex flex-col gap-6">
         {bottomItems.map((item, index) => (
           <div
             key={index}

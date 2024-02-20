@@ -1,7 +1,7 @@
 import { ComponentProps } from "react";
 import { cn } from "~/utils";
 
-type IActivityTransferIconProps = ComponentProps<"svg"> & {
+type ITransferIconProps = ComponentProps<"svg"> & {
   size?: "sm" | "md" | "lg";
 };
 const sizeClasses = {
@@ -10,7 +10,7 @@ const sizeClasses = {
   lg: "w-14 h-14",
 };
 
-export const ActivyTransferIcon = (props: IActivityTransferIconProps) => {
+export const TransferIcon = (props: ITransferIconProps) => {
   const { className, size = "sm", ...res } = props;
 
   return (

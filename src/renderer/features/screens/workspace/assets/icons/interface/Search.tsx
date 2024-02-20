@@ -1,7 +1,7 @@
 import { ComponentProps } from "react";
 import { cn } from "~/utils";
 
-type IActivitySearchIconProps = ComponentProps<"svg"> & {
+type ISearchIconProps = ComponentProps<"svg"> & {
   size?: "sm" | "md" | "lg";
 };
 const sizeClasses = {
@@ -10,7 +10,7 @@ const sizeClasses = {
   lg: "w-14 h-14",
 };
 
-export const ActivitySearchIcon = (props: IActivitySearchIconProps) => {
+export const SearchIcon = (props: ISearchIconProps) => {
   const { className, size = "sm", ...res } = props;
 
   return (

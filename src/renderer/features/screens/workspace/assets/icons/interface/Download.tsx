@@ -1,7 +1,7 @@
 import React, { ComponentProps } from "react";
 import { cn } from "~/utils";
 
-type IActivityDownloadIconProps = ComponentProps<"svg"> & {
+type IDownloadIconProps = ComponentProps<"svg"> & {
   size?: "sm" | "md" | "lg";
 };
 
@@ -11,7 +11,7 @@ const sizeClasses = {
   lg: "w-14 h-14",
 };
 
-export const ActivityDownloadIcon = (props: IActivityDownloadIconProps) => {
+export const DownloadIcon = (props: IDownloadIconProps) => {
   const { className, size = "sm", ...res } = props;
   return (
     <svg

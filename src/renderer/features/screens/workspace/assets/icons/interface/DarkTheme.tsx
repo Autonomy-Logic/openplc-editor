@@ -1,7 +1,7 @@
 import { ComponentProps } from "react";
 import { cn } from "~/utils";
 
-type IActivityToggleThemeProps = ComponentProps<"svg"> & {
+type IDarkThemeProps = ComponentProps<"svg"> & {
   size?: "sm" | "md" | "lg";
 };
 const sizeClasses = {
@@ -9,7 +9,7 @@ const sizeClasses = {
   md: "w-10 h-10",
   lg: "w-14 h-14",
 };
-export const DarkThemeIcon = (props: IActivityToggleThemeProps) => {
+export const DarkThemeIcon = (props: IDarkThemeProps) => {
   const { className, size = "md", ...res } = props;
   return (
     <svg

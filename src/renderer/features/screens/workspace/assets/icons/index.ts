@@ -19,10 +19,11 @@ export * from "./interface/Folder";
 
 export * from "./Fallback";
 
-export * from "./interface/ActivitySearch";
-export * from "./interface/ActivityZoomInOut";
-export * from "./interface/ActivityTransfer";
-export * from "./interface/ActivityDownload";
-export * from "./interface/ActivityPlay";
-export * from "./interface/ActivityLightTheme";
-export * from "./interface/DarkThemeIcon"
+export * from "./interface/Search";
+export * from "./interface/ZoomInOut";
+export * from "./interface/Transfer";
+export * from "./interface/Download";
+export * from "./interface/Play";
+export * from "./interface/LightTheme";
+export * from "./interface/DarkTheme";
+export * from "./interface/Exit";
