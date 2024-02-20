@@ -1,7 +1,7 @@
 import { ComponentProps } from "react";
 import { cn } from "~/utils";
 
-type IActivityToggleThemeProps = ComponentProps<"svg"> & {
+type IActivityExitProps = ComponentProps<"svg"> & {
   size?: "sm" | "md" | "lg";
 };
 const sizeClasses = {
@@ -10,7 +10,7 @@ const sizeClasses = {
   lg: "w-14 h-14",
 };
 
-export const ActivityExitIcon = (props: IActivityToggleThemeProps) => {
+export const ActivityExitIcon = (props: IActivityExitProps) => {
   const { className, size = "sm", ...res } = props;
 
   return (

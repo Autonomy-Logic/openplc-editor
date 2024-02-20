@@ -19,7 +19,7 @@ export const SidebarPanel = (): ReactNode => {
 		>
 			<ProjectTree />
 			<hr className='h-[1px] bg-neutral-600 w-full' />
-			<div className='h-[55%] border-neutral-200 bg-white'>
+			<div className='h-[55%]  dark:bg-neutral-950 border-neutral-200 bg-white'>
 				{/** Here goes the library component */}
 			</div>
 		</Panel>

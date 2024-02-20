@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivitySearchIcon,
   ActivityZoomInOut,
@@ -5,10 +6,13 @@ import {
   ActivityDownloadIcon,
   ActivityPlayIcon,
   ActivityLightTheme,
+  DarkThemeIcon
 } from "../../assets/icons";
 import { ActivityExitIcon } from "../../assets/icons/interface/ActivityExit";
 
+
 export default function Activitybar() {
+  const [theme, setTheme] = useState("light");
   const topItems = [
     {
       icon: <ActivitySearchIcon />,
@@ -47,25 +51,25 @@ export default function Activitybar() {
     },
   ];
 
+  const handleSetTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    window.bridge.toggleTheme();
+  };
+
   const bottomItems = [
     {
-      icon: <ActivityLightTheme />,
-      title: "ActivityLightTheme",
-      onClick: () => {
-        console.log("light");
-      },
+      icon: theme === "light" ? <ActivityLightTheme /> : <DarkThemeIcon />,
+      title: theme === "light" ? "ActivityLightTheme" : "ActivityDarkTheme",
     },
     {
       icon: <ActivityExitIcon />,
       title: "ActivityExitIcon",
-      onClick: () => {
-        console.log("exit");
-      },
     },
   ];
 
   return (
-    <div className="activitybar h-full w-20 bg-[#011E4B] flex flex-col justify-between pb-10">
+    <div className=" dark:bg-neutral-950 bg-brand-dark h-full w-20 flex flex-col justify-between pb-10">
       <div className=" w-full h-fit flex flex-col gap-6 my-5">
         {topItems.map((item, index) => (
           <div
@@ -80,7 +84,7 @@ export default function Activitybar() {
       <div className=" h-20 w-full flex flex-col gap-3">
         {bottomItems.map((item, index) => (
           <div
-            onClick={item.onClick}
+            onClick={() => handleSetTheme()}
             key={index}
             className="w-full h-10 flex items-center justify-center"
           >

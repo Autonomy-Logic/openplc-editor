@@ -25,3 +25,4 @@ export * from "./interface/ActivityTransfer";
 export * from "./interface/ActivityDownload";
 export * from "./interface/ActivityPlay";
 export * from "./interface/ActivityLightTheme";
+export * from "./interface/DarkThemeIcon"
