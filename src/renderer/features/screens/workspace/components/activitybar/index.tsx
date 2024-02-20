@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivitySearchIcon,
   ActivityZoomInOut,
@@ -6,13 +6,17 @@ import {
   ActivityDownloadIcon,
   ActivityPlayIcon,
   ActivityLightTheme,
-  DarkThemeIcon
+  DarkThemeIcon,
 } from "../../assets/icons";
 import { ActivityExitIcon } from "../../assets/icons/interface/ActivityExit";
 
-
 export default function Activitybar() {
-  const [theme, setTheme] = useState("light");
+  const prefersDarkMode =
+    window.matchMedia &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+  const [theme, setTheme] = useState(prefersDarkMode);
+
   const topItems = [
     {
       icon: <ActivitySearchIcon />,
@@ -51,23 +55,24 @@ export default function Activitybar() {
     },
   ];
 
-  const handleSetTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    window.bridge.toggleTheme();
+  const handleSetTheme = async () => {
+    const res = await window.bridge.toggleTheme();
+    setTheme(res);
   };
 
   const bottomItems = [
     {
-      icon: theme === "light" ? <ActivityLightTheme /> : <DarkThemeIcon />,
-      title: theme === "light" ? "ActivityLightTheme" : "ActivityDarkTheme",
+      key: "theme",
+      icon: theme === true ? <DarkThemeIcon /> : <ActivityLightTheme />,
+      title: theme === true ? "ActivityLightTheme" : "ActivityDarkTheme",
     },
     {
+      key: "exit",
       icon: <ActivityExitIcon />,
       title: "ActivityExitIcon",
     },
   ];
-
+  console.log(theme);
   return (
     <div className=" dark:bg-neutral-950 bg-brand-dark h-full w-20 flex flex-col justify-between pb-10">
       <div className=" w-full h-fit flex flex-col gap-6 my-5">
@@ -84,11 +89,14 @@ export default function Activitybar() {
       <div className=" h-20 w-full flex flex-col gap-3">
         {bottomItems.map((item, index) => (
           <div
-            onClick={() => handleSetTheme()}
             key={index}
             className="w-full h-10 flex items-center justify-center"
           >
-            {item.icon}
+            {item.key === "theme" ? (
+              <div onClick={handleSetTheme}> {item.icon}</div>
+            ) : (
+              item.icon
+            )}
           </div>
         ))}
       </div>
