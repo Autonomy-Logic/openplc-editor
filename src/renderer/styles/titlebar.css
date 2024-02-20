@@ -1,4 +1,4 @@
-.cet-titlebar {
+/* .cet-titlebar {
   @apply dark:!bg-neutral-950 !z-10 !h-12 !flex;
 }
 .cet-container {
@@ -43,7 +43,7 @@
 /* .cet-title {
   @apply max-w-[25%] !w-fit !flex-grow;
 } */
-.inactive {
+/* .inactive {
   @apply !bg-gray-900;
 }
 .cet-titlebar-right {
@@ -51,4 +51,4 @@
 }
 .cet-titlebar-controls-container {
   @apply !flex !justify-end !items-center !ml-auto;
-}
+} */
