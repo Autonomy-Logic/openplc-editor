@@ -27,7 +27,7 @@ export default function Start() {
 			if (ok && data) {
 				const { path, xmlAsObject } = data
 				setWorkspaceData({ projectPath: path, projectData: xmlAsObject })
-				navigate('editor')
+				navigate('workspace')
 				console.log(data)
 				console.log('new project:', data)
 			}
@@ -36,7 +36,7 @@ export default function Start() {
 			if (ok && data) {
 				const { path: projectPath, xmlAsObject: projectAsObj } = data
 				setWorkspaceData({ projectPath, projectData: projectAsObj })
-				navigate('editor')
+				navigate('workspace')
 				console.log('open:', data)
 			}
 		}

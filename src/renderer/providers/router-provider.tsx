@@ -10,12 +10,12 @@ const router = createBrowserRouter([
 	{
 		id: 'root',
 		path: '/',
-		element: <Screen.Workspace />,
+		element: <Screen.Start />,
 	},
 	{
 		id: 'workspace',
 		path: 'workspace',
-		element: <Screen.Start />,
+		element: <Screen.Workspace />,
 		/**
 		 * TODO: Fill the children array with the correct elements
 		 *

@@ -9,96 +9,62 @@ import {
 	DarkThemeIcon,
 	ExitIcon,
 } from '~renderer/assets/icons'
+import { ActivitybarButton } from './components'
+import { useNavigate } from 'react-router-dom'
 
 export default function Activitybar() {
+	const navigate = useNavigate()
 	const prefersDarkMode = window.matchMedia?.(
 		'(prefers-color-scheme: dark)'
 	).matches
 
-	const [theme, setTheme] = useState(prefersDarkMode)
+	const [isDark, setIsDark] = useState(prefersDarkMode)
 
-	const topItems = [
-		{
-			icon: <SearchIcon />,
-			title: 'Search',
-			onClick: () => {
-				console.log('search')
-			},
-		},
-		{
-			icon: <ZoomInOut />,
-			title: 'ActivityZoomInOut',
-			onClick: () => {
-				console.log('zoom')
-			},
-		},
-		{
-			icon: <DownloadIcon />,
-			title: 'ActivityDownloadIcon',
-			onClick: () => {
-				console.log('download')
-			},
-		},
-		{
-			icon: <TransferIcon />,
-			title: 'ActivyTransferIcon',
-			onClick: () => {
-				console.log('transfer')
-			},
-		},
-		{
-			icon: <PlayIcon />,
-			title: 'ActivityPlayIcon',
-			onClick: () => {
-				console.log('play')
-			},
-		},
-	]
-
-	const handleSetTheme = async () => {
+	const handleChangeTheme = async () => {
 		const res = await window.bridge.toggleTheme()
-		setTheme(res)
+		setIsDark(res)
 	}
-
-	const bottomItems = [
-		{
-			key: 'theme',
-			icon: theme === true ? <DarkThemeIcon /> : <LightThemeIcon />,
-			title: theme === true ? 'ActivityLightTheme' : 'ActivityDarkTheme',
-		},
-		{
-			key: 'exit',
-			icon: <ExitIcon />,
-			title: 'ActivityExitIcon',
-		},
-	]
 
 	return (
 		<div className=' dark:bg-neutral-950 bg-brand-dark h-full w-20 flex flex-col justify-between pb-10'>
-			<div className=' w-full h-fit flex flex-col gap-10 my-5'>
-				{topItems.map((item, index) => (
-					<div
-						onClick={item.onClick}
-						key={index}
-						className='w-full h-10 flex items-center justify-center '
-					>
-						{item.icon}
-					</div>
-				))}
+			<div className='w-full h-fit flex flex-col gap-10 my-5'>
+				<ActivitybarButton
+					label='Search'
+					Icon={SearchIcon}
+					onClick={() => console.log('search')}
+				/>
+				<ActivitybarButton
+					label='Zoom'
+					Icon={ZoomInOut}
+					onClick={() => console.log('zoom')}
+				/>
+				<ActivitybarButton
+					label='Download'
+					Icon={DownloadIcon}
+					onClick={() => console.log('download')}
+				/>
+				<ActivitybarButton
+					label='Transfer'
+					Icon={TransferIcon}
+					onClick={() => console.log('transfer')}
+				/>
+				<ActivitybarButton
+					label='Play'
+					Icon={PlayIcon}
+					onClick={() => console.log('play')}
+				/>
 			</div>
 			<div className=' h-20 w-full flex flex-col gap-6'>
-				{bottomItems.map((item, index) => (
-					<div
-						key={index}
-						className='w-full h-10 flex items-center justify-center'
-					>
-						{item.key === 'theme' ? (
-							<div onClick={handleSetTheme}> {item.icon}</div>
-						) : (
-							item.icon
-						)}
-					</div>
-				))}
+				<ActivitybarButton
+					label='Change theme'
+					Icon={isDark === true ? DarkThemeIcon : LightThemeIcon}
+					onClick={handleChangeTheme}
+				/>
+				<ActivitybarButton
+					label='Exit'
+					Icon={ExitIcon}
+					onClick={() => navigate('/')}
+				/>
 			</div>
 		</div>
 	)
