@@ -1,7 +1,0 @@
-import { ReactNode } from 'react'
-
-export const NavigationPanel = (): ReactNode => {
-	return (
-		<div className='w-full h-[70px] border-neutral-200  dark:bg-neutral-950 rounded-lg mb-1 bg-white border-2' />
-	)
-}
