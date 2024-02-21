@@ -13,7 +13,7 @@ export const ContainerComponent = (
 		<div
 			role='main'
 			className={cn(
-				'containerWrapper bg-[#011E4B] flex h-full items-center w-full',
+				'containerWrapper bg-brand-dark dark:bg-neutral-950 flex h-full items-center w-full',
 				className
 			)}
 			{...res}
