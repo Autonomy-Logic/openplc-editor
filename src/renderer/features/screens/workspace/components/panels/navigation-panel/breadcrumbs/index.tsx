@@ -7,14 +7,6 @@ import {
 	PouIcon,
 } from '~renderer/data'
 
-// type GenericPouType<T> = {
-// 	[Property in keyof T]: T[Property]
-// }
-
-// type GenericLangType<T> = {
-// 	[Property in keyof T]: T[Property]
-// }
-
 type INavigationPanelBreadcrumbsProps = ComponentProps<'ol'> & {
 	crumb: {
 		key: string
@@ -46,7 +38,7 @@ export const NavigationPanelBreadcrumbs = (
 						aria-hidden='true'
 						role='img'
 					/>
-					<span className='font-caption text-[10px] text-neutral-850 font-medium'>
+					<span className='font-caption text-[10px] text-neutral-850 dark:text-neutral-300 font-medium'>
 						{crumb.project_name}
 					</span>
 					<ArrowIcon
@@ -65,7 +57,7 @@ export const NavigationPanelBreadcrumbs = (
 						aria-hidden='true'
 						role='img'
 					/>
-					<span className='font-caption text-[10px] text-neutral-850 font-medium'>
+					<span className='font-caption text-[10px] text-neutral-850 dark:text-neutral-300 font-medium'>
 						{/** Text */}
 						{PouType}
 					</span>
@@ -85,7 +77,7 @@ export const NavigationPanelBreadcrumbs = (
 						aria-hidden='true'
 						role='img'
 					/>
-					<span className='font-caption text-[10px] text-neutral-850 font-medium'>
+					<span className='font-caption text-[10px] text-neutral-850 dark:text-neutral-300 font-medium'>
 						{/** Text */}
 						{PouName}
 					</span>

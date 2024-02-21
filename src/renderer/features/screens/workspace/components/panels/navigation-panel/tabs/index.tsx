@@ -18,12 +18,13 @@ export const NavigationPanelTabs = () => {
 					className={cn(
 						tab.current ? '' : 'opacity-[35%] border-r border-neutral-300',
 						tabIdx === 0 ? 'rounded-tl-lg' : '',
-						'group min-w-0 max-w-[160px] bg-neutral-100 h-1/2 flex-1 flex items-center justify-between overflow-hidden text-neutral-1000 dark:text-white  py-2 px-3 text-start text-sm font-normal font-display dark:bg-brand-dark'
+						'aria-[current=page]:dark:bg-brand-dark',
+						'group min-w-0 max-w-[160px] relative bg-neutral-100 h-1/2 flex-1 flex items-center justify-between overflow-hidden text-neutral-1000 dark:text-white py-2 px-3 text-start text-sm font-normal font-display dark:bg-neutral-800'
 					)}
 					aria-current={tab.current ? 'page' : undefined}
 				>
 					<span>{tab.name}</span>
-					<PlusIcon className='rotate-45 inline stroke-brand w-4 h-4' />
+					<PlusIcon className='rotate-45 inline stroke-brand dark:stroke-brand-light w-4 h-4' />
 					<span
 						aria-hidden='true'
 						className={cn(

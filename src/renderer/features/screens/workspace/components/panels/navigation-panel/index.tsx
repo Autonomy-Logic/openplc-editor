@@ -14,7 +14,7 @@ const TestData = {
 
 export const NavigationPanel = (): ReactNode => {
 	return (
-		<div className='w-full h-[70px] border-neutral-200 rounded-lg mb-1 bg-white border'>
+		<div className='w-full h-[70px] border-neutral-200 dark:border-neutral-850 rounded-lg mb-1 bg-white dark:bg-neutral-950 border'>
 			<NavigationPanelTabs />
 			<NavigationPanelBreadcrumbs
 				crumb={{
