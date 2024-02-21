@@ -1,0 +1,40 @@
+import { ComponentProps } from "react";
+import { cn } from "~/utils";
+
+type ISearchIconProps = ComponentProps<"svg"> & {
+  size?: "sm" | "md" | "lg";
+};
+const sizeClasses = {
+  sm: "w-7 h-7",
+  md: "w-10 h-10",
+  lg: "w-14 h-14",
+};
+
+export const SearchIcon = (props: ISearchIconProps) => {
+  const { className, size = "sm", ...res } = props;
+
+  return (
+    <svg
+      role="button"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={cn(`${sizeClasses[size]}`, className)}
+      {...res}
+    >
+      <g opacity="0.4">
+        <path
+          d="M19.7345 22.9923C20.6341 23.8919 22.0927 23.8919 22.9923 22.9923C23.8919 22.0927 23.8919 20.6341 22.9923 19.7345L18.417 15.1592L15.1592 18.417L19.7345 22.9923Z"
+          fill="#B4D1FE"
+        />
+      </g>
+      <circle
+        cx="10.834"
+        cy="10.8335"
+        r="10.5"
+        transform="rotate(180 10.834 10.8335)"
+        fill="#B4D1FE"
+      />
+    </svg>
+  );
+};

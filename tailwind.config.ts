@@ -5,7 +5,7 @@ module.exports = {
     "./src/renderer/**/*.{js,jsx,ts,tsx,ejs,html}",
     "./src/main/**/*.{js,jsx,ts,tsx,ejs,html}",
   ],
-  darkMode: "class", // or 'media' or 'class'
+  darkMode: "media", // or 'media' or 'class'
   theme: {
     extend: {
       fontSize: {
