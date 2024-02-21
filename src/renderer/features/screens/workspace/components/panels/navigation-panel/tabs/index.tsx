@@ -16,17 +16,22 @@ export const NavigationPanelTabs = () => {
 					key={tab.name}
 					href={tab.href}
 					className={cn(
-						tab.current
-							? 'border-b-[3px] border-brand'
-							: 'opacity-[35%] border-r-2 border-neutral-300 dark:bg-neutral-900 dark:border-neutral-800',
+						tab.current ? '' : 'opacity-[35%] border-r border-neutral-300',
 						tabIdx === 0 ? 'rounded-tl-lg' : '',
-						'group min-w-0 max-w-[160px] bg-neutral-100 h-1/2 flex-1 flex items-center justify-between overflow-hidden text-neutral-1000 dark:text-white  py-2 px-3 text-start text-sm font-normal font-display dark:bg-brand-dark'
+						'aria-[current=page]:dark:bg-brand-dark',
+						'group min-w-0 max-w-[160px] relative bg-neutral-100 h-1/2 flex-1 flex items-center justify-between overflow-hidden text-neutral-1000 dark:text-white py-2 px-3 text-start text-sm font-normal font-display dark:bg-neutral-800'
 					)}
 					aria-current={tab.current ? 'page' : undefined}
 				>
-					<LDIcon />
-					<span className='w-3/4 h-fit ml-1 truncate'>{tab.name}</span>
+					<span>{tab.name}</span>
 					<PlusIcon className='rotate-45 inline stroke-brand dark:stroke-brand-light w-4 h-4' />
+					<span
+						aria-hidden='true'
+						className={cn(
+							tab.current ? 'bg-brand' : 'bg-transparent',
+							'absolute inset-x-0 bottom-0 h-[3px]'
+						)}
+					/>
 				</a>
 			))}
 		</nav>

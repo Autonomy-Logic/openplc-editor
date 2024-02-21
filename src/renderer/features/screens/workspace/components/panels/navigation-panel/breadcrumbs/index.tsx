@@ -1,39 +1,88 @@
+import { ComponentProps } from 'react'
 import { ArrowIcon, PLCIcon } from '~/renderer/assets'
+import {
+	LanguageIcon,
+	LanguageIconType,
+	PouIconType,
+	PouIcon,
+} from '~renderer/data'
 
-const pages = [
-	{ name: 'Projects', href: '#', current: false },
-	{ name: 'Project Nero', href: '#', current: true },
-]
-export const NavigationPanelBreadcrumbs = () => {
+type INavigationPanelBreadcrumbsProps = ComponentProps<'ol'> & {
+	crumb: {
+		key: string
+		project_name: string
+		pou_to_display: {
+			name: string
+			type: [keyof PouIconType]
+			language: [keyof LanguageIconType]
+		}
+	}
+}
+
+export const NavigationPanelBreadcrumbs = (
+	props: INavigationPanelBreadcrumbsProps
+) => {
+	const { crumb, className, ...res } = props
+	const PouName = crumb.pou_to_display.name
+	const PouType = crumb.pou_to_display.type[0]
+	const PouLanguage = crumb.pou_to_display.language[0]
+	const IconForType = PouIcon[PouType]
+	const IconForLang = LanguageIcon[PouLanguage]
 	return (
-		<nav className='flex h-1/2' aria-label='Breadcrumb'>
-			<ol className='flex items-center space-x-4'>
-				<li>
-					<div>
-						<a href='#' className='text-gray-400 hover:text-gray-500'>
-							<PLCIcon className='h-5 w-5 flex-shrink-0' aria-hidden='true' />
-							<span className='sr-only'>Home</span>
-						</a>
-					</div>
-				</li>
-				{pages.map((page) => (
-					<li key={page.name}>
-						<div className='flex items-center'>
-							<ArrowIcon
-								className='h-5 w-5 flex-shrink-0 text-gray-400'
-								aria-hidden='true'
-							/>
-							<a
-								href={page.href}
-								className='ml-4 text-sm font-medium text-gray-500 hover:text-gray-700'
-								aria-current={page.current ? 'page' : undefined}
-							>
-								{page.name}
-							</a>
-						</div>
-					</li>
-				))}
-			</ol>
-		</nav>
+		<ol className='flex h-1/2 cursor-default items-center p-2 select-none'>
+			{/** Project Name */}
+			<li key={crumb.key}>
+				<div className='flex items-center gap-1'>
+					<PLCIcon
+						className='h-4 w-4 flex-shrink-0'
+						aria-hidden='true'
+						role='img'
+					/>
+					<span className='font-caption text-[10px] text-neutral-850 dark:text-neutral-300 font-medium'>
+						{crumb.project_name}
+					</span>
+					<ArrowIcon
+						className='h-3 w-3 flex-shrink-0 stroke-brand-light'
+						aria-hidden='true'
+						role='img'
+					/>
+				</div>
+			</li>
+			{/** Pou type and associated Icon */}
+			<li>
+				<div className='flex items-center gap-1'>
+					{/** Icon */}
+					<IconForType
+						className='h-4 w-4 flex-shrink-0'
+						aria-hidden='true'
+						role='img'
+					/>
+					<span className='font-caption text-[10px] text-neutral-850 dark:text-neutral-300 font-medium'>
+						{/** Text */}
+						{PouType}
+					</span>
+					<ArrowIcon
+						className='h-3 w-3 flex-shrink-0 stroke-brand-light'
+						aria-hidden='true'
+						role='img'
+					/>
+				</div>
+			</li>
+			{/** Pou language and associated Icon */}
+			<li>
+				<div className='flex items-center gap-1'>
+					{/** Icon */}
+					<IconForLang
+						className='h-4 w-4 flex-shrink-0'
+						aria-hidden='true'
+						role='img'
+					/>
+					<span className='font-caption text-[10px] text-neutral-850 dark:text-neutral-300 font-medium'>
+						{/** Text */}
+						{PouName}
+					</span>
+				</div>
+			</li>
+		</ol>
 	)
 }
