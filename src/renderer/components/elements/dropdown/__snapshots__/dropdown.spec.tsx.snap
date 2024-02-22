@@ -55,23 +55,17 @@ exports[`Select Component renders correctly 1`] = `
 <div>
   <button
     class="select-none"
+    data-testid="dropdown-icon"
     type="button"
   >
     Select an option
     <p
-      class="flex justify-between w-28"
+      class="flex items-center justify-between w-28"
     >
       <span
         class="text-black "
       >
         Option 1
-      </span>
-      <span
-        class=" rotate-0 transition-all "
-      >
-        <span>
-          Icon
-        </span>
       </span>
     </p>
   </button>

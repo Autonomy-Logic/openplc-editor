@@ -74,7 +74,7 @@ describe('Menu Button Component', () => {
 		// Act
 		const { getByTestId } = render(
 			<Menu.Button
-				icon={'test-icon'}
+				Icon={undefined} // Update the value of Icon to be of type ElementType or undefined
 				label='test-label'
 				data-testid='button-test-id'
 				data-custom-prop={customProp}
@@ -101,7 +101,7 @@ describe('Menu Divider Component', () => {
 			<Menu.Divider
 				data-testid='divider-test-id'
 				data-custom-prop={customProp}
-			></Menu.Divider>
+			/>
 		)
 
 		// Assert
