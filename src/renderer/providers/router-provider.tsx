@@ -10,7 +10,7 @@ const router = createBrowserRouter([
 	{
 		id: 'root',
 		path: '/',
-		element: <Screen.Start />,
+		element: <Screen.Workspace />,
 	},
 	{
 		id: 'workspace',

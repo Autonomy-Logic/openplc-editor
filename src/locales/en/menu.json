@@ -63,5 +63,11 @@
 			"communitySupport": "Community support",
 			"about": "About"
 		}
+	},
+	"recents": {
+		"label": "Recents",
+		"submenu": {
+			"recents": "Recents"
+		}
 	}
 }

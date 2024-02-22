@@ -106,14 +106,14 @@
 .cet-titlebar {
   @apply dark:!bg-neutral-950 !z-10 !h-12 !flex;
 }
+.cet-titlebar-left {
+  @apply !flex !flex-grow !items-center  !w-fit;
+}
 .cet-container {
   @apply !top-12;
 }
-/* .cet-titlebar-left {
-  @apply !flex !flex-grow !items-center  !max-w-[20%] !w-fit;
-} */
 .cet-icon {
-  @apply !w-[75px] !relative;
+  @apply mx-6 !relative;
 }
 .cet-icon img {
   @apply !h-7 !w-fit;
@@ -134,13 +134,16 @@
   @apply !m-0 !right-0 !relative;
 }
 .cet-menubar div {
-  @apply flex rounded-md p-2  text-sm font-semibold leading-6 hover:!bg-blue-100 hover:text-brand dark:hover:!bg-gray-800;
+  @apply flex rounded-md p-2  text-sm font-semibold leading-6;
 }
 .cet-menubar-menu-container {
-  @apply !mt-4 flex-col;
+  @apply !mt-4 flex-col dark:!bg-neutral-900;
+}
+.cet-menubar-menu-button {
+  @apply dark:hover:!bg-neutral-900;
 }
 .cet-menubar {
-  @apply !m-0 items-center !w-full !overflow-hidden;
+  @apply mx-6 items-center !w-full !overflow-hidden gap-6;
 }
 .cet-title.cet-title-center {
   @apply !transform-none !max-w-[50%] !w-fit !flex-grow !static;
@@ -154,4 +157,7 @@
 }
 .cet-titlebar-controls-container {
   @apply !flex !justify-end !items-center !ml-auto;
+}
+.menu-divider{
+  @apply !h-5 !max-w-[1px] !w-[1px] bg-neutral-500 !p-0
 }
