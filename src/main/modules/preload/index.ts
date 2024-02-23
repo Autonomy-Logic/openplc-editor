@@ -1,5 +1,5 @@
 import "./scripts/loading/index";
-import "./scripts/titlebar/index";
+// import "./scripts/titlebar/index";
 
 
 import { contextBridge } from "electron";

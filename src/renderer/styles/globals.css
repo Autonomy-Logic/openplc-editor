@@ -161,3 +161,22 @@
 .menu-divider{
   @apply !h-5 !max-w-[1px] !w-[1px] bg-neutral-500 !p-0
 }
+
+#titlebar-test {
+  background-color: #023c97;
+  height: 1rem;
+  width: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100;
+  -webkit-app-region: drag;
+}
+
+#titlebar-menu {
+  position: absolute;
+  top: 30px;  /* Adjust to align with the bottom of your titlebar */
+  right: 10px;
+  background-color: #333;
+  border-radius: 5px;
+}
