@@ -1,3 +1,5 @@
+import { Panel } from "react-resizable-panels";
+
 export const CodeEditor = () => {
-	return <div>CodeEditor</div>
-}
+  return <Panel>CodeEditor</Panel>;
+};

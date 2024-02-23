@@ -20,7 +20,7 @@ export const Header = (props: IHeaderProps): ReactNode => {
 				type='button'
 				className='w-10 h-8 rounded-lg bg-brand flex justify-center items-center'
 			>
-				<ButtonIcon />
+				<ButtonIcon className='stroke-white' />
 			</button>
 		</div>
 	)
