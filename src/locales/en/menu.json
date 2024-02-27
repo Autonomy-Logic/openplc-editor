@@ -58,7 +58,8 @@
 		"submenu": {
 			"refresh": "Refresh",
 			"clearErrors": "Clear Errors",
-			"zoom": "Zoom",
+			"zoomIn": "Zoom In",
+			"zoomOut": "Zoom Out",
 			"switchPerspective": "Switch Perspective",
 			"fullScreen": "Full Screen",
 			"resetPerspective": "Reset Perspective",

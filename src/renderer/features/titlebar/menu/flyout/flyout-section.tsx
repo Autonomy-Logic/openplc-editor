@@ -3,7 +3,7 @@ import { cn } from '~/utils'
 
 type IMenuSectionProps = ComponentProps<'ul'> & {
 	section: IMenuItem[]
-	hasSibling: boolean
+	hasSibling?: boolean
 }
 
 type IMenuItem = ComponentProps<'li'> & {
@@ -14,7 +14,7 @@ type IMenuItem = ComponentProps<'li'> & {
 }
 
 export const FlyoutMenuSection = (props: IMenuSectionProps) => {
-	const { section, hasSibling, ...res } = props
+	const { section, hasSibling = false, ...res } = props
 	return (
 		<ul
 			className={cn(
