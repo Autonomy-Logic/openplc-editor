@@ -5,8 +5,8 @@ export default function TableRoot({ tableData }) {
     "#",
     "Name",
     "Class",
-    "Type",
     "Localization",
+    "Type",
     "Initial value",
     "Option",
     "Debug",
@@ -33,16 +33,48 @@ export default function TableRoot({ tableData }) {
                   key={i}
                   className="!h-8 px-3 font-medium text-neutral-500 text-xs"
                 >
-                  {title === "#" ? (
+                  {title === "#" && (
                     <p className="text-neutral-400 text-center w-full">
                       {row.id}
                     </p>
-                  ) : (
+                  )}
+                  {title === "Name" && (
                     <input
                       type="text"
                       className="w-full bg-inherit focus:outline-none text-center"
-                      value={row[title.toLowerCase().replace(/\s+/g, "")]}
+                      defaultValue={`localVar${row.id}`}
                       onChange={(e) => console.log(e.target.value)}
+                    />
+                  )}
+                  {title === "Class" && (
+                    <select
+                      defaultValue={"local"}
+                      className="w-full bg-inherit focus:outline-none text-center"
+                    >
+                      {row.class.map((option, index) => (
+                        <option key={index}>{option.name}</option>
+                      ))}
+                    </select>
+                  )}
+                  {title === "Localization" && <td>{row.localization}</td>}
+                  {title === "Type" && <td>{row.type}</td>}
+                  {title === "Initial value" && (
+                    <input
+                      className="w-full bg-inherit focus:outline-none text-center"
+                      type="text"
+                    />
+                  )}
+                  {title === "Option" && Array.isArray(row.option) && (
+                    <select defaultValue="" className="w-full bg-inherit focus:outline-none text-center">
+                      {row.option.map((option, index) => (
+                        <option key={index}>{option.name}</option>
+                      ))}
+                    </select>
+                  )}
+                  {title === "Documentation" && (
+                    <input
+                      className="w-full bg-inherit focus:outline-none text-center"
+                      type="text"
                     />
                   )}
                 </td>

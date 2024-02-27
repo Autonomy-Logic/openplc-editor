@@ -4,15 +4,57 @@ import { ArrowIcon, ArrowUp, MinusIcon, PlusIcon } from "~/renderer/assets";
 import TableRoot from "./table";
 
 export const VariableTable = () => {
+  const classes = [
+    {
+      name: "input",
+      value: "",
+    },
+    {
+      name: "output",
+      value: "",
+    },
+    {
+      name: "inOut",
+      value: "",
+    },
+    {
+      name: "local",
+      value: "",
+    },
+    {
+      name: "temporary",
+      value: "",
+    },
+  ];
+
+  const options = [
+    {
+      name: "",
+      value: "",
+    },
+    {
+      name: "constant",
+      value: "",
+    },
+    {
+      name: "retain",
+      value: "",
+    },
+    {
+      name: "no Retain",
+      value: "",
+    },
+  ];
+
   const [tableData, setTableData] = useState([
     {
       id: 1,
       name: "",
-      class: "",
+      class: classes,
       type: "",
       localization: "",
       initialValue: "",
-      option: "",
+      option: options,
       debug: "",
       documentation: "",
     },
@@ -22,11 +64,11 @@ export const VariableTable = () => {
     const newRow = {
       id: tableData.length + 1,
       name: "",
-      class: "",
+      class: classes,
       type: "",
       localization: "",
       initialValue: "",
-      option: "",
+      option: options,
       debug: "",
       documentation: "",
     };
