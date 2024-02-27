@@ -1,8 +1,43 @@
+import React, { useState } from "react";
 import { Panel } from "react-resizable-panels";
 import { ArrowIcon, ArrowUp, MinusIcon, PlusIcon } from "~/renderer/assets";
 import TableRoot from "./table";
 
 export const VariableTable = () => {
+  const [tableData, setTableData] = useState([
+    {
+      id: 1,
+      name: "",
+      class: "",
+      type: "",
+      localization: "",
+      initialValue: "",
+      option: "",
+      debug: "",
+      documentation: "",
+    },
+  ]);
+
+  const addTableRow = () => {
+    const newRow = {
+      id: tableData.length + 1,
+      name: "",
+      class: "",
+      type: "",
+      localization: "",
+      initialValue: "",
+      option: "",
+      debug: "",
+      documentation: "",
+    };
+    setTableData([...tableData, newRow]);
+    console.log(tableData);
+  };
+
+  const removeTableRow = (idToRemove) => {
+    setTableData(tableData.filter((row) => row.id !== idToRemove));
+  };
+
   return (
     <Panel defaultSize={35} className=" flex flex-col gap-4 w-full h-full ">
       <div className=" flex justify-between">
@@ -22,8 +57,11 @@ export const VariableTable = () => {
         </div>
         <div className="flex gap-4">
           <div className="flex gap-3">
-            <PlusIcon className="w-5 h-5 !stroke-brand" />
-            <MinusIcon className="w-5 h-5 stroke-brand" />
+            <PlusIcon className="w-5 h-5 !stroke-brand" onClick={addTableRow} />
+            <MinusIcon
+              className="w-5 h-5 stroke-brand"
+              onClick={() => removeTableRow(tableData.length)}
+            />
             <ArrowUp className="w-5 h-5 stroke-brand" />
             <ArrowUp className="w-5 h-5 stroke-brand rotate-180" />
           </div>
@@ -31,7 +69,7 @@ export const VariableTable = () => {
         </div>
       </div>
       {/** Table */}
-      <TableRoot />
+      <TableRoot tableData={tableData} />
     </Panel>
   );
 };
