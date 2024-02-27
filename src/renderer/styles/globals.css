@@ -9,9 +9,26 @@
     --primary-medium: #0350c9;
     --primary-medium-dark: #023c97;
     --primary-dark: #011e4b;
+    /* Fallback variables to set the height of the titlebar based on OS */
+    --fallback-title-bar-height: 3rem;
+    --fallback-darwin-title-bar-height: 1.75rem;
+  }
+
+  /* This can be useful to allocate the main container */
+  .oplc-main-content {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: env(titlebar-area-height, var(--fallback-title-bar-height));
+    overflow: hidden;
   }
   #folder-root p:hover ~ svg #folder-path {
     fill: var(--primary-medium-dark);
+  }
+
+  #title-bar-container {
+    top: env(titlebar-area-y, 0);
   }
 
   /* Explanation: The recent projects carousel viewport (The visible part) */
@@ -66,6 +83,29 @@
     height: 65%;
   }
   /* Code-Block - End */
+}
+
+@layer components {
+  /* Classes for the custom titlebar*/
+  .oplc-titlebar-container {
+    position: absolute;
+    top: env(titlebar-area-y, 0);
+    width: 100%;
+    height: env(titlebar-area-height);
+  }
+  .oplc-titlebar-content {
+    position: absolute;
+    top: 0;
+    display: flex;
+    user-select: none;
+    height: 100%;
+    background-color: var(--primary-dark);
+    left: env(titlebar-area-x, 0);
+    width: env(titlebar-area-width, 100%);
+  }
+  .oplc-titlebar-drag-region {
+    app-region: drag;
+  }
 }
 
 @layer utilities {

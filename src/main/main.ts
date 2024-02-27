@@ -14,7 +14,7 @@ import path from 'path'
 //   attachTitlebarToWindow,
 //   setupTitlebar,
 // } from "custom-electron-titlebar/main";
-import { BrowserWindow, app, ipcMain, shell } from 'electron'
+import { BrowserWindow, app, ipcMain, nativeTheme, shell } from 'electron'
 import log from 'electron-log'
 import { autoUpdater } from 'electron-updater'
 
@@ -88,6 +88,10 @@ const createWindow = async () => {
 	 */
 	const { bounds } = store.get('window')
 
+	const windowControlColor = nativeTheme.shouldUseDarkColors
+		? '#121316'
+		: '#011e4b'
+
 	// Create a new browser window for the splash screen
 	splash = new BrowserWindow({
 		width: 580,
@@ -118,6 +122,10 @@ const createWindow = async () => {
 		show: false,
 		icon: getAssetPath('icon.png'),
 		titleBarStyle: 'hidden',
+		titleBarOverlay: {
+			color: windowControlColor,
+			symbolColor: '#fff',
+		},
 		frame: false,
 		webPreferences: {
 			sandbox: false,
