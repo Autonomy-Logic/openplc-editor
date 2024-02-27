@@ -12,7 +12,7 @@ export default function Container(
 ): ReactNode {
 	const { refProvider, ...restProps } = props
 	return (
-		<div className='overflow-hidden w-full ' ref={refProvider} {...restProps} />
+		<div className='overflow-hidden w-full' ref={refProvider} {...restProps} />
 	)
 }
 

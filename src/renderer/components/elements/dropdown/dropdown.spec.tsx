@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/jest-globals'
-import { fireEvent, render } from '@testing-library/react'
+import { fireEvent, getByTestId, render } from '@testing-library/react'
 import Dropdown from '.'
 
 // Tests for the Dropdown.Root component
@@ -72,10 +72,10 @@ describe('Options Component', () => {
 			/>
 		)
 
-		options.forEach((option) => {
+		for (const option of options) {
 			// Use the toBeInTheDocument matcher from @testing-library/jest-dom
 			expect(getByText(option.label)).toBeInTheDocument()
-		})
+		}
 	})
 
 	// Test to check if state is updated correctly when an option is clicked
@@ -109,7 +109,7 @@ describe('Select Component', () => {
 		const { container } = render(
 			<Dropdown.Select
 				selectedOption='Option 1'
-				icon={<span>Icon</span>}
+				Icon={undefined}
 				setShowOptions={mockSetShowOptions}
 				showOptions={false}
 				placeholder='Select an option'
@@ -124,7 +124,7 @@ describe('Select Component', () => {
 		const { getByText } = render(
 			<Dropdown.Select
 				selectedOption='Option 1'
-				icon={<span>Icon</span>}
+				Icon={undefined}
 				setShowOptions={mockSetShowOptions}
 				showOptions={false}
 				placeholder='Select an option'
@@ -139,7 +139,7 @@ describe('Select Component', () => {
 		const { getByText } = render(
 			<Dropdown.Select
 				selectedOption='Option 1'
-				icon={<span>Icon</span>}
+				Icon={undefined}
 				setShowOptions={mockSetShowOptions}
 				showOptions={false}
 				placeholder='Select an option'
@@ -151,17 +151,17 @@ describe('Select Component', () => {
 
 	// Test to check if icon is displayed correctly
 	test('displays icon', () => {
-		const { getByText } = render(
+		const { getByTestId } = render(
 			<Dropdown.Select
 				selectedOption='Option 1'
-				icon={<span>Icon</span>}
+				Icon={undefined}
 				setShowOptions={mockSetShowOptions}
 				showOptions={false}
 				placeholder='Select an option'
 			/>
 		)
 
-		expect(getByText('Icon')).toBeInTheDocument()
+		expect(getByTestId('dropdown-icon')).toBeInTheDocument()
 	})
 
 	// Test to check if setShowOptions is called on button click
@@ -169,7 +169,7 @@ describe('Select Component', () => {
 		const { getByText } = render(
 			<Dropdown.Select
 				selectedOption='Option 1'
-				icon={<span>Icon</span>}
+				Icon={undefined}
 				setShowOptions={mockSetShowOptions}
 				showOptions={false}
 				placeholder='Select an option'
