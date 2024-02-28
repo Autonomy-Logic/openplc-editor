@@ -1,17 +1,15 @@
-import "./scripts/loading/index";
-import "./scripts/titlebar/index";
+import './scripts/loading/index'
 
+import { contextBridge } from 'electron'
 
-import { contextBridge } from "electron";
+import rendererProcessBridge from '../ipc/renderer'
 
-import rendererProcessBridge from "../ipc/renderer";
+contextBridge.exposeInMainWorld('bridge', rendererProcessBridge)
 
-contextBridge.exposeInMainWorld("bridge", rendererProcessBridge);
-
-export type ElectronHandler = typeof rendererProcessBridge;
+export type ElectronHandler = typeof rendererProcessBridge
 
 declare global {
-  interface Window {
-    bridge: ElectronHandler;
-  }
+	interface Window {
+		bridge: ElectronHandler
+	}
 }

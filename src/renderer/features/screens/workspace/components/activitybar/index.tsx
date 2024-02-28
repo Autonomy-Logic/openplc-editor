@@ -26,7 +26,7 @@ export default function Activitybar() {
 	}
 
 	return (
-		<div className=' dark:bg-neutral-950 bg-brand-dark h-full w-20 flex flex-col justify-between pb-10'>
+		<div className='bg-brand-dark dark:bg-neutral-950 h-full w-20 flex flex-col justify-between pb-10 border-t-inherit'>
 			<div className='w-full h-fit flex flex-col gap-10 my-5'>
 				<ActivitybarButton
 					label='Search'

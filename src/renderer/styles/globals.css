@@ -9,7 +9,13 @@
     --primary-medium: #0350c9;
     --primary-medium-dark: #023c97;
     --primary-dark: #011e4b;
+    /* Fallback variables to set the height of the titlebar based on OS */
+    --oplc-title-bar-height: 2rem;
+    --fallback-darwin-title-bar-height: 1.75rem;
   }
+
+  /* This can be useful to allocate the main container */
+
   #folder-root p:hover ~ svg #folder-path {
     fill: var(--primary-medium-dark);
   }
@@ -68,6 +74,38 @@
   /* Code-Block - End */
 }
 
+@layer components {
+  /* Classes for the custom titlebar*/
+  .oplc-titlebar-container {
+    position: absolute;
+    top: 0;
+    width: 100%;
+    height: var(--oplc-title-bar-height);
+  }
+  .oplc-titlebar-content {
+    position: absolute;
+    top: 0;
+    display: flex;
+    user-select: none;
+    height: 100%;
+    background-color: var(--primary-dark);
+    left: 0;
+    width: 100%;
+  }
+  .oplc-titlebar-drag-region {
+    app-region: drag;
+  }
+  .oplc-main-content {
+    position: absolute;
+    display: flex;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: var(--oplc-title-bar-height);
+    overflow: hidden;
+  }
+}
+
 @layer utilities {
   .press-animated {
     @apply border-[none] transition-[0.2s] duration-[all] active:scale-[0.90];
@@ -99,59 +137,4 @@
   .dark ::-webkit-scrollbar {
     @apply bg-gray-900;
   }
-}
-
-/* classes for the titlebar */
-
-.cet-titlebar {
-  @apply dark:!bg-neutral-950 !z-10 !h-12 !flex;
-}
-.cet-container {
-  @apply !top-12;
-}
-/* .cet-titlebar-left {
-  @apply !flex !flex-grow !items-center  !max-w-[20%] !w-fit;
-} */
-.cet-icon {
-  @apply !w-[75px] !relative;
-}
-.cet-icon img {
-  @apply !h-7 !w-fit;
-}
-.cet-window-title {
-  @apply !max-w-full;
-}
-.cet-controls-container div {
-  @apply flex items-center justify-center rounded-md;
-}
-.cet-window-icon {
-  @apply !mr-5;
-}
-.cet-window-icon img {
-  @apply !h-10 !w-auto;
-}
-.cet-window-controls {
-  @apply !m-0 !right-0 !relative;
-}
-.cet-menubar div {
-  @apply flex rounded-md p-2  text-sm font-semibold leading-6 hover:!bg-blue-100 hover:text-brand dark:hover:!bg-gray-800;
-}
-.cet-menubar-menu-container {
-  @apply !mt-4 flex-col;
-}
-.cet-menubar {
-  @apply !m-0 items-center !w-full !overflow-hidden;
-}
-.cet-title.cet-title-center {
-  @apply !transform-none !max-w-[50%] !w-fit !flex-grow !static;
-}
-
-.inactive {
-  @apply !bg-gray-900;
-}
-.cet-titlebar-right {
-  @apply !h-10 !max-w-[25%] !w-fit !flex-grow;
-}
-.cet-titlebar-controls-container {
-  @apply !flex !justify-end !items-center !ml-auto;
 }
