@@ -1,12 +1,13 @@
-import React from "react";
+import TableHeader from "./elements/header";
+import TableRow from "./elements/rows";
 
 export default function TableRoot({ tableData }) {
   const tableTitle = [
     "#",
     "Name",
     "Class",
-    "Localization",
     "Type",
+    "Localization",
     "Initial value",
     "Option",
     "Debug",
@@ -14,72 +15,18 @@ export default function TableRoot({ tableData }) {
   ];
 
   return (
-    <div className="overflow-hidden  rounded-lg border border-neutral-300">
+    <div className=" rounded-lg border border-neutral-300 overflow-auto scroll-mt-2">
       <table className="w-full">
         <thead className="border-b border-neutral-300">
           <tr>
             {tableTitle.map((title) => (
-              <th className="h-8 border-r px-4 py-2 text-center text-neutral-850 font-medium text-xs">
-                {title}
-              </th>
+              <TableHeader key={title} title={title} />
             ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-300">
           {tableData.map((row, index) => (
-            <tr key={index} className="divide-x divide-neutral-300">
-              {tableTitle.map((title, i) => (
-                <td
-                  key={i}
-                  className="!h-8 px-3 font-medium text-neutral-500 text-xs"
-                >
-                  {title === "#" && (
-                    <p className="text-neutral-400 text-center w-full">
-                      {row.id}
-                    </p>
-                  )}
-                  {title === "Name" && (
-                    <input
-                      type="text"
-                      className="w-full bg-inherit focus:outline-none text-center"
-                      defaultValue={`localVar${row.id}`}
-                      onChange={(e) => console.log(e.target.value)}
-                    />
-                  )}
-                  {title === "Class" && (
-                    <select
-                      defaultValue={"local"}
-                      className="w-full bg-inherit focus:outline-none text-center"
-                    >
-                      {row.class.map((option, index) => (
-                        <option key={index}>{option.name}</option>
-                      ))}
-                    </select>
-                  )}
-                  {title === "Localization" && <td>{row.localization}</td>}
-                  {title === "Type" && <td>{row.type}</td>}
-                  {title === "Initial value" && (
-                    <input
-                      className="w-full bg-inherit focus:outline-none text-center"
-                      type="text"
-                    />
-                  )}
-                  {title === "Option" && Array.isArray(row.option) && (
-                    <select defaultValue="" className="w-full bg-inherit focus:outline-none text-center">
-                      {row.option.map((option, index) => (
-                        <option key={index}>{option.name}</option>
-                      ))}
-                    </select>
-                  )}
-                  {title === "Documentation" && (
-                    <input
-                      className="w-full bg-inherit focus:outline-none text-center"
-                      type="text"
-                    />
-                  )}
-                </td>
-              ))}
-            </tr>
+            <TableRow key={index} row={row} />
           ))}
         </tbody>
       </table>

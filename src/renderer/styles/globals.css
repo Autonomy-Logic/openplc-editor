@@ -85,7 +85,7 @@
     @apply outline-none;
   }
   ::-webkit-scrollbar {
-    @apply w-1 bg-neutral-200;
+    @apply w-1 bg-neutral-200 h-1;
   }
   ::-webkit-scrollbar-corner {
     @apply bg-transparent;

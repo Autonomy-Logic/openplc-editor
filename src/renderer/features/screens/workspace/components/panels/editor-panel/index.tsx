@@ -7,7 +7,7 @@ export const EditorPanel = (): ReactNode => {
   return (
     <Panel className="flex-grow rounded-lg overflow-hidden flex flex-col border-2 border-neutral-200 bg-white dark:bg-neutral-950 dark:border-neutral-800 p-4">
       <PanelGroup
-        className="w-full h-full flex flex-col gap-2"
+        className="w-full h-full flex flex-col gap-2 "
         direction="vertical"
       >
         <VariableTable />
