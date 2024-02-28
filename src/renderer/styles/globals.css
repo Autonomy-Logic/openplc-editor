@@ -20,10 +20,6 @@
     fill: var(--primary-medium-dark);
   }
 
-  #title-bar-container {
-    top: env(titlebar-area-y, 0);
-  }
-
   /* Explanation: The recent projects carousel viewport (The visible part) */
   .embla__viewport {
     overflow: hidden;
@@ -141,65 +137,4 @@
   .dark ::-webkit-scrollbar {
     @apply bg-gray-900;
   }
-}
-
-/* classes for the titlebar */
-
-.cet-titlebar {
-  @apply dark:!bg-neutral-950 !z-10 !h-12 !flex;
-}
-.cet-titlebar-left {
-  @apply !flex !flex-grow !items-center  !w-fit;
-}
-.cet-container {
-  @apply !top-12;
-}
-.cet-icon {
-  @apply mx-6 !relative;
-}
-.cet-icon img {
-  @apply !h-7 !w-fit;
-}
-.cet-window-title {
-  @apply !max-w-full;
-}
-.cet-controls-container div {
-  @apply flex items-center justify-center rounded-md;
-}
-.cet-window-icon {
-  @apply !mr-5;
-}
-.cet-window-icon img {
-  @apply !h-10 !w-auto;
-}
-.cet-window-controls {
-  @apply !m-0 !right-0 !relative;
-}
-.cet-menubar div {
-  @apply flex rounded-md p-2  text-sm font-semibold leading-6;
-}
-.cet-menubar-menu-container {
-  @apply !mt-4 flex-col dark:!bg-neutral-900;
-}
-.cet-menubar-menu-button {
-  @apply dark:hover:!bg-neutral-900;
-}
-.cet-menubar {
-  @apply mx-6 items-center !w-full !overflow-hidden gap-6;
-}
-.cet-title.cet-title-center {
-  @apply !transform-none !max-w-[50%] !w-fit !flex-grow !static;
-}
-
-.inactive {
-  @apply !bg-gray-900;
-}
-.cet-titlebar-right {
-  @apply !h-10 !max-w-[25%] !w-fit !flex-grow;
-}
-.cet-titlebar-controls-container {
-  @apply !flex !justify-end !items-center !ml-auto;
-}
-.menu-divider{
-  @apply !h-5 !max-w-[1px] !w-[1px] bg-neutral-500 !p-0
 }
