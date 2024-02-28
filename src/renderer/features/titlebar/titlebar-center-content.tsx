@@ -1,18 +1,44 @@
 import { useLocation } from 'react-router-dom'
 import { OpenPLCIcon } from '~/renderer/assets/icons/oplc'
+import { useOpenPLCStore } from '~/renderer/store'
 
 export const TitlebarCenterContent = () => {
+	/**
+	 * Get the platform name from the store and check if it's macOS
+	 */
+	const platformName = useOpenPLCStore().platformName
+	const isMac = platformName === 'darwin'
+	/**
+	 * Get information about the current location to perform conditional rendering
+	 */
 	const navigation = useLocation()
 	const path = navigation.pathname
-
 	/**
-	 * TODO: Add the titlebar center content here based on the OS
+	 * Create a template for macOS systems
+	 */
+	const DarwinTemplate = () => {
+		return (
+			<>
+				<OpenPLCIcon />
+				<span className='text-xs font-normal font-caption'>OpenPLC Editor</span>
+			</>
+		)
+	}
+	/**
+	 * Create a template for windows and other systems
+	 */
+	const DefaultTemplate = () =>
+		!path.includes('/workspace') ? (
+			<span className='text-xs font-normal font-caption'>OpenPLC Editor</span>
+		) : (
+			<></>
+		)
+	/**
+	 * Render the appropriate template based on the platform
 	 */
 	return (
 		<div className='oplc-titlebar-drag-region flex flex-1 items-center justify-center gap-2'>
-			{!path.includes('/workspace') && (
-				<span className='text-xs font-normal font-caption'>OpenPLC Editor</span>
-			)}
+			{isMac ? <DarwinTemplate /> : <DefaultTemplate />}
 		</div>
 	)
 }

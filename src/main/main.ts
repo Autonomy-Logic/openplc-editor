@@ -1,4 +1,4 @@
-import { release } from 'os'
+import { release, platform } from 'os'
 import path from 'path'
 /* eslint-disable @typescript-eslint/no-var-requires */
 /* eslint global-require: off, no-console: off */
@@ -14,7 +14,14 @@ import path from 'path'
 //   attachTitlebarToWindow,
 //   setupTitlebar,
 // } from "custom-electron-titlebar/main";
-import { BrowserWindow, app, ipcMain, nativeTheme, shell } from 'electron'
+import {
+	BrowserWindow,
+	app,
+	ipcMain,
+	nativeTheme,
+	shell,
+	webContents,
+} from 'electron'
 import log from 'electron-log'
 import { autoUpdater } from 'electron-updater'
 
@@ -192,6 +199,10 @@ const createWindow = async () => {
 		return { action: 'deny' }
 	})
 
+	/**
+	 * Add event listeners...
+	 */
+
 	// Handles the creation of the menu
 	const menuBuilder = new MenuBuilder(mainWindow)
 	menuBuilder.buildMenu()
@@ -209,10 +220,6 @@ const createWindow = async () => {
 	// eslint-disable-next-line
 	new AppUpdater()
 }
-
-/**
- * Add event listeners...
- */
 
 // Disable GPU Acceleration for Windows 7;
 if (release().startsWith('6.1')) app.disableHardwareAcceleration()
