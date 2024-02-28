@@ -3,6 +3,7 @@ import { cn } from "~/utils";
 
 type ICodeIconProps = ComponentProps<"svg"> & {
   size?: "sm" | "md" | "lg";
+  variableAsCode?: boolean;
 };
 const sizeClasses = {
   sm: "w-7 h-7",
@@ -11,7 +12,7 @@ const sizeClasses = {
 };
 
 export const CodeIcon = (props: ICodeIconProps) => {
-  const { className, size = "sm", ...res } = props;
+  const { variableAsCode, className, size = "sm", ...res } = props;
 
   return (
     <svg
@@ -22,10 +23,14 @@ export const CodeIcon = (props: ICodeIconProps) => {
       className={cn(`${sizeClasses[size]}`, className)}
       {...res}
     >
-      <rect width="30" height="28" fill="#EDEFF2" />
+      <rect
+        width="30"
+        height="28"
+        fill={variableAsCode ? "#0464FB" : "#EDEFF2"}
+      />
       <path
         d="M18.3333 17.3333L21.6667 14L18.3333 10.6667M11.6667 10.6667L8.33333 14L11.6667 17.3333M16.3333 8L13.6667 20"
-        stroke="#C8D0D9"
+        stroke={variableAsCode ? "white" : "#C8D0D9"}
         stroke-width="1.5"
         stroke-linecap="round"
         stroke-linejoin="round"

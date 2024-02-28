@@ -3,6 +3,7 @@ import { cn } from "~/utils";
 
 type ITableIconProps = ComponentProps<"svg"> & {
   size?: "sm" | "md" | "lg";
+  variableAsTable?: boolean;
 };
 const sizeClasses = {
   sm: "w-7 h-7",
@@ -11,7 +12,7 @@ const sizeClasses = {
 };
 
 export const TableIcon = (props: ITableIconProps) => {
-  const { className, size = "sm", ...res } = props;
+  const { variableAsTable, className, size = "sm", ...res } = props;
 
   return (
     <svg
@@ -22,10 +23,14 @@ export const TableIcon = (props: ITableIconProps) => {
       className={cn(`${sizeClasses[size]}`, className)}
       {...res}
     >
-      <rect width="30" height="28" fill="#0464FB" />
+      <rect
+        width="30"
+        height="28"
+        fill={variableAsTable ? "#0464FB" : "#EDEFF2"}
+      />
       <path
         d="M9 12H21M9 16H21M15 8V20M12.2 8H17.8C18.9201 8 19.4802 8 19.908 8.21799C20.2843 8.40973 20.5903 8.71569 20.782 9.09202C21 9.51984 21 10.0799 21 11.2V16.8C21 17.9201 21 18.4802 20.782 18.908C20.5903 19.2843 20.2843 19.5903 19.908 19.782C19.4802 20 18.9201 20 17.8 20H12.2C11.0799 20 10.5198 20 10.092 19.782C9.71569 19.5903 9.40973 19.2843 9.21799 18.908C9 18.4802 9 17.9201 9 16.8V11.2C9 10.0799 9 9.51984 9.21799 9.09202C9.40973 8.71569 9.71569 8.40973 10.092 8.21799C10.5198 8 11.0799 8 12.2 8Z"
-        stroke="white"
+        stroke={variableAsTable ? "white" : "#C8D0D9"}
         stroke-width="1.5"
         stroke-linecap="round"
         stroke-linejoin="round"
