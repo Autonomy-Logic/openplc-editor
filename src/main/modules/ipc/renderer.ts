@@ -21,6 +21,9 @@ const rendererProcessBridge = {
 	 * Refactor: This can be optimized.
 	 */
 	getOSInfo: () => ipcRenderer.invoke('system:get-os'),
+	closeWindow: () => ipcRenderer.send('window-controls:close'),
+	minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
+	maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
 	// WIP: Refactoring
 	getTheme: () => ipcRenderer.invoke('app:get-theme'),
 	// setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),

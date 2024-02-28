@@ -50,6 +50,8 @@ if (process.env.NODE_ENV === 'production') {
 	sourceMapSupport.install()
 }
 
+const isMac = platform() === 'darwin'
+
 const isDebug =
 	process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true'
 
@@ -69,10 +71,6 @@ const installExtensions = async () => {
 		)
 		.catch(console.log)
 }
-
-// Set up the custom title bar;
-// REFACTOR
-// setupTitlebar();
 
 const createWindow = async () => {
 	// Check if the application is on debug method, install the extensions
@@ -94,10 +92,6 @@ const createWindow = async () => {
 	 * Get the window bounds from the store.
 	 */
 	const { bounds } = store.get('window')
-
-	const windowControlColor = nativeTheme.shouldUseDarkColors
-		? '#121316'
-		: '#011e4b'
 
 	// Create a new browser window for the splash screen
 	splash = new BrowserWindow({
@@ -129,10 +123,7 @@ const createWindow = async () => {
 		show: false,
 		icon: getAssetPath('icon.png'),
 		titleBarStyle: 'hidden',
-		titleBarOverlay: {
-			color: windowControlColor,
-			symbolColor: '#fff',
-		},
+		titleBarOverlay: isMac,
 		frame: false,
 		webPreferences: {
 			sandbox: false,

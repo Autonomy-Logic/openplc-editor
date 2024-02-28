@@ -69,6 +69,17 @@ class MainProcessBridge implements MainIpcModule {
 			const response = platform
 			return response
 		})
+		this.ipcMain.on('window-controls:close', () => this.mainWindow?.close())
+		this.ipcMain.on('window-controls:minimize', () =>
+			this.mainWindow?.minimize()
+		)
+		this.ipcMain.on('window-controls:maximize', () => {
+			if (this.mainWindow?.isMaximized()) {
+				this.mainWindow?.restore()
+			} else {
+				this.mainWindow?.maximize()
+			}
+		})
 		// Wip: From here
 
 		this.ipcMain.handle('app:get-theme', this.mainIpcEventHandlers.getTheme)

@@ -10,7 +10,7 @@
     --primary-medium-dark: #023c97;
     --primary-dark: #011e4b;
     /* Fallback variables to set the height of the titlebar based on OS */
-    --fallback-title-bar-height: 3rem;
+    --oplc-title-bar-height: 2rem;
     --fallback-darwin-title-bar-height: 1.75rem;
   }
 
@@ -78,9 +78,9 @@
   /* Classes for the custom titlebar*/
   .oplc-titlebar-container {
     position: absolute;
-    top: env(titlebar-area-y, 0);
+    top: 0;
     width: 100%;
-    height: env(titlebar-area-height);
+    height: var(--oplc-title-bar-height);
   }
   .oplc-titlebar-content {
     position: absolute;
@@ -89,8 +89,8 @@
     user-select: none;
     height: 100%;
     background-color: var(--primary-dark);
-    left: env(titlebar-area-x, 0);
-    width: env(titlebar-area-width, 100%);
+    left: 0;
+    width: 100%;
   }
   .oplc-titlebar-drag-region {
     app-region: drag;
@@ -101,7 +101,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    top: env(titlebar-area-height);
+    top: var(--oplc-title-bar-height);
     overflow: hidden;
   }
 }
