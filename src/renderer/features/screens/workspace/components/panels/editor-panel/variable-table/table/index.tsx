@@ -16,7 +16,7 @@ export default function TableRoot({ tableData }) {
 
   return (
     <div className=" rounded-lg border border-neutral-300 overflow-auto scroll-mt-2">
-      <table className="w-full">
+      <table className="w-full ">
         <thead className="border-b border-neutral-300">
           <tr>
             {tableTitle.map((title) => (
@@ -24,7 +24,7 @@ export default function TableRoot({ tableData }) {
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-neutral-300">
+        <tbody className=" divide-y divide-neutral-300">
           {tableData.map((row, index) => (
             <TableRow key={index} row={row} />
           ))}

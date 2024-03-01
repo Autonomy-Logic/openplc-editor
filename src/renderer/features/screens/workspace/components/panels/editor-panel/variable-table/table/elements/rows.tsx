@@ -1,13 +1,18 @@
+import { useState } from "react";
 import { cn } from "~/utils";
+import ModalTypes from "../components/modal";
 
 export default function TableRow({ row }) {
-  const tdDefaultStyle = "h-8 px-3 font-medium text-neutral-500 text-xs w-[10%] !min-w-[128px]";
+  const [showModal, setShowModal] = useState(false);
+
+  const tdDefaultStyle =
+    "h-8  font-medium text-neutral-500 text-xs w-[10%] !min-w-[128px]";
   const selectDefaultStyle =
     "w-full bg-inherit focus:outline-none text-center ";
   const optionDefaultStyle =
     "w-full bg-inherit focus:outline-none text-center rounded-2xl";
   return (
-    <tr className="divide-x divide-neutral-300 ">
+    <tr className=" divide-x divide-neutral-300 ">
       <td className={cn(tdDefaultStyle, "w-[6%]")}>
         <p className="text-neutral-400 text-center w-full">{row.id}</p>
       </td>
@@ -28,7 +33,13 @@ export default function TableRow({ row }) {
           ))}
         </select>
       </td>
-      <td className={tdDefaultStyle}></td>
+
+
+      <td className={`${tdDefaultStyle} relative`}>
+        <ModalTypes />
+      </td>
+
+
       <td className={tdDefaultStyle}></td>
       <td className={tdDefaultStyle}>
         <input

@@ -73,10 +73,14 @@ export default function VariableTable() {
   };
 
   return (
-    <Panel defaultSize={31} className="flex flex-col gap-4 w-full h-full">
-      {/* Controles */}
+    <Panel
+      collapsible={true}
+      collapsedSize={0}
+      minSize={25}
+      defaultSize={31}
+      className="flex flex-col gap-4 w-full h-full"
+    >
       <div className="flex justify-between">
-        {/* Descrição e Filtro */}
         {!variableAsCode ? (
           <div className="flex gap-4">
             <div className="flex gap-4 items-center">
@@ -123,7 +127,11 @@ export default function VariableTable() {
         </div>
       </div>
 
-      {!variableAsCode ? <TableRoot tableData={tableData} /> : <VariableCode />}
+      {!variableAsCode ? (
+        <TableRoot tableData={tableData} optionsMock={optionsMock} />
+      ) : (
+        <VariableCode />
+      )}
     </Panel>
   );
 }

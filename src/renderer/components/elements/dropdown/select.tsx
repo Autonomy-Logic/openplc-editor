@@ -13,7 +13,7 @@ type DropdownSelectProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 	icon?: ReactNode
 	setShowOptions: Dispatch<SetStateAction<boolean>>
 	showOptions: boolean
-	placeholder: string
+	placeholder?: string
 }
 export default function Select({
 	selectedOption,
