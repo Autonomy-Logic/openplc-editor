@@ -67,7 +67,7 @@ export default function ActionsBar() {
 					selectedOption={selectedOption}
 				/>
 			</Dropdown.Root>
-			<Search.Root className='flex flex-grow w-[704px] border-neutral-100 border-[1.5px] gap-4 px-8 rounded-lg text-base font-caption items-center h-14 bg-white dark:bg-neutral-50'>
+			<Search.Root className='flex flex-grow w-[704px] mr-4 border-neutral-100 border-[1.5px] gap-4 px-8 rounded-lg text-base font-caption items-center h-14 bg-white dark:bg-neutral-50'>
 				<MagnifierIcon className='stroke-brand cursor-default' />
 				<Search.Input
 					className='w-full h-full bg-inherit outline-none text-black'
