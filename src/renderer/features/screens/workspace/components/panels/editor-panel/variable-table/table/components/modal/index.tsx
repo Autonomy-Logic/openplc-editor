@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { ExitIcon } from "~/renderer/assets";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 
 export default function ModalTypes() {
   const optionsMock = [
@@ -25,6 +25,7 @@ export default function ModalTypes() {
     "DWORD",
     "LWORD",
   ];
+
   const types = [
     { name: "Base Types", value: optionsMock },
     { name: "User Data Types", value: [] },
@@ -35,57 +36,55 @@ export default function ModalTypes() {
   const [hoveredName, setHoveredName] = useState(null);
   const [selectedType, setSelectedType] = useState(null);
 
-  const modalDefaultStyle =
-    "rounded absolute z-50 bg-white border border-neutral-300 shadow-xl p-[4px]";
-
   const handleSelectType = (type) => {
     setSelectedType(type);
     setHoveredName(null);
   };
 
   return (
-    <Popover.Root>
-      <Popover.Trigger asChild>
-        <button className="w-full h-full" aria-label="Update dimensions">
-          {selectedType}
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button className="w-full h-full flex justify-between" aria-label="Customise options">
+          {selectedType ? selectedType : <p></p>}
+          <p className="rotate-180">^</p>
         </button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          className={`${modalDefaultStyle} left-[82px] -top-8 w-[200px] rounded-xl`}
+      </DropdownMenu.Trigger>
+
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          className="z-50 min-w-[220px] bg-white rounded-sm border border-neutral-300 p-[5px] "
+          align="start"
         >
-          {types.map((type, index) => (
-            <div
-              key={index}
-              onMouseEnter={() => setHoveredName(type.name)}
-              onMouseLeave={() => setHoveredName(null)}
-              onClick={(e) => e.preventDefault()}
-            >
-              <h1 className="p-[4px] rounded-md hover:bg-neutral-200 ">
+          {types.map((type) => (
+            <DropdownMenu.Sub key={type.name}>
+              <DropdownMenu.SubTrigger
+                onMouseEnter={() => setHoveredName(type.name)}
+                className="focus:outline-none hover:bg-neutral-100 p-1 rounded-md"
+              >
                 {type.name}
-              </h1>
-              {hoveredName === type.name && type.value.length > 0 && (
-                <Popover.Content
-                  className={`${modalDefaultStyle} left-[275px] -top-8 z-50 w-[120px]`}
+              </DropdownMenu.SubTrigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.SubContent
+                  className="z-50 min-w-[220px] bg-white rounded-md p-[5px] border border-neutral-300 "
+                  sideOffset={2}
+                  alignOffset={-5}
                 >
-                  {type.value.map((option, index) => {
-                    return (
-                      <p
-                        type="button"
+                  {hoveredName === type.name &&
+                    type.value.map((option) => (
+                      <DropdownMenu.Item
+                        key={option}
                         onClick={() => handleSelectType(option)}
-                        className="p-[4px] rounded-md hover:bg-neutral-200"
-                        key={index}
+                        className="hover:bg-neutral-100 rounded-md w-full  focus:outline-none p-1"
                       >
                         {option}
-                      </p>
-                    );
-                  })}
-                </Popover.Content>
-              )}
-            </div>
+                      </DropdownMenu.Item>
+                    ))}
+                </DropdownMenu.SubContent>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Sub>
           ))}
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
