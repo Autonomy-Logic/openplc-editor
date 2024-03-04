@@ -47,9 +47,10 @@ const Leaf = (props: ILeafProps) => {
 			>
 				{hasChildren && (
 					<ArrowIcon
+						direction='right'
 						className={cn(
 							`stroke-brand-light w-4 h-4 transition-all ${
-								childVisible && 'stroke-brand rotate-90'
+								childVisible && 'stroke-brand rotate-270'
 							}`
 						)}
 					/>

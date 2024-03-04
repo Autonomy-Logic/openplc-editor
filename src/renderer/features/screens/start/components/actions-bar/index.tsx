@@ -1,4 +1,4 @@
-import { ElementType, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowIcon, MagnifierIcon } from '~renderer/assets/icons'
 
 import { Dropdown } from '~renderer/components/elements'

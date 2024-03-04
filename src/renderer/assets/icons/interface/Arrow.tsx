@@ -1,9 +1,17 @@
-import { ComponentProps } from 'react'
+import { ComponentPropsWithRef, ElementType } from 'react'
 import { cn } from '~/utils'
 
-type IArrowIconProps = ComponentProps<'svg'> & {
+type IArrowIconProps = ComponentPropsWithRef<'svg'> & {
 	variant?: 'default' | 'primary' | 'secondary'
+	direction?: 'up' | 'down' | 'left' | 'right'
 	size?: 'sm' | 'md' | 'lg'
+}
+
+const directionClasses = {
+	left: 'rotate-0',
+	up: 'rotate-90',
+	right: 'rotate-180',
+	down: 'rotate-270',
 }
 
 const variantClasses = {
@@ -18,8 +26,14 @@ const sizeClasses = {
 	lg: 'w-8 h-8',
 }
 
-export const ArrowIcon = (props: IArrowIconProps) => {
-	const { className, variant = 'default', size = 'sm', ...res } = props
+export const ArrowIcon: ElementType<IArrowIconProps> = ({
+	className,
+	variant = 'default',
+	size = 'sm',
+	direction = 'left',
+	ref,
+	...res
+}) => {
 	return (
 		<svg
 			role='button'
@@ -29,13 +43,15 @@ export const ArrowIcon = (props: IArrowIconProps) => {
 			aria-label='Arrow Icon'
 			className={cn(
 				`${variantClasses[variant]}`,
+				`${directionClasses[direction]}`,
 				`${sizeClasses[size]}`,
 				className
 			)}
+			ref={ref}
 			{...res}
 		>
 			<path
-				d='M21 10.5L14 17.5L7 10.5'
+				d='M17.5002 21L10.5002 14L17.5002 7'
 				stroke='current-color'
 				strokeWidth='1.5'
 				strokeLinecap='round'

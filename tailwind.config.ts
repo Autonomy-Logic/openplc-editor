@@ -58,6 +58,9 @@ module.exports = {
        '3xl': "2048px",
        '4xl': "2560px",
       },
+      rotate: {
+        270: "270deg",
+      }
     },
   },
   variants: {

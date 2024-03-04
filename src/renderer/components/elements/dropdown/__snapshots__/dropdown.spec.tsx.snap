@@ -59,7 +59,7 @@ exports[`Select Component renders correctly 1`] = `
     type="button"
   >
     Select an option
-    <p
+    <div
       class="flex items-center justify-between w-28"
     >
       <span
@@ -67,7 +67,7 @@ exports[`Select Component renders correctly 1`] = `
       >
         Option 1
       </span>
-    </p>
+    </div>
   </button>
 </div>
 `;
