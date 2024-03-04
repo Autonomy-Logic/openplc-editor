@@ -105,6 +105,9 @@ export default class MenuBuilder {
 
 	// Wip: Constructing a mac machines menu.
 	buildDarwinTemplate(): MenuItemConstructorOptions[] {
+		const defaultDarwinMenu: MenuItemConstructorOptions = {
+			submenu: [{ label: 'Test', click: () => console.log('Test clicked') }],
+		}
 		const subMenuFile: DarwinMenuItemConstructorOptions = {
 			label: i18n.t('menu:file.label'),
 			submenu: [
@@ -317,7 +320,13 @@ export default class MenuBuilder {
 			],
 		}
 
-		return [subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp]
+		return [
+			defaultDarwinMenu,
+			subMenuFile,
+			subMenuEdit,
+			subMenuDisplay,
+			subMenuHelp,
+		]
 	}
 
 	// Wip: Constructing a default machines menu.
