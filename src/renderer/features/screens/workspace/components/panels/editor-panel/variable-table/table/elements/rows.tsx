@@ -1,16 +1,14 @@
 import { useState } from "react";
 import { cn } from "~/utils";
-import ModalTypes from "../components/modal";
+import DropdownTypes from "../components/typesDropdown";
+import OptionsDropdown from "../components/optionsDropdown";
 
 export default function TableRow({ row }) {
-  const [showModal, setShowModal] = useState(false);
-
   const tdDefaultStyle =
     "h-8  font-medium text-neutral-500 text-xs w-[10%] !min-w-[128px]";
   const selectDefaultStyle =
     "w-full bg-inherit focus:outline-none text-center ";
-  const optionDefaultStyle =
-    "w-full bg-inherit focus:outline-none text-center rounded-2xl";
+
   return (
     <tr className=" divide-x divide-neutral-300 ">
       <td className={cn(tdDefaultStyle, "w-[6%]")}>
@@ -24,21 +22,13 @@ export default function TableRow({ row }) {
           onChange={(e) => console.log(e.target.value)}
         />
       </td>
-      <td className={tdDefaultStyle}>
-        <select defaultValue="local" className={selectDefaultStyle}>
-          {row.class.map((option, index) => (
-            <option className={optionDefaultStyle} key={index}>
-              {option.name}
-            </option>
-          ))}
-        </select>
+      <td className={`${tdDefaultStyle} relative`}>
+        <OptionsDropdown row={row} value="class" />
       </td>
-
 
       <td className={`${tdDefaultStyle} relative`}>
-        <ModalTypes />
+        <DropdownTypes row={row} />
       </td>
-
 
       <td className={tdDefaultStyle}></td>
       <td className={tdDefaultStyle}>
@@ -48,14 +38,8 @@ export default function TableRow({ row }) {
           className={selectDefaultStyle}
         />
       </td>
-      <td className={tdDefaultStyle}>
-        <select defaultValue="constant" className={selectDefaultStyle}>
-          {row.option.map((option, index) => (
-            <option className={optionDefaultStyle} key={index}>
-              {option.name}
-            </option>
-          ))}
-        </select>
+      <td className={`${tdDefaultStyle} relative`}>
+        <OptionsDropdown row={row} value="option" />
       </td>
       <td className={tdDefaultStyle}></td>
       <td className={tdDefaultStyle}>
