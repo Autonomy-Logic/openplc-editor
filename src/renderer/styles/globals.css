@@ -16,7 +16,7 @@
 
   /* This can be useful to allocate the main container */
 
-  #folder-root p:hover ~ svg #folder-path {
+  #folder-root p:hover~svg #folder-path {
     fill: var(--primary-medium-dark);
   }
 
@@ -24,6 +24,7 @@
   .embla__viewport {
     overflow: hidden;
   }
+
   /* Explanation: Container for each card */
   .embla__container {
     display: flex;
@@ -52,6 +53,7 @@
     width: 4rem;
     height: 4rem;
   }
+
   /* Review: Repeated class */
   .embla__button {
     -webkit-appearance: none;
@@ -64,17 +66,21 @@
     padding: 0;
     margin: 0;
   }
+
   .embla__button:disabled {
     opacity: 0.3;
   }
+
   .embla__button__svg {
     width: 65%;
     height: 65%;
   }
+
   /* Code-Block - End */
 }
 
 @layer components {
+
   /* Classes for the custom titlebar*/
   .oplc-titlebar-container {
     position: absolute;
@@ -82,6 +88,7 @@
     width: 100%;
     height: var(--oplc-title-bar-height);
   }
+
   .oplc-titlebar-content {
     position: absolute;
     top: 0;
@@ -92,9 +99,11 @@
     left: 0;
     width: 100%;
   }
+
   .oplc-titlebar-drag-region {
     app-region: drag;
   }
+
   .oplc-main-content {
     position: absolute;
     display: flex;
@@ -104,15 +113,57 @@
     top: var(--oplc-title-bar-height);
     overflow: hidden;
   }
+
+  /* Classes for custom scroll areas */
+  .scroll-area {
+    display: flex;
+    gap: 1.5rem;
+    overflow: auto;
+    flex-wrap: wrap;
+    height: 100%;
+  }
+
+  .scroll-area::-webkit-scrollbar {
+    @apply flex transition-colors duration-[160ms] ease-out w-[6px];
+  }
+
+  .scroll-area:hover::-webkit-scrollbar-thumb {
+    @apply bg-[#0350c9]
+  }
+
+  .scroll-area::-webkit-scrollbar-thumb {
+    @apply bg-[#0350c9] bg-opacity-30 rounded-lg hover:bg-opacity-100 transition-colors ease-in-out duration-700;
+  }
+
+  .scroll-area-horizontal {
+    display: flex;
+    gap: 1.5rem;
+    padding-bottom: 12px;
+    overflow: auto;
+  }
+
+  .scroll-area-horizontal:hover::-webkit-scrollbar-thumb {
+    background-color: #0350c9;
+  }
+
+  .scroll-area-horizontal::-webkit-scrollbar {
+    @apply h-2;
+  }
+
+  .scroll-area-horizontal::-webkit-scrollbar-thumb {
+    @apply bg-[#0350c9] bg-opacity-30 rounded-lg hover:bg-opacity-100 transition-colors ease-in-out duration-700;
+  }
 }
 
 @layer utilities {
   .press-animated {
     @apply border-[none] transition-[0.2s] duration-[all] active:scale-[0.90];
   }
+
   .no-drag-window {
     -webkit-app-region: no-drag;
   }
+
   .scrollbar-white ::-webkit-scrollbar {
     @apply bg-white;
   }
@@ -122,19 +173,22 @@
   button {
     @apply outline-none;
   }
-  ::-webkit-scrollbar {
-    @apply w-1 bg-neutral-200;
-  }
-  ::-webkit-scrollbar-corner {
-    @apply bg-transparent;
-  }
-  :-webkit-scrollbar-track {
-    @apply bg-transparent !w-full;
-  }
-  ::-webkit-scrollbar-thumb {
-    @apply rounded-[0.625rem]  bg-brand bg-clip-padding hover:bg-brand-medium;
-  }
-  .dark ::-webkit-scrollbar {
-    @apply bg-gray-900;
-  }
+
 }
+
+/*
+::-webkit-scrollbar {
+  @apply w-1 bg-neutral-200;
+}
+::-webkit-scrollbar-corner {
+  @apply bg-transparent;
+}
+:-webkit-scrollbar-track {
+  @apply bg-transparent !w-full;
+}
+::-webkit-scrollbar-thumb {
+  @apply rounded-[0.625rem]  bg-brand bg-clip-padding hover:bg-brand-medium;
+}
+.dark ::-webkit-scrollbar {
+  @apply bg-gray-900;
+} */
