@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { cn } from "~/utils";
 import DropdownTypes from "../components/typesDropdown";
-import OptionsDropdown from "../components/optionsDropdown";
 
 export default function TableRow({ row }) {
   const tdDefaultStyle =
