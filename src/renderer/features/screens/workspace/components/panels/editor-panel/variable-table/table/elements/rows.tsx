@@ -23,11 +23,11 @@ export default function TableRow({ row }) {
         />
       </td>
       <td className={`${tdDefaultStyle} `}>
-        <OptionsDropdown row={row} value="class" />
+        <DropdownTypes row={row} value="class" />
       </td>
 
       <td className={`${tdDefaultStyle} `}>
-        <DropdownTypes row={row} />
+        <DropdownTypes row={row}  value="type"/>
       </td>
 
       <td className={tdDefaultStyle}></td>
@@ -39,7 +39,7 @@ export default function TableRow({ row }) {
         />
       </td>
       <td className={`${tdDefaultStyle}`}>
-        <OptionsDropdown row={row} value="option" />
+        <DropdownTypes row={row} value="option" />
       </td>
       <td className={tdDefaultStyle}></td>
       <td className={tdDefaultStyle}>
