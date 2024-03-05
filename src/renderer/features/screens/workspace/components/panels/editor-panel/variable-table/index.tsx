@@ -29,6 +29,13 @@ const optionsMock = [
   "LWORD",
 ];
 
+const types = [
+  { name: "Base Types", value: optionsMock },
+  { name: "User Data Types", value: [] },
+  { name: "Native Data Types", value: ["LOGLEVEL"] },
+  { name: "Array", value: [] },
+];
+
 const classes = [
   { name: "input", value: "" },
   { name: "output", value: "" },
@@ -47,7 +54,7 @@ const initialTableRow = {
   id: 1,
   name: "",
   class: classes,
-  type: optionsMock,
+  type: types,
   localization: "",
   initialValue: "",
   option: options,

@@ -1,36 +1,8 @@
 import { useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 
-export default function DropdownTypes() {
-  const optionsMock = [
-    "BOOL",
-    "SINT",
-    "INT",
-    "DINT",
-    "LINT",
-    "USINT",
-    "UINT",
-    "UDINT",
-    "ULINT",
-    "REAL",
-    "LREAL",
-    "TIME",
-    "DATE",
-    "TOD",
-    "DT",
-    "STRING",
-    "BYTE",
-    "WORD",
-    "DWORD",
-    "LWORD",
-  ];
-
-  const types = [
-    { name: "Base Types", value: optionsMock },
-    { name: "User Data Types", value: [] },
-    { name: "Native Data Types", value: ["LOGLEVEL"] },
-    { name: "Array", value: [] },
-  ];
+export default function DropdownTypes({ row }) {
+  console.log(row);
 
   const [hoveredName, setHoveredName] = useState(null);
   const [selectedType, setSelectedType] = useState(null);
@@ -52,7 +24,7 @@ export default function DropdownTypes() {
         className="z-50 hover:scale-105 cursor-pointer  transition-all duration-100 w-[var(--radix-popper-anchor-width)] bg-white rounded-sm border border-neutral-300 text-neutral-400 font-medium text-xs"
         align="start"
       >
-        {types.map((type) => (
+        {row.type.map((type) => (
           <DropdownMenu.Sub key={type.name}>
             <DropdownMenu.SubTrigger
               onMouseEnter={() => setHoveredName(type.name)}
