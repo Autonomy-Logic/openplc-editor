@@ -1,5 +1,4 @@
 import { useState } from "react";
-import * as Popover from "@radix-ui/react-popover";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 
 export default function DropdownTypes() {
@@ -43,52 +42,47 @@ export default function DropdownTypes() {
 
   return (
     <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button
-          className="w-full h-full items-center justify-center bg-inherit focus:outline-none"
-          aria-label="Customise options"
-        >
+      <DropdownMenu.Trigger className="w-full cursor-pointer h-full items-center justify-center bg-inherit focus:outline-none">
+        <button aria-label="Customise options">
           {selectedType ? selectedType : <p></p>}
         </button>
       </DropdownMenu.Trigger>
 
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          className="z-50 min-w-[180px] bg-white rounded-sm border border-neutral-300 text-neutral-400 font-medium text-xs"
-          align="start"
-        >
-          {types.map((type) => (
-            <DropdownMenu.Sub key={type.name}>
-              <DropdownMenu.SubTrigger
-                onMouseEnter={() => setHoveredName(type.name)}
-                className="focus:outline-none hover:bg-neutral-100 p-1  w-full h-full"
-              >
-                {type.name}
-              </DropdownMenu.SubTrigger>
+      <DropdownMenu.Content
+        className="z-50 hover:scale-105 cursor-pointer  transition-all duration-100 w-[var(--radix-popper-anchor-width)] bg-white rounded-sm border border-neutral-300 text-neutral-400 font-medium text-xs"
+        align="start"
+      >
+        {types.map((type) => (
+          <DropdownMenu.Sub key={type.name}>
+            <DropdownMenu.SubTrigger
+              onMouseEnter={() => setHoveredName(type.name)}
+              className="focus:outline-none  hover:bg-neutral-100 p-1  w-full h-full"
+            >
+              {type.name}
+            </DropdownMenu.SubTrigger>
 
-              {type.value.length > 0 && hoveredName === type.name && (
-                <DropdownMenu.Portal>
-                  <DropdownMenu.SubContent
-                    sideOffset={2}
-                    alignOffset={-1}
-                    className="z-50 min-w-[220px] bg-white border border-neutral-300  text-neutral-400 font-medium text-xs"
-                  >
-                    {type.value.map((option) => (
-                      <DropdownMenu.Item
-                        key={option}
-                        onClick={() => handleSelectType(option)}
-                        className="hover:bg-neutral-100  w-full focus:outline-none p-1"
-                      >
-                        {option}
-                      </DropdownMenu.Item>
-                    ))}
-                  </DropdownMenu.SubContent>
-                </DropdownMenu.Portal>
-              )}
-            </DropdownMenu.Sub>
-          ))}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
+            {type.value.length > 0 && hoveredName === type.name && (
+              <DropdownMenu.Portal>
+                <DropdownMenu.SubContent
+                  sideOffset={-4}
+                  alignOffset={-1}
+                  className="z-50 cursor-pointer transition-all duration-100 hover:scale-105 w-36 bg-white rounded-sm border border-neutral-300 text-neutral-400 font-medium text-xs"
+                >
+                  {type.value.map((option) => (
+                    <DropdownMenu.Item
+                      key={option}
+                      onClick={() => handleSelectType(option)}
+                      className="hover:bg-neutral-100  w-full focus:outline-none p-1"
+                    >
+                      {option}
+                    </DropdownMenu.Item>
+                  ))}
+                </DropdownMenu.SubContent>
+              </DropdownMenu.Portal>
+            )}
+          </DropdownMenu.Sub>
+        ))}
+      </DropdownMenu.Content>
     </DropdownMenu.Root>
   );
 }

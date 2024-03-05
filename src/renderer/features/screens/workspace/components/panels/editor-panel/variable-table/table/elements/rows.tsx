@@ -22,11 +22,11 @@ export default function TableRow({ row }) {
           onChange={(e) => console.log(e.target.value)}
         />
       </td>
-      <td className={`${tdDefaultStyle} relative`}>
+      <td className={`${tdDefaultStyle} `}>
         <OptionsDropdown row={row} value="class" />
       </td>
 
-      <td className={`${tdDefaultStyle} relative`}>
+      <td className={`${tdDefaultStyle} `}>
         <DropdownTypes row={row} />
       </td>
 
@@ -38,7 +38,7 @@ export default function TableRow({ row }) {
           className={selectDefaultStyle}
         />
       </td>
-      <td className={`${tdDefaultStyle} relative`}>
+      <td className={`${tdDefaultStyle}`}>
         <OptionsDropdown row={row} value="option" />
       </td>
       <td className={tdDefaultStyle}></td>
