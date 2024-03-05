@@ -9,6 +9,7 @@
 import { release, platform } from 'os'
 import path from 'path'
 import {
+	type BrowserWindowConstructorOptions,
 	BrowserWindow,
 	app,
 	ipcMain,
@@ -43,8 +44,16 @@ if (process.env.NODE_ENV === 'production') {
 	sourceMapSupport.install()
 }
 
-const systemInfo = platform() // Assuming you have 'process' available
-const titlebarOptionsMap = {
+// Retrieves the system information
+const systemInfo = platform()
+// The options to use when creating the titlebar. Type comes from electron.
+type OptTitlebar = {
+	titleBarStyle?: 'hidden' | 'default' | 'hiddenInset' | 'customButtonsOnHover'
+	titlebarOverlay: boolean
+	frame: boolean
+}
+
+const titlebarOptionsMap: Record<string, OptTitlebar> = {
 	darwin: {
 		titleBarStyle: 'hidden',
 		titlebarOverlay: true,
@@ -137,9 +146,6 @@ const createWindow = async () => {
 		show: false,
 		icon: getAssetPath('icon.png'),
 		...titlebarStyles,
-		// titleBarStyle: 'hidden',
-		// titleBarOverlay: isMac,
-		// frame: false,
 		webPreferences: {
 			sandbox: false,
 			preload: app.isPackaged
@@ -188,11 +194,6 @@ const createWindow = async () => {
 		if (process.env.START_MINIMIZED) {
 			mainWindow.minimize()
 		}
-		// REFACTOR
-		// else {
-		//   // Attach the custom titlebar to the window;
-		//   attachTitlebarToWindow(mainWindow);
-		// }
 	})
 
 	mainWindow.on('closed', () => {
