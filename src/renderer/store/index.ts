@@ -8,12 +8,20 @@ import createWorkspaceSlice, {
 	WorkspaceSlice as WorkspaceSliceType,
 } from './slices/workspace-slice'
 
+import {
+	createPlatformSlice,
+	type IPlatformSlice,
+} from './slices/platform-slice'
+
 /**
  * Create the base store to be exported as a hook.
  */
-export const openPLCStoreBase = create<WorkspaceSliceType>()((...a) => ({
-	...createWorkspaceSlice(...a),
-}))
+export const openPLCStoreBase = create<WorkspaceSliceType & IPlatformSlice>()(
+	(...a) => ({
+		...createWorkspaceSlice(...a),
+		...createPlatformSlice(...a),
+	})
+)
 
 /**
  * Create the store as a hook and generate the selectors using the createSelectorHooks function.

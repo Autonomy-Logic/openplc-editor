@@ -2,6 +2,8 @@
 import {
 	ButtonHTMLAttributes,
 	Dispatch,
+	ReactElement,
+	ElementType,
 	ReactNode,
 	SetStateAction,
 } from 'react'
@@ -10,14 +12,14 @@ import { cn } from '~/utils'
 
 type DropdownSelectProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 	selectedOption: string
-	icon?: ReactNode
+	Icon?: ElementType
 	setShowOptions: Dispatch<SetStateAction<boolean>>
 	showOptions: boolean
 	placeholder?: string
 }
 export default function Select({
 	selectedOption,
-	icon,
+	Icon,
 	setShowOptions,
 	showOptions,
 	placeholder,
@@ -25,24 +27,28 @@ export default function Select({
 	...props
 }: DropdownSelectProps) {
 	return (
-		// eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
 		<button
 			type='button'
+			data-testid='dropdown-icon'
 			className={cn('select-none', className)}
 			onClick={() => setShowOptions(!showOptions)}
 			{...props}
 		>
 			{placeholder}
-			<p className='flex justify-between w-28'>
+			<div className='flex items-center justify-between w-28'>
 				<span className='text-black '>{selectedOption}</span>
-				<span
-					className={` ${
-						showOptions ? '-rotate-180' : 'rotate-0'
-					} transition-all `}
-				>
-					{icon}
-				</span>
-			</p>
+				{Icon && (
+					<Icon
+						size='md'
+						direction='right'
+						variant='primary'
+						className={cn(
+							`${showOptions && 'rotate-270'}`,
+							'stroke-brand inline transition-all'
+						)}
+					/>
+				)}
+			</div>
 		</button>
 	)
 }

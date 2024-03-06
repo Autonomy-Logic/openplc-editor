@@ -4,7 +4,6 @@
 		"submenu": {
 			"new": "New",
 			"open": "Open",
-			"recentProjects": "Recent projects",
 			"examples": {
 				"label": "Tutorials and examples",
 				"submenu": {
@@ -18,13 +17,13 @@
 				}
 			},
 			"save": "Save",
-			"saveAs": "Save as",
-			"closeTab": "Close tab",
-			"closeProject": "Close project",
-			"pageSetup": "Page setup",
+			"saveAs": "Save As",
+			"closeTab": "Close Tab",
+			"closeProject": "Close Project",
+			"pageSetup": "Page Setup",
 			"preview": "Preview",
 			"print": "Print",
-			"updates": "Check for updates",
+			"updates": "Check for Updates",
 			"quit": "Quit"
 		}
 	},
@@ -37,10 +36,19 @@
 			"copy": "Copy",
 			"paste": "Paste",
 			"find": "Find",
-			"findNext": "Find next",
-			"findPrevious": "Find previous",
-			"findInProject": "Find in project",
-			"addElement": "Add element",
+			"findNext": "Find Next",
+			"findPrevious": "Find Previous",
+			"findInProject": "Find in Project",
+			"addElement": {
+				"label": "Add Element",
+				"submenu": {
+					"function": "Function",
+					"functionBlock": "Function block",
+					"program": "Program",
+					"dataType": "Data type",
+					"cExtension": "C Extension"
+				}
+			},
 			"selectAll": "Select all",
 			"delete": "Delete"
 		}
@@ -49,12 +57,13 @@
 		"label": "Display",
 		"submenu": {
 			"refresh": "Refresh",
-			"clearErrors": "Clear errors",
-			"zoom": "Zoom",
-			"switchPerspective": "Switch perspective",
-			"fullScreen": "Full screen",
-			"resetPerspective": "Reset perspective",
-			"sortAlpha": "Sort alpha"
+			"clearErrors": "Clear Errors",
+			"zoomIn": "Zoom In",
+			"zoomOut": "Zoom Out",
+			"switchPerspective": "Switch Perspective",
+			"fullScreen": "Full Screen",
+			"resetPerspective": "Reset Perspective",
+			"sortAlpha": "Sort Alpha"
 		}
 	},
 	"help": {
@@ -63,5 +72,6 @@
 			"communitySupport": "Community support",
 			"about": "About"
 		}
-	}
+	},
+	"recents": "Recents"
 }

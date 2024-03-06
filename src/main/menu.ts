@@ -5,12 +5,12 @@ import { i18n } from '../utils/i18n'
 import { ProjectService } from './services'
 
 /**
- * Todo: Can be used to construct a different menu for mac machines.
+ * Wip: Interface for mac machines menu.
  */
-// interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
-//   selector?: string;
-//   submenu?: DarwinMenuItemConstructorOptions[] | Menu;
-// }
+interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
+	selector?: string
+	submenu?: DarwinMenuItemConstructorOptions[] | Menu
+}
 
 /**
  * Class to manage the creation of menu.
@@ -43,9 +43,9 @@ export default class MenuBuilder {
 
 		// Todo: Can be used to construct a different menu for mac machines.
 		const template =
-			// process.platform === 'darwin'
-			//   ? this.buildDarwinTemplate() :
-			this.buildDefaultTemplate()
+			process.platform === 'darwin'
+				? this.buildDarwinTemplate()
+				: this.buildDefaultTemplate()
 
 		const menu = Menu.buildFromTemplate(template)
 		Menu.setApplicationMenu(menu)
@@ -103,238 +103,300 @@ export default class MenuBuilder {
 		})
 	}
 
-	// Todo: Can be used to construct a different menu for mac machines.
-	// buildDarwinTemplate(): MenuItemConstructorOptions[] {
-	//   const subMenuAbout: DarwinMenuItemConstructorOptions = {
-	//     label: 'Electron',
-	//     submenu: [
-	//       {
-	//         label: 'About ElectronReact',
-	//         selector: 'orderFrontStandardAboutPanel:',
-	//       },
-	//       { type: 'separator' },
-	//       { label: 'Services', submenu: [] },
-	//       { type: 'separator' },
-	//       {
-	//         label: 'Hide ElectronReact',
-	//         accelerator: 'Command+H',
-	//         selector: 'hide:',
-	//       },
-	//       {
-	//         label: 'Hide Others',
-	//         accelerator: 'Command+Shift+H',
-	//         selector: 'hideOtherApplications:',
-	//       },
-	//       { label: 'Show All', selector: 'unhideAllApplications:' },
-	//       { type: 'separator' },
-	//       {
-	//         label: 'Quit',
-	//         accelerator: 'Command+Q',
-	//         click: () => {
-	//           app.quit();
-	//         },
-	//       },
-	//     ],
-	//   };
-	//   const subMenuEdit: DarwinMenuItemConstructorOptions = {
-	//     label: 'Edit',
-	//     submenu: [
-	//       { label: 'Undo', accelerator: 'Command+Z', selector: 'undo:' },
-	//       { label: 'Redo', accelerator: 'Shift+Command+Z', selector: 'redo:' },
-	//       { type: 'separator' },
-	//       { label: 'Cut', accelerator: 'Command+X', selector: 'cut:' },
-	//       { label: 'Copy', accelerator: 'Command+C', selector: 'copy:' },
-	//       { label: 'Paste', accelerator: 'Command+V', selector: 'paste:' },
-	//       {
-	//         label: 'Select All',
-	//         accelerator: 'Command+A',
-	//         selector: 'selectAll:',
-	//       },
-	//     ],
-	//   };
-	//   const subMenuViewDev: MenuItemConstructorOptions = {
-	//     label: 'View',
-	//     submenu: [
-	//       {
-	//         label: 'Reload',
-	//         accelerator: 'Command+R',
-	//         click: () => {
-	//           this.mainWindow.webContents.reload();
-	//         },
-	//       },
-	//       {
-	//         label: 'Toggle Full Screen',
-	//         accelerator: 'Ctrl+Command+F',
-	//         click: () => {
-	//           this.mainWindow.setFullScreen(!this.mainWindow.isFullScreen());
-	//         },
-	//       },
-	//       {
-	//         label: 'Toggle Developer Tools',
-	//         accelerator: 'Alt+Command+I',
-	//         click: () => {
-	//           this.mainWindow.webContents.toggleDevTools();
-	//         },
-	//       },
-	//     ],
-	//   };
-	//   const subMenuViewProd: MenuItemConstructorOptions = {
-	//     label: 'View',
-	//     submenu: [
-	//       {
-	//         label: 'Toggle Full Screen',
-	//         accelerator: 'Ctrl+Command+F',
-	//         click: () => {
-	//           this.mainWindow.setFullScreen(!this.mainWindow.isFullScreen());
-	//         },
-	//       },
-	//     ],
-	//   };
-	//   const subMenuWindow: DarwinMenuItemConstructorOptions = {
-	//     label: 'Window',
-	//     submenu: [
-	//       {
-	//         label: 'Minimize',
-	//         accelerator: 'Command+M',
-	//         selector: 'performMiniaturize:',
-	//       },
-	//       { label: 'Close', accelerator: 'Command+W', selector: 'performClose:' },
-	//       { type: 'separator' },
-	//       { label: 'Bring All to Front', selector: 'arrangeInFront:' },
-	//     ],
-	//   };
-	//   const subMenuHelp: MenuItemConstructorOptions = {
-	//     label: 'Help',
-	//     submenu: [
-	//       {
-	//         label: 'Learn More',
-	//         click() {
-	//           shell.openExternal('https://electronjs.org');
-	//         },
-	//       },
-	//       {
-	//         label: 'Documentation',
-	//         click() {
-	//           shell.openExternal(
-	//             'https://github.com/electron/electron/tree/main/docs#readme',
-	//           );
-	//         },
-	//       },
-	//       {
-	//         label: 'Community Discussions',
-	//         click() {
-	//           shell.openExternal('https://www.electronjs.org/community');
-	//         },
-	//       },
-	//       {
-	//         label: 'Search Issues',
-	//         click() {
-	//           shell.openExternal('https://github.com/electron/electron/issues');
-	//         },
-	//       },
-	//     ],
-	//   };
+	// Wip: Constructing a mac machines menu.
+	buildDarwinTemplate(): MenuItemConstructorOptions[] {
+		const defaultDarwinMenu: MenuItemConstructorOptions = {
+			submenu: [{ label: 'Test', click: () => console.log('Test clicked') }],
+		}
+		const subMenuFile: DarwinMenuItemConstructorOptions = {
+			label: i18n.t('menu:file.label'),
+			submenu: [
+				{
+					label: i18n.t('menu:file.submenu.new'),
+					accelerator: 'Cmd+N',
+					click: () => this.handleProject('project:create'),
+				},
+				{
+					label: i18n.t('menu:file.submenu.open'),
+					accelerator: 'Cmd+O',
+					click: () => this.handleProject('project:open'),
+				},
+				{ type: 'separator' },
+				{
+					label: i18n.t('menu:file.submenu.save'),
+					accelerator: 'Cmd+S',
+					click: () =>
+						console.warn('Save button clicked! This is not working yet.'),
+				},
+				{
+					label: i18n.t('menu:file.submenu.saveAs'),
+					accelerator: 'Cmd+Shift+S',
+					click: () =>
+						console.warn('Save as button clicked! This is not working yet.'),
+				},
+				{
+					label: i18n.t('menu:file.submenu.closeTab'),
+					accelerator: 'Cmd+W',
+					click: () =>
+						console.warn('Close tab button clicked! This is not working yet.'),
+				},
+				{
+					label: i18n.t('menu:file.submenu.closeProject'),
+					accelerator: '',
+					click: () =>
+						console.warn(
+							'Close project button clicked! This is not working yet.'
+						),
+				},
+				{ type: 'separator' },
+				{
+					label: i18n.t('menu:file.submenu.pageSetup'),
+					accelerator: 'Cmd+Alt+P',
+					click: () =>
+						console.warn('Page setup button clicked! This is not working yet.'),
+				},
+				{
+					label: i18n.t('menu:file.submenu.preview'),
+					accelerator: 'Cmd+Shift+P',
+					click: () =>
+						console.warn('Preview button clicked! This is not working yet.'),
+				},
+				{
+					label: i18n.t('menu:file.submenu.print'),
+					accelerator: 'Cmd+P',
+					enabled: false,
+				},
+				{ type: 'separator' },
+				{
+					label: i18n.t('menu:file.submenu.updates'),
+					accelerator: 'Cmd+U',
+					click: () =>
+						console.warn('Updates button clicked! This is not working yet.'),
+				},
+				{ type: 'separator' },
+				{
+					label: i18n.t('menu:file.submenu.quit'),
+					role: 'quit',
+					accelerator: 'Cmd+Q',
+				},
+			],
+		}
 
-	//   const subMenuView =
-	//     process.env.NODE_ENV === 'development' ||
-	//     process.env.DEBUG_PROD === 'true'
-	//       ? subMenuViewDev
-	//       : subMenuViewProd;
+		const subMenuEdit: DarwinMenuItemConstructorOptions = {
+			label: i18n.t('menu:edit.label'),
+			submenu: [
+				{
+					label: i18n.t('menu:edit.submenu.undo'),
+					accelerator: 'Cmd+Z',
+					selector: 'undo:',
+				},
+				{
+					label: i18n.t('menu:edit.submenu.redo'),
+					accelerator: 'Cmd+Y',
+					selector: 'redo:',
+				},
+				{ type: 'separator' },
+				{
+					label: i18n.t('menu:edit.submenu.cut'),
+					accelerator: 'Cmd+X',
+					selector: 'cut:',
+				},
+				{
+					label: i18n.t('menu:edit.submenu.copy'),
+					accelerator: 'Cmd+C',
+					selector: 'copy:',
+				},
+				{
+					label: i18n.t('menu:edit.submenu.paste'),
+					accelerator: 'Cmd+V',
+					selector: 'paste:',
+				},
+				{ type: 'separator' },
+				{
+					label: i18n.t('menu:edit.submenu.find'),
+					accelerator: 'Cmd+F',
+					selector: 'find:',
+				},
+				{
+					label: i18n.t('menu:edit.submenu.findNext'),
+					accelerator: 'Cmd+K',
+				},
+				{
+					label: i18n.t('menu:edit.submenu.findPrevious'),
+					accelerator: 'Cmd+Shift+K',
+				},
+				{ type: 'separator' },
+				{
+					label: i18n.t('menu:edit.submenu.findInProject'),
+					accelerator: '',
+				},
+				{ type: 'separator' },
+				{
+					label: i18n.t('menu:edit.submenu.addElement.label'),
+					submenu: [
+						{
+							label: i18n.t(
+								'menu:edit.submenu.addElement.submenu.functionBlock'
+							),
+						},
+						{
+							label: i18n.t('menu:edit.submenu.addElement.submenu.function'),
+						},
+						{
+							label: i18n.t('menu:edit.submenu.addElement.submenu.program'),
+						},
+						{
+							label: i18n.t('menu:edit.submenu.addElement.submenu.dataType'),
+						},
+					],
+				},
+				{
+					label: i18n.t('menu:edit.submenu.selectAll'),
+					accelerator: 'Cmd+A',
+					selector: 'selectAll:',
+				},
+				{
+					label: i18n.t('menu:edit.submenu.delete'),
+					role: 'delete',
+				},
+			],
+		}
 
-	//   return [subMenuAbout, subMenuEdit, subMenuView, subMenuWindow, subMenuHelp];
-	// }
+		const subMenuDisplay: DarwinMenuItemConstructorOptions = {
+			label: i18n.t('menu:display.label'),
+			submenu: [
+				{
+					label: i18n.t('menu:display.submenu.refresh'),
+					accelerator: 'Cmd+R',
+					selector: 'reload:',
+				},
+				{
+					label: i18n.t('menu:display.submenu.clearErrors'),
+					accelerator: '',
+				},
+				{ type: 'separator' },
+				{
+					label: 'Zoom', // Todo: i18n.t('menu:display.submenu.zoom') have to be added
+					submenu: [
+						{
+							label: i18n.t('menu:display.submenu.zoomIn'),
+							accelerator: 'Cmd+Plus',
+						},
+						{
+							label: i18n.t('menu:display.submenu.zoomOut'),
+							accelerator: 'Cmd+-',
+						},
+					],
+				},
+				{ type: 'separator' },
+				{
+					label: i18n.t('menu:display.submenu.switchPerspective'),
+					accelerator: 'F12',
+				},
+				{
+					label: i18n.t('menu:display.submenu.fullScreen'),
+					accelerator: 'Shift+F12',
+					role: 'togglefullscreen',
+				},
+				{
+					label: i18n.t('menu:display.submenu.resetPerspective'),
+				},
+				{
+					label: i18n.t('menu:display.submenu.sortAlpha'),
+				},
+			],
+		}
 
+		const subMenuHelp: DarwinMenuItemConstructorOptions = {
+			label: i18n.t('menu:help.label'),
+			submenu: [
+				{
+					label: i18n.t('menu:help.submenu.communitySupport'),
+				},
+				{
+					label: i18n.t('menu:help.submenu.about'),
+					role: 'about',
+				},
+			],
+		}
+
+		return [
+			defaultDarwinMenu,
+			subMenuFile,
+			subMenuEdit,
+			subMenuDisplay,
+			subMenuHelp,
+		]
+	}
+
+	// Wip: Constructing a default machines menu.
 	buildDefaultTemplate() {
 		const templateDefault: MenuItemConstructorOptions[] = [
 			{
 				label: i18n.t('menu:file.label'),
+				visible: false,
 				submenu: [
 					{
 						label: i18n.t('menu:file.submenu.new'),
-						accelerator: 'CmdOrCtrl+N',
+						accelerator: 'Ctrl+N',
 						click: () => this.handleProject('project:create'),
 					},
 					{
 						label: i18n.t('menu:file.submenu.open'),
-						accelerator: 'CmdOrCtrl+O',
+						accelerator: 'Ctrl+O',
 						click: () => this.handleProject('project:open'),
 					},
-					{ label: i18n.t('menu:file.submenu.recentProjects'), submenu: [] },
-					{ type: 'separator' },
 					{
-						label: i18n.t('menu:file.submenu.examples.label'),
-						submenu: [
-							{
-								label: i18n.t('menu:file.submenu.examples.submenu.arduino'),
-							},
-							{
-								label: i18n.t('menu:file.submenu.examples.submenu.blink'),
-							},
-							{
-								label: i18n.t('menu:file.submenu.examples.submenu.blinkP1AM'),
-							},
-							{
-								label: i18n.t(
-									'menu:file.submenu.examples.submenu.multiLanguage'
-								),
-							},
-							{
-								label: i18n.t(
-									'menu:file.submenu.examples.submenu.randomGeneratorPragma'
-								),
-							},
-							{
-								label: i18n.t('menu:file.submenu.examples.submenu.tcpSocket'),
-							},
-							{
-								label: i18n.t(
-									'menu:file.submenu.examples.submenu.trafficLightFBD'
-								),
-							},
-						],
-					},
-					{ type: 'separator' },
-					{
-						id: 'test',
 						label: i18n.t('menu:file.submenu.save'),
-						accelerator: 'CmdOrCtrl+S',
-						click: () => this.handleSaveProject('project:save-request'),
+						accelerator: 'Ctrl+S',
+						click: () =>
+							console.warn('Menu button clicked! This is not working yet.'),
 					},
 					{
 						label: i18n.t('menu:file.submenu.saveAs'),
-						accelerator: 'CmdOrCtrl+Shift+S',
+						accelerator: 'Ctrl+Shift+S',
+						click: () =>
+							console.warn('Menu button clicked! This is not working yet.'),
 					},
 					{
 						label: i18n.t('menu:file.submenu.closeTab'),
-						accelerator: 'CmdOrCtrl+W',
+						accelerator: 'Ctrl+W',
+						click: () =>
+							console.warn('Menu button clicked! This is not working yet.'),
 					},
 					{
 						label: i18n.t('menu:file.submenu.closeProject'),
-						accelerator: 'CmdOrCtrl+Shift+W',
+						accelerator: 'Ctrl+Shift+W',
+						click: () =>
+							console.warn('Menu button clicked! This is not working yet.'),
 					},
-					{ type: 'separator' },
 					{
 						label: i18n.t('menu:file.submenu.pageSetup'),
-						accelerator: 'CmdOrCtrl+Alt+P',
+						accelerator: 'Ctrl+Alt+P',
+						click: () =>
+							console.warn('Menu button clicked! This is not working yet.'),
 					},
 					{
 						label: i18n.t('menu:file.submenu.preview'),
-						accelerator: 'CmdOrCtrl+Shift+P',
+						accelerator: 'Ctrl+Shift+P',
+						click: () =>
+							console.warn('Menu button clicked! This is not working yet.'),
 					},
 					{
 						label: i18n.t('menu:file.submenu.print'),
-						accelerator: 'CmdOrCtrl+P',
+						accelerator: 'Ctrl+P',
+						enabled: false,
 					},
-					{ type: 'separator' },
 					{
 						label: i18n.t('menu:file.submenu.updates'),
-						accelerator: 'CmdOrCtrl+U',
+						accelerator: 'Ctrl+U',
+						click: () =>
+							console.warn('Menu button clicked! This is not working yet.'),
 					},
-					{ type: 'separator' },
 					{
 						label: i18n.t('menu:file.submenu.quit'),
 						role: 'quit',
-						accelerator: 'CmdOrCtrl+Q',
+						accelerator: 'Ctrl+Q',
 					},
 				],
 			},
@@ -343,55 +405,69 @@ export default class MenuBuilder {
 				submenu: [
 					{
 						label: i18n.t('menu:edit.submenu.undo'),
+						accelerator: 'Ctrl+Z',
 						role: 'undo',
 					},
 					{
 						label: i18n.t('menu:edit.submenu.redo'),
+						accelerator: 'Ctrl+Y',
 						role: 'redo',
-						enabled: false,
 					},
-					{ type: 'separator' },
 					{
 						label: i18n.t('menu:edit.submenu.cut'),
+						accelerator: 'Ctrl+X',
 						role: 'cut',
 					},
 					{
 						label: i18n.t('menu:edit.submenu.copy'),
+						accelerator: 'Ctrl+C',
 						role: 'copy',
 					},
 					{
 						label: i18n.t('menu:edit.submenu.paste'),
+						accelerator: 'Ctrl+V',
 						role: 'paste',
 					},
-					{ type: 'separator' },
 					{
 						label: i18n.t('menu:edit.submenu.find'),
-						accelerator: 'CmdOrCtrl+F',
+						accelerator: 'Ctrl+F',
 					},
 					{
 						label: i18n.t('menu:edit.submenu.findNext'),
-						accelerator: 'CmdOrCtrl+K',
-
+						accelerator: 'Ctrl+K',
 						enabled: false,
 					},
 					{
 						label: i18n.t('menu:edit.submenu.findPrevious'),
-						accelerator: 'CmdOrCtrl+Shift+K',
-
+						accelerator: 'Ctrl+Shift+K',
 						enabled: false,
 					},
-					{ type: 'separator' },
 					{
 						label: i18n.t('menu:edit.submenu.findInProject'),
-						accelerator: 'CmdOrCtrl+Shift+F',
+						accelerator: 'Ctrl+Shift+F',
 					},
-					{ type: 'separator' },
 					{
-						label: i18n.t('menu:edit.submenu.addElement'),
-						submenu: [],
+						label: i18n.t('menu:edit.submenu.addElement.label'),
+						submenu: [
+							{
+								label: i18n.t(
+									'menu:edit.submenu.addElement.submenu.functionBlock'
+								),
+							},
+							{
+								label: i18n.t('menu:edit.submenu.addElement.submenu.function'),
+							},
+							{
+								label: i18n.t('menu:edit.submenu.addElement.submenu.program'),
+							},
+							{
+								label: i18n.t('menu:edit.submenu.addElement.submenu.dataType'),
+							},
+						],
 					},
 					{
 						label: i18n.t('menu:edit.submenu.selectAll'),
+						accelerator: 'Ctrl+A',
 						role: 'selectAll',
 					},
 					{
@@ -409,14 +485,21 @@ export default class MenuBuilder {
 					},
 					{
 						label: i18n.t('menu:display.submenu.clearErrors'),
-						accelerator: 'CmdOrCtrl+K',
+						accelerator: '',
 					},
-					{ type: 'separator' },
 					{
-						label: i18n.t('menu:display.submenu.zoom'),
-						submenu: [],
+						label: 'Zoom',
+						submenu: [
+							{
+								label: i18n.t('menu:display.submenu.zoomIn'),
+								accelerator: 'Ctrl+Plus',
+							},
+							{
+								label: i18n.t('menu:display.submenu.zoomOut'),
+								accelerator: 'Ctrl+-',
+							},
+						],
 					},
-					{ type: 'separator' },
 					{
 						label: i18n.t('menu:display.submenu.switchPerspective'),
 						accelerator: 'F12',
@@ -431,9 +514,6 @@ export default class MenuBuilder {
 					{
 						label: i18n.t('menu:display.submenu.sortAlpha'),
 					},
-					...(process.env.NODE_ENV === 'development'
-						? this.developOptions
-						: []),
 				],
 			},
 			{

@@ -1,5 +1,3 @@
-import useEmblaCarousel from 'embla-carousel-react'
-import { useCallback } from 'react'
 // TODO: Remove mock data
 import MockImage from '~renderer/assets/images/example.png'
 
@@ -7,41 +5,33 @@ import Card from '~renderer/components/elements/card'
 
 // TODO: Remove mock data
 import Mock from '../../../../../../shared/data/mock/examples.json'
-import { Carousel, Header, NextButton, PrevButton, Wrapper } from './elements'
+import { ComponentProps } from 'react'
 
-export default function DisplayExampleProjects() {
-	const [emblaRef, emblaApi] = useEmblaCarousel({
-		align: 'start',
-	})
+type IDisplayExampleProjectProps = ComponentProps<'section'>
 
-	const scrollPrev = useCallback(() => {
-		if (emblaApi) emblaApi.scrollPrev()
-	}, [emblaApi])
-
-	const scrollNext = useCallback(() => {
-		if (emblaApi) emblaApi.scrollNext()
-	}, [emblaApi])
+const DisplayExampleProjects = (props: IDisplayExampleProjectProps) => {
 	return (
-		<Wrapper>
-			<Header title='Examples'>
-				<PrevButton data-testid='prevButton' onClick={scrollPrev} />
-				<NextButton data-testid='nextButton' onClick={scrollNext} />
-			</Header>
-			<Carousel.Container refProvider={emblaRef}>
-				<Carousel.Viewport>
-					{Mock.map((project) => (
-						<Card.Root key={project.id}>
-							<Card.Preview source={MockImage} />
-							<Card.Label
-								title={project.name}
-								description={project.description}
-							/>
-						</Card.Root>
-					))}
-				</Carousel.Viewport>
-			</Carousel.Container>
-		</Wrapper>
+		<section
+			className='flex pr-9 flex-col w-full bg-none mb-8 4xl:pr-0'
+			{...props}
+		>
+			<h2 className='flex pr-3 flex-1 w-full mb-3 justify-between text-xl leading-6 font-medium font-caption text-neutral-1000 dark:text-white cursor-default'>
+				Example Projects
+			</h2>
+			<div className='scroll-area-horizontal'>
+				{Mock.map((project) => (
+					<Card.Root key={project.id}>
+						<Card.Preview source={MockImage} />
+						<Card.Label
+							title={project.name}
+							description={project.description}
+						/>
+					</Card.Root>
+				))}
+			</div>
+		</section>
 	)
 }
 
+export default DisplayExampleProjects
 export type DisplayExampleProjectsComponent = typeof DisplayExampleProjects

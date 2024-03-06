@@ -7,8 +7,11 @@ import { BottomPanel } from './bottom-panel'
 
 export const PanelsGroupComponent = (): ReactNode => {
 	return (
-		<PanelGroup direction='horizontal'>
-			<div className=' rounded-tl-lg flex-grow h-full dark:bg-neutral-900 bg-neutral-100 flex p-2 gap-1'>
+		<PanelGroup
+			direction='horizontal'
+			className='bg-brand-dark dark:bg-neutral-950'
+		>
+			<div className='!rounded-tl-lg flex-grow h-full bg-neutral-100 dark:bg-neutral-900 flex p-2 gap-1'>
 				<SidebarPanel />
 				{/* Here goes the sidebar component */}
 				<PanelResizeHandle

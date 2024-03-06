@@ -42,6 +42,7 @@ export const NavigationPanelBreadcrumbs = (
 						{crumb.project_name}
 					</span>
 					<ArrowIcon
+						direction='right'
 						className='h-3 w-3 flex-shrink-0 stroke-brand-light'
 						aria-hidden='true'
 						role='img'
@@ -62,6 +63,7 @@ export const NavigationPanelBreadcrumbs = (
 						{PouType}
 					</span>
 					<ArrowIcon
+						direction='right'
 						className='h-3 w-3 flex-shrink-0 stroke-brand-light'
 						aria-hidden='true'
 						role='img'

@@ -1,15 +1,19 @@
-import { HTMLAttributes, useEffect, useState } from 'react'
+import { ComponentProps, HTMLAttributes } from 'react'
 import { FileElement } from '~renderer/components/elements'
 import RecentProjects from '../../../../../../shared/data/mock/projects-data.json'
-import { Header, Wrapper } from './elements'
 
-export type DisplayRecentProjectProps = HTMLAttributes<HTMLDivElement>
+export type IDisplayRecentProjectProps = ComponentProps<'section'>
 
-export default function DisplayRecentProjects() {
+const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
 	return (
-		<Wrapper>
-			<Header title='Projects' />
-			<div className='flex flex-wrap gap-6 overflow-auto h-full'>
+		<section
+			className='flex flex-col w-full h-[52%] 2xl:h-3/5 3xl:h-3/4 4xl:h-4/5 pr-9 4xl:pr-0'
+			{...props}
+		>
+			<h2 className='flex flex-1 w-full mb-6 justify-start text-xl font-caption font-medium text-neutral-1000 dark:text-white cursor-default'>
+				Projects
+			</h2>
+			<div className='scroll-area'>
 				{RecentProjects.map((project) => (
 					<FileElement.Root key={project.id}>
 						<FileElement.Label
@@ -20,8 +24,10 @@ export default function DisplayRecentProjects() {
 					</FileElement.Root>
 				))}
 			</div>
-		</Wrapper>
+		</section>
 	)
 }
+
+export default DisplayRecentProjects
 
 export type DisplayRecentProjectsComponent = typeof DisplayRecentProjects
