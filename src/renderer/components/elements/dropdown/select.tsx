@@ -15,7 +15,7 @@ type DropdownSelectProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 	Icon?: ElementType
 	setShowOptions: Dispatch<SetStateAction<boolean>>
 	showOptions: boolean
-	placeholder: string
+	placeholder?: string
 }
 export default function Select({
 	selectedOption,

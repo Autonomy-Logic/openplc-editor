@@ -1,8 +1,8 @@
-import { ReactNode } from 'react'
+import { ReactNode } from "react";
 import {
-	RouterProvider as ReactRouterProvider,
-	createBrowserRouter,
-} from 'react-router-dom'
+  RouterProvider as ReactRouterProvider,
+  createBrowserRouter,
+} from "react-router-dom";
 
 import { Screen } from '~features/index'
 import { AppLayout } from '../features/layout'
@@ -46,5 +46,5 @@ const router = createBrowserRouter([
 	},
 ])
 export default function RouterProvider(): ReactNode {
-	return <ReactRouterProvider router={router} />
+  return <ReactRouterProvider router={router} />;
 }

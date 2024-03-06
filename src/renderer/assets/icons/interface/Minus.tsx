@@ -1,7 +1,7 @@
 import { ComponentProps } from "react";
 import { cn } from "~/utils";
 
-type IPlusIconProps = ComponentProps<"svg"> & {
+type IMinusIconProps = ComponentProps<"svg"> & {
   size?: "sm" | "md" | "lg";
 };
 
@@ -11,20 +11,20 @@ const sizeClasses = {
   lg: "w-12 h-12",
 };
 
-export const PlusIcon = (props: IPlusIconProps) => {
+export const MinusIcon = (props: IMinusIconProps) => {
   const { className, size = "sm", ...res } = props;
   return (
     <svg
       role="button"
-      viewBox="0 0 18 18"
+      viewBox="0 0 14 2"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={cn(`${sizeClasses[size]}`, className)}
       {...res}
     >
       <path
-        d="M1.5 9H16.5M9 1.5L9 16.5"
-        stroke="inherit"
+        d="M1.28571 1H12.7143"
+        stroke="#0464FB"
         stroke-width="1.5"
         stroke-linecap="round"
       />
