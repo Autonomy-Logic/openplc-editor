@@ -26,7 +26,7 @@ export default function Activitybar() {
 	}
 
 	return (
-		<div className='bg-brand-dark dark:bg-neutral-950 h-full w-20 flex flex-col justify-between pb-10 border-t-inherit'>
+		<div className='bg-brand-dark dark:bg-neutral-950 h-full w-14 flex flex-col justify-between pb-10 border-t-inherit'>
 			<div className='w-full h-fit flex flex-col gap-10 my-5'>
 				<ActivitybarButton
 					label='Search'
@@ -55,11 +55,11 @@ export default function Activitybar() {
 				/>
 			</div>
 			<div className=' h-20 w-full flex flex-col gap-6'>
-				<ActivitybarButton
+				{/* <ActivitybarButton
 					label='Change theme'
 					Icon={isDark === true ? DarkThemeIcon : LightThemeIcon}
 					onClick={handleChangeTheme}
-				/>
+				/> */}
 				<ActivitybarButton
 					label='Exit'
 					Icon={ExitIcon}
