@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { cn } from "~/utils";
-import DropdownTypes from "../components/typesDropdown";
+import RowDropdown from "../components/rowDropdown";
 
 export default function TableRow({ row }) {
   const tdDefaultStyle =
@@ -22,11 +22,11 @@ export default function TableRow({ row }) {
         />
       </td>
       <td className={`${tdDefaultStyle} `}>
-        <DropdownTypes row={row} value="class" />
+        <RowDropdown row={row} value="class" />
       </td>
 
       <td className={`${tdDefaultStyle} `}>
-        <DropdownTypes row={row}  value="type"/>
+        <RowDropdown row={row} value="type" />
       </td>
 
       <td className={tdDefaultStyle}></td>
@@ -38,7 +38,7 @@ export default function TableRow({ row }) {
         />
       </td>
       <td className={`${tdDefaultStyle}`}>
-        <DropdownTypes row={row} value="option" />
+        <RowDropdown row={row} value="option" />
       </td>
       <td className={tdDefaultStyle}></td>
       <td className={tdDefaultStyle}>
