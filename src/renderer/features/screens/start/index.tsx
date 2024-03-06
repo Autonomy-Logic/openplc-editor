@@ -13,6 +13,7 @@ import {
 	DisplayExampleProjects,
 	DisplayRecentProjects,
 } from './components'
+import { ElementType } from 'react'
 
 export default function Start() {
 	const navigate = useNavigate()
