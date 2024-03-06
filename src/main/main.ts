@@ -1,7 +1,3 @@
-import { release, platform } from 'os'
-import path from 'path'
-/* eslint-disable @typescript-eslint/no-var-requires */
-/* eslint global-require: off, no-console: off */
 /**
  * This module executes inside of electron's main process. You can start
  * electron renderer process from here and communicate with the other processes
@@ -10,11 +6,10 @@ import path from 'path'
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
-// import {
-//   attachTitlebarToWindow,
-//   setupTitlebar,
-// } from "custom-electron-titlebar/main";
+import { release, platform } from 'os'
+import path from 'path'
 import {
+	type BrowserWindowConstructorOptions,
 	BrowserWindow,
 	app,
 	ipcMain,
@@ -41,7 +36,6 @@ class AppUpdater {
 	}
 }
 
-// eslint-disable-next-line import/prefer-default-export, import/no-mutable-exports
 export let mainWindow: BrowserWindow | null = null
 export let splash: BrowserWindow | null = null
 
@@ -50,7 +44,36 @@ if (process.env.NODE_ENV === 'production') {
 	sourceMapSupport.install()
 }
 
-const isMac = platform() === 'darwin'
+// Retrieves the system information
+const systemInfo = platform()
+// The options to use when creating the titlebar. Type comes from electron.
+type OptTitlebar = {
+	titleBarStyle?: 'hidden' | 'default' | 'hiddenInset' | 'customButtonsOnHover'
+	titlebarOverlay: boolean
+	frame: boolean
+}
+
+const titlebarOptionsMap: Record<string, OptTitlebar> = {
+	darwin: {
+		titleBarStyle: 'hidden',
+		titlebarOverlay: true,
+		frame: false,
+	},
+	win32: {
+		titleBarStyle: 'hidden',
+		titlebarOverlay: false,
+		frame: false,
+	},
+	// Default for everything else (including other Unix variants)
+	default: {
+		titleBarStyle: 'default',
+		titlebarOverlay: true,
+		frame: true,
+	},
+}
+
+const titlebarStyles =
+	titlebarOptionsMap[systemInfo] || titlebarOptionsMap.default
 
 const isDebug =
 	process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true'
@@ -117,14 +140,12 @@ const createWindow = async () => {
 
 	// Create the main window instance.
 	mainWindow = new BrowserWindow({
-		minWidth: 1440,
+		minWidth: 1124,
 		minHeight: 768,
 		...bounds,
 		show: false,
 		icon: getAssetPath('icon.png'),
-		titleBarStyle: 'hidden',
-		titleBarOverlay: isMac,
-		frame: false,
+		...titlebarStyles,
 		webPreferences: {
 			sandbox: false,
 			preload: app.isPackaged
@@ -173,11 +194,6 @@ const createWindow = async () => {
 		if (process.env.START_MINIMIZED) {
 			mainWindow.minimize()
 		}
-		// REFACTOR
-		// else {
-		//   // Attach the custom titlebar to the window;
-		//   attachTitlebarToWindow(mainWindow);
-		// }
 	})
 
 	mainWindow.on('closed', () => {

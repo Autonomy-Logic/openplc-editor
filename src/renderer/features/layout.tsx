@@ -1,9 +1,10 @@
 import { Outlet } from 'react-router-dom'
 import { TitleBar } from './titlebar'
 import { useOpenPLCStore } from '../store'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export const AppLayout = () => {
+	const [isLinux, setIsLinux] = useState(true)
 	const setPlatFormData = useOpenPLCStore().setPlatFormData
 
 	useEffect(() => {
@@ -13,13 +14,16 @@ export const AppLayout = () => {
 				platformName: systemInfo,
 				platformType: 'x64',
 			})
+			if (systemInfo === 'darwin' || systemInfo === 'win32') {
+				setIsLinux(false)
+			}
 		}
 		setInitialData()
 	}, [setPlatFormData])
 
 	return (
 		<>
-			<TitleBar />
+			{!isLinux && <TitleBar />}
 			<main className='oplc-main-content'>
 				<Outlet />
 			</main>

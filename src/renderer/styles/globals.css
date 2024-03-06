@@ -124,7 +124,7 @@
   }
 
   .scroll-area::-webkit-scrollbar {
-    @apply flex transition-colors duration-[160ms] ease-out w-[6px];
+    @apply flex transition-colors duration-[160ms] ease-out w-[6px] rounded-lg bg-neutral-200 dark:bg-neutral-850;
   }
 
   .scroll-area:hover::-webkit-scrollbar-thumb {
@@ -140,6 +140,7 @@
     gap: 1.5rem;
     padding-bottom: 12px;
     overflow: auto;
+    margin-right: 8px;
   }
 
   .scroll-area-horizontal:hover::-webkit-scrollbar-thumb {
@@ -147,7 +148,7 @@
   }
 
   .scroll-area-horizontal::-webkit-scrollbar {
-    @apply h-2;
+    @apply h-[6px] rounded-lg bg-neutral-200 dark:bg-neutral-850;
   }
 
   .scroll-area-horizontal::-webkit-scrollbar-thumb {
