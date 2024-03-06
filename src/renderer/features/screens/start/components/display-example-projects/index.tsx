@@ -18,7 +18,7 @@ const DisplayExampleProjects = (props: IDisplayExampleProjectProps) => {
 			<h2 className='flex pr-3 flex-1 w-full mb-3 justify-between text-xl leading-6 font-medium font-caption text-neutral-1000 dark:text-white cursor-default'>
 				Example Projects
 			</h2>
-			<div className='scroll-area-horizontal mr-5'>
+			<div className='scroll-area-horizontal'>
 				{Mock.map((project) => (
 					<Card.Root key={project.id}>
 						<Card.Preview source={MockImage} />
