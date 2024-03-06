@@ -21,7 +21,7 @@ type ITreeProps = ComponentProps<'ul'> & {
 export const Tree = (props: ITreeProps): ReactNode => {
 	const { treeData, ...res } = props
 	return (
-		<div >
+		<div>
 			<ul className='list-none p-0' {...res}>
 				{treeData?.map((leaf) => (
 					<Leaf key={leaf.key} leafData={leaf} />

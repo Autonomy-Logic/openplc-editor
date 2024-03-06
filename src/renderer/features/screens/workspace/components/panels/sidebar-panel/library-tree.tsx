@@ -116,12 +116,12 @@ export const LibraryTree = () => {
 		>
 			<Header title='Library' TitleIcon={BookIcon} ButtonIcon={MagnifierIcon} />
 			<div
-				className='overflow-y-auto overflow-x-hidden
+				className='mb-3 overflow-y-auto overflow-x-hidden
 			[&::-webkit-scrollbar]:bg-neutral-200
 			[&::-webkit-scrollbar]:dark:bg-neutral-850
 			[&::-webkit-scrollbar-thumb]:bg-brand
 			[&::-webkit-scrollbar-thumb]:dark:bg-neutral-700
-			[&::-webkit-scrollbar]:w-0.5
+			[&::-webkit-scrollbar]:w-1
 			'
 			>
 				<Tree treeData={treeData} />

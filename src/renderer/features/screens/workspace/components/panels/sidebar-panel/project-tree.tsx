@@ -132,7 +132,7 @@ export const ProjectTree = (props: IProjectTreeProps): ReactNode => {
 			[&::-webkit-scrollbar]:dark:bg-neutral-850
 			[&::-webkit-scrollbar-thumb]:bg-brand
 			[&::-webkit-scrollbar-thumb]:dark:bg-neutral-700
-			[&::-webkit-scrollbar]:w-[4px]'
+			[&::-webkit-scrollbar]:w-1'
 				// [&::-webkit-scrollbar-thumb]:w-[6px]'
 			>
 				<Tree treeData={treeData} />

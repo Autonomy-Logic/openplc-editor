@@ -10,7 +10,7 @@ const tabs = [
 ]
 export const NavigationPanelTabs = () => {
 	return (
-		<nav className='isolate flex border-none' aria-label='Tabs'>
+		<nav className='isolate flex border-none outline-none' aria-label='Tabs'>
 			{tabs.map((tab, tabIdx) => (
 				<a
 					key={tab.name}
@@ -29,7 +29,7 @@ export const NavigationPanelTabs = () => {
 						aria-hidden='true'
 						className={cn(
 							tab.current ? 'bg-brand' : 'bg-transparent',
-							'absolute inset-x-0 bottom-0 h-[3px]'
+							'absolute inset-x-0 bottom-0 h-[3px] z-50'
 						)}
 					/>
 				</a>
