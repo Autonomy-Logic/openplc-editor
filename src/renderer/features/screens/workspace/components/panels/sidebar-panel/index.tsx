@@ -14,7 +14,7 @@ export const SidebarPanel = (): ReactNode => {
 			collapsedSize={0}
 			id='sidebar'
 			minSize={11}
-			defaultSize={11}
+			defaultSize={13}
 			className={`h-full border-inherit rounded-lg overflow-auto border-2 border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950 ${
 				isSidebarCollapsed ? 'border-none' : ''
 			}`}

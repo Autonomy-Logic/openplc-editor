@@ -110,7 +110,16 @@ export const ProjectTree = (props: IProjectTreeProps): ReactNode => {
 	]
 	return (
 		<div
-			className='w-full h-2/5 border-none bg-none flex flex-col pr-1'
+			className='w-full h-2/5 border-none bg-none flex flex-col pr-1 overflow-x-auto
+			[&::-webkit-scrollbar]:mx-1
+			[&::-webkit-scrollbar]:bg-neutral-200
+			[&::-webkit-scrollbar]:dark:bg-neutral-850
+			[&::-webkit-scrollbar-thumb]:bg-brand
+			[&::-webkit-scrollbar-thumb]:dark:bg-neutral-700
+			[&::-webkit-scrollbar]:hover:h-[6px]
+			[&::-webkit-scrollbar]:transition-all
+			[&::-webkit-scrollbar]:transition-duration-700
+			[&::-webkit-scrollbar]:h-0'
 			{...props}
 		>
 			<Header
@@ -123,7 +132,8 @@ export const ProjectTree = (props: IProjectTreeProps): ReactNode => {
 			[&::-webkit-scrollbar]:dark:bg-neutral-850
 			[&::-webkit-scrollbar-thumb]:bg-brand
 			[&::-webkit-scrollbar-thumb]:dark:bg-neutral-700
-			[&::-webkit-scrollbar]:w-0.5'
+			[&::-webkit-scrollbar]:w-[4px]'
+				// [&::-webkit-scrollbar-thumb]:w-[6px]'
 			>
 				<Tree treeData={treeData} />
 			</div>

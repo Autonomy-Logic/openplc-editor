@@ -103,7 +103,17 @@ export const LibraryTree = () => {
 		},
 	]
 	return (
-		<div className='w-full h-[43%] border-none bg-none flex flex-col pr-1'>
+		<div
+			className='w-full h-[43%] border-none bg-none flex flex-col pr-1 overflow-x-auto
+			[&::-webkit-scrollbar]:bg-neutral-200
+		[&::-webkit-scrollbar]:dark:bg-neutral-850
+		[&::-webkit-scrollbar-thumb]:bg-brand
+		[&::-webkit-scrollbar-thumb]:dark:bg-neutral-700
+		[&::-webkit-scrollbar]:hover:h-[6px]
+		[&::-webkit-scrollbar]:transition-all
+		[&::-webkit-scrollbar]:transition-duration-700
+		[&::-webkit-scrollbar]:h-0'
+		>
 			<Header title='Library' TitleIcon={BookIcon} ButtonIcon={MagnifierIcon} />
 			<div
 				className='overflow-y-auto overflow-x-hidden
