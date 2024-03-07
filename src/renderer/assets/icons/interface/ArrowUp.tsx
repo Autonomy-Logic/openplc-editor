@@ -25,9 +25,9 @@ export const ArrowUp = (props: IArrowUpIconProps) => {
       <path
         d="M6 1.1665L6 12.8332M6 1.1665L1 6.02761M6 1.1665L11 6.02761"
         stroke="#0464FB"
-        stroke-width="1.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );

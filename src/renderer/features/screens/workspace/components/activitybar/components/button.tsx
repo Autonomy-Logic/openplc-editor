@@ -14,7 +14,7 @@ export const ActivitybarButton = ({
     <button
       type="button"
       title={label}
-      className="w-full h-8 flex items-center justify-center"
+      className="w-full h-6 flex items-center justify-center"
       {...res}
     >
       <Icon />

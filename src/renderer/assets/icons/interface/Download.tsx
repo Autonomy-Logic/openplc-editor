@@ -1,25 +1,18 @@
 import React, { ComponentProps } from "react";
+import { IconStyles } from "~/renderer/data/constants/icon-styles";
 import { cn } from "~/utils";
+import { IIconProps } from "../iconTypes";
 
-type IDownloadIconProps = ComponentProps<"svg"> & {
-  size?: "sm" | "md" | "lg";
-};
-
-const sizeClasses = {
-  sm: "w-6 h-6",
-  md: "w-8 h-8",
-  lg: "w-10 h-10",
-};
-
-export const DownloadIcon = (props: IDownloadIconProps) => {
+export const DownloadIcon = (props: IIconProps) => {
   const { className, size = "sm", ...res } = props;
+  const sizeClasses = IconStyles.sizeClasses.small[size];
   return (
     <svg
       role="button"
       viewBox="0 0 24 22"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={cn(`${sizeClasses[size]}`, className)}
+      className={cn(`${sizeClasses}`, className)}
       {...res}
     >
       <path

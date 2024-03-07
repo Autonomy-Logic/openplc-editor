@@ -31,9 +31,9 @@ export const CodeIcon = (props: ICodeIconProps) => {
       <path
         d="M18.3333 17.3333L21.6667 14L18.3333 10.6667M11.6667 10.6667L8.33333 14L11.6667 17.3333M16.3333 8L13.6667 20"
         stroke={variableAsCode ? "white" : "#C8D0D9"}
-        stroke-width="1.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );

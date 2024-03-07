@@ -1,23 +1,18 @@
-import { ComponentProps } from "react";
+import React, { ComponentProps } from "react";
+import { IconStyles } from "~/renderer/data/constants/icon-styles";
 import { cn } from "~/utils";
+import { IIconProps } from "../iconTypes";
 
-type IDarkThemeProps = ComponentProps<"svg"> & {
-  size?: "sm" | "md" | "lg";
-};
-const sizeClasses = {
-  sm: "w-7 h-7",
-  md: "w-10 h-10",
-  lg: "w-14 h-14",
-};
-export const DarkThemeIcon = (props: IDarkThemeProps) => {
+export const DarkThemeIcon = (props: IIconProps) => {
   const { className, size = "md", ...res } = props;
+  const sizeClasses = IconStyles.sizeClasses.medium[size];
   return (
     <svg
       role="button"
       viewBox="0 0 44 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={cn(`${sizeClasses[size]}`, className)}
+      className={cn(`${sizeClasses}`, className)}
       {...res}
     >
       <g clipPath="url(#clip0_1958_12610)">

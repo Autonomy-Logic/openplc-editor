@@ -55,11 +55,11 @@ export default function Activitybar() {
 				/>
 			</div>
 			<div className=' h-20 w-full flex flex-col gap-6'>
-				{/* <ActivitybarButton
+				<ActivitybarButton
 					label='Change theme'
 					Icon={isDark === true ? DarkThemeIcon : LightThemeIcon}
 					onClick={handleChangeTheme}
-				/> */}
+				/>
 				<ActivitybarButton
 					label='Exit'
 					Icon={ExitIcon}
