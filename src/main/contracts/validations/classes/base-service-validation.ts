@@ -1,3 +1,3 @@
 export abstract class BaseServiceClass<T> {
-	protected constructor(public serviceManager: T) {}
+	constructor(public serviceManager: T) {}
 }

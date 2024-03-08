@@ -13,29 +13,39 @@ import {
 	DisplayExampleProjects,
 	DisplayRecentProjects,
 } from './components'
-import { ElementType } from 'react'
 
 export default function Start() {
 	const navigate = useNavigate()
-	const setWorkspaceData = useOpenPLCStore.useSetWorkspace()
+	const setWorkspace = useOpenPLCStore.useSetWorkspace()
 
 	const handleProject = async (channel: string) => {
 		if (channel === 'project:create') {
 			const { ok, data } = await window.bridge.startCreateProject()
 			if (ok && data) {
 				const { path, xmlAsObject } = data
-				setWorkspaceData({ projectPath: path, projectData: xmlAsObject })
+				const dataToWorkspace = xmlAsObject.toString()
+				setWorkspace({
+					path: path,
+					name: 'new-project',
+					data: dataToWorkspace,
+					createdAt: new Date().toISOString(),
+					updatedAt: new Date().toISOString(),
+				})
 				navigate('workspace')
-				console.log(data)
-				console.log('new project:', data)
 			}
 		} else if (channel === 'project:open') {
 			const { ok, data } = await window.bridge.startOpenProject()
 			if (ok && data) {
-				const { path: projectPath, xmlAsObject: projectAsObj } = data
-				setWorkspaceData({ projectPath, projectData: projectAsObj })
+				const { path, xmlAsObject } = data
+				const dataToWorkspace = xmlAsObject.toString()
+				setWorkspace({
+					path: path,
+					name: 'new-project',
+					data: dataToWorkspace,
+					createdAt: new Date().toISOString(),
+					updatedAt: new Date().toISOString(),
+				})
 				navigate('workspace')
-				console.log('open:', data)
 			}
 		}
 	}
@@ -46,26 +56,28 @@ export default function Start() {
 				<MenuComponent.Root>
 					<MenuComponent.Section className='flex-col gap-2'>
 						<MenuComponent.Button
-							Icon={PlusIcon}
-							label='New Project'
 							onClick={() => handleProject('project:create')}
-						/>
+						>
+							{' '}
+							<PlusIcon className='stroke-white' /> New Project{' '}
+						</MenuComponent.Button>
 						<MenuComponent.Button
-							Icon={FolderIcon}
-							label='Open'
 							ghosted
 							onClick={() => handleProject('project:open')}
-						/>
-						<MenuComponent.Button Icon={VideoIcon} label='Tutorials' ghosted />
+						>
+							{' '}
+							<FolderIcon /> Open
+						</MenuComponent.Button>
+						<MenuComponent.Button ghosted>
+							{' '}
+							<VideoIcon /> Tutorials{' '}
+						</MenuComponent.Button>
 					</MenuComponent.Section>
 					<MenuComponent.Divider />
 					<MenuComponent.Section>
-						<MenuComponent.Button
-							label='Quit'
-							Icon={StickArrowIcon}
-							ghosted
-							cnForIcon='rotate-180'
-						/>
+						<MenuComponent.Button ghosted>
+							<StickArrowIcon className='rotate-180' /> Quit
+						</MenuComponent.Button>
 					</MenuComponent.Section>
 				</MenuComponent.Root>
 			</aside>

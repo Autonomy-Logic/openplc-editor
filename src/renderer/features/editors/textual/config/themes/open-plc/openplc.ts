@@ -28,9 +28,8 @@ const darkThemeData: monaco.editor.IStandaloneThemeData = {
 		{ token: 'block-comment', foreground: '#377534' },
 	],
 	colors: {
-		'editor.background': '#1F2635', // editor background
-		'editorCursor.foreground': '#E8E5E5', // cursor color
-		'editor.lineHighlightBorder': '#FFFFFF', // current line highlight border color
+		'editor.background': '#121316', // editor background
+		'editorCursor.foreground': '#E8E5E5', // cursor color // current line highlight border color
 		'editor.highlightBackground': '#00FF00',
 		'editorLineNumber.foreground': '#A09AA0', // line number color without highlight
 		'editor.selectionBackground': '#565F68', // selected content color, e.g., ctrl + a

@@ -11,8 +11,8 @@ export const AppLayout = () => {
 		const setInitialData = async () => {
 			const systemInfo = await window.bridge.getOSInfo()
 			setPlatFormData({
-				platformName: systemInfo,
-				platformType: 'x64',
+				OS: systemInfo,
+				arch: 'x64',
 			})
 			if (systemInfo === 'darwin' || systemInfo === 'win32') {
 				setIsLinux(false)
