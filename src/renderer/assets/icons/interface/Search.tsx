@@ -1,6 +1,6 @@
 import { IconStyles } from "~/renderer/data/constants/icon-styles";
 import { cn } from "~/utils";
-import { IIconProps } from "../iconTypes";
+import { IIconProps } from "../Types/iconTypes";
 
 export const SearchIcon = (props: IIconProps) => {
   const { className, size = "sm", ...res } = props;

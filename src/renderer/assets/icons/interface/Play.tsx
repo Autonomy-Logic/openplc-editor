@@ -1,6 +1,6 @@
 import { cn } from "~/utils";
 import { IconStyles } from "~/renderer/data/constants/icon-styles";
-import { IIconProps } from "../iconTypes";
+import { IIconProps } from "../Types/iconTypes";
 
 export const PlayIcon = (props: IIconProps) => {
   const { className, size = "sm", ...res } = props;

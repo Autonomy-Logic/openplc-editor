@@ -87,7 +87,7 @@ export default function VariableTable() {
 			defaultSize={31}
 			className='flex flex-col gap-4 w-full h-full'
 		>
-			<div className='flex justify-between'>
+			<div className='flex justify-between h-8'>
 				{!variableAsCode ? (
 					<div className='flex gap-4'>
 						<div className='flex gap-4 items-center'>
@@ -119,16 +119,18 @@ export default function VariableTable() {
 							<ArrowUp className='w-5 h-5 stroke-brand rotate-180' />
 						</div>
 					) : null}
-					<div className='flex items-center rounded-md overflow-hidden'>
+					<div className='flex items-center rounded-md overflow-hidden relative h-full'>
 						<TableIcon
 							size='md'
 							onClick={() => toggleVariableDisplay(true)}
 							variableAsTable={!variableAsCode}
+							className='w-full h-full'
 						/>
 						<CodeIcon
 							size='md'
 							onClick={() => toggleVariableDisplay(false)}
 							variableAsCode={variableAsCode}
+							className='w-full h-full'
 						/>
 					</div>
 				</div>

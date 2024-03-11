@@ -1,7 +1,7 @@
 import React, { ComponentProps } from "react";
 import { IconStyles } from "~/renderer/data/constants/icon-styles";
 import { cn } from "~/utils";
-import { IIconProps } from "../iconTypes";
+import { IIconProps } from "../Types/iconTypes";
 
 export const DarkThemeIcon = (props: IIconProps) => {
   const { className, size = "md", ...res } = props;

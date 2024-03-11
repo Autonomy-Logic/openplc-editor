@@ -35,3 +35,4 @@ export * from "./interface/Exit";
 export * from "./interface/Minus";
 export * from "./interface/ArrowUp";
 export * from "./Fallback";
+export * from "./interface/Debugger";

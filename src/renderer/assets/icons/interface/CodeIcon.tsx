@@ -1,18 +1,11 @@
-import { ComponentProps } from "react";
+import React, { ComponentProps } from "react";
+import { IconStyles } from "~/renderer/data/constants/icon-styles";
 import { cn } from "~/utils";
+import { IIconProps } from "../Types/iconTypes";
 
-type ICodeIconProps = ComponentProps<"svg"> & {
-  size?: "sm" | "md" | "lg";
-  variableAsCode?: boolean;
-};
-const sizeClasses = {
-  sm: "w-7 h-7",
-  md: "w-10 h-10",
-  lg: "w-14 h-14",
-};
-
-export const CodeIcon = (props: ICodeIconProps) => {
+export const CodeIcon = (props: IIconProps) => {
   const { variableAsCode, className, size = "sm", ...res } = props;
+  const sizeClasses = IconStyles.sizeClasses.medium[size];
 
   return (
     <svg
@@ -20,7 +13,7 @@ export const CodeIcon = (props: ICodeIconProps) => {
       viewBox="0 0 30 28"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={cn(`${sizeClasses[size]}`, className)}
+      className={cn(`${sizeClasses}`, className)}
       {...res}
     >
       <rect
