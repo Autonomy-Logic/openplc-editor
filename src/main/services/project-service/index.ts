@@ -1,4 +1,4 @@
-import { promises, readFile, writeFile } from 'fs'
+import { mkdir, promises, readFile, writeFile } from 'fs'
 import { join } from 'path'
 import { BrowserWindow, dialog } from 'electron'
 import { convert, create } from 'xmlbuilder2'
@@ -66,13 +66,21 @@ class ProjectService extends BaseServiceClass<
 			xmlProjectAsObject
 		)
 
+		const configsPath = mkdir(
+			join(filePath, 'configs'),
+			{ recursive: true },
+			(err, path) => {
+				if (err) throw err
+				return path
+			}
+		)
 		CreateJSONFile({
-			path: filePath,
+			path: configsPath as unknown as string,
 			fileName: 'project.configs',
 			data: JSON.stringify(configs),
 		})
 		CreateJSONFile({
-			path: filePath,
+			path: configsPath as unknown as string,
 			fileName: 'project.data',
 			data: JSON.stringify(data),
 		})
