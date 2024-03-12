@@ -15,16 +15,16 @@ import { useNavigate } from "react-router-dom";
 
 export default function Activitybar() {
   const navigate = useNavigate();
-  const prefersDarkMode = window.matchMedia?.(
-    "(prefers-color-scheme: dark)",
-  ).matches;
+  // const prefersDarkMode = window.matchMedia?.(
+  //   "(prefers-color-scheme: dark)",
+  // ).matches;
 
-  const [isDark, setIsDark] = useState(prefersDarkMode);
+  // const [isDark, setIsDark] = useState(prefersDarkMode);
 
-  const handleChangeTheme = async () => {
-    const res = await window.bridge.toggleTheme();
-    setIsDark(res);
-  };
+  // const handleChangeTheme = async () => {
+  //   const res = await window.bridge.toggleTheme();
+  //   setIsDark(res);
+  // };
 
   return (
     <div className="bg-brand-dark dark:bg-neutral-950 h-full w-14 flex flex-col justify-between pb-10 border-t-inherit">
@@ -61,11 +61,11 @@ export default function Activitybar() {
         />
       </div>
       <div className=" h-20 w-full flex flex-col gap-6">
-        <ActivitybarButton
+        {/* <ActivitybarButton
           label="Change theme"
           Icon={isDark === true ? DarkThemeIcon : LightThemeIcon}
           onClick={handleChangeTheme}
-        />
+        /> */}
         <ActivitybarButton
           label="Exit"
           Icon={ExitIcon}
