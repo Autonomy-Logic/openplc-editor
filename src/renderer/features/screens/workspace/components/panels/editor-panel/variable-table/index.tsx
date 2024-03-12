@@ -80,13 +80,7 @@ export default function VariableTable() {
 	}
 
 	return (
-		<Panel
-			collapsible={true}
-			collapsedSize={0}
-			minSize={25}
-			defaultSize={31}
-			className='flex flex-col gap-4 w-full h-full'
-		>
+		<>
 			<div className='flex justify-between'>
 				{!variableAsCode ? (
 					<div className='flex gap-4'>
@@ -139,6 +133,6 @@ export default function VariableTable() {
 			) : (
 				<VariableCode />
 			)}
-		</Panel>
+		</>
 	)
 }

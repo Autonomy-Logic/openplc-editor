@@ -12,14 +12,16 @@ export const PanelsGroupComponent = (): ReactNode => {
 			className='bg-brand-dark dark:bg-neutral-950'
 		>
 			<div className='!rounded-tl-lg flex-grow h-full bg-neutral-100 dark:bg-neutral-900 flex p-2 gap-1'>
-				<SidebarPanel />
-				{/* Here goes the sidebar component */}
-				<PanelResizeHandle
-				// className={`hover:bg-neutral-400 ${
-				// 	isSidebarCollapsed ? 'hidden ' : ''
-				// }  `}
-				/>
-				<Panel>
+				<>
+					<SidebarPanel />
+					{/* Here goes the sidebar component */}
+					<PanelResizeHandle
+					// className={`hover:bg-neutral-400 ${
+					// 	isSidebarCollapsed ? 'hidden ' : ''
+					// }  `}
+					/>
+				</>
+				<Panel id='workspace' order={2}>
 					<PanelGroup
 						className='flex-grow h-full overflow-hidden flex flex-col gap-1'
 						direction='vertical'
