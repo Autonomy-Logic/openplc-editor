@@ -18,7 +18,7 @@ export default function TableRow({ row }) {
           type="text"
           className={selectDefaultStyle}
           defaultValue={`localVar${row.id}`}
-          onChange={(e) => console.log(e.target.value)}
+        
         />
       </td>
       <td className={`${tdDefaultStyle} `}>

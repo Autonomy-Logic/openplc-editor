@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { FlyoutMenu } from "./flyout";
-import { MenuButton } from "./menu-button";
+import { FlyoutMenu } from "./menu/flyout";
+import { MenuButton } from "./menu/menu-button";
+
+import * as MenuPrimitive from "@radix-ui/react-menubar";
 
 import { i18n } from "~utils/i18n";
 
@@ -21,17 +23,60 @@ export const MenuBar = () => {
       setIsDark(res);
     }
   };
-
+  //each root is a menu
   return (
-    <div className="h-full flex-1 flex items-center gap-2">
-      <FlyoutMenu.root label={i18n.t("menu:file.label")}>
+    <MenuPrimitive.Root className="h-full flex-1 flex items-center gap-2">
+      <MenuPrimitive.Menu>
+        <MenuPrimitive.Trigger>
+          {i18n.t("menu:file.label")}
+        </MenuPrimitive.Trigger>
+        <MenuPrimitive.Portal>
+          <MenuPrimitive.Content>
+            <MenuPrimitive.Item asChild>
+              <p>
+                <span>{i18n.t("menu:file.submenu.new")}</span>
+                <span>{"Ctrl + N"}</span>
+              </p>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item asChild>
+              <p>
+                <span>{i18n.t("menu:file.submenu.open")}</span>
+                <span>{"Ctrl + O"}</span>
+              </p>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item asChild>
+              <p>
+                <span>{i18n.t("menu:file.submenu.save")}</span>
+                <span>{"Ctrl + S"}</span>
+              </p>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item asChild>
+              <p>
+                <span>{i18n.t("menu:file.submenu.saveAs")}</span>
+                <span>{"Ctrl + Shift + S"}</span>
+              </p>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item asChild>
+              <p>
+                <span>{i18n.t("menu:file.submenu.closeTab")}</span>
+                <span>{"Ctrl + W"}</span>
+              </p>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item asChild>
+              <p>
+                <span>{i18n.t("menu:file.submenu.closeProject")}</span>
+                <span>{"Ctrl  + W"}</span>
+              </p>
+            </MenuPrimitive.Item>
+
+            <MenuPrimitive.Separator />
+          </MenuPrimitive.Content>
+        </MenuPrimitive.Portal>
+      </MenuPrimitive.Menu>
+
+      {/* <FlyoutMenu.root label={i18n.t("menu:file.label")}>
         <FlyoutMenu.section
           section={[
-            {
-              id: i18n.t("menu:file.submenu.new"),
-              label: i18n.t("menu:file.submenu.new"),
-              accelerator: "Ctrl + N",
-            },
             {
               id: i18n.t("menu:file.submenu.open"),
               label: i18n.t("menu:file.submenu.open"),
@@ -248,8 +293,8 @@ export const MenuBar = () => {
                   id: i18n.t("menu:display.submenu.theme.submenu.light"),
                   label: i18n.t("menu:display.submenu.theme.submenu.light"),
                   accelerator: "",
-                  type: "checkbox ",
-                  onclick: () => {
+                  selected: isDark ? false : true,
+                  action: () => {
                     handleChangeTheme("light");
                   },
                 },
@@ -257,8 +302,8 @@ export const MenuBar = () => {
                   id: i18n.t("menu:display.submenu.theme.submenu.dark"),
                   label: i18n.t("menu:display.submenu.theme.submenu.dark"),
                   accelerator: "",
-                  type: "checkbox ",
-                  onclick: () => {
+                  selected: isDark ? true : false,
+                  action: () => {
                     handleChangeTheme("dark");
                   },
                 },
@@ -284,7 +329,7 @@ export const MenuBar = () => {
         />
       </FlyoutMenu.root>
       <div className="bg-brand-light h-[1px] rotate-90 w-3" />
-      <MenuButton>Recent</MenuButton>
-    </div>
+      <MenuButton>Recent</MenuButton> */}
+    </MenuPrimitive.Root>
   );
 };

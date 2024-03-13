@@ -16,6 +16,7 @@ type IMenuItem = ComponentProps<"li"> & {
 
 export const FlyoutMenuSection = (props: IMenuSectionProps) => {
   const { section, hasSibling = false, ...res } = props;
+
   return (
     <ul
       className={cn(
@@ -28,30 +29,45 @@ export const FlyoutMenuSection = (props: IMenuSectionProps) => {
         // biome-ignore lint/a11y/useKeyWithClickEvents: This is not useful in this context
         <li
           key={item.label}
-          className="px-2 py-1 text-neutral-850 font-normal font-caption text-xs dark:text-white flex items-center justify-between hover:bg-neutral-100 hover:dark:bg-neutral-700 rounded-sm cursor-pointer"
+          className="px-2 py-1 text-neutral-850 outline-none font-normal font-caption text-xs dark:text-white flex items-center justify-between hover:bg-neutral-100 hover:dark:bg-neutral-700 rounded-sm cursor-pointer"
           onClick={item.action}
         >
           {item.submenu ? (
             <div className="w-full flex justify-between">
               <Menubar.Sub>
-                <Menubar.SubTrigger className="w-full text-neutral-850 font-normal font-caption text-xs dark:text-white flex items-center justify-between hover:bg-neutral-100 hover:dark:bg-neutral-700 rounded-sm cursor-pointer">
+                <Menubar.SubTrigger className="w-full h-full outline-none text-neutral-850 font-normal font-caption text-xs dark:text-white flex items-center justify-between hover:bg-neutral-100 hover:dark:bg-neutral-700 rounded-sm cursor-pointer">
                   {item.label}
+                  {item.submenu.map((sub) =>
+                    sub.selected ? (
+                      <span className="opacity-50 ">{sub.label}</span>
+                    ) : null,
+                  )}
                 </Menubar.SubTrigger>
-                {/* <Menubar.Item>{"open"}</Menubar.Item> */}
+
                 <Menubar.Portal>
                   <Menubar.SubContent
                     className="w-80 px-4 py-4 gap-2 bg-white dark:bg-neutral-900 dark:border-brand-dark rounded-md shadow-inner backdrop-blur-2xl border border-brand-light"
                     alignOffset={-10}
                   >
-                    {item.submenu.map((sub) => (
-                      <Menubar.Item
-                        onClick={() => (sub.onclick() ? sub.onclick() : null)}
-                        className="text-neutral-850 dark:text-white my-2 "
-                        key={sub.label}
-                      >
-                        {sub.label}
-                      </Menubar.Item>
-                    ))}
+                    {item.submenu.map(
+                      (sub) => (
+                        console.log(sub),
+                        (
+                          <Menubar.Item
+                            onClick={() => (sub.action() ? sub.action() : null)}
+                            className="flex px-2  outline-none  justify-between items-center text-neutral-850 dark:text-white my-2 hover:bg-neutral-100 hover:dark:bg-neutral-700 rounded-sm cursor-pointer"
+                            key={sub.label}
+                          >
+                            {sub.label}
+                            <div className="w-3 h-3 bg-neutral-300 dark:bg-neutral-100 items-center flex">
+                              {sub.selected ? (
+                                <span className="text-brand">✓</span>
+                              ) : null}
+                            </div>
+                          </Menubar.Item>
+                        )
+                      ),
+                    )}
                   </Menubar.SubContent>
                 </Menubar.Portal>
               </Menubar.Sub>
