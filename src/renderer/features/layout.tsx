@@ -9,12 +9,13 @@ export const AppLayout = () => {
 
 	useEffect(() => {
 		const setInitialData = async () => {
-			const systemInfo = await window.bridge.getOSInfo()
+			const { system, theme } = await window.bridge.getSystemInfo()
 			setPlatFormData({
-				OS: systemInfo,
+				OS: system,
 				arch: 'x64',
+				colorScheme: theme,
 			})
-			if (systemInfo === 'darwin' || systemInfo === 'win32') {
+			if (system === 'darwin' || system === 'win32') {
 				setIsLinux(false)
 			}
 		}

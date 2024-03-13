@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
 	SearchIcon,
 	ZoomInOut,
@@ -11,8 +11,10 @@ import {
 } from '~renderer/assets/icons'
 import { ActivitybarButton } from './components'
 import { useNavigate } from 'react-router-dom'
+import { useOpenPLCStore } from '~/renderer/store'
 
 export default function Activitybar() {
+	const setColorSchemeStore = useOpenPLCStore.useUpdatePlatFormData()
 	const navigate = useNavigate()
 	const prefersDarkMode = window.matchMedia?.(
 		'(prefers-color-scheme: dark)'
@@ -23,8 +25,8 @@ export default function Activitybar() {
 	const handleChangeTheme = async () => {
 		const res = await window.bridge.toggleTheme()
 		setIsDark(res)
+		setColorSchemeStore({ colorScheme: res ? 'dark' : 'light' })
 	}
-
 	return (
 		<div className='bg-brand-dark dark:bg-neutral-950 h-full w-20 flex flex-col justify-between pb-10 border-t-inherit'>
 			<div className='w-full h-fit flex flex-col gap-10 my-5'>

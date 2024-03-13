@@ -38,7 +38,7 @@ export const MainContent = () => {
 						>
 							<ProjectTree />
 						</ResizablePanel>
-						<ResizableHandle withHandle />
+						<ResizableHandle className='bg-neutral-200 dark:bg-neutral-850' />
 						<ResizablePanel
 							id='sidebarLibraryTreePanel'
 							order={2}
@@ -84,15 +84,12 @@ export const MainContent = () => {
 									>
 										<VariableTable />
 									</ResizablePanel>
-									<ResizableHandle
-										withHandle
-										className='h-[1px] bg-brand-light w-full'
-									/>
+									<ResizableHandle className='h-[1px] bg-brand-light w-full' />
 									<ResizablePanel
 										id='textualEditorPanel'
 										order={2}
 										defaultSize={75}
-										className='flex-1 flex-grow rounded-lg mt-1'
+										className='flex-1 flex-grow rounded-md mt-6'
 									>
 										<TextEditor />
 									</ResizablePanel>

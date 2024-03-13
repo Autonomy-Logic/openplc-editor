@@ -104,7 +104,7 @@ export const LibraryTree = () => {
 	]
 	return (
 		<div
-			className='w-full h-[43%] border-none bg-none flex flex-col pr-1 overflow-x-auto
+			className='w-full h-full border-none bg-none flex flex-col pr-1 overflow-x-auto
 			[&::-webkit-scrollbar]:bg-neutral-200
 		[&::-webkit-scrollbar]:dark:bg-neutral-850
 		[&::-webkit-scrollbar-thumb]:bg-brand

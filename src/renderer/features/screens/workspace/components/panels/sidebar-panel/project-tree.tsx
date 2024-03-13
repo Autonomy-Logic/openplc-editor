@@ -110,7 +110,7 @@ export const ProjectTree = (props: IProjectTreeProps): ReactNode => {
 	]
 	return (
 		<div
-			className='w-full h-2/5 border-none bg-none flex flex-col pr-1 overflow-x-auto
+			className='w-full h-full border-none bg-none flex flex-col pr-1 overflow-x-auto
 			[&::-webkit-scrollbar]:mx-1
 			[&::-webkit-scrollbar]:bg-neutral-200
 			[&::-webkit-scrollbar]:dark:bg-neutral-850

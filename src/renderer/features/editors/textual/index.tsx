@@ -4,15 +4,19 @@ import * as monaco from 'monaco-editor'
 import { Editor } from '@monaco-editor/react'
 import { IpcRendererEvent } from 'electron/renderer'
 import _ from 'lodash'
-import { useCallback, useEffect, useRef } from 'react'
+import { ComponentProps, useCallback, useEffect, useRef, useState } from 'react'
 
 import { useOpenPLCStore } from '~renderer/store'
 
-export default function TextEditor() {
+type IEditorProps = ComponentProps<typeof Editor>
+
+export default function TextEditor(props: IEditorProps) {
 	const projectPath = useOpenPLCStore.usePath()
 	const projectData = useOpenPLCStore.useData()
 	const updatePou = useOpenPLCStore.useUpdatePou()
 	const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+	const [isDark, setIsDark] = useState(true)
+	const themePreference = useOpenPLCStore.useColorScheme()
 
 	/**
 	 *  here is the editor instance, you can store it in `useRef` for further usage
@@ -60,22 +64,14 @@ export default function TextEditor() {
 		return res
 	}, [projectData])
 
-	// window.bridge.saveProject(async (event: IpcRendererEvent, _value: string) => {
-	// 	if (!_value) return
-	// 	const dataToSave = {
-	// 		projectPath,
-	// 		projectAsObj: project,
-	// 	}
-	// 	event.sender.send('project:save-response', dataToSave)
-	// })
-
 	return (
 		<Editor
 			path={setEditorPath()}
 			defaultValue={setPouInStage()}
 			onMount={handleEditorInstance}
 			onChange={handleChange}
-			theme='openplc-dark'
+			theme={themePreference === 'dark' ? 'openplc-dark' : 'openplc-light'}
+			{...props}
 		/>
 	)
 }

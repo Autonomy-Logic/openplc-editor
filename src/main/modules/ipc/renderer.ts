@@ -5,6 +5,7 @@ type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
 const rendererProcessBridge = {
 	toggleTheme: () => ipcRenderer.invoke('app:toggle-theme'),
+	getThemePreference: () => ipcRenderer.invoke('app-preferences:get-theme'),
 	startOpenProject: () => ipcRenderer.invoke('start-screen/project:open'),
 	startCreateProject: () => ipcRenderer.invoke('start-screen/project:create'),
 	createProject: (callback: IpcRendererCallbacks) =>
@@ -20,7 +21,7 @@ const rendererProcessBridge = {
 	 * Send the OS information to the renderer process
 	 * Refactor: This can be optimized.
 	 */
-	getOSInfo: () => ipcRenderer.invoke('system:get-os'),
+	getSystemInfo: () => ipcRenderer.invoke('system:get-system-info'),
 	closeWindow: () => ipcRenderer.send('window-controls:close'),
 	minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
 	maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
