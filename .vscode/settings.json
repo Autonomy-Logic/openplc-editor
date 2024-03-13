@@ -34,11 +34,13 @@
     "headlessui",
     "hookform",
     "IFBD",
+    "immer",
     "IPLC",
     "ISFC",
     "mimetypes",
     "openplc",
     "oplc",
+    "Pous",
     "tanstack",
     "titlebar",
     "toastify"

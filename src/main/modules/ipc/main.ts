@@ -42,6 +42,9 @@ class MainProcessBridge implements MainIpcModule {
 	}
 	setupMainIpcListener() {
 		this.ipcMain.handle('app:toggle-theme', this.handleThemeToggle.bind(this))
+		this.ipcMain.handle('app-preferences:get-theme', async () => {
+			return nativeTheme.shouldUseDarkColors
+		})
 		this.ipcMain.handle('start-screen/project:create', async () => {
 			const response = await this.projectService.createProject()
 			return response
@@ -65,9 +68,10 @@ class MainProcessBridge implements MainIpcModule {
 		 * Send the OS information to the renderer process
 		 * Refactor: This can be optimized.
 		 */
-		this.ipcMain.handle('system:get-os', async () => {
+		this.ipcMain.handle('system:get-system-info', async () => {
 			const response = platform
-			return response
+			const colorPreference = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
+			return { system: response, theme: colorPreference }
 		})
 		this.ipcMain.on('window-controls:close', () => this.mainWindow?.close())
 		this.ipcMain.on('window-controls:minimize', () =>

@@ -7,8 +7,8 @@ export const TitlebarLeftContent = () => {
 	/**
 	 * Get the platform name from the store and check if it's macOS
 	 */
-	const platformName = useOpenPLCStore().platformName
-	const isMac = platformName === 'darwin'
+	const OS = useOpenPLCStore().OS
+	const isMac = OS === 'darwin'
 	/**
 	 * Get information about the current location to perform conditional rendering
 	 */
