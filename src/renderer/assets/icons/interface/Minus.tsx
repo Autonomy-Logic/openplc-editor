@@ -25,8 +25,8 @@ export const MinusIcon = (props: IMinusIconProps) => {
       <path
         d="M1.28571 1H12.7143"
         stroke="#0464FB"
-        stroke-width="1.5"
-        stroke-linecap="round"
+        strokeWidth="1.5"
+        strokeLinecap="round"
       />
     </svg>
   );

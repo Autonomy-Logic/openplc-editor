@@ -1,17 +1,10 @@
-import { ComponentProps } from "react";
+import { IconStyles } from "~/renderer/data/constants/icon-styles";
 import { cn } from "~/utils";
+import { IIconProps } from "../Types/iconTypes";
 
-type ISearchIconProps = ComponentProps<"svg"> & {
-  size?: "sm" | "md" | "lg";
-};
-const sizeClasses = {
-  sm: "w-7 h-7",
-  md: "w-10 h-10",
-  lg: "w-14 h-14",
-};
-
-export const SearchIcon = (props: ISearchIconProps) => {
+export const SearchIcon = (props: IIconProps) => {
   const { className, size = "sm", ...res } = props;
+  const sizeClasses = IconStyles.sizeClasses.small[size];
 
   return (
     <svg
@@ -19,7 +12,7 @@ export const SearchIcon = (props: ISearchIconProps) => {
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={cn(`${sizeClasses[size]}`, className)}
+      className={cn(`${sizeClasses}`, className)}
       {...res}
     >
       <g opacity="0.4">
