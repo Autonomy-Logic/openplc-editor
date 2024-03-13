@@ -1,12 +1,9 @@
-import { useState } from "react";
 import {
   SearchIcon,
   ZoomInOut,
   TransferIcon,
   DownloadIcon,
   PlayIcon,
-  LightThemeIcon,
-  DarkThemeIcon,
   ExitIcon,
   DebuggerIcon,
 } from "~renderer/assets/icons";
@@ -50,7 +47,7 @@ export default function Activitybar() {
           onClick={() => console.log("play")}
         />
       </div>
-      <div className=" h-20 w-full flex flex-col gap-6">
+      <div className=" h-10 w-full flex flex-col gap-6">
         <ActivitybarButton
           label="Exit"
           Icon={ExitIcon}
