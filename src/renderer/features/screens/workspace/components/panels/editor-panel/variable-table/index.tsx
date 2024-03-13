@@ -118,13 +118,11 @@ export default function VariableTable() {
 							size='md'
 							onClick={() => toggleVariableDisplay(true)}
 							variableAsTable={!variableAsCode}
-							className='w-full h-full'
 						/>
 						<CodeIcon
 							size='md'
 							onClick={() => toggleVariableDisplay(false)}
 							variableAsCode={variableAsCode}
-							className='w-full h-full'
 						/>
 					</div>
 				</div>
