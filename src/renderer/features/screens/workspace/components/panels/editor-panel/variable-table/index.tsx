@@ -113,16 +113,18 @@ export default function VariableTable() {
 							<ArrowUp className='w-5 h-5 stroke-brand rotate-180' />
 						</div>
 					) : null}
-					<div className='flex items-center rounded-md overflow-hidden'>
+					<div className='flex items-center rounded-md overflow-hidden relative h-full'>
 						<TableIcon
 							size='md'
 							onClick={() => toggleVariableDisplay(true)}
 							variableAsTable={!variableAsCode}
+							className='w-full h-full'
 						/>
 						<CodeIcon
 							size='md'
 							onClick={() => toggleVariableDisplay(false)}
 							variableAsCode={variableAsCode}
+							className='w-full h-full'
 						/>
 					</div>
 				</div>

@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react'
 import {
-	SearchIcon,
-	ZoomInOut,
-	TransferIcon,
-	DownloadIcon,
-	PlayIcon,
-	LightThemeIcon,
-	DarkThemeIcon,
-	ExitIcon,
-} from '~renderer/assets/icons'
-import { ActivitybarButton } from './components'
-import { useNavigate } from 'react-router-dom'
+  SearchIcon,
+  ZoomInOut,
+  TransferIcon,
+  DownloadIcon,
+  PlayIcon,
+  LightThemeIcon,
+  DarkThemeIcon,
+  ExitIcon,
+  DebuggerIcon,
+} from "~renderer/assets/icons";
+import { ActivitybarButton } from "./components";
+import { useNavigate } from "react-router-dom";
 import { useOpenPLCStore } from '~/renderer/store'
 
 export default function Activitybar() {
