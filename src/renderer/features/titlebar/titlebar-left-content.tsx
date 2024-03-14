@@ -1,5 +1,5 @@
 import { OpenPLCIcon } from '~/renderer/assets/icons/oplc'
-import { MenuBar } from './menu/menu-bar'
+import { MenuBar } from './menu-bar'
 import { useLocation } from 'react-router-dom'
 import { useOpenPLCStore } from '~/renderer/store'
 
