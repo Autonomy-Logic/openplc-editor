@@ -1,15 +1,17 @@
-import { promises, readFile, writeFile } from 'fs'
+import { mkdir, promises, readFile, writeFile } from 'fs'
 import { join } from 'path'
 import { BrowserWindow, dialog } from 'electron'
 import { convert, create } from 'xmlbuilder2'
 
 // import { TXmlProject } from '../../shared/contracts/types';
-import { ProjectSchema } from '../../shared/contracts/validations'
-import xmlProjectAsObject from '../../shared/data/mock/object-to-create-project'
-import { i18n } from '../../utils/i18n'
-import { ProjectDto } from '../contracts/types/services/project.service'
-import { BaseServiceClass } from '../contracts/validations'
-import { store } from '../modules/store'
+import { ProjectSchema } from '../../../shared/contracts/validations'
+import xmlProjectAsObject from '../../../shared/data/mock/object-to-create-project'
+import { i18n } from '../../../utils/i18n'
+import { ProjectDto } from '../../contracts/types/services/project.service'
+import { BaseServiceClass } from '../../contracts/validations'
+import { store } from '../../modules/store'
+import { configs, data } from './data/config-file'
+import { CreateJSONFile } from './utils/json-creator'
 
 // Wip: Refactoring project services.
 class ProjectService extends BaseServiceClass<
@@ -63,6 +65,25 @@ class ProjectService extends BaseServiceClass<
 			{ version: '1.0', encoding: 'utf-8' },
 			xmlProjectAsObject
 		)
+
+		const configsPath = mkdir(
+			join(filePath, 'configs'),
+			{ recursive: true },
+			(err, path) => {
+				if (err) throw err
+				return path
+			}
+		)
+		CreateJSONFile({
+			path: configsPath as unknown as string,
+			fileName: 'project.configs',
+			data: JSON.stringify(configs),
+		})
+		CreateJSONFile({
+			path: configsPath as unknown as string,
+			fileName: 'project.data',
+			data: JSON.stringify(data),
+		})
 
 		// Create the path to the project file.
 		const projectPath = join(filePath, 'plc.xml')

@@ -80,14 +80,8 @@ export default function VariableTable() {
 	}
 
 	return (
-		<Panel
-			collapsible={true}
-			collapsedSize={0}
-			minSize={25}
-			defaultSize={31}
-			className='flex flex-col gap-4 w-full h-full'
-		>
-			<div className='flex justify-between h-8'>
+		<>
+			<div className='flex justify-between'>
 				{!variableAsCode ? (
 					<div className='flex gap-4'>
 						<div className='flex gap-4 items-center'>
@@ -124,13 +118,11 @@ export default function VariableTable() {
 							size='md'
 							onClick={() => toggleVariableDisplay(true)}
 							variableAsTable={!variableAsCode}
-							className='w-full h-full'
 						/>
 						<CodeIcon
 							size='md'
 							onClick={() => toggleVariableDisplay(false)}
 							variableAsCode={variableAsCode}
-							className='w-full h-full'
 						/>
 					</div>
 				</div>
@@ -141,6 +133,6 @@ export default function VariableTable() {
 			) : (
 				<VariableCode />
 			)}
-		</Panel>
+		</>
 	)
 }
