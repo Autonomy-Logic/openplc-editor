@@ -55,12 +55,13 @@ module.exports = {
         ] /* Font for captions, labels, buttons and legends */,
       },
       screens: {
-       '3xl': "2048px",
-       '4xl': "2560px",
+        xm: "1792px",
+        "3xl": "2048px",
+        "4xl": "2560px",
       },
       rotate: {
         270: "270deg",
-      }
+      },
     },
   },
   variants: {
