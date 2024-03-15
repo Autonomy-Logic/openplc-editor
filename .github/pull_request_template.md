@@ -1,6 +1,6 @@
 ## Issue reference
 
-This PR resolve the # issue.
+This PR refer to the # issue.
 
 ## Description of the changes proposed
 
