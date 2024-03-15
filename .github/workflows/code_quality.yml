@@ -1,0 +1,24 @@
+name: Code quality
+
+run-name: OpenPLC CI pipeline - Code quality
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches:
+      - main
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Biome
+        uses: biomejs/setup-biome@v2
+        with:
+          version: latest
+      - name: Run Biome
+        run: biome ci .
