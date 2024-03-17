@@ -6,7 +6,7 @@ import { IpcRendererEvent } from 'electron/renderer'
 import _ from 'lodash'
 import { ComponentProps, useCallback, useEffect, useRef, useState } from 'react'
 
-import { useOpenPLCStore } from '~renderer/store'
+import { useOpenPLCStore } from '@process:renderer/store'
 
 type IEditorProps = ComponentProps<typeof Editor>
 

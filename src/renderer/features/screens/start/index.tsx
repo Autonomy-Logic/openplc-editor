@@ -3,11 +3,11 @@ import {
 	PlusIcon,
 	StickArrowIcon,
 	VideoIcon,
-} from '~renderer/assets/icons'
-import { MenuComponent } from '~renderer/components/ui'
+} from '@process:renderer/assets/icons'
+import { MenuComponent } from '@components/ui'
 
 import { useNavigate } from 'react-router-dom'
-import { useOpenPLCStore } from '~renderer/store'
+import { useOpenPLCStore } from '@process:renderer/store'
 import {
 	ActionsBar,
 	DisplayExampleProjects,

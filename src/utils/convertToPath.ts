@@ -4,7 +4,7 @@
  * @param {string[]} text - The array of strings to convert to a path.
  * @returns {string} The forward-slash-separated path.
  */
-const convertToPath = (text: string[]) => {
+const convertToPath = (text: string[]): string => {
 	/**
 	 * Initializes an empty string to store the path.
 	 *
@@ -16,9 +16,9 @@ const convertToPath = (text: string[]) => {
 	 *
 	 * @param {string} item - The current item in the array.
 	 */
-	text.forEach((item) => {
+	for (const item of text) {
 		path += `/${item}`
-	})
+	}
 	/**
 	 * Returns the final concatenated path.
 	 *

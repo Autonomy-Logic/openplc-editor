@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowIcon, MagnifierIcon } from '~renderer/assets/icons'
+import { ArrowIcon, MagnifierIcon } from '@process:renderer/assets/icons'
 
-import { Dropdown } from '~renderer/components/elements'
-import { Search } from '~renderer/features/screens/start/components/actions-bar/elements'
+import { Dropdown } from '@components/elements'
+import { Search } from '@features/screens/start/components/actions-bar/elements'
 
 export default function ActionsBar() {
 	const options = [

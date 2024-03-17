@@ -1,4 +1,10 @@
-import { FBDIcon, ILIcon, LDIcon, SFCIcon, STIcon } from '~/renderer/assets'
+import {
+	FBDIcon,
+	ILIcon,
+	LDIcon,
+	SFCIcon,
+	STIcon,
+} from '@process:renderer/assets'
 
 export const LanguageIcon = {
 	st: STIcon,

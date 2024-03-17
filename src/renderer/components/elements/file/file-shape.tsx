@@ -1,15 +1,15 @@
-import { SVGProps } from 'react'
+import { ComponentProps } from 'react'
 
-type ShapeProps = SVGProps<SVGSVGElement> & Record<string, never>
-export default function Shape({ ...props }: ShapeProps) {
+type IFileShapeProps = ComponentProps<'svg'>
+const Shape = (props: IFileShapeProps) => {
 	return (
-		// eslint-disable-next-line react/jsx-props-no-spreading
 		<svg
-			role='figure'
+			aria-label='folder-shape'
 			viewBox='0 0 224 160'
 			xmlns='http://www.w3.org/2000/svg'
 			{...props}
 		>
+			<title>folder-shape</title>
 			<path
 				id='folder-path'
 				className='fill-brand-medium cursor-pointer hover:fill-brand-medium-dark'
@@ -18,3 +18,5 @@ export default function Shape({ ...props }: ShapeProps) {
 		</svg>
 	)
 }
+
+export default Shape

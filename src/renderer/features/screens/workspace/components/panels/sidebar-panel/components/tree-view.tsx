@@ -1,6 +1,6 @@
 import { ComponentProps, ElementType, ReactNode, useState } from 'react'
-import { ArrowIcon } from '~renderer/assets'
-import { cn } from '~/utils'
+import { ArrowIcon } from '@process:renderer/assets'
+import { cn } from '@utils/cn'
 
 type ILeafData = {
 	key: string

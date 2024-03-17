@@ -1,6 +1,6 @@
 import { useLocation } from 'react-router-dom'
-import { OpenPLCIcon } from '~/renderer/assets/icons/oplc'
-import { useOpenPLCStore } from '~/renderer/store'
+import { OpenPLCIcon } from '@process:renderer/assets/icons/oplc'
+import { useOpenPLCStore } from '@process:renderer/store'
 
 export const TitlebarCenterContent = () => {
 	/**

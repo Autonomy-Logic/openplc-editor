@@ -1,16 +1,15 @@
-import { ImgHTMLAttributes } from 'react'
+import { ComponentProps } from 'react'
 
-type CardPreviewProps = ImgHTMLAttributes<HTMLImageElement> & {
+type ICardPreviewProps = ComponentProps<'img'> & {
 	source: string
 }
-export default function Preview({ source, ...props }: CardPreviewProps) {
-	return (
-		<img
-			alt='card-preview'
-			src={source}
-			className='self-stretch flex-1 relative rounded-md max-w-full overflow-hidden max-h-full object-cover cursor-pointer'
-			// eslint-disable-next-line react/jsx-props-no-spreading
-			{...props}
-		/>
-	)
-}
+const Preview = ({ source, ...props }: ICardPreviewProps) => (
+	// biome-ignore lint/a11y/useAltText: <Does not make sense in this context, can be reviewed>
+	<img
+		src={source}
+		className='self-stretch flex-1 relative rounded-md max-w-full overflow-hidden max-h-full object-cover cursor-pointer'
+		{...props}
+	/>
+)
+
+export default Preview

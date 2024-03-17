@@ -1,7 +1,7 @@
-import { OpenPLCIcon } from '~/renderer/assets/icons/oplc'
+import { OpenPLCIcon } from '@process:renderer/assets/icons/oplc'
 import { MenuBar } from './menu-bar'
 import { useLocation } from 'react-router-dom'
-import { useOpenPLCStore } from '~/renderer/store'
+import { useOpenPLCStore } from '@process:renderer/store'
 
 export const TitlebarLeftContent = () => {
 	/**

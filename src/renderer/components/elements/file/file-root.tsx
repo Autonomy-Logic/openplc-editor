@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { HTMLAttributes } from 'react'
-import { cn } from '~/utils'
+import { cn } from '@utils/cn'
 
 type FolderRootProps = HTMLAttributes<HTMLDivElement> & unknown
 // {

@@ -1,7 +1,7 @@
 import { ReactNode } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import VariableTable from './variable-table'
-import TextEditor from '~/renderer/features/editors/textual'
+import TextEditor from '@features/editors/textual'
 
 export const EditorPanel = (): ReactNode => {
 	return (

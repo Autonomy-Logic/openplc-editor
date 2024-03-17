@@ -4,7 +4,7 @@ import { SidebarPanel } from './sidebar-panel'
 import { NavigationPanel } from './navigation-panel'
 import { EditorPanel } from './editor-panel'
 import { BottomPanel } from './bottom-panel'
-import { cn } from '~/utils/index'
+import { cn } from '@utils/cn'
 
 export const PanelsGroupComponent = (): ReactNode => {
 	const [isLinux, setIsLinux] = useState(true)
@@ -22,7 +22,12 @@ export const PanelsGroupComponent = (): ReactNode => {
 			direction='horizontal'
 			className='bg-brand-dark dark:bg-neutral-950'
 		>
-			<div className={cn('flex-grow h-full bg-neutral-100 dark:bg-neutral-900 flex p-2 gap-1', `${isLinux ? '' : '!rounded-tl-lg'}`)}>
+			<div
+				className={cn(
+					'flex-grow h-full bg-neutral-100 dark:bg-neutral-900 flex p-2 gap-1',
+					`${isLinux ? '' : '!rounded-tl-lg'}`
+				)}
+			>
 				<>
 					<SidebarPanel />
 					{/* Here goes the sidebar component */}

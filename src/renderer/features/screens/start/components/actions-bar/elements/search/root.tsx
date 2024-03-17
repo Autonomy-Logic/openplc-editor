@@ -1,6 +1,6 @@
 import { HTMLAttributes, ReactNode } from 'react'
 
-import { cn } from '~/utils'
+import { cn } from '@utils/cn'
 
 type SearchRootProps = HTMLAttributes<HTMLDivElement>
 

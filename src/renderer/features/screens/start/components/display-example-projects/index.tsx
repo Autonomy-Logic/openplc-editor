@@ -1,7 +1,7 @@
 // TODO: Remove mock data
-import MockImage from '~renderer/assets/images/example.png'
+import MockImage from '@process:renderer/assets/images/example.png'
 
-import Card from '~renderer/components/elements/card'
+import Card from '@components/elements/card'
 
 // TODO: Remove mock data
 import Mock from '../../../../../../shared/data/mock/examples.json'

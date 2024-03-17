@@ -1,11 +1,11 @@
 import { ComponentProps } from 'react'
-import { ArrowIcon, PLCIcon } from '~/renderer/assets'
+import { ArrowIcon, PLCIcon } from '@process:renderer/assets'
 import {
 	LanguageIcon,
 	LanguageIconType,
 	PouIconType,
 	PouIcon,
-} from '~renderer/data'
+} from '@process:renderer/data'
 
 type INavigationPanelBreadcrumbsProps = ComponentProps<'ol'> & {
 	crumb: {

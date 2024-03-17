@@ -15,7 +15,7 @@ import {
 	ResourceIcon,
 	SFCIcon,
 	STIcon,
-} from '~renderer/assets'
+} from '@process:renderer/assets'
 
 type IProjectTreeProps = ComponentProps<'div'>
 export const ProjectTree = (props: IProjectTreeProps): ReactNode => {

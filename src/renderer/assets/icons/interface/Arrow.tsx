@@ -1,5 +1,5 @@
 import { ComponentPropsWithRef, ElementType } from 'react'
-import { cn } from '~/utils'
+import { cn } from '@utils/cn'
 
 type IArrowIconProps = ComponentPropsWithRef<'svg'> & {
 	variant?: 'default' | 'primary' | 'secondary'

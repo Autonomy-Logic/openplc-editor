@@ -20,7 +20,7 @@ export const language: languages.IMonarchLanguage = {
 				'comment', // Tokenize comment of line
 			],
 			[
-				/\(\*[^]*?\*\)/,
+				/\(\*[\s\S]*?\*\)/,
 				'block-comment', // Tokenize block of comment
 			],
 		],

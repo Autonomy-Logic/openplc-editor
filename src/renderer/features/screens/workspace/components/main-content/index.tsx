@@ -1,4 +1,4 @@
-import TextEditor from '~/renderer/features/editors/textual'
+import TextEditor from '@features/editors/textual'
 import {
 	ResizableHandle,
 	ResizablePanel,

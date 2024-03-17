@@ -1,7 +1,6 @@
-/* eslint-disable react/jsx-props-no-spreading */
 import { HTMLAttributes, ReactNode } from 'react'
 
-import { cn } from '~/utils'
+import { cn } from '@utils/cn'
 
 type MenuSectionProps = HTMLAttributes<HTMLDivElement> & {
 	children: ReactNode

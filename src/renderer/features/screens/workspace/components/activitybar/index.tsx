@@ -6,7 +6,7 @@ import {
 	PlayIcon,
 	ExitIcon,
 	DebuggerIcon,
-} from '~renderer/assets/icons'
+} from '@process:renderer/assets/icons'
 import { ActivitybarButton } from './components'
 import { useNavigate } from 'react-router-dom'
 

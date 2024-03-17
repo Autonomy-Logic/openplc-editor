@@ -5,7 +5,7 @@ import {
 	FunctionIcon,
 	ProgramIcon,
 	ResourceIcon,
-} from '~/renderer/assets'
+} from '@process:renderer/assets'
 
 export const PouIcon = {
 	function: FunctionIcon,

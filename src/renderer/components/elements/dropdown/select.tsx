@@ -8,7 +8,7 @@ import {
 	SetStateAction,
 } from 'react'
 
-import { cn } from '~/utils'
+import { cn } from '@utils/cn'
 
 type DropdownSelectProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 	selectedOption: string

@@ -1,5 +1,5 @@
 import { ComponentProps, HTMLAttributes } from 'react'
-import { FileElement } from '~renderer/components/elements'
+import { FileElement } from '@components/elements'
 import RecentProjects from '../../../../../../shared/data/mock/projects-data.json'
 
 export type IDisplayRecentProjectProps = ComponentProps<'section'>

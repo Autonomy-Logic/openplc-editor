@@ -3,9 +3,9 @@ import {
 	FolderIcon,
 	LibraryCloseFolderIcon,
 	MagnifierIcon,
-} from '~renderer/assets'
+} from '@process:renderer/assets'
 import { Header, Tree } from './components'
-import { LibraryFileIcon } from '~/renderer/assets/icons/library/File'
+import { LibraryFileIcon } from '@process:renderer/assets/icons/library/File'
 
 export const LibraryTree = () => {
 	const treeData = [

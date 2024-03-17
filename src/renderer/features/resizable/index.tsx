@@ -1,4 +1,4 @@
-import { cn } from '~/utils'
+import { cn } from '@utils/cn'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { ComponentProps } from 'react'
 import { DragHandleDots2Icon } from '@radix-ui/react-icons'

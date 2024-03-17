@@ -4,6 +4,7 @@ import { BrowserWindow, dialog } from 'electron'
 import { convert, create } from 'xmlbuilder2'
 
 // import { TXmlProject } from '../../shared/contracts/types';
+
 import { ProjectSchema } from '../../../shared/contracts/validations'
 import xmlProjectAsObject from '../../../shared/data/mock/object-to-create-project'
 import { i18n } from '../../../utils/i18n'
@@ -185,8 +186,7 @@ class ProjectService extends BaseServiceClass<
 	 * @param xmlSerializedAsObject - The XML data to be serialized and saved.
 	 * @returns A `promise` of `ResponseService` type.
 	 */
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	async saveProject(data: ProjectDto): Promise<any | void> {
+	async saveProject(data: ProjectDto) {
 		const { projectPath, projectAsObj } = data
 		// Check if required parameters are provided.
 		if (!projectPath || !projectAsObj)

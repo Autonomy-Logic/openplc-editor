@@ -1,4 +1,4 @@
-import { useOpenPLCStore } from '~/renderer/store'
+import { useOpenPLCStore } from '@process:renderer/store'
 import { MinimizeIcon, MaximizeIcon, CloseIcon } from './window-controls-icons'
 
 export const TitlebarRightContent = () => {

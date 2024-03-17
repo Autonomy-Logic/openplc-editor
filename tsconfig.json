@@ -1,10 +1,16 @@
 {
   "compilerOptions": {
-    "types": ["@testing-library/jest-dom", "node"],
+    "types": [
+      "@testing-library/jest-dom",
+      "node"
+    ],
     "incremental": true,
     "target": "es2022",
     "module": "commonjs",
-    "lib": ["dom", "es2022"],
+    "lib": [
+      "dom",
+      "es2022"
+    ],
     "jsx": "react-jsx",
     "strict": true,
     "sourceMap": true,
@@ -15,15 +21,39 @@
     "allowJs": true,
     "outDir": "configs/dll",
     "paths": {
-      "~/*": ["./src/*"],
-      "~main/*": ["./src/main/*"],
-      "~renderer/*": ["./src/renderer/*"],
-      "~features/*": ["./src/renderer/features/*"],
-      "~providers/*": ["./src/renderer/providers/*"],
-      "~contracts/*": ["./src/renderer/contracts/*"],
-      "~utils/*": ["./src/utils/*"],
-      "~shared/*": ["./src/shared/*"],
+      "@root/*": [
+        "./src/*"
+      ],
+      "@process:main/*": [
+        "./src/main/*"
+      ],
+      "@process:renderer/*": [
+        "./src/renderer/*"
+      ],
+      "@components/*": [
+        "./src/renderer/components/*"
+      ],
+      "@features/*": [
+        "./src/renderer/features/*"
+      ],
+      "@providers/*": [
+        "./src/renderer/providers/*"
+      ],
+      "@contracts/*": [
+        "./src/renderer/contracts/*"
+      ],
+      "@utils/*": [
+        "./src/utils/*"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
+      ],
     }
   },
-  "exclude": ["test", "release/build", "release/app/dist", "configs/dll"]
+  "exclude": [
+    "test",
+    "release/build",
+    "release/app/dist",
+    "configs/dll"
+  ]
 }
