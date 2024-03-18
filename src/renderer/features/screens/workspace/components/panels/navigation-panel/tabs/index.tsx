@@ -1,33 +1,43 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { LDIcon, PlusIcon } from '@process:renderer/assets'
 import { cn } from '@utils/cn'
 
 const tabs = [
-	{ name: 'Program', href: '#', current: true },
-	{ name: 'Function', href: '#', current: false },
-	{ name: 'Function Block', href: '#', current: false },
-	{ name: 'Data Type', href: '#', current: false },
+	{ id: 1, name: 'Program', href: '#' },
+	{ id: 2, name: 'Function', href: '#' },
+	{ id: 3, name: 'Function Block', href: '#' },
+	{ id: 4, name: 'Data Type', href: '#' },
 ]
+
 export const NavigationPanelTabs = () => {
+	const [selectedTab, setSelectedTab] = useState(tabs[0].id)
+
 	return (
 		<nav className='isolate flex border-none outline-none' aria-label='Tabs'>
-			{tabs.map((tab, tabIdx) => (
+			{tabs.map((tab) => (
 				<a
-					key={tab.name}
+					key={tab.id}
 					href={tab.href}
+					onClick={() => setSelectedTab(tab.id)}
 					className={cn(
-						tab.current ? '' : 'opacity-[35%] border-r border-neutral-300',
+						selectedTab === tab.id
+							? ''
+							: 'opacity-[35%] border-r border-neutral-300',
 						'aria-[current=page]:dark:bg-brand-dark',
 						'group min-w-0 max-w-[160px] relative bg-neutral-100 h-1/2 flex-1 flex items-center justify-between overflow-hidden text-neutral-1000 dark:text-white py-2 px-3 text-start text-sm font-normal font-display dark:bg-neutral-800'
 					)}
-					aria-current={tab.current ? 'page' : undefined}
+					aria-current={selectedTab === tab.id ? 'page' : undefined}
 				>
 					<span>{tab.name}</span>
-					<PlusIcon className='rotate-45 inline stroke-brand dark:stroke-brand-light w-4 h-4' />
+					<PlusIcon
+						className={`${
+							selectedTab === tab.id ? 'inline' : 'hidden group-hover:inline'
+						} rotate-45 stroke-brand dark:stroke-brand-light w-4 h-4`}
+					/>
 					<span
 						aria-hidden='true'
 						className={cn(
-							tab.current ? 'bg-brand' : 'bg-transparent',
+							selectedTab === tab.id ? 'bg-brand' : 'bg-transparent',
 							'absolute inset-x-0 top-0 h-[3px] z-50'
 						)}
 					/>
