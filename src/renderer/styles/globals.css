@@ -115,6 +115,24 @@
   }
 
   /* Classes for custom scroll areas */
+
+  /* Explanation: Scrollbar */
+  .oplc-scrollbar:hover::-webkit-scrollbar-thumb {
+    background-color: #0350c9;
+  }
+
+  .oplc-scrollbar::-webkit-scrollbar {
+    @apply flex h-1 w-1 transition-colors duration-[160ms] ease-in-out rounded-lg bg-neutral-200 dark:bg-neutral-850;
+  }
+
+  .oplc-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-[--primary-medium] bg-opacity-30 rounded-lg hover:bg-opacity-100 transition-colors ease-in-out duration-700;
+  }
+
+  .oplc-scrollbar::-webkit-scrollbar-corner {
+    @apply bg-none;
+  }
+
   .scroll-area {
     display: flex;
     gap: 1.5rem;
@@ -152,7 +170,7 @@
   }
 
   .scroll-area-horizontal::-webkit-scrollbar-thumb {
-    @apply bg-[#0350c9] bg-opacity-30 rounded-lg hover:bg-opacity-100 transition-colors ease-in-out duration-700;
+    @apply bg-[--primary-medium] bg-opacity-30 rounded-lg hover:bg-opacity-100 transition-colors ease-in-out duration-700;
   }
 }
 

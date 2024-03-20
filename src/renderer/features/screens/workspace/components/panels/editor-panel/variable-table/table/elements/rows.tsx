@@ -20,7 +20,7 @@ const TableRow = ({ row }: ITableRowProps) => {
 	const selectDefaultStyle = 'w-full bg-inherit focus:outline-none text-center '
 
 	return (
-		<tr className=' divide-x divide-neutral-300 '>
+		<tr className=' divide-x divide-y divide-neutral-300 dark:divide-neutral-850'>
 			<td className={cn(tdDefaultStyle, 'w-[6%]')}>
 				<p className='text-neutral-400 text-center w-full'>{row.id}</p>
 			</td>

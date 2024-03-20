@@ -1,3 +1,4 @@
+import { cn } from '@root/utils'
 import TableHeader from './elements/header'
 import TableRow from './elements/rows'
 
@@ -31,20 +32,29 @@ const TableRoot = ({ tableData }: ITableComponentProps) => {
 	]
 
 	return (
-		<div className=' rounded-lg border border-neutral-300 overflow-auto scroll-mt-2'>
-			<table className='w-full '>
-				<thead className='border-b border-neutral-300'>
-					<tr>
+		<div className='pb-2 pr-2 overflow-auto oplc-scrollbar'>
+			<table id='Variable table' className='w-full flex-1'>
+				<div
+					id='Variable table container'
+					className='rounded-lg border border-neutral-300 dark:border-neutral-850'
+				>
+					<thead
+						id='Variable table header'
+						className='divide-x border-b border-neutral-300 dark:border-neutral-850 divide-neutral-300 dark:divide-neutral-850'
+					>
 						{tableTitle.map((title) => (
 							<TableHeader key={title} title={title} />
 						))}
-					</tr>
-				</thead>
-				<tbody className=' divide-y divide-neutral-300'>
-					{tableData.map((row) => (
-						<TableRow key={row.id} row={row} />
-					))}
-				</tbody>
+					</thead>
+					<tbody
+						id='Variable table body'
+						className='divide-y divide-x divide-neutral-300 dark:divide-neutral-850'
+					>
+						{tableData.map((row) => (
+							<TableRow key={row.id} row={row} />
+						))}
+					</tbody>
+				</div>
 			</table>
 		</div>
 	)
