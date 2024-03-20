@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { LDIcon, PlusIcon } from '@process:renderer/assets'
+import { PlusIcon } from '@process:renderer/assets'
 import { cn } from '@utils/cn'
 
 export const NavigationPanelTabs = () => {
@@ -24,7 +24,6 @@ export const NavigationPanelTabs = () => {
 
 	const handleDeleteTab = (id: number) => {
 		const tabClone = [...tabs]
-
 		tabClone.splice(id, 1)
 		setTabs(tabClone)
 	}
@@ -34,11 +33,11 @@ export const NavigationPanelTabs = () => {
 			{tabs.map((tab, index) => (
 				<a
 					draggable
-					onDragStart={(e) => {
+					onDragStart={() => {
 						dragTab.current = index
 						setSelectedTab(tab.id)
 					}}
-					onDragEnter={(e) => (draggedOverTab.current = index)}
+					onDragEnter={() => (draggedOverTab.current = index)}
 					onDragEnd={() => handleSort()}
 					onDragOver={(e) => e.preventDefault()}
 					key={tab.id}
@@ -49,7 +48,7 @@ export const NavigationPanelTabs = () => {
 							? ''
 							: 'opacity-[35%] border-r border-neutral-300',
 						'aria-[current=page]:dark:bg-brand-dark',
-						'group min-w-0 max-w-[160px] relative bg-neutral-100 relative h-1/2 flex-1 flex items-center justify-between overflow-hidden text-neutral-1000 dark:text-white py-2 px-3 text-start text-sm font-normal font-display dark:bg-neutral-800'
+						'group min-w-0 max-w-[160px] relative bg-neutral-100  h-[30px] flex-1 flex items-center justify-between overflow-hidden text-neutral-1000 dark:text-white py-2 px-3 text-start text-xs font-normal font-display dark:bg-neutral-800'
 					)}
 					aria-current={selectedTab === tab.id ? 'page' : undefined}
 				>
