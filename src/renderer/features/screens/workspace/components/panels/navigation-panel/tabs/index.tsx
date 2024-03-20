@@ -22,12 +22,22 @@ export const NavigationPanelTabs = () => {
 		setTabs(tabClone)
 	}
 
+	const handleDeleteTab = (id: number) => {
+		const tabClone = [...tabs]
+
+		tabClone.splice(id, 1)
+		setTabs(tabClone)
+	}
+
 	return (
 		<nav className='isolate flex border-none outline-none' aria-label='Tabs'>
 			{tabs.map((tab, index) => (
 				<a
 					draggable
-					onDragStart={(e) => (dragTab.current = index)}
+					onDragStart={(e) => {
+						dragTab.current = index
+						setSelectedTab(tab.id)
+					}}
 					onDragEnter={(e) => (draggedOverTab.current = index)}
 					onDragEnd={() => handleSort()}
 					onDragOver={(e) => e.preventDefault()}
@@ -45,6 +55,7 @@ export const NavigationPanelTabs = () => {
 				>
 					<span>{tab.name}</span>
 					<PlusIcon
+						onClick={() => handleDeleteTab(index)}
 						className={`${
 							selectedTab === tab.id ? 'inline' : 'hidden group-hover:inline'
 						} rotate-45 stroke-brand dark:stroke-brand-light w-4 h-4`}
