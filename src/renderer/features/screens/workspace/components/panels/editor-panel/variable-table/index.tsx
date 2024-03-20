@@ -1,54 +1,9 @@
-import React, { useState } from 'react'
-import { Panel } from 'react-resizable-panels'
+import { useState } from 'react'
 import { ArrowUp, MinusIcon, PlusIcon } from '@process:renderer/assets'
 import TableRoot from './table'
 import { TableIcon } from '@process:renderer/assets/icons/interface/TableIcon'
 import { CodeIcon } from '@process:renderer/assets/icons/interface/CodeIcon'
 import VariableCode from './variableCode'
-
-const optionsMock = [
-	'BOOL',
-	'SINT',
-	'INT',
-	'DINT',
-	'LINT',
-	'USINT',
-	'UINT',
-	'UDINT',
-	'ULINT',
-	'REAL',
-	'LREAL',
-	'TIME',
-	'DATE',
-	'TOD',
-	'DT',
-	'STRING',
-	'BYTE',
-	'WORD',
-	'DWORD',
-	'LWORD',
-]
-
-const types = [
-	{ name: 'Base Types', value: optionsMock },
-	{ name: 'User Data Types', value: [] },
-	{ name: 'Native Data Types', value: ['LOGLEVEL'] },
-	{ name: 'Array', value: [] },
-]
-
-const classes = [
-	{ name: 'input', value: '' },
-	{ name: 'output', value: '' },
-	{ name: 'inOut', value: '' },
-	{ name: 'local', value: '' },
-	{ name: 'temporary', value: '' },
-]
-
-const options = [
-	{ name: 'constant', value: '' },
-	{ name: 'variable', value: '' },
-	{ name: 'function', value: '' },
-]
 
 const initialTableRow = {
 	id: 1,
@@ -63,18 +18,21 @@ const initialTableRow = {
 }
 
 export default function VariableTable() {
-	const [variableAsCode, setVariableAsCode] = useState(false)
+	// const [variableAsCode, setVariableAsCode] = useState(false)
+	// Todo
 	const [tableData, setTableData] = useState([initialTableRow])
 
-	const addTableRow = () => {
-		const newRow = { ...initialTableRow, id: tableData.length + 1 }
-		setTableData([...tableData, newRow])
-	}
+	// Todo
+	// const addTableRow = () => {
+	// 	const newRow = { ...initialTableRow, id: tableData.length + 1 }
+	// 	setTableData([...tableData, newRow])
+	// }
 
-	const removeTableRow = (idToRemove) => {
-		setTableData(tableData.filter((row) => row.id !== idToRemove))
-	}
+	// const removeTableRow = (idToRemove) => {
+	// 	setTableData(tableData.filter((row) => row.id !== idToRemove))
+	// }
 
+	// Todo
 	const toggleVariableDisplay = (variableAsTable) => {
 		setVariableAsCode(!variableAsTable)
 	}

@@ -1,18 +1,9 @@
 import React, { useState } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { IVariableProps } from '@root/renderer/features/variables/table-view/table-row'
 
 type IRowDropdownProps = {
-	rowData: {
-		id: number
-		name: string
-		class: string
-		type: string
-		localization: string
-		initialValue: string
-		option: string
-		debug: string
-		documentation: string
-	}
+	rowData: IVariableProps
 	value: 'class' | 'type' | 'option'
 }
 
