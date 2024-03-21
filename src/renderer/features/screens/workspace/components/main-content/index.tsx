@@ -4,11 +4,11 @@ import {
 	ResizablePanel,
 	ResizablePanelGroup,
 } from '../../../../resizable'
-import VariableTable from '../panels/editor-panel/variable-table'
 import { NavigationPanel } from '../panels/navigation-panel'
 import { InfoPanel } from '../panels/sidebar-panel/info-panel'
 import { LibraryTree } from '../panels/sidebar-panel/library-tree'
 import { ProjectTree } from '../panels/sidebar-panel/project-tree'
+import { Variables } from '@root/renderer/features/variables'
 
 export const MainContent = () => {
 	return (
@@ -82,7 +82,7 @@ export const MainContent = () => {
 										defaultSize={25}
 										className='flex flex-1 flex-col gap-4 w-full h-full'
 									>
-										<VariableTable />
+										<Variables />
 									</ResizablePanel>
 									<ResizableHandle className='h-[1px] bg-brand-light w-full' />
 									<ResizablePanel
