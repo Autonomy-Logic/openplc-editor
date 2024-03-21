@@ -3,16 +3,38 @@ import { ArrowUp, MinusIcon, PlusIcon } from '@root/renderer/assets'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 
-import VariableCode from '../screens/workspace/components/panels/editor-panel/variable-table/variableCode'
-import { VariablesTable } from './table-view'
+import { TableDisplay, CodeDisplay } from './data-display'
+import { IVariableProps } from './types'
 
 const Variables = () => {
 	const [visibility, setVisibility] = useState<'code' | 'table'>('table')
-	const [variablesData, setVariablesData] = useState([])
+	const [variablesData, setVariablesData] = useState<IVariableProps[]>([
+		{
+			id: 1,
+			name: '',
+			class: 'Input',
+			type: 'Array',
+			location: '',
+			initialValue: '',
+			debug: false,
+			documentation: '',
+		},
+	])
 
+	const addTableRow = () => {
+		const newRow = { ...variablesData[0], id: variablesData.length + 1 }
+		setVariablesData([...variablesData, newRow])
+	}
+
+	const removeTableRow = (idToRemove: number) => {
+		setVariablesData(variablesData.filter((row) => row.id !== idToRemove))
+	}
 	return (
 		<div id='Variables container'>
-			<div id='Variables actions container' className='flex justify-between'>
+			<div
+				id='Variables actions container'
+				className='flex justify-between mb-4'
+			>
 				{visibility === 'table' && (
 					<div id='Table actions' className='flex flex-1 justify-between'>
 						<div className='flex gap-4'>
@@ -34,7 +56,7 @@ const Variables = () => {
 							/>
 							<MinusIcon
 								className='w-5 h-5 stroke-brand'
-								onClick={() => removeTableRow(tableData.length)}
+								onClick={() => removeTableRow(variablesData.length)}
 							/>
 							<ArrowUp className='w-5 h-5 stroke-brand' />
 							<ArrowUp className='w-5 h-5 stroke-brand rotate-180' />
@@ -64,13 +86,15 @@ const Variables = () => {
 							id='Variable table container'
 							className='w-full min-w-max flex flex-1 rounded-lg border border-neutral-500 dark:border-neutral-850'
 						>
-							<VariablesTable data={variablesData} />
+							<TableDisplay data={variablesData} />
 						</div>
 					</div>
 				) : (
-					<VariableCode />
+					<CodeDisplay />
 				)}
 			</div>
 		</div>
 	)
 }
+
+export { Variables }

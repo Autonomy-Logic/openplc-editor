@@ -40,7 +40,4 @@ const classesForVariables = {
 	Temporary: 'temporary',
 }
 
-export type IVariableType = keyof typeof typesForVariables
-export type IVariableClass = keyof typeof classesForVariables
-
 export { typesForVariables, classesForVariables }
