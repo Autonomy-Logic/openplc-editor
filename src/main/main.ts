@@ -122,12 +122,12 @@ const createWindow = async () => {
 		height: 366,
 		resizable: false,
 		frame: false,
+		alwaysOnTop: true,
 		webPreferences: {
 			sandbox: false,
 		},
 	})
 
-	splash.setIgnoreMouseEvents(true)
 	splash
 		.loadURL(
 			`file://${path.join(
@@ -166,6 +166,7 @@ const createWindow = async () => {
 		)
 	})
 
+	splash.setIgnoreMouseEvents(false)
 	// Save window bounds on resize, close, and move events
 	const saveBounds = () => {
 		store.set('window.bounds', mainWindow?.getBounds())
@@ -183,9 +184,9 @@ const createWindow = async () => {
 	mainWindow.loadURL(resolveHtmlPath(''))
 
 	// Open devtools if the app is not packaged;
-	if (isDebug) {
-		mainWindow.webContents.openDevTools()
-	}
+	// if (isDebug) {
+	// 	mainWindow.webContents.openDevTools()
+	// }
 
 	mainWindow.on('ready-to-show', () => {
 		if (!mainWindow) {
