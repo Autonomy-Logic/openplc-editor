@@ -5,6 +5,7 @@ import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 
 import { TableDisplay, CodeDisplay } from './data-display'
 import { IVariableProps } from './types'
+import { cn } from '@root/utils'
 
 const Variables = () => {
 	const [visibility, setVisibility] = useState<'code' | 'table'>('table')
@@ -33,10 +34,13 @@ const Variables = () => {
 		<div id='Variables container'>
 			<div
 				id='Variables actions container'
-				className='flex justify-between mb-4'
+				className={cn(
+					'flex mb-4',
+					visibility === 'table' ? 'justify-between' : 'justify-end'
+				)}
 			>
 				{visibility === 'table' && (
-					<div id='Table actions' className='flex flex-1 justify-between'>
+					<div id='Table actions' className='flex flex-1 mr-4 justify-between'>
 						<div className='flex gap-4'>
 							<div className='flex gap-4 items-center text-neutral-1000 font-medium text-xs dark:text-neutral-300'>
 								Description:
@@ -68,11 +72,21 @@ const Variables = () => {
 						size='md'
 						onClick={() => setVisibility('table')}
 						currentVisible={visibility === 'table'}
+						className={
+							visibility === 'table'
+								? 'fill-brand'
+								: 'fill-neutral-100 dark:fill-neutral-900 '
+						}
 					/>
 					<CodeIcon
 						size='md'
 						onClick={() => setVisibility('code')}
 						currentVisible={visibility === 'code'}
+						className={
+							visibility === 'code'
+								? 'fill-brand'
+								: 'fill-neutral-100 dark:fill-neutral-900 '
+						}
 					/>
 				</div>
 			</div>

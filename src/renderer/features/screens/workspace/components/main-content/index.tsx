@@ -9,10 +9,18 @@ import { InfoPanel } from '../panels/sidebar-panel/info-panel'
 import { LibraryTree } from '../panels/sidebar-panel/library-tree'
 import { ProjectTree } from '../panels/sidebar-panel/project-tree'
 import { Variables } from '@root/renderer/features/variables'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { cn } from '@root/utils'
 
 export const MainContent = () => {
+	const platform = useOpenPLCStore().OS
 	return (
-		<div className='!rounded-tl-lg flex flex-1 flex-grow h-full w-full p-2 gap-1 bg-neutral-100 dark:bg-neutral-900'>
+		<div
+			className={cn(
+				'flex flex-1 flex-grow h-full w-full p-2 gap-1 bg-neutral-100 dark:bg-neutral-900',
+				`${platform !== 'linux' && 'rounded-tr-lg'}`
+			)}
+		>
 			<ResizablePanelGroup
 				id='mainContentPanelGroup'
 				direction='horizontal'
@@ -102,7 +110,7 @@ export const MainContent = () => {
 								collapsible
 								defaultSize={25}
 								minSize={15}
-								className='flex-1 grow border-neutral-200 bg-white dark:bg-neutral-950 rounded-lg border-2 data-[panel-size="0.0"]:hidden'
+								className='flex-1 grow border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-lg border-2 data-[panel-size="0.0"]:hidden'
 							>
 								<span>Console</span>
 							</ResizablePanel>
