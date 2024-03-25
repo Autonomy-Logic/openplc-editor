@@ -12,6 +12,7 @@ import { Variables } from '@root/renderer/features/variables'
 
 export const MainContent = () => {
 	return (
+		/* Refactor: This outside div will be replaced by the new <WorkspaceMainContent /> */
 		<div className='!rounded-tl-lg flex flex-1 flex-grow h-full w-full p-2 gap-1 bg-neutral-100 dark:bg-neutral-900'>
 			<ResizablePanelGroup
 				id='mainContentPanelGroup'
