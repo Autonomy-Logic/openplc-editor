@@ -19,7 +19,7 @@ export const MainContent = () => {
 		<div
 			className={cn(
 				'flex flex-1 flex-grow h-full w-full p-2 gap-1 bg-neutral-100 dark:bg-neutral-900',
-				`${platform !== 'linux' && 'rounded-tr-lg'}`
+				`${platform !== 'linux' && '!rounded-tl-lg'}`
 			)}
 		>
 			<ResizablePanelGroup
