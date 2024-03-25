@@ -14,6 +14,7 @@ export default function Activitybar() {
 	const navigate = useNavigate()
 
 	return (
+		/* Refactor: This outside div will be replaced by the new <WorkspaceSideContent /> */
 		<div className='bg-brand-dark dark:bg-neutral-950 h-full w-14 flex flex-col justify-between pb-10 border-t-inherit'>
 			<div className='w-full h-fit flex flex-col gap-10 my-5'>
 				<ActivitybarButton

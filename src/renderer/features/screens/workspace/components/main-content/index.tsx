@@ -15,6 +15,7 @@ import { cn } from '@root/utils'
 export const MainContent = () => {
 	const platform = useOpenPLCStore().OS
 	return (
+		/* Refactor: This outside div will be replaced by the new <WorkspaceMainContent /> */
 		<div
 			className={cn(
 				'flex flex-1 flex-grow h-full w-full p-2 gap-1 bg-neutral-100 dark:bg-neutral-900',

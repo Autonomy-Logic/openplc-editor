@@ -81,7 +81,7 @@ export default function Start() {
 					</MenuComponent.Section>
 				</MenuComponent.Root>
 			</aside>
-			<div className='w-full my-4 max-w-3xl xl:max-w-5xl 2xl:max-w-7xl xm:max-w-[1520px] 3xl:max-w-[1532px]  4xl:max-w-[1990px] h-full mb-2'>
+			<div className='w-full h-full mb-2 my-4 max-w-3xl xl:max-w-5xl 2xl:max-w-7xl xm:max-w-[1520px] 3xl:max-w-[1532px] 4xl:max-w-[1990px]'>
 				<ActionsBar />
 				<DisplayExampleProjects />
 				<DisplayRecentProjects />
