@@ -95,6 +95,26 @@ const installExtensions = async () => {
 		.catch(console.log)
 }
 
+const createSplashWindow = () => {
+	splash = new BrowserWindow({
+		width: 580,
+		height: 366,
+		resizable: false,
+		frame: false,
+		alwaysOnTop: true,
+		webPreferences: {
+			sandbox: false,
+		},
+	})
+
+	splash.loadURL(
+		`file://${path.join(
+			__dirname,
+			'./modules/preload/scripts/loading/splash.html'
+		)}`
+	)
+}
+
 const createWindow = async () => {
 	// Check if the application is on debug method, install the extensions
 	if (isDebug) {
@@ -117,26 +137,26 @@ const createWindow = async () => {
 	const { bounds } = store.get('window')
 
 	// Create a new browser window for the splash screen
-	splash = new BrowserWindow({
-		width: 580,
-		height: 366,
-		resizable: false,
-		frame: false,
-		alwaysOnTop: true,
-		webPreferences: {
-			sandbox: false,
-		},
-	})
+	// splash = new BrowserWindow({
+	// 	width: 580,
+	// 	height: 366,
+	// 	resizable: false,
+	// 	frame: false,
+	// 	alwaysOnTop: true,
+	// 	webPreferences: {
+	// 		sandbox: false,
+	// 	},
+	// })
 
-	splash
-		.loadURL(
-			`file://${path.join(
-				__dirname,
-				'./modules/preload/scripts/loading/splash.html'
-			)}`
-		)
-		.then(() => console.log('Splash screen loaded successfully'))
-		.catch((error) => console.error('Error loading splash screen:', error))
+	// splash
+	// 	.loadURL(
+	// 		`file://${path.join(
+	// 			__dirname,
+	// 			'./modules/preload/scripts/loading/splash.html'
+	// 		)}`
+	// 	)
+	// 	.then(() => console.log('Splash screen loaded successfully'))
+	// 	.catch((error) => console.error('Error loading splash screen:', error))
 
 	// Create the main window instance.
 	mainWindow = new BrowserWindow({
@@ -154,19 +174,17 @@ const createWindow = async () => {
 		},
 	})
 
-	// Send a message to the renderer process when the content finishes loading;
 	mainWindow.webContents.on('did-finish-load', () => {
-		if (splash) {
-			splash?.destroy()
+		if (!splash) {
+			createSplashWindow()
+			setTimeout(() => {
+				splash?.close()
+				mainWindow?.show()
+			},4500)
 		}
-		mainWindow?.show()
-		mainWindow?.webContents.send(
-			'main-process-message',
-			new Date().toLocaleString()
-		)
 	})
 
-	splash.setIgnoreMouseEvents(false)
+	// splash.setIgnoreMouseEvents(false)
 	// Save window bounds on resize, close, and move events
 	const saveBounds = () => {
 		store.set('window.bounds', mainWindow?.getBounds())

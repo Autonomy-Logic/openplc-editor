@@ -4,6 +4,7 @@ import { IpcRendererEvent, ipcRenderer } from 'electron'
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
 const rendererProcessBridge = {
+	closeSplash: () => ipcRenderer.invoke('app:close-splash'),
 	toggleTheme: () => ipcRenderer.invoke('app:toggle-theme'),
 	getThemePreference: () => ipcRenderer.invoke('app-preferences:get-theme'),
 	startOpenProject: () => ipcRenderer.invoke('start-screen/project:open'),

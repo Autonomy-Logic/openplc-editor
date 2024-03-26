@@ -41,6 +41,9 @@ class MainProcessBridge implements MainIpcModule {
 		return nativeTheme.shouldUseDarkColors
 	}
 	setupMainIpcListener() {
+		this.ipcMain.handle('app:close-splash', () => {
+			console.log('closing splash')
+		})
 		this.ipcMain.handle('app:toggle-theme', this.handleThemeToggle.bind(this))
 		this.ipcMain.handle('app-preferences:get-theme', async () => {
 			return nativeTheme.shouldUseDarkColors
