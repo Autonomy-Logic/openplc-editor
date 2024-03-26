@@ -8,6 +8,7 @@ import { produce } from 'immer'
 const pouSchema = z.object({
 	'@name': z.string(),
 	'@pouType': z.enum(['program', 'function']),
+	'@language': z.string(),
 	interface: z.object({
 		returnType: z.enum(['BOOL', 'INT', 'DINT']),
 		localVars: z
@@ -69,7 +70,24 @@ export type IPousSlice = IPousState & IPousActions
 export const createPousSlice: StateCreator<IPousSlice, [], [], IPousSlice> = (
 	setState
 ) => ({
-	pous: [],
+	pous: [
+		{
+			'@name': 'default',
+			'@pouType': 'program',
+			'@language': 'ST',
+			interface: { returnType: 'BOOL', localVars: { variables: [] } },
+			body: { ST: { 'xhtml:p': '' } },
+			documentation: { 'xhtml:p': 'This is the default POU program' },
+		},
+		{
+			'@name': 'default1',
+			'@pouType': 'function',
+			'@language': 'IL',
+			interface: { returnType: 'BOOL', localVars: { variables: [] } },
+			body: { IL: { 'xhtml:p': '' } },
+			documentation: { 'xhtml:p': 'This is the default POU function' },
+		},
+	],
 	addPou: (pou) =>
 		setState(
 			produce((state: IPousSlice) => {

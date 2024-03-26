@@ -1,8 +1,10 @@
 import { useState, useRef } from 'react'
 import { PlusIcon } from '@process:renderer/assets'
 import { cn } from '@utils/cn'
+import { useOpenPLCStore } from '@root/renderer/store'
 
 export const NavigationPanelTabs = () => {
+	const { updateEditor } = useOpenPLCStore()
 	const [tabs, setTabs] = useState([
 		{ id: 1, name: 'Program', href: '#' },
 		{ id: 2, name: 'Function', href: '#' },
@@ -28,6 +30,10 @@ export const NavigationPanelTabs = () => {
 		setTabs(tabClone)
 	}
 
+	const handleClickedTab = (tab) => {
+		setSelectedTab(tab.id)
+		updateEditor({ path: tab.name, value: tab.name })
+	}
 	return (
 		<nav className='isolate flex border-none outline-none' aria-label='Tabs'>
 			{tabs.map((tab, index) => (
@@ -42,7 +48,7 @@ export const NavigationPanelTabs = () => {
 					onDragOver={(e) => e.preventDefault()}
 					key={tab.id}
 					href={tab.href}
-					onClick={() => setSelectedTab(tab.id)}
+					onClick={() => handleClickedTab(tab)}
 					className={cn(
 						selectedTab === tab.id
 							? ''

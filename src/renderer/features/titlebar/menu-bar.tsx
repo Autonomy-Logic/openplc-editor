@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 
 import { i18n } from '@utils/i18n'
 import { cn } from '@utils/cn'
+import { useOpenPLCStore } from '@root/renderer/store'
 
 export const MenuBar = () => {
+	const { updatePlatFormData } = useOpenPLCStore()
 	const prefersDarkMode = window.matchMedia?.(
 		'(prefers-color-scheme: dark)'
 	).matches
@@ -18,6 +20,14 @@ export const MenuBar = () => {
 		const res = await window.bridge.toggleTheme()
 		setIsDark(res)
 	}
+
+	const toggleTheme = useCallback(
+		() =>
+			updatePlatFormData({
+				colorScheme: isDark ? 'dark' : 'light',
+			}),
+		[isDark, updatePlatFormData]
+	)
 
 	const triggerDefaultStyle =
 		'w-fit h-fit px-2 py-px text-white font-caption font-light text-xs rounded-sm bg-brand-dark dark:bg-neutral-950  hover:bg-brand-medium-dark hover:shadow-2xl hover:dark:bg-neutral-900 transition-colors'
@@ -226,6 +236,7 @@ export const MenuBar = () => {
 									<MenuPrimitive.Item
 										onClick={() => {
 											handleChangeTheme('light')
+											toggleTheme()
 										}}
 										className={itemDefaultSyle}
 									>
@@ -240,7 +251,10 @@ export const MenuBar = () => {
 										)}
 									</MenuPrimitive.Item>
 									<MenuPrimitive.Item
-										onClick={() => handleChangeTheme('dark')}
+										onClick={() => {
+											handleChangeTheme('dark')
+											toggleTheme()
+										}}
 										className={itemDefaultSyle}
 									>
 										<span>

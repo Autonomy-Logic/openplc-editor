@@ -11,13 +11,13 @@ import { useOpenPLCStore } from '@process:renderer/store'
 type IEditorProps = ComponentProps<typeof Editor>
 
 export default function TextEditor(props: IEditorProps) {
-	const projectPath = useOpenPLCStore.usePath()
-	const projectData = useOpenPLCStore.useData()
 	const updatePou = useOpenPLCStore.useUpdatePou()
 	const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
 	const [isDark, setIsDark] = useState(true)
 	const themePreference = useOpenPLCStore.useColorScheme()
+	const { path, language, theme, value, colorScheme } = useOpenPLCStore()
 
+	console.log({ path, language, theme, value, colorScheme })
 	/**
 	 *  here is the editor instance, you can store it in `useRef` for further usage
 	 */
@@ -55,22 +55,15 @@ export default function TextEditor(props: IEditorProps) {
 		debounce(value)
 	}
 
-	const setEditorPath = useCallback(() => {
-		return ''
-	}, [])
-
-	const setPouInStage = useCallback(() => {
-		const res = projectData
-		return res
-	}, [projectData])
-
 	return (
 		<Editor
-			path={setEditorPath()}
-			defaultValue={setPouInStage()}
+			path={path}
+			language={language}
+			defaultValue={value}
 			onMount={handleEditorInstance}
 			onChange={handleChange}
-			theme={themePreference === 'dark' ? 'openplc-dark' : 'openplc-light'}
+			theme={theme}
+			saveViewState={false}
 			{...props}
 		/>
 	)

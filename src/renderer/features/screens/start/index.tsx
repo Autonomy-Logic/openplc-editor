@@ -16,18 +16,17 @@ import {
 
 export default function Start() {
 	const navigate = useNavigate()
-	const setWorkspace = useOpenPLCStore.useSetWorkspace()
+	const { setWorkspace } = useOpenPLCStore()
 
 	const handleProject = async (channel: string) => {
 		if (channel === 'project:create') {
-			const { ok, data } = await window.bridge.startCreateProject()
-			if (ok && data) {
-				const { path, xmlAsObject } = data
-				const dataToWorkspace = xmlAsObject.toString()
+			const { ok, res } = await window.bridge.startCreateProject()
+			if (ok && res) {
+				const { path, data } = res
 				setWorkspace({
-					path: path,
-					name: 'new-project',
-					data: dataToWorkspace,
+					path,
+					projectName: 'new-project',
+					data,
 					createdAt: new Date().toISOString(),
 					updatedAt: new Date().toISOString(),
 				})
@@ -40,7 +39,7 @@ export default function Start() {
 				const dataToWorkspace = xmlAsObject.toString()
 				setWorkspace({
 					path: path,
-					name: 'new-project',
+					projectName: 'new-project',
 					data: dataToWorkspace,
 					createdAt: new Date().toISOString(),
 					updatedAt: new Date().toISOString(),
