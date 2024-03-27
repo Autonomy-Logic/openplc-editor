@@ -11,15 +11,16 @@ import { ProjectTree } from '../panels/sidebar-panel/project-tree'
 import { Variables } from '@root/renderer/features/variables'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
+import { TabsNavigation } from '@root/renderer/components/_molecules/tabs'
 
 export const MainContent = () => {
-	const platform = useOpenPLCStore().OS
+	const { OS } = useOpenPLCStore()
 	return (
 		/* Refactor: This outside div will be replaced by the new <WorkspaceMainContent /> */
 		<div
 			className={cn(
 				'flex flex-1 flex-grow h-full w-full p-2 gap-1 bg-neutral-100 dark:bg-neutral-900',
-				`${platform !== 'linux' && '!rounded-tl-lg'}`
+				`${OS !== 'linux' && '!rounded-tl-lg'}`
 			)}
 		>
 			<ResizablePanelGroup
@@ -69,7 +70,7 @@ export const MainContent = () => {
 						id='workspaceContentPanel'
 						className='flex-1 grow h-full overflow-hidden flex flex-col gap-2'
 					>
-						<NavigationPanel />
+						<TabsNavigation />
 						<ResizablePanelGroup id='editorPanelGroup' direction='vertical'>
 							<ResizablePanel
 								id='editorPanel'

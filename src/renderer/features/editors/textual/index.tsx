@@ -2,7 +2,6 @@ import './config/index'
 
 import * as monaco from 'monaco-editor'
 import { Editor } from '@monaco-editor/react'
-import { IpcRendererEvent } from 'electron/renderer'
 import _ from 'lodash'
 import { ComponentProps, useCallback, useEffect, useRef, useState } from 'react'
 
@@ -11,13 +10,12 @@ import { useOpenPLCStore } from '@process:renderer/store'
 type IEditorProps = ComponentProps<typeof Editor>
 
 export default function TextEditor(props: IEditorProps) {
+	// const { path, defaultValue, language, theme } = props
 	const updatePou = useOpenPLCStore.useUpdatePou()
 	const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
-	const [isDark, setIsDark] = useState(true)
-	const themePreference = useOpenPLCStore.useColorScheme()
-	const { path, language, theme, value, colorScheme } = useOpenPLCStore()
+	// const { path, language, theme, value, colorScheme } = useOpenPLCStore()
 
-	console.log({ path, language, theme, value, colorScheme })
+	// console.log({ path, language, theme, value, colorScheme })
 	/**
 	 *  here is the editor instance, you can store it in `useRef` for further usage
 	 */
@@ -57,12 +55,8 @@ export default function TextEditor(props: IEditorProps) {
 
 	return (
 		<Editor
-			path={path}
-			language={language}
-			defaultValue={value}
 			onMount={handleEditorInstance}
-			onChange={handleChange}
-			theme={theme}
+			// onChange={handleChange}
 			saveViewState={false}
 			{...props}
 		/>

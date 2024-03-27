@@ -48,6 +48,9 @@
       "@shared/*": [
         "./src/shared/*"
       ],
+      "@oplc-icons/*": [
+        "./src/renderer/assets/icons/*"
+      ]
     }
   },
   "exclude": [
