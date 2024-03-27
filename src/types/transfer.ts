@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 const IPouTemplateSchema = z.object({
-	id: z.string().optional(),
+	id: z.number().optional(),
 	name: z.string().min(3).default('PouDefault'),
 	type: z.enum(['program', 'function', 'functionBlock']).default('program'),
 	languageCodification: z.enum(['Graphical', 'Textual']).default('Textual'),
@@ -13,7 +13,7 @@ const IPouTemplateSchema = z.object({
 type IPouTemplate = z.infer<typeof IPouTemplateSchema>
 
 const IDataTypeTemplateSchema = z.object({
-	id: z.string().optional(),
+	id: z.number().optional(),
 	derivationType: z
 		.enum(['Directly', 'SubRange', 'Enumerated', 'Array', 'Structure'])
 		.default('Directly'),

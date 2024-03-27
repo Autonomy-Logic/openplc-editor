@@ -6,7 +6,7 @@ import { IProjectData } from '@root/types/transfer'
 type IWorkspaceState = {
 	path: string
 	projectName: string
-	data: IProjectData | null
+	data: Partial<IProjectData>
 	createdAt: string
 	updatedAt: string
 }
@@ -65,7 +65,11 @@ export const createWorkspaceSlice: StateCreator<
 > = (setState) => ({
 	path: 'C://User//File//file.json',
 	projectName: 'default-project',
-	data: null,
+	data: {
+		pous: [],
+		dataTypes: [],
+		variables: [],
+	},
 	createdAt: '0000-00-00T00:00:00.000Z',
 	updatedAt: '0000-00-00T00:00:00.000Z',
 	setWorkspace: (workspaceData: IWorkspaceState) => {
@@ -93,7 +97,11 @@ export const createWorkspaceSlice: StateCreator<
 			produce((state: IWorkspaceSlice) => {
 				state.path = 'C://User//File//file.json'
 				state.projectName = 'default-project'
-				state.data = null
+				state.data = {
+					pous: [],
+					dataTypes: [],
+					variables: [],
+				}
 				state.createdAt = '0000-00-00T00:00:00.000Z'
 				state.updatedAt = '0000-00-00T00:00:00.000Z'
 			})

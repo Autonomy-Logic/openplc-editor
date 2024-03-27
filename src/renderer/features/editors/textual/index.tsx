@@ -13,7 +13,7 @@ export default function TextEditor(props: IEditorProps) {
 	// const { path, defaultValue, language, theme } = props
 	const updatePou = useOpenPLCStore.useUpdatePou()
 	const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
-	// const { path, language, theme, value, colorScheme } = useOpenPLCStore()
+	const { path, language, value, colorScheme } = useOpenPLCStore()
 
 	// console.log({ path, language, theme, value, colorScheme })
 	/**
@@ -56,6 +56,10 @@ export default function TextEditor(props: IEditorProps) {
 	return (
 		<Editor
 			onMount={handleEditorInstance}
+			path={path}
+			language={language}
+			defaultValue={value}
+			theme={colorScheme === 'dark' ? 'openplc-dark' : 'openplc-light'}
 			// onChange={handleChange}
 			saveViewState={false}
 			{...props}

@@ -11,10 +11,12 @@ import { ProjectTree } from '../panels/sidebar-panel/project-tree'
 import { Variables } from '@root/renderer/features/variables'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { TabsNavigation } from '@root/renderer/components/_molecules/tabs'
+import { Navigation } from '@root/renderer/components/_organisms/navigation'
+import { MonacoEditor } from '@root/renderer/components/_features/[workspace]/editor'
 
 export const MainContent = () => {
-	const { OS } = useOpenPLCStore()
+	const { OS, path } = useOpenPLCStore()
+	console.log('Editor current -> ', path)
 	return (
 		/* Refactor: This outside div will be replaced by the new <WorkspaceMainContent /> */
 		<div
@@ -70,7 +72,7 @@ export const MainContent = () => {
 						id='workspaceContentPanel'
 						className='flex-1 grow h-full overflow-hidden flex flex-col gap-2'
 					>
-						<TabsNavigation />
+						<Navigation />
 						<ResizablePanelGroup id='editorPanelGroup' direction='vertical'>
 							<ResizablePanel
 								id='editorPanel'
@@ -101,7 +103,7 @@ export const MainContent = () => {
 										defaultSize={75}
 										className='flex-1 flex-grow rounded-md mt-6'
 									>
-										<TextEditor />
+										<MonacoEditor />
 									</ResizablePanel>
 								</ResizablePanelGroup>
 							</ResizablePanel>

@@ -21,13 +21,12 @@ export const MenuBar = () => {
 		setIsDark(res)
 	}
 
-	const toggleTheme = useCallback(
-		() =>
-			updatePlatFormData({
-				colorScheme: isDark ? 'dark' : 'light',
-			}),
-		[isDark, updatePlatFormData]
-	)
+	const toggleTheme = useCallback(() => {
+		updatePlatFormData({
+			colorScheme: isDark ? 'dark' : 'light',
+		})
+		window.bridge.reloadWindow()
+	}, [isDark, updatePlatFormData])
 
 	const triggerDefaultStyle =
 		'w-fit h-fit px-2 py-px text-white font-caption font-light text-xs rounded-sm bg-brand-dark dark:bg-neutral-950  hover:bg-brand-medium-dark hover:shadow-2xl hover:dark:bg-neutral-900 transition-colors'
