@@ -4,9 +4,14 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { IPouTemplate } from '@root/types/transfer'
 
 const Tabs = () => {
-	const { data, updateEditor } = useOpenPLCStore()
+	const {
+		data,
+		updateTabs,
+		setTabs,
+		tabsState: { tabs },
+		updateEditor,
+	} = useOpenPLCStore()
 	const [selectedTab, setSelectedTab] = useState('')
-	const [tabs, setTabs] = useState<IPouTemplate[]>([])
 	const dndTab = useRef<number>(0)
 	const replaceTab = useRef<number>(0)
 
@@ -14,20 +19,23 @@ const Tabs = () => {
 		if (data.pous) {
 			setTabs(data.pous)
 		}
-	}, [data])
-
+	}, [data, setTabs])
 	const handleSort = () => {
 		const tabClone = [...tabs]
 		const draggedTab = tabClone[dndTab.current]
 		tabClone.splice(dndTab.current, 1)
 		tabClone.splice(replaceTab.current, 0, draggedTab)
-		setTabs(tabClone)
+		updateTabs(tabClone)
 	}
 	const handleDeleteTab = (id: number) => {
 		const tabClone = [...tabs]
 		tabClone.splice(id, 1)
-		setTabs(tabClone)
+		updateTabs(tabClone)
 	}
+	/**
+	 * Todo: this tab handler should be refactored to fit all possibles cases
+	 * @param tab the selected tab
+	 */
 	const handleClickedTab = (tab: IPouTemplate) => {
 		setSelectedTab(tab.name)
 		updateEditor({ path: tab.name, value: tab.body })
@@ -61,7 +69,7 @@ const Tabs = () => {
 					/>
 				))
 			) : (
-				<div />
+				<div className='h-[35px] bg-inherit border-none' />
 			)}
 		</TabList>
 	)
