@@ -1,11 +1,12 @@
 import { StateCreator } from 'zustand'
 import { produce } from 'immer'
 import { z } from 'zod'
+import { IProjectData } from '@root/types/transfer'
 
 type IWorkspaceState = {
 	path: string
-	name: string
-	data: string
+	projectName: string
+	data: Partial<IProjectData>
 	createdAt: string
 	updatedAt: string
 }
@@ -63,15 +64,19 @@ export const createWorkspaceSlice: StateCreator<
 	IWorkspaceSlice
 > = (setState) => ({
 	path: 'C://User//File//file.json',
-	name: 'default-project',
-	data: 'Dummy data',
+	projectName: 'default-project',
+	data: {
+		pous: [],
+		dataTypes: [],
+		variables: [],
+	},
 	createdAt: '0000-00-00T00:00:00.000Z',
 	updatedAt: '0000-00-00T00:00:00.000Z',
 	setWorkspace: (workspaceData: IWorkspaceState) => {
 		setState(
 			produce((state: IWorkspaceSlice) => {
 				state.path = workspaceData.path
-				state.name = workspaceData.name
+				state.projectName = workspaceData.projectName
 				state.data = workspaceData.data
 				state.createdAt = workspaceData.createdAt
 				state.updatedAt = workspaceData.updatedAt
@@ -81,7 +86,7 @@ export const createWorkspaceSlice: StateCreator<
 	updateWorkspace: (workspaceData: IWorkspaceState) => {
 		setState(
 			produce((state: IWorkspaceSlice) => {
-				state.name = workspaceData.name
+				state.projectName = workspaceData.projectName
 				state.data = workspaceData.data
 				state.updatedAt = workspaceData.updatedAt
 			})
@@ -91,16 +96,18 @@ export const createWorkspaceSlice: StateCreator<
 		setState(
 			produce((state: IWorkspaceSlice) => {
 				state.path = 'C://User//File//file.json'
-				state.name = 'default-project'
-				state.data = 'Dummy data'
+				state.projectName = 'default-project'
+				state.data = {
+					pous: [],
+					dataTypes: [],
+					variables: [],
+				}
 				state.createdAt = '0000-00-00T00:00:00.000Z'
 				state.updatedAt = '0000-00-00T00:00:00.000Z'
 			})
 		)
 	},
 })
-
-
 
 // 	 * Adds a new Pou to the state.
 // 	 *

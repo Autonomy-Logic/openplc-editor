@@ -12,6 +12,7 @@ import { ProjectDto } from '../../contracts/types/services/project.service'
 import { BaseServiceClass } from '../../contracts/validations'
 import { store } from '../../modules/store'
 import { configs, data } from './data/config-file'
+import { ProjectDataTemplate } from './data/project-data'
 import { CreateJSONFile } from './utils/json-creator'
 
 // Wip: Refactoring project services.
@@ -67,25 +68,11 @@ class ProjectService extends BaseServiceClass<
 			xmlProjectAsObject
 		)
 
-		const configsPath = mkdir(
-			join(filePath, 'configs'),
-			{ recursive: true },
-			(err, path) => {
-				if (err) throw err
-				return path
-			}
-		)
 		CreateJSONFile({
-			path: configsPath as unknown as string,
-			fileName: 'project.configs',
-			data: JSON.stringify(configs),
+			path: filePath,
+			fileName: 'data',
+			data: JSON.stringify(ProjectDataTemplate),
 		})
-		CreateJSONFile({
-			path: configsPath as unknown as string,
-			fileName: 'project.data',
-			data: JSON.stringify(data),
-		})
-
 		// Create the path to the project file.
 		const projectPath = join(filePath, 'plc.xml')
 
@@ -119,7 +106,7 @@ class ProjectService extends BaseServiceClass<
 		})
 		return {
 			ok: true,
-			data: { path: projectPath, xmlAsObject: createdXmlAsObject },
+			res: { path: projectPath, data: ProjectDataTemplate },
 		}
 	}
 	// eslint-disable-next-line consistent-return

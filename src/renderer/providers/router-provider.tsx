@@ -6,6 +6,7 @@ import {
 
 import { Screen } from '@features/index'
 import { AppLayout } from '../features/layout'
+import { StartScreen } from '../screens'
 
 const router = createBrowserRouter([
 	{
