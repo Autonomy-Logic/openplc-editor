@@ -14,12 +14,6 @@ const Tabs = () => {
 	const [selectedTab, setSelectedTab] = useState('')
 	const dndTab = useRef<number>(0)
 	const replaceTab = useRef<number>(0)
-
-	useEffect(() => {
-		if (data.pous) {
-			setTabs(data.pous)
-		}
-	}, [data, setTabs])
 	const handleSort = () => {
 		const tabClone = [...tabs]
 		const draggedTab = tabClone[dndTab.current]

@@ -13,9 +13,22 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { Navigation } from '@root/renderer/components/_organisms/navigation'
 import { MonacoEditor } from '@root/renderer/components/_features/[workspace]/editor'
+import { useEffect } from 'react'
 
 export const MainContent = () => {
-	const { OS, path } = useOpenPLCStore()
+	const {
+		OS,
+		path,
+		data,
+		setTabs,
+		tabsState: { tabs },
+	} = useOpenPLCStore()
+
+	useEffect(() => {
+		if (data.pous) {
+			setTabs(data.pous)
+		}
+	}, [data, setTabs])
 	console.log('Editor current -> ', path)
 	return (
 		/* Refactor: This outside div will be replaced by the new <WorkspaceMainContent /> */
@@ -72,7 +85,7 @@ export const MainContent = () => {
 						id='workspaceContentPanel'
 						className='flex-1 grow h-full overflow-hidden flex flex-col gap-2'
 					>
-						<Navigation />
+						{tabs.length > 0 && <Navigation />}
 						<ResizablePanelGroup id='editorPanelGroup' direction='vertical'>
 							<ResizablePanel
 								id='editorPanel'
