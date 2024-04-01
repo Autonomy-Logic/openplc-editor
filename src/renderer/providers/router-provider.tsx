@@ -17,7 +17,7 @@ const router = createBrowserRouter([
 		children: [
 			{
 				index: true,
-				element: <Test />,
+				element: <Screen.Start />,
 			},
 			{
 				id: 'workspace',

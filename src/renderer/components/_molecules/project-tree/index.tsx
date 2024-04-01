@@ -4,12 +4,14 @@ import {
 	FunctionIcon,
 	FunctionBlockIcon,
 	ProgramIcon,
+	DeviceIcon,
 	PLCIcon,
 	ILIcon,
 	STIcon,
 	FBDIcon,
 	SFCIcon,
 	LDIcon,
+	ResourceIcon,
 } from '@root/renderer/assets'
 import { cn } from '@root/utils'
 import {
@@ -73,7 +75,7 @@ const ProjectTreeRoot = ({
 }
 
 type IProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
-	branchTarget: 'dataType' | 'function' | 'functionBlock' | 'program'
+	branchTarget: 'dataType' | 'function' | 'functionBlock' | 'program' | 'device'
 	children?: ReactNode
 }
 
@@ -82,6 +84,7 @@ const BranchSources = {
 	function: { BranchIcon: FunctionIcon, label: 'Functions' },
 	functionBlock: { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
 	program: { BranchIcon: ProgramIcon, label: 'Programs' },
+	device: { BranchIcon: DeviceIcon, label: 'Device' },
 }
 const ProjectTreeBranch = ({
 	branchTarget,
@@ -137,7 +140,7 @@ const ProjectTreeBranch = ({
 }
 
 type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
-	leafLang: 'IL' | 'ST' | 'FBD' | 'SFC' | 'LD' | 'DT'
+	leafLang: 'IL' | 'ST' | 'FBD' | 'SFC' | 'LD' | 'DT' | 'RES'
 	label?: string
 }
 
@@ -148,6 +151,7 @@ const LeafSources = {
 	SFC: { LeafIcon: SFCIcon },
 	LD: { LeafIcon: LDIcon },
 	DT: { LeafIcon: DataTypeIcon },
+	RES: { LeafIcon: ResourceIcon },
 }
 const ProjectTreeLeaf = ({
 	leafLang,
@@ -163,7 +167,7 @@ const ProjectTreeLeaf = ({
 	)
 
 	return (
-		<li className='py-1 pl-2 ml-2' {...res}>
+		<li className='py-1 pl-2 ml-4' {...res}>
 			<button
 				type='button'
 				className='flex flex-row items-center'

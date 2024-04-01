@@ -1,36 +1,24 @@
 import { FolderIcon, PlusIcon } from '@root/renderer/assets'
-import { useState } from 'react'
+import {
+	ProjectTreeRoot,
+	ProjectTreeBranch,
+	ProjectTreeLeaf,
+} from '@components/_molecules/project-tree'
+import { useOpenPLCStore } from '@root/renderer/store'
 
 const ProjectExplorer = () => {
-	const [nameIsEditing, setNameIsEditing] = useState(false)
+	const { data } = useOpenPLCStore()
 	const Name = 'Project Name'
 
 	return (
 		<div>
 			{/* Actions handler */}
-			<div className='flex justify-around w-[400px] my-3 px-2'>
-				<div className='flex items-center justify-start px-1.5 w-48 h-9 gap-1 rounded-lg cursor-default select-none bg-neutral-100 dark:bg-brand-dark'>
-					<FolderIcon size='md' />
-					<p
-						data-editing={nameIsEditing}
-						className='w-full pl-1 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50 data-[editing=true]:hidden'
-					>
+			<div className='flex justify-around w-[200px] my-3 px-2'>
+				<div className='flex items-center justify-start px-1.5 w-32 h-8 gap-1 rounded-lg cursor-default select-none bg-neutral-100 dark:bg-brand-dark'>
+					<FolderIcon size='sm' />
+					<span className='pl-1 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'>
 						{Name}
-					</p>
-					<input
-						type='text'
-						name='project-name'
-						data-editing={nameIsEditing}
-						value={Name}
-						id='project-name'
-						className='hidden w-full pl-1 py-1 rounded-sm bg-brand-medium-dark outline-none border-none drop-shadow-lg text-white font-caption font-thin text-xs transition-all data-[editing=true]:block'
-					/>
-					<button
-						type='button'
-						onClick={() => setNameIsEditing(!nameIsEditing)}
-					>
-						p
-					</button>
+					</span>
 				</div>
 				<button
 					type='button'
@@ -40,7 +28,49 @@ const ProjectExplorer = () => {
 				</button>
 			</div>
 			{/* Data display */}
-			<p>Project Explorer</p>
+			<ProjectTreeRoot label={Name}>
+				<ProjectTreeBranch branchTarget='dataType'>
+					<ProjectTreeLeaf leafLang='DT' />
+				</ProjectTreeBranch>
+				<ProjectTreeBranch branchTarget='function'>
+					{data.pous
+						?.filter((pou) => pou.type === 'function')
+						.map((pou) => (
+							<ProjectTreeLeaf
+								key={pou.name}
+								leafLang={pou.language}
+								label={pou.name}
+							/>
+						))}
+				</ProjectTreeBranch>
+				<ProjectTreeBranch branchTarget='functionBlock'>
+					{data.pous
+						?.filter((pou) => pou.type === 'functionBlock')
+						.map((pou) => (
+							<ProjectTreeLeaf
+								key={pou.name}
+								leafLang={pou.language}
+								label={pou.name}
+							/>
+						))}
+				</ProjectTreeBranch>
+				<ProjectTreeBranch branchTarget='program'>
+					{data.pous
+						?.filter((pou) => pou.type === 'program')
+						.map((pou) => (
+							<ProjectTreeLeaf
+								key={pou.name}
+								leafLang={pou.language}
+								label={pou.name}
+							/>
+						))}
+				</ProjectTreeBranch>
+				<ProjectTreeBranch branchTarget='device'>
+					{/** Will be filled with device */}
+				</ProjectTreeBranch>
+				{/** Maybe a divider component */}
+				<ProjectTreeLeaf leafLang='RES' label='Resources' />
+			</ProjectTreeRoot>
 		</div>
 	)
 }

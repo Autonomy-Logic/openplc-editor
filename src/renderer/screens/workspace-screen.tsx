@@ -1,4 +1,5 @@
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
+import { ProjectExplorer } from '../components/_organisms/explorer/project'
 import { Navigation } from '../components/_organisms/navigation'
 import {
 	ResizableHandle,
@@ -39,7 +40,7 @@ const WorkspaceScreen = () => {
 								defaultSize={50}
 							>
 								{/* TODO: refactor project tree */}
-								<ProjectTree />
+								<ProjectExplorer />
 							</ResizablePanel>
 							<ResizableHandle className='bg-neutral-200 dark:bg-neutral-850' />
 							<ResizablePanel
