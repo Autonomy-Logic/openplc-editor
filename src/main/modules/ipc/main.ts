@@ -84,6 +84,9 @@ class MainProcessBridge implements MainIpcModule {
 				this.mainWindow?.maximize()
 			}
 		})
+		this.ipcMain.on('window:reload', () =>
+			this.mainWindow?.webContents.reload()
+		)
 		// Wip: From here
 
 		this.ipcMain.handle('app:get-theme', this.mainIpcEventHandlers.getTheme)

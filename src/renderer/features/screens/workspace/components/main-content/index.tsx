@@ -9,10 +9,35 @@ import { InfoPanel } from '../panels/sidebar-panel/info-panel'
 import { LibraryTree } from '../panels/sidebar-panel/library-tree'
 import { ProjectTree } from '../panels/sidebar-panel/project-tree'
 import { Variables } from '@root/renderer/features/variables'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { cn } from '@root/utils'
+import { Navigation } from '@root/renderer/components/_organisms/navigation'
+import { MonacoEditor } from '@root/renderer/components/_features/[workspace]/editor'
+import { useEffect } from 'react'
 
 export const MainContent = () => {
+	const {
+		OS,
+		path,
+		data,
+		setTabs,
+		tabsState: { tabs },
+	} = useOpenPLCStore()
+
+	useEffect(() => {
+		if (data.pous) {
+			setTabs(data.pous)
+		}
+	}, [data, setTabs])
+	console.log('Editor current -> ', path)
 	return (
-		<div className='!rounded-tl-lg flex flex-1 flex-grow h-full w-full p-2 gap-1 bg-neutral-100 dark:bg-neutral-900'>
+		/* Refactor: This outside div will be replaced by the new <WorkspaceMainContent /> */
+		<div
+			className={cn(
+				'flex flex-1 flex-grow h-full w-full p-2 gap-1 bg-neutral-100 dark:bg-neutral-900',
+				`${OS !== 'linux' && '!rounded-tl-lg'}`
+			)}
+		>
 			<ResizablePanelGroup
 				id='mainContentPanelGroup'
 				direction='horizontal'
@@ -60,7 +85,7 @@ export const MainContent = () => {
 						id='workspaceContentPanel'
 						className='flex-1 grow h-full overflow-hidden flex flex-col gap-2'
 					>
-						<NavigationPanel />
+						{tabs.length > 0 && <Navigation />}
 						<ResizablePanelGroup id='editorPanelGroup' direction='vertical'>
 							<ResizablePanel
 								id='editorPanel'
@@ -91,7 +116,7 @@ export const MainContent = () => {
 										defaultSize={75}
 										className='flex-1 flex-grow rounded-md mt-6'
 									>
-										<TextEditor />
+										<MonacoEditor />
 									</ResizablePanel>
 								</ResizablePanelGroup>
 							</ResizablePanel>
@@ -102,7 +127,7 @@ export const MainContent = () => {
 								collapsible
 								defaultSize={25}
 								minSize={15}
-								className='flex-1 grow border-neutral-200 bg-white dark:bg-neutral-950 rounded-lg border-2 data-[panel-size="0.0"]:hidden'
+								className='flex-1 grow border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-lg border-2 data-[panel-size="0.0"]:hidden'
 							>
 								<span>Console</span>
 							</ResizablePanel>

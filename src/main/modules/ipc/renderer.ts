@@ -25,6 +25,7 @@ const rendererProcessBridge = {
 	closeWindow: () => ipcRenderer.send('window-controls:close'),
 	minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
 	maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
+	reloadWindow: () => ipcRenderer.send('window:reload'),
 	// WIP: Refactoring
 	getTheme: () => ipcRenderer.invoke('app:get-theme'),
 	// setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),
