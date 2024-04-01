@@ -95,27 +95,7 @@ const installExtensions = async () => {
 		.catch(console.log)
 }
 
-const createSplashWindow = () => {
-	splash = new BrowserWindow({
-		width: 580,
-		height: 366,
-		resizable: false,
-		frame: false,
-		alwaysOnTop: true,
-		webPreferences: {
-			sandbox: false,
-		},
-	})
-
-	splash.loadURL(
-		`file://${path.join(
-			__dirname,
-			'./modules/preload/scripts/loading/splash.html'
-		)}`
-	)
-}
-
-const createWindow = async () => {
+const createMainWindow = async () => {
 	// Check if the application is on debug method, install the extensions
 	if (isDebug) {
 		await installExtensions()
@@ -136,28 +116,6 @@ const createWindow = async () => {
 	 */
 	const { bounds } = store.get('window')
 
-	// Create a new browser window for the splash screen
-	// splash = new BrowserWindow({
-	// 	width: 580,
-	// 	height: 366,
-	// 	resizable: false,
-	// 	frame: false,
-	// 	alwaysOnTop: true,
-	// 	webPreferences: {
-	// 		sandbox: false,
-	// 	},
-	// })
-
-	// splash
-	// 	.loadURL(
-	// 		`file://${path.join(
-	// 			__dirname,
-	// 			'./modules/preload/scripts/loading/splash.html'
-	// 		)}`
-	// 	)
-	// 	.then(() => console.log('Splash screen loaded successfully'))
-	// 	.catch((error) => console.error('Error loading splash screen:', error))
-
 	// Create the main window instance.
 	mainWindow = new BrowserWindow({
 		minWidth: 1124,
@@ -174,17 +132,25 @@ const createWindow = async () => {
 		},
 	})
 
-	mainWindow.webContents.on('did-finish-load', () => {
-		if (!splash) {
-			createSplashWindow()
-			setTimeout(() => {
-				splash?.close()
-				mainWindow?.show()
-			},4500)
-		}
+	splash = new BrowserWindow({
+		parent: mainWindow,
+		width: 580,
+		height: 366,
+		resizable: false,
+		frame: false,
+		alwaysOnTop: true,
+		webPreferences: {
+			sandbox: false,
+		},
 	})
 
-	// splash.setIgnoreMouseEvents(false)
+	splash.loadURL(
+		`file://${path.join(
+			__dirname,
+			'./modules/preload/scripts/loading/splash.html'
+		)}`
+	)
+	splash.show()
 	// Save window bounds on resize, close, and move events
 	const saveBounds = () => {
 		store.set('window.bounds', mainWindow?.getBounds())
@@ -206,13 +172,15 @@ const createWindow = async () => {
 	// 	mainWindow.webContents.openDevTools()
 	// }
 
-	mainWindow.on('ready-to-show', () => {
+	mainWindow.once('ready-to-show', () => {
 		if (!mainWindow) {
 			throw new Error('"mainWindow" is not defined')
 		}
 		if (process.env.START_MINIMIZED) {
 			mainWindow.minimize()
 		}
+		splash?.close()
+		mainWindow.show()
 	})
 
 	mainWindow.on('closed', () => {
@@ -281,12 +249,12 @@ app.on('second-instance', () => {
 app
 	.whenReady()
 	.then(() => {
-		createWindow()
+		createMainWindow()
 		// Handle the app activation event;
 		app.on('activate', () => {
 			// On macOS it's common to re-create a window in the app when the
 			// dock icon is clicked and there are no other windows open.
-			if (mainWindow === null) createWindow()
+			if (mainWindow === null) createMainWindow()
 		})
 	})
 	.catch(console.log)
