@@ -47,6 +47,7 @@ const ProjectExplorer = () => {
 				</button>
 			</div>
 			{/* Data display */}
+			{/* Work in progress: Do not change the structure */}
 			<ProjectTreeRoot label={Name}>
 				<ProjectTreeLeaf leafLang='DT' />
 				<ProjectTreeBranch branchTarget='function'>
