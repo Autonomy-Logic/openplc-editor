@@ -5,13 +5,32 @@ import {
 	ProjectTreeLeaf,
 } from '@components/_molecules/project-tree'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { IPouTemplate } from '@root/types/transfer'
 
 const ProjectExplorer = () => {
-	const { data } = useOpenPLCStore()
+	const {
+		data,
+		updateEditor,
+		updateTabs,
+		tabsState: { tabs },
+	} = useOpenPLCStore()
 	const Name = 'Project Name'
 
+	const handleCreateTab = (tab: IPouTemplate) => {
+		const { name, type, languageCodification, language } = tab
+		updateTabs([
+			...tabs,
+			{
+				name,
+				type,
+				languageCodification,
+				language,
+			},
+		])
+		updateEditor({ path: name, value: tab.body })
+	}
 	return (
-		<div>
+		<>
 			{/* Actions handler */}
 			<div className='flex justify-around w-[200px] my-3 px-2'>
 				<div className='flex items-center justify-start px-1.5 w-32 h-8 gap-1 rounded-lg cursor-default select-none bg-neutral-100 dark:bg-brand-dark'>
@@ -29,9 +48,7 @@ const ProjectExplorer = () => {
 			</div>
 			{/* Data display */}
 			<ProjectTreeRoot label={Name}>
-				<ProjectTreeBranch branchTarget='dataType'>
-					<ProjectTreeLeaf leafLang='DT' />
-				</ProjectTreeBranch>
+				<ProjectTreeLeaf leafLang='DT' />
 				<ProjectTreeBranch branchTarget='function'>
 					{data.pous
 						?.filter((pou) => pou.type === 'function')
@@ -40,6 +57,7 @@ const ProjectExplorer = () => {
 								key={pou.name}
 								leafLang={pou.language}
 								label={pou.name}
+								onClick={() => handleCreateTab(pou)}
 							/>
 						))}
 				</ProjectTreeBranch>
@@ -51,6 +69,7 @@ const ProjectExplorer = () => {
 								key={pou.name}
 								leafLang={pou.language}
 								label={pou.name}
+								onClick={() => handleCreateTab(pou)}
 							/>
 						))}
 				</ProjectTreeBranch>
@@ -62,6 +81,7 @@ const ProjectExplorer = () => {
 								key={pou.name}
 								leafLang={pou.language}
 								label={pou.name}
+								onClick={() => handleCreateTab(pou)}
 							/>
 						))}
 				</ProjectTreeBranch>
@@ -71,7 +91,7 @@ const ProjectExplorer = () => {
 				{/** Maybe a divider component */}
 				<ProjectTreeLeaf leafLang='RES' label='Resources' />
 			</ProjectTreeRoot>
-		</div>
+		</>
 	)
 }
 export { ProjectExplorer }
