@@ -1,5 +1,6 @@
+import { OpenPLCIcon } from '../assets/icons/oplc'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
-import { ProjectExplorer } from '../components/_organisms/explorer/project'
+import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import {
 	ResizableHandle,
@@ -10,8 +11,12 @@ import {
 	WorkspaceMainContent,
 	WorkspaceSideContent,
 } from '../components/_templates'
+import { useOpenPLCStore } from '../store'
 
 const WorkspaceScreen = () => {
+	const {
+		tabsState: { tabs },
+	} = useOpenPLCStore()
 	return (
 		<div className='flex w-full h-full bg-brand-dark dark:bg-neutral-950'>
 			<WorkspaceSideContent />
@@ -21,42 +26,7 @@ const WorkspaceScreen = () => {
 					direction='horizontal'
 					className='w-full h-full'
 				>
-					<ResizablePanel
-						id='sidebarPanel'
-						order={1}
-						collapsible={true}
-						minSize={11}
-						defaultSize={13}
-						className='flex flex-col h-full w-[200px] border-inherit rounded-lg overflow-auto border-2 data-[panel-size="0.0"]:hidden border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950'
-					>
-						<ResizablePanelGroup
-							id='sidebarContentPanelGroup'
-							direction='vertical'
-							className='flex-1 h-full'
-						>
-							<ResizablePanel
-								id='sidebarProjectTreePanel'
-								order={1}
-								defaultSize={50}
-							>
-								{/* TODO: refactor project tree */}
-								<ProjectExplorer />
-							</ResizablePanel>
-							<ResizableHandle className='bg-neutral-200 dark:bg-neutral-850' />
-							<ResizablePanel
-								id='sidebarLibraryTreePanel'
-								order={2}
-								defaultSize={50}
-							>
-								{/* TODO: refactor library tree */}
-								<LibraryTree />
-							</ResizablePanel>
-						</ResizablePanelGroup>
-						{/**
-						 * TODO: refactor info panel
-						 */}
-						<InfoPanel />
-					</ResizablePanel>
+					<Explorer />
 					<ResizableHandle className='mr-2' />
 					<ResizablePanel
 						id='workspacePanel'
@@ -68,7 +38,7 @@ const WorkspaceScreen = () => {
 							id='workspaceContentPanel'
 							className='flex-1 grow h-full overflow-hidden flex flex-col gap-2'
 						>
-							<Navigation />
+							{tabs.length > 0 && <Navigation />}
 							<ResizablePanelGroup id='editorPanelGroup' direction='vertical'>
 								<ResizablePanel
 									id='editorPanel'
@@ -76,35 +46,42 @@ const WorkspaceScreen = () => {
 									defaultSize={75}
 									className='flex-1 grow rounded-lg overflow-hidden flex flex-col border-2 border-neutral-200 bg-white dark:bg-neutral-950 dark:border-neutral-800 p-4'
 								>
-									<ResizablePanelGroup
-										id='editorContentPanelGroup'
-										direction='vertical'
-										className='flex flex-1 flex-col gap-2'
-									>
-										<ResizablePanel
-											id='variableTablePanel'
-											order={1}
-											collapsible
-											collapsedSize={0}
-											minSize={20}
-											defaultSize={25}
-											className='flex flex-1 flex-col gap-4 w-full h-full'
+									{tabs.length > 0 ? (
+										<ResizablePanelGroup
+											id='editorContentPanelGroup'
+											direction='vertical'
+											className='flex flex-1 flex-col gap-2'
 										>
-											{/**
-											 * TODO: refactor the variable component
-											 */}
-											<Variables />
-										</ResizablePanel>
-										<ResizableHandle className='h-[1px] bg-brand-light w-full' />
-										<ResizablePanel
-											id='textualEditorPanel'
-											order={2}
-											defaultSize={75}
-											className='flex-1 flex-grow rounded-md mt-6'
-										>
-											<MonacoEditor />
-										</ResizablePanel>
-									</ResizablePanelGroup>
+											<ResizablePanel
+												id='variableTablePanel'
+												order={1}
+												collapsible
+												collapsedSize={0}
+												minSize={20}
+												defaultSize={25}
+												className='flex flex-1 flex-col gap-4 w-full h-full'
+											>
+												{/**
+												 * TODO: refactor the variable component
+												 */}
+												{/* <Variables /> */}
+											</ResizablePanel>
+											<ResizableHandle className='h-[1px] bg-brand-light w-full' />
+											<ResizablePanel
+												id='textualEditorPanel'
+												order={2}
+												defaultSize={75}
+												className='flex-1 flex-grow rounded-md mt-6'
+											>
+												<MonacoEditor />
+											</ResizablePanel>
+										</ResizablePanelGroup>
+									) : (
+										<p className='mx-auto my-auto text-xl flex flex-col items-center gap-1 font-medium font-display cursor-default select-none'>
+											OpenPLC Editor
+											<OpenPLCIcon className='w-9 h-9' />
+										</p>
+									)}
 								</ResizablePanel>
 								<ResizableHandle className='mt-2' />
 								<ResizablePanel

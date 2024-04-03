@@ -30,25 +30,25 @@ const ProjectTreeRoot = ({
 	label,
 	...res
 }: IProjectTreeRootProps) => {
-	const [isOpen, setIsOpen] = useState(false)
+	const [isOpen, setIsOpen] = useState(true)
 	const handleVisibility = useCallback(() => setIsOpen(!isOpen), [isOpen])
 	return (
-		<div>
+		<div className='select-none'>
 			<ul className='list-none p-0' {...res}>
-				<button
-					type='button'
-					className='flex flex-row items-center'
+				{/* biome-ignore lint/a11y/useKeyWithClickEvents: Do not use */}
+				<li
+					className=' flex flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900 cursor-pointer'
 					onClick={handleVisibility}
 				>
 					<ArrowIcon
 						direction='right'
 						className={cn(
-							`stroke-brand-light w-4 h-4 transition-all ${
+							`stroke-brand-light w-4 h-4 transition-all mr-[6px] ${
 								isOpen && 'stroke-brand rotate-270'
 							}`
 						)}
 					/>
-					<PLCIcon className='w-4 h-4' />
+					<PLCIcon />
 					<span
 						className={cn(
 							'font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ml-1 truncate',
@@ -57,9 +57,9 @@ const ProjectTreeRoot = ({
 					>
 						{label}
 					</span>
-				</button>
+				</li>
 				{children && isOpen && (
-					<div>
+					<div className='pl-2'>
 						<ul>
 							{children && (
 								<div>
@@ -100,21 +100,29 @@ const ProjectTreeBranch = ({
 	const { BranchIcon, label } = BranchSources[branchTarget]
 
 	return (
-		<li className='py-1 pl-2' {...res}>
-			<button
-				type='button'
-				className='flex flex-row items-center'
+		<li
+			aria-expanded={branchIsOpen}
+			className='cursor-pointer aria-expanded:cursor-default '
+			{...res}
+		>
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: <explanation> */}
+			<div
+				className='cursor-pointer flex flex-row items-center w-full py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
 				onClick={handleBranchVisibility}
 			>
-				<ArrowIcon
-					direction='right'
-					className={cn(
-						`stroke-brand-light w-4 h-4 transition-all ${
-							branchIsOpen && 'stroke-brand rotate-270'
-						}`
-					)}
-				/>
-				<BranchIcon className='w-4 h-4' />
+				{children ? (
+					<ArrowIcon
+						direction='right'
+						className={cn(
+							`stroke-brand-light w-4 h-4 transition-all mr-[6px] ${
+								branchIsOpen && 'stroke-brand rotate-270'
+							}`
+						)}
+					/>
+				) : (
+					<div className='w-[22px]' />
+				)}
+				<BranchIcon />
 				<span
 					className={cn(
 						'font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ml-1 truncate',
@@ -123,7 +131,8 @@ const ProjectTreeBranch = ({
 				>
 					{label}
 				</span>
-			</button>
+			</div>
+
 			{children && branchIsOpen && (
 				<div>
 					<ul>
@@ -167,22 +176,20 @@ const ProjectTreeLeaf = ({
 	)
 
 	return (
-		<li className='py-1 pl-2 ml-4' {...res}>
-			<button
-				type='button'
-				className='flex flex-row items-center'
-				onClick={handleLeafSelection}
+		<li
+			className='py-1 pl-4 ml-4 flex flex-row items-center hover:bg-slate-50 dark:hover:bg-neutral-900 cursor-pointer'
+			onClick={handleLeafSelection}
+			{...res}
+		>
+			<LeafIcon />
+			<span
+				className={cn(
+					'font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ml-1 truncate',
+					leafIsSelected && 'font-medium text-neutral-1000 dark:text-white'
+				)}
 			>
-				<LeafIcon className='w-4 h-4' />
-				<span
-					className={cn(
-						'font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ml-1 truncate',
-						leafIsSelected && 'font-medium text-neutral-1000 dark:text-white'
-					)}
-				>
-					{label}
-				</span>
-			</button>
+				{label}
+			</span>
 		</li>
 	)
 }
