@@ -13,6 +13,7 @@ import {
 	LDIcon,
 	ResourceIcon,
 } from '@root/renderer/assets'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import {
 	ComponentPropsWithoutRef,
@@ -91,6 +92,9 @@ const ProjectTreeBranch = ({
 	children,
 	...res
 }: IProjectTreeBranchProps) => {
+	const {
+		data: { pous },
+	} = useOpenPLCStore()
 	const [branchIsOpen, setBranchIsOpen] = useState(false)
 	const handleBranchVisibility = useCallback(
 		() => setBranchIsOpen(!branchIsOpen),
@@ -110,7 +114,7 @@ const ProjectTreeBranch = ({
 				className='cursor-pointer flex flex-row items-center w-full py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
 				onClick={handleBranchVisibility}
 			>
-				{children ? (
+				{pous?.length !== 0 ? (
 					<ArrowIcon
 						direction='right'
 						className={cn(

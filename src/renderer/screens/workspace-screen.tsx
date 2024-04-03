@@ -79,7 +79,9 @@ const WorkspaceScreen = () => {
 									) : (
 										<p className='mx-auto my-auto text-xl flex flex-col items-center gap-1 font-medium font-display cursor-default select-none'>
 											OpenPLC Editor
-											<OpenPLCIcon className='w-9 h-9' />
+											<span className='bg-brand rounded-md'>
+												<OpenPLCIcon className='w-9 h-9 ' />
+											</span>
 										</p>
 									)}
 								</ResizablePanel>
