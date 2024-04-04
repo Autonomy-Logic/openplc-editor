@@ -56,20 +56,10 @@ const ProjectExplorer = () => {
 			type: 'Program',
 			icon: <ProgramIcon size='md' />,
 		},
-		Resource: {
-			name: 'Resource',
-			type: 'Resource',
-			icon: <ResourceIcon size='md' />,
-		},
 		Data_Type: {
 			name: 'Data Type',
 			type: 'Data Type',
 			icon: <DataTypeIcon size='md' />,
-		},
-		C_Extension: {
-			name: 'C Extension',
-			type: 'C Extension',
-			icon: <CExtIcon size='md' />,
 		},
 	}
 	return (
@@ -89,18 +79,75 @@ const ProjectExplorer = () => {
 					>
 						<PlusIcon className='stroke-white' />
 					</Popover.Trigger>
-					<Popover.Content align='end' alignOffset={-7} sideOffset={10}>
-						<div className='w-[188px] h-fit border border-brand-light bg-white dark:bg-brand-dark p-2 rounded-xl flex flex-col gap-2'>
+					<Popover.Content alignOffset={-7} sideOffset={10}>
+						<div className='w-[188px] h-fit border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-xl flex flex-col gap-2'>
 							{Object.entries(projectOptions).map(([key, value]) => (
-								<button
-									className='flex items-center justify-start w-full h-7 gap-1 rounded-lg cursor-default select-none hover:bg-neutral-100 p-2 dark:hover:bg-brand-dark'
-									key={key}
-								>
-									{value.icon}
-									<span className='pl-1 font-caption text-xs font-medium text-neutral-950 dark:text-neutral-50'>
-										{value.name}
-									</span>
-								</button>
+								<Popover.Root>
+									<div className='h-full w-full'>
+										<Popover.Trigger
+											className='flex items-center justify-start w-full h-7 gap-1 rounded-lg cursor-default select-none hover:bg-neutral-100 p-2 dark:hover:bg-neutral-900'
+											key={key}
+										>
+											{value.icon}
+											<span className='pl-1  text-xs font-medium text-neutral-950 dark:text-neutral-50'>
+												{value.name}
+											</span>
+										</Popover.Trigger>
+										<Popover.Content
+											alignOffset={-7}
+											align='start'
+											side='right'
+											className=' ml-4 flex flex-col gap-3  w-[188px] h-fit border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-xl'
+										>
+											<div className='flex items-center w-full'>
+												{value.icon}
+												<span className='pl-1 text-xs font-medium text-neutral-950 dark:text-neutral-50'>
+													{value.name}
+												</span>
+											</div>
+											<div className='w-full flex flex-col gap-[6px] '>
+												<span className='text-xs font-medium text-neutral-1000 dark:text-neutral-50'>
+													POU name:
+												</span>
+												<input
+													type='text'
+													placeholder='POU name'
+													className='px-2 w-full outline-none border border-neutral-100 dark:border-brand-medium-dark text-neutral-850 font-medium text-xs bg-white dark:bg-neutral-950 h-[26px] rounded-lg'
+												/>
+											</div>
+											<div className='w-full flex flex-col gap-[6px] '>
+												<p className='text-xs font-medium text-neutral-1000 dark:text-neutral-50'>
+													Language:
+												</p>
+												<select
+													aria-label='Select Language'
+													id=''
+													className='px-2 w-full outline-none border border-neutral-100 dark:border-brand-medium-dark text-neutral-850 font-medium text-xs bg-white dark:bg-neutral-950 h-[26px] rounded-lg'
+												>
+													<option value='LD'>Ladde Diagram</option>
+													<option value='SF'>Sequential Function Chart</option>
+													<option value='FD'>Functional Block Diagram</option>
+													<option value='ST'>Structured Text</option>
+													<option value='IL'>Instruction List</option>
+												</select>
+											</div>
+											<div className='w-full flex justify-between'>
+												<button
+													type='button'
+													className='w-20 h-6 bg-brand rounded-lg text-white font-medium text-xs'
+												>
+													Create
+												</button>
+												<button
+													type='button'
+													className='w-20 h-6 bg-neutral-100 rounded-lg text-neutral-1000  font-medium text-xs'
+												>
+													Cancel
+												</button>
+											</div>
+										</Popover.Content>
+									</div>
+								</Popover.Root>
 							))}
 						</div>
 					</Popover.Content>
