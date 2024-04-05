@@ -22,7 +22,7 @@ const router = createBrowserRouter([
 			{
 				id: 'workspace',
 				path: 'workspace',
-				element: <WorkspaceScreen />,
+				element: <Screen.Workspace />,
 			},
 		],
 	},

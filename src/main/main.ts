@@ -119,7 +119,7 @@ const createMainWindow = async () => {
 	// Create the main window instance.
 	mainWindow = new BrowserWindow({
 		minWidth: 1124,
-		minHeight: 768,
+		minHeight: 628,
 		...bounds,
 		show: false,
 		icon: getAssetPath('icon.png'),
