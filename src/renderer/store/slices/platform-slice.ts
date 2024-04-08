@@ -4,12 +4,13 @@ import { produce } from 'immer'
 type IPlatformState = {
 	OS: 'win32' | 'linux' | 'darwin' | ''
 	arch: 'x64' | 'arm' | ''
-	colorScheme: 'dark' | 'light'
+	shouldUseDarkMode: boolean
 }
 
 type IPlatformActions = {
 	setPlatFormData: (platformData: IPlatformState) => void
 	updatePlatFormData: (platformData: Partial<IPlatformState>) => void
+	updateTheme: () => void
 }
 
 export type IPlatformSlice = IPlatformState & IPlatformActions
@@ -22,13 +23,13 @@ export const createPlatformSlice: StateCreator<
 > = (setState) => ({
 	OS: '',
 	arch: '',
-	colorScheme: 'light',
+	shouldUseDarkMode: false,
 	setPlatFormData: (platformData: IPlatformState): void =>
 		setState(
 			produce((state: IPlatformState) => {
 				state.OS = platformData.OS
 				state.arch = platformData.arch
-				state.colorScheme = platformData.colorScheme
+				state.shouldUseDarkMode = platformData.shouldUseDarkMode
 			})
 		),
 	updatePlatFormData: (platformData: Partial<IPlatformState>): void =>
@@ -36,8 +37,14 @@ export const createPlatformSlice: StateCreator<
 			produce((state: IPlatformState) => {
 				if (platformData.OS) state.OS = platformData.OS
 				if (platformData.arch) state.arch = platformData.arch
-				if (platformData.colorScheme)
-					state.colorScheme = platformData.colorScheme
+				if (platformData.shouldUseDarkMode)
+					state.shouldUseDarkMode = platformData.shouldUseDarkMode
+			})
+		),
+	updateTheme: (): void =>
+		setState(
+			produce((state: IPlatformState) => {
+				state.shouldUseDarkMode = !state.shouldUseDarkMode
 			})
 		),
 })

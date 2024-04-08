@@ -8,9 +8,11 @@ import {
 	LibraryFolder,
 	LibraryFile,
 } from '@components/_molecules/library'
+import { ProjectExplorer } from '../components/_organisms/explorer/project'
 const Test = () => {
 	return (
 		<div className='w-full h-full flex flex-row justify-center items-center gap-7'>
+			<ProjectExplorer />
 			<ProjectTreeRoot label='OPENPLC-EDITOR'>
 				<ProjectTreeBranch branchTarget='dataType'>
 					<ProjectTreeLeaf leafLang='DT' />

@@ -16,6 +16,7 @@ import {
 	SFCIcon,
 	STIcon,
 } from '@process:renderer/assets'
+import { ProjectExplorer } from '@root/renderer/components/_organisms/explorer/project'
 
 type IProjectTreeProps = ComponentProps<'div'>
 export const ProjectTree = (props: IProjectTreeProps): ReactNode => {
@@ -135,7 +136,7 @@ export const ProjectTree = (props: IProjectTreeProps): ReactNode => {
 			[&::-webkit-scrollbar]:w-1'
 				// [&::-webkit-scrollbar-thumb]:w-[6px]'
 			>
-				<Tree treeData={treeData} />
+				<ProjectExplorer />
 			</div>
 		</div>
 	)

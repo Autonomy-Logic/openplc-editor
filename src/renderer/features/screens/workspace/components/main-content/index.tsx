@@ -14,22 +14,14 @@ import { cn } from '@root/utils'
 import { Navigation } from '@root/renderer/components/_organisms/navigation'
 import { MonacoEditor } from '@root/renderer/components/_features/[workspace]/editor'
 import { useEffect } from 'react'
+import { Explorer } from '@root/renderer/components/_organisms/explorer'
 
 export const MainContent = () => {
 	const {
 		OS,
-		path,
-		data,
-		setTabs,
 		tabsState: { tabs },
 	} = useOpenPLCStore()
 
-	useEffect(() => {
-		if (data.pous) {
-			setTabs(data.pous)
-		}
-	}, [data, setTabs])
-	console.log('Editor current -> ', path)
 	return (
 		/* Refactor: This outside div will be replaced by the new <WorkspaceMainContent /> */
 		<div
@@ -43,37 +35,7 @@ export const MainContent = () => {
 				direction='horizontal'
 				className='w-full h-full'
 			>
-				<ResizablePanel
-					id='sidebarPanel'
-					order={1}
-					collapsible={true}
-					minSize={11}
-					defaultSize={13}
-					className='flex flex-col h-full w-[200px] border-inherit rounded-lg overflow-auto border-2 data-[panel-size="0.0"]:hidden border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950'
-				>
-					<ResizablePanelGroup
-						id='sidebarContentPanelGroup'
-						direction='vertical'
-						className='flex-1 h-full'
-					>
-						<ResizablePanel
-							id='sidebarProjectTreePanel'
-							order={1}
-							defaultSize={50}
-						>
-							<ProjectTree />
-						</ResizablePanel>
-						<ResizableHandle className='bg-neutral-200 dark:bg-neutral-850' />
-						<ResizablePanel
-							id='sidebarLibraryTreePanel'
-							order={2}
-							defaultSize={50}
-						>
-							<LibraryTree />
-						</ResizablePanel>
-					</ResizablePanelGroup>
-					<InfoPanel />
-				</ResizablePanel>
+				<Explorer />
 				<ResizableHandle className='mr-2' />
 				<ResizablePanel
 					id='workspacePanel'
@@ -93,32 +55,38 @@ export const MainContent = () => {
 								defaultSize={75}
 								className='flex-1 grow rounded-lg overflow-hidden flex flex-col border-2 border-neutral-200 bg-white dark:bg-neutral-950 dark:border-neutral-800 p-4'
 							>
-								<ResizablePanelGroup
-									id='editorContentPanelGroup'
-									direction='vertical'
-									className='flex flex-1 flex-col gap-2'
-								>
-									<ResizablePanel
-										id='variableTablePanel'
-										order={1}
-										collapsible
-										collapsedSize={0}
-										minSize={20}
-										defaultSize={25}
-										className='flex flex-1 flex-col gap-4 w-full h-full'
+								{tabs.length > 0 ? (
+									<ResizablePanelGroup
+										id='editorContentPanelGroup'
+										direction='vertical'
+										className='flex flex-1 flex-col gap-2'
 									>
-										<Variables />
-									</ResizablePanel>
-									<ResizableHandle className='h-[1px] bg-brand-light w-full' />
-									<ResizablePanel
-										id='textualEditorPanel'
-										order={2}
-										defaultSize={75}
-										className='flex-1 flex-grow rounded-md mt-6'
-									>
-										<MonacoEditor />
-									</ResizablePanel>
-								</ResizablePanelGroup>
+										<ResizablePanel
+											id='variableTablePanel'
+											order={1}
+											collapsible
+											collapsedSize={0}
+											minSize={20}
+											defaultSize={25}
+											className='flex flex-1 flex-col gap-4 w-full h-full'
+										>
+											<Variables />
+										</ResizablePanel>
+										<ResizableHandle className='h-[1px] bg-brand-light w-full' />
+										<ResizablePanel
+											id='textualEditorPanel'
+											order={2}
+											defaultSize={75}
+											className='flex-1 flex-grow rounded-md mt-6'
+										>
+											<MonacoEditor />
+										</ResizablePanel>
+									</ResizablePanelGroup>
+								) : (
+									<p className='mx-auto my-auto text-xl font-medium font-display cursor-default select-none'>
+										OpenPLC Editor
+									</p>
+								)}
 							</ResizablePanel>
 							<ResizableHandle className='mt-2' />
 							<ResizablePanel
