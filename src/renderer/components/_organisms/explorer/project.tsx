@@ -1,12 +1,18 @@
 import {
+	ArrowIcon,
 	CExtIcon,
 	DataTypeIcon,
+	FBDIcon,
 	FolderIcon,
 	FunctionBlockIcon,
 	FunctionIcon,
+	ILIcon,
+	LDIcon,
 	PlusIcon,
 	ProgramIcon,
 	ResourceIcon,
+	SFCIcon,
+	STIcon,
 } from '@root/renderer/assets'
 import {
 	ProjectTreeRoot,
@@ -16,6 +22,8 @@ import {
 import { useOpenPLCStore } from '@root/renderer/store'
 import { IPouTemplate } from '@root/types/transfer'
 import * as Popover from '@radix-ui/react-popover'
+import * as Select from '@radix-ui/react-select'
+import { useState } from 'react'
 
 const ProjectExplorer = () => {
 	const {
@@ -62,11 +70,37 @@ const ProjectExplorer = () => {
 			icon: <DataTypeIcon size='md' />,
 		},
 	}
+
+	const options = [
+		{
+			name: 'Ladder Diagram',
+			icon: <LDIcon size='sm' />,
+		},
+		{
+			name: 'Sequential Functional Charts',
+			icon: <SFCIcon size='sm' />,
+		},
+		{
+			name: 'Functional Block Diagram',
+			icon: <FBDIcon size='sm' />,
+		},
+		{
+			name: 'Structured Text',
+			icon: <STIcon size='sm' />,
+		},
+		{
+			name: 'Intruction List',
+			icon: <ILIcon size='sm' />,
+		},
+	]
+
+	const [option, setOption] = useState('')
+
 	return (
 		<>
 			{/* Actions handler */}
 			<Popover.Root>
-				<div className='flex justify-around w-[200px] my-3 px-2'>
+				<div className='flex justify-around w-[200px] my-3 px-2 relative z-[1]'>
 					<div className='flex items-center justify-start px-1.5 w-32 h-8 gap-1 rounded-lg cursor-default select-none bg-neutral-100 dark:bg-brand-dark'>
 						<FolderIcon size='sm' />
 						<span className='pl-1 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'>
@@ -79,68 +113,104 @@ const ProjectExplorer = () => {
 					>
 						<PlusIcon className='stroke-white' />
 					</Popover.Trigger>
-					<Popover.Content alignOffset={-7} sideOffset={10}>
+					<Popover.Content alignOffset={-7} sideOffset={10} align='end'>
 						<div className='w-[188px] h-fit border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-xl flex flex-col gap-2'>
 							{Object.entries(projectOptions).map(([key, value]) => (
-								<Popover.Root>
+								<Popover.Root key={key}>
 									<div className='h-full w-full'>
-										<Popover.Trigger
-											className='flex items-center justify-start w-full h-7 gap-1 rounded-lg cursor-default select-none hover:bg-neutral-100 p-2 dark:hover:bg-neutral-900'
-											key={key}
-										>
-											{value.icon}
-											<span className='pl-1  text-xs font-medium text-neutral-950 dark:text-neutral-50'>
-												{value.name}
-											</span>
-										</Popover.Trigger>
-										<Popover.Content
-											alignOffset={-7}
-											align='start'
-											side='right'
-											className=' ml-4 flex flex-col gap-3  w-[188px] h-fit border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-xl'
-										>
-											<div className='flex items-center w-full'>
+										<Popover.Trigger className='w-full items-center' asChild>
+											<button
+												type='button'
+												className='data-[state=open]:bg-neutral-100 dark:data-[state=open]:bg-neutral-900 relative flex items-center justify-start w-full h-7 gap-1 rounded-lg cursor-default select-none hover:bg-neutral-100 p-2 dark:hover:bg-neutral-900'
+												onClick={() => setOption(value.name)}
+											>
 												{value.icon}
 												<span className='pl-1 text-xs font-medium text-neutral-950 dark:text-neutral-50'>
 													{value.name}
 												</span>
+												<ArrowIcon className='rotate-180 absolute right-0' />
+											</button>
+										</Popover.Trigger>
+										<Popover.Content
+											sideOffset={14}
+											alignOffset={-7}
+											align='start'
+											side='right'
+											className='flex flex-col pb-3 px-3 pt-2 gap-3 w-[210px] h-fit border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-xl'
+										>
+											<div className='flex items-center w-full h-8 flex-col justify-between'>
+												<div className='flex w-full items-center'>
+													{value.icon}
+													<span className='pl-1 text-xs font-medium text-neutral-950 dark:text-neutral-50'>
+														{value.name}
+													</span>
+												</div>
+												<hr className='stroke-neutral-200 stroke-[1.5px] w-full' />
 											</div>
 											<div className='w-full flex flex-col gap-[6px] '>
-												<span className='text-xs font-medium text-neutral-1000 dark:text-neutral-50'>
+												<span className='text-cp-sm font-medium text-neutral-1000 dark:text-neutral-50'>
 													POU name:
 												</span>
 												<input
 													type='text'
 													placeholder='POU name'
-													className='px-2 w-full outline-none border border-neutral-100 dark:border-brand-medium-dark text-neutral-850 font-medium text-xs bg-white dark:bg-neutral-950 h-[26px] rounded-lg'
+													className='px-2 w-full outline-none border border-neutral-100 dark:border-brand-medium-dark text-neutral-850 font-medium text-cp-sm bg-white dark:bg-neutral-950 h-[26px] rounded-lg'
 												/>
 											</div>
 											<div className='w-full flex flex-col gap-[6px] '>
-												<p className='text-xs font-medium text-neutral-1000 dark:text-neutral-50'>
+												<p className='text-cp-sm font-medium text-neutral-1000 dark:text-neutral-50'>
 													Language:
 												</p>
-												<select
-													aria-label='Select Language'
-													id=''
-													className='px-2 w-full outline-none border border-neutral-100 dark:border-brand-medium-dark text-neutral-850 font-medium text-xs bg-white dark:bg-neutral-950 h-[26px] rounded-lg'
-												>
-													<option value='LD'>Ladde Diagram</option>
-													<option value='SF'>Sequential Function Chart</option>
-													<option value='FD'>Functional Block Diagram</option>
-													<option value='ST'>Structured Text</option>
-													<option value='IL'>Instruction List</option>
-												</select>
+
+												<Select.Root value={option} onValueChange={setOption}>
+													<Select.Trigger className='relative px-[14px] py-2 flex items-center w-full outline-none border border-neutral-100 dark:border-brand-medium-dark text-neutral-850 font-medium text-cp-sm bg-white dark:bg-neutral-950 rounded-lg'>
+														<div className='w-full justify-between flex'>
+															{option || 'Select a language'}
+															<Select.Icon>
+																<ArrowIcon
+																	size='sm'
+																	className='stroke-brand rotate-270 '
+																/>
+															</Select.Icon>
+														</div>
+													</Select.Trigger>
+													<Select.Content
+														sideOffset={10}
+														alignOffset={10}
+														position='popper'
+														align='center'
+														side='bottom'
+														className='dark:bg-neutral-950 relative z-[9999] overflow-hidden  w-full border h-fit bg-white border-neutral-100 dark:border-brand-medium-dark rounded-lg'
+													>
+														<Select.Viewport className='w-full h-full'>
+															{options.map((language) => (
+																<Select.Item
+																	key={language.name}
+																	value={language.name}
+																	className='px-2 py-[9px] cursor-pointer w-full hover:bg-neutral-100 dark:hover:bg-neutral-900 flex gap-2 items-center text-neutral-850 dark:text-neutral-300 font-medium'
+																>
+																	{language.icon}
+
+																	<p className='font-caption text-cp-sm text-neutral-850 dark:text-neutral-300 font-medium'>
+																		{language.name}
+																	</p>
+																</Select.Item>
+															))}
+														</Select.Viewport>
+													</Select.Content>
+												</Select.Root>
 											</div>
+
 											<div className='w-full flex justify-between'>
 												<button
 													type='button'
-													className='w-20 h-6 bg-brand rounded-lg text-white font-medium text-xs'
+													className='font-caption font w-[78px] h-6 bg-brand rounded-lg text-white font-medium text-cp-sm'
 												>
 													Create
 												</button>
 												<button
 													type='button'
-													className='w-20 h-6 bg-neutral-100 rounded-lg text-neutral-1000  font-medium text-xs'
+													className='font-caption w-[78px] h-6 bg-neutral-100 rounded-lg text-neutral-1000 font-medium text-cp-sm'
 												>
 													Cancel
 												</button>
