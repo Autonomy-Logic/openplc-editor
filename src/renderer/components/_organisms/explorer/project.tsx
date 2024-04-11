@@ -95,12 +95,19 @@ const ProjectExplorer = () => {
 	]
 
 	const [option, setOption] = useState('')
+	const [selectedOption, setSelectedOption] = useState('Select a language')
+	const getSelectedIcon = () => {
+		const currentSelectedOption = options.find(
+			(opt) => opt.name === selectedOption
+		)
+		return currentSelectedOption ? currentSelectedOption.icon : null
+	}
 
 	return (
 		<>
 			{/* Actions handler */}
 			<Popover.Root>
-				<div className='flex justify-around w-[200px] my-3 px-2 relative z-[1]'>
+				<div className='flex justify-around w-[200px] my-3 px-2 relative z-10'>
 					<div className='flex items-center justify-start px-1.5 w-32 h-8 gap-1 rounded-lg cursor-default select-none bg-neutral-100 dark:bg-brand-dark'>
 						<FolderIcon size='sm' />
 						<span className='pl-1 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'>
@@ -114,21 +121,23 @@ const ProjectExplorer = () => {
 						<PlusIcon className='stroke-white' />
 					</Popover.Trigger>
 					<Popover.Content alignOffset={-7} sideOffset={10} align='end'>
-						<div className='w-[188px] h-fit border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-xl flex flex-col gap-2'>
+						<div className='w-[188px] h-fit drop-shadow-lg border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-lg flex flex-col gap-2'>
 							{Object.entries(projectOptions).map(([key, value]) => (
 								<Popover.Root key={key}>
-									<div className='h-full w-full'>
-										<Popover.Trigger className='w-full items-center' asChild>
+									<div className='h-full w-full relative z-9'>
+										<Popover.Trigger className='w-full' asChild>
 											<button
 												type='button'
-												className='data-[state=open]:bg-neutral-100 dark:data-[state=open]:bg-neutral-900 relative flex items-center justify-start w-full h-7 gap-1 rounded-lg cursor-default select-none hover:bg-neutral-100 p-2 dark:hover:bg-neutral-900'
+												className='data-[state=open]:bg-neutral-100 justify-between dark:data-[state=open]:bg-neutral-900 relative flex items-center w-full h-7 gap-1 rounded-lg cursor-default select-none hover:bg-neutral-100 p-2 dark:hover:bg-neutral-900'
 												onClick={() => setOption(value.name)}
 											>
-												{value.icon}
-												<span className='pl-1 text-xs font-medium text-neutral-950 dark:text-neutral-50'>
-													{value.name}
-												</span>
-												<ArrowIcon className='rotate-180 absolute right-0' />
+												<div className='flex items-center w-full h-full'>
+													{value.icon}
+													<span className='pl-1 text-xs font-medium text-neutral-950 dark:text-neutral-50'>
+														{value.name}
+													</span>
+												</div>
+												<ArrowIcon className='rotate-180 ' />
 											</button>
 										</Popover.Trigger>
 										<Popover.Content
@@ -136,7 +145,7 @@ const ProjectExplorer = () => {
 											alignOffset={-7}
 											align='start'
 											side='right'
-											className='flex flex-col pb-3 px-3 pt-2 gap-3 w-[210px] h-fit border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-xl'
+											className='flex flex-col drop-shadow-lg pb-3 px-3 pt-2 gap-3 w-[225px] h-fit border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-lg'
 										>
 											<div className='flex items-center w-full h-8 flex-col justify-between'>
 												<div className='flex w-full items-center'>
@@ -154,7 +163,7 @@ const ProjectExplorer = () => {
 												<input
 													type='text'
 													placeholder='POU name'
-													className='px-2 w-full outline-none border border-neutral-100 dark:border-brand-medium-dark text-neutral-850 font-medium text-cp-sm bg-white dark:bg-neutral-950 h-[26px] rounded-lg'
+													className='px-2 w-full  outline-none border border-neutral-100 dark:border-brand-medium-dark text-neutral-850 font-medium text-cp-sm bg-white dark:bg-neutral-950 py-2 h-[30px] rounded-md'
 												/>
 											</div>
 											<div className='w-full flex flex-col gap-[6px] '>
@@ -162,10 +171,18 @@ const ProjectExplorer = () => {
 													Language:
 												</p>
 
-												<Select.Root value={option} onValueChange={setOption}>
-													<Select.Trigger className='relative px-[14px] py-2 flex items-center w-full outline-none border border-neutral-100 dark:border-brand-medium-dark text-neutral-850 font-medium text-cp-sm bg-white dark:bg-neutral-950 rounded-lg'>
-														<div className='w-full justify-between flex'>
-															{option || 'Select a language'}
+												<Select.Root
+													value={selectedOption}
+													onValueChange={setSelectedOption}
+												>
+													<Select.Trigger className='h-[30px] px-[8px] py-1 flex items-center w-full outline-none border border-neutral-100 dark:border-brand-medium-dark text-neutral-850 font-medium text-cp-sm bg-white dark:bg-neutral-950 rounded-md'>
+														<div className='w-full justify-between flex items-center'>
+															<div className='w-full gap-1 flex items-center'>
+																{getSelectedIcon()}
+																<p className='font-caption text-cp-sm text-neutral-850 dark:text-neutral-300 font-medium'>
+																	{selectedOption}
+																</p>
+															</div>
 															<Select.Icon>
 																<ArrowIcon
 																	size='sm'
@@ -180,7 +197,7 @@ const ProjectExplorer = () => {
 														position='popper'
 														align='center'
 														side='bottom'
-														className='dark:bg-neutral-950 relative z-[9999] overflow-hidden  w-full border h-fit bg-white border-neutral-100 dark:border-brand-medium-dark rounded-lg'
+														className='dark:bg-neutral-950 w-[--radix-select-trigger-width] drop-shadow-lg overflow-hidden border h-fit bg-white border-neutral-100 dark:border-brand-medium-dark rounded-lg'
 													>
 														<Select.Viewport className='w-full h-full'>
 															{options.map((language) => (
@@ -204,13 +221,13 @@ const ProjectExplorer = () => {
 											<div className='w-full flex justify-between'>
 												<button
 													type='button'
-													className='font-caption font w-[78px] h-6 bg-brand rounded-lg text-white font-medium text-cp-sm'
+													className='font-caption font w-[78px] h-6 bg-brand rounded-md text-white font-medium text-cp-sm'
 												>
 													Create
 												</button>
 												<button
 													type='button'
-													className='font-caption w-[78px] h-6 bg-neutral-100 rounded-lg text-neutral-1000 font-medium text-cp-sm'
+													className='font-caption w-[78px] h-6 bg-neutral-100 rounded-md text-neutral-1000 font-medium text-cp-sm'
 												>
 													Cancel
 												</button>
