@@ -52,7 +52,7 @@ export default function SecundaryPopover() {
 									<p className={labelsDefaultStyle}>{value.name}</p>
 								</div>
 
-								<ArrowIcon className='rotate-180 ' />
+								<ArrowIcon direction='right'/>
 							</button>
 						</Popover.Trigger>
 						<Popover.Content

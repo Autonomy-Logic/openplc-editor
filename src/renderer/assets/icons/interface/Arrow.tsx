@@ -36,7 +36,6 @@ export const ArrowIcon: ElementType<IArrowIconProps> = ({
 }) => {
 	return (
 		<svg
-			role='button'
 			viewBox='0 0 28 28'
 			fill='none'
 			xmlns='http://www.w3.org/2000/svg'
@@ -50,6 +49,7 @@ export const ArrowIcon: ElementType<IArrowIconProps> = ({
 			ref={ref}
 			{...res}
 		>
+			<title>Arrow Icon</title>
 			<path
 				d='M17.5002 21L10.5002 14L17.5002 7'
 				stroke='current-color'
