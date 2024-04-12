@@ -12,7 +12,7 @@ import {
 export default function ProjectSelect() {
 	const [selectedOption, setSelectedOption] = useState('Select a language')
 
-	const options = [
+	const languagesOptions = [
 		{
 			name: 'Ladder Diagram',
 			icon: <LDIcon size='sm' />,
@@ -36,7 +36,7 @@ export default function ProjectSelect() {
 	]
 
 	const getSelectedIcon = () => {
-		const currentSelectedOption = options.find(
+		const currentSelectedOption = languagesOptions.find(
 			(opt) => opt.name === selectedOption
 		)
 		return currentSelectedOption ? currentSelectedOption.icon : null
@@ -66,7 +66,7 @@ export default function ProjectSelect() {
 				className='dark:bg-neutral-950 w-[--radix-select-trigger-width] drop-shadow-lg overflow-hidden border h-fit bg-white border-neutral-100 dark:border-brand-medium-dark rounded-lg'
 			>
 				<Select.Viewport className='w-full h-full'>
-					{options.map((language) => (
+					{languagesOptions.map((language) => (
 						<Select.Item
 							key={language.name}
 							value={language.name}

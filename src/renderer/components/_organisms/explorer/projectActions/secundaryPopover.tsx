@@ -7,6 +7,7 @@ import {
 	ProgramIcon,
 } from '@root/renderer/assets'
 import ProjectSelect from './select'
+import { cn } from '@root/utils'
 
 export default function SecundaryPopover() {
 	const projectOptions = {
@@ -29,6 +30,13 @@ export default function SecundaryPopover() {
 			hasChildren: true,
 		},
 	}
+
+	const buttonDefaultStyle =
+		'font-caption w-[88px] h-7 rounded-md  font-medium text-cp-sm'
+	const labelsDefaultStyle =
+		'text-cp-sm font-medium text-neutral-1000 dark:text-neutral-50'
+	const itemsPositionDefaultStyle = 'w-full flex flex-col gap-[6px]'
+
 	return (
 		<>
 			{Object.entries(projectOptions).map(([key, value]) => (
@@ -39,11 +47,9 @@ export default function SecundaryPopover() {
 								type='button'
 								className='data-[state=open]:bg-neutral-100 justify-between dark:data-[state=open]:bg-neutral-900 relative flex items-center w-full h-7 gap-1 rounded-lg cursor-default select-none hover:bg-neutral-100 p-2 dark:hover:bg-neutral-900'
 							>
-								<div className='flex items-center w-full h-full'>
+								<div className='flex items-center w-full h-full gap-2'>
 									{value.icon}
-									<span className='pl-1 text-xs font-medium text-neutral-950 dark:text-neutral-50'>
-										{value.name}
-									</span>
+									<p className={labelsDefaultStyle}>{value.name}</p>
 								</div>
 
 								<ArrowIcon className='rotate-180 ' />
@@ -57,41 +63,38 @@ export default function SecundaryPopover() {
 							className='flex flex-col drop-shadow-lg pb-3 px-3 pt-2 gap-3 w-[225px] h-fit border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-lg'
 						>
 							<div className='flex items-center w-full h-8 flex-col justify-between'>
-								<div className='flex w-full items-center'>
+								<div className='flex w-full items-center gap-2'>
 									{value.icon}
-									<span className='pl-1 text-xs font-medium text-neutral-950 dark:text-neutral-50'>
-										{value.name}
-									</span>
+									<p className={labelsDefaultStyle}>{value.name}</p>
 								</div>
-								<hr className='stroke-neutral-200 stroke-[1.5px] w-full' />
+								<div className='bg-neutral-200 dark:!bg-neutral-850 h-[1px] w-full' />
 							</div>
-							<div className='w-full flex flex-col gap-[6px] '>
-								<span className='text-cp-sm font-medium text-neutral-1000 dark:text-neutral-50'>
-									POU name:
-								</span>
+							<div className={itemsPositionDefaultStyle}>
+								<p className={labelsDefaultStyle}>POU name:</p>
 								<input
 									type='text'
 									placeholder='POU name'
 									className='px-2 w-full dark:text-neutral-300  outline-none border border-neutral-100 dark:border-brand-medium-dark text-neutral-850 font-medium text-cp-sm bg-white dark:bg-neutral-950 py-2 h-[30px] rounded-md'
 								/>
 							</div>
-							<div className='w-full flex flex-col gap-[6px] '>
-								<p className='text-cp-sm font-medium text-neutral-1000 dark:text-neutral-50'>
-									Language:
-								</p>
+							<div className={itemsPositionDefaultStyle}>
+								<p className={labelsDefaultStyle}>Language:</p>
 								<ProjectSelect />
 							</div>
 
 							<div className='w-full flex justify-between'>
 								<button
 									type='button'
-									className='font-caption font w-[78px] h-6 bg-brand rounded-md text-white font-medium text-cp-sm'
+									className={cn('!text-white bg-brand', buttonDefaultStyle)}
 								>
 									Create
 								</button>
 								<button
 									type='button'
-									className='font-caption w-[78px] h-6 bg-neutral-100 rounded-md text-neutral-1000 font-medium text-cp-sm'
+									className={cn(
+										' bg-neutral-100  !text-neutral-1000',
+										buttonDefaultStyle
+									)}
 								>
 									Cancel
 								</button>

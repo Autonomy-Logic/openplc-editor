@@ -17,26 +17,6 @@ import {
 import * as Popover from '@radix-ui/react-popover'
 import SecundaryPopover from './secundaryPopover'
 
-const projectOptions = {
-	Function: {
-		name: 'Function',
-		type: 'Function',
-		icon: <FunctionIcon size='md' />,
-		hasChildren: true,
-	},
-	Function_Block: {
-		name: 'Function Block',
-		type: 'Function Block',
-		icon: <FunctionBlockIcon size='md' />,
-		hasChildren: true,
-	},
-	Program: {
-		name: 'Program',
-		type: 'Program',
-		icon: <ProgramIcon size='md' />,
-		hasChildren: true,
-	},
-}
 const Name = 'Project Name'
 export default function ProjectActions() {
 	return (
