@@ -6,8 +6,7 @@ import { cn } from '@utils/cn'
 
 export const AppLayout = () => {
 	const [isLinux, setIsLinux] = useState(true)
-	const [prefersDark, setPrefersDark] = useState()
-	const { setPlatFormData, updateEditor } = useOpenPLCStore()
+	const { setPlatFormData } = useOpenPLCStore()
 
 	useEffect(() => {
 		const setInitialData = async () => {
@@ -15,17 +14,14 @@ export const AppLayout = () => {
 			setPlatFormData({
 				OS: system,
 				arch: 'x64',
-				colorScheme: theme,
-			})
-			updateEditor({
-				theme: theme === 'dark' ? 'openplc-dark' : 'openplc-light',
+				shouldUseDarkMode: theme === 'dark',
 			})
 			if (system === 'darwin' || system === 'win32') {
 				setIsLinux(false)
 			}
 		}
 		setInitialData()
-	}, [setPlatFormData, updateEditor])
+	}, [setPlatFormData])
 
 	return (
 		<>

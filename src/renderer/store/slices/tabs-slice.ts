@@ -2,15 +2,21 @@ import { IPouTemplate } from '@root/types/transfer'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
+type ITabProps = IPouTemplate & {
+	currentTab?: boolean
+}
+
 type ITabsState = {
 	tabsState: {
-		tabs: IPouTemplate[] | []
+		tabs: ITabProps[] | []
 	}
 }
 
 type ITabsActions = {
-	setTabs: (tabs: IPouTemplate[]) => void
-	updateTabs: (tabs: IPouTemplate[]) => void
+	setTabs: (tabs: ITabProps[]) => void
+	updateTabs: (tab: ITabProps) => void
+	sortTabs: (tabs: ITabProps[]) => void
+	removeTab: (tabToRemove: string) => void
 	clearTabs: () => void
 }
 
@@ -22,17 +28,37 @@ const createTabsSlice: StateCreator<ITabsSlice, [], [], ITabsSlice> = (
 	tabsState: {
 		tabs: [],
 	},
-	setTabs: (tabs: IPouTemplate[]) => {
+	setTabs: (tabs: ITabProps[]) => {
 		setState(
 			produce((state) => {
 				state.tabsState.tabs = tabs
 			})
 		)
 	},
-	updateTabs: (tabs: IPouTemplate[]) => {
+	updateTabs: (tab: ITabProps) => {
+		setState(
+			produce((state) => {
+				const tabExists = state.tabsState.tabs.find(
+					(t: ITabProps) => t.name === tab.name
+				)
+				if (tabExists) return
+				state.tabsState.tabs = [...state.tabsState.tabs, tab]
+			})
+		)
+	},
+	sortTabs: (tabs: ITabProps[]) => {
 		setState(
 			produce((state) => {
 				state.tabsState.tabs = tabs
+			})
+		)
+	},
+	removeTab: (tabToRemove: string) => {
+		setState(
+			produce((state) => {
+				state.tabsState.tabs = state.tabsState.tabs.filter(
+					(t: ITabProps) => t.name !== tabToRemove
+				)
 			})
 		)
 	},

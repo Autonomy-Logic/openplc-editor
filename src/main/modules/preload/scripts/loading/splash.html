@@ -21,6 +21,7 @@
         color: #fff;
         font-size: 10px;
         font-weight: 500;
+        user-select: none;
       }
 
       .container {
@@ -46,7 +47,7 @@
         width: 0%;
         height: 100%;
         background: #0464fb;
-        transition: width 7.5s ease-out;
+        transition: width 1s ease-out;
       }
       .loadingWrapper {
         position: absolute;
@@ -89,7 +90,7 @@
 
         let progress = 0;
         const interval = setInterval(() => {
-          progress += 10;
+          progress += 4;
           if (progress > 100) {
             clearInterval(interval);
             return;

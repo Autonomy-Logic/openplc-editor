@@ -11,7 +11,8 @@ export const OpenPLCIcon = (props: IOpenPLCIconProps) => {
 			fill='none'
 			xmlns='http://www.w3.org/2000/svg'
 			aria-labelledby='openplc-logo-title'
-			className='w-6 h-6'
+			className={cn('w-6 h-6', className)}
+			{...rest}
 		>
 			<title id='openplc-logo-title'>OpenPLC Logo</title>
 			{/* <rect width='12' height='12' rx='1.71429' fill='#0464FB' /> */}

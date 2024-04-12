@@ -28,25 +28,15 @@ import ProjectActions from './projectActions'
 
 const ProjectExplorer = () => {
 	const {
-		data,
+		data: { pous },
 		updateEditor,
 		updateTabs,
-		tabsState: { tabs },
 	} = useOpenPLCStore()
 	const Name = 'Project Name'
 
 	const handleCreateTab = (tab: IPouTemplate) => {
-		const { name, type, languageCodification, language } = tab
-		updateTabs([
-			...tabs,
-			{
-				name,
-				type,
-				languageCodification,
-				language,
-			},
-		])
-		updateEditor({ path: name, value: tab.body })
+		updateTabs(tab)
+		updateEditor({ path: tab.name, value: tab.body })
 	}
 
 	return (
@@ -56,9 +46,9 @@ const ProjectExplorer = () => {
 			{/* Data display */}
 			{/* Work in progress: Do not change the structure */}
 			<ProjectTreeRoot label={Name}>
-				<ProjectTreeLeaf leafLang='DT' />
+				<ProjectTreeBranch branchTarget='dataType' />
 				<ProjectTreeBranch branchTarget='function'>
-					{data.pous
+					{pous
 						?.filter((pou) => pou.type === 'function')
 						.map((pou) => (
 							<ProjectTreeLeaf
@@ -70,7 +60,7 @@ const ProjectExplorer = () => {
 						))}
 				</ProjectTreeBranch>
 				<ProjectTreeBranch branchTarget='functionBlock'>
-					{data.pous
+					{pous
 						?.filter((pou) => pou.type === 'functionBlock')
 						.map((pou) => (
 							<ProjectTreeLeaf
@@ -82,7 +72,7 @@ const ProjectExplorer = () => {
 						))}
 				</ProjectTreeBranch>
 				<ProjectTreeBranch branchTarget='program'>
-					{data.pous
+					{pous
 						?.filter((pou) => pou.type === 'program')
 						.map((pou) => (
 							<ProjectTreeLeaf
@@ -97,7 +87,7 @@ const ProjectExplorer = () => {
 					{/** Will be filled with device */}
 				</ProjectTreeBranch>
 				{/** Maybe a divider component */}
-				<ProjectTreeLeaf leafLang='RES' label='Resources' />
+				{/* <ProjectTreeBranch branchTarget='' label='Resources' /> */}
 			</ProjectTreeRoot>
 		</>
 	)
