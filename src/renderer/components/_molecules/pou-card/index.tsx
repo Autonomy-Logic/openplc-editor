@@ -6,6 +6,13 @@ import {
 import { ComponentPropsWithoutRef } from 'react'
 import { InputWithRef } from '../../_atoms'
 import ProjectSelect from '../../_organisms/explorer/projectActions/select'
+import {
+	Select,
+	SelectValue,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+} from '../../_atoms/select'
 
 type IPouCardProps = ComponentPropsWithoutRef<'div'>
 const PouCard = (props: IPouCardProps) => (
@@ -83,7 +90,18 @@ const PouCardForm = (props: IPouCardFormProps) => {
 				>
 					Language:
 				</p>
-				<ProjectSelect />
+				<Select>
+					<SelectTrigger
+						className='h-[30px] px-2 py-1 flex items-center w-full outline-none border border-neutral-100 dark:border-brand-medium-dark font-medium text-cp-sm bg-white dark:bg-neutral-950 rounded-md'
+						aria-label='pou-language'
+					>
+						<SelectValue placeholder='Select a language' />
+					</SelectTrigger>
+					<SelectContent className='dark:bg-neutral-950 w-[--radix-select-trigger-width] drop-shadow-lg overflow-hidden border h-fit bg-white border-neutral-100 dark:border-brand-medium-dark rounded-lg'>
+						<SelectItem value='Select a language' />
+						<SelectItem value='Python' />
+					</SelectContent>
+				</Select>
 			</div>
 			<div id='form-button-container' className='w-full flex justify-between'>
 				<button
