@@ -84,7 +84,7 @@ export const MainContent = () => {
 									</ResizablePanelGroup>
 								) : (
 									<p className='mx-auto my-auto text-xl font-medium font-display cursor-default select-none'>
-										OpenPLC Editor
+										No tabs open
 									</p>
 								)}
 							</ResizablePanel>

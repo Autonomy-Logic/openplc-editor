@@ -123,11 +123,11 @@ export const ProjectTree = (props: IProjectTreeProps): ReactNode => {
 			[&::-webkit-scrollbar]:h-0'
 			{...props}
 		>
-			<Header
+			{/* <Header
 				title='Project Name'
 				TitleIcon={FolderIcon}
 				ButtonIcon={PlusIcon}
-			/>
+			/> */}
 			<div
 				className='mb-3 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:bg-neutral-200
 			[&::-webkit-scrollbar]:dark:bg-neutral-850
