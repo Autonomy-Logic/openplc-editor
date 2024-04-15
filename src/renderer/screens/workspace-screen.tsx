@@ -1,4 +1,3 @@
-import { OpenPLCIcon } from '../assets/icons/oplc'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
@@ -78,10 +77,7 @@ const WorkspaceScreen = () => {
 										</ResizablePanelGroup>
 									) : (
 										<p className='mx-auto my-auto text-xl flex flex-col items-center gap-1 font-medium font-display cursor-default select-none'>
-											OpenPLC Editor
-											<span className='bg-brand rounded-md'>
-												<OpenPLCIcon className='w-9 h-9 ' />
-											</span>
+											No tabs open
 										</p>
 									)}
 								</ResizablePanel>

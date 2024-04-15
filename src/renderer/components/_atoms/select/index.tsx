@@ -4,20 +4,18 @@ import { ComponentPropsWithoutRef, ElementRef, forwardRef } from 'react'
 
 const Select = PrimitiveSelect.Root
 
-const SelectValue = forwardRef<
-	ElementRef<typeof PrimitiveSelect.Value>,
-	ComponentPropsWithoutRef<typeof PrimitiveSelect.Value>
->(({ ...props }, forwardedRef) => {
-	return <PrimitiveSelect.Value ref={forwardedRef} {...props} />
-})
-
+type ISelectTriggerProps = ComponentPropsWithoutRef<
+	typeof PrimitiveSelect.Trigger
+> & {
+	placeholder?: string
+}
 const SelectTrigger = forwardRef<
 	ElementRef<typeof PrimitiveSelect.Trigger>,
-	ComponentPropsWithoutRef<typeof PrimitiveSelect.Trigger>
->(({ children, className, ...rest }, forwardedRef) => {
+	ISelectTriggerProps
+>(({ children, placeholder, className, ...rest }, forwardedRef) => {
 	return (
-		<PrimitiveSelect.Trigger className={className} ref={forwardedRef} {...rest}>
-			{children}
+		<PrimitiveSelect.Trigger className={className} {...rest} ref={forwardedRef}>
+			<PrimitiveSelect.Value placeholder={placeholder} />
 			<PrimitiveSelect.Icon>
 				<ArrowIcon size='sm' className='stroke-brand rotate-270 ' />
 			</PrimitiveSelect.Icon>
@@ -52,7 +50,9 @@ const SelectContent = ({
 				<PrimitiveSelect.ScrollUpButton>
 					<ArrowIcon direction='up' size='sm' className='stroke-brand' />
 				</PrimitiveSelect.ScrollUpButton>
-				<PrimitiveSelect.Viewport>{children}</PrimitiveSelect.Viewport>
+				<PrimitiveSelect.Viewport className='w-full h-full'>
+					{children}
+				</PrimitiveSelect.Viewport>
 				<PrimitiveSelect.ScrollDownButton>
 					<ArrowIcon direction='down' size='sm' className='stroke-brand' />
 				</PrimitiveSelect.ScrollDownButton>
@@ -82,4 +82,4 @@ const SelectItem = forwardRef<
 	)
 })
 
-export { Select, SelectValue, SelectTrigger, SelectContent, SelectItem }
+export { Select, SelectTrigger, SelectContent, SelectItem }

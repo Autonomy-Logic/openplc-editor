@@ -1,18 +1,10 @@
 import {
 	ArrowIcon,
-	CExtIcon,
-	DataTypeIcon,
-	FBDIcon,
 	FolderIcon,
 	FunctionBlockIcon,
 	FunctionIcon,
-	ILIcon,
-	LDIcon,
 	PlusIcon,
 	ProgramIcon,
-	ResourceIcon,
-	SFCIcon,
-	STIcon,
 } from '@root/renderer/assets'
 import {
 	ProjectTreeRoot,
@@ -21,9 +13,6 @@ import {
 } from '@components/_molecules/project-tree'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { IPouTemplate } from '@root/types/transfer'
-import * as Select from '@radix-ui/react-select'
-import { useState } from 'react'
-import ProjectActions from './projectActions'
 import {
 	Popover,
 	PopoverTrigger,
@@ -32,7 +21,6 @@ import {
 	PouCardLabel,
 	PouCardForm,
 } from '../../_molecules'
-import { Button } from '../../_atoms'
 
 const Actions = () => {
 	const Name = 'Project Name'
@@ -91,8 +79,8 @@ const Actions = () => {
 							side='right'
 						>
 							<PouCard>
-								<PouCardLabel pouType='function' />
-								<PouCardForm />
+								<PouCardLabel type='function' />
+								<PouCardForm type='function' />
 							</PouCard>
 						</PopoverContent>
 					</Popover>
@@ -117,8 +105,8 @@ const Actions = () => {
 							side='right'
 						>
 							<PouCard>
-								<PouCardLabel pouType='function-block' />
-								<PouCardForm />
+								<PouCardLabel type='function-block' />
+								<PouCardForm type='function-block' />
 							</PouCard>
 						</PopoverContent>
 					</Popover>
@@ -143,8 +131,8 @@ const Actions = () => {
 							side='right'
 						>
 							<PouCard>
-								<PouCardLabel pouType='program' />
-								<PouCardForm />
+								<PouCardLabel type='program' />
+								<PouCardForm type='program' />
 							</PouCard>
 						</PopoverContent>
 					</Popover>
