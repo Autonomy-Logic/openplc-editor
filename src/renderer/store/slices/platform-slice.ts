@@ -1,3 +1,4 @@
+/** Deprecated - Must be removed */
 import { StateCreator } from 'zustand'
 import { produce } from 'immer'
 

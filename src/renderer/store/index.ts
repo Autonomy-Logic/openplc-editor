@@ -15,19 +15,27 @@ import {
 	type IEditorSlice,
 	createTabsSlice,
 	type ITabsSlice,
+	createProjectSlice,
+	type IProjectSlice,
 } from './slices'
 
 /**
  * Create the base store to be exported as a hook.
  */
 export const openPLCStoreBase = create<
-	IPlatformSlice & IWorkspaceSlice & IPousSlice & IEditorSlice & ITabsSlice
+	IPlatformSlice &
+		IWorkspaceSlice &
+		IPousSlice &
+		IEditorSlice &
+		ITabsSlice &
+		IProjectSlice
 >()((...a) => ({
 	...createPlatformSlice(...a),
 	...createWorkspaceSlice(...a),
 	...createPousSlice(...a),
 	...createEditorSlice(...a),
 	...createTabsSlice(...a),
+	...createProjectSlice(...a),
 }))
 
 /**

@@ -10,15 +10,15 @@ const projectSchema = z.object({
 		z.discriminatedUnion('type', [
 			z.object({
 				type: z.literal('program'),
-				content: z.lazy(() => programSchema),
+				data: z.lazy(() => programSchema),
 			}),
 			z.object({
 				type: z.literal('function'),
-				content: z.lazy(() => functionSchema),
+				data: z.lazy(() => functionSchema),
 			}),
 			z.object({
 				type: z.literal('functionBlock'),
-				content: z.lazy(() => functionBlockSchema),
+				data: z.lazy(() => functionBlockSchema),
 			}),
 		])
 	),
