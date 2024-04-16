@@ -17,7 +17,7 @@ type IPouDTO =
 			data: IFunction
 	  }
 	| {
-			type: 'functionBlock'
+			type: 'function-block'
 			data: IFunctionBlock
 	  }
 

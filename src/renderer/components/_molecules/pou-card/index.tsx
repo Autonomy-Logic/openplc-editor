@@ -17,7 +17,10 @@ import {
 	SelectItem,
 	SelectTrigger,
 } from '../../_atoms/select'
-import { kebabCase } from 'lodash'
+import { kebabCase, camelCase } from 'lodash'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { IFunction, IFunctionBlock, IProgram } from '@root/types/PLC'
+import { z } from 'zod'
 
 type IPouCardProps = ComponentPropsWithoutRef<'div'>
 const PouCard = (props: IPouCardProps) => (
@@ -104,12 +107,31 @@ const PouLanguageSources = [
 type IPouCardFormProps = ComponentPropsWithoutRef<'form'> & {
 	type: 'function' | 'function-block' | 'program'
 }
+
 const PouCardForm = ({ type, ...res }: IPouCardFormProps) => {
 	const { control, register, handleSubmit } = useForm<PouProps>()
+	const { actions } = useOpenPLCStore()
+
+	const convertToInitial = (str: string) => {
+		const draft = str.split('-')
+		const initial = draft.map((word) => word.charAt(0).toUpperCase()).join('')
+		return initial
+	}
 
 	/** Todo: add a function to create a pou in the app store */
 	const onSubmit: SubmitHandler<PouProps> = (data) => {
-		console.log(data)
+		actions.createPou({
+			type: 'program',
+			data: {
+				name: data['pou-name'],
+				language: convertToInitial(data['pou-language']) as
+					| 'LD'
+					| 'SFC'
+					| 'FBD'
+					| 'ST'
+					| 'IL',
+			},
+		})
 	}
 	return (
 		<form

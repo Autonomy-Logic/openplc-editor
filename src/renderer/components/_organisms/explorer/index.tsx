@@ -1,6 +1,6 @@
 import { ReactElement } from 'react'
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '../panel'
-import { ProjectExplorer } from './project'
+import { Project } from './project'
 
 /**
  * Renders the Explorer component which consists of a ResizablePanel containing a ProjectExplorer and a LibraryExplorer.
@@ -23,7 +23,7 @@ const Explorer = (): ReactElement => {
 				className='flex-1 h-full'
 			>
 				<ResizablePanel id='projectExplorerPanel' order={1} defaultSize={50}>
-					<ProjectExplorer />
+					<Project />
 				</ResizablePanel>
 				<ResizableHandle className='bg-neutral-200 dark:bg-neutral-850' />
 				<ResizablePanel id='libraryExplorerPanel' order={2} defaultSize={50}>

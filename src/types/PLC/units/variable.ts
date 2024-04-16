@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { dataTypeSchema } from './dataType'
+import { dataTypeSchema } from './data-type'
 
 const variableShape = z.object({
 	id: z.number(),
