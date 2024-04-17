@@ -18,7 +18,7 @@ export const MenuBar = () => {
 	const contentDefaultStyle =
 		'w-80 flex flex-col relative z-50 drop-shadow-lg  px-4 py-4 gap-2 bg-white dark:bg-neutral-900 dark:border-brand-dark rounded-md shadow-inner backdrop-blur-2xl border border-brand-light'
 	const itemDefaultStyle =
-		'px-2 py-1 text-neutral-850 dark:aria-[expanded="true"]:bg-neutral-700 aria-[expanded="true"]:bg-neutral-100 outline-none font-normal font-caption text-xs dark:text-white flex items-center justify-between hover:bg-neutral-100 hover:dark:bg-neutral-700 rounded-sm cursor-pointer'
+		'px-2 py-1 text-neutral-850 dark:aria-[expanded="true"]:bg-neutral-700 aria-[expanded="true"]:bg-neutral-100 outline-none font-normal font-caption text-xs dark:text-white flex items-center justify-between hover:bg-neutral-100 hover:dark:bg-neutral-700 rounded-sm cursor-pointer data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[disabled]:hover:bg-transparent'
 	const acceleratorDefaultStyle = 'opacity-50 capitalize '
 	const separatorDefaultStyle = 'border-b border-b-neutral-400'
 	const checkboxDefaultStyle =
@@ -42,41 +42,41 @@ export const MenuBar = () => {
 							<span className={acceleratorDefaultStyle}>{'Ctrl + O'}</span>
 						</MenuPrimitive.Item>
 						<MenuPrimitive.Separator className={separatorDefaultStyle} />
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:file.submenu.save')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + S'}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:file.submenu.saveAs')}</span>
 							<span className={acceleratorDefaultStyle}>
 								{'Ctrl + Shift + S'}
 							</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:file.submenu.closeTab')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + W'}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:file.submenu.closeProject')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl  + W'}</span>
 						</MenuPrimitive.Item>
 						<MenuPrimitive.Separator className={separatorDefaultStyle} />
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:file.submenu.pageSetup')}</span>
 							<span className={acceleratorDefaultStyle}>"Ctrl + Alt + P"</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:file.submenu.preview')}</span>
 							<span className={acceleratorDefaultStyle}>
 								{'Ctrl + Shift + P'}
 							</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:file.submenu.print')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + P'}</span>
 						</MenuPrimitive.Item>
 						<MenuPrimitive.Separator className={separatorDefaultStyle} />
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:file.submenu.updates')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + U'}</span>
 						</MenuPrimitive.Item>
@@ -97,44 +97,44 @@ export const MenuBar = () => {
 				</MenuPrimitive.Trigger>
 				<MenuPrimitive.Portal>
 					<MenuPrimitive.Content sideOffset={4} className={contentDefaultStyle}>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.undo')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + Z'}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.redo')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + Y'}</span>
 						</MenuPrimitive.Item>
 						<MenuPrimitive.Separator className={separatorDefaultStyle} />
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.cut')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + X'}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.copy')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + C'}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.paste')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + V'}</span>
 						</MenuPrimitive.Item>
 						<MenuPrimitive.Separator className={separatorDefaultStyle} />
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.find')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + F'}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.findNext')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + K'}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.findPrevious')}</span>
 							<span className={acceleratorDefaultStyle}>
 								{'Ctrl + Shift + K'}
 							</span>
 						</MenuPrimitive.Item>
 						<MenuPrimitive.Separator className={separatorDefaultStyle} />
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.findInProject')}</span>
 							<span className={acceleratorDefaultStyle}>
 								{'Ctrl + Shift + F'}
@@ -142,15 +142,15 @@ export const MenuBar = () => {
 						</MenuPrimitive.Item>
 						<MenuPrimitive.Separator className={separatorDefaultStyle} />
 
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.addElement.label')}</span>
 							<span className={acceleratorDefaultStyle}>{''}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.selectAll')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + A'}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.delete')}</span>
 							<span className={acceleratorDefaultStyle}>{''}</span>
 						</MenuPrimitive.Item>
@@ -170,37 +170,37 @@ export const MenuBar = () => {
 							<span>{i18n.t('menu:display.submenu.refresh')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + R '}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:display.submenu.clearErrors')}</span>
 							<span className={acceleratorDefaultStyle}>{''}</span>
 						</MenuPrimitive.Item>
 						<MenuPrimitive.Separator className={separatorDefaultStyle} />
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:display.submenu.zoomIn')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + + '}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:display.submenu.zoomOut')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + - '}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:display.submenu.switchPerspective')}</span>
 							<span className={acceleratorDefaultStyle}>{'F12 '}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:display.submenu.resetPerspective')}</span>
 							<span className={acceleratorDefaultStyle}>{'Shift + F12 '}</span>
 						</MenuPrimitive.Item>
 						<MenuPrimitive.Separator className={separatorDefaultStyle} />
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:display.submenu.resetPerspective')}</span>
 							<span className={acceleratorDefaultStyle}>{'Shift + F12 '}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:display.submenu.fullScreen')}</span>
 							<span className={acceleratorDefaultStyle}>{'F11'}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:display.submenu.sortAlpha')}</span>
 							<span className={acceleratorDefaultStyle}>{'F10'}</span>
 						</MenuPrimitive.Item>
@@ -263,11 +263,11 @@ export const MenuBar = () => {
 				</MenuPrimitive.Trigger>
 				<MenuPrimitive.Portal>
 					<MenuPrimitive.Content sideOffset={4} className={contentDefaultStyle}>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:help.submenu.communitySupport')}</span>
 							<span className={acceleratorDefaultStyle}>{'F1'}</span>
 						</MenuPrimitive.Item>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
+						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:help.submenu.about')}</span>
 							<span className={acceleratorDefaultStyle}>{'F1'}</span>
 						</MenuPrimitive.Item>
