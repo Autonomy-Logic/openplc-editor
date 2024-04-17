@@ -21,7 +21,6 @@ const StartScreen = () => {
 			ok,
 			res: { data, path },
 		} = await window.bridge.startCreateProject()
-		console.log(ok, data, path)
 		if (ok && data) {
 			setUserWorkspace({
 				projectPath: path,

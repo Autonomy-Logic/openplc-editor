@@ -22,10 +22,13 @@ import {
 	PouCardForm,
 } from '../../_molecules'
 import _ from 'lodash'
-import { ReactElement } from 'react'
+import { ReactElement, useState } from 'react'
 import { ITabProps } from '@root/renderer/store/slices'
+import { CreatePou } from '../../_features/[workspace]/create-pou'
 
 const Project = () => {
+	const [containerIsOpen, setContainerIsOpen] = useState(false)
+	const [createPouFormIsOpen, setCreatePouFormIsOpen] = useState(false)
 	const {
 		workspaceState: { projectData: { pous } },
 		updateEditor,
@@ -63,24 +66,25 @@ const Project = () => {
 	return (
 		<>
 			{/* Actions handler */}
-			<Popover>
+			<div
+				id='project-actions-container'
+				className='flex justify-around w-[200px] my-3 px-2 relative z-10'
+			>
 				<div
-					id='project-actions-container'
-					className='flex justify-around w-[200px] my-3 px-2 relative z-10'
+					id='project-name-container'
+					className='flex items-center justify-start px-1.5 w-32 h-8 gap-1 rounded-lg cursor-default select-none bg-neutral-100 dark:bg-brand-dark'
 				>
-					<div
-						id='project-name-container'
-						className='flex items-center justify-start px-1.5 w-32 h-8 gap-1 rounded-lg cursor-default select-none bg-neutral-100 dark:bg-brand-dark'
+					<FolderIcon size='sm' />
+					<span
+						id='project-name'
+						className='pl-1 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'
 					>
-						<FolderIcon size='sm' />
-						<span
-							id='project-name'
-							className='pl-1 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'
-						>
-							{Name}
-						</span>
-					</div>
-					<div id='create-pou-container'>
+						{Name}
+					</span>
+				</div>
+				<div id='create-pou-container'>
+					<CreatePou />
+					{/* <Popover>
 						<PopoverTrigger
 							id='create-pou-trigger'
 							type='button'
@@ -88,45 +92,45 @@ const Project = () => {
 						>
 							<PlusIcon className='stroke-white' />
 						</PopoverTrigger>
-					</div>
 
-					<PopoverContent
-						alignOffset={-7}
-						sideOffset={10}
-						align='end'
-						className='w-[188px] h-fit shadow-card dark:shadow-dark-card border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-lg flex flex-col gap-2'
-					>
-						{CreatePouSources.map(({ id, label, icon }) => (
-							<Popover key={id}>
-								<PopoverTrigger id={`create-${label}-trigger`}>
-									<div
-										id={`create-${label}-trigger-container`}
-										className='data-[state=open]:bg-neutral-100 py-[2px] px-[6px] justify-between dark:data-[state=open]:bg-neutral-900 relative flex items-center w-full h-7 gap-[6px] rounded-md cursor-pointer select-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+						<PopoverContent
+							alignOffset={-7}
+							sideOffset={10}
+							align='end'
+							className='w-[188px] h-fit shadow-card dark:shadow-dark-card border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-lg flex flex-col gap-2'
+						>
+							{CreatePouSources.map(({ id, label, icon }) => (
+								<Popover key={id}>
+									<PopoverTrigger id={`create-${label}-trigger`}>
+										<div
+											id={`create-${label}-trigger-container`}
+											className='data-[state=open]:bg-neutral-100 py-[2px] px-[6px] justify-between dark:data-[state=open]:bg-neutral-900 relative flex items-center w-full h-7 gap-[6px] rounded-md cursor-pointer select-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+										>
+											{icon}
+											<p className='text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300 flex-1 my-[2px]'>
+												{_.startCase(label)}
+											</p>
+											<ArrowIcon size='md' direction='right' />
+										</div>
+									</PopoverTrigger>
+									<PopoverContent
+										id={`create-${label}-content`}
+										sideOffset={14}
+										alignOffset={-7}
+										align='start'
+										side='right'
 									>
-										{icon}
-										<p className='text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300 flex-1 my-[2px]'>
-											{_.startCase(label)}
-										</p>
-										<ArrowIcon size='md' direction='right' />
-									</div>
-								</PopoverTrigger>
-								<PopoverContent
-									id={`create-${label}-content`}
-									sideOffset={14}
-									alignOffset={-7}
-									align='start'
-									side='right'
-								>
-									<PouCard>
-										<PouCardLabel type={label} />
-										<PouCardForm type={label} />
-									</PouCard>
-								</PopoverContent>
-							</Popover>
-						))}
-					</PopoverContent>
+										<PouCard>
+											<PouCardLabel type={label} />
+											<PouCardForm type={label} />
+										</PouCard>
+									</PopoverContent>
+								</Popover>
+							))}
+						</PopoverContent>
+					</Popover> */}
 				</div>
-			</Popover>
+			</div>
 			{/* Data display */}
 			<ProjectTreeRoot label={Name}>
 				<ProjectTreeBranch branchTarget='dataType' />

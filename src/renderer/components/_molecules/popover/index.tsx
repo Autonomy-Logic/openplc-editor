@@ -20,6 +20,8 @@ const PopoverContent = forwardRef<
 	</PrimitivePopover.Portal>
 ))
 
+const PopoverClose = PrimitivePopover.Close
+
 PopoverContent.displayName = PrimitivePopover.Content.displayName
 
-export { Popover, PopoverTrigger, PopoverContent }
+export { Popover, PopoverTrigger, PopoverContent, PopoverClose }

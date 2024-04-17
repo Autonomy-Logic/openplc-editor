@@ -22,6 +22,20 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { IFunction, IFunctionBlock, IProgram } from '@root/types/PLC'
 import { z } from 'zod'
 
+type IPouDTO =
+	| {
+			type: 'program'
+			data: IProgram
+	  }
+	| {
+			type: 'function'
+			data: IFunction
+	  }
+	| {
+			type: 'function-block'
+			data: IFunctionBlock
+	  }
+
 type IPouCardProps = ComponentPropsWithoutRef<'div'>
 const PouCard = (props: IPouCardProps) => (
 	<div
@@ -112,26 +126,46 @@ const PouCardForm = ({ type, ...res }: IPouCardFormProps) => {
 	const { control, register, handleSubmit } = useForm<PouProps>()
 	const { workspaceActions } = useOpenPLCStore()
 
-	const convertToInitial = (str: string) => {
+	const convertToShortenedFormat = (
+		str: string
+	): 'LD' | 'SFC' | 'FBD' | 'ST' | 'IL' => {
 		const draft = str.split('-')
 		const initial = draft.map((word) => word.charAt(0).toUpperCase()).join('')
-		return initial
+		return initial as 'LD' | 'SFC' | 'FBD' | 'ST' | 'IL'
 	}
 
+	const createNormalizedPou = (data: PouProps): IPouDTO => {
+		switch (data['pou-type']) {
+			case 'function':
+				return {
+					type: 'function',
+					data: {
+						name: data['pou-name'],
+						language: convertToShortenedFormat(data['pou-language']),
+						returnType: 'BOOL',
+					},
+				}
+			case 'function-block':
+				return {
+					type: 'function-block',
+					data: {
+						name: data['pou-name'],
+						language: convertToShortenedFormat(data['pou-language']),
+					},
+				}
+			case 'program':
+				return {
+					type: 'program',
+					data: {
+						name: data['pou-name'],
+						language: convertToShortenedFormat(data['pou-language']),
+					},
+				}
+		}
+	}
 	/** Todo: add a function to create a pou in the app store */
 	const onSubmit: SubmitHandler<PouProps> = (data) => {
-		workspaceActions.createPou({
-			type: 'program',
-			data: {
-				name: data['pou-name'],
-				language: convertToInitial(data['pou-language']) as
-					| 'LD'
-					| 'SFC'
-					| 'FBD'
-					| 'ST'
-					| 'IL',
-			},
-		})
+		workspaceActions.createPou(createNormalizedPou(data))
 	}
 	return (
 		<form
