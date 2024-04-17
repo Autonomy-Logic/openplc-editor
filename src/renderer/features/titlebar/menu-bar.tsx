@@ -18,7 +18,7 @@ export const MenuBar = () => {
 	const contentDefaultStyle =
 		'w-80 flex flex-col relative z-50 drop-shadow-lg  px-4 py-4 gap-2 bg-white dark:bg-neutral-900 dark:border-brand-dark rounded-md shadow-inner backdrop-blur-2xl border border-brand-light'
 	const itemDefaultStyle =
-		'px-2 py-1 text-neutral-850 outline-none font-normal font-caption text-xs dark:text-white flex items-center justify-between hover:bg-neutral-100 hover:dark:bg-neutral-700 rounded-sm cursor-pointer'
+		'px-2 py-1 text-neutral-850 dark:aria-[expanded="true"]:bg-neutral-700 aria-[expanded="true"]:bg-neutral-100 outline-none font-normal font-caption text-xs dark:text-white flex items-center justify-between hover:bg-neutral-100 hover:dark:bg-neutral-700 rounded-sm cursor-pointer'
 	const acceleratorDefaultStyle = 'opacity-50 capitalize '
 	const separatorDefaultStyle = 'border-b border-b-neutral-400'
 	const checkboxDefaultStyle =
