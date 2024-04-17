@@ -26,13 +26,13 @@ export const MenuBar = () => {
 
 	//each root is a menu
 	return (
-		<MenuPrimitive.Root className='h-full flex-1 flex items-center gap-2'>
+		<MenuPrimitive.Root className='h-full ml-6 flex-1 flex items-center gap-2'>
 			<MenuPrimitive.Menu>
 				<MenuPrimitive.Trigger className={triggerDefaultStyle}>
 					{i18n.t('menu:file.label')}
 				</MenuPrimitive.Trigger>
 				<MenuPrimitive.Portal>
-					<MenuPrimitive.Content sideOffset={4} className={contentDefaultStyle}>
+					<MenuPrimitive.Content sideOffset={16} className={contentDefaultStyle}>
 						<MenuPrimitive.Item className={itemDefaultStyle}>
 							<span>{i18n.t('menu:file.submenu.new')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + N'}</span>
@@ -96,7 +96,7 @@ export const MenuBar = () => {
 					{i18n.t('menu:edit.label')}
 				</MenuPrimitive.Trigger>
 				<MenuPrimitive.Portal>
-					<MenuPrimitive.Content sideOffset={4} className={contentDefaultStyle}>
+					<MenuPrimitive.Content sideOffset={16} className={contentDefaultStyle}>
 						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.undo')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + Z'}</span>
@@ -165,7 +165,7 @@ export const MenuBar = () => {
 					{i18n.t('menu:display.label')}
 				</MenuPrimitive.Trigger>
 				<MenuPrimitive.Portal>
-					<MenuPrimitive.Content sideOffset={4} className={contentDefaultStyle}>
+					<MenuPrimitive.Content sideOffset={16} className={contentDefaultStyle}>
 						<MenuPrimitive.Item className={itemDefaultStyle}>
 							<span>{i18n.t('menu:display.submenu.refresh')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + R '}</span>
@@ -262,7 +262,7 @@ export const MenuBar = () => {
 					{i18n.t('menu:help.label')}
 				</MenuPrimitive.Trigger>
 				<MenuPrimitive.Portal>
-					<MenuPrimitive.Content sideOffset={4} className={contentDefaultStyle}>
+					<MenuPrimitive.Content sideOffset={16} className={contentDefaultStyle}>
 						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:help.submenu.communitySupport')}</span>
 							<span className={acceleratorDefaultStyle}>{'F1'}</span>
@@ -285,7 +285,7 @@ export const MenuBar = () => {
 					recent
 				</MenuPrimitive.Trigger>
 				<MenuPrimitive.Portal>
-					<MenuPrimitive.Content sideOffset={4} className={contentDefaultStyle}>
+					<MenuPrimitive.Content sideOffset={16} className={contentDefaultStyle}>
 						<MenuPrimitive.Item className={itemDefaultStyle}>
 							<span>recent</span>
 						</MenuPrimitive.Item>
