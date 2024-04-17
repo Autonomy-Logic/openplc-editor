@@ -23,16 +23,17 @@ import {
 } from '../../_molecules'
 import _ from 'lodash'
 import { ReactElement } from 'react'
+import { ITabProps } from '@root/renderer/store/slices'
 
 const Project = () => {
 	const {
-		state: { projectData: { pous } },
+		workspaceState: { projectData: { pous } },
 		updateEditor,
 		updateTabs,
 	} = useOpenPLCStore()
 	const Name = 'Project Name'
 
-	const handleCreateTab = (tab: IPouTemplate) => {
+	const handleCreateTab = (tab: ITabProps) => {
 		updateTabs(tab)
 		updateEditor({ path: tab.name, value: tab.body })
 	}

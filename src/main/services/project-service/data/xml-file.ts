@@ -1,6 +1,6 @@
 import { formatDate } from '../../../../utils'
 
-const configs = {
+export const baseXmlStructure = {
 	'@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
 	'@xmlns:ns1': 'http://www.plcopen.org/xml/tc6.xsd',
 	'@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
@@ -48,14 +48,3 @@ const configs = {
 		},
 	},
 }
-
-const data = {
-	types: {
-		dataTypes: {},
-		pous: {
-			pou: [],
-		},
-	},
-}
-
-export { configs, data }

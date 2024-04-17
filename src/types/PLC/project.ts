@@ -22,6 +22,7 @@ const projectSchema = z.object({
 			}),
 		])
 	),
+	globalVariables: z.array(z.string()).optional(),
 })
 
 type IProject = z.infer<typeof projectSchema>

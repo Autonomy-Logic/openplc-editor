@@ -5,7 +5,7 @@ import {
 } from 'react-router-dom'
 
 import { Screen } from '@features/index'
-import { AppLayout } from '../features/layout'
+import { AppLayout } from '@components/_templates'
 import { StartScreen, WorkspaceScreen } from '../screens'
 import { Test } from '../screens/test'
 
@@ -17,7 +17,7 @@ const router = createBrowserRouter([
 		children: [
 			{
 				index: true,
-				element: <Screen.Start />,
+				element: <StartScreen />,
 			},
 			{
 				id: 'workspace',

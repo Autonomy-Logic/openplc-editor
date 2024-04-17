@@ -93,7 +93,7 @@ const ProjectTreeBranch = ({
 	...res
 }: IProjectTreeBranchProps) => {
 	const {
-		data: { pous },
+		workspaceState: { projectData: { pous } },
 	} = useOpenPLCStore()
 	const [branchIsOpen, setBranchIsOpen] = useState(false)
 	const handleBranchVisibility = useCallback(

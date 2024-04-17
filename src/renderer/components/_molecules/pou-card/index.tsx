@@ -110,7 +110,7 @@ type IPouCardFormProps = ComponentPropsWithoutRef<'form'> & {
 
 const PouCardForm = ({ type, ...res }: IPouCardFormProps) => {
 	const { control, register, handleSubmit } = useForm<PouProps>()
-	const { actions } = useOpenPLCStore()
+	const { workspaceActions } = useOpenPLCStore()
 
 	const convertToInitial = (str: string) => {
 		const draft = str.split('-')
@@ -120,7 +120,7 @@ const PouCardForm = ({ type, ...res }: IPouCardFormProps) => {
 
 	/** Todo: add a function to create a pou in the app store */
 	const onSubmit: SubmitHandler<PouProps> = (data) => {
-		actions.createPou({
+		workspaceActions.createPou({
 			type: 'program',
 			data: {
 				name: data['pou-name'],

@@ -1,10 +1,13 @@
-import { IPouTemplate } from '@root/types/transfer'
+import { IFunction, IFunctionBlock, IProgram } from '@root/types/PLC'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-type ITabProps = IPouTemplate & {
-	currentTab?: boolean
-}
+type ITabProps =
+	| IProgram
+	| IFunction
+	| (IFunctionBlock & {
+			currentTab?: boolean
+	  })
 
 type ITabsState = {
 	tabsState: {
@@ -71,4 +74,4 @@ const createTabsSlice: StateCreator<ITabsSlice, [], [], ITabsSlice> = (
 	},
 })
 
-export { createTabsSlice }
+export { createTabsSlice, type ITabProps }
