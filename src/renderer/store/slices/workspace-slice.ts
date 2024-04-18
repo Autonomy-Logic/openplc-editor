@@ -42,7 +42,7 @@ type IWorkspaceActions = {
 	switchAppTheme: () => void
 	updateProjectName: (projectName: string) => void
 	updateProjectPath: (projectPath: string) => void
-	createPou: (pouToBeCreated: IPouDTO) => void
+	createPou: (pouToBeCreated: IPouDTO) => { ok: boolean }
 	updatePou: (dataToBeUpdated: Pick<IPouDTO, 'data'>) => void
 	deletePou: (pouToBeDeleted: string) => void
 }
@@ -127,12 +127,23 @@ const createWorkspaceSlice: StateCreator<
 				})
 			)
 		},
-		createPou: (pouToBeCreated: IPouDTO): void => {
+		createPou: (pouToBeCreated: IPouDTO): { ok: boolean } => {
+			let res = { ok: false }
 			setState(
 				produce((slice: IWorkspaceSlice) => {
-					slice.workspaceState.projectData.pous.push(pouToBeCreated)
+					const pouExists = slice.workspaceState.projectData.pous.find(
+						(pou) => {
+							return pou.data.name === pouToBeCreated.data.name
+						}
+					)
+					if (!pouExists) {
+						slice.workspaceState.projectData.pous.push(pouToBeCreated)
+						res = { ok: true }
+					}
+					res = { ok: false }
 				})
 			)
+			return res
 		},
 		updatePou: (dataToBeUpdated: Pick<IPouDTO, 'data'>): void => {
 			setState(
