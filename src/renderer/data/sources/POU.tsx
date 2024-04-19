@@ -1,0 +1,45 @@
+import {
+	FBDIcon,
+	FunctionBlockIcon,
+	FunctionIcon,
+	ILIcon,
+	LDIcon,
+	ProgramIcon,
+	SFCIcon,
+	STIcon,
+} from '@root/renderer/assets'
+import { ReactElement } from 'react'
+
+const PouLanguageSources = [
+	{
+		icon: <LDIcon />,
+		value: 'Ladder Diagram',
+	},
+
+	{
+		icon: <SFCIcon />,
+		value: 'Sequential Functional Chart',
+	},
+
+	{
+		icon: <FBDIcon />,
+		value: 'Functional Block Diagram',
+	},
+
+	{
+		icon: <STIcon />,
+		value: 'Structured Text',
+	},
+	{
+		icon: <ILIcon />,
+		value: 'Instruction List',
+	},
+]
+
+const CreatePouSources = {
+	function: <FunctionIcon size='sm' />,
+	'function-block': <FunctionBlockIcon size='sm' />,
+	program: <ProgramIcon size='sm' />,
+}
+
+export { PouLanguageSources, CreatePouSources }

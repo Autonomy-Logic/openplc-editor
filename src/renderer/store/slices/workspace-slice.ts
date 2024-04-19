@@ -1,97 +1,177 @@
-import { StateCreator } from 'zustand'
+import {
+	IFunction,
+	IFunctionBlock,
+	IProgram,
+	IProject,
+} from '@root/types/PLC/index'
 import { produce } from 'immer'
-import { IProjectData } from '@root/types/transfer'
+import { StateCreator } from 'zustand'
 
-/**
- * workspaceState: {
-		projectName: string
-		projectPath: string
-		systemConfigs: {
-			OS: 'win32' | 'linux' | 'darwin' | ''
-			arch: 'x64' | 'arm' | ''
-			shouldUseDarkMode: boolean
-		}
-		projectData: Partial<IProject>
-		createdAt: date
-		updatedAt: date
-	}
-
-	actions: {
-		setInitialState: (initialState: Partial<workspaceState>) => void
-		setSystemConfigs: (systemConfigs: workspaceState['systemConfigs']) => void
-		toggleDarkMode: () => void
-		updateProjectName: (projectName: string) => void
-		updateProjectPath: (projectPath: string) => void
-		addPou: (pou: IPou) => void
-		updatePou: (pou: IPou) => void
-		removePou: (pou: IPou) => void
-	}
- */
+type IPouDTO =
+	| {
+			type: 'program'
+			data: IProgram
+	  }
+	| {
+			type: 'function'
+			data: IFunction
+	  }
+	| {
+			type: 'function-block'
+			data: IFunctionBlock
+	  }
 
 type IWorkspaceState = {
-	path: string
 	projectName: string
-	data: Partial<IProjectData>
+	projectPath: string
+	systemConfigs: {
+		OS: 'win32' | 'linux' | 'darwin' | ''
+		arch: 'x64' | 'arm' | ''
+		shouldUseDarkMode: boolean
+	}
+	projectData: IProject
 	createdAt: string
 	updatedAt: string
 }
 
-type IWorkspaceActions = {
-	setWorkspace: (workspaceData: IWorkspaceState) => void
-	updateWorkspace: (workspaceData: IWorkspaceState) => void
-	clearWorkspace: () => void
+type ICreatePouRes = {
+	ok: boolean
+	message?: string
 }
 
-export type IWorkspaceSlice = IWorkspaceState & IWorkspaceActions
+type IWorkspaceActions = {
+	setUserWorkspace: (
+		userWorkspaceState: Omit<IWorkspaceState, 'systemConfigs'>
+	) => void
+	setSystemConfigs: (systemConfigs: IWorkspaceState['systemConfigs']) => void
+	switchAppTheme: () => void
+	updateProjectName: (projectName: string) => void
+	updateProjectPath: (projectPath: string) => void
+	createPou: (pouToBeCreated: IPouDTO) => ICreatePouRes
+	updatePou: (dataToBeUpdated: Pick<IPouDTO, 'data'>) => void
+	deletePou: (pouToBeDeleted: string) => void
+}
 
-export const createWorkspaceSlice: StateCreator<
+type IWorkspaceSlice = {
+	workspaceState: IWorkspaceState
+	workspaceActions: IWorkspaceActions
+}
+
+const createWorkspaceSlice: StateCreator<
 	IWorkspaceSlice,
 	[],
 	[],
 	IWorkspaceSlice
 > = (setState) => ({
-	path: 'C://User//File//file.json',
-	projectName: 'default-project',
-	data: {
-		pous: [],
-		dataTypes: [],
-		variables: [],
+	workspaceState: {
+		projectName: '',
+		projectPath: '',
+		systemConfigs: {
+			OS: '',
+			arch: '',
+			shouldUseDarkMode: false,
+		},
+		projectData: {
+			dataTypes: [],
+			pous: [],
+			globalVariables: [],
+		},
+		createdAt: new Date().toISOString(),
+		updatedAt: new Date().toISOString(),
 	},
-	createdAt: '0000-00-00T00:00:00.000Z',
-	updatedAt: '0000-00-00T00:00:00.000Z',
-	setWorkspace: (workspaceData: IWorkspaceState) => {
-		setState(
-			produce((state: IWorkspaceSlice) => {
-				state.path = workspaceData.path
-				state.projectName = workspaceData.projectName
-				state.data = workspaceData.data
-				state.createdAt = workspaceData.createdAt
-				state.updatedAt = workspaceData.updatedAt
-			})
-		)
-	},
-	updateWorkspace: (workspaceData: IWorkspaceState) => {
-		setState(
-			produce((state: IWorkspaceSlice) => {
-				state.projectName = workspaceData.projectName
-				state.data = workspaceData.data
-				state.updatedAt = workspaceData.updatedAt
-			})
-		)
-	},
-	clearWorkspace: () => {
-		setState(
-			produce((state: IWorkspaceSlice) => {
-				state.path = 'C://User//File//file.json'
-				state.projectName = 'default-project'
-				state.data = {
-					pous: [],
-					dataTypes: [],
-					variables: [],
-				}
-				state.createdAt = '0000-00-00T00:00:00.000Z'
-				state.updatedAt = '0000-00-00T00:00:00.000Z'
-			})
-		)
+	workspaceActions: {
+		setUserWorkspace: (
+			userWorkspaceState: Omit<IWorkspaceState, 'systemConfigs'>
+		): void => {
+			setState(
+				produce(({ workspaceState }: IWorkspaceSlice) => {
+					const {
+						projectPath,
+						projectName,
+						projectData,
+						createdAt,
+						updatedAt,
+					} = userWorkspaceState
+
+					workspaceState.projectPath = projectPath
+					workspaceState.projectName = projectName
+					workspaceState.projectData = projectData
+					workspaceState.createdAt = createdAt
+					workspaceState.updatedAt = updatedAt
+				})
+			)
+		},
+		setSystemConfigs: (
+			systemConfigsData: IWorkspaceState['systemConfigs']
+		): void => {
+			setState(
+				produce(({ workspaceState }: IWorkspaceSlice) => {
+					workspaceState.systemConfigs = systemConfigsData
+				})
+			)
+		},
+		switchAppTheme: (): void => {
+			setState(
+				produce((slice: IWorkspaceSlice) => {
+					slice.workspaceState.systemConfigs.shouldUseDarkMode =
+						!slice.workspaceState.systemConfigs.shouldUseDarkMode
+				})
+			)
+		},
+		updateProjectName: (projectName: string): void => {
+			setState(
+				produce((slice: IWorkspaceSlice) => {
+					slice.workspaceState.projectName = projectName
+				})
+			)
+		},
+		updateProjectPath: (projectPath: string): void => {
+			setState(
+				produce((slice: IWorkspaceSlice) => {
+					slice.workspaceState.projectPath = projectPath
+				})
+			)
+		},
+		createPou: (pouToBeCreated: IPouDTO): ICreatePouRes => {
+			let response: ICreatePouRes = { ok: false, message: '' }
+			setState(
+				produce((slice: IWorkspaceSlice) => {
+					const pouExists = slice.workspaceState.projectData.pous.find(
+						(pou) => {
+							return pou.data.name === pouToBeCreated.data.name
+						}
+					)
+					if (!pouExists) {
+						slice.workspaceState.projectData.pous.push(pouToBeCreated)
+						response = { ok: true, message: 'Pou created successfully' }
+					} else {
+						response = { ok: false, message: 'Pou already exists' }
+					}
+				})
+			)
+			return response
+		},
+		updatePou: (dataToBeUpdated: Pick<IPouDTO, 'data'>): void => {
+			setState(
+				produce((slice: IWorkspaceSlice) => {
+					const draft = slice.workspaceState.projectData.pous.find((pou) => {
+						return pou.data.name === dataToBeUpdated.data.name
+					})
+					if (draft) draft.data = dataToBeUpdated.data
+				})
+			)
+		},
+		deletePou: (pouToBeDeleted: string): void => {
+			setState(
+				produce((slice: IWorkspaceSlice) => {
+					slice.workspaceState.projectData.pous =
+						slice.workspaceState.projectData.pous.filter(
+							(pou) => pou.data.name !== pouToBeDeleted
+						)
+				})
+			)
+		},
 	},
 })
+
+export { createWorkspaceSlice, type IWorkspaceSlice }

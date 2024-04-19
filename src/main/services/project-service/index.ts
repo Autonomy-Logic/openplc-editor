@@ -11,8 +11,7 @@ import { i18n } from '../../../utils/i18n'
 import { ProjectDto } from '../../contracts/types/services/project.service'
 import { BaseServiceClass } from '../../contracts/validations'
 import { store } from '../../modules/store'
-import { configs, data } from './data/config-file'
-import { ProjectDataTemplate } from './data/project-data'
+import { baseJsonStructure, baseXmlStructure } from './data'
 import { CreateJSONFile } from './utils/json-creator'
 
 // Wip: Refactoring project services.
@@ -71,7 +70,7 @@ class ProjectService extends BaseServiceClass<
 		CreateJSONFile({
 			path: filePath,
 			fileName: 'data',
-			data: JSON.stringify(ProjectDataTemplate),
+			data: JSON.stringify(baseJsonStructure),
 		})
 		// Create the path to the project file.
 		const projectPath = join(filePath, 'plc.xml')
@@ -106,7 +105,7 @@ class ProjectService extends BaseServiceClass<
 		})
 		return {
 			ok: true,
-			res: { path: projectPath, data: ProjectDataTemplate },
+			res: { path: projectPath, data: baseJsonStructure },
 		}
 	}
 	// eslint-disable-next-line consistent-return

@@ -1,3 +1,4 @@
+import { baseJsonStructure } from '../../services/project-service/data'
 import { IpcRendererEvent, ipcRenderer } from 'electron'
 
 // biome-ignore lint/suspicious/noExplicitAny: <This causes an error in Electron, must be reviewed>
@@ -7,7 +8,10 @@ const rendererProcessBridge = {
 	toggleTheme: () => ipcRenderer.invoke('app:toggle-theme'),
 	getThemePreference: () => ipcRenderer.invoke('app-preferences:get-theme'),
 	startOpenProject: () => ipcRenderer.invoke('start-screen/project:open'),
-	startCreateProject: () => ipcRenderer.invoke('start-screen/project:create'),
+	startCreateProject: (): Promise<{
+		ok: boolean
+		res: { path: string; data: typeof baseJsonStructure }
+	}> => ipcRenderer.invoke('start-screen/project:create'),
 	createProject: (callback: IpcRendererCallbacks) =>
 		ipcRenderer.on('project:create', callback),
 	openProject: (callback: IpcRendererCallbacks) =>
@@ -19,9 +23,13 @@ const rendererProcessBridge = {
 		ipcRenderer.send('app:store-set', key, val),
 	/**
 	 * Send the OS information to the renderer process
-	 * Refactor: This can be optimized.
+	 * !IMPORTANT: This return type must be refactored to match the Node.js API
 	 */
-	getSystemInfo: () => ipcRenderer.invoke('system:get-system-info'),
+	getSystemInfo: (): Promise<{
+		OS: 'linux' | 'darwin' | 'win32' | ''
+		architecture: 'x64' | 'arm' | ''
+		prefersDarkMode: boolean
+	}> => ipcRenderer.invoke('system:get-system-info'),
 	closeWindow: () => ipcRenderer.send('window-controls:close'),
 	minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
 	maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
