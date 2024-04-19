@@ -36,26 +36,10 @@ const PouLanguageSources = [
 	},
 ]
 
-const CreatePouSources: {
-	id: number
-	label: 'function' | 'function-block' | 'program'
-	icon: ReactElement
-}[] = [
-	{
-		id: 0,
-		label: 'function',
-		icon: <FunctionIcon size='sm' />,
-	},
-	{
-		id: 1,
-		label: 'function-block',
-		icon: <FunctionBlockIcon size='sm' />,
-	},
-	{
-		id: 2,
-		label: 'program',
-		icon: <ProgramIcon size='sm' />,
-	},
-]
+const CreatePouSources = {
+	function: <FunctionIcon size='sm' />,
+	'function-block': <FunctionBlockIcon size='sm' />,
+	program: <ProgramIcon size='sm' />,
+}
 
 export { PouLanguageSources, CreatePouSources }

@@ -2,7 +2,7 @@ import {
 	IFunction,
 	IFunctionBlock,
 	IProgram,
-	type IProject,
+	IProject,
 } from '@root/types/PLC/index'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
@@ -34,6 +34,11 @@ type IWorkspaceState = {
 	updatedAt: string
 }
 
+type ICreatePouRes = {
+	ok: boolean
+	message?: string
+}
+
 type IWorkspaceActions = {
 	setUserWorkspace: (
 		userWorkspaceState: Omit<IWorkspaceState, 'systemConfigs'>
@@ -42,7 +47,7 @@ type IWorkspaceActions = {
 	switchAppTheme: () => void
 	updateProjectName: (projectName: string) => void
 	updateProjectPath: (projectPath: string) => void
-	createPou: (pouToBeCreated: IPouDTO) => { ok: boolean }
+	createPou: (pouToBeCreated: IPouDTO) => ICreatePouRes
 	updatePou: (dataToBeUpdated: Pick<IPouDTO, 'data'>) => void
 	deletePou: (pouToBeDeleted: string) => void
 }
@@ -127,8 +132,8 @@ const createWorkspaceSlice: StateCreator<
 				})
 			)
 		},
-		createPou: (pouToBeCreated: IPouDTO): { ok: boolean } => {
-			let res = { ok: false }
+		createPou: (pouToBeCreated: IPouDTO): ICreatePouRes => {
+			let response: ICreatePouRes = { ok: false, message: '' }
 			setState(
 				produce((slice: IWorkspaceSlice) => {
 					const pouExists = slice.workspaceState.projectData.pous.find(
@@ -138,12 +143,13 @@ const createWorkspaceSlice: StateCreator<
 					)
 					if (!pouExists) {
 						slice.workspaceState.projectData.pous.push(pouToBeCreated)
-						res = { ok: true }
+						response = { ok: true, message: 'Pou created successfully' }
+					} else {
+						response = { ok: false, message: 'Pou already exists' }
 					}
-					res = { ok: false }
 				})
 			)
-			return res
+			return response
 		},
 		updatePou: (dataToBeUpdated: Pick<IPouDTO, 'data'>): void => {
 			setState(
