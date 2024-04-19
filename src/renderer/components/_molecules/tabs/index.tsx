@@ -2,6 +2,8 @@ import { createRef, useEffect, useRef, useState } from 'react'
 import { Tab, TabList } from '../../_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { IPouTemplate } from '@root/types/transfer'
+import { IFunction, IFunctionBlock, IProgram } from '@root/types/PLC'
+import { ITabProps } from '@process:renderer/store/slices/tabs-slice'
 
 const Tabs = () => {
 	const {
@@ -25,15 +27,12 @@ const Tabs = () => {
 	 * Todo: this tab handler should be refactored to fit all possibles cases
 	 * @param tab the selected tab
 	 */
-	const handleClickedTab = (tab: IPouTemplate) => {
+	const handleClickedTab = (tab: ITabProps) => {
 		setSelectedTab(tab.name)
 		updateEditor({ path: tab.name, value: tab.body })
 	}
 
-	const handleDragStart = ({
-		tab,
-		idx,
-	}: { tab: IPouTemplate; idx: number }) => {
+	const handleDragStart = ({ tab, idx }: { tab: ITabProps; idx: number }) => {
 		dndTab.current = idx
 		setSelectedTab(tab.name)
 	}

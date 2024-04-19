@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
 const functionBlockSchema = z.object({
-	type: z.literal('functionBlock'),
 	language: z.enum(['IL', 'ST', 'LD', 'SFC', 'FBD']).default('IL'),
 	name: z.string(),
 	/** Array of variable - will be implemented */

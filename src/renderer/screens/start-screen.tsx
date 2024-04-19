@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'
 import {
 	MenuRoot,
@@ -6,14 +7,40 @@ import {
 	MenuSection,
 } from '../components/_features/[start]/menu'
 import { StartMainContent, StartSideContent } from '../components/_templates'
+import { useOpenPLCStore } from '../store'
+import _ from 'lodash'
 
 const StartScreen = () => {
+	const navigate = useNavigate()
+	const {
+		workspaceActions: { setUserWorkspace },
+	} = useOpenPLCStore()
+
+	const handleCreateProject = async () => {
+		const {
+			ok,
+			res: { data, path },
+		} = await window.bridge.startCreateProject()
+		if (ok && data) {
+			setUserWorkspace({
+				projectPath: path,
+				projectData: data,
+				projectName: 'new-project',
+				createdAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+			})
+			navigate('/workspace')
+		}
+	}
+
+	const handleOpenProject = async () => {}
+
 	return (
 		<>
 			<StartSideContent>
 				<MenuRoot>
 					<MenuSection id='1'>
-						<MenuItem onClick={() => console.log('create project')}>
+						<MenuItem onClick={() => handleCreateProject()}>
 							<PlusIcon className='stroke-white' /> New Project
 						</MenuItem>
 						<MenuItem ghosted onClick={() => console.log('open project')}>

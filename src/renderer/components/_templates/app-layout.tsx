@@ -1,28 +1,31 @@
 import { TitleBar } from '@root/renderer/features/titlebar'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
+import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 
-type IAppLayoutProps = ComponentPropsWithoutRef<'div'>
-const AppLayout = (props: IAppLayoutProps) => {
+// type IAppLayoutProps = ComponentPropsWithoutRef<'div'>
+const AppLayout = (): ReactNode => {
 	const [isLinux, setIsLinux] = useState(true)
-	const setPlatFormData = useOpenPLCStore().setPlatFormData
+	const {
+		workspaceActions: { setSystemConfigs },
+	} = useOpenPLCStore()
 
 	useEffect(() => {
-		const setInitialData = async () => {
-			const { system, theme } = await window.bridge.getSystemInfo()
-			setPlatFormData({
-				OS: system,
-				arch: 'x64',
-				colorScheme: theme,
+		const getUserSystemProps = async () => {
+			const { OS, architecture, prefersDarkMode } =
+				await window.bridge.getSystemInfo()
+			setSystemConfigs({
+				OS,
+				arch: architecture,
+				shouldUseDarkMode: prefersDarkMode,
 			})
-			if (system === 'darwin' || system === 'win32') {
+			if (OS === 'darwin' || OS === 'win32') {
 				setIsLinux(false)
 			}
 		}
-		setInitialData()
-	}, [setPlatFormData])
+		getUserSystemProps()
+	}, [setSystemConfigs])
 	return (
 		<>
 			{!isLinux && <TitleBar />}

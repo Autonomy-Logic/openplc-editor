@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
 const functionSchema = z.object({
-	type: z.literal('function'),
 	language: z.enum(['IL', 'ST', 'LD', 'SFC', 'FBD']).default('IL'),
 	name: z.string(),
 	returnType: z.enum(['BOOL', 'INT', 'DINT']),

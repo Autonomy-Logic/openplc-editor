@@ -1,5 +1,5 @@
 import { Event, nativeTheme } from 'electron'
-import { platform } from 'process'
+import { platform, arch } from 'process'
 
 import {
 	MainIpcModule,
@@ -69,9 +69,11 @@ class MainProcessBridge implements MainIpcModule {
 		 * Refactor: This can be optimized.
 		 */
 		this.ipcMain.handle('system:get-system-info', async () => {
-			const response = platform
-			const colorPreference = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
-			return { system: response, theme: colorPreference }
+			return {
+				OS: platform,
+				architecture: arch,
+				prefersDarkMode: nativeTheme.shouldUseDarkColors,
+			}
 		})
 		this.ipcMain.on('window-controls:close', () => this.mainWindow?.close())
 		this.ipcMain.on('window-controls:minimize', () =>

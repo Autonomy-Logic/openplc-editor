@@ -6,22 +6,25 @@ import { cn } from '@utils/cn'
 
 export const AppLayout = () => {
 	const [isLinux, setIsLinux] = useState(true)
-	const { setPlatFormData } = useOpenPLCStore()
+	const {
+		workspaceActions: { setSystemConfigs },
+	} = useOpenPLCStore()
 
 	useEffect(() => {
-		const setInitialData = async () => {
-			const { system, theme } = await window.bridge.getSystemInfo()
-			setPlatFormData({
-				OS: system,
-				arch: 'x64',
-				shouldUseDarkMode: theme === 'dark',
+		const getUserSystemProps = async () => {
+			const { OS, architecture, prefersDarkMode } =
+				await window.bridge.getSystemInfo()
+			setSystemConfigs({
+				OS,
+				arch: architecture,
+				shouldUseDarkMode: prefersDarkMode,
 			})
-			if (system === 'darwin' || system === 'win32') {
+			if (OS === 'darwin' || OS === 'win32') {
 				setIsLinux(false)
 			}
 		}
-		setInitialData()
-	}, [setPlatFormData])
+		getUserSystemProps()
+	}, [setSystemConfigs])
 
 	return (
 		<>
