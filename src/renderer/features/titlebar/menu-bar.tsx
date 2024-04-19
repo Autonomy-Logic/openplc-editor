@@ -1,12 +1,15 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 
 import { i18n } from '@utils/i18n'
 import { cn } from '@utils/cn'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { FileIcon } from '@radix-ui/react-icons'
+import RecentProjectIcon from '@root/renderer/assets/icons/interface/Recent'
 
 export const MenuBar = () => {
 	const { updateTheme, shouldUseDarkMode } = useOpenPLCStore()
+	const [recentProjects, setRecentProjects] = useState<string[]>([])
 
 	const handleChangeTheme = async () => {
 		await window.bridge.toggleTheme()
@@ -24,6 +27,16 @@ export const MenuBar = () => {
 	const checkboxDefaultStyle =
 		'w-3 h-3 bg-neutral-400 dark:bg-neutral-500 text-brand flex justify-center items-center'
 
+	const getRecents = async () => {
+		const recents = await window.bridge.getRecents()
+		setRecentProjects(recents)
+	}
+
+	useEffect(() => {
+		getRecents()
+	}, [])
+	console.log(recentProjects)
+
 	//each root is a menu
 	return (
 		<MenuPrimitive.Root className='h-full ml-6 flex-1 flex items-center gap-2'>
@@ -32,7 +45,10 @@ export const MenuBar = () => {
 					{i18n.t('menu:file.label')}
 				</MenuPrimitive.Trigger>
 				<MenuPrimitive.Portal>
-					<MenuPrimitive.Content sideOffset={16} className={contentDefaultStyle}>
+					<MenuPrimitive.Content
+						sideOffset={16}
+						className={contentDefaultStyle}
+					>
 						<MenuPrimitive.Item className={itemDefaultStyle}>
 							<span>{i18n.t('menu:file.submenu.new')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + N'}</span>
@@ -96,7 +112,10 @@ export const MenuBar = () => {
 					{i18n.t('menu:edit.label')}
 				</MenuPrimitive.Trigger>
 				<MenuPrimitive.Portal>
-					<MenuPrimitive.Content sideOffset={16} className={contentDefaultStyle}>
+					<MenuPrimitive.Content
+						sideOffset={16}
+						className={contentDefaultStyle}
+					>
 						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:edit.submenu.undo')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + Z'}</span>
@@ -165,7 +184,10 @@ export const MenuBar = () => {
 					{i18n.t('menu:display.label')}
 				</MenuPrimitive.Trigger>
 				<MenuPrimitive.Portal>
-					<MenuPrimitive.Content sideOffset={16} className={contentDefaultStyle}>
+					<MenuPrimitive.Content
+						sideOffset={16}
+						className={contentDefaultStyle}
+					>
 						<MenuPrimitive.Item className={itemDefaultStyle}>
 							<span>{i18n.t('menu:display.submenu.refresh')}</span>
 							<span className={acceleratorDefaultStyle}>{'Ctrl + R '}</span>
@@ -262,7 +284,10 @@ export const MenuBar = () => {
 					{i18n.t('menu:help.label')}
 				</MenuPrimitive.Trigger>
 				<MenuPrimitive.Portal>
-					<MenuPrimitive.Content sideOffset={16} className={contentDefaultStyle}>
+					<MenuPrimitive.Content
+						sideOffset={16}
+						className={contentDefaultStyle}
+					>
 						<MenuPrimitive.Item className={itemDefaultStyle} disabled>
 							<span>{i18n.t('menu:help.submenu.communitySupport')}</span>
 							<span className={acceleratorDefaultStyle}>{'F1'}</span>
@@ -285,10 +310,22 @@ export const MenuBar = () => {
 					recent
 				</MenuPrimitive.Trigger>
 				<MenuPrimitive.Portal>
-					<MenuPrimitive.Content sideOffset={16} className={contentDefaultStyle}>
-						<MenuPrimitive.Item className={itemDefaultStyle}>
-							<span>recent</span>
-						</MenuPrimitive.Item>
+					<MenuPrimitive.Content
+						sideOffset={16}
+						className={contentDefaultStyle}
+					>
+						{recentProjects.map((project) => (
+							<MenuPrimitive.Item
+								key={project}
+								className={cn(
+									itemDefaultStyle,
+									'flex !overflow-hidden text-neutral-900 dark:text-neutral-50 font-medium text-xs justify-normal items-center gap-2'
+								)}
+							>
+								<RecentProjectIcon />
+								<span className='overflow-hidden flex-1'>{project}</span>
+							</MenuPrimitive.Item>
+						))}
 					</MenuPrimitive.Content>
 				</MenuPrimitive.Portal>
 			</MenuPrimitive.Menu>

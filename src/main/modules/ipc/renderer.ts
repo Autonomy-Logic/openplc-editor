@@ -21,6 +21,7 @@ const rendererProcessBridge = {
 	 * Send the OS information to the renderer process
 	 * Refactor: This can be optimized.
 	 */
+	getRecents: () => ipcRenderer.invoke('app:store-get', 'last_projects'),
 	getSystemInfo: () => ipcRenderer.invoke('system:get-system-info'),
 	closeWindow: () => ipcRenderer.send('window-controls:close'),
 	minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),

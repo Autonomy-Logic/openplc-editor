@@ -57,7 +57,7 @@ class MainProcessBridge implements MainIpcModule {
 
 		this.ipcMain.handle(
 			'app:store-get',
-			this.mainIpcEventHandlers.getStoreValue
+			 this.mainIpcEventHandlers.getStoreValue
 		)
 		this.ipcMain.on('app:store-set', this.mainIpcEventHandlers.setStoreValue)
 
