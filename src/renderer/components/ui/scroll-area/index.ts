@@ -4,10 +4,10 @@ import { ScrollBar } from './scrollbar'
 import { Viewport } from './viewport'
 
 const ScrollAreaComponent = {
-	CustomDisplay,
-	Root,
-	ScrollBar,
-	Viewport,
+  CustomDisplay,
+  Root,
+  ScrollBar,
+  Viewport,
 }
 
 export default ScrollAreaComponent

@@ -1,7 +1,7 @@
 {
-	"programs": "Programs",
-	"buttons": {
-		"cancel": "Cancel",
-		"ok": "OK"
-	}
+  "programs": "Programs",
+  "buttons": {
+    "cancel": "Cancel",
+    "ok": "OK"
+  }
 }

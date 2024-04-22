@@ -1,9 +1,9 @@
-import { HTMLAttributes, forwardRef } from 'react'
+import { forwardRef,HTMLAttributes } from 'react'
 
 type DropdownRootProps = HTMLAttributes<HTMLDivElement>
 
 const Root = forwardRef<HTMLDivElement, DropdownRootProps>((props, ref) => (
-	<div ref={ref} className='relative h-14' {...props} />
+  <div ref={ref} className='relative h-14' {...props} />
 ))
 
 Root.displayName = 'DropdownRoot'

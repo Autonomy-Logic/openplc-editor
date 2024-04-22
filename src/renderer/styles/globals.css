@@ -16,7 +16,7 @@
 
   /* This can be useful to allocate the main container */
 
-  #folder-root p:hover~svg #folder-path {
+  #folder-root p:hover ~ svg #folder-path {
     fill: var(--primary-medium-dark);
   }
 
@@ -80,7 +80,6 @@
 }
 
 @layer components {
-
   /* Classes for the custom titlebar*/
   .oplc-titlebar-container {
     position: absolute;
@@ -146,7 +145,7 @@
   }
 
   .scroll-area:hover::-webkit-scrollbar-thumb {
-    @apply bg-[#0350c9]
+    @apply bg-[#0350c9];
   }
 
   .scroll-area::-webkit-scrollbar-thumb {
@@ -192,7 +191,6 @@
   button {
     @apply outline-none;
   }
-
 }
 
 /*

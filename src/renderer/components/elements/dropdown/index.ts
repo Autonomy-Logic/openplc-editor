@@ -3,8 +3,8 @@ import Root from './root'
 import Select from './select'
 
 const Dropdown = {
-	Options,
-	Root,
-	Select,
+  Options,
+  Root,
+  Select,
 }
 export default Dropdown

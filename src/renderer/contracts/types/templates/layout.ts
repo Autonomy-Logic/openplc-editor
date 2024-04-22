@@ -1,7 +1,7 @@
 import { ReactNode } from 'react'
 
 type TLayoutProps = {
-	main: ReactNode
+  main: ReactNode
 }
 
 export default TLayoutProps

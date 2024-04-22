@@ -4,10 +4,10 @@ import Root from './menu-root'
 import Section from './menu-section'
 
 const MenuComponent = {
-	Button,
-	Divider,
-	Root,
-	Section,
+  Button,
+  Divider,
+  Root,
+  Section,
 }
 
 export default MenuComponent

@@ -1,3 +1,1 @@
-class AppService {
-
-}
+class AppService {}

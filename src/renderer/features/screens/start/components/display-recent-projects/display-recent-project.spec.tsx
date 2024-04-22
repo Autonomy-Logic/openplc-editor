@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom'
+
 import { render, screen } from '@testing-library/react'
 import { ReactNode } from 'react'
+
 import DisplayRecentProjects from './index'
 
 // Mocking the components used within DisplayRecentProjects
@@ -30,7 +32,7 @@ import DisplayRecentProjects from './index'
 // ])
 
 describe('DisplayRecentProjects', () => {
-	it('renders correctly with projects', () => {
-		render(<DisplayRecentProjects />)
-	})
+  it('renders correctly with projects', () => {
+    render(<DisplayRecentProjects />)
+  })
 })

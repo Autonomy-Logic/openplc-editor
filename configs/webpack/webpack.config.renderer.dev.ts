@@ -3,13 +3,13 @@ import 'webpack-dev-server'
 import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin'
 import chalk from 'chalk'
 import { execSync, spawn } from 'child_process'
+import EslintPlugin from 'eslint-webpack-plugin'
 import fs from 'fs'
 import HtmlWebpackPlugin from 'html-webpack-plugin'
 import MonacoEditorWebpackPlugin from 'monaco-editor-webpack-plugin'
 import path from 'path'
 import webpack from 'webpack'
 import { merge } from 'webpack-merge'
-import EslintPlugin from 'eslint-webpack-plugin'
 
 import checkNodeEnv from '../../scripts/check-node-env'
 import baseConfig from './webpack.config.base'
@@ -212,7 +212,7 @@ const configuration: ICustomConfiguration = {
         shell: true,
         stdio: 'inherit',
       })
-        .on('close', (code: number) => process.exit(code!))
+        .on('close', (code: number) => process.exit(code))
         .on('error', (spawnError) => console.error(spawnError))
 
       console.log('Starting Main Process...')
@@ -226,7 +226,7 @@ const configuration: ICustomConfiguration = {
       })
         .on('close', (code: number) => {
           preloadProcess.kill()
-          process.exit(code!)
+          process.exit(code)
         })
         .on('error', (spawnError) => console.error(spawnError))
       return middlewares

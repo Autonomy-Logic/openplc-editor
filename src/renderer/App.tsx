@@ -5,8 +5,8 @@ import './styles/react-toastify.css'
 import { RouterProvider } from '@providers/index'
 
 export default function App() {
-	{
-		/** Manage routing and navigation within the app. */
-	}
-	return <RouterProvider />
+  {
+    /** Manage routing and navigation within the app. */
+  }
+  return <RouterProvider />
 }

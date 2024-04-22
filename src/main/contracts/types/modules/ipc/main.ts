@@ -7,23 +7,23 @@ import { TStoreType } from '../store'
 import { ToastProps } from './toast'
 
 export type MainIpcModule = {
-	ipcMain: IpcMain
-	mainWindow: InstanceType<typeof BrowserWindow> | null
-	projectService: InstanceType<typeof ProjectService>
-	store: TStoreType
-	setupMainIpcListener: () => void
-	mainIpcEventHandlers: {
-		createPou: () => void
-		getTheme: () => ThemeDto
-		setTheme: (event: Event, arg: ThemeDto) => void
-		saveProject: (_event: Event, arg: ProjectDto) => void
-		sendToast: (arg: ToastProps) => void
-	}
+  ipcMain: IpcMain
+  mainWindow: InstanceType<typeof BrowserWindow> | null
+  projectService: InstanceType<typeof ProjectService>
+  store: TStoreType
+  setupMainIpcListener: () => void
+  mainIpcEventHandlers: {
+    createPou: () => void
+    getTheme: () => ThemeDto
+    setTheme: (event: Event, arg: ThemeDto) => void
+    saveProject: (_event: Event, arg: ProjectDto) => void
+    sendToast: (arg: ToastProps) => void
+  }
 }
 
 export type MainIpcModuleConstructor = {
-	ipcMain: IpcMain
-	mainWindow: InstanceType<typeof BrowserWindow> | null
-	projectService: InstanceType<typeof ProjectService>
-	store: TStoreType
+  ipcMain: IpcMain
+  mainWindow: InstanceType<typeof BrowserWindow> | null
+  projectService: InstanceType<typeof ProjectService>
+  store: TStoreType
 }

@@ -1,13 +1,13 @@
 {
-	"title": "Create a new POU",
-	"errors": {
-		"name": "The POU name is required",
-		"type": "The POU type is required",
-		"language": "The language is required"
-	},
-	"labels": {
-		"name": "POU Name",
-		"type": "POU Type",
-		"language": "Language"
-	}
+  "title": "Create a new POU",
+  "errors": {
+    "name": "The POU name is required",
+    "type": "The POU type is required",
+    "language": "The language is required"
+  },
+  "labels": {
+    "name": "POU Name",
+    "type": "POU Type",
+    "language": "Language"
+  }
 }

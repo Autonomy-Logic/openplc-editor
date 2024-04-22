@@ -1,4 +1,4 @@
 const CodeDisplay = () => {
-	return <></>
+  return <></>
 }
 export { CodeDisplay }

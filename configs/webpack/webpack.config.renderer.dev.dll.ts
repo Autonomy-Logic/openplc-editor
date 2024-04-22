@@ -2,6 +2,7 @@
  * Builds the DLL for development electron renderer process
  */
 
+import ESLintPlugin from 'eslint-webpack-plugin'
 import path from 'path'
 import webpack from 'webpack'
 import { merge } from 'webpack-merge'
@@ -10,7 +11,6 @@ import { dependencies } from '../../package.json'
 import checkNodeEnv from '../../scripts/check-node-env'
 import baseConfig from './webpack.config.base'
 import webpackPaths from './webpack.paths'
-import ESLintPlugin from 'eslint-webpack-plugin'
 
 checkNodeEnv('development')
 

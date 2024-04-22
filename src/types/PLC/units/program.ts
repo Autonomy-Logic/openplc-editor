@@ -12,4 +12,4 @@ const programSchema = z.object({
 
 type IProgram = z.infer<typeof programSchema>
 
-export { programSchema, IProgram }
+export { IProgram,programSchema }
