@@ -12,12 +12,23 @@ export default [
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      parserOptions: {
+        project: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
     ...reactRecommended,
     name: 'eslint-plugin-react',
     files: ['**/*.{js,jsx,ts,tsx}'],
     ignores: ['src/main/**/*'],
     languageOptions: {
       parserOptions: {
+        project: true,
         ecmaFeatures: {
           jsx: true,
         },
@@ -67,6 +78,7 @@ export default [
     },
   },
   {
+    files: ['src/**/*.{js,jsx,ts,tsx}'],
     rules: {
       'no-unused-vars': 'warn',
       'no-undef': 'warn',
@@ -88,4 +100,12 @@ export default [
     },
   },
   eslintConfigPrettier,
+  {
+    ignores: [
+      '**/*.d.ts',
+      '**/*.test.{js,jsx,ts,tsx}',
+      '**/*.config.{js,ts,mjs,cjs}',
+      'configs/dll/**/*.{js,ts,jsx,tsx}',
+    ],
+  },
 ]
