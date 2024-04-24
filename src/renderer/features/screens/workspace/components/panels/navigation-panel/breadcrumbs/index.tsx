@@ -1,5 +1,5 @@
 import { ArrowIcon, PLCIcon } from '@process:renderer/assets'
-import { LanguageIcon, LanguageIconType, PouIcon,PouIconType } from '@process:renderer/data'
+import { LanguageIcon, LanguageIconType, PouIcon, PouIconType } from '@process:renderer/data'
 import { ComponentProps } from 'react'
 
 type INavigationPanelBreadcrumbsProps = ComponentProps<'ol'> & {
@@ -15,14 +15,14 @@ type INavigationPanelBreadcrumbsProps = ComponentProps<'ol'> & {
 }
 
 export const NavigationPanelBreadcrumbs = (props: INavigationPanelBreadcrumbsProps) => {
-  const { crumb, className, ...res } = props
+  const { crumb, ...res } = props
   const PouName = crumb.pou_to_display.name
   const PouType = crumb.pou_to_display.type[0]
   const PouLanguage = crumb.pou_to_display.language[0]
   const IconForType = PouIcon[PouType]
   const IconForLang = LanguageIcon[PouLanguage]
   return (
-    <ol className='flex h-1/2 cursor-default items-center p-2 select-none'>
+    <ol className='flex h-1/2 cursor-default items-center p-2 select-none' {...res}>
       {/** Project Name */}
       <li key={crumb.key}>
         <div className='flex items-center gap-1'>

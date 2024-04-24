@@ -1,6 +1,6 @@
 import * as PrimitiveSelect from '@radix-ui/react-select'
 import { ArrowIcon } from '@root/renderer/assets'
-import { ComponentPropsWithoutRef, ElementRef, forwardRef } from 'react'
+import { ComponentPropsWithoutRef, ElementRef, forwardRef, ReactElement } from 'react'
 
 const Select = PrimitiveSelect.Root
 
@@ -8,7 +8,7 @@ type ISelectTriggerProps = ComponentPropsWithoutRef<typeof PrimitiveSelect.Trigg
   placeholder?: string
 }
 const SelectTrigger = forwardRef<ElementRef<typeof PrimitiveSelect.Trigger>, ISelectTriggerProps>(
-  ({ children, placeholder, className, ...rest }, forwardedRef) => {
+  ({ placeholder, className, ...rest }, forwardedRef) => {
     return (
       <PrimitiveSelect.Trigger className={className} {...rest} ref={forwardedRef}>
         <PrimitiveSelect.Value placeholder={placeholder} />
@@ -55,7 +55,7 @@ const SelectContent = ({
 }
 
 type ISelectItemProps = ComponentPropsWithoutRef<typeof PrimitiveSelect.Item> & {
-  indicator?: JSX.Element
+  indicator?: ReactElement
 }
 
 const SelectItem = forwardRef<ElementRef<typeof PrimitiveSelect.Item>, ISelectItemProps>(
@@ -72,4 +72,4 @@ const SelectItem = forwardRef<ElementRef<typeof PrimitiveSelect.Item>, ISelectIt
   },
 )
 
-export { Select, SelectContent, SelectItem,SelectTrigger }
+export { Select, SelectContent, SelectItem, SelectTrigger }

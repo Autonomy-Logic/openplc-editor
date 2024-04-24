@@ -6,18 +6,11 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
-import {
-  app,
-  BrowserWindow,
-  type BrowserWindowConstructorOptions,
-  ipcMain,
-  nativeTheme,
-  shell,
-  webContents,
-} from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
 import { autoUpdater } from 'electron-updater'
-import { platform,release } from 'os'
+import { platform, release } from 'os'
 import path from 'path'
 
 import { resolveHtmlPath } from '../utils/resolveHtmlPath'
@@ -32,7 +25,7 @@ class AppUpdater {
   constructor() {
     log.transports.file.level = 'info'
     autoUpdater.logger = log
-    autoUpdater.checkForUpdatesAndNotify()
+    void autoUpdater.checkForUpdatesAndNotify()
   }
 }
 
@@ -40,8 +33,12 @@ export let mainWindow: BrowserWindow | null = null
 export let splash: BrowserWindow | null = null
 
 if (process.env.NODE_ENV === 'production') {
-  const sourceMapSupport = require('source-map-support')
-  sourceMapSupport.install()
+  async function loadSourceMapSupport(): Promise<void> {
+    const sourceMapSupport = await import('source-map-support')
+    sourceMapSupport.install()
+  }
+
+  loadSourceMapSupport()
 }
 
 // Retrieves the system information
@@ -77,17 +74,17 @@ const titlebarStyles = titlebarOptionsMap[systemInfo] || titlebarOptionsMap.defa
 const isDebug = process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true'
 
 if (isDebug) {
-  require('electron-debug')()
+  import('electron-debug')
 }
 
 const installExtensions = async () => {
-  const installer = require('electron-devtools-installer')
+  const installer= await import('electron-devtools-installer')
   const forceDownload = !!process.env.UPGRADE_EXTENSIONS
   const extensions = ['REACT_DEVELOPER_TOOLS']
 
   return installer
     .default(
-      extensions.map((name) => installer[name]),
+      extensions.map((name) => installer[name as keyof typeof Installer]),
       forceDownload,
     )
     .catch(console.log)
@@ -203,7 +200,7 @@ const createMainWindow = async () => {
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
   // Remove this if your app does not use auto updates;
-   
+
   new AppUpdater()
 }
 

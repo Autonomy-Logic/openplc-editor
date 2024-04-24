@@ -3,7 +3,6 @@ import z from 'zod'
 import { formatDate } from '../../../utils'
 import { PouSchema } from './pou-validation'
 
-// eslint-disable-next-line import/prefer-default-export
 export const ProjectSchema = z.object({
   project: z.object({
     '@xmlns': z.string().default('http://www.plcopen.org/xml/tc6_0201'),

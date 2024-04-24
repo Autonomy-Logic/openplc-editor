@@ -14,5 +14,4 @@ const Root = forwardRef<
 
 Root.displayName = ScrollAreaPrimitive.Root.displayName
 
-// eslint-disable-next-line import/prefer-default-export
 export { Root }

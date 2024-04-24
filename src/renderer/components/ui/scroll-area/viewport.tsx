@@ -13,5 +13,4 @@ const Viewport = forwardRef<
 
 Viewport.displayName = ScrollAreaPrimitive.Viewport.displayName
 
-// eslint-disable-next-line import/prefer-default-export
 export { Viewport }

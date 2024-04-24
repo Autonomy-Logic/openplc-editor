@@ -1,6 +1,5 @@
- 
 import { cn } from '@utils/cn'
-import { ButtonHTMLAttributes, Dispatch, ElementType, ReactElement, ReactNode, SetStateAction } from 'react'
+import { ButtonHTMLAttributes, Dispatch, ElementType, SetStateAction } from 'react'
 
 type DropdownSelectProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   selectedOption: string

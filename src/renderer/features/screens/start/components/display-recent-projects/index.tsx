@@ -1,5 +1,5 @@
 import { FileElement } from '@components/elements'
-import { ComponentProps, HTMLAttributes } from 'react'
+import { ComponentProps } from 'react'
 
 import RecentProjects from '../../../../../../shared/data/mock/projects-data.json'
 

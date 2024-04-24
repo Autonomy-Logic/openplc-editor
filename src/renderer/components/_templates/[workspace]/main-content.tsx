@@ -4,7 +4,7 @@ import { ComponentPropsWithoutRef } from 'react'
 
 type IWorkspaceMainContentProps = ComponentPropsWithoutRef<'div'>
 const WorkspaceMainContent = (props: IWorkspaceMainContentProps) => {
-  const platform = useOpenPLCStore().OS
+  const platform = useOpenPLCStore().workspaceState.systemConfigs.OS
   const { children, ...res } = props
   return (
     <div

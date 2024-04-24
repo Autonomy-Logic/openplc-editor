@@ -23,5 +23,4 @@ const ScrollBar = forwardRef<
 
 ScrollBar.displayName = ScrollAreaPrimitive.ScrollAreaScrollbar.displayName
 
-// eslint-disable-next-line import/prefer-default-export
 export { ScrollBar }

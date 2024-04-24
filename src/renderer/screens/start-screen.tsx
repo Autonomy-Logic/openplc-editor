@@ -1,4 +1,3 @@
-import _ from 'lodash'
 import { useNavigate } from 'react-router-dom'
 
 import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'
@@ -29,7 +28,7 @@ const StartScreen = () => {
     }
   }
 
-  const handleOpenProject = async () => {}
+  // const handleOpenProject = async () => {}
 
   return (
     <>

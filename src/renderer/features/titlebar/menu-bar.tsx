@@ -2,14 +2,18 @@ import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@utils/cn'
 import { i18n } from '@utils/i18n'
-import { useCallback, useState } from 'react'
 
 export const MenuBar = () => {
-  const { updateTheme, shouldUseDarkMode } = useOpenPLCStore()
+  const {
+    workspaceActions: { switchAppTheme },
+    workspaceState: {
+      systemConfigs: { shouldUseDarkMode },
+    },
+  } = useOpenPLCStore()
 
   const handleChangeTheme = async () => {
     await window.bridge.toggleTheme()
-    updateTheme()
+    switchAppTheme()
   }
 
   const triggerDefaultStyle =

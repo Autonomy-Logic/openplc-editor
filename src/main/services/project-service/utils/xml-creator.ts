@@ -7,7 +7,7 @@ type ICreateXMLFileProps = {
   fileName: string
 }
 
-const CreateXMLFile = async (args: ICreateXMLFileProps) => {
+const CreateXMLFile = (args: ICreateXMLFileProps) => {
   const { path, fileName, data } = args
   const normalizedPath = join(path, `${fileName}.xml`)
   writeFile(normalizedPath, data, (error) => {

@@ -12,6 +12,13 @@ export default [
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
+    rules: {
+      '@typescript-eslint/no-floating-promises': ['warn', { ignoreIIFE: true }],
+      '@typescript-eslint/no-unsafe-assignment': 'warn',
+      '@typescript-eslint/no-unsafe-member-access': 'warn',
+      '@typescript-eslint/no-unsafe-call': 'warn',
+      '@typescript-eslint/no-misused-promises': 'warn',
+    },
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

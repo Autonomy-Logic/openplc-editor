@@ -1,20 +1,19 @@
 import { BrowserWindow, dialog } from 'electron'
-import { mkdir, promises, readFile, writeFile } from 'fs'
+import { promises, readFile, writeFile } from 'fs'
 import { join } from 'path'
 import { convert, create } from 'xmlbuilder2'
 
-// import { TXmlProject } from '../../shared/contracts/types';
 import { ProjectSchema } from '../../../shared/contracts/validations'
 import xmlProjectAsObject from '../../../shared/data/mock/object-to-create-project'
 import { i18n } from '../../../utils/i18n'
 import { ProjectDto } from '../../contracts/types/services/project.service'
-import { BaseServiceClass } from '../../contracts/validations'
 import { store } from '../../modules/store'
-import { baseJsonStructure, baseXmlStructure } from './data'
+import { baseJsonStructure } from './data'
 import { CreateJSONFile } from './utils/json-creator'
 
 // Wip: Refactoring project services.
-class ProjectService extends BaseServiceClass<InstanceType<typeof BrowserWindow>> {
+class ProjectService {
+  constructor(private serviceManager: InstanceType<typeof BrowserWindow>) {}
   /**
    * @description Asynchronous function to create a PLC xml project based on selected directory.
    * @returns A `promise` of `ServiceResponse` type.
@@ -54,7 +53,7 @@ class ProjectService extends BaseServiceClass<InstanceType<typeof BrowserWindow>
     }
 
     // Check if the data provided is valid, then create a JS Object with the project base structure
-    const createdXmlAsObject = ProjectSchema.parse(xmlProjectAsObject)
+    // const createdXmlAsObject = ProjectSchema.parse(xmlProjectAsObject)
 
     // Create the project XML structure using xmlbuilder2.
     const projectAsXml = create({ version: '1.0', encoding: 'utf-8' }, xmlProjectAsObject)
@@ -98,7 +97,7 @@ class ProjectService extends BaseServiceClass<InstanceType<typeof BrowserWindow>
       res: { path: projectPath, data: baseJsonStructure },
     }
   }
-   
+
   async openProject() {
     const response = await dialog.showOpenDialog(this.serviceManager, {
       title: i18n.t('openProject:dialog.title'),
@@ -162,7 +161,7 @@ class ProjectService extends BaseServiceClass<InstanceType<typeof BrowserWindow>
    * @param xmlSerializedAsObject - The XML data to be serialized and saved.
    * @returns A `promise` of `ResponseService` type.
    */
-  async saveProject(data: ProjectDto) {
+  saveProject(data: ProjectDto) {
     const { projectPath, projectAsObj } = data
     // Check if required parameters are provided.
     if (!projectPath || !projectAsObj)
@@ -195,7 +194,7 @@ class ProjectService extends BaseServiceClass<InstanceType<typeof BrowserWindow>
         },
       }
     })
-     
+
     console.log('Works!')
 
     return {

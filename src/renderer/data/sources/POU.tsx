@@ -8,7 +8,6 @@ import {
   SFCIcon,
   STIcon,
 } from '@root/renderer/assets'
-import { ReactElement } from 'react'
 
 const PouLanguageSources = [
   {
@@ -42,4 +41,4 @@ const CreatePouSources = {
   program: <ProgramIcon size='sm' />,
 }
 
-export { CreatePouSources,PouLanguageSources }
+export { CreatePouSources, PouLanguageSources }

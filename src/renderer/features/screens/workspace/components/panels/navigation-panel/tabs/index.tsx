@@ -1,7 +1,7 @@
 import { PlusIcon } from '@process:renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@utils/cn'
-import { useRef,useState } from 'react'
+import { useRef, useState } from 'react'
 
 export const NavigationPanelTabs = () => {
   const { updateEditor } = useOpenPLCStore()
@@ -30,7 +30,7 @@ export const NavigationPanelTabs = () => {
     setTabs(tabClone)
   }
 
-  const handleClickedTab = (tab) => {
+  const handleClickedTab = (tab: { id: number; name: string }) => {
     setSelectedTab(tab.id)
     updateEditor({ path: tab.name, value: tab.name })
   }

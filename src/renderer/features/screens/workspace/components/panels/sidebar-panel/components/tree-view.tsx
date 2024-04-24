@@ -38,7 +38,7 @@ const Leaf = (props: ILeafProps) => {
     /** The leaf component */
     <li className='py-1 pl-2' key={key}>
       {/** The button component to render the arrow to open the tree */}
-      <button className='flex flex-row items-center' type='button' onClick={(e) => setChildVisible((v) => !v)}>
+      <button className='flex flex-row items-center' type='button' onClick={() => setChildVisible((v) => !v)}>
         {hasChildren && (
           <ArrowIcon
             direction='right'

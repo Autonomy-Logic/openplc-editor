@@ -1,6 +1,5 @@
 import { IconStyles } from '@process:renderer/data/constants/icon-styles'
 import { cn } from '@utils/cn'
-import React, { ComponentProps } from 'react'
 
 import { IIconProps } from '../Types/iconTypes'
 
@@ -9,13 +8,13 @@ export const ZoomInOut = (props: IIconProps) => {
   const sizeClasses = IconStyles.sizeClasses.small[size]
   return (
     <svg
-      role='button'
       viewBox='0 0 24 24'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'
       className={cn(`${sizeClasses}`, className)}
       {...res}
     >
+      <title>Zoom In/Out Icon</title>
       <path
         opacity='0.4'
         d='M4.99967 0.333374H18.9997C21.577 0.333374 23.6663 2.42271 23.6663 5.00004V19C23.6663 21.5774 21.577 23.6667 18.9997 23.6667H4.99967C2.42235 23.6667 0.333008 21.5774 0.333008 19V5.00004C0.333008 2.42271 2.42235 0.333374 4.99967 0.333374Z'

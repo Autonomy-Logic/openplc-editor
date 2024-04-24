@@ -1,9 +1,8 @@
-import { ProjectTreeBranch, ProjectTreeLeaf,ProjectTreeRoot } from '@components/_molecules/project-tree'
+import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '@components/_molecules/project-tree'
 import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { ITabProps } from '@root/renderer/store/slices'
-import _ from 'lodash'
 
+// import { ITabProps } from '@root/renderer/store/slices'
 import { CreatePou } from '../../_features/[workspace]/create-pou'
 
 const Project = () => {
@@ -11,15 +10,15 @@ const Project = () => {
     workspaceState: {
       projectData: { pous },
     },
-    updateEditor,
-    updateTabs,
+    // updateEditor,
+    // updateTabs,
   } = useOpenPLCStore()
   const Name = 'Project Name'
 
-  const handleCreateTab = (tab: ITabProps) => {
-    updateTabs(tab)
-    updateEditor({ path: tab.name, value: tab.body })
-  }
+  // const handleCreateTab = (tab: ITabProps) => {
+  //   updateTabs(tab)
+  //   updateEditor({ path: tab.name, value: tab.body })
+  // }
 
   return (
     <>

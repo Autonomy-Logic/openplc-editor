@@ -1,6 +1,6 @@
 import { HTMLAttributes } from 'react'
 
-type CardRootProps = HTMLAttributes<HTMLDivElement> & unknown
+type CardRootProps = HTMLAttributes<HTMLDivElement>
 
 export default function Root({ ...props }: CardRootProps) {
   return (
