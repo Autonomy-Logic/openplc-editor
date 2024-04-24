@@ -1,8 +1,9 @@
 /* eslint-disable no-console */
-import { BrowserWindow, Menu, MenuItemConstructorOptions } from 'electron'
+import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme } from 'electron'
 
 import { i18n } from '../utils/i18n'
 import { ProjectService } from './services'
+
 
 /**
  * Wip: Interface for mac machines menu.
@@ -537,6 +538,20 @@ export default class MenuBuilder {
 						label: i18n.t('menu:display.submenu.sortAlpha'),
 						enabled: false,
 					},
+					{
+						label: i18n.t('menu:display.submenu.theme.label'),
+						submenu: [
+							{
+								label: i18n.t('menu:display.submenu.theme.submenu.light'),
+								click: () =>  nativeTheme.themeSource = 'light',
+							},
+							{
+								label: i18n.t('menu:display.submenu.theme.submenu.dark'),
+								click: () =>  nativeTheme.themeSource = 'dark',
+							}
+						]
+
+					}
 				],
 			},
 			{
