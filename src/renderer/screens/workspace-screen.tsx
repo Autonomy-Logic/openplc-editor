@@ -1,3 +1,7 @@
+import { useNavigate } from 'react-router-dom'
+
+import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
+import { ActivityBarButton } from '../components/_atoms/buttons'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
@@ -6,12 +10,39 @@ import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templ
 import { useOpenPLCStore } from '../store'
 
 const WorkspaceScreen = () => {
+  const navigate = useNavigate()
   const {
     tabsState: { tabs },
   } = useOpenPLCStore()
   return (
     <div className='flex w-full h-full bg-brand-dark dark:bg-neutral-950'>
-      <WorkspaceSideContent />
+      <WorkspaceSideContent>
+        <div className='w-full h-fit flex flex-col gap-10 my-5'>
+          <ActivityBarButton aria-label='Search'>
+            <SearchIcon />
+          </ActivityBarButton>
+          <ActivityBarButton aria-label='Zoom'>
+            <ZoomInOut />
+          </ActivityBarButton>
+          <ActivityBarButton aria-label='Download'>
+            <DownloadIcon />
+          </ActivityBarButton>
+          <ActivityBarButton aria-label='Transfer'>
+            <TransferIcon />
+          </ActivityBarButton>
+          <ActivityBarButton aria-label='Debugger'>
+            <DebuggerIcon />
+          </ActivityBarButton>
+          <ActivityBarButton aria-label='Play'>
+            <PlayIcon />
+          </ActivityBarButton>
+        </div>
+        <div className='h-20 w-full flex flex-col gap-6'>
+          <ActivityBarButton aria-label='Exit' onClick={() => navigate('/')}>
+            <ExitIcon />
+          </ActivityBarButton>
+        </div>
+      </WorkspaceSideContent>
       <WorkspaceMainContent>
         <ResizablePanelGroup id='mainContentPanelGroup' direction='horizontal' className='w-full h-full'>
           <Explorer />

@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
+import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
 import { StartMainContent, StartSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
 
@@ -54,7 +55,7 @@ const StartScreen = () => {
         </MenuRoot>
       </StartSideContent>
       <StartMainContent>
-        <div className='text-2xl text-neutral-1000 dark:text-white'>Welcome to OpenPLC Editor</div>
+        <ProjectFilterBar />
       </StartMainContent>
     </>
   )

@@ -25,7 +25,7 @@ export default function Activitybar() {
         <ActivitybarButton label='Debugger' Icon={DebuggerIcon} onClick={() => console.log('debugger')} />
         <ActivitybarButton label='Play' Icon={PlayIcon} onClick={() => console.log('play')} />
       </div>
-      <div className=' h-20 w-full flex flex-col gap-6'>
+      <div className='h-20 w-full flex flex-col gap-6'>
         <ActivitybarButton label='Exit' Icon={ExitIcon} onClick={() => navigate('/')} />
       </div>
     </div>
