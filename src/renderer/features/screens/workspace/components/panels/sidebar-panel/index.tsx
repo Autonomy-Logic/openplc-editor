@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react'
+import { ReactNode } from 'react'
 import { Panel } from 'react-resizable-panels'
 
 import { InfoPanel } from './info-panel'
@@ -6,11 +6,11 @@ import { LibraryTree } from './library-tree'
 import { ProjectTree } from './project-tree'
 
 export const SidebarPanel = (): ReactNode => {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  // const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   return (
     <Panel
-      onCollapse={() => setIsSidebarCollapsed(true)}
-      onExpand={() => setIsSidebarCollapsed(false)}
+      // onCollapse={() => setIsSidebarCollapsed(true)}
+      // onExpand={() => setIsSidebarCollapsed(false)}
       collapsible={true}
       collapsedSize={0}
       id='sidebar'

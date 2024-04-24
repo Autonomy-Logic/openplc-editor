@@ -1,6 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
 import { PlusIcon } from '@root/renderer/assets'
-import _ from 'lodash'
 import { useState } from 'react'
 
 import { Card } from './card'

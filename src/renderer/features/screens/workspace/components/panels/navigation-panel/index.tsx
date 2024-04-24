@@ -3,15 +3,15 @@ import { ReactNode } from 'react'
 import { NavigationPanelBreadcrumbs } from './breadcrumbs'
 import { NavigationPanelTabs } from './tabs'
 
-const TestData = {
-  key: '1',
-  project_name: 'Project Name',
-  pou_to_display: {
-    name: 'Pou Name',
-    type: ['function'],
-    language: ['ld'],
-  },
-}
+// const TestData = {
+//   key: '1',
+//   project_name: 'Project Name',
+//   pou_to_display: {
+//     name: 'Pou Name',
+//     type: ['function'],
+//     language: ['ld'],
+//   },
+// }
 
 export const NavigationPanel = (): ReactNode => {
   return (

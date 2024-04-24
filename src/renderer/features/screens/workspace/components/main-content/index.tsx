@@ -1,21 +1,21 @@
-import TextEditor from '@features/editors/textual'
 import { MonacoEditor } from '@root/renderer/components/_features/[workspace]/editor'
 import { Explorer } from '@root/renderer/components/_organisms/explorer'
 import { Navigation } from '@root/renderer/components/_organisms/navigation'
 import { Variables } from '@root/renderer/features/variables'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { useEffect } from 'react'
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../../../../resizable'
-import { NavigationPanel } from '../panels/navigation-panel'
-import { InfoPanel } from '../panels/sidebar-panel/info-panel'
-import { LibraryTree } from '../panels/sidebar-panel/library-tree'
-import { ProjectTree } from '../panels/sidebar-panel/project-tree'
+// import { NavigationPanel } from '../panels/navigation-panel'
+// import { InfoPanel } from '../panels/sidebar-panel/info-panel'
+// import { LibraryTree } from '../panels/sidebar-panel/library-tree'
+// import { ProjectTree } from '../panels/sidebar-panel/project-tree'
 
 export const MainContent = () => {
   const {
-    OS,
+    workspaceState: {
+      systemConfigs: { OS },
+    },
     tabsState: { tabs },
   } = useOpenPLCStore()
 

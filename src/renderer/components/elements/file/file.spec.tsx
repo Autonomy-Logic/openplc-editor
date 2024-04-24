@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom'
 
-import { cleanup, render } from '@testing-library/react'
+import { render } from '@testing-library/react'
 
 import File from './index'
 

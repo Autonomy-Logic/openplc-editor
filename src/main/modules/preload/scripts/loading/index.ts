@@ -1,6 +1,4 @@
- 
-// import logoSvg from './assets/logo'
-
+/* eslint-disable @typescript-eslint/unbound-method */
 /**
  * Waits for the specified document ready states before resolving.
  * @param condition - The document ready states to wait for.
@@ -10,7 +8,7 @@ const domReady = (
   /**
    * Represents the possible ready states of the document.
    */
-   
+
   condition: DocumentReadyState[] = ['complete', 'interactive'],
 ) =>
   new Promise((resolve) => {
@@ -114,13 +112,12 @@ const useLoading = () => {
   }
 }
 
-// eslint-disable-next-line react-hooks/rules-of-hooks
 const { appendLoading, removeLoading } = useLoading()
 
 // Wait for the DOM to be ready before appending the loading screen.
 domReady()
   .then(appendLoading)
-   
+
   .catch(() => console.log('Failed to load the dom'))
 
 /**

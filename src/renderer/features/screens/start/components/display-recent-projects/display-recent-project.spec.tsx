@@ -1,7 +1,6 @@
 import '@testing-library/jest-dom'
 
-import { render, screen } from '@testing-library/react'
-import { ReactNode } from 'react'
+import { render } from '@testing-library/react'
 
 import DisplayRecentProjects from './index'
 

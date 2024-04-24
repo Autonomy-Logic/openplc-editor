@@ -1,4 +1,4 @@
-import { BookIcon, FolderIcon, LibraryCloseFolderIcon, MagnifierIcon } from '@process:renderer/assets'
+import { BookIcon, LibraryCloseFolderIcon, MagnifierIcon } from '@process:renderer/assets'
 import { LibraryFileIcon } from '@process:renderer/assets/icons/library/File'
 
 import { Header, Tree } from './components'

@@ -1,10 +1,8 @@
 import { AppLayout } from '@components/_templates'
-import { Screen } from '@features/index'
 import { ReactNode } from 'react'
-import { createBrowserRouter,RouterProvider as ReactRouterProvider } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider as ReactRouterProvider } from 'react-router-dom'
 
 import { StartScreen, WorkspaceScreen } from '../screens'
-import { Test } from '../screens/test'
 
 const router = createBrowserRouter([
   {

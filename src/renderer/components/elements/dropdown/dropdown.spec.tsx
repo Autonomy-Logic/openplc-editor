@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/jest-globals'
 
-import { fireEvent, getByTestId, render } from '@testing-library/react'
+import { fireEvent, render } from '@testing-library/react'
 
 import Dropdown from '.'
 

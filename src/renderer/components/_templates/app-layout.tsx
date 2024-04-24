@@ -1,7 +1,7 @@
 import { TitleBar } from '@root/renderer/features/titlebar'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 
 // type IAppLayoutProps = ComponentPropsWithoutRef<'div'>

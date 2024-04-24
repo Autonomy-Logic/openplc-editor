@@ -1,4 +1,3 @@
-/* eslint-disable jsx-a11y/click-events-have-key-events */
 import { cn } from '@utils/cn'
 import { Dispatch, HTMLAttributes, SetStateAction } from 'react'
 

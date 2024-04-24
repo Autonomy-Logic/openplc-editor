@@ -1,10 +1,7 @@
-import { nativeTheme } from 'electron/main'
 import Store from 'electron-store'
 
-// import { DefaultStoreProps, schema } from '../contracts/types/store/schema';
 import { TStoreType } from '../../contracts/types/modules/store'
 
-// eslint-disable-next-line import/prefer-default-export
 export const store = new Store<TStoreType>({
   schema: {
     last_projects: {

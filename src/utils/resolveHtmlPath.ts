@@ -1,5 +1,3 @@
-/* eslint import/prefer-default-export: off */
-
 import path from 'path'
 
 export function resolveHtmlPath(htmlFileName: string) {

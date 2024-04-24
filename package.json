@@ -84,6 +84,7 @@
     "@types/react": "^18.2.21",
     "@types/react-dom": "^18.2.7",
     "@types/react-test-renderer": "^18.0.1",
+    "@types/source-map-support": "^0.5.10",
     "@types/uuid": "^9.0.7",
     "@types/webpack-bundle-analyzer": "^4.6.0",
     "autoprefixer": "^10.4.16",

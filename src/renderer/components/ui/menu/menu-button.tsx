@@ -1,5 +1,5 @@
 import { cn } from '@utils/cn'
-import { ComponentProps, ElementType, ReactNode } from 'react'
+import { ComponentProps, ReactNode } from 'react'
 
 type IMenuButtonProps = ComponentProps<'button'> & {
   ghosted?: boolean

@@ -7,7 +7,7 @@ type ICreateJSONFileProps = {
   fileName: string
 }
 
-const CreateJSONFile = async (args: ICreateJSONFileProps) => {
+const CreateJSONFile = (args: ICreateJSONFileProps) => {
   const { path, fileName, data } = args
   const normalizedPath = join(path, `${fileName}.json`)
   writeFile(normalizedPath, data, (error) => {

@@ -1,8 +1,6 @@
 import { ITabProps } from '@process:renderer/store/slices/tabs-slice'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { IFunction, IFunctionBlock, IProgram } from '@root/types/PLC'
-import { IPouTemplate } from '@root/types/transfer'
-import { createRef, useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { Tab, TabList } from '../../_atoms'
 

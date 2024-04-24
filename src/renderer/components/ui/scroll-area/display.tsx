@@ -13,5 +13,4 @@ const CustomDisplay = forwardRef(
 
 CustomDisplay.displayName = 'CustomDisplay'
 
-// eslint-disable-next-line import/prefer-default-export
 export { CustomDisplay }

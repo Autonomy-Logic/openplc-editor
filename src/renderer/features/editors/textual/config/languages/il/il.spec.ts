@@ -1,5 +1,3 @@
-import * as monaco from 'monaco-editor'
-
 import { registerLanguage } from '../_.register'
 import { conf as languageConfiguration, language as monarchLanguage } from './il'
 import { conf, language } from './il'

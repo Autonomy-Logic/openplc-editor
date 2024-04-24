@@ -1,9 +1,8 @@
 import { cn } from '@utils/cn'
-import { ReactNode, useEffect,useState } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 
 import { BottomPanel } from './bottom-panel'
-import { EditorPanel } from './editor-panel'
 import { NavigationPanel } from './navigation-panel'
 import { SidebarPanel } from './sidebar-panel'
 
@@ -11,8 +10,8 @@ export const PanelsGroupComponent = (): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   useEffect(() => {
     const setInitialData = async () => {
-      const systemInfo = await window.bridge.getOSInfo()
-      if (systemInfo === 'darwin' || systemInfo === 'win32') {
+      const { OS } = await window.bridge.getSystemInfo()
+      if (OS === 'darwin' || OS === 'win32') {
         setIsLinux(false)
       }
     }
@@ -39,7 +38,7 @@ export const PanelsGroupComponent = (): ReactNode => {
           <PanelGroup className='flex-grow h-full overflow-hidden flex flex-col gap-1' direction='vertical'>
             {/* Here goes the top panel component */}
             <NavigationPanel />
-            <EditorPanel />
+            {/* <EditorPanel /> */}
             {/* Here goes the editor component */}
             <PanelResizeHandle
             // className={`hover:bg-neutral-400 ${

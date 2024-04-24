@@ -40,7 +40,7 @@ const Card = (props: ICardProps): ReactNode => {
     control,
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<IPouFormProps>()
   const { workspaceActions } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)

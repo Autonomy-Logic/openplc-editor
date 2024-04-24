@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
 const programSchema = z.object({
-  type: z.literal('program'),
   language: z.enum(['IL', 'ST', 'LD', 'SFC', 'FBD']).default('IL'),
   name: z.string(),
   /** Array of variable - will be implemented */
@@ -12,4 +11,4 @@ const programSchema = z.object({
 
 type IProgram = z.infer<typeof programSchema>
 
-export { IProgram,programSchema }
+export { IProgram, programSchema }

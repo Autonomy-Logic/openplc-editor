@@ -1,8 +1,8 @@
-import { ipcRenderer,IpcRendererEvent } from 'electron'
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
+import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { baseJsonStructure } from '../../services/project-service/data'
 
-// biome-ignore lint/suspicious/noExplicitAny: <This causes an error in Electron, must be reviewed>
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
 const rendererProcessBridge = {

@@ -5,7 +5,6 @@ import { CONSTANTS } from '../../data'
 const { types } = CONSTANTS
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
-// eslint-disable-next-line import/prefer-default-export
 export const PouSchema = z
   .object({
     '@name': z.string(),

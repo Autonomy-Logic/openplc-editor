@@ -1,6 +1,5 @@
 import { IconStyles } from '@process:renderer/data/constants/icon-styles'
 import { cn } from '@utils/cn'
-import React, { ComponentProps } from 'react'
 
 import { IIconProps } from '../Types/iconTypes'
 
@@ -9,13 +8,13 @@ export const DarkThemeIcon = (props: IIconProps) => {
   const sizeClasses = IconStyles.sizeClasses.medium[size]
   return (
     <svg
-      role='button'
       viewBox='0 0 44 24'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'
       className={cn(`${sizeClasses}`, className)}
       {...res}
     >
+      <title>Dark Theme Icon</title>
       <g clipPath='url(#clip0_1958_12610)'>
         <rect width='44' height='24' rx='12' fill='#0464FB' />
         <g filter='url(#filter0_dd_1958_12610)'>

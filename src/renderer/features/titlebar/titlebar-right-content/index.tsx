@@ -1,12 +1,12 @@
 import { useOpenPLCStore } from '@process:renderer/store'
 
-import { CloseIcon,MaximizeIcon, MinimizeIcon } from './window-controls-icons'
+import { CloseIcon, MaximizeIcon, MinimizeIcon } from './window-controls-icons'
 
 export const TitlebarRightContent = () => {
   /**
    * Get the platform name from the store and check if it's macOS
    */
-  const OS = useOpenPLCStore().OS
+  const OS = useOpenPLCStore().workspaceState.systemConfigs.OS
   const isMac = OS === 'darwin'
   /**
    * Create a template for macOS systems
