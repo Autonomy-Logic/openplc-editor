@@ -350,35 +350,41 @@ export default class MenuBuilder {
 					{
 						label: i18n.t('menu:file.submenu.save'),
 						accelerator: 'Ctrl+S',
+						enabled: false,
 						click: () =>
 							console.warn('Menu button clicked! This is not working yet.'),
 					},
 					{
 						label: i18n.t('menu:file.submenu.saveAs'),
+						enabled: false,
 						accelerator: 'Ctrl+Shift+S',
 						click: () =>
 							console.warn('Menu button clicked! This is not working yet.'),
 					},
 					{
 						label: i18n.t('menu:file.submenu.closeTab'),
+						enabled: false,
 						accelerator: 'Ctrl+W',
 						click: () =>
 							console.warn('Menu button clicked! This is not working yet.'),
 					},
 					{
 						label: i18n.t('menu:file.submenu.closeProject'),
+						enabled: false,
 						accelerator: 'Ctrl+Shift+W',
 						click: () =>
 							console.warn('Menu button clicked! This is not working yet.'),
 					},
 					{
 						label: i18n.t('menu:file.submenu.pageSetup'),
+						enabled: false,
 						accelerator: 'Ctrl+Alt+P',
 						click: () =>
 							console.warn('Menu button clicked! This is not working yet.'),
 					},
 					{
 						label: i18n.t('menu:file.submenu.preview'),
+						enabled: false,
 						accelerator: 'Ctrl+Shift+P',
 						click: () =>
 							console.warn('Menu button clicked! This is not working yet.'),
@@ -390,6 +396,7 @@ export default class MenuBuilder {
 					},
 					{
 						label: i18n.t('menu:file.submenu.updates'),
+						enabled: false,
 						accelerator: 'Ctrl+U',
 						click: () =>
 							console.warn('Menu button clicked! This is not working yet.'),
@@ -406,31 +413,37 @@ export default class MenuBuilder {
 				submenu: [
 					{
 						label: i18n.t('menu:edit.submenu.undo'),
+						enabled: false,
 						accelerator: 'Ctrl+Z',
 						role: 'undo',
 					},
 					{
 						label: i18n.t('menu:edit.submenu.redo'),
+						enabled: false,
 						accelerator: 'Ctrl+Y',
 						role: 'redo',
 					},
 					{
 						label: i18n.t('menu:edit.submenu.cut'),
+						enabled: false,
 						accelerator: 'Ctrl+X',
 						role: 'cut',
 					},
 					{
 						label: i18n.t('menu:edit.submenu.copy'),
+						enabled: false,
 						accelerator: 'Ctrl+C',
 						role: 'copy',
 					},
 					{
 						label: i18n.t('menu:edit.submenu.paste'),
+						enabled: false,
 						accelerator: 'Ctrl+V',
 						role: 'paste',
 					},
 					{
 						label: i18n.t('menu:edit.submenu.find'),
+						enabled: false,
 						accelerator: 'Ctrl+F',
 					},
 					{
@@ -446,9 +459,11 @@ export default class MenuBuilder {
 					{
 						label: i18n.t('menu:edit.submenu.findInProject'),
 						accelerator: 'Ctrl+Shift+F',
+						enabled: false,
 					},
 					{
 						label: i18n.t('menu:edit.submenu.addElement.label'),
+						enabled: false,
 						submenu: [
 							{
 								label: i18n.t(
@@ -468,11 +483,13 @@ export default class MenuBuilder {
 					},
 					{
 						label: i18n.t('menu:edit.submenu.selectAll'),
+						enabled: false,
 						accelerator: 'Ctrl+A',
 						role: 'selectAll',
 					},
 					{
 						label: i18n.t('menu:edit.submenu.delete'),
+						enabled: false,
 						role: 'delete',
 					},
 				],
@@ -486,10 +503,12 @@ export default class MenuBuilder {
 					},
 					{
 						label: i18n.t('menu:display.submenu.clearErrors'),
+						enabled: false,
 						accelerator: '',
 					},
 					{
 						label: 'Zoom',
+						enabled: false,
 						submenu: [
 							{
 								label: i18n.t('menu:display.submenu.zoomIn'),
@@ -503,6 +522,7 @@ export default class MenuBuilder {
 					},
 					{
 						label: i18n.t('menu:display.submenu.switchPerspective'),
+						
 						accelerator: 'F12',
 					},
 					{
@@ -511,9 +531,11 @@ export default class MenuBuilder {
 					},
 					{
 						label: i18n.t('menu:display.submenu.resetPerspective'),
+						enabled: false,
 					},
 					{
 						label: i18n.t('menu:display.submenu.sortAlpha'),
+						enabled: false,
 					},
 				],
 			},
@@ -523,6 +545,7 @@ export default class MenuBuilder {
 				submenu: [
 					{
 						label: i18n.t('menu:help.submenu.communitySupport'),
+						enabled: false,
 					},
 					{
 						label: i18n.t('menu:help.submenu.about'),
