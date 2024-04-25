@@ -1,41 +1,43 @@
 import { TitleBar } from '@root/renderer/features/titlebar'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 
-type IAppLayoutProps = ComponentPropsWithoutRef<'div'>
-const AppLayout = (props: IAppLayoutProps) => {
-	const [isLinux, setIsLinux] = useState(true)
-	const setPlatFormData = useOpenPLCStore().setPlatFormData
+// type IAppLayoutProps = ComponentPropsWithoutRef<'div'>
+const AppLayout = (): ReactNode => {
+  const [isLinux, setIsLinux] = useState(true)
+  const {
+    workspaceActions: { setSystemConfigs },
+  } = useOpenPLCStore()
 
-	useEffect(() => {
-		const setInitialData = async () => {
-			const { system, theme } = await window.bridge.getSystemInfo()
-			setPlatFormData({
-				OS: system,
-				arch: 'x64',
-				colorScheme: theme,
-			})
-			if (system === 'darwin' || system === 'win32') {
-				setIsLinux(false)
-			}
-		}
-		setInitialData()
-	}, [setPlatFormData])
-	return (
-		<>
-			{!isLinux && <TitleBar />}
-			<main
-				className={cn(
-					'absolute flex left-0 right-0 bottom-0 overflow-hidden',
-					`${isLinux ? 'top-0' : 'top-[--oplc-title-bar-height]'}`
-				)}
-			>
-				<Outlet />
-			</main>
-		</>
-	)
+  useEffect(() => {
+    const getUserSystemProps = async () => {
+      const { OS, architecture, prefersDarkMode } = await window.bridge.getSystemInfo()
+      setSystemConfigs({
+        OS,
+        arch: architecture,
+        shouldUseDarkMode: prefersDarkMode,
+      })
+      if (OS === 'darwin' || OS === 'win32') {
+        setIsLinux(false)
+      }
+    }
+    void getUserSystemProps()
+  }, [setSystemConfigs])
+  return (
+    <>
+      {!isLinux && <TitleBar />}
+      <main
+        className={cn(
+          'absolute bottom-0 left-0 right-0 flex overflow-hidden',
+          `${isLinux ? 'top-0' : 'top-[--oplc-title-bar-height]'}`,
+        )}
+      >
+        <Outlet />
+      </main>
+    </>
+  )
 }
 
 export { AppLayout }

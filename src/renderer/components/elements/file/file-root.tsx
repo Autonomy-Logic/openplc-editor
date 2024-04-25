@@ -1,22 +1,13 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { HTMLAttributes } from 'react'
 import { cn } from '@utils/cn'
+import { HTMLAttributes } from 'react'
 
-type FolderRootProps = HTMLAttributes<HTMLDivElement> & unknown
+type FolderRootProps = HTMLAttributes<HTMLDivElement>
 // {
 //   size?: 'sm' | 'md' | 'lg';
 // };
 
 export default function Root({ ...props }: FolderRootProps) {
-	const defaultStyle = 'flex relative w-[224px] h-[160px]'
-	const { className } = props
-	return (
-		// eslint-disable-next-line react/jsx-props-no-spreading
-		<div
-			title='file-root'
-			id='folder-root'
-			{...props}
-			className={cn(defaultStyle, className)}
-		/>
-	)
+  const defaultStyle = 'flex relative w-[224px] h-[160px]'
+  const { className } = props
+  return <div title='file-root' id='folder-root' {...props} className={cn(defaultStyle, className)} />
 }

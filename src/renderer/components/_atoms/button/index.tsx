@@ -1,29 +1,29 @@
-import { ComponentProps, ReactNode } from 'react'
 import { cn } from '@utils/cn'
+import { ComponentProps, ReactNode } from 'react'
 
 type IButtonProps = ComponentProps<'button'> & {
-	ghosted?: boolean
-	children?: ReactNode
+  ghosted?: boolean
+  children?: ReactNode
 }
 
 const GhostedClasses =
-	'bg-transparent focus:bg-transparent text-neutral-1000 hover:text-brand hover:bg-transparent dark:text-white justify-start hover:opacity-90 font-medium'
+  'bg-transparent focus:bg-transparent text-neutral-1000 hover:text-brand hover:bg-transparent dark:text-white justify-start hover:opacity-90 font-medium'
 
 const Button = (props: IButtonProps) => {
-	const { children, ghosted, className, ...res } = props
-	return (
-		<button
-			type='button'
-			className={cn(
-				`w-48 h-12 bg-brand focus:bg-brand-medium text-white flex items-center rounded-md hover:bg-brand-medium-dark font-caption text-xl font-normal px-5 py-3 gap-3
+  const { children, ghosted, className, ...res } = props
+  return (
+    <button
+      type='button'
+      className={cn(
+        `flex h-12 w-48 items-center gap-3 rounded-md bg-brand px-5 py-3 font-caption text-xl font-normal text-white hover:bg-brand-medium-dark focus:bg-brand-medium
 				${ghosted ? GhostedClasses : ''}`,
-				className
-			)}
-			{...res}
-		>
-			{children}
-		</button>
-	)
+        className,
+      )}
+      {...res}
+    >
+      {children}
+    </button>
+  )
 }
 
 export { Button }

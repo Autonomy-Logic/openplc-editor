@@ -1,32 +1,33 @@
 import { ReactNode } from 'react'
-import { NavigationPanelTabs } from './tabs'
-import { NavigationPanelBreadcrumbs } from './breadcrumbs'
 
-const TestData = {
-	key: '1',
-	project_name: 'Project Name',
-	pou_to_display: {
-		name: 'Pou Name',
-		type: ['function'],
-		language: ['ld'],
-	},
-}
+import { NavigationPanelBreadcrumbs } from './breadcrumbs'
+import { NavigationPanelTabs } from './tabs'
+
+// const TestData = {
+//   key: '1',
+//   project_name: 'Project Name',
+//   pou_to_display: {
+//     name: 'Pou Name',
+//     type: ['function'],
+//     language: ['ld'],
+//   },
+// }
 
 export const NavigationPanel = (): ReactNode => {
-	return (
-		<div className='w-full h-[70px] overflow-hidden border-neutral-200 dark:border-neutral-850 rounded-lg bg-white dark:bg-neutral-950 border-2'>
-			<NavigationPanelTabs />
-			<NavigationPanelBreadcrumbs
-				crumb={{
-					key: '1',
-					project_name: 'Project Name',
-					pou_to_display: {
-						name: 'Pou Name',
-						type: ['program'],
-						language: ['ld'],
-					},
-				}}
-			/>
-		</div>
-	)
+  return (
+    <div className='h-[70px] w-full overflow-hidden rounded-lg border-2 border-neutral-200 bg-white dark:border-neutral-850 dark:bg-neutral-950'>
+      <NavigationPanelTabs />
+      <NavigationPanelBreadcrumbs
+        crumb={{
+          key: '1',
+          project_name: 'Project Name',
+          pou_to_display: {
+            name: 'Pou Name',
+            type: ['program'],
+            language: ['ld'],
+          },
+        }}
+      />
+    </div>
+  )
 }

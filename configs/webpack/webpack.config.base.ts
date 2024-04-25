@@ -2,12 +2,12 @@
  * Base webpack config used across other specific configs
  */
 
+import path, { join } from 'path'
 import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin'
 import webpack from 'webpack'
 
 import { dependencies as externals } from '../../release/app/package.json'
 import webpackPaths from './webpack.paths'
-import path, { join } from 'path'
 
 const configuration: webpack.Configuration = {
 	externals: [...Object.keys(externals || {}), 'terser-webpack-plugin'],

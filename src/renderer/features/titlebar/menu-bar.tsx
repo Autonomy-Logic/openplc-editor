@@ -8,13 +8,18 @@ import { FileIcon } from "@radix-ui/react-icons";
 import RecentProjectIcon from "@root/renderer/assets/icons/interface/Recent";
 
 export const MenuBar = () => {
-  const { updateTheme, shouldUseDarkMode } = useOpenPLCStore();
+  const {
+    workspaceActions: { switchAppTheme },
+    workspaceState: {
+      systemConfigs: { shouldUseDarkMode },
+    },
+  } = useOpenPLCStore()
   const [recentProjects, setRecentProjects] = useState<string[]>([]);
 
   const handleChangeTheme = async () => {
-    await window.bridge.toggleTheme();
-    updateTheme();
-  };
+    await window.bridge.toggleTheme()
+    switchAppTheme()
+  }
 
   const triggerDefaultStyle =
     'w-fit dark:aria-[expanded="true"]:bg-neutral-900 h-fit px-2 py-px aria-[expanded="true"]:bg-brand-medium text-white font-caption font-light text-xs rounded-sm bg-brand-dark dark:bg-neutral-950  hover:bg-brand-medium-dark hover:shadow-2xl hover:dark:bg-neutral-900 transition-colors';
@@ -239,7 +244,7 @@ export const MenuBar = () => {
                 >
                   <MenuPrimitive.Item
                     onClick={() => {
-                      handleChangeTheme();
+                    void  handleChangeTheme();
                     }}
                     className={itemDefaultStyle}
                   >
@@ -255,7 +260,7 @@ export const MenuBar = () => {
                   </MenuPrimitive.Item>
                   <MenuPrimitive.Item
                     onClick={() => {
-                      handleChangeTheme();
+                    void  handleChangeTheme();
                     }}
                     className={itemDefaultStyle}
                   >

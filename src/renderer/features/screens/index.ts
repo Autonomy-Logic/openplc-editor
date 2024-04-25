@@ -1,9 +1,9 @@
-import Workspace from './workspace'
 import Start from './start'
+import Workspace from './workspace'
 
 const Screen = {
-	Workspace,
-	Start,
+  Workspace,
+  Start,
 }
 
 export default Screen

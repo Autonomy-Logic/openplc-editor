@@ -1,84 +1,84 @@
 {
-	"file": {
-		"label": "File",
-		"submenu": {
-			"new": "New",
-			"open": "Open",
-			"examples": {
-				"label": "Tutorials and examples",
-				"submenu": {
-					"arduino": "1: Arduino_Cloud",
-					"blink": "2: Blink",
-					"blinkP1AM": "3: Blink_P1AM",
-					"multiLanguage": "4: Multi_Language",
-					"randomGeneratorPragma": "5: Random_Generator_Pragma",
-					"tcpSocket": "6: TCP_Socket",
-					"trafficLightFBD": "7: Traffic_Light_FBD"
-				}
-			},
-			"save": "Save",
-			"saveAs": "Save As",
-			"closeTab": "Close Tab",
-			"closeProject": "Close Project",
-			"pageSetup": "Page Setup",
-			"preview": "Preview",
-			"print": "Print",
-			"updates": "Check for Updates",
-			"quit": "Quit"
-		}
-	},
-	"edit": {
-		"label": "Edit",
-		"submenu": {
-			"undo": "Undo",
-			"redo": "Redo",
-			"cut": "Cut",
-			"copy": "Copy",
-			"paste": "Paste",
-			"find": "Find",
-			"findNext": "Find Next",
-			"findPrevious": "Find Previous",
-			"findInProject": "Find in Project",
-			"addElement": {
-				"label": "Add Element",
-				"submenu": {
-					"function": "Function",
-					"functionBlock": "Function block",
-					"program": "Program",
-					"dataType": "Data type",
-					"cExtension": "C Extension"
-				}
-			},
-			"selectAll": "Select all",
-			"delete": "Delete"
-		}
-	},
-	"display": {
-		"label": "Display",
-		"submenu": {
-			"refresh": "Refresh",
-			"clearErrors": "Clear Errors",
-			"zoomIn": "Zoom In",
-			"zoomOut": "Zoom Out",
-			"switchPerspective": "Switch Perspective",
-			"fullScreen": "Full Screen",
-			"resetPerspective": "Reset Perspective",
-			"sortAlpha": "Sort Alpha",
-			"theme": {
-				"label": "Theme",
-				"submenu": {
-					"light": "Light",
-					"dark": "Dark"
-				}
-			}
-		}
-	},
-	"help": {
-		"label": "Help",
-		"submenu": {
-			"communitySupport": "Community support",
-			"about": "About"
-		}
-	},
-	"recents": "Recents"
+  "file": {
+    "label": "File",
+    "submenu": {
+      "new": "New",
+      "open": "Open",
+      "examples": {
+        "label": "Tutorials and examples",
+        "submenu": {
+          "arduino": "1: Arduino_Cloud",
+          "blink": "2: Blink",
+          "blinkP1AM": "3: Blink_P1AM",
+          "multiLanguage": "4: Multi_Language",
+          "randomGeneratorPragma": "5: Random_Generator_Pragma",
+          "tcpSocket": "6: TCP_Socket",
+          "trafficLightFBD": "7: Traffic_Light_FBD"
+        }
+      },
+      "save": "Save",
+      "saveAs": "Save As",
+      "closeTab": "Close Tab",
+      "closeProject": "Close Project",
+      "pageSetup": "Page Setup",
+      "preview": "Preview",
+      "print": "Print",
+      "updates": "Check for Updates",
+      "quit": "Quit"
+    }
+  },
+  "edit": {
+    "label": "Edit",
+    "submenu": {
+      "undo": "Undo",
+      "redo": "Redo",
+      "cut": "Cut",
+      "copy": "Copy",
+      "paste": "Paste",
+      "find": "Find",
+      "findNext": "Find Next",
+      "findPrevious": "Find Previous",
+      "findInProject": "Find in Project",
+      "addElement": {
+        "label": "Add Element",
+        "submenu": {
+          "function": "Function",
+          "functionBlock": "Function block",
+          "program": "Program",
+          "dataType": "Data type",
+          "cExtension": "C Extension"
+        }
+      },
+      "selectAll": "Select all",
+      "delete": "Delete"
+    }
+  },
+  "display": {
+    "label": "Display",
+    "submenu": {
+      "refresh": "Refresh",
+      "clearErrors": "Clear Errors",
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "switchPerspective": "Switch Perspective",
+      "fullScreen": "Full Screen",
+      "resetPerspective": "Reset Perspective",
+      "sortAlpha": "Sort Alpha",
+      "theme": {
+        "label": "Theme",
+        "submenu": {
+          "light": "Light",
+          "dark": "Dark"
+        }
+      }
+    }
+  },
+  "help": {
+    "label": "Help",
+    "submenu": {
+      "communitySupport": "Community support",
+      "about": "About"
+    }
+  },
+  "recents": "Recents"
 }

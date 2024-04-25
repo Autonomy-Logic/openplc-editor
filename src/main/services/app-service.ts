@@ -1,3 +1,2 @@
-class AppService {
-
-}
+class AppService {}
+export default AppService
