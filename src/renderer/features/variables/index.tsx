@@ -4,7 +4,7 @@ import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { cn } from '@root/utils'
 import { useState } from 'react'
 
-import { CodeDisplay,TableDisplay } from './data-display'
+import { CodeDisplay, TableDisplay } from './data-display'
 import { IVariableProps } from './types'
 
 const Variables = () => {
@@ -34,31 +34,31 @@ const Variables = () => {
     <div id='Variables container'>
       <div
         id='Variables actions container'
-        className={cn('flex mb-4', visibility === 'table' ? 'justify-between' : 'justify-end')}
+        className={cn('mb-4 flex', visibility === 'table' ? 'justify-between' : 'justify-end')}
       >
         {visibility === 'table' && (
-          <div id='Table actions' className='flex flex-1 mr-4 justify-between'>
+          <div id='Table actions' className='mr-4 flex flex-1 justify-between'>
             <div className='flex gap-4'>
-              <div className='flex gap-4 items-center text-neutral-1000 font-medium text-xs dark:text-neutral-300'>
+              <div className='flex items-center gap-4 text-xs font-medium text-neutral-1000 dark:text-neutral-300'>
                 Description:
-                <input className='px-2 focus:outline-none w-80 border dark:text-white border-neutral-100 rounded-lg bg-inherit h-8 font-medium text-[10px] text-neutral-850 ' />
+                <input className='h-8 w-80 rounded-lg border border-neutral-100 bg-inherit px-2 text-[10px] font-medium text-neutral-850 focus:outline-none dark:text-white ' />
               </div>
-              <div className='flex gap-4 items-center text-neutral-1000 font-medium text-xs dark:text-neutral-300'>
+              <div className='flex items-center gap-4 text-xs font-medium text-neutral-1000 dark:text-neutral-300'>
                 Class Filter:
-                <select className='px-2 focus:outline-none dark:text-white w-48 border border-neutral-100 rounded-lg bg-inherit h-8 font-medium text-[10px] text-neutral-850 '>
+                <select className='h-8 w-48 rounded-lg border border-neutral-100 bg-inherit px-2 text-[10px] font-medium text-neutral-850 focus:outline-none dark:text-white '>
                   <option value='local'>Local</option>
                 </select>
               </div>
             </div>
-            <div className='flex gap-3 items-center'>
-              <PlusIcon className='w-5 h-5 !stroke-brand' onClick={addTableRow} />
-              <MinusIcon className='w-5 h-5 stroke-brand' onClick={() => removeTableRow(variablesData.length)} />
-              <ArrowUp className='w-5 h-5 stroke-brand' />
-              <ArrowUp className='w-5 h-5 stroke-brand rotate-180' />
+            <div className='flex items-center gap-3'>
+              <PlusIcon className='h-5 w-5 !stroke-brand' onClick={addTableRow} />
+              <MinusIcon className='h-5 w-5 stroke-brand' onClick={() => removeTableRow(variablesData.length)} />
+              <ArrowUp className='h-5 w-5 stroke-brand' />
+              <ArrowUp className='h-5 w-5 rotate-180 stroke-brand' />
             </div>
           </div>
         )}
-        <div className='flex items-center rounded-md overflow-hidden relative h-full'>
+        <div className='relative flex h-full items-center overflow-hidden rounded-md'>
           <TableIcon
             size='md'
             onClick={() => setVisibility('table')}
@@ -75,10 +75,10 @@ const Variables = () => {
       </div>
       <div id='Variables data'>
         {visibility === 'table' ? (
-          <div id='Variables table root' className='w-full min-w-28 pb-2 pr-2 overflow-auto oplc-scrollbar'>
+          <div id='Variables table root' className='oplc-scrollbar w-full min-w-28 overflow-auto pb-2 pr-2'>
             <div
               id='Variable table container'
-              className='w-full min-w-max flex flex-1 rounded-lg border border-neutral-500 dark:border-neutral-850'
+              className='flex w-full min-w-max flex-1 rounded-lg border border-neutral-500 dark:border-neutral-850'
             >
               <TableDisplay data={variablesData} />
             </div>

@@ -28,7 +28,7 @@ export const MenuBar = () => {
 
   //each root is a menu
   return (
-    <MenuPrimitive.Root className='h-full flex-1 flex items-center gap-2'>
+    <MenuPrimitive.Root className='flex h-full flex-1 items-center gap-2'>
       <MenuPrimitive.Menu>
         <MenuPrimitive.Trigger className={triggerDefaultStyle}>{i18n.t('menu:file.label')}</MenuPrimitive.Trigger>
         <MenuPrimitive.Portal>
@@ -202,7 +202,7 @@ export const MenuBar = () => {
                 <MenuPrimitive.SubContent sideOffset={18} className={contentDefaultStyle}>
                   <MenuPrimitive.Item
                     onClick={() => {
-                      handleChangeTheme()
+                      void handleChangeTheme()
                     }}
                     className={itemDefaultStyle}
                   >
@@ -212,7 +212,7 @@ export const MenuBar = () => {
                   </MenuPrimitive.Item>
                   <MenuPrimitive.Item
                     onClick={() => {
-                      handleChangeTheme()
+                      void handleChangeTheme()
                     }}
                     className={itemDefaultStyle}
                   >
@@ -243,7 +243,7 @@ export const MenuBar = () => {
           </MenuPrimitive.Content>
         </MenuPrimitive.Portal>
       </MenuPrimitive.Menu>
-      <MenuPrimitive.Separator className={cn(separatorDefaultStyle, 'bg-brand-light h-[1px] rotate-90 w-3')} />
+      <MenuPrimitive.Separator className={cn(separatorDefaultStyle, 'h-[1px] w-3 rotate-90 bg-brand-light')} />
       <MenuPrimitive.Menu>
         <MenuPrimitive.Trigger className={triggerDefaultStyle}>recent</MenuPrimitive.Trigger>
         <MenuPrimitive.Portal>

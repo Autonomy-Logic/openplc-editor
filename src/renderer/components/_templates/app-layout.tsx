@@ -23,14 +23,14 @@ const AppLayout = (): ReactNode => {
         setIsLinux(false)
       }
     }
-    getUserSystemProps()
+    void getUserSystemProps()
   }, [setSystemConfigs])
   return (
     <>
       {!isLinux && <TitleBar />}
       <main
         className={cn(
-          'absolute flex left-0 right-0 bottom-0 overflow-hidden',
+          'absolute bottom-0 left-0 right-0 flex overflow-hidden',
           `${isLinux ? 'top-0' : 'top-[--oplc-title-bar-height]'}`,
         )}
       >

@@ -42,7 +42,7 @@ const Leaf = (props: ILeafProps) => {
         {hasChildren && (
           <ArrowIcon
             direction='right'
-            className={cn(`stroke-brand-light w-4 h-4 transition-all ${childVisible && 'stroke-brand rotate-270'}`)}
+            className={cn(`h-4 w-4 stroke-brand-light transition-all ${childVisible && 'rotate-270 stroke-brand'}`)}
           />
         )}
         {/** Icon for the file/folder being rendered */}
@@ -50,7 +50,7 @@ const Leaf = (props: ILeafProps) => {
         {/** Label for the file/folder being rendered */}
         <span
           className={cn(
-            `font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ml-1 truncate ${
+            `ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ${
               childVisible && 'font-medium text-neutral-1000 dark:text-white'
             }`,
           )}

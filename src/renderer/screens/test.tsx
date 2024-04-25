@@ -1,10 +1,10 @@
-import { LibraryFile,LibraryFolder, LibraryRoot } from '@components/_molecules/library'
-import { ProjectTreeBranch, ProjectTreeLeaf,ProjectTreeRoot } from '@components/_molecules/project-tree'
+import { LibraryFile, LibraryFolder, LibraryRoot } from '@components/_molecules/library'
+import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '@components/_molecules/project-tree'
 
 import { ProjectExplorer } from '../components/_organisms/explorer/project'
 const Test = () => {
   return (
-    <div className='w-full h-full flex flex-row justify-center items-center gap-7'>
+    <div className='flex h-full w-full flex-row items-center justify-center gap-7'>
       <ProjectExplorer />
       <ProjectTreeRoot label='OPENPLC-EDITOR'>
         <ProjectTreeBranch branchTarget='dataType'>

@@ -23,22 +23,22 @@ export const MainContent = () => {
     /* Refactor: This outside div will be replaced by the new <WorkspaceMainContent /> */
     <div
       className={cn(
-        'flex flex-1 flex-grow h-full w-full p-2 gap-1 bg-neutral-100 dark:bg-neutral-900',
+        'flex h-full w-full flex-1 flex-grow gap-1 bg-neutral-100 p-2 dark:bg-neutral-900',
         `${OS !== 'linux' && '!rounded-tl-lg'}`,
       )}
     >
-      <ResizablePanelGroup id='mainContentPanelGroup' direction='horizontal' className='w-full h-full'>
+      <ResizablePanelGroup id='mainContentPanelGroup' direction='horizontal' className='h-full w-full'>
         <Explorer />
         <ResizableHandle className='mr-2' />
         <ResizablePanel id='workspacePanel' order={2} defaultSize={87} className='h-full w-[400px]'>
-          <div id='workspaceContentPanel' className='flex-1 grow h-full overflow-hidden flex flex-col gap-2'>
+          <div id='workspaceContentPanel' className='flex h-full flex-1 grow flex-col gap-2 overflow-hidden'>
             {tabs.length > 0 && <Navigation />}
             <ResizablePanelGroup id='editorPanelGroup' direction='vertical'>
               <ResizablePanel
                 id='editorPanel'
                 order={1}
                 defaultSize={75}
-                className='flex-1 grow rounded-lg overflow-hidden flex flex-col border-2 border-neutral-200 bg-white dark:bg-neutral-950 dark:border-neutral-800 p-4'
+                className='flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950'
               >
                 {tabs.length > 0 ? (
                   <ResizablePanelGroup
@@ -53,22 +53,22 @@ export const MainContent = () => {
                       collapsedSize={0}
                       minSize={20}
                       defaultSize={25}
-                      className='flex flex-1 flex-col gap-4 w-full h-full'
+                      className='flex h-full w-full flex-1 flex-col gap-4'
                     >
                       <Variables />
                     </ResizablePanel>
-                    <ResizableHandle className='h-[1px] bg-brand-light w-full' />
+                    <ResizableHandle className='h-[1px] w-full bg-brand-light' />
                     <ResizablePanel
                       id='textualEditorPanel'
                       order={2}
                       defaultSize={75}
-                      className='flex-1 flex-grow rounded-md mt-6'
+                      className='mt-6 flex-1 flex-grow rounded-md'
                     >
                       <MonacoEditor />
                     </ResizablePanel>
                   </ResizablePanelGroup>
                 ) : (
-                  <p className='mx-auto my-auto text-xl font-medium font-display cursor-default select-none'>
+                  <p className='mx-auto my-auto cursor-default select-none font-display text-xl font-medium'>
                     No tabs open
                   </p>
                 )}
@@ -80,7 +80,7 @@ export const MainContent = () => {
                 collapsible
                 defaultSize={25}
                 minSize={15}
-                className='flex-1 grow border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-lg border-2 data-[panel-size="0.0"]:hidden'
+                className='flex-1 grow rounded-lg border-2 border-neutral-200 bg-white data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
               >
                 <span>Console</span>
               </ResizablePanel>

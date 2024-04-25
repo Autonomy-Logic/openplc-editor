@@ -1,4 +1,3 @@
- 
 import { BrowserWindow, Menu, MenuItemConstructorOptions } from 'electron'
 
 import { i18n } from '../utils/i18n'

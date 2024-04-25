@@ -30,4 +30,4 @@ const CloseIcon = () => {
   )
 }
 
-export { CloseIcon,MaximizeIcon, MinimizeIcon }
+export { CloseIcon, MaximizeIcon, MinimizeIcon }

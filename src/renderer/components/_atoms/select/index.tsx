@@ -13,7 +13,7 @@ const SelectTrigger = forwardRef<ElementRef<typeof PrimitiveSelect.Trigger>, ISe
       <PrimitiveSelect.Trigger className={className} {...rest} ref={forwardedRef}>
         <PrimitiveSelect.Value placeholder={placeholder} />
         <PrimitiveSelect.Icon>
-          <ArrowIcon size='sm' className='stroke-brand rotate-270 ' />
+          <ArrowIcon size='sm' className='rotate-270 stroke-brand ' />
         </PrimitiveSelect.Icon>
       </PrimitiveSelect.Trigger>
     )
@@ -45,7 +45,7 @@ const SelectContent = ({
         <PrimitiveSelect.ScrollUpButton>
           <ArrowIcon direction='up' size='sm' className='stroke-brand' />
         </PrimitiveSelect.ScrollUpButton>
-        <PrimitiveSelect.Viewport className='w-full h-full'>{children}</PrimitiveSelect.Viewport>
+        <PrimitiveSelect.Viewport className='h-full w-full'>{children}</PrimitiveSelect.Viewport>
         <PrimitiveSelect.ScrollDownButton>
           <ArrowIcon direction='down' size='sm' className='stroke-brand' />
         </PrimitiveSelect.ScrollDownButton>

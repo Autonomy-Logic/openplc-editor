@@ -17,10 +17,10 @@ export const SidebarPanel = (): ReactNode => {
       order={1}
       minSize={11}
       defaultSize={13}
-      className='h-full border-inherit rounded-lg overflow-auto border-2 border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950 '
+      className='h-full overflow-auto rounded-lg border-2 border-inherit border-neutral-200 bg-white dark:border-neutral-850 dark:bg-neutral-950 '
     >
       <ProjectTree />
-      <hr className='h-[1px] border-none bg-neutral-200 dark:bg-neutral-850 w-full' />
+      <hr className='h-[1px] w-full border-none bg-neutral-200 dark:bg-neutral-850' />
       <LibraryTree />
       <InfoPanel />
     </Panel>

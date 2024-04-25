@@ -3,7 +3,7 @@ import { Tabs } from '../../_molecules/tabs'
 
 const Navigation = () => {
   return (
-    <div className='w-full h-[70px] overflow-hidden border-neutral-200 dark:border-neutral-850 rounded-lg bg-white dark:bg-neutral-950 border-2'>
+    <div className='h-[70px] w-full overflow-hidden rounded-lg border-2 border-neutral-200 bg-white dark:border-neutral-850 dark:bg-neutral-950'>
       <Tabs />
       <Breadcrumbs />
     </div>

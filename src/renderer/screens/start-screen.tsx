@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
 import { useNavigate } from 'react-router-dom'
 
 import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'

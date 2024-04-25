@@ -15,9 +15,9 @@ const WorkspaceScreen = () => {
     tabsState: { tabs },
   } = useOpenPLCStore()
   return (
-    <div className='flex w-full h-full bg-brand-dark dark:bg-neutral-950'>
+    <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
-        <div className='w-full h-fit flex flex-col gap-10 my-5'>
+        <div className='my-5 flex h-fit w-full flex-col gap-10'>
           <ActivityBarButton aria-label='Search'>
             <SearchIcon />
           </ActivityBarButton>
@@ -37,25 +37,25 @@ const WorkspaceScreen = () => {
             <PlayIcon />
           </ActivityBarButton>
         </div>
-        <div className='h-20 w-full flex flex-col gap-6'>
+        <div className='flex h-20 w-full flex-col gap-6'>
           <ActivityBarButton aria-label='Exit' onClick={() => navigate('/')}>
             <ExitIcon />
           </ActivityBarButton>
         </div>
       </WorkspaceSideContent>
       <WorkspaceMainContent>
-        <ResizablePanelGroup id='mainContentPanelGroup' direction='horizontal' className='w-full h-full'>
+        <ResizablePanelGroup id='mainContentPanelGroup' direction='horizontal' className='h-full w-full'>
           <Explorer />
           <ResizableHandle className='mr-2' />
           <ResizablePanel id='workspacePanel' order={2} defaultSize={87} className='h-full w-[400px]'>
-            <div id='workspaceContentPanel' className='flex-1 grow h-full overflow-hidden flex flex-col gap-2'>
+            <div id='workspaceContentPanel' className='flex h-full flex-1 grow flex-col gap-2 overflow-hidden'>
               {tabs.length > 0 && <Navigation />}
               <ResizablePanelGroup id='editorPanelGroup' direction='vertical'>
                 <ResizablePanel
                   id='editorPanel'
                   order={1}
                   defaultSize={75}
-                  className='flex-1 grow rounded-lg overflow-hidden flex flex-col border-2 border-neutral-200 bg-white dark:bg-neutral-950 dark:border-neutral-800 p-4'
+                  className='flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950'
                 >
                   {tabs.length > 0 ? (
                     <ResizablePanelGroup
@@ -70,25 +70,25 @@ const WorkspaceScreen = () => {
                         collapsedSize={0}
                         minSize={20}
                         defaultSize={25}
-                        className='flex flex-1 flex-col gap-4 w-full h-full'
+                        className='flex h-full w-full flex-1 flex-col gap-4'
                       >
                         {/**
                          * TODO: refactor the variable component
                          */}
                         {/* <Variables /> */}
                       </ResizablePanel>
-                      <ResizableHandle className='h-[1px] bg-brand-light w-full' />
+                      <ResizableHandle className='h-[1px] w-full bg-brand-light' />
                       <ResizablePanel
                         id='textualEditorPanel'
                         order={2}
                         defaultSize={75}
-                        className='flex-1 flex-grow rounded-md mt-6'
+                        className='mt-6 flex-1 flex-grow rounded-md'
                       >
                         <MonacoEditor />
                       </ResizablePanel>
                     </ResizablePanelGroup>
                   ) : (
-                    <p className='mx-auto my-auto text-xl flex flex-col items-center gap-1 font-medium font-display cursor-default select-none'>
+                    <p className='mx-auto my-auto flex cursor-default select-none flex-col items-center gap-1 font-display text-xl font-medium'>
                       No tabs open
                     </p>
                   )}
@@ -100,7 +100,7 @@ const WorkspaceScreen = () => {
                   collapsible
                   defaultSize={25}
                   minSize={15}
-                  className='flex-1 grow border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-lg border-2 data-[panel-size="0.0"]:hidden'
+                  className='flex-1 grow rounded-lg border-2 border-neutral-200 bg-white data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
                 >
                   <span>Console</span>
                 </ResizablePanel>

@@ -10,8 +10,8 @@ type IDisplayExampleProjectProps = ComponentProps<'section'>
 
 const DisplayExampleProjects = (props: IDisplayExampleProjectProps) => {
   return (
-    <section className='flex pr-9 flex-col w-full bg-none mb-8 4xl:pr-0' {...props}>
-      <h2 className='flex pr-3 flex-1 w-full mb-3 justify-between text-xl leading-6 font-medium font-caption text-neutral-1000 dark:text-white cursor-default'>
+    <section className='mb-8 flex w-full flex-col bg-none pr-9 4xl:pr-0' {...props}>
+      <h2 className='mb-3 flex w-full flex-1 cursor-default justify-between pr-3 font-caption text-xl font-medium leading-6 text-neutral-1000 dark:text-white'>
         Example Projects
       </h2>
       <div className='scroll-area-horizontal'>

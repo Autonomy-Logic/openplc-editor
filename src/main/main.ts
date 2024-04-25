@@ -38,7 +38,7 @@ if (process.env.NODE_ENV === 'production') {
     sourceMapSupport.install()
   }
 
-  loadSourceMapSupport()
+  void loadSourceMapSupport()
 }
 
 // Retrieves the system information
@@ -78,7 +78,7 @@ if (isDebug) {
 }
 
 const installExtensions = async () => {
-  const installer= await import('electron-devtools-installer')
+  const installer = await import('electron-devtools-installer')
   const forceDownload = !!process.env.UPGRADE_EXTENSIONS
   const extensions = ['REACT_DEVELOPER_TOOLS']
 
@@ -138,7 +138,7 @@ const createMainWindow = async () => {
     },
   })
 
-  splash.loadURL(`file://${path.join(__dirname, './modules/preload/scripts/loading/splash.html')}`)
+  void splash.loadURL(`file://${path.join(__dirname, './modules/preload/scripts/loading/splash.html')}`)
   splash.show()
   // Save window bounds on resize, close, and move events
   const saveBounds = () => {
@@ -154,7 +154,7 @@ const createMainWindow = async () => {
   }
 
   // Load the Url or index.html file;
-  mainWindow.loadURL(resolveHtmlPath(''))
+  void mainWindow.loadURL(resolveHtmlPath(''))
 
   // Open devtools if the app is not packaged;
   // if (isDebug) {
@@ -178,7 +178,7 @@ const createMainWindow = async () => {
 
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
-    shell.openExternal(edata.url)
+    void shell.openExternal(edata.url)
     return { action: 'deny' }
   })
 
@@ -238,12 +238,12 @@ app.on('second-instance', () => {
 app
   .whenReady()
   .then(() => {
-    createMainWindow()
+    void createMainWindow()
     // Handle the app activation event;
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
       // dock icon is clicked and there are no other windows open.
-      if (mainWindow === null) createMainWindow()
+      if (mainWindow === null) void createMainWindow()
     })
   })
   .catch(console.log)

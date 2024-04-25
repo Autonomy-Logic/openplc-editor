@@ -41,7 +41,7 @@ export default function TextEditor(props: IEditorProps) {
   }, [])
 
   const debounce = useCallback(
-    _.debounce((_editorValue) => {
+    _.debounce((_editorValue: string | undefined) => {
       const fileToEdit = verifyEditor()
       if (!fileToEdit) return
       updatePou({ data: { name: fileToEdit, language: 'IL', body: _editorValue } })

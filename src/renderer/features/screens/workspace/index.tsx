@@ -7,7 +7,7 @@ export default function Workspace() {
   const { path, data, projectName, createdAt } = useOpenPLCStore()
   console.log('Data loaded -> ', data, path, projectName, createdAt)
   return (
-    <div className='flex w-full h-full bg-brand-dark dark:bg-neutral-950'>
+    <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       {/** Here goes the activity component */}
       <Activitybar />
       <MainContent />

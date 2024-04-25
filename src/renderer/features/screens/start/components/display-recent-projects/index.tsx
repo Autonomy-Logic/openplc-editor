@@ -7,8 +7,8 @@ export type IDisplayRecentProjectProps = ComponentProps<'section'>
 
 const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
   return (
-    <section className='flex flex-col w-full h-[52%] 2xl:h-3/5 3xl:h-3/4 4xl:h-4/5 pr-9 4xl:pr-0' {...props}>
-      <h2 className='flex flex-1 w-full mb-6 justify-start text-xl font-caption font-medium text-neutral-1000 dark:text-white cursor-default'>
+    <section className='flex h-[52%] w-full flex-col pr-9 2xl:h-3/5 3xl:h-3/4 4xl:h-4/5 4xl:pr-0' {...props}>
+      <h2 className='mb-6 flex w-full flex-1 cursor-default justify-start font-caption text-xl font-medium text-neutral-1000 dark:text-white'>
         Projects
       </h2>
       <div className='scroll-area'>

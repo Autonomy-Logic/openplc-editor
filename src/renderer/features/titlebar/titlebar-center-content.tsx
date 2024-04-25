@@ -20,7 +20,7 @@ export const TitlebarCenterContent = () => {
     return (
       <>
         <OpenPLCIcon />
-        <span className='text-xs font-normal font-caption'>OpenPLC Editor</span>
+        <span className='font-caption text-xs font-normal'>OpenPLC Editor</span>
       </>
     )
   }
@@ -28,7 +28,7 @@ export const TitlebarCenterContent = () => {
    * Create a template for windows and other systems
    */
   const DefaultTemplate = () =>
-    !path.includes('/workspace') ? <span className='text-xs font-normal font-caption'>OpenPLC Editor</span> : <></>
+    !path.includes('/workspace') ? <span className='font-caption text-xs font-normal'>OpenPLC Editor</span> : <></>
   /**
    * Render the appropriate template based on the platform
    */

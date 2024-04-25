@@ -1,4 +1,4 @@
-import { forwardRef,HTMLAttributes } from 'react'
+import { forwardRef, HTMLAttributes } from 'react'
 
 type DropdownRootProps = HTMLAttributes<HTMLDivElement>
 

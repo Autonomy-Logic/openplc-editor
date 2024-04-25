@@ -8,12 +8,12 @@ const Search = (props: ISearchProps) => {
   const inputRef = createRef<HTMLInputElement>()
   return (
     <form
-      className='flex flex-grow w-[704px] mr-2 xl:mr-4 border-neutral-100 border-[1.5px] gap-4 px-8 rounded-lg text-base font-caption items-center h-14 bg-white dark:bg-neutral-50'
+      className='mr-2 flex h-14 w-[704px] flex-grow items-center gap-4 rounded-lg border-[1.5px] border-neutral-100 bg-white px-8 font-caption text-base xl:mr-4 dark:bg-neutral-50'
       {...props}
     >
-      <MagnifierIcon className='stroke-brand cursor-default' />
+      <MagnifierIcon className='cursor-default stroke-brand' />
       <InputWithRef
-        className='w-full h-full bg-inherit outline-none text-black'
+        className='h-full w-full bg-inherit text-black outline-none'
         ref={inputRef}
         id='start-search'
         type='text'

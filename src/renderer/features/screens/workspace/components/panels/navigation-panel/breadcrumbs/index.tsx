@@ -22,12 +22,12 @@ export const NavigationPanelBreadcrumbs = (props: INavigationPanelBreadcrumbsPro
   const IconForType = PouIcon[PouType]
   const IconForLang = LanguageIcon[PouLanguage]
   return (
-    <ol className='flex h-1/2 cursor-default items-center p-2 select-none' {...res}>
+    <ol className='flex h-1/2 cursor-default select-none items-center p-2' {...res}>
       {/** Project Name */}
       <li key={crumb.key}>
         <div className='flex items-center gap-1'>
           <PLCIcon className='h-4 w-4 flex-shrink-0' aria-hidden='true' role='img' />
-          <span className='font-caption text-[10px] text-neutral-850 dark:text-neutral-300 font-medium'>
+          <span className='font-caption text-[10px] font-medium text-neutral-850 dark:text-neutral-300'>
             {crumb.project_name}
           </span>
           <ArrowIcon
@@ -43,7 +43,7 @@ export const NavigationPanelBreadcrumbs = (props: INavigationPanelBreadcrumbsPro
         <div className='flex items-center gap-1'>
           {/** Icon */}
           <IconForType className='h-4 w-4 flex-shrink-0' aria-hidden='true' role='img' />
-          <span className='font-caption text-[10px] text-neutral-850 dark:text-neutral-300 font-medium'>
+          <span className='font-caption text-[10px] font-medium text-neutral-850 dark:text-neutral-300'>
             {/** Text */}
             {PouType}
           </span>
@@ -60,7 +60,7 @@ export const NavigationPanelBreadcrumbs = (props: INavigationPanelBreadcrumbsPro
         <div className='flex items-center gap-1'>
           {/** Icon */}
           <IconForLang className='h-4 w-4 flex-shrink-0' aria-hidden='true' role='img' />
-          <span className='font-caption text-[10px] text-neutral-850 dark:text-neutral-300 font-medium'>
+          <span className='font-caption text-[10px] font-medium text-neutral-850 dark:text-neutral-300'>
             {/** Text */}
             {PouName}
           </span>

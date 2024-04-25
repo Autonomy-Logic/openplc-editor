@@ -16,8 +16,8 @@ export default function Activitybar() {
 
   return (
     /* Refactor: This outside div will be replaced by the new <WorkspaceSideContent /> */
-    <div className='bg-brand-dark dark:bg-neutral-950 h-full w-14 flex flex-col justify-between pb-10 border-t-inherit'>
-      <div className='w-full h-fit flex flex-col gap-10 my-5'>
+    <div className='flex h-full w-14 flex-col justify-between border-t-inherit bg-brand-dark pb-10 dark:bg-neutral-950'>
+      <div className='my-5 flex h-fit w-full flex-col gap-10'>
         <ActivitybarButton label='Search' Icon={SearchIcon} onClick={() => console.log('search')} />
         <ActivitybarButton label='Zoom' Icon={ZoomInOut} onClick={() => console.log('zoom')} />
         <ActivitybarButton label='Download' Icon={DownloadIcon} onClick={() => console.log('download')} />
@@ -25,7 +25,7 @@ export default function Activitybar() {
         <ActivitybarButton label='Debugger' Icon={DebuggerIcon} onClick={() => console.log('debugger')} />
         <ActivitybarButton label='Play' Icon={PlayIcon} onClick={() => console.log('play')} />
       </div>
-      <div className='h-20 w-full flex flex-col gap-6'>
+      <div className='flex h-20 w-full flex-col gap-6'>
         <ActivitybarButton label='Exit' Icon={ExitIcon} onClick={() => navigate('/')} />
       </div>
     </div>

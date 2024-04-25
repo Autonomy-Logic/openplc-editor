@@ -97,10 +97,10 @@ const Card = (props: ICardProps): ReactNode => {
       <Popover.Trigger id={`create-${target}-trigger`} asChild>
         <div
           id={`create-${target}-trigger-container`}
-          className='data-[state=open]:bg-neutral-100 py-[2px] px-[6px] justify-between dark:data-[state=open]:bg-neutral-900 relative flex items-center w-full h-7 gap-[6px] rounded-md cursor-pointer select-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+          className='relative flex h-7 w-full cursor-pointer select-none items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 dark:data-[state=open]:bg-neutral-900'
         >
           {CreatePouSources[target]}
-          <p className='text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300 flex-1 my-[2px]'>
+          <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
             {startCase(target)}
           </p>
           <ArrowIcon size='md' direction='right' />
@@ -110,25 +110,25 @@ const Card = (props: ICardProps): ReactNode => {
         <Popover.Content id={`create-${target}-content`} sideOffset={14} alignOffset={-7} align='start' side='right'>
           <div
             id='pou-card-root'
-            className='flex flex-col drop-shadow-lg pb-3 px-3 pt-2 gap-3 w-[225px] h-fit border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-lg'
+            className='flex h-fit w-[225px] flex-col gap-3 rounded-lg border border-brand-light bg-white p-2 px-3 pb-3 pt-2 drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
           >
-            <div id='pou-card-label-container' className='flex items-center w-full h-8 flex-col justify-between'>
-              <div className='flex w-full items-center gap-2 select-none'>
+            <div id='pou-card-label-container' className='flex h-8 w-full flex-col items-center justify-between'>
+              <div className='flex w-full select-none items-center gap-2'>
                 {CreatePouSources[target]}
-                <p className='text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300 flex-1 my-[2px]'>
+                <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
                   {startCase(target)}
                 </p>
               </div>
-              <div className='bg-neutral-200 dark:!bg-neutral-850 h-[1px] w-full' />
+              <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
             </div>
             <div id='pou-card-form'>
-              <form onSubmit={handleSubmit(submitData)} className='flex flex-col gap-3 w-full h-fit select-none'>
+              <form onSubmit={() => handleSubmit(submitData)} className='flex h-fit w-full select-none flex-col gap-3'>
                 <input type='hidden' {...register('pouType')} value={target} />
-                <div id='pou-name-form-container' className='flex flex-col w-full gap-[6px]'>
+                <div id='pou-name-form-container' className='flex w-full flex-col gap-[6px]'>
                   <label
                     id='pou-name-label'
                     htmlFor='pou-name'
-                    className='text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300 flex-1'
+                    className='flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
                   >
                     POU name:
                   </label>
@@ -143,19 +143,19 @@ const Card = (props: ICardProps): ReactNode => {
                     id='pou-name'
                     type='text'
                     placeholder='POU name'
-                    className='px-2 w-full dark:text-neutral-300  outline-none border border-neutral-100 dark:border-brand-medium-dark text-neutral-850 font-medium text-cp-sm bg-white dark:bg-neutral-950 py-2 h-[30px] rounded-md'
+                    className='h-[30px] w-full rounded-md  border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
                   />
                   {errors.pouName && (
-                    <span className='text-center font-caption text-cp-sm font-normal text-red-500 dark:text-red-500 flex-1'>
+                    <span className='flex-1 text-center font-caption text-cp-sm font-normal text-red-500 dark:text-red-500'>
                       {errors.pouName.message}
                     </span>
                   )}
                 </div>
-                <div id='pou-language-form-container' className='flex flex-col w-full gap-[6px] '>
+                <div id='pou-language-form-container' className='flex w-full flex-col gap-[6px] '>
                   <label
                     id='pou-language-label'
                     htmlFor='pou-language'
-                    className='text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300 flex-1 my-[2px]'
+                    className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
                   >
                     Language:
                   </label>
@@ -169,10 +169,10 @@ const Card = (props: ICardProps): ReactNode => {
                             id='pou-language'
                             aria-label='pou-language'
                             placeholder='Select a language'
-                            className='w-full h-[30px] px-2 py-1 gap-1 flex items-center justify-between outline-none border border-neutral-100 dark:border-brand-medium-dark font-caption font-medium text-cp-sm bg-white dark:bg-neutral-950 rounded-md text-neutral-850 dark:text-neutral-300'
+                            className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
                           />
                           <SelectContent
-                            className='dark:bg-neutral-950 w-[--radix-select-trigger-width] drop-shadow-lg overflow-hidden border h-fit bg-white border-neutral-100 dark:border-brand-medium-dark rounded-lg'
+                            className='h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-neutral-100 bg-white drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
                             sideOffset={5}
                             alignOffset={5}
                             position='popper'
@@ -183,10 +183,10 @@ const Card = (props: ICardProps): ReactNode => {
                               return (
                                 <SelectItem
                                   key={lang.value}
-                                  className='w-full px-2 py-[9px] cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900 flex items-center'
+                                  className='flex w-full cursor-pointer items-center px-2 py-[9px] hover:bg-neutral-100 dark:hover:bg-neutral-900'
                                   value={ConvertToLangShortenedFormat(lang.value)}
                                 >
-                                  <span className='flex items-center  font-caption text-cp-sm gap-2 text-neutral-850 dark:text-neutral-300 font-medium'>
+                                  <span className='flex items-center  gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
                                     {lang.icon} <span>{lang.value}</span>
                                   </span>
                                 </SelectItem>
@@ -198,17 +198,17 @@ const Card = (props: ICardProps): ReactNode => {
                     }}
                   />
                 </div>
-                <div id='form-button-container' className='w-full flex justify-between'>
+                <div id='form-button-container' className='flex w-full justify-between'>
                   <button
                     type='submit'
-                    className='!text-white bg-brand font-caption w-[88px] h-7 rounded-md  font-medium text-cp-sm hover:bg-brand-medium-dark focus:bg-brand-medium'
+                    className='h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm  font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium'
                   >
                     Create
                   </button>
                   <Popover.Close asChild>
                     <button
                       type='button'
-                      className='bg-neutral-100 hover:bg-neutral-200 !text-neutral-1000 font-caption w-[88px] h-7 rounded-md  font-medium text-cp-sm dark:bg-white dark:hover:bg-neutral-100'
+                      className='h-7 w-[88px] rounded-md bg-neutral-100 font-caption text-cp-sm font-medium  !text-neutral-1000 hover:bg-neutral-200 dark:bg-white dark:hover:bg-neutral-100'
                       onClick={handleCancelCreatePou}
                     >
                       Cancel

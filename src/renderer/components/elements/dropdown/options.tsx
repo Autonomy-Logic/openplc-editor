@@ -29,7 +29,7 @@ export default function Options({
 
   return (
     <div className={cn(className)} {...props}>
-      <div className='w-full h-full flex flex-col'>
+      <div className='flex h-full w-full flex-col'>
         {options.map((option) => (
           <button
             type='button'
@@ -37,7 +37,7 @@ export default function Options({
             key={option.label}
             onClick={() => handleOptionClick(option)}
           >
-            <p className='flex-1 text-neutral-1000 text-left py-[10px] pl-4'>{option.label}</p>
+            <p className='flex-1 py-[10px] pl-4 text-left text-neutral-1000'>{option.label}</p>
           </button>
         ))}
       </div>

@@ -28,4 +28,4 @@ const projectSchema = z.object({
 
 type IProject = z.infer<typeof projectSchema>
 
-export { IProject,projectSchema }
+export { IProject, projectSchema }

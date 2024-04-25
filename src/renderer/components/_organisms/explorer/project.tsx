@@ -23,10 +23,10 @@ const Project = () => {
   return (
     <>
       {/* Actions handler */}
-      <div id='project-actions-container' className='flex justify-around w-[200px] my-3 px-2 relative z-10'>
+      <div id='project-actions-container' className='relative z-10 my-3 flex w-[200px] justify-around px-2'>
         <div
           id='project-name-container'
-          className='flex items-center justify-start px-1.5 w-32 h-8 gap-1 rounded-lg cursor-default select-none bg-neutral-100 dark:bg-brand-dark'
+          className='flex h-8 w-32 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 dark:bg-brand-dark'
         >
           <FolderIcon size='sm' />
           <span

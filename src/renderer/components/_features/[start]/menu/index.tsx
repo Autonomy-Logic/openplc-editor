@@ -7,7 +7,7 @@ const MenuRoot = (props: IMenuRootProps) => {
   const { children, ...res } = props
   return (
     <div
-      className='flex flex-col h-fit min-h-[372px] w-[240px] max-w-[240px] bg-transparent justify-start text-xl text-neutral-1000 dark:text-white'
+      className='flex h-fit min-h-[372px] w-[240px] max-w-[240px] flex-col justify-start bg-transparent text-xl text-neutral-1000 dark:text-white'
       {...res}
     >
       {children}
@@ -27,10 +27,10 @@ const MenuSection = (props: IMenuSectionProps) => {
 
 type IMenuDividerProps = ComponentPropsWithoutRef<'hr'>
 const MenuDivider = (props: IMenuDividerProps) => (
-  <hr className='stroke-neutral-200 stroke-[1.5px] w-48 my-4' {...props} />
+  <hr className='my-4 w-48 stroke-neutral-200 stroke-[1.5px]' {...props} />
 )
 
 type IMenuItemProps = ComponentPropsWithoutRef<typeof Button>
 const MenuItem = (props: IMenuItemProps) => <Button {...props} />
 
-export { MenuDivider, MenuItem,MenuRoot, MenuSection }
+export { MenuDivider, MenuItem, MenuRoot, MenuSection }

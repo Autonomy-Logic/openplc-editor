@@ -1,4 +1,4 @@
-import { CloseIcon, FBDIcon, ILIcon,LDIcon, SFCIcon, STIcon } from '@oplc-icons/index'
+import { CloseIcon, FBDIcon, ILIcon, LDIcon, SFCIcon, STIcon } from '@oplc-icons/index'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef } from 'react'
 
@@ -10,11 +10,11 @@ type ITabProps = ComponentPropsWithoutRef<'div'> & {
 }
 
 const LangIcon = {
-  LD: <LDIcon className='w-4 h-4' />,
-  SFC: <SFCIcon className='w-4 h-4' />,
-  FBD: <FBDIcon className='w-4 h-4' />,
-  ST: <STIcon className='w-4 h-4' />,
-  IL: <ILIcon className='w-4 h-4' />,
+  LD: <LDIcon className='h-4 w-4' />,
+  SFC: <SFCIcon className='h-4 w-4' />,
+  FBD: <FBDIcon className='h-4 w-4' />,
+  ST: <STIcon className='h-4 w-4' />,
+  IL: <ILIcon className='h-4 w-4' />,
 }
 
 const Tab = (props: ITabProps) => {
@@ -24,19 +24,19 @@ const Tab = (props: ITabProps) => {
       role='tab'
       draggable
       className={cn(
-        currentTab ? '' : 'opacity-[35%] border-r border-neutral-300',
+        currentTab ? '' : 'border-r border-neutral-300 opacity-[35%]',
         'aria-[current=page]:dark:bg-brand-dark',
-        'group cursor-pointer min-w-0 max-w-[160px] relative bg-neutral-100  h-[30px] flex-1 flex items-center justify-between overflow-hidden text-neutral-1000 dark:text-white py-2 px-3 text-start text-xs font-normal font-display dark:bg-neutral-800',
+        'group relative flex h-[30px] min-w-0 max-w-[160px]  flex-1 cursor-pointer items-center justify-between overflow-hidden bg-neutral-100 px-3 py-2 text-start font-display text-xs font-normal text-neutral-1000 dark:bg-neutral-800 dark:text-white',
       )}
       aria-current={currentTab ? 'page' : undefined}
       {...res}
     >
       {LangIcon[fileLang]}
       <span>{fileName}</span>
-      <CloseIcon onClick={() => handleDeleteTab()} className={cn('stroke-brand dark:stroke-brand-light w-4 h-4')} />
+      <CloseIcon onClick={() => handleDeleteTab()} className={cn('h-4 w-4 stroke-brand dark:stroke-brand-light')} />
       <span
         aria-hidden='true'
-        className={cn(currentTab ? 'bg-brand' : 'bg-transparent', 'absolute inset-x-0 top-0 h-[3px] z-50')}
+        className={cn(currentTab ? 'bg-brand' : 'bg-transparent', 'absolute inset-x-0 top-0 z-50 h-[3px]')}
       />
     </div>
   )

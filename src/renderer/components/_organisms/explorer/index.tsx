@@ -1,6 +1,6 @@
 import { ReactElement } from 'react'
 
-import { ResizableHandle,ResizablePanel, ResizablePanelGroup } from '../panel'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../panel'
 import { Project } from './project'
 
 /**
@@ -16,9 +16,9 @@ const Explorer = (): ReactElement => {
       collapsible={true}
       minSize={11}
       defaultSize={13}
-      className='flex flex-col h-full w-[200px] border-inherit rounded-lg overflow-auto border-2 data-[panel-size="0.0"]:hidden border-neutral-200 dark:border-neutral-850 bg-white dark:bg-neutral-950'
+      className='flex h-full w-[200px] flex-col overflow-auto rounded-lg border-2 border-inherit border-neutral-200 bg-white data-[panel-size="0.0"]:hidden dark:border-neutral-850 dark:bg-neutral-950'
     >
-      <ResizablePanelGroup id='explorerPanelGroup' direction='vertical' className='flex-1 h-full'>
+      <ResizablePanelGroup id='explorerPanelGroup' direction='vertical' className='h-full flex-1'>
         <ResizablePanel id='projectExplorerPanel' order={1} defaultSize={50}>
           <Project />
         </ResizablePanel>

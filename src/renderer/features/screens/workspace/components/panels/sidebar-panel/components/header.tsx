@@ -9,12 +9,12 @@ type IHeaderProps = ComponentProps<'div'> & {
 export const Header = (props: IHeaderProps): ReactNode => {
   const { title, ButtonIcon, TitleIcon } = props
   return (
-    <div className='flex justify-around w-[200px] my-3 px-2 '>
-      <div className='flex items-center justify-start px-1.5 w-32 h-8 gap-2 rounded-lg cursor-default select-none bg-neutral-100 dark:bg-brand-dark'>
+    <div className='my-3 flex w-[200px] justify-around px-2 '>
+      <div className='flex h-8 w-32 cursor-default select-none items-center justify-start gap-2 rounded-lg bg-neutral-100 px-1.5 dark:bg-brand-dark'>
         <TitleIcon />
         <p className='font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'>{title}</p>
       </div>
-      <button type='button' className='w-10 h-8 rounded-lg bg-brand flex justify-center items-center'>
+      <button type='button' className='flex h-8 w-10 items-center justify-center rounded-lg bg-brand'>
         <ButtonIcon className='stroke-white' />
       </button>
     </div>

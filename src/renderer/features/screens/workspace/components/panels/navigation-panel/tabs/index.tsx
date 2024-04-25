@@ -50,9 +50,9 @@ export const NavigationPanelTabs = () => {
           href={tab.href}
           onClick={() => handleClickedTab(tab)}
           className={cn(
-            selectedTab === tab.id ? '' : 'opacity-[35%] border-r border-neutral-300',
+            selectedTab === tab.id ? '' : 'border-r border-neutral-300 opacity-[35%]',
             'aria-[current=page]:dark:bg-brand-dark',
-            'group min-w-0 max-w-[160px] relative bg-neutral-100  h-[30px] flex-1 flex items-center justify-between overflow-hidden text-neutral-1000 dark:text-white py-2 px-3 text-start text-xs font-normal font-display dark:bg-neutral-800',
+            'group relative flex h-[30px] min-w-0  max-w-[160px] flex-1 items-center justify-between overflow-hidden bg-neutral-100 px-3 py-2 text-start font-display text-xs font-normal text-neutral-1000 dark:bg-neutral-800 dark:text-white',
           )}
           aria-current={selectedTab === tab.id ? 'page' : undefined}
         >
@@ -61,13 +61,13 @@ export const NavigationPanelTabs = () => {
             onClick={() => handleDeleteTab(index)}
             className={`${
               selectedTab === tab.id ? 'inline' : 'hidden group-hover:inline'
-            } rotate-45 stroke-brand dark:stroke-brand-light w-4 h-4`}
+            } h-4 w-4 rotate-45 stroke-brand dark:stroke-brand-light`}
           />
           <span
             aria-hidden='true'
             className={cn(
               selectedTab === tab.id ? 'bg-brand' : 'bg-transparent',
-              'absolute inset-x-0 top-0 h-[3px] z-50',
+              'absolute inset-x-0 top-0 z-50 h-[3px]',
             )}
           />
         </a>

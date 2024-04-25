@@ -29,17 +29,17 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
       <ul className='list-none p-0' {...res}>
         {/* biome-ignore lint/a11y/useKeyWithClickEvents: Do not use */}
         <li
-          className=' flex flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900 cursor-pointer'
+          className=' flex cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
           onClick={handleVisibility}
         >
           <ArrowIcon
             direction='right'
-            className={cn(`stroke-brand-light w-4 h-4 transition-all mr-[6px] ${isOpen && 'stroke-brand rotate-270'}`)}
+            className={cn(`mr-[6px] h-4 w-4 stroke-brand-light transition-all ${isOpen && 'rotate-270 stroke-brand'}`)}
           />
           <PLCIcon />
           <span
             className={cn(
-              'font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ml-1 truncate',
+              'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
               isOpen && 'font-medium text-neutral-1000 dark:text-white',
             )}
           >
@@ -89,14 +89,14 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: <explanation> */}
       <div
-        className='cursor-pointer flex flex-row items-center w-full py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
+        className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
         onClick={handleBranchVisibility}
       >
         {pous?.length !== 0 ? (
           <ArrowIcon
             direction='right'
             className={cn(
-              `stroke-brand-light w-4 h-4 transition-all mr-[6px] ${branchIsOpen && 'stroke-brand rotate-270'}`,
+              `mr-[6px] h-4 w-4 stroke-brand-light transition-all ${branchIsOpen && 'rotate-270 stroke-brand'}`,
             )}
           />
         ) : (
@@ -105,7 +105,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
         <BranchIcon />
         <span
           className={cn(
-            'font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ml-1 truncate',
+            'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
         >
@@ -150,14 +150,14 @@ const ProjectTreeLeaf = ({ leafLang, label = 'Data Type', ...res }: IProjectTree
 
   return (
     <li
-      className='py-1 pl-4 ml-4 flex flex-row items-center hover:bg-slate-50 dark:hover:bg-neutral-900 cursor-pointer'
+      className='ml-4 flex cursor-pointer flex-row items-center py-1 pl-4 hover:bg-slate-50 dark:hover:bg-neutral-900'
       onClick={handleLeafSelection}
       {...res}
     >
       <LeafIcon />
       <span
         className={cn(
-          'font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ml-1 truncate',
+          'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
           leafIsSelected && 'font-medium text-neutral-1000 dark:text-white',
         )}
       >
@@ -166,4 +166,4 @@ const ProjectTreeLeaf = ({ leafLang, label = 'Data Type', ...res }: IProjectTree
     </li>
   )
 }
-export { ProjectTreeBranch, ProjectTreeLeaf,ProjectTreeRoot }
+export { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot }

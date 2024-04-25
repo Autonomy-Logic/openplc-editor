@@ -15,4 +15,4 @@ const variableShape = z.object({
 
 type IVariable = z.infer<typeof variableShape>
 
-export { IVariable,variableShape }
+export { IVariable, variableShape }

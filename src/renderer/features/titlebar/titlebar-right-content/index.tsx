@@ -20,21 +20,21 @@ export const TitlebarRightContent = () => {
       <div className='flex h-full'>
         <button
           type='button'
-          className='px-[10px] h-full flex justify-center items-center hover:bg-[#021633] hover:dark:bg-neutral-850'
+          className='flex h-full items-center justify-center px-[10px] hover:bg-[#021633] hover:dark:bg-neutral-850'
           onClick={() => window.bridge.minimizeWindow()}
         >
           <MinimizeIcon />
         </button>
         <button
           type='button'
-          className='px-[10px] h-full flex justify-center items-center hover:bg-[#021633] hover:dark:bg-neutral-850'
+          className='flex h-full items-center justify-center px-[10px] hover:bg-[#021633] hover:dark:bg-neutral-850'
           onClick={() => window.bridge.maximizeWindow()}
         >
           <MaximizeIcon />
         </button>
         <button
           type='button'
-          className='px-[10px] h-full flex justify-center items-center hover:bg-red-600'
+          className='flex h-full items-center justify-center px-[10px] hover:bg-red-600'
           onClick={() => window.bridge.closeWindow()}
         >
           <CloseIcon />

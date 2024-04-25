@@ -26,14 +26,14 @@ export default function Select({
       {...props}
     >
       {placeholder}
-      <div className='flex items-center justify-between w-28'>
+      <div className='flex w-28 items-center justify-between'>
         <span className='text-black '>{selectedOption}</span>
         {Icon && (
           <Icon
             size='md'
             direction='right'
             variant='primary'
-            className={cn(`${showOptions && 'rotate-270'}`, 'stroke-brand inline transition-all')}
+            className={cn(`${showOptions && 'rotate-270'}`, 'inline stroke-brand transition-all')}
           />
         )}
       </div>

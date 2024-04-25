@@ -8,15 +8,15 @@ type IFileProps = ComponentPropsWithoutRef<'div'> & {
 const File = (props: IFileProps) => {
   const { projectName, lastModified, className, ...res } = props
   return (
-    <div title='file-root' id='folder-root' className={cn('flex relative w-[224px] h-[160px]', className)} {...res}>
+    <div title='file-root' id='folder-root' className={cn('relative flex h-[160px] w-[224px]', className)} {...res}>
       <p
         id={projectName}
-        className='text-white text-xs absolute flex flex-col gap-[1px] bottom-4 left-3 cursor-pointer'
+        className='absolute bottom-4 left-3 flex cursor-pointer flex-col gap-[1px] text-xs text-white'
       >
-        <span id={projectName} className='overflow-ellipsis overflow-hidden whitespace-nowrap'>
+        <span id={projectName} className='overflow-hidden overflow-ellipsis whitespace-nowrap'>
           {projectName}
         </span>
-        <span id={lastModified} className='text-[10px] opacity-40 overflow-ellipsis overflow-hidden whitespace-nowrap'>
+        <span id={lastModified} className='overflow-hidden overflow-ellipsis whitespace-nowrap text-[10px] opacity-40'>
           {lastModified}
         </span>
       </p>
@@ -24,7 +24,7 @@ const File = (props: IFileProps) => {
         <title>folder-shape</title>
         <path
           id='folder-path'
-          className='fill-brand-medium cursor-pointer hover:fill-brand-medium-dark'
+          className='cursor-pointer fill-brand-medium hover:fill-brand-medium-dark'
           d='M224 153.143V33.5238C224 29.7367 220.991 26.6667 217.28 26.6667H136.217C135.027 26.6667 133.858 26.3443 132.831 25.7326L91.1693 0.934087C90.1415 0.322343 88.9731 0 87.7833 0H6.72C3.00865 0 0 3.07005 0 6.85715V153.143C0 156.93 3.00864 160 6.71999 160H217.28C220.991 160 224 156.93 224 153.143Z'
         />
       </svg>

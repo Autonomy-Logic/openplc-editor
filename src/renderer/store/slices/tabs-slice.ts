@@ -31,14 +31,14 @@ const createTabsSlice: StateCreator<ITabsSlice, [], [], ITabsSlice> = (setState)
   },
   setTabs: (tabs: ITabProps[]) => {
     setState(
-      produce((state) => {
+      produce((state: ITabsState) => {
         state.tabsState.tabs = tabs
       }),
     )
   },
   updateTabs: (tab: ITabProps) => {
     setState(
-      produce((state) => {
+      produce((state: ITabsState) => {
         const tabExists = state.tabsState.tabs.find((t: ITabProps) => t.name === tab.name)
         if (tabExists) return
         state.tabsState.tabs = [...state.tabsState.tabs, tab]
@@ -46,22 +46,18 @@ const createTabsSlice: StateCreator<ITabsSlice, [], [], ITabsSlice> = (setState)
     )
   },
   sortTabs: (tabs: ITabProps[]) => {
-    setState(
-      produce((state) => {
-        state.tabsState.tabs = tabs
-      }),
-    )
+    setState(produce((state: ITabsState) => (state.tabsState.tabs = tabs)))
   },
   removeTab: (tabToRemove: string) => {
     setState(
-      produce((state) => {
+      produce((state: ITabsState) => {
         state.tabsState.tabs = state.tabsState.tabs.filter((t: ITabProps) => t.name !== tabToRemove)
       }),
     )
   },
   clearTabs: () => {
     setState(
-      produce((state) => {
+      produce((state: ITabsState) => {
         state.tabsState.tabs = []
       }),
     )

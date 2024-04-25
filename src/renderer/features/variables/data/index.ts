@@ -40,4 +40,4 @@ const classesForVariables = {
   Temporary: 'temporary',
 }
 
-export { classesForVariables,typesForVariables }
+export { classesForVariables, typesForVariables }

@@ -43,10 +43,10 @@ export default function ActionsBar() {
   }, [])
 
   return (
-    <div className='w-full pr-10 xl:pr-10 3xl:pr-10 4xl:pr-0 flex mb-4 items-center gap-4 justify-between relative'>
+    <div className='relative mb-4 flex w-full items-center justify-between gap-4 pr-10 xl:pr-10 3xl:pr-10 4xl:pr-0'>
       <Dropdown.Root ref={dropdownRef}>
         <Dropdown.Select
-          className='w-60 h-full gap-3 whitespace-nowrap text-base font-caption text-neutral-700 font-normal justify-center pl-6 pr-2 relative flex items-center rounded-lg  border-neutral-100 border bg-white dark:bg-neutral-50 '
+          className='relative flex h-full w-60 items-center justify-center gap-3 whitespace-nowrap rounded-lg border border-neutral-100 bg-white pl-6 pr-2 font-caption  text-base font-normal text-neutral-700 dark:bg-neutral-50 '
           Icon={ArrowIcon}
           selectedOption={selectedOption}
           setShowOptions={setShowOptions}
@@ -54,7 +54,7 @@ export default function ActionsBar() {
           placeholder='Order by'
         />
         <Dropdown.Options
-          className={`w-[138px] right-0 rounded-md bg-white border-neutral-100 border-[1.5px] absolute z-[999] top-16 ${
+          className={`absolute right-0 top-16 z-[999] w-[138px] rounded-md border-[1.5px] border-neutral-100 bg-white ${
             showOptions ? 'block' : 'hidden'
           }`}
           options={options}
@@ -63,10 +63,10 @@ export default function ActionsBar() {
           selectedOption={selectedOption}
         />
       </Dropdown.Root>
-      <Search.Root className='flex flex-grow w-[704px] mr-2 xl:mr-4 border-neutral-100 border-[1.5px] gap-4 px-8 rounded-lg text-base font-caption items-center h-14 bg-white dark:bg-neutral-50'>
-        <MagnifierIcon className='stroke-brand cursor-default' />
+      <Search.Root className='mr-2 flex h-14 w-[704px] flex-grow items-center gap-4 rounded-lg border-[1.5px] border-neutral-100 bg-white px-8 font-caption text-base xl:mr-4 dark:bg-neutral-50'>
+        <MagnifierIcon className='cursor-default stroke-brand' />
         <Search.Input
-          className='w-full h-full bg-inherit outline-none text-black'
+          className='h-full w-full bg-inherit text-black outline-none'
           id='start-search'
           type='text'
           placeholder='Search a project'

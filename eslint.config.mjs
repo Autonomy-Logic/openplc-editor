@@ -84,28 +84,6 @@ export default [
       'simple-import-sort/imports': 'error',
     },
   },
-  {
-    files: ['src/**/*.{js,jsx,ts,tsx}'],
-    rules: {
-      'no-unused-vars': 'warn',
-      'no-undef': 'warn',
-    },
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
-      globals: {
-        ...globals.amd,
-        ...globals.browser,
-        ...globals.serviceworker,
-        ...globals.node,
-      },
-      /** @type {import('eslint').Linter.ParserOptions} */
-      parserOptions: {
-        project: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
-    },
-  },
   eslintConfigPrettier,
   {
     ignores: [

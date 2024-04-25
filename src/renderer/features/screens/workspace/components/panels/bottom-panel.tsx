@@ -12,7 +12,7 @@ export const BottomPanel = (): ReactNode => {
       id='bottomPanel'
       minSize={22}
       defaultSize={22}
-      className={`border-neutral-200 bg-white dark:bg-neutral-950 rounded-lg border-2  ${
+      className={`rounded-lg border-2 border-neutral-200 bg-white dark:bg-neutral-950  ${
         isBottomBarCollapsed ? 'border-none ' : ''
       }`}
     />

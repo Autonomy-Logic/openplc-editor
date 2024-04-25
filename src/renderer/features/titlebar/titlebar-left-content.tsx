@@ -35,7 +35,7 @@ export const TitlebarLeftContent = () => {
    * Render the appropriate template based on the platform
    */
   return (
-    <div className='flex items-center justify-start px-4 py-0.5 gap-1'>
+    <div className='flex items-center justify-start gap-1 px-4 py-0.5'>
       {' '}
       {isMac ? <DarwinTemplate /> : <DefaultTemplate />}
     </div>

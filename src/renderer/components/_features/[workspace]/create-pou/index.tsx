@@ -13,7 +13,7 @@ const CreatePou = () => {
       <Popover.Trigger
         id='create-pou-trigger'
         type='button'
-        className='w-10 h-8 rounded-lg bg-brand flex justify-center items-center'
+        className='flex h-8 w-10 items-center justify-center rounded-lg bg-brand'
         onClick={() => setIsContainerOpen((prev) => !prev)}
       >
         <PlusIcon className='stroke-white' />
@@ -23,7 +23,7 @@ const CreatePou = () => {
           alignOffset={-7}
           sideOffset={10}
           align='end'
-          className='w-[188px] h-fit shadow-card dark:shadow-dark-card border border-brand-light dark:border-brand-medium-dark bg-white dark:bg-neutral-950 p-2 rounded-lg flex flex-col gap-2'
+          className='flex h-fit w-[188px] flex-col gap-2 rounded-lg border border-brand-light bg-white p-2 shadow-card dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card'
         >
           {CreatePouTypes.map((target) => (
             <Card key={`unique ${target}`} target={target} closeContainer={setIsContainerOpen} />

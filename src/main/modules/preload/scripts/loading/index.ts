@@ -125,6 +125,10 @@ domReady()
  * @param event - The message event.
  */
 window.onmessage = (event) => {
+  /**
+   * This ESLint rule can be reviewed later.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   if (event.data.payload === 'removeLoading') removeLoading()
 }
 

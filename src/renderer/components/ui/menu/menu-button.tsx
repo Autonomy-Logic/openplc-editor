@@ -15,7 +15,7 @@ const Button = (props: IMenuButtonProps) => {
     <button
       type='button'
       className={cn(
-        `w-48 h-12 bg-brand focus:bg-brand-medium text-white flex items-center rounded-md hover:bg-brand-medium-dark font-caption text-xl font-normal px-5 py-3 gap-3
+        `flex h-12 w-48 items-center gap-3 rounded-md bg-brand px-5 py-3 font-caption text-xl font-normal text-white hover:bg-brand-medium-dark focus:bg-brand-medium
 				${ghosted ? GhostedClasses : ''}`,
         className,
       )}

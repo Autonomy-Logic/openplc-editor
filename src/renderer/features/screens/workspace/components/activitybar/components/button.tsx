@@ -7,7 +7,7 @@ type IActivitybarButtonProps = ComponentProps<'button'> & {
 
 export const ActivitybarButton = ({ label, Icon, ...res }: IActivitybarButtonProps) => {
   return (
-    <button type='button' title={label} className='w-full h-6 flex items-center justify-center' {...res}>
+    <button type='button' title={label} className='flex h-6 w-full items-center justify-center' {...res}>
       <Icon />
       <span className='sr-only'>{label}</span>
     </button>
