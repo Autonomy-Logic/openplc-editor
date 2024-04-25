@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
 import { CreatePouSources, PouLanguageSources } from '@process:renderer/data'
 import * as Popover from '@radix-ui/react-popover'
 import { ArrowIcon } from '@root/renderer/assets'
@@ -122,7 +123,7 @@ const Card = (props: ICardProps): ReactNode => {
               <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
             </div>
             <div id='pou-card-form'>
-              <form onSubmit={() => handleSubmit(submitData)} className='flex h-fit w-full select-none flex-col gap-3'>
+              <form onSubmit={handleSubmit(submitData)} className='flex h-fit w-full select-none flex-col gap-3'>
                 <input type='hidden' {...register('pouType')} value={target} />
                 <div id='pou-name-form-container' className='flex w-full flex-col gap-[6px]'>
                   <label
