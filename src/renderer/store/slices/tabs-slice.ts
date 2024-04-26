@@ -1,18 +1,13 @@
-import { IFunction, IFunctionBlock, IProgram } from '@root/types/PLC'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-type ITabProps =
-  | IProgram
-  | IFunction
-  | (IFunctionBlock & {
-      currentTab?: boolean
-    })
-
+type ITabProps = {
+  name: string
+  language: 'IL' | 'ST' | 'LD' | 'SFC' | 'FBD'
+  currentTab: boolean
+}
 type ITabsState = {
-  tabsState: {
-    tabs: ITabProps[] | []
-  }
+  tabs: ITabProps[] | []
 }
 
 type ITabsActions = {
@@ -23,44 +18,53 @@ type ITabsActions = {
   clearTabs: () => void
 }
 
-export type ITabsSlice = ITabsState & ITabsActions
+export type ITabsSlice = {
+  tabsState: ITabsState
+  tabsActions: ITabsActions
+}
 
 const createTabsSlice: StateCreator<ITabsSlice, [], [], ITabsSlice> = (setState) => ({
   tabsState: {
     tabs: [],
   },
-  setTabs: (tabs: ITabProps[]) => {
-    setState(
-      produce((state: ITabsState) => {
-        state.tabsState.tabs = tabs
-      }),
-    )
-  },
-  updateTabs: (tab: ITabProps) => {
-    setState(
-      produce((state: ITabsState) => {
-        const tabExists = state.tabsState.tabs.find((t: ITabProps) => t.name === tab.name)
-        if (tabExists) return
-        state.tabsState.tabs = [...state.tabsState.tabs, tab]
-      }),
-    )
-  },
-  sortTabs: (tabs: ITabProps[]) => {
-    setState(produce((state: ITabsState) => (state.tabsState.tabs = tabs)))
-  },
-  removeTab: (tabToRemove: string) => {
-    setState(
-      produce((state: ITabsState) => {
-        state.tabsState.tabs = state.tabsState.tabs.filter((t: ITabProps) => t.name !== tabToRemove)
-      }),
-    )
-  },
-  clearTabs: () => {
-    setState(
-      produce((state: ITabsState) => {
-        state.tabsState.tabs = []
-      }),
-    )
+  tabsActions: {
+    setTabs: (tabs: ITabProps[]) => {
+      setState(
+        produce(({ tabsState }: ITabsSlice) => {
+          tabsState.tabs = tabs
+        }),
+      )
+    },
+    updateTabs: (tab: ITabProps) => {
+      setState(
+        produce(({ tabsState }: ITabsSlice) => {
+          const tabExists = tabsState.tabs.find((t: ITabProps) => t.name === tab.name)
+          if (tabExists) return
+          tabsState.tabs = [...tabsState.tabs, tab]
+        }),
+      )
+    },
+    sortTabs: (tabs: ITabProps[]) => {
+      setState(
+        produce(({ tabsState }: ITabsSlice) => {
+          tabsState.tabs = tabs
+        }),
+      )
+    },
+    removeTab: (tabToRemove: string) => {
+      setState(
+        produce(({ tabsState }: ITabsSlice) => {
+          tabsState.tabs = tabsState.tabs.filter((t: ITabProps) => t.name !== tabToRemove)
+        }),
+      )
+    },
+    clearTabs: () => {
+      setState(
+        produce(({ tabsState }: ITabsSlice) => {
+          tabsState.tabs = []
+        }),
+      )
+    },
   },
 })
 
