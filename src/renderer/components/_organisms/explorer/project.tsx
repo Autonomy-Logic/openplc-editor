@@ -1,8 +1,8 @@
 import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '@components/_molecules/project-tree'
 import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { ITabProps } from '@root/renderer/store/slices'
 
-// import { ITabProps } from '@root/renderer/store/slices'
 import { CreatePou } from '../../_features/[workspace]/create-pou'
 
 const Project = () => {
@@ -10,15 +10,19 @@ const Project = () => {
     workspaceState: {
       projectData: { pous },
     },
+    tabsActions: { updateTabs },
     // updateEditor,
-    // updateTabs,
   } = useOpenPLCStore()
   const Name = 'Project Name'
 
-  // const handleCreateTab = (tab: ITabProps) => {
-  //   updateTabs(tab)
-  //   updateEditor({ path: tab.name, value: tab.body })
-  // }
+  const handleCreateTab = (name: string, language: 'IL' | 'ST' | 'LD' | 'SFC' | 'FBD') => {
+    const tabToBeCreated: ITabProps = {
+      name,
+      language,
+      currentTab: true,
+    }
+    updateTabs(tabToBeCreated)
+  }
 
   return (
     <>
@@ -52,7 +56,7 @@ const Project = () => {
                 leafLang={data.language}
                 label={data.name}
                 /** Todo: Update the tab state */
-                // onClick={() => handleCreateTab(data)}
+                onClick={() => handleCreateTab(data.name, data.language)}
               />
             ))}
         </ProjectTreeBranch>
@@ -65,7 +69,7 @@ const Project = () => {
                 leafLang={data.language}
                 label={data.name}
                 /** Todo: Update the tab state */
-                // onClick={() => handleCreateTab(data)}
+                onClick={() => handleCreateTab(data.name, data.language)}
               />
             ))}
         </ProjectTreeBranch>
@@ -78,7 +82,7 @@ const Project = () => {
                 leafLang={data.language}
                 label={data.name}
                 /** Todo: Update the tab state */
-                // onClick={() => handleCreateTab(data)}
+                onClick={() => handleCreateTab(data.name, data.language)}
               />
             ))}
         </ProjectTreeBranch>

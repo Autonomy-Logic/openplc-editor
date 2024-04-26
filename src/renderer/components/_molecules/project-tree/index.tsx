@@ -27,7 +27,6 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
   return (
     <div className='select-none'>
       <ul className='list-none p-0' {...res}>
-        {/* biome-ignore lint/a11y/useKeyWithClickEvents: Do not use */}
         <li
           className=' flex cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
           onClick={handleVisibility}
@@ -87,7 +86,6 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
 
   return (
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: <explanation> */}
       <div
         className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
         onClick={handleBranchVisibility}

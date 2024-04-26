@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
 import { CreatePouSources, PouLanguageSources } from '@process:renderer/data'
 import * as Popover from '@radix-ui/react-popover'
 import { ArrowIcon } from '@root/renderer/assets'
