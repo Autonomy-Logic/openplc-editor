@@ -4,7 +4,6 @@ import { StateCreator } from 'zustand'
 type IEditorState = {
   path: string
   language: string
-  theme: string
   value: string
 }
 
@@ -14,38 +13,32 @@ type IEditorActions = {
   clearEditor: () => void
 }
 
-export type IEditorSlice = IEditorState & IEditorActions
+export type IEditorSlice = {
+  editorState: IEditorState
+  editorActions: IEditorActions
+}
 
 export const createEditorSlice: StateCreator<IEditorSlice, [], [], IEditorSlice> = (setState) => ({
-  path: '',
-  language: '',
-  theme: '',
-  value: '',
-  setEditor: (editor: IEditorState): void =>
-    setState(
-      produce((state: IEditorState) => {
-        state.path = editor.path
-        state.language = editor.language
-        state.theme = editor.theme
-        state.value = editor.value
-      }),
-    ),
-  updateEditor: (editor: Partial<IEditorState>): void =>
-    setState(
-      produce((state: IEditorState) => {
-        if (editor.path) state.path = editor.path
-        if (editor.language) state.language = editor.language
-        if (editor.theme) state.theme = editor.theme
-        if (editor.value) state.value = editor.value
-      }),
-    ),
-  clearEditor: (): void =>
-    setState(
-      produce((state: IEditorState) => {
-        state.path = ''
-        state.language = ''
-        state.theme = ''
-        state.value = ''
-      }),
-    ),
+  editorState: {
+    path: '',
+    language: '',
+    value: '',
+  },
+  editorActions: {
+    setEditor: (editor: IEditorState): void => setState(produce((slice: IEditorSlice) => (slice.editorState = editor))),
+    updateEditor: (editor: Partial<IEditorState>): void =>
+      setState(
+        produce((slice: IEditorSlice) => {
+          Object.assign(slice.editorState, editor)
+        }),
+      ),
+    clearEditor: (): void =>
+      setState(
+        produce((slice: IEditorSlice) => {
+          slice.editorState.path = ''
+          slice.editorState.language = ''
+          slice.editorState.value = ''
+        }),
+      ),
+  },
 })

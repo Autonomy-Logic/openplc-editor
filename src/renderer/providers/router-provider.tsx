@@ -12,12 +12,12 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <StartScreen />,
+        element: <WorkspaceScreen />,
       },
       {
         id: 'workspace',
         path: 'workspace',
-        element: <WorkspaceScreen />,
+        element: <StartScreen />,
       },
     ],
   },

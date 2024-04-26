@@ -5,36 +5,30 @@ const lightThemeData: monaco.editor.IStandaloneThemeData = {
   inherit: true,
   rules: [],
   colors: {
-    'editor.foreground': '#333333',
-    'editor.background': '#FFFFFF',
-    'editorCursor.foreground': '#000000',
-    'editor.lineHighlightBackground': '#E5E5E5',
-    'editor.highlightBackground': '#FFFF00',
-    'editorLineNumber.foreground': '#0464fb',
-    'editor.selectionBackground': '#B0B0B0',
-    // 'editorGutter.background': '#F9F9F9',
-    'editorLineNumber.activeForeground': '#011e4b',
+    'editor.background': '#FFFFFF', // Editor background color.
+    'editor.foreground': '#030303', // Editor foreground color <! The text that appears in the editor !>.
+    'editor.selectionBackground': '#E5E5E5', // Color of the editor selection.
+    'editorLineNumber.foreground': '#B4D0FE', // Color of the editor line numbers.
+    'editorLineNumber.activeForeground': '#0464fb', // Color of the active editor line number.
+    'editor.lineHighlightBackground': '#F9F9F9', // Background color of the current line highlight.
+    'editorGutter.background': '#FFFFFF', // Color of the editor gutter <! The place where the line numbers go. Must be the same color as editor.background. !>.
+    'editorCursor.foreground': '#000000', // Color of the editor cursor.
   },
 }
 
 const darkThemeData: monaco.editor.IStandaloneThemeData = {
   base: 'vs-dark',
   inherit: true,
-  rules: [
-    { token: 'variable', foreground: '#FFD700' },
-    { token: 'operators', foreground: '#0EFE03' },
-    { token: 'type', foreground: '#0EFE03' },
-    { token: 'comment', foreground: '#377534' },
-    { token: 'block-comment', foreground: '#377534' },
-  ],
+  rules: [],
   colors: {
-    'editor.background': '#121316', // editor background
-    'editorCursor.foreground': '#E8E5E5', // cursor color // current line highlight border color
-    'editor.highlightBackground': '#00FF00',
-    'editorLineNumber.foreground': '#0464fb', // line number color without highlight
-    'editor.selectionBackground': '#565F68', // selected content color, e.g., ctrl + a
-    'editorLineNumber.activeForeground': '#FFFFFF', // highlighted line number color
-    'editorBracketPairGuide.activeBackground1': '#2DD6B5',
+    'editor.background': '#121316', // Editor background color.
+    'editor.foreground': '#FFFFFF', // Editor foreground color <! The text that appears in the editor !>.
+    'editor.selectionBackground': '#5E6275', // Color of the editor selection. 
+    'editorLineNumber.foreground': '#023C97', // Color of the editor line numbers.
+    'editorLineNumber.activeForeground': '#0464fb', // Color of the active editor line number.
+    'editor.lineHighlightBackground': '#2E3038', // Background color of the current line highlight.
+    'editorGutter.background': '#121316', // Color of the editor gutter <! The place where the line numbers go. Must be the same color as editor.background. !>.
+    'editorCursor.foreground': '#E8E5E5', // Color of the editor cursor.
   },
 }
 
