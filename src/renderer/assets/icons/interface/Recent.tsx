@@ -1,30 +1,30 @@
-import { ComponentProps } from 'react'
 import { cn } from '@utils/cn'
+import { ComponentProps } from 'react'
 
 type IRecentIconProps = ComponentProps<'svg'> & {
-	size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg'
 }
 
 const sizeClasses = {
-	sm: 'w-5 h-5',
-	md: 'w-8 h-8',
-	lg: 'w-12 h-12',
+  sm: 'w-5 h-5',
+  md: 'w-8 h-8',
+  lg: 'w-12 h-12',
 }
 export default function RecentProjectIcon(props: IRecentIconProps) {
-	const { className, size = 'sm', ...res } = props
-	return (
-		<svg
-			role='img'
-			viewBox='0 0 23 16'
-			fill='none'
-			xmlns='http://www.w3.org/2000/svg'
-			className={cn(`${sizeClasses[size]}`, className)}
-			{...res}
-		>
-			<path
-				d='M22.4 15.3143V3.35238C22.4 2.97367 22.0991 2.66667 21.728 2.66667H13.6217C13.5027 2.66667 13.3858 2.63443 13.2831 2.57326L9.11693 0.0934087C9.01415 0.0322343 8.89731 0 8.77833 0H0.672C0.300865 0 0 0.307005 0 0.685715V15.3143C0 15.693 0.300864 16 0.671999 16H21.728C22.0991 16 22.4 15.693 22.4 15.3143Z'
-				fill='#0350C9'
-			/>
-		</svg>
-	)
+  const { className, size = 'sm', ...res } = props
+  return (
+    <svg
+      viewBox='0 0 20 18'
+      fill='none'
+      xmlns='http://www.w3.org/2000/svg'
+      className={cn(sizeClasses[size], className)}
+      {...res}
+    >
+      <title>Recent Icon</title>
+      <path
+        d='M20 13.6111V6.80555C20 4.65778 18.2091 2.91667 16 2.91667H13.3333C12.4679 2.91667 11.6257 2.64375 10.9333 2.13889L9.06667 0.777778C8.37428 0.272914 7.53215 0 6.66667 0H4C1.79086 0 0 1.74111 0 3.88889V13.6111C0 15.7589 1.79086 17.5 4 17.5H16C18.2091 17.5 20 15.7589 20 13.6111Z'
+        fill='#0464FB'
+      />
+    </svg>
+  )
 }
