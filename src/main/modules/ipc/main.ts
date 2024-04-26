@@ -1,8 +1,8 @@
+import { TStoreType } from '@root/main/contracts/types/modules/store'
 import { Event, nativeTheme } from 'electron'
-import { arch, platform } from 'process'
+import { platform } from 'process'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
-import { ToastProps, ToastSchema } from '../../contracts/types/modules/ipc/toast'
 import { ProjectDto } from '../../contracts/types/services/project.service'
 
 class MainProcessBridge implements MainIpcModule {
@@ -37,17 +37,16 @@ class MainProcessBridge implements MainIpcModule {
       return response
     })
 
+    this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
     this.ipcMain.on('project:save-response', (_event, data: ProjectDto) => this.projectService.saveProject(data))
     /**
      * Send the OS information to the renderer process
      * Refactor: This can be optimized.
      */
     this.ipcMain.handle('system:get-system-info', () => {
-      return {
-        OS: platform,
-        architecture: arch,
-        prefersDarkMode: nativeTheme.shouldUseDarkColors,
-      }
+      const response = platform
+      const colorPreference = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
+      return { OS: response, architecture: 'x64', prefersDarkMode: colorPreference }
     })
     this.ipcMain.on('window-controls:close', () => this.mainWindow?.close())
     this.ipcMain.on('window-controls:minimize', () => this.mainWindow?.minimize())
@@ -63,14 +62,15 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   mainIpcEventHandlers = {
+    getStoreValue: (_: Event, key: keyof typeof this.store) => {
+      const response = this.store.get(key)
+      console.log(response)
+      return response as unknown as TStoreType
+    },
     createPou: () => this.mainWindow?.webContents.send('pou:createPou', { ok: true }),
     saveProject: (_: Event, arg: ProjectDto) => {
       const response = this.projectService.saveProject(arg)
       return response
-    },
-    sendToast: (arg: ToastProps) => {
-      const message = ToastSchema.parse(arg)
-      this.mainWindow?.webContents.send('get-toast', message)
     },
   }
 }

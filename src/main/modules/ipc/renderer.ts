@@ -6,7 +6,7 @@ import { baseJsonStructure } from '../../services/project-service/data'
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
 const rendererProcessBridge = {
-  toggleTheme: () => ipcRenderer.invoke('app:toggle-theme'),
+  toggleTheme: (): Promise<boolean> => ipcRenderer.invoke('app:toggle-theme'),
   getThemePreference: () => ipcRenderer.invoke('app-preferences:get-theme'),
   startOpenProject: () => ipcRenderer.invoke('start-screen/project:open'),
   startCreateProject: (): Promise<{
@@ -22,6 +22,7 @@ const rendererProcessBridge = {
    * Send the OS information to the renderer process
    * !IMPORTANT: This return type must be refactored to match the Node.js API
    */
+  getRecents: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
   getSystemInfo: (): Promise<{
     OS: 'linux' | 'darwin' | 'win32' | ''
     architecture: 'x64' | 'arm' | ''
