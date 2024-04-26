@@ -22,7 +22,7 @@ const rendererProcessBridge = {
    * Send the OS information to the renderer process
    * !IMPORTANT: This return type must be refactored to match the Node.js API
    */
-	getRecents: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
+  getRecents: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
   getSystemInfo: (): Promise<{
     OS: 'linux' | 'darwin' | 'win32' | ''
     architecture: 'x64' | 'arm' | ''

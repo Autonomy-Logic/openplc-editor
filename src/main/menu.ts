@@ -4,7 +4,6 @@ import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme } from 'el
 import { i18n } from '../utils/i18n'
 import { ProjectService } from './services'
 
-
 /**
  * Wip: Interface for mac machines menu.
  */
@@ -308,244 +307,234 @@ export default class MenuBuilder {
     return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp]
   }
 
-	// Wip: Constructing a default machines menu.
-	buildDefaultTemplate() {
-		const templateDefault: MenuItemConstructorOptions[] = [
-			{
-				label: i18n.t('menu:file.label'),
-				visible: false,
-				submenu: [
-					{
-						label: i18n.t('menu:file.submenu.new'),
-						accelerator: 'Ctrl+N',
-						click: () => this.handleProject('project:create'),
-					},
-					{
-						label: i18n.t('menu:file.submenu.open'),
-						accelerator: 'Ctrl+O',
-						click: () => this.handleProject('project:open'),
-					},
-					{
-						label: i18n.t('menu:file.submenu.save'),
-						accelerator: 'Ctrl+S',
-						enabled: false,
-						click: () =>
-							console.warn('Menu button clicked! This is not working yet.'),
-					},
-					{
-						label: i18n.t('menu:file.submenu.saveAs'),
-						enabled: false,
-						accelerator: 'Ctrl+Shift+S',
-						click: () =>
-							console.warn('Menu button clicked! This is not working yet.'),
-					},
-					{
-						label: i18n.t('menu:file.submenu.closeTab'),
-						enabled: false,
-						accelerator: 'Ctrl+W',
-						click: () =>
-							console.warn('Menu button clicked! This is not working yet.'),
-					},
-					{
-						label: i18n.t('menu:file.submenu.closeProject'),
-						enabled: false,
-						accelerator: 'Ctrl+Shift+W',
-						click: () =>
-							console.warn('Menu button clicked! This is not working yet.'),
-					},
-					{
-						label: i18n.t('menu:file.submenu.pageSetup'),
-						enabled: false,
-						accelerator: 'Ctrl+Alt+P',
-						click: () =>
-							console.warn('Menu button clicked! This is not working yet.'),
-					},
-					{
-						label: i18n.t('menu:file.submenu.preview'),
-						enabled: false,
-						accelerator: 'Ctrl+Shift+P',
-						click: () =>
-							console.warn('Menu button clicked! This is not working yet.'),
-					},
-					{
-						label: i18n.t('menu:file.submenu.print'),
-						accelerator: 'Ctrl+P',
-						enabled: false,
-					},
-					{
-						label: i18n.t('menu:file.submenu.updates'),
-						enabled: false,
-						accelerator: 'Ctrl+U',
-						click: () =>
-							console.warn('Menu button clicked! This is not working yet.'),
-					},
-					{
-						label: i18n.t('menu:file.submenu.quit'),
-						role: 'quit',
-						accelerator: 'Ctrl+Q',
-					},
-				],
-			},
-			{
-				label: i18n.t('menu:edit.label'),
-				submenu: [
-					{
-						label: i18n.t('menu:edit.submenu.undo'),
-						enabled: false,
-						accelerator: 'Ctrl+Z',
-						role: 'undo',
-					},
-					{
-						label: i18n.t('menu:edit.submenu.redo'),
-						enabled: false,
-						accelerator: 'Ctrl+Y',
-						role: 'redo',
-					},
-					{
-						label: i18n.t('menu:edit.submenu.cut'),
-						enabled: false,
-						accelerator: 'Ctrl+X',
-						role: 'cut',
-					},
-					{
-						label: i18n.t('menu:edit.submenu.copy'),
-						enabled: false,
-						accelerator: 'Ctrl+C',
-						role: 'copy',
-					},
-					{
-						label: i18n.t('menu:edit.submenu.paste'),
-						enabled: false,
-						accelerator: 'Ctrl+V',
-						role: 'paste',
-					},
-					{
-						label: i18n.t('menu:edit.submenu.find'),
-						enabled: false,
-						accelerator: 'Ctrl+F',
-					},
-					{
-						label: i18n.t('menu:edit.submenu.findNext'),
-						accelerator: 'Ctrl+K',
-						enabled: false,
-					},
-					{
-						label: i18n.t('menu:edit.submenu.findPrevious'),
-						accelerator: 'Ctrl+Shift+K',
-						enabled: false,
-					},
-					{
-						label: i18n.t('menu:edit.submenu.findInProject'),
-						accelerator: 'Ctrl+Shift+F',
-						enabled: false,
-					},
-					{
-						label: i18n.t('menu:edit.submenu.addElement.label'),
-						enabled: false,
-						submenu: [
-							{
-								label: i18n.t(
-									'menu:edit.submenu.addElement.submenu.functionBlock'
-								),
-							},
-							{
-								label: i18n.t('menu:edit.submenu.addElement.submenu.function'),
-							},
-							{
-								label: i18n.t('menu:edit.submenu.addElement.submenu.program'),
-							},
-							{
-								label: i18n.t('menu:edit.submenu.addElement.submenu.dataType'),
-							},
-						],
-					},
-					{
-						label: i18n.t('menu:edit.submenu.selectAll'),
-						enabled: false,
-						accelerator: 'Ctrl+A',
-						role: 'selectAll',
-					},
-					{
-						label: i18n.t('menu:edit.submenu.delete'),
-						enabled: false,
-						role: 'delete',
-					},
-				],
-			},
-			{
-				label: i18n.t('menu:display.label'),
-				submenu: [
-					{
-						label: i18n.t('menu:display.submenu.refresh'),
-						role: 'reload',
-					},
-					{
-						label: i18n.t('menu:display.submenu.clearErrors'),
-						enabled: false,
-						accelerator: '',
-					},
-					{
-						label: 'Zoom',
-						enabled: false,
-						submenu: [
-							{
-								label: i18n.t('menu:display.submenu.zoomIn'),
-								accelerator: 'Ctrl+Plus',
-							},
-							{
-								label: i18n.t('menu:display.submenu.zoomOut'),
-								accelerator: 'Ctrl+-',
-							},
-						],
-					},
-					{
-						label: i18n.t('menu:display.submenu.switchPerspective'),
-						
-						accelerator: 'F12',
-					},
-					{
-						label: i18n.t('menu:display.submenu.fullScreen'),
-						role: 'togglefullscreen',
-					},
-					{
-						label: i18n.t('menu:display.submenu.resetPerspective'),
-						enabled: false,
-					},
-					{
-						label: i18n.t('menu:display.submenu.sortAlpha'),
-						enabled: false,
-					},
-					{
-						label: i18n.t('menu:display.submenu.theme.label'),
-						submenu: [
-							{
-								label: i18n.t('menu:display.submenu.theme.submenu.light'),
-								click: () =>  nativeTheme.themeSource = 'light',
-							},
-							{
-								label: i18n.t('menu:display.submenu.theme.submenu.dark'),
-								click: () =>  nativeTheme.themeSource = 'dark',
-							}
-						]
+  // Wip: Constructing a default machines menu.
+  buildDefaultTemplate() {
+    const templateDefault: MenuItemConstructorOptions[] = [
+      {
+        label: i18n.t('menu:file.label'),
+        visible: false,
+        submenu: [
+          {
+            label: i18n.t('menu:file.submenu.new'),
+            accelerator: 'Ctrl+N',
+            click: () => this.handleProject('project:create'),
+          },
+          {
+            label: i18n.t('menu:file.submenu.open'),
+            accelerator: 'Ctrl+O',
+            click: () => this.handleProject('project:open'),
+          },
+          {
+            label: i18n.t('menu:file.submenu.save'),
+            accelerator: 'Ctrl+S',
+            enabled: false,
+            click: () => console.warn('Menu button clicked! This is not working yet.'),
+          },
+          {
+            label: i18n.t('menu:file.submenu.saveAs'),
+            enabled: false,
+            accelerator: 'Ctrl+Shift+S',
+            click: () => console.warn('Menu button clicked! This is not working yet.'),
+          },
+          {
+            label: i18n.t('menu:file.submenu.closeTab'),
+            enabled: false,
+            accelerator: 'Ctrl+W',
+            click: () => console.warn('Menu button clicked! This is not working yet.'),
+          },
+          {
+            label: i18n.t('menu:file.submenu.closeProject'),
+            enabled: false,
+            accelerator: 'Ctrl+Shift+W',
+            click: () => console.warn('Menu button clicked! This is not working yet.'),
+          },
+          {
+            label: i18n.t('menu:file.submenu.pageSetup'),
+            enabled: false,
+            accelerator: 'Ctrl+Alt+P',
+            click: () => console.warn('Menu button clicked! This is not working yet.'),
+          },
+          {
+            label: i18n.t('menu:file.submenu.preview'),
+            enabled: false,
+            accelerator: 'Ctrl+Shift+P',
+            click: () => console.warn('Menu button clicked! This is not working yet.'),
+          },
+          {
+            label: i18n.t('menu:file.submenu.print'),
+            accelerator: 'Ctrl+P',
+            enabled: false,
+          },
+          {
+            label: i18n.t('menu:file.submenu.updates'),
+            enabled: false,
+            accelerator: 'Ctrl+U',
+            click: () => console.warn('Menu button clicked! This is not working yet.'),
+          },
+          {
+            label: i18n.t('menu:file.submenu.quit'),
+            role: 'quit',
+            accelerator: 'Ctrl+Q',
+          },
+        ],
+      },
+      {
+        label: i18n.t('menu:edit.label'),
+        submenu: [
+          {
+            label: i18n.t('menu:edit.submenu.undo'),
+            enabled: false,
+            accelerator: 'Ctrl+Z',
+            role: 'undo',
+          },
+          {
+            label: i18n.t('menu:edit.submenu.redo'),
+            enabled: false,
+            accelerator: 'Ctrl+Y',
+            role: 'redo',
+          },
+          {
+            label: i18n.t('menu:edit.submenu.cut'),
+            enabled: false,
+            accelerator: 'Ctrl+X',
+            role: 'cut',
+          },
+          {
+            label: i18n.t('menu:edit.submenu.copy'),
+            enabled: false,
+            accelerator: 'Ctrl+C',
+            role: 'copy',
+          },
+          {
+            label: i18n.t('menu:edit.submenu.paste'),
+            enabled: false,
+            accelerator: 'Ctrl+V',
+            role: 'paste',
+          },
+          {
+            label: i18n.t('menu:edit.submenu.find'),
+            enabled: false,
+            accelerator: 'Ctrl+F',
+          },
+          {
+            label: i18n.t('menu:edit.submenu.findNext'),
+            accelerator: 'Ctrl+K',
+            enabled: false,
+          },
+          {
+            label: i18n.t('menu:edit.submenu.findPrevious'),
+            accelerator: 'Ctrl+Shift+K',
+            enabled: false,
+          },
+          {
+            label: i18n.t('menu:edit.submenu.findInProject'),
+            accelerator: 'Ctrl+Shift+F',
+            enabled: false,
+          },
+          {
+            label: i18n.t('menu:edit.submenu.addElement.label'),
+            enabled: false,
+            submenu: [
+              {
+                label: i18n.t('menu:edit.submenu.addElement.submenu.functionBlock'),
+              },
+              {
+                label: i18n.t('menu:edit.submenu.addElement.submenu.function'),
+              },
+              {
+                label: i18n.t('menu:edit.submenu.addElement.submenu.program'),
+              },
+              {
+                label: i18n.t('menu:edit.submenu.addElement.submenu.dataType'),
+              },
+            ],
+          },
+          {
+            label: i18n.t('menu:edit.submenu.selectAll'),
+            enabled: false,
+            accelerator: 'Ctrl+A',
+            role: 'selectAll',
+          },
+          {
+            label: i18n.t('menu:edit.submenu.delete'),
+            enabled: false,
+            role: 'delete',
+          },
+        ],
+      },
+      {
+        label: i18n.t('menu:display.label'),
+        submenu: [
+          {
+            label: i18n.t('menu:display.submenu.refresh'),
+            role: 'reload',
+          },
+          {
+            label: i18n.t('menu:display.submenu.clearErrors'),
+            enabled: false,
+            accelerator: '',
+          },
+          {
+            label: 'Zoom',
+            enabled: false,
+            submenu: [
+              {
+                label: i18n.t('menu:display.submenu.zoomIn'),
+                accelerator: 'Ctrl+Plus',
+              },
+              {
+                label: i18n.t('menu:display.submenu.zoomOut'),
+                accelerator: 'Ctrl+-',
+              },
+            ],
+          },
+          {
+            label: i18n.t('menu:display.submenu.switchPerspective'),
 
-					}
-				],
-			},
-			{
-				label: i18n.t('menu:help.label'),
-				role: 'help',
-				submenu: [
-					{
-						label: i18n.t('menu:help.submenu.communitySupport'),
-						enabled: false,
-					},
-					{
-						label: i18n.t('menu:help.submenu.about'),
-						role: 'about',
-					},
-				],
-			},
-		]
+            accelerator: 'F12',
+          },
+          {
+            label: i18n.t('menu:display.submenu.fullScreen'),
+            role: 'togglefullscreen',
+          },
+          {
+            label: i18n.t('menu:display.submenu.resetPerspective'),
+            enabled: false,
+          },
+          {
+            label: i18n.t('menu:display.submenu.sortAlpha'),
+            enabled: false,
+          },
+          {
+            label: i18n.t('menu:display.submenu.theme.label'),
+            submenu: [
+              {
+                label: i18n.t('menu:display.submenu.theme.submenu.light'),
+                click: () => (nativeTheme.themeSource = 'light'),
+              },
+              {
+                label: i18n.t('menu:display.submenu.theme.submenu.dark'),
+                click: () => (nativeTheme.themeSource = 'dark'),
+              },
+            ],
+          },
+        ],
+      },
+      {
+        label: i18n.t('menu:help.label'),
+        role: 'help',
+        submenu: [
+          {
+            label: i18n.t('menu:help.submenu.communitySupport'),
+            enabled: false,
+          },
+          {
+            label: i18n.t('menu:help.submenu.about'),
+            role: 'about',
+          },
+        ],
+      },
+    ]
 
     return templateDefault
   }
