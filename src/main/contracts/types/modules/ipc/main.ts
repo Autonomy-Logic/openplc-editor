@@ -11,6 +11,7 @@ export type MainIpcModule = {
   store: TStoreType
   setupMainIpcListener: () => void
   mainIpcEventHandlers: {
+    getStoreValue: (_: Event, key: keyof TStoreType) => TStoreType
     createPou: () => void
     saveProject: (event: Event, arg: ProjectDto) => { ok: boolean; reason: { title: string; description: string } }
   }

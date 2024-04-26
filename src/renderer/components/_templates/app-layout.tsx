@@ -22,6 +22,7 @@ const AppLayout = (): ReactNode => {
       if (OS === 'darwin' || OS === 'win32') {
         setIsLinux(false)
       }
+      console.log({ OS, architecture, prefersDarkMode })
     }
     void getUserSystemProps()
   }, [setSystemConfigs])
