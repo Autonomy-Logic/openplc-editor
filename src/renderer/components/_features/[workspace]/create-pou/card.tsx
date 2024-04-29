@@ -5,8 +5,8 @@ import { ArrowIcon } from '@root/renderer/assets'
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { IFunction, IFunctionBlock, IProgram } from '@root/types/PLC'
-import { ConvertToLangShortenedFormat } from '@root/utils'
-import { startCase } from 'lodash'
+import { ConvertToLangShortenedFormat, CreateEditorPath } from '@root/utils'
+import { lowerCase, startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
@@ -43,8 +43,43 @@ const Card = (props: ICardProps): ReactNode => {
     handleSubmit,
     formState: { errors },
   } = useForm<IPouFormProps>()
-  const { workspaceActions } = useOpenPLCStore()
+  const {
+    workspaceActions: { createPou },
+    editorActions: { setEditor },
+    tabsActions: { updateTabs },
+  } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
+
+  const handleWorkspaceActions = (data: IPouFormProps) => {
+    const dataToCreatePou = createNormalizedPou(data)
+    const response = createPou(dataToCreatePou)
+    if (!response.ok) {
+      console.log(response.message)
+    } else {
+      console.log(response.message)
+      // closeContainer((prev) => !prev)
+      // setIsOpen(false)
+    }
+  }
+
+  const handleEditorActions = (data: IPouFormProps) => {
+    const dataToCreateEditor = {
+      path: CreateEditorPath(data.pouName, data.pouType),
+      language: lowerCase(data.pouLanguage),
+      value: '',
+      isEditorOpen: true,
+    }
+    setEditor(dataToCreateEditor)
+  }
+
+  const handleTabsActions = (data: IPouFormProps) => {
+    const dataToCreateTab = {
+      name: data.pouName,
+      language: data.pouLanguage,
+      currentTab: true,
+    }
+    updateTabs(dataToCreateTab)
+  }
 
   const createNormalizedPou = (data: IPouFormProps): IPouDTO => {
     switch (data.pouType) {
@@ -54,6 +89,7 @@ const Card = (props: ICardProps): ReactNode => {
           data: {
             name: data.pouName,
             language: data.pouLanguage,
+            body: '',
             returnType: 'BOOL',
           },
         }
@@ -63,6 +99,7 @@ const Card = (props: ICardProps): ReactNode => {
           data: {
             name: data.pouName,
             language: data.pouLanguage,
+            body: '',
           },
         }
       case 'program':
@@ -71,21 +108,18 @@ const Card = (props: ICardProps): ReactNode => {
           data: {
             name: data.pouName,
             language: data.pouLanguage,
+            body: '',
           },
         }
     }
   }
 
   const submitData: SubmitHandler<IPouFormProps> = (data) => {
-    console.log(data)
-    const response = workspaceActions.createPou(createNormalizedPou(data))
-    if (!response.ok) {
-      console.log(response.message)
-    } else {
-      console.log(response.message)
-      closeContainer((prev) => !prev)
-      setIsOpen(false)
-    }
+    handleWorkspaceActions(data)
+    handleEditorActions(data)
+    handleTabsActions(data)
+    closeContainer((prev) => !prev)
+    setIsOpen(false)
   }
 
   const handleCancelCreatePou = () => {

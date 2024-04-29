@@ -1,15 +1,19 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-type IEditorState = {
+type IEditorProps = {
   path: string
   language: string
   value: string
+  isEditorOpen: boolean
+}
+type IEditorState = {
+  editors: IEditorProps[]
 }
 
 type IEditorActions = {
-  setEditor: (editor: IEditorState) => void
-  updateEditor: (editor: Partial<IEditorState>) => void
+  setEditor: (editorToBeCreated: IEditorProps) => void
+  updateEditor: (dataToUpdateEditor: Partial<IEditorState>) => void
   clearEditor: () => void
 }
 
@@ -20,25 +24,25 @@ export type IEditorSlice = {
 
 export const createEditorSlice: StateCreator<IEditorSlice, [], [], IEditorSlice> = (setState) => ({
   editorState: {
-    path: '',
-    language: '',
-    value: '',
+    editors: [],
   },
   editorActions: {
-    setEditor: (editor: IEditorState): void => setState(produce((slice: IEditorSlice) => (slice.editorState = editor))),
-    updateEditor: (editor: Partial<IEditorState>): void =>
+    setEditor: (editorToBeCreated: IEditorProps): void =>
       setState(
-        produce((slice: IEditorSlice) => {
-          Object.assign(slice.editorState, editor)
+        produce(({ editorState }: IEditorSlice) => {
+          editorState.editors.push(editorToBeCreated)
         }),
       ),
-    clearEditor: (): void =>
+    updateEditor: (dataToUpdateEditor: Partial<IEditorProps>): void =>
       setState(
         produce((slice: IEditorSlice) => {
-          slice.editorState.path = ''
-          slice.editorState.language = ''
-          slice.editorState.value = ''
+          const { editors } = slice.editorState
+          const editorExists = editors.find((editor) => editor.path === dataToUpdateEditor.path)
+          if (editorExists) {
+            Object.assign(editors[editors.indexOf(editorExists)], dataToUpdateEditor)
+          }
         }),
       ),
+    clearEditor: (): void => setState(produce((slice: IEditorSlice) => (slice.editorState.editors = []))),
   },
 })

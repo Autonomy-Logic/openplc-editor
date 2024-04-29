@@ -8,7 +8,6 @@ const Tabs = () => {
   const {
     tabsState: { tabs },
     tabsActions: { sortTabs, removeTab },
-    // updateEditor,
   } = useOpenPLCStore()
   const [selectedTab, setSelectedTab] = useState('')
   const hasTabs = tabs.length > 0
@@ -27,7 +26,6 @@ const Tabs = () => {
    */
   const handleClickedTab = (tab: ITabProps) => {
     setSelectedTab(tab.name)
-    // updateEditor({ path: tab.name, value: tab.body })
   }
 
   const handleDragStart = ({ tab, idx }: { tab: ITabProps; idx: number }) => {
