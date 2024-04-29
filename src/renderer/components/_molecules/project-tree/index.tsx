@@ -83,14 +83,14 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
 
   const { BranchIcon, label } = BranchSources[branchTarget]
-
+  const hasAssociatedPOU = pous.some((pou) => pou.type === branchTarget)
   return (
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
       <div
         className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
         onClick={handleBranchVisibility}
       >
-        {pous?.length !== 0 ? (
+        {hasAssociatedPOU ? (
           <ArrowIcon
             direction='right'
             className={cn(
