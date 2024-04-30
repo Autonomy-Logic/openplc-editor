@@ -14,19 +14,18 @@ const StartScreen = () => {
   } = useOpenPLCStore()
 
   const handleCreateProject = async () => {
-    const {
-      ok,
-      res: { data, path },
-    } = await window.bridge.startCreateProject()
-    if (ok && data) {
+    const { success, data, error } = await window.bridge.startCreateProject()
+    if (success && data) {
       setUserWorkspace({
-        projectPath: path,
-        projectData: data,
+        projectPath: data.meta.path,
+        projectData: data.content,
         projectName: 'new-project',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       })
       navigate('/workspace')
+    } else {
+      console.log('Cannot create project:', error)
     }
   }
 
