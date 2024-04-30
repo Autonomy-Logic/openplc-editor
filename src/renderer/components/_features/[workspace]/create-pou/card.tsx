@@ -6,7 +6,7 @@ import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '
 import { useOpenPLCStore } from '@root/renderer/store'
 import { IFunction, IFunctionBlock, IProgram } from '@root/types/PLC'
 import { ConvertToLangShortenedFormat, CreateEditorPath } from '@root/utils'
-import { lowerCase, startCase } from 'lodash'
+import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
@@ -18,7 +18,7 @@ type ICardProps = {
 type IPouFormProps = {
   pouType: 'function' | 'function-block' | 'program'
   pouName: string
-  pouLanguage: 'LD' | 'SFC' | 'FBD' | 'ST' | 'IL'
+  pouLanguage: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
 }
 
 type IPouDTO =
@@ -47,6 +47,7 @@ const Card = (props: ICardProps): ReactNode => {
     workspaceActions: { createPou },
     editorActions: { setEditor },
     tabsActions: { updateTabs },
+    pouActions: { create },
   } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
 
@@ -65,7 +66,7 @@ const Card = (props: ICardProps): ReactNode => {
   const handleEditorActions = (data: IPouFormProps) => {
     const dataToCreateEditor = {
       path: CreateEditorPath(data.pouName, data.pouType),
-      language: lowerCase(data.pouLanguage),
+      language: data.pouLanguage,
       value: '',
       isEditorOpen: true,
     }
@@ -118,6 +119,7 @@ const Card = (props: ICardProps): ReactNode => {
     handleWorkspaceActions(data)
     handleEditorActions(data)
     handleTabsActions(data)
+    create()
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
