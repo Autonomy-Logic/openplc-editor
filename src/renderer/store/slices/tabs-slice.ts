@@ -3,7 +3,7 @@ import { StateCreator } from 'zustand'
 
 type ITabProps = {
   name: string
-  language: 'IL' | 'ST' | 'LD' | 'SFC' | 'FBD'
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
   currentTab: boolean
 }
 type ITabsState = {

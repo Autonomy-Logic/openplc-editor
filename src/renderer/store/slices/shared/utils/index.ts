@@ -55,7 +55,7 @@ const CreatePouObject = ({ type, name, language }: IPouProps): ICreatedPouObject
 
 type ICreatedEditorObject = {
   path: string
-  language: string
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
   value: string
   isEditorOpen: boolean
 }
@@ -72,11 +72,11 @@ const CreateEditorObject = ({ type, name, language }: IPouProps): ICreatedEditor
 
 type ICreatedTabObject = {
   name: string
-  language: string
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
   currentTab: boolean
 }
 
-const CreateTabObject = ({ name, language }: IPouProps): ICreatedTabObject => {
+const CreateTabObject = ({ name, language }: Omit<IPouProps, 'type'>): ICreatedTabObject => {
   return {
     name,
     language,

@@ -1,4 +1,3 @@
-import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import { IEditorSlice } from '../editor-slice'
@@ -26,7 +25,9 @@ export const createSharedSlice: StateCreator<IEditorSlice & ITabsSlice & IWorksp
   pouActions: {
     create: (dataToCreatePou: IDataToCreatePou) => {
       getState().editorActions.setEditor(CreateEditorObject(dataToCreatePou))
-      // getState().tabsActions.updateTabs(CreateTabObject(dataToCreatePou))
+      getState().tabsActions.updateTabs(
+        CreateTabObject({ name: dataToCreatePou.name, language: dataToCreatePou.language }),
+      )
       getState().workspaceActions.createPou(CreatePouObject(dataToCreatePou))
     },
     update: () => {},
