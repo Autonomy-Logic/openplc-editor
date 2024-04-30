@@ -5,11 +5,26 @@ import { convert, create } from 'xmlbuilder2'
 
 import { ProjectSchema } from '../../../shared/contracts/validations'
 import xmlProjectAsObject from '../../../shared/data/mock/object-to-create-project'
+import { IProject } from '../../../types/PLC'
 import { i18n } from '../../../utils/i18n'
 import { ProjectDto } from '../../contracts/types/services/project.service'
 import { store } from '../../modules/store'
 import { baseJsonStructure } from './data'
 import { CreateJSONFile } from './utils/json-creator'
+
+export type IProjectServiceResponse = {
+  success: boolean
+  error?: {
+    title: string
+    description: string
+  }
+  data?: {
+    meta: {
+      path: string
+    },
+    content: IProject
+  }
+}
 
 // Wip: Refactoring project services.
 class ProjectService {
@@ -18,7 +33,7 @@ class ProjectService {
    * @description Asynchronous function to create a PLC xml project based on selected directory.
    * @returns A `promise` of `ServiceResponse` type.
    */
-  async createProject() {
+  async createProject(): Promise<IProjectServiceResponse> {
     // Show a dialog to select the project directory.
     const res = await dialog.showOpenDialog(this.serviceManager, {
       title: i18n.t('createProject:dialog.title'),
@@ -26,7 +41,14 @@ class ProjectService {
     })
     // If the dialog is canceled, return an unsuccessful response
     // otherwise, create a constant containing the selected directory path as a string.
-    if (res.canceled) return { ok: false }
+    if (res.canceled)
+      return {
+        success: false,
+        error: {
+          title: i18n.t('projectServiceResponses:createProject.errors.canceled.title'),
+          description: i18n.t('projectServiceResponses:createProject.errors.canceled.description'),
+        }
+      }
     const [filePath] = res.filePaths
 
     // Checks asynchronously if the selected directory is empty.
@@ -44,11 +66,11 @@ class ProjectService {
     // If the selected directory is not empty, return an error response.
     if (!(await isEmptyDir())) {
       return {
-        ok: false,
-        reason: {
-          title: i18n.t('createProject:errors.directoryNotEmpty.title'),
-          description: i18n.t('createProject:errors.directoryNotEmpty.description'),
-        },
+        success: false,
+        error: {
+          title: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.title'),
+          description: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.description'),
+        }
       }
     }
 
@@ -85,16 +107,21 @@ class ProjectService {
     writeFile(projectPath, projectAsXml.end({ prettyPrint: true }), (error) => {
       if (error) throw error
       return {
-        ok: false,
-        reason: {
-          title: i18n.t('createProject:errors.failedToCreateFile.title'),
-          description: i18n.t('createProject:errors.failedToCreateFile.description'),
+        success: false,
+        error: {
+          title: i18n.t('projectServiceResponses:createProject.errors.internalError.title'),
+          description: i18n.t('projectServiceResponses:createProject.errors.internalError.description'),
         },
       }
     })
     return {
-      ok: true,
-      res: { path: projectPath, data: baseJsonStructure },
+      success: true,
+      data: {
+        meta: {
+          path: projectPath,
+        },
+        content: baseJsonStructure,
+      }
     }
   }
 
