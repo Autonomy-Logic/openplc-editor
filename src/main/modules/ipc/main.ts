@@ -44,9 +44,7 @@ class MainProcessBridge implements MainIpcModule {
      * Refactor: This can be optimized.
      */
     this.ipcMain.handle('system:get-system-info', () => {
-      const response = platform
-      const colorPreference = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
-      return { OS: response, architecture: 'x64', prefersDarkMode: colorPreference }
+      return { OS: platform, architecture: 'x64', prefersDarkMode: nativeTheme.shouldUseDarkColors }
     })
     this.ipcMain.on('window-controls:close', () => this.mainWindow?.close())
     this.ipcMain.on('window-controls:minimize', () => this.mainWindow?.minimize())

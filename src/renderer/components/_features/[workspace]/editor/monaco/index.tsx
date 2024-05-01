@@ -2,45 +2,49 @@ import './configs'
 
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { useOpenPLCStore } from '@process:renderer/store'
+import * as monaco from 'monaco-editor'
+import { useRef } from 'react'
 
 const MonacoEditor = (): ReturnType<typeof PrimitiveEditor> => {
-  const newLocal = `Lorem ipsum dolor sit amet, consectetur adipiscing elit\n
-  Quisque commodo elit eget scelerisque laoreet.\n
-  Curabitur id diam nec risus pharetra commodo.\n
-  Cras volutpat ipsum eu vestibulum viverra.\n
-  Praesent sollicitudin ligula quis erat auctor varius.\n
-  Suspendisse ac est sit amet ligula lobortis vehicula eu vel nulla.\n
-  Cras non odio porta dolor scelerisque faucibus quis eget mi.\n
-  Etiam volutpat eros a est aliquam, sit amet eleifend lacus luctus.\n
-  Nam a eros porttitor, pretium quam ac, fermentum enim.\n
-  Mauris eu dui dictum, viverra ex vitae, elementum enim.\n
-  Fusce non lorem eget dolor lobortis faucibus ac vel est.\n
-  Integer ut velit sed metus bibendum aliquam tincidunt vitae elit.\n
-  Donec at massa blandit, aliquet neque vel, scelerisque orci.\n
-  Sed semper purus sit amet dignissim lacinia.\n
-  Etiam pellentesque ipsum sed libero viverra efficitur.\n
-  Proin quis ante cursus, consectetur velit et, ullamcorper augue.\n
-  Sed et ligula in metus viverra consectetur.\n
-  Nulla condimentum turpis in cursus elementum.\n
-  Nunc vestibulum nisl eu nibh suscipit, et commodo sapien tempor.\n
-  Duis sit amet sapien consectetur quam interdum scelerisque.\n
-  Proin accumsan lacus non eros efficitur, vitae vulputate felis tempor.\n
-  Donec in tellus convallis libero venenatis auctor et ornare libero.`
+  const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
+  const monacoRef = useRef<null | typeof monaco>(null)
+
+  function handleEditorDidMount(
+    editor: null | monaco.editor.IStandaloneCodeEditor,
+    monacoInstance: null | typeof monaco,
+  ) {
+    // here is the editor instance
+    // you can store it in `useRef` for further usage
+    editorRef.current = editor
+
+    // here is another way to get monaco instance
+    // you can also store it in `useRef` for further usage
+    monacoRef.current = monacoInstance
+  }
+
+  console.log(editorRef.current?.getModel()?.getValue())
+  // console.log(monacoRef.current?.editor.getModels())
 
   const {
-    editorState: { path },
-    // workspaceState: {
-    //   systemConfigs: { shouldUseDarkMode },
-    // },
+    editorState: {
+      editor: { path, language, name },
+    },
+    workspaceState: {
+      projectData: { pous },
+    },
   } = useOpenPLCStore()
+
   return (
     <PrimitiveEditor
       height='100%'
       width='100%'
       path={path}
-      language='st'
-      defaultValue={newLocal}
-      theme='openplc-light'
+      language={language}
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      defaultValue={pous.find((pou) => pou.data.name === name)?.data.body}
+      onMount={handleEditorDidMount}
+      onChange={(v) => console.log(v)}
+      theme='openplc-dark'
     />
   )
 }

@@ -1,6 +1,9 @@
 export const ConvertToLangShortenedFormat = (str: string): 'il' | 'st' | 'ld' | 'sfc' | 'fbd' => {
   const draft = str.split(' ')
-  const initial = draft.map((word) => word.charAt(0)).join('')
+  const initial = draft
+    .map((word) => word.charAt(0))
+    .join('')
+    .toLowerCase()
   return initial as 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
 }
 

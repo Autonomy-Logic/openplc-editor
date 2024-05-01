@@ -28,7 +28,7 @@ const CreatePouObject = ({ type, name, language }: IPouProps): ICreatedPouObject
         data: {
           name: name,
           language,
-          body: '',
+          body: `This is the body of ${name}`,
           returnType: 'BOOL',
         },
       }
@@ -38,7 +38,7 @@ const CreatePouObject = ({ type, name, language }: IPouProps): ICreatedPouObject
         data: {
           name: name,
           language,
-          body: '',
+          body: `This is the body of ${name}`,
         },
       }
     case 'program':
@@ -47,40 +47,40 @@ const CreatePouObject = ({ type, name, language }: IPouProps): ICreatedPouObject
         data: {
           name: name,
           language,
-          body: '',
+          body: `This is the body of ${name}`,
         },
       }
   }
 }
 
 type ICreatedEditorObject = {
+  name: string
   path: string
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
   value: string
-  isEditorOpen: boolean
 }
 
 const CreateEditorObject = ({ type, name, language }: IPouProps): ICreatedEditorObject => {
   const normalizedPath = `/data/pous/${type}/${name}`
   return {
+    name,
     path: normalizedPath,
     language,
     value: '',
-    isEditorOpen: true,
   }
 }
 
 type ICreatedTabObject = {
+  type: 'program' | 'function' | 'function-block'
   name: string
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
-  currentTab: boolean
 }
 
-const CreateTabObject = ({ name, language }: Omit<IPouProps, 'type'>): ICreatedTabObject => {
+const CreateTabObject = ({ name, language, type }: IPouProps): ICreatedTabObject => {
   return {
+    type,
     name,
     language,
-    currentTab: true,
   }
 }
 

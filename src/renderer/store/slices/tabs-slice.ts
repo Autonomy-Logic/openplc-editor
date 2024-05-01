@@ -4,7 +4,7 @@ import { StateCreator } from 'zustand'
 type ITabProps = {
   name: string
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
-  currentTab: boolean
+  type: 'program' | 'function' | 'function-block'
 }
 type ITabsState = {
   tabs: ITabProps[] | []
