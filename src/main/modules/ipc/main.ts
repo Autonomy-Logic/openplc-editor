@@ -16,17 +16,7 @@ class MainProcessBridge implements MainIpcModule {
     this.projectService = projectService
     this.store = store
   }
-
-  handleThemeToggle() {
-    const currentTheme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
-    nativeTheme.themeSource = currentTheme === 'dark' ? 'light' : 'dark'
-    return nativeTheme.shouldUseDarkColors
-  }
   setupMainIpcListener() {
-    this.ipcMain.handle('app:toggle-theme', this.handleThemeToggle.bind(this))
-    this.ipcMain.handle('app-preferences:get-theme', () => {
-      return nativeTheme.shouldUseDarkColors
-    })
     this.ipcMain.handle('start-screen/project:create', async () => {
       const response = await this.projectService.createProject()
       return response
@@ -36,7 +26,6 @@ class MainProcessBridge implements MainIpcModule {
       const response = await this.projectService.openProject()
       return response
     })
-
     this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
     this.ipcMain.on('project:save-response', (_event, data: ProjectDto) => this.projectService.saveProject(data))
     /**

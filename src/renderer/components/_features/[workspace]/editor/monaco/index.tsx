@@ -30,6 +30,7 @@ const MonacoEditor = (): ReturnType<typeof PrimitiveEditor> => {
       editor: { path, language, name },
     },
     workspaceState: {
+      systemConfigs: { shouldUseDarkMode },
       projectData: { pous },
     },
   } = useOpenPLCStore()
@@ -44,7 +45,7 @@ const MonacoEditor = (): ReturnType<typeof PrimitiveEditor> => {
       defaultValue={pous.find((pou) => pou.data.name === name)?.data.body}
       onMount={handleEditorDidMount}
       onChange={(v) => console.log(v)}
-      theme='openplc-dark'
+      theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
     />
   )
 }

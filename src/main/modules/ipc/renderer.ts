@@ -6,8 +6,6 @@ import { IProjectServiceResponse } from '../../services/project-service'
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
 const rendererProcessBridge = {
-  toggleTheme: (): Promise<boolean> => ipcRenderer.invoke('app:toggle-theme'),
-  getThemePreference: () => ipcRenderer.invoke('app-preferences:get-theme'),
   startOpenProject: () => ipcRenderer.invoke('start-screen/project:open'),
   startCreateProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('start-screen/project:create'),
   createProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:create', callback),
@@ -29,8 +27,8 @@ const rendererProcessBridge = {
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
   reloadWindow: () => ipcRenderer.send('window:reload'),
+  handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
   // WIP: Refactoring
-  getTheme: () => ipcRenderer.invoke('app:get-theme'),
   // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),
   // createPou: (callback: any) => ipcRenderer.on('pou:create', callback),
 }

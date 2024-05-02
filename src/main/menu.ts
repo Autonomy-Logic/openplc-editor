@@ -97,6 +97,12 @@ export default class MenuBuilder {
     })
   }
 
+  updateAppTheme() {
+    nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
+    this.mainWindow.webContents.send('system:update-theme')
+    this.buildMenu()
+  }
+
   // Wip: Constructing a mac machines menu.
   buildDarwinTemplate(): MenuItemConstructorOptions[] {
     const defaultDarwinMenu: MenuItemConstructorOptions = {
@@ -287,6 +293,14 @@ export default class MenuBuilder {
         },
         {
           label: i18n.t('menu:display.submenu.sortAlpha'),
+        },
+        {
+          type: 'separator',
+        },
+        {
+          label: i18n.t('menu:display.submenu.theme'),
+          sublabel: nativeTheme.shouldUseDarkColors ? 'Dark' : 'Light',
+          click: () => this.updateAppTheme(),
         },
       ],
     }
@@ -506,17 +520,12 @@ export default class MenuBuilder {
             enabled: false,
           },
           {
-            label: i18n.t('menu:display.submenu.theme.label'),
-            submenu: [
-              {
-                label: i18n.t('menu:display.submenu.theme.submenu.light'),
-                click: () => (nativeTheme.themeSource = 'light'),
-              },
-              {
-                label: i18n.t('menu:display.submenu.theme.submenu.dark'),
-                click: () => (nativeTheme.themeSource = 'dark'),
-              },
-            ],
+            type: 'separator',
+          },
+          {
+            label: i18n.t('menu:display.submenu.theme'),
+            sublabel: nativeTheme.shouldUseDarkColors ? 'Dark' : 'Light',
+            click: () => this.updateAppTheme(),
           },
         ],
       },

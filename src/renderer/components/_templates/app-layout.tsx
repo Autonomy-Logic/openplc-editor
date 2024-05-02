@@ -8,7 +8,7 @@ import { Outlet } from 'react-router-dom'
 const AppLayout = (): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
-    workspaceActions: { setSystemConfigs },
+    workspaceActions: { setSystemConfigs, switchAppTheme },
   } = useOpenPLCStore()
 
   useEffect(() => {
@@ -22,10 +22,16 @@ const AppLayout = (): ReactNode => {
       if (OS === 'darwin' || OS === 'win32') {
         setIsLinux(false)
       }
-      console.log({ OS, architecture, prefersDarkMode })
     }
     void getUserSystemProps()
   }, [setSystemConfigs])
+
+  useEffect(() => {
+    window.bridge.handleUpdateTheme((_event) => {
+      switchAppTheme()
+    })
+  }, [])
+
   return (
     <>
       {!isLinux && <TitleBar />}
