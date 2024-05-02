@@ -90,7 +90,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
         className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
         onClick={handleBranchVisibility}
       >
-        {hasAssociatedPOU ? (
+        {hasAssociatedPOU  ? (
           <ArrowIcon
             direction='right'
             className={cn(
