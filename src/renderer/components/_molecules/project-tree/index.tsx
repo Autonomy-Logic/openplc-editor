@@ -88,9 +88,9 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
       <div
         className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
-        onClick={handleBranchVisibility}
+        onClick={hasAssociatedPOU ? handleBranchVisibility : undefined}
       >
-        {hasAssociatedPOU  ? (
+        {hasAssociatedPOU ? (
           <ArrowIcon
             direction='right'
             className={cn(
