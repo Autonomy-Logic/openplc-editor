@@ -16,17 +16,7 @@ class MainProcessBridge implements MainIpcModule {
     this.projectService = projectService
     this.store = store
   }
-
-  handleThemeToggle() {
-    const currentTheme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
-    nativeTheme.themeSource = currentTheme === 'dark' ? 'light' : 'dark'
-    return nativeTheme.shouldUseDarkColors
-  }
   setupMainIpcListener() {
-    this.ipcMain.handle('app:toggle-theme', this.handleThemeToggle.bind(this))
-    this.ipcMain.handle('app-preferences:get-theme', () => {
-      return nativeTheme.shouldUseDarkColors
-    })
     this.ipcMain.handle('start-screen/project:create', async () => {
       const response = await this.projectService.createProject()
       return response
@@ -36,7 +26,6 @@ class MainProcessBridge implements MainIpcModule {
       const response = await this.projectService.openProject()
       return response
     })
-
     this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
     this.ipcMain.on('project:save-response', (_event, data: ProjectDto) => this.projectService.saveProject(data))
     /**
@@ -44,9 +33,7 @@ class MainProcessBridge implements MainIpcModule {
      * Refactor: This can be optimized.
      */
     this.ipcMain.handle('system:get-system-info', () => {
-      const response = platform
-      const colorPreference = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
-      return { OS: response, architecture: 'x64', prefersDarkMode: colorPreference }
+      return { OS: platform, architecture: 'x64', prefersDarkMode: nativeTheme.shouldUseDarkColors }
     })
     this.ipcMain.on('window-controls:close', () => this.mainWindow?.close())
     this.ipcMain.on('window-controls:minimize', () => this.mainWindow?.minimize())
@@ -58,10 +45,14 @@ class MainProcessBridge implements MainIpcModule {
       }
     })
     this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
+    this.ipcMain.on('system:update-theme', () => this.mainIpcEventHandlers.handleUpdateTheme())
     // Wip: From here
   }
 
   mainIpcEventHandlers = {
+    handleUpdateTheme: () => {
+      nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
+    },
     getStoreValue: (_: Event, key: keyof typeof this.store) => {
       const response = this.store.get(key)
       console.log(response)

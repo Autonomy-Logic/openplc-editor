@@ -12,8 +12,12 @@ export const MenuBar = () => {
     },
   } = useOpenPLCStore()
 
-  const handleChangeTheme = async () => {
-    await window.bridge.toggleTheme()
+  /**
+   * Switches the app theme.
+   * This must be tested, probably will be broken on Windows OS.
+   */
+  const handleChangeTheme = () => {
+    window.bridge.winHandleUpdateTheme()
     switchAppTheme()
   }
 
@@ -38,7 +42,6 @@ export const MenuBar = () => {
     'px-2 py-1 text-neutral-850 dark:aria-[expanded="true"]:bg-neutral-700 aria-[expanded="true"]:bg-neutral-100 outline-none font-normal font-caption text-xs dark:text-white flex items-center justify-between hover:bg-neutral-100 hover:dark:bg-neutral-700 rounded-sm cursor-pointer data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 data-[disabled]:hover:bg-transparent'
   const acceleratorDefaultStyle = 'opacity-50 capitalize '
   const separatorDefaultStyle = 'border-b border-b-neutral-400'
-  const checkboxDefaultStyle = 'w-3 h-3 bg-neutral-400 dark:bg-neutral-500 text-brand flex justify-center items-center'
 
   //each root is a menu
   return (
@@ -206,36 +209,34 @@ export const MenuBar = () => {
               <span>{i18n.t('menu:display.submenu.sortAlpha')}</span>
               <span className={acceleratorDefaultStyle}>{'F10'}</span>
             </MenuPrimitive.Item>
-            <MenuPrimitive.Sub>
-              <MenuPrimitive.SubTrigger className={itemDefaultStyle}>
-                <span>{i18n.t('menu:display.submenu.theme.label')}</span>
-                <span className={acceleratorDefaultStyle}>{shouldUseDarkMode ? 'dark' : 'light'}</span>
-              </MenuPrimitive.SubTrigger>
+            <MenuPrimitive.Item className={itemDefaultStyle} onClick={() => void handleChangeTheme()}>
+              <span>{i18n.t('menu:display.submenu.theme')}</span>
+              <span className={acceleratorDefaultStyle}>{shouldUseDarkMode ? 'dark' : 'light'}</span>
+            </MenuPrimitive.Item>
+            {/* 
+            <MenuPrimitive.Portal>
+              <MenuPrimitive.SubContent sideOffset={18} className={contentDefaultStyle}>
+                <MenuPrimitive.Item
+                  onClick={() => {
+                    void handleChangeTheme()
+                  }}
+                  className={itemDefaultStyle}
+                >
+                  <span>{i18n.t('menu:display.submenu.theme.submenu.light')}</span>
 
-              <MenuPrimitive.Portal>
-                <MenuPrimitive.SubContent sideOffset={18} className={contentDefaultStyle}>
-                  <MenuPrimitive.Item
-                    onClick={() => {
-                      void handleChangeTheme()
-                    }}
-                    className={itemDefaultStyle}
-                  >
-                    <span>{i18n.t('menu:display.submenu.theme.submenu.light')}</span>
-
-                    {!shouldUseDarkMode ? <div className={checkboxDefaultStyle}>✓</div> : ''}
-                  </MenuPrimitive.Item>
-                  <MenuPrimitive.Item
-                    onClick={() => {
-                      void handleChangeTheme()
-                    }}
-                    className={itemDefaultStyle}
-                  >
-                    <span>{i18n.t('menu:display.submenu.theme.submenu.dark')}</span>
-                    {shouldUseDarkMode ? <div className={checkboxDefaultStyle}>✓</div> : ''}
-                  </MenuPrimitive.Item>
-                </MenuPrimitive.SubContent>
-              </MenuPrimitive.Portal>
-            </MenuPrimitive.Sub>
+                  {!shouldUseDarkMode ? <div className={checkboxDefaultStyle}>✓</div> : ''}
+                </MenuPrimitive.Item>
+                <MenuPrimitive.Item
+                  onClick={() => {
+                    void handleChangeTheme()
+                  }}
+                  className={itemDefaultStyle}
+                >
+                  <span>{i18n.t('menu:display.submenu.theme.submenu.dark')}</span>
+                  {shouldUseDarkMode ? <div className={checkboxDefaultStyle}>✓</div> : ''}
+                </MenuPrimitive.Item>
+              </MenuPrimitive.SubContent>
+            </MenuPrimitive.Portal> */}
           </MenuPrimitive.Content>
         </MenuPrimitive.Portal>
       </MenuPrimitive.Menu>

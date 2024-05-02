@@ -1,16 +1,18 @@
 import { ITabProps } from '@process:renderer/store/slices/tabs-slice'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { useRef, useState } from 'react'
+import { CreateEditorObject } from '@root/renderer/store/slices/shared/utils'
+import { useEffect, useRef, useState } from 'react'
 
 import { Tab, TabList } from '../../_atoms'
 
 const Tabs = () => {
   const {
     tabsState: { tabs },
-    tabsActions: { sortTabs, removeTab },
-    // updateEditor,
+    tabsActions: { sortTabs },
+    editorState: { editor },
+    editorActions: { setEditor },
   } = useOpenPLCStore()
-  const [selectedTab, setSelectedTab] = useState('')
+  const [selectedTab, setSelectedTab] = useState(editor.name)
   const hasTabs = tabs.length > 0
   const dndTab = useRef<number>(0)
   const replaceTab = useRef<number>(0)
@@ -26,17 +28,41 @@ const Tabs = () => {
    * @param tab the selected tab
    */
   const handleClickedTab = (tab: ITabProps) => {
+    if (tab.name === selectedTab) return
     setSelectedTab(tab.name)
-    // updateEditor({ path: tab.name, value: tab.body })
+    setEditor(CreateEditorObject(tab))
+  }
+
+  const handleRemoveTab = (tabToRemove: string) => {
+    const draftTabs = tabs.filter((t: ITabProps) => t.name !== tabToRemove)
+    const candidate = draftTabs.slice(-1)[0]
+    if (!candidate) {
+      sortTabs(draftTabs)
+      setEditor({
+        name: '',
+        language: 'openplc',
+        path: '',
+      })
+    } else {
+      setSelectedTab(candidate.name)
+      setEditor(CreateEditorObject(candidate))
+      sortTabs(draftTabs)
+    }
   }
 
   const handleDragStart = ({ tab, idx }: { tab: ITabProps; idx: number }) => {
     dndTab.current = idx
     setSelectedTab(tab.name)
+    setEditor(CreateEditorObject(tab))
   }
   const handleDragEnter = (idx: number) => {
     replaceTab.current = idx
   }
+
+  useEffect(() => {
+    setSelectedTab(editor.name)
+  }, [editor.name])
+
   return (
     <TabList>
       {hasTabs &&
@@ -46,8 +72,8 @@ const Tabs = () => {
             onDragEnter={() => handleDragEnter(idx)}
             onDragEnd={() => handleSort()}
             onDragOver={(e) => e.preventDefault()}
-            onClick={() => handleClickedTab(pou)}
-            handleDeleteTab={() => removeTab(pou.name)}
+            handleClickedTab={() => handleClickedTab(pou)}
+            handleDeleteTab={() => handleRemoveTab(pou.name)}
             key={pou.name}
             fileName={pou.name}
             fileLang={pou.language}

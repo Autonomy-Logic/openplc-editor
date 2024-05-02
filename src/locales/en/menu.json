@@ -64,13 +64,7 @@
       "fullScreen": "Full Screen",
       "resetPerspective": "Reset Perspective",
       "sortAlpha": "Sort Alpha",
-      "theme": {
-        "label": "Theme",
-        "submenu": {
-          "light": "Light",
-          "dark": "Dark"
-        }
-      }
+      "theme": "Change Theme"
     }
   },
   "help": {
