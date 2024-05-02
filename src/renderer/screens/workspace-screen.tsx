@@ -57,41 +57,41 @@ const WorkspaceScreen = () => {
                   defaultSize={75}
                   className='flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950'
                 >
-                  {/* {tabs.length > 0 ? ( */}
-                  <ResizablePanelGroup
-                    id='editorContentPanelGroup'
-                    direction='vertical'
-                    className='flex flex-1 flex-col gap-2'
-                  >
-                    <ResizablePanel
-                      id='variableTablePanel'
-                      order={1}
-                      collapsible
-                      collapsedSize={0}
-                      minSize={20}
-                      defaultSize={25}
-                      className='flex h-full w-full flex-1 flex-col gap-4'
+                  {tabs.length > 0 ? (
+                    <ResizablePanelGroup
+                      id='editorContentPanelGroup'
+                      direction='vertical'
+                      className='flex flex-1 flex-col gap-2'
                     >
-                      {/**
-                       * TODO: refactor the variable component
-                       */}
-                      {/* <Variables /> */}
-                    </ResizablePanel>
-                    <ResizableHandle className='h-[1px] w-full bg-brand-light' />
-                    <ResizablePanel
-                      id='textualEditorPanel'
-                      order={2}
-                      defaultSize={75}
-                      className='mt-6 flex-1 flex-grow rounded-md'
-                    >
-                      <MonacoEditor />
-                    </ResizablePanel>
-                  </ResizablePanelGroup>
-                  {/* ) : (
+                      <ResizablePanel
+                        id='variableTablePanel'
+                        order={1}
+                        collapsible
+                        collapsedSize={0}
+                        minSize={20}
+                        defaultSize={25}
+                        className='flex h-full w-full flex-1 flex-col gap-4'
+                      >
+                        {/**
+                         * TODO: refactor the variable component
+                         */}
+                        {/* <Variables /> */}
+                      </ResizablePanel>
+                      <ResizableHandle className='h-[1px] w-full bg-brand-light' />
+                      <ResizablePanel
+                        id='textualEditorPanel'
+                        order={2}
+                        defaultSize={75}
+                        className='mt-6 flex-1 flex-grow rounded-md'
+                      >
+                        <MonacoEditor />
+                      </ResizablePanel>
+                    </ResizablePanelGroup>
+                  ) : (
                     <p className='mx-auto my-auto flex cursor-default select-none flex-col items-center gap-1 font-display text-xl font-medium'>
                       No tabs open
                     </p>
-                  )} */}
+                  )}
                 </ResizablePanel>
                 <ResizableHandle className='mt-2' />
                 <ResizablePanel
