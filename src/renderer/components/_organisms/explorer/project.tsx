@@ -30,8 +30,9 @@ const Project = () => {
     setEditor(CreateEditorObject(tabToBeCreated))
   }
 
+
   return (
-    <>
+    <div className='max-w-[184px]'>
       {/* Actions handler */}
       <div id='project-actions-container' className='relative z-10 my-3 flex w-[200px] justify-around px-2'>
         <div
@@ -66,7 +67,7 @@ const Project = () => {
               />
             ))}
         </ProjectTreeBranch>
-        <ProjectTreeBranch branchTarget='functionBlock'>
+        <ProjectTreeBranch branchTarget='function-block'>
           {pous
             ?.filter(({ type }) => type === 'function-block')
             .map(({ data }) => (
@@ -96,7 +97,7 @@ const Project = () => {
         {/** Maybe a divider component */}
         {/* <ProjectTreeBranch branchTarget='' label='Resources' /> */}
       </ProjectTreeRoot>
-    </>
+    </div>
   )
 }
 export { Project }

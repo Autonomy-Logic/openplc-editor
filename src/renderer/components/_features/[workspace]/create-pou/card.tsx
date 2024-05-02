@@ -124,7 +124,7 @@ const Card = (props: ICardProps): ReactNode => {
                             className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
                           />
                           <SelectContent
-                            className='h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-neutral-100 bg-white drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                            className='h-fit w-[--radix-select-trigger-width]  overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
                             sideOffset={5}
                             alignOffset={5}
                             position='popper'
@@ -135,7 +135,7 @@ const Card = (props: ICardProps): ReactNode => {
                               return (
                                 <SelectItem
                                   key={lang.value}
-                                  className='flex w-full cursor-pointer items-center px-2 py-[9px] hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                                  className='flex w-full  cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                                   value={ConvertToLangShortenedFormat(lang.value)}
                                 >
                                   <span className='flex items-center  gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>

@@ -15,7 +15,7 @@ import {
 } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { ComponentPropsWithoutRef, ReactNode, useCallback, useState } from 'react'
+import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
 type IProjectTreeRootProps = ComponentPropsWithoutRef<'ul'> & {
   label: string
@@ -62,14 +62,14 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
 }
 
 type IProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
-  branchTarget: 'dataType' | 'function' | 'functionBlock' | 'program' | 'device'
+  branchTarget: 'dataType' | 'function' | 'function-block' | 'program' | 'device'
   children?: ReactNode
 }
 
 const BranchSources = {
   dataType: { BranchIcon: DataTypeIcon, label: 'Data Types' },
   function: { BranchIcon: FunctionIcon, label: 'Functions' },
-  functionBlock: { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
+  'function-block': { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
   program: { BranchIcon: ProgramIcon, label: 'Programs' },
   device: { BranchIcon: DeviceIcon, label: 'Device' },
 }
@@ -84,13 +84,16 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
 
   const { BranchIcon, label } = BranchSources[branchTarget]
 
+  const hasAssociatedPOU = pous.some((pou) => pou.type === branchTarget)
+  useEffect(() => setBranchIsOpen(hasAssociatedPOU), [hasAssociatedPOU])
+
   return (
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
       <div
         className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
-        onClick={handleBranchVisibility}
+        onClick={hasAssociatedPOU ? handleBranchVisibility : undefined}
       >
-        {pous?.length !== 0 ? (
+        {hasAssociatedPOU ? (
           <ArrowIcon
             direction='right'
             className={cn(
@@ -141,6 +144,11 @@ const LeafSources = {
   res: { LeafIcon: ResourceIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, label = 'Data Type', ...res }: IProjectTreeLeafProps) => {
+  const {
+    editorState: {
+      editor: { name },
+    },
+  } = useOpenPLCStore()
   const [leafIsSelected, setLeafIsSelected] = useState(false)
   const { LeafIcon } = LeafSources[leafLang]
 
@@ -148,7 +156,10 @@ const ProjectTreeLeaf = ({ leafLang, label = 'Data Type', ...res }: IProjectTree
 
   return (
     <li
-      className='ml-4 flex cursor-pointer flex-row items-center py-1 pl-4 hover:bg-slate-50 dark:hover:bg-neutral-900'
+      className={cn(
+        'ml-4 flex cursor-pointer flex-row items-center py-1 pl-4 hover:bg-slate-50 dark:hover:bg-neutral-900',
+        name === label && 'bg-slate-50 dark:bg-neutral-900',
+      )}
       onClick={handleLeafSelection}
       {...res}
     >
@@ -156,7 +167,7 @@ const ProjectTreeLeaf = ({ leafLang, label = 'Data Type', ...res }: IProjectTree
       <span
         className={cn(
           'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
-          leafIsSelected && 'font-medium text-neutral-1000 dark:text-white',
+          name === label && 'font-medium text-neutral-1000 dark:text-white',
         )}
       >
         {label}
