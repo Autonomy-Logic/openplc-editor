@@ -1,0 +1,30 @@
+{
+  "createProject": {
+    "success": {
+      "created": {
+        "status": 201,
+        "title": "Project created",
+        "description": "The project was created successfully."
+      }
+    },
+    "errors": {
+      "canceled": {
+        "status": 400,
+        "title": "Operation canceled",
+        "description": "Operation canceled by the user."
+      },
+      "directoryNotEmpty": {
+        "status": 409,
+        "title": "Directory is not empty",
+        "description": "The folder chosen isn't empty. You can't use it for a new project!"
+      },
+      "internalError": {
+        "status": 500,
+        "title": "Failed to create file",
+        "description": "Unable to create new project files"
+      }
+    }
+  },
+  "openProject": {},
+  "saveProject": {}
+}

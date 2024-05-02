@@ -127,18 +127,18 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
 }
 
 type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
-  leafLang: 'IL' | 'ST' | 'FBD' | 'SFC' | 'LD' | 'DT' | 'RES'
+  leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'dt' | 'res'
   label?: string
 }
 
 const LeafSources = {
-  IL: { LeafIcon: ILIcon },
-  ST: { LeafIcon: STIcon },
-  FBD: { LeafIcon: FBDIcon },
-  SFC: { LeafIcon: SFCIcon },
-  LD: { LeafIcon: LDIcon },
-  DT: { LeafIcon: DataTypeIcon },
-  RES: { LeafIcon: ResourceIcon },
+  il: { LeafIcon: ILIcon },
+  st: { LeafIcon: STIcon },
+  fbd: { LeafIcon: FBDIcon },
+  sfc: { LeafIcon: SFCIcon },
+  ld: { LeafIcon: LDIcon },
+  dt: { LeafIcon: DataTypeIcon },
+  res: { LeafIcon: ResourceIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, label = 'Data Type', ...res }: IProjectTreeLeafProps) => {
   const [leafIsSelected, setLeafIsSelected] = useState(false)
