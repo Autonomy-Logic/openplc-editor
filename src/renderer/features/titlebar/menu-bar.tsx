@@ -17,9 +17,8 @@ export const MenuBar = () => {
    * This must be tested, probably will be broken on Windows OS.
    */
   const handleChangeTheme = () => {
-    window.bridge.handleUpdateTheme(() => {
-      switchAppTheme()
-    })
+    window.bridge.winHandleUpdateTheme()
+    switchAppTheme()
   }
 
   const recentProjects = [

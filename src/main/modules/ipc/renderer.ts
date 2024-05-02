@@ -28,6 +28,7 @@ const rendererProcessBridge = {
   maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
   reloadWindow: () => ipcRenderer.send('window:reload'),
   handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
+  winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
   // WIP: Refactoring
   // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),
   // createPou: (callback: any) => ipcRenderer.on('pou:create', callback),

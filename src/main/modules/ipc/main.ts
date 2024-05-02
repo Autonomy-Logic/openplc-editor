@@ -45,10 +45,14 @@ class MainProcessBridge implements MainIpcModule {
       }
     })
     this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
+    this.ipcMain.on('system:update-theme', () => this.mainIpcEventHandlers.handleUpdateTheme())
     // Wip: From here
   }
 
   mainIpcEventHandlers = {
+    handleUpdateTheme: () => {
+      nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
+    },
     getStoreValue: (_: Event, key: keyof typeof this.store) => {
       const response = this.store.get(key)
       console.log(response)
