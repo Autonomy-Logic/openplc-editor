@@ -33,7 +33,7 @@ const Tab = (props: ITabProps) => {
       aria-current={currentTab ? 'page' : undefined}
       {...res}
     >
-      <div className='flex h-full w-full px-3 py-2 ' onClick={() => handleClickedTab()}>
+      <div className='flex h-full w-full px-3 py-2 [&_svg]:mr-1' onClick={() => handleClickedTab()}>
         {LangIcon[fileLang]}
         <span>{fileName}</span>
         <span

@@ -22,7 +22,7 @@ const MonacoEditor = (): ReturnType<typeof PrimitiveEditor> => {
     monacoRef.current = monacoInstance
   }
 
-  console.log(editorRef.current?.getModel()?.getValue())
+  console.log(editorRef.current?.getModel()?.uri.path)
   // console.log(monacoRef.current?.editor.getModels())
 
   const {
