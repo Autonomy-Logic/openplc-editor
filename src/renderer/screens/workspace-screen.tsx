@@ -1,7 +1,17 @@
 import * as Tabs from '@radix-ui/react-tabs'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
+import {
+  DebuggerIcon,
+  DownloadIcon,
+  ExitIcon,
+  PauseIcon,
+  PlayIcon,
+  SearchIcon,
+  TransferIcon,
+  ZoomInOut,
+} from '../assets'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
 import { Explorer } from '../components/_organisms/explorer'
@@ -15,6 +25,8 @@ const WorkspaceScreen = () => {
   const {
     tabsState: { tabs },
   } = useOpenPLCStore()
+
+  const [isPaused, setIsPaused] = useState(false)
 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
@@ -123,16 +135,25 @@ const WorkspaceScreen = () => {
                       console
                     </Tabs.Content>
                     <Tabs.Content value='debug' className='h-full w-full'>
-                      <div className='flex h-full w-full justify-between rounded-lg border-[0.75px] border-neutral-800 p-2'>
+                      <div className='flex h-full w-full justify-between rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800'>
                         <div className='flex gap-4'>
-                          <button className='h-7 w-[133px] rounded-md bg-neutral-100 flex gap-[2px] items-center text-cp-sm justify-center font-medium text-neutral-1000'>
-                            <DebuggerIcon fill="#0464fb" className='h-3 w-3 stroke-brand' /> debugger terminal
+                          <button className='flex h-7 w-[133px] items-center justify-center gap-[2px] rounded-md bg-neutral-100 text-cp-sm font-medium text-neutral-1000'>
+                            <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
                           </button>
                           <input className='h-7 w-9 rounded-md bg-white' />
                           <select className='h-7 w-[88px] rounded-md bg-white'></select>
                         </div>
                         <div className='flex gap-4'>
-                          <button className='h-7 w-[38px] rounded-md bg-neutral-100'></button>
+                          <button
+                            onClick={() => setIsPaused(!isPaused)}
+                            className='flex h-7 w-[38px] items-center justify-center rounded-md bg-brand'
+                          >
+                            {isPaused ? (
+                              <PlayIcon fill='#FFFFFF' className='h-fit w-[10px]' />
+                            ) : (
+                              <PauseIcon fill='#FFFFFF' className='h-fit w-[10px]' />
+                            )}
+                          </button>
                           <button className='h-7 w-[38px] rounded-md bg-neutral-50'></button>
                         </div>
                       </div>
