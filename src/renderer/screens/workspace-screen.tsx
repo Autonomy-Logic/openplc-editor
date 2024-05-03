@@ -122,10 +122,12 @@ const WorkspaceScreen = () => {
                     <Tabs.Content value='console' className='w-full '>
                       console
                     </Tabs.Content>
-                    <Tabs.Content value='debug' className='w-full h-full'>
-                      <div className='flex w-full justify-between border-[0.75px] border-neutral-800 h-full p-2 rounded-lg'>
+                    <Tabs.Content value='debug' className='h-full w-full'>
+                      <div className='flex h-full w-full justify-between rounded-lg border-[0.75px] border-neutral-800 p-2'>
                         <div className='flex gap-4'>
-                          <button className='h-7 w-[133px] rounded-md bg-neutral-100'></button>
+                          <button className='h-7 w-[133px] rounded-md bg-neutral-100 flex gap-[2px] items-center text-cp-sm justify-center font-medium text-neutral-1000'>
+                            <DebuggerIcon fill="#0464fb" className='h-3 w-3 stroke-brand' /> debugger terminal
+                          </button>
                           <input className='h-7 w-9 rounded-md bg-white' />
                           <select className='h-7 w-[88px] rounded-md bg-white'></select>
                         </div>
