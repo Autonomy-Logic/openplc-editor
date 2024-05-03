@@ -1,3 +1,4 @@
+import * as Tabs from '@radix-ui/react-tabs'
 import { useNavigate } from 'react-router-dom'
 
 import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
@@ -14,6 +15,7 @@ const WorkspaceScreen = () => {
   const {
     tabsState: { tabs },
   } = useOpenPLCStore()
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -100,9 +102,30 @@ const WorkspaceScreen = () => {
                   collapsible
                   defaultSize={25}
                   minSize={15}
-                  className='flex-1 grow rounded-lg border-2 border-neutral-200 bg-white data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
+                  className='flex-1 grow overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
                 >
-                  <span>Console</span>
+                  <Tabs.Root defaultValue='console' className='h-full w-full '>
+                    <Tabs.List className='flex  w-64 gap-4'>
+                      <Tabs.Trigger
+                        value='console'
+                        className='h-7 w-16 rounded-md bg-neutral-100 data-[state=active]:bg-blue-500'
+                      >
+                        <p className='text-xs font-medium text-brand-light data-[state=active]:text-white'>Console</p>
+                      </Tabs.Trigger>
+                      <Tabs.Trigger
+                        value='debug'
+                        className='h-7 w-16 rounded-md bg-neutral-100 data-[state=active]:bg-blue-500'
+                      >
+                        <p className='text-xs font-medium text-brand-light data-[state=active]:text-white'>Debugger</p>
+                      </Tabs.Trigger>
+                    </Tabs.List>
+                    <Tabs.Content value='console' className='h-full w-full bg-red-50'>
+                      console
+                    </Tabs.Content>
+                    <Tabs.Content value='debug' className='h-full w-full bg-red-50'>
+                      debug
+                    </Tabs.Content>
+                  </Tabs.Root>
                 </ResizablePanel>
               </ResizablePanelGroup>
             </div>
