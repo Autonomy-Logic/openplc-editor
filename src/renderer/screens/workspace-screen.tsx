@@ -102,10 +102,10 @@ const WorkspaceScreen = () => {
                   collapsible
                   defaultSize={25}
                   minSize={15}
-                  className='flex-1 grow overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
+                  className='flex-1 grow  rounded-lg border-2 border-neutral-200 bg-white p-4 data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
                 >
-                  <Tabs.Root defaultValue='console' className='h-full w-full '>
-                    <Tabs.List className='flex  w-64 gap-4'>
+                  <Tabs.Root defaultValue='console' className='flex h-full w-full flex-col gap-4 overflow-hidden'>
+                    <Tabs.List className='flex  h-7 w-64 gap-4'>
                       <Tabs.Trigger
                         value='console'
                         className='h-7 w-16 rounded-md bg-neutral-100 data-[state=active]:bg-blue-500'
@@ -119,11 +119,21 @@ const WorkspaceScreen = () => {
                         <p className='text-xs font-medium text-brand-light data-[state=active]:text-white'>Debugger</p>
                       </Tabs.Trigger>
                     </Tabs.List>
-                    <Tabs.Content value='console' className='h-full w-full bg-red-50'>
+                    <Tabs.Content value='console' className='w-full '>
                       console
                     </Tabs.Content>
-                    <Tabs.Content value='debug' className='h-full w-full bg-red-50'>
-                      debug
+                    <Tabs.Content value='debug' className='w-full h-full'>
+                      <div className='flex w-full justify-between border-[0.75px] border-neutral-800 h-full p-2 rounded-lg'>
+                        <div className='flex gap-4'>
+                          <button className='h-7 w-[133px] rounded-md bg-neutral-100'></button>
+                          <input className='h-7 w-9 rounded-md bg-white' />
+                          <select className='h-7 w-[88px] rounded-md bg-white'></select>
+                        </div>
+                        <div className='flex gap-4'>
+                          <button className='h-7 w-[38px] rounded-md bg-neutral-100'></button>
+                          <button className='h-7 w-[38px] rounded-md bg-neutral-50'></button>
+                        </div>
+                      </div>
                     </Tabs.Content>
                   </Tabs.Root>
                 </ResizablePanel>
