@@ -8,9 +8,7 @@ import { CreatePou } from '../../_features/[workspace]/create-pou'
 
 const Project = () => {
   const {
-    workspaceState: {
-      projectData: { pous },
-    },
+    projectData: { pous },
     tabsActions: { updateTabs },
     editorActions: { setEditor },
   } = useOpenPLCStore()
@@ -29,7 +27,6 @@ const Project = () => {
     updateTabs(tabToBeCreated)
     setEditor(CreateEditorObject(tabToBeCreated))
   }
-
 
   return (
     <div className='max-w-[184px]'>

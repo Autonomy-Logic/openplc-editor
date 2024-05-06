@@ -19,14 +19,13 @@ type IPouDTO =
 type IWorkspaceState = {
   projectName: string
   projectPath: string
+  projectData: IProject
+  editingState: 'save-request' | 'saved' | 'unsaved'
   systemConfigs: {
     OS: 'win32' | 'linux' | 'darwin' | ''
     arch: 'x64' | 'arm' | ''
     shouldUseDarkMode: boolean
   }
-  projectData: IProject
-  createdAt: string
-  updatedAt: string
 }
 
 type ICreatePouRes = {
@@ -35,77 +34,79 @@ type ICreatePouRes = {
 }
 
 type IWorkspaceActions = {
+  setEditingState: (editingState: IWorkspaceState['editingState']) => void
   setUserWorkspace: (userWorkspaceState: Omit<IWorkspaceState, 'systemConfigs'>) => void
   setSystemConfigs: (systemConfigs: IWorkspaceState['systemConfigs']) => void
   switchAppTheme: () => void
   updateProjectName: (projectName: string) => void
   updateProjectPath: (projectPath: string) => void
   createPou: (pouToBeCreated: IPouDTO) => ICreatePouRes
-  updatePou: (dataToBeUpdated: Pick<IPouDTO, 'data'>) => void
+  updatePou: (dataToBeUpdated: { name: string; content: string }) => void
   deletePou: (pouToBeDeleted: string) => void
 }
 
-type IWorkspaceSlice = {
-  workspaceState: IWorkspaceState
+type IWorkspaceSlice = IWorkspaceState & {
   workspaceActions: IWorkspaceActions
 }
 
 const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlice> = (setState) => ({
-  workspaceState: {
-    projectName: '',
-    projectPath: '',
-    systemConfigs: {
-      OS: '',
-      arch: '',
-      shouldUseDarkMode: false,
-    },
-    projectData: {
-      dataTypes: [],
-      pous: [],
-      globalVariables: [],
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+  editingState: 'unsaved',
+  projectName: '',
+  projectPath: '',
+  projectData: {
+    dataTypes: [],
+    pous: [],
+    globalVariables: [],
   },
+  systemConfigs: {
+    OS: '',
+    arch: '',
+    shouldUseDarkMode: false,
+  },
+
   workspaceActions: {
+    setEditingState: (editingState: IWorkspaceState['editingState']): void => {
+      setState(
+        produce((slice: IWorkspaceSlice) => {
+          slice.editingState = editingState
+        }),
+      )
+    },
     setUserWorkspace: (userWorkspaceState: Omit<IWorkspaceState, 'systemConfigs'>): void => {
       setState(
-        produce(({ workspaceState }: IWorkspaceSlice) => {
-          const { projectPath, projectName, projectData, createdAt, updatedAt } = userWorkspaceState
-
-          workspaceState.projectPath = projectPath
-          workspaceState.projectName = projectName
-          workspaceState.projectData = projectData
-          workspaceState.createdAt = createdAt
-          workspaceState.updatedAt = updatedAt
+        produce((slice: IWorkspaceSlice) => {
+          const { projectPath, projectName, projectData } = userWorkspaceState
+          slice.projectPath = projectPath
+          slice.projectName = projectName
+          slice.projectData = projectData
         }),
       )
     },
     setSystemConfigs: (systemConfigsData: IWorkspaceState['systemConfigs']): void => {
       setState(
-        produce(({ workspaceState }: IWorkspaceSlice) => {
-          workspaceState.systemConfigs = systemConfigsData
+        produce((slice: IWorkspaceSlice) => {
+          slice.systemConfigs = systemConfigsData
         }),
       )
     },
     switchAppTheme: (): void => {
       setState(
         produce((slice: IWorkspaceSlice) => {
-          slice.workspaceState.systemConfigs.shouldUseDarkMode = !slice.workspaceState.systemConfigs.shouldUseDarkMode
+          slice.systemConfigs.shouldUseDarkMode = !slice.systemConfigs.shouldUseDarkMode
         }),
       )
     },
     updateProjectName: (projectName: string): void => {
       setState(
         produce((slice: IWorkspaceSlice) => {
-          slice.workspaceState.projectName = projectName
+          slice.projectName = projectName
         }),
       )
     },
     updateProjectPath: (projectPath: string): void => {
       setState(
         produce((slice: IWorkspaceSlice) => {
-          slice.workspaceState.projectPath = projectPath
+          slice.projectPath = projectPath
         }),
       )
     },
@@ -113,11 +114,11 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
       let response: ICreatePouRes = { ok: false, message: '' }
       setState(
         produce((slice: IWorkspaceSlice) => {
-          const pouExists = slice.workspaceState.projectData.pous.find((pou) => {
+          const pouExists = slice.projectData.pous.find((pou) => {
             return pou.data.name === pouToBeCreated.data.name
           })
           if (!pouExists) {
-            slice.workspaceState.projectData.pous.push(pouToBeCreated)
+            slice.projectData.pous.push(pouToBeCreated)
             response = { ok: true, message: 'Pou created successfully' }
           } else {
             response = { ok: false, message: 'Pou already exists' }
@@ -126,22 +127,20 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
       )
       return response
     },
-    updatePou: (dataToBeUpdated: Pick<IPouDTO, 'data'>): void => {
+    updatePou: (dataToBeUpdated: { name: string; content: string }): void => {
       setState(
         produce((slice: IWorkspaceSlice) => {
-          const draft = slice.workspaceState.projectData.pous.find((pou) => {
-            return pou.data.name === dataToBeUpdated.data.name
+          const draft = slice.projectData.pous.find((pou) => {
+            return pou.data.name === dataToBeUpdated.name
           })
-          if (draft) draft.data = dataToBeUpdated.data
+          if (draft) draft.data.body = dataToBeUpdated.content
         }),
       )
     },
     deletePou: (pouToBeDeleted: string): void => {
       setState(
         produce((slice: IWorkspaceSlice) => {
-          slice.workspaceState.projectData.pous = slice.workspaceState.projectData.pous.filter(
-            (pou) => pou.data.name !== pouToBeDeleted,
-          )
+          slice.projectData.pous = slice.projectData.pous.filter((pou) => pou.data.name !== pouToBeDeleted)
         }),
       )
     },

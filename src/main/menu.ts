@@ -79,6 +79,10 @@ export default class MenuBuilder {
     }
   }
 
+  handleSaveProjectRequest() {
+    this.mainWindow.webContents.send('project:save/open-request', 1)
+  }
+
   handleSaveProject(channel: string): void {
     this.mainWindow.webContents.send(channel, 'Save project request')
   }
@@ -341,8 +345,7 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.save'),
             accelerator: 'Ctrl+S',
-            enabled: false,
-            click: () => console.warn('Menu button clicked! This is not working yet.'),
+            click: () => this.handleSaveProjectRequest(),
           },
           {
             label: i18n.t('menu:file.submenu.saveAs'),

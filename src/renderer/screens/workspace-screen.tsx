@@ -1,3 +1,5 @@
+import _ from 'lodash'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
@@ -12,8 +14,29 @@ import { useOpenPLCStore } from '../store'
 const WorkspaceScreen = () => {
   const navigate = useNavigate()
   const {
-    tabsState: { tabs },
+    tabs,
+    projectData,
+    projectPath,
+    editingState,
+    workspaceActions: { setEditingState },
   } = useOpenPLCStore()
+
+  useEffect(() => {
+    const handleSaveProject = async () => {
+      const { success, reason } = await window.bridge.handleSaveProjectWriteData({ projectPath, projectData })
+      console.log(success, reason)
+      _.debounce(() => setEditingState('saved'), 1000)()
+    }
+
+    if (editingState === 'save-request') {
+      void handleSaveProject()
+    }
+  }, [editingState])
+
+  window.bridge.handleSaveProjectOpenRequest((_event) => {
+    setEditingState('save-request')
+  })
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>

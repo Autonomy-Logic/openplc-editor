@@ -7,9 +7,9 @@ import { Tab, TabList } from '../../_atoms'
 
 const Tabs = () => {
   const {
-    tabsState: { tabs },
+    tabs,
+    editor,
     tabsActions: { sortTabs },
-    editorState: { editor },
     editorActions: { setEditor },
   } = useOpenPLCStore()
   const [selectedTab, setSelectedTab] = useState(editor.name)
