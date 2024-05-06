@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
+import { IProject } from '../../../types/PLC'
 import { IProjectServiceResponse } from '../../services/project-service'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
@@ -29,6 +30,18 @@ const rendererProcessBridge = {
   reloadWindow: () => ipcRenderer.send('window:reload'),
   handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
   winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
+  handleSaveProjectOpenRequest: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:save/open-request', callback),
+  handleSaveProjectWriteData: (dataToWrite: {
+    projectPath: string
+    projectData: IProject
+  }): Promise<{
+    success: boolean
+    reason: {
+      title: string
+      description: string
+    }
+  }> => ipcRenderer.invoke('project:save/write-data', dataToWrite),
   // WIP: Refactoring
   // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),
   // createPou: (callback: any) => ipcRenderer.on('pou:create', callback),

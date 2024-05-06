@@ -17,6 +17,7 @@ const StartScreen = () => {
     const { success, data, error } = await window.bridge.startCreateProject()
     if (success && data) {
       setUserWorkspace({
+        editingState: 'working',
         projectPath: data.meta.path,
         projectData: data.content,
         projectName: 'new-project',

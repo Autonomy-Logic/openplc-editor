@@ -17,6 +17,7 @@ type IPouDTO =
     }
 
 type IWorkspaceState = {
+  editingState: 'working' | 'saved' | 'unsaved'
   projectName: string
   projectPath: string
   systemConfigs: {
@@ -35,13 +36,14 @@ type ICreatePouRes = {
 }
 
 type IWorkspaceActions = {
+  setEditingState: (editingState: IWorkspaceState['editingState']) => void
   setUserWorkspace: (userWorkspaceState: Omit<IWorkspaceState, 'systemConfigs'>) => void
   setSystemConfigs: (systemConfigs: IWorkspaceState['systemConfigs']) => void
   switchAppTheme: () => void
   updateProjectName: (projectName: string) => void
   updateProjectPath: (projectPath: string) => void
   createPou: (pouToBeCreated: IPouDTO) => ICreatePouRes
-  updatePou: (dataToBeUpdated: Pick<IPouDTO, 'data'>) => void
+  updatePou: (dataToBeUpdated: { name: string; content: string }) => void
   deletePou: (pouToBeDeleted: string) => void
 }
 
@@ -52,6 +54,7 @@ type IWorkspaceSlice = {
 
 const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlice> = (setState) => ({
   workspaceState: {
+    editingState: 'unsaved',
     projectName: '',
     projectPath: '',
     systemConfigs: {
@@ -68,6 +71,13 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
     updatedAt: new Date().toISOString(),
   },
   workspaceActions: {
+    setEditingState: (editingState: IWorkspaceState['editingState']): void => {
+      setState(
+        produce((slice: IWorkspaceSlice) => {
+          slice.workspaceState.editingState = editingState
+        }),
+      )
+    },
     setUserWorkspace: (userWorkspaceState: Omit<IWorkspaceState, 'systemConfigs'>): void => {
       setState(
         produce(({ workspaceState }: IWorkspaceSlice) => {
@@ -126,13 +136,13 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
       )
       return response
     },
-    updatePou: (dataToBeUpdated: Pick<IPouDTO, 'data'>): void => {
+    updatePou: (dataToBeUpdated: { name: string; content: string }): void => {
       setState(
         produce((slice: IWorkspaceSlice) => {
           const draft = slice.workspaceState.projectData.pous.find((pou) => {
-            return pou.data.name === dataToBeUpdated.data.name
+            return pou.data.name === dataToBeUpdated.name
           })
-          if (draft) draft.data = dataToBeUpdated.data
+          if (draft) draft.data.body = dataToBeUpdated.content
         }),
       )
     },

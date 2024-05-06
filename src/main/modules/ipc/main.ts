@@ -2,8 +2,8 @@ import { TStoreType } from '@root/main/contracts/types/modules/store'
 import { Event, nativeTheme } from 'electron'
 import { platform } from 'process'
 
+import { IProject } from '../../../types/PLC'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
-import { ProjectDto } from '../../contracts/types/services/project.service'
 
 class MainProcessBridge implements MainIpcModule {
   ipcMain
@@ -27,7 +27,7 @@ class MainProcessBridge implements MainIpcModule {
       return response
     })
     this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
-    this.ipcMain.on('project:save-response', (_event, data: ProjectDto) => this.projectService.saveProject(data))
+    // this.ipcMain.on('project:save-response', (_event, data: ProjectDto) => this.projectService.saveProject(data))
     /**
      * Send the OS information to the renderer process
      * Refactor: This can be optimized.
@@ -46,6 +46,12 @@ class MainProcessBridge implements MainIpcModule {
     })
     this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
     this.ipcMain.on('system:update-theme', () => this.mainIpcEventHandlers.handleUpdateTheme())
+    this.ipcMain.handle(
+      'project:save/write-data',
+      (_event, { projectPath, projectData }: { projectPath: string; projectData: IProject }) =>
+        this.projectService.saveProject({ projectPath, projectData }),
+    )
+
     // Wip: From here
   }
 
@@ -59,10 +65,10 @@ class MainProcessBridge implements MainIpcModule {
       return response as unknown as TStoreType
     },
     createPou: () => this.mainWindow?.webContents.send('pou:createPou', { ok: true }),
-    saveProject: (_: Event, arg: ProjectDto) => {
-      const response = this.projectService.saveProject(arg)
-      return response
-    },
+    // saveProject: (_: Event, arg: ProjectDto) => {
+    //   const response = this.projectService.saveProject(arg)
+    //   return response
+    // },
   }
 }
 

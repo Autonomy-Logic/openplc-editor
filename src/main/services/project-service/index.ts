@@ -1,13 +1,13 @@
 import { BrowserWindow, dialog } from 'electron'
 import { promises, readFile, writeFile } from 'fs'
 import { join } from 'path'
-import { convert, create } from 'xmlbuilder2'
+import { convert } from 'xmlbuilder2'
 
 import { ProjectSchema } from '../../../shared/contracts/validations'
-import xmlProjectAsObject from '../../../shared/data/mock/object-to-create-project'
+// import xmlProjectAsObject from '../../../shared/data/mock/object-to-create-project'
 import { IProject } from '../../../types/PLC'
 import { i18n } from '../../../utils/i18n'
-import { ProjectDto } from '../../contracts/types/services/project.service'
+// import { ProjectDto } from '../../contracts/types/services/project.service'
 import { store } from '../../modules/store'
 import { baseJsonStructure } from './data'
 import { CreateJSONFile } from './utils/json-creator'
@@ -21,7 +21,7 @@ export type IProjectServiceResponse = {
   data?: {
     meta: {
       path: string
-    },
+    }
     content: IProject
   }
 }
@@ -47,7 +47,7 @@ class ProjectService {
         error: {
           title: i18n.t('projectServiceResponses:createProject.errors.canceled.title'),
           description: i18n.t('projectServiceResponses:createProject.errors.canceled.description'),
-        }
+        },
       }
     const [filePath] = res.filePaths
 
@@ -58,7 +58,7 @@ class ProjectService {
         const entry = await directory.read()
         await directory.close()
         return entry === null
-      } catch (error) {
+      } catch (_error) {
         return false
       }
     }
@@ -70,7 +70,7 @@ class ProjectService {
         error: {
           title: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.title'),
           description: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.description'),
-        }
+        },
       }
     }
 
@@ -78,15 +78,15 @@ class ProjectService {
     // const createdXmlAsObject = ProjectSchema.parse(xmlProjectAsObject)
 
     // Create the project XML structure using xmlbuilder2.
-    const projectAsXml = create({ version: '1.0', encoding: 'utf-8' }, xmlProjectAsObject)
+    // const projectAsXml = create({ version: '1.0', encoding: 'utf-8' }, xmlProjectAsObject)
 
     CreateJSONFile({
       path: filePath,
       fileName: 'data',
-      data: JSON.stringify(baseJsonStructure),
+      data: JSON.stringify(baseJsonStructure, null, 2),
     })
     // Create the path to the project file.
-    const projectPath = join(filePath, 'plc.xml')
+    const projectPath = join(filePath, 'data.json')
 
     // Add the path to the store that will be used for the recent projects data.
     const lastProjects = store.get('last_projects')
@@ -104,16 +104,16 @@ class ProjectService {
      * otherwise return a successful response with the created file path.
      */
 
-    writeFile(projectPath, projectAsXml.end({ prettyPrint: true }), (error) => {
-      if (error) throw error
-      return {
-        success: false,
-        error: {
-          title: i18n.t('projectServiceResponses:createProject.errors.internalError.title'),
-          description: i18n.t('projectServiceResponses:createProject.errors.internalError.description'),
-        },
-      }
-    })
+    // writeFile(projectPath, projectAsXml.end({ prettyPrint: true }), (error) => {
+    //   if (error) throw error
+    //   return {
+    //     success: false,
+    //     error: {
+    //       title: i18n.t('projectServiceResponses:createProject.errors.internalError.title'),
+    //       description: i18n.t('projectServiceResponses:createProject.errors.internalError.description'),
+    //     },
+    //   }
+    // })
     return {
       success: true,
       data: {
@@ -121,7 +121,7 @@ class ProjectService {
           path: projectPath,
         },
         content: baseJsonStructure,
-      }
+      },
     }
   }
 
@@ -188,12 +188,12 @@ class ProjectService {
    * @param xmlSerializedAsObject - The XML data to be serialized and saved.
    * @returns A `promise` of `ResponseService` type.
    */
-  saveProject(data: ProjectDto) {
-    const { projectPath, projectAsObj } = data
+  saveProject(data: { projectPath: string; projectData: IProject }) {
+    const { projectPath, projectData } = data
     // Check if required parameters are provided.
-    if (!projectPath || !projectAsObj)
+    if (!projectPath || !projectData)
       return {
-        ok: false,
+        success: false,
         reason: {
           title: i18n.t('saveProject:errors.failedToSaveFile.title'),
           description: i18n.t('saveProject:errors.failedToSaveFile.description'),
@@ -201,20 +201,22 @@ class ProjectService {
       }
 
     // Serialize the XML data using xmlbuilder2.
-    const projectAsXml = create(
-      // { parser: { cdata: (projectAsObj) => projectAsObj } },
-      projectAsObj,
-    )
+    // const projectAsXml = create(
+    //   // { parser: { cdata: (projectAsObj) => projectAsObj } },
+    //   projectAsObj,
+    // )
+
+    const normalizedDataToWrite = JSON.stringify(projectData, null, 2)
 
     /**
      * Write the serialized xml to a file.
      * If the file saving failed, return an error response,
      * otherwise return a successful response.
      */
-    writeFile(projectPath, projectAsXml.end({ prettyPrint: true }), (error) => {
+    writeFile(projectPath, normalizedDataToWrite, (error) => {
       if (error) throw error
       return {
-        ok: false,
+        success: false,
         reason: {
           title: i18n.t('saveProject:errors.failedToSaveFile.title'),
           description: i18n.t('saveProject:errors.failedToSaveFile.description'),
@@ -222,10 +224,8 @@ class ProjectService {
       }
     })
 
-    console.log('Works!')
-
     return {
-      ok: true,
+      success: true,
       reason: {
         title: i18n.t('saveProject:success.successToSaveFile.title'),
         description: i18n.t('saveProject:success.successToSaveFile.description'),
