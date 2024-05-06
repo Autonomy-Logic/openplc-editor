@@ -75,9 +75,7 @@ const BranchSources = {
 }
 const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranchProps) => {
   const {
-    workspaceState: {
-      projectData: { pous },
-    },
+    projectData: { pous },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState(false)
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
@@ -145,9 +143,7 @@ const LeafSources = {
 }
 const ProjectTreeLeaf = ({ leafLang, label = 'Data Type', ...res }: IProjectTreeLeafProps) => {
   const {
-    editorState: {
-      editor: { name },
-    },
+    editor: { name },
   } = useOpenPLCStore()
   const [leafIsSelected, setLeafIsSelected] = useState(false)
   const { LeafIcon } = LeafSources[leafLang]

@@ -17,12 +17,10 @@ const StartScreen = () => {
     const { success, data, error } = await window.bridge.startCreateProject()
     if (success && data) {
       setUserWorkspace({
-        editingState: 'working',
+        editingState: 'unsaved',
         projectPath: data.meta.path,
         projectData: data.content,
         projectName: 'new-project',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
       })
       navigate('/workspace')
     } else {

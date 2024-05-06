@@ -4,13 +4,15 @@ import { ComponentPropsWithoutRef } from 'react'
 
 type IWorkspaceMainContentProps = ComponentPropsWithoutRef<'div'>
 const WorkspaceMainContent = (props: IWorkspaceMainContentProps) => {
-  const platform = useOpenPLCStore().workspaceState.systemConfigs.OS
+  const {
+    systemConfigs: { OS },
+  } = useOpenPLCStore()
   const { children, ...res } = props
   return (
     <div
       className={cn(
         'flex h-full w-full flex-1 flex-grow gap-1 bg-neutral-100 p-2 dark:bg-neutral-900',
-        `${platform !== 'linux' && '!rounded-tl-lg'}`,
+        `${OS !== 'linux' && '!rounded-tl-lg'}`,
       )}
       {...res}
     >

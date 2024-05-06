@@ -14,28 +14,28 @@ import { useOpenPLCStore } from '../store'
 const WorkspaceScreen = () => {
   const navigate = useNavigate()
   const {
-    tabsState: { tabs },
-    workspaceState: { projectData, projectPath, editingState },
+    tabs,
+    projectData,
+    projectPath,
+    editingState,
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()
 
-  const handleSaveProject = async () => {
-    const { success, reason } = await window.bridge.handleSaveProjectWriteData({ projectPath, projectData })
-    console.log(success, reason)
-    _.debounce(() => setEditingState('working'), 1000)()
-  }
-
-  window.bridge.handleSaveProjectOpenRequest((_event) => {
-    setEditingState('saved')
-  })
   useEffect(() => {
-    if (editingState === 'saved') {
+    const handleSaveProject = async () => {
+      const { success, reason } = await window.bridge.handleSaveProjectWriteData({ projectPath, projectData })
+      console.log(success, reason)
+      _.debounce(() => setEditingState('saved'), 1000)()
+    }
+
+    if (editingState === 'save-request') {
       void handleSaveProject()
     }
   }, [editingState])
 
-  console.log('This is the current project data ->', projectData)
-  console.log('This is the current project path ->', projectPath)
+  window.bridge.handleSaveProjectOpenRequest((_event) => {
+    setEditingState('save-request')
+  })
 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
