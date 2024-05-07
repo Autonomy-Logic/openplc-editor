@@ -47,38 +47,6 @@ export default class MenuBuilder {
     return menu
   }
 
-  handleProject(channel: string): void {
-    if (channel === 'project:create') {
-      this.projectService
-        .createProject()
-        .then(({ ok, data }) => {
-          if (ok && data) {
-            this.mainWindow.webContents.send(channel, data)
-            console.log(data)
-          } else if (!ok) {
-            console.warn('error in creating project')
-          }
-        })
-        .catch((err) => {
-          console.warn(err)
-        })
-    } else if (channel === 'project:open') {
-      this.projectService
-        .openProject()
-        .then(({ ok, data, reason }) => {
-          if (ok && data) {
-            this.mainWindow.webContents.send(channel, data)
-            console.log(data)
-          } else if (!ok && reason) {
-            console.warn('error in opening project', reason)
-          }
-        })
-        .catch((err) => {
-          console.warn(err)
-        })
-    }
-  }
-
   handleSaveProjectRequest() {
     this.mainWindow.webContents.send('project:save/open-request', 1)
   }
@@ -119,12 +87,12 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.new'),
           accelerator: 'Cmd+N',
-          click: () => this.handleProject('project:create'),
+          click: () => console.warn('New button clicked! This is not working yet.'),
         },
         {
           label: i18n.t('menu:file.submenu.open'),
           accelerator: 'Cmd+O',
-          click: () => this.handleProject('project:open'),
+          click: () => console.warn('New button clicked! This is not working yet.'),
         },
         { type: 'separator' },
         {
@@ -335,12 +303,12 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.new'),
             accelerator: 'Ctrl+N',
-            click: () => this.handleProject('project:create'),
+            click: () => console.log('New'),
           },
           {
             label: i18n.t('menu:file.submenu.open'),
             accelerator: 'Ctrl+O',
-            click: () => this.handleProject('project:open'),
+            click: () => console.log('New'),
           },
           {
             label: i18n.t('menu:file.submenu.save'),

@@ -13,6 +13,7 @@ const ToastViewport = forwardRef<
   <PrimitiveToast.ToastViewport
     ref={ref}
     className={cn('absolute bottom-4 right-0 z-[100] flex h-fit max-h-36 w-[292px] px-4 xl:w-[420px]', className)}
+    // inset-x-[40%] top-4 -> For fail toasts to be on top
     {...props}
   />
 ))
@@ -20,11 +21,11 @@ const ToastViewport = forwardRef<
 ToastViewport.displayName = PrimitiveToast.ToastViewport.displayName
 
 const toastVariants = cva(
-  'group relative pointer-events-auto flex flex-col flex-1 w-full items-start rounded-md shadow-lg px-4 py-3 font-display border border-neutral-200 bg-white dark:bg-neutral-950 dark:border-neutral-850 transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full',
+  'group relative pointer-events-auto flex flex-col flex-1 w-full text-neutral-1000 dark:text-white items-start rounded-md shadow-lg px-4 py-3 font-display border border-neutral-200 bg-white dark:bg-neutral-950 dark:border-neutral-850 transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full',
   {
     variants: {
       variant: {
-        default: 'text-neutral-1000 dark:text-white',
+        default: '',
         fail: 'fail group border-rose-500 shadow-rose-500/10',
         warn: 'warn group border-amber-500 shadow-amber-500/10',
       },
@@ -86,7 +87,11 @@ const ToastDescription = forwardRef<
   ElementRef<typeof PrimitiveToast.ToastDescription>,
   ComponentPropsWithoutRef<typeof PrimitiveToast.ToastDescription>
 >(({ className, ...props }, ref) => (
-  <PrimitiveToast.ToastDescription ref={ref} className={cn('text-xs opacity-90', className)} {...props} />
+  <PrimitiveToast.ToastDescription
+    ref={ref}
+    className={cn('w-full overflow-y-auto text-xs opacity-90', className)}
+    {...props}
+  />
 ))
 ToastDescription.displayName = PrimitiveToast.ToastDescription.displayName
 
