@@ -121,30 +121,32 @@ const WorkspaceScreen = () => {
                     <Tabs.List className='flex  h-7 w-64 gap-4'>
                       <Tabs.Trigger
                         value='console'
-                        className='h-7 w-16 rounded-md bg-neutral-100 data-[state=active]:bg-blue-500'
+                        className='h-7 w-16 dark:bg-neutral-900 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white  dark:text-neutral-700'
                       >
-                        <p className='text-xs font-medium text-brand-light data-[state=active]:text-white'>Console</p>
+                        Console
                       </Tabs.Trigger>
                       <Tabs.Trigger
                         value='debug'
-                        className='h-7 w-16 rounded-md bg-neutral-100 data-[state=active]:bg-blue-500'
+                        className='h-7 w-16 dark:bg-neutral-900 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white  dark:text-neutral-700'
                       >
-                        <p className='text-xs font-medium text-brand-light data-[state=active]:text-white'>Debugger</p>
+                        Debugger
                       </Tabs.Trigger>
                     </Tabs.List>
                     <Tabs.Content value='console' className='w-full '>
                       console
                     </Tabs.Content>
                     <Tabs.Content value='debug' className='h-full w-full'>
-                      <div className='flex h-full w-full justify-between rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800'>
+                      <div className='flex h-full w-full justify-between rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
                         <div className='flex gap-4'>
-                          <button className='flex h-7 w-[133px] items-center justify-center gap-[2px] rounded-md border border-neutral-200 bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none'>
+                          <button className='flex h-7 w-[133px] items-center justify-center gap-2 rounded-md bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
                             <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
                           </button>
-                          <input className='h-7 w-9 items-center rounded-md border border-neutral-200 bg-white p-2 text-center text-cp-sm font-medium text-neutral-1000 outline-none' />
-                          <select className='h-7 w-[88px] rounded-md border border-neutral-200 bg-white outline-none'></select>
+                          <div className='flex gap-2'>
+                            <input className='h-7 w-9 items-center rounded-md border border-neutral-200 bg-white p-2 text-center text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-neutral-900' />
+                            <select className='h-7 w-[88px] rounded-md border border-neutral-200 bg-white outline-none dark:bg-neutral-900'></select>
+                          </div>
                         </div>
-                        <div className='flex gap-4'>
+                        <div className='flex gap-2'>
                           <button
                             onClick={() => setIsPaused(!isPaused)}
                             className='flex h-7 w-[38px] items-center justify-center rounded-md  bg-brand outline-none'
