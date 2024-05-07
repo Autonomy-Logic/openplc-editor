@@ -12,6 +12,7 @@ import {
   TransferIcon,
   ZoomInOut,
 } from '../assets'
+import NextIcon from '../assets/icons/interface/Next'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
 import { Explorer } from '../components/_organisms/explorer'
@@ -137,16 +138,16 @@ const WorkspaceScreen = () => {
                     <Tabs.Content value='debug' className='h-full w-full'>
                       <div className='flex h-full w-full justify-between rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800'>
                         <div className='flex gap-4'>
-                          <button className='flex h-7 w-[133px] items-center justify-center gap-[2px] rounded-md bg-neutral-100 text-cp-sm font-medium text-neutral-1000'>
+                          <button className='flex h-7 w-[133px] items-center justify-center gap-[2px] rounded-md border border-neutral-200 bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none'>
                             <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
                           </button>
-                          <input className='h-7 w-9 rounded-md bg-white' />
-                          <select className='h-7 w-[88px] rounded-md bg-white'></select>
+                          <input className='h-7 w-9 items-center rounded-md border border-neutral-200 bg-white p-2 text-center text-cp-sm font-medium text-neutral-1000 outline-none' />
+                          <select className='h-7 w-[88px] rounded-md border border-neutral-200 bg-white outline-none'></select>
                         </div>
                         <div className='flex gap-4'>
                           <button
                             onClick={() => setIsPaused(!isPaused)}
-                            className='flex h-7 w-[38px] items-center justify-center rounded-md bg-brand'
+                            className='flex h-7 w-[38px] items-center justify-center rounded-md  bg-brand outline-none'
                           >
                             {isPaused ? (
                               <PlayIcon fill='#FFFFFF' className='h-fit w-[10px]' />
@@ -154,7 +155,9 @@ const WorkspaceScreen = () => {
                               <PauseIcon fill='#FFFFFF' className='h-fit w-[10px]' />
                             )}
                           </button>
-                          <button className='h-7 w-[38px] rounded-md bg-neutral-50'></button>
+                          <button className='flex h-7 w-[38px] items-center justify-center  rounded-md bg-neutral-50 outline-none dark:bg-neutral-850'>
+                            <NextIcon className='h-[10px] w-[14px]' />
+                          </button>
                         </div>
                       </div>
                     </Tabs.Content>
