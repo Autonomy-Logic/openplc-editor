@@ -9,6 +9,8 @@ import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
+import { useToast } from '../../[app]/toast/use-toast'
+
 type ICardProps = {
   target: 'function' | 'function-block' | 'program'
   closeContainer: Dispatch<SetStateAction<boolean>>
@@ -21,6 +23,7 @@ type IPouFormProps = {
 }
 
 const Card = (props: ICardProps): ReactNode => {
+  const { toast } = useToast()
   const { target, closeContainer } = props
   const {
     control,
@@ -35,6 +38,7 @@ const Card = (props: ICardProps): ReactNode => {
 
   const submitData: SubmitHandler<IPouFormProps> = (data) => {
     create(data)
+    toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'fail' })
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
