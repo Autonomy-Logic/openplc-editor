@@ -4,7 +4,7 @@ import * as Popover from '@radix-ui/react-popover'
 import { ArrowIcon } from '@root/renderer/assets'
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { ConvertToLangShortenedFormat } from '@root/utils'
+import { cn, ConvertToLangShortenedFormat } from '@root/utils'
 import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
@@ -44,7 +44,7 @@ const Card = (props: ICardProps): ReactNode => {
   }
 
   const handleCancelCreatePou = () => {
-    toast({ description: 'Pou creation canceled', variant: 'fail' })
+    toast({ title: 'Pou creation canceled!', variant: 'fail' })
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
@@ -119,11 +119,11 @@ const Card = (props: ICardProps): ReactNode => {
                   <Controller
                     name='language'
                     control={control}
+                    rules={{ required: 'A language is required' }}
                     render={({ field: { value, onChange } }) => {
                       return (
                         <Select value={value} onValueChange={onChange}>
                           <SelectTrigger
-                            id='pou-language'
                             aria-label='pou-language'
                             placeholder='Select a language'
                             className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
@@ -158,7 +158,11 @@ const Card = (props: ICardProps): ReactNode => {
                 <div id='form-button-container' className='flex w-full justify-between'>
                   <button
                     type='submit'
-                    className='h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm  font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium'
+                    // disabled={!isValid ? true : false}
+                    className={cn(
+                      // `${!isValid ? 'cursor-not-allowed opacity-50' : 'cursor-pointer opacity-100'}`,
+                      'h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium',
+                    )}
                   >
                     Create
                   </button>
