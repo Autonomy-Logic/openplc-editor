@@ -75,12 +75,6 @@ class ProjectService {
       }
     }
 
-    // Check if the data provided is valid, then create a JS Object with the project base structure
-    // const createdXmlAsObject = ProjectSchema.parse(xmlProjectAsObject)
-
-    // Create the project XML structure using xmlbuilder2.
-    // const projectAsXml = create({ version: '1.0', encoding: 'utf-8' }, xmlProjectAsObject)
-
     CreateJSONFile({
       path: filePath,
       fileName: 'data',
@@ -99,22 +93,6 @@ class ProjectService {
       store.set('last_projects', [projectPath, ...lastProjects])
     }
 
-    /**
-     * Serialize the XML structure and write it to a file.
-     * If the file creation failed, return an error response,
-     * otherwise return a successful response with the created file path.
-     */
-
-    // writeFile(projectPath, projectAsXml.end({ prettyPrint: true }), (error) => {
-    //   if (error) throw error
-    //   return {
-    //     success: false,
-    //     error: {
-    //       title: i18n.t('projectServiceResponses:createProject.errors.internalError.title'),
-    //       description: i18n.t('projectServiceResponses:createProject.errors.internalError.description'),
-    //     },
-    //   }
-    // })
     return {
       success: true,
       data: {

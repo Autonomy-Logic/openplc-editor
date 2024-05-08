@@ -111,7 +111,7 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
       )
     },
     createPou: (pouToBeCreated: IPouDTO): ICreatePouRes => {
-      let response: ICreatePouRes = { ok: false, message: '' }
+      let response: ICreatePouRes = { ok: false, message: 'Internal error' }
       setState(
         produce((slice: IWorkspaceSlice) => {
           const pouExists = slice.projectData.pous.find((pou) => {

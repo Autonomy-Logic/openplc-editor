@@ -29,22 +29,28 @@ const Card = (props: ICardProps): ReactNode => {
     control,
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<IPouFormProps>()
   const {
     pouActions: { create },
   } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
-
   const submitData: SubmitHandler<IPouFormProps> = (data) => {
-    create(data)
-    toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
-    closeContainer((prev) => !prev)
-    setIsOpen(false)
+    try {
+      const pouWasCreated = create(data)
+      if (!pouWasCreated) throw new TypeError()
+      toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
+      closeContainer((prev) => !prev)
+      setIsOpen(false)
+    } catch (_error) {
+      setError('name', {
+        type: 'already-exists',
+      })
+    }
   }
 
   const handleCancelCreatePou = () => {
-    toast({ title: 'Pou creation canceled!', variant: 'fail' })
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
@@ -81,32 +87,33 @@ const Card = (props: ICardProps): ReactNode => {
             <div id='pou-card-form'>
               <form onSubmit={handleSubmit(submitData)} className='flex h-fit w-full select-none flex-col gap-3'>
                 <input type='hidden' {...register('type')} value={target} />
-                <div id='pou-name-form-container' className='flex w-full flex-col gap-[6px]'>
+                <div id='pou-name-form-container' className='flex w-full flex-col'>
                   <label
                     id='pou-name-label'
                     htmlFor='pou-name'
                     className='flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
                   >
                     POU name:
+                    {errors.name?.type === 'required' && <span className='text-red-500'>*</span>}
                   </label>
                   <InputWithRef
                     {...register('name', {
-                      required: 'POU name is required',
-                      minLength: {
-                        value: 3,
-                        message: 'POU name must be at least 3 characters',
-                      },
+                      required: true,
+                      minLength: 3,
                     })}
                     id='pou-name'
                     type='text'
                     placeholder='POU name'
-                    className='h-[30px] w-full rounded-md  border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
+                    className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
                   />
-                  {errors.name && (
-                    <span className='flex-1 text-center font-caption text-cp-sm font-normal text-red-500 dark:text-red-500'>
-                      {errors.name.message}
+                  {errors.name?.type === 'already-exists' && (
+                    <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
+                      * POU name already exists
                     </span>
                   )}
+                  <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
+                    ** Name must be at least 3 characters
+                  </span>
                 </div>
                 <div id='pou-language-form-container' className='flex w-full flex-col gap-[6px] '>
                   <label
@@ -115,11 +122,12 @@ const Card = (props: ICardProps): ReactNode => {
                     className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
                   >
                     Language:
+                    {errors.language && <span className='text-red-500'>*</span>}
                   </label>
                   <Controller
                     name='language'
                     control={control}
-                    rules={{ required: 'A language is required' }}
+                    rules={{ required: true }}
                     render={({ field: { value, onChange } }) => {
                       return (
                         <Select value={value} onValueChange={onChange}>
@@ -158,9 +166,7 @@ const Card = (props: ICardProps): ReactNode => {
                 <div id='form-button-container' className='flex w-full justify-between'>
                   <button
                     type='submit'
-                    // disabled={!isValid ? true : false}
                     className={cn(
-                      // `${!isValid ? 'cursor-not-allowed opacity-50' : 'cursor-pointer opacity-100'}`,
                       'h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium',
                     )}
                   >
