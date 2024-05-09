@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
 import { ActivityBarButton } from '../components/_atoms/buttons'
+import { toast } from '../components/_features/[app]/toast/use-toast'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
@@ -24,8 +25,21 @@ const WorkspaceScreen = () => {
   useEffect(() => {
     const handleSaveProject = async () => {
       const { success, reason } = await window.bridge.handleSaveProjectWriteData({ projectPath, projectData })
-      console.log(success, reason)
-      _.debounce(() => setEditingState('saved'), 1000)()
+      if (success) {
+        _.debounce(() => setEditingState('saved'), 1000)()
+        toast({
+          title: 'Changes saved!',
+          description: 'The project was saved successfully!',
+          variant: 'default',
+        })
+      } else {
+        _.debounce(() => setEditingState('unsaved'), 1000)()
+        toast({
+          title: 'Error in the save request!',
+          description: reason.description,
+          variant: 'fail',
+        })
+      }
     }
 
     if (editingState === 'save-request') {
@@ -35,6 +49,11 @@ const WorkspaceScreen = () => {
 
   window.bridge.handleSaveProjectOpenRequest((_event) => {
     setEditingState('save-request')
+    toast({
+      title: 'Save changes',
+      description: 'Trying to save the changes in the project file.',
+      variant: 'warn',
+    })
   })
 
   return (
