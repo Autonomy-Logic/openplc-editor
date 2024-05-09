@@ -39,6 +39,7 @@
     "@tanstack/react-table": "^8.10.7",
     "auto-zustand-selectors-hook": "^2.0.0",
     "clsx": "^2.0.0",
+    "cva": "npm:class-variance-authority@^0.7.0",
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",
     "electron-store": "^8.1.0",

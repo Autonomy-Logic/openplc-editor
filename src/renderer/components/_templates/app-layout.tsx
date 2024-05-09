@@ -4,6 +4,8 @@ import { cn } from '@root/utils'
 import { ReactNode, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 
+import Toaster from '../_features/[app]/toast/toaster'
+
 // type IAppLayoutProps = ComponentPropsWithoutRef<'div'>
 const AppLayout = (): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
@@ -42,6 +44,7 @@ const AppLayout = (): ReactNode => {
         )}
       >
         <Outlet />
+        <Toaster />
       </main>
     </>
   )

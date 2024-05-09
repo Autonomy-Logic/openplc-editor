@@ -2,12 +2,14 @@
 import { useNavigate } from 'react-router-dom'
 
 import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'
+import { useToast } from '../components/_features/[app]/toast/use-toast'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
 import { StartMainContent, StartSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
 
 const StartScreen = () => {
+  const { toast } = useToast()
   const navigate = useNavigate()
   const {
     workspaceActions: { setUserWorkspace },
@@ -23,12 +25,19 @@ const StartScreen = () => {
         projectName: 'new-project',
       })
       navigate('/workspace')
+      toast({
+        title: 'The project was created successfully!',
+        description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
+        variant: 'default',
+      })
     } else {
-      console.log('Cannot create project:', error)
+      toast({
+        title: 'Cannot create a project!',
+        description: error?.description,
+        variant: 'fail',
+      })
     }
   }
-
-  // const handleOpenProject = async () => {}
 
   return (
     <>

@@ -12,7 +12,7 @@ type IDataToCreatePou = {
 }
 export type ISharedSlice = {
   pouActions: {
-    create: (dataToCreatePou: IDataToCreatePou) => void
+    create: (dataToCreatePou: IDataToCreatePou) => boolean
     update: () => void
     delete: () => void
   }
@@ -24,9 +24,15 @@ export const createSharedSlice: StateCreator<IEditorSlice & ITabsSlice & IWorksp
 ) => ({
   pouActions: {
     create: (dataToCreatePou: IDataToCreatePou) => {
-      getState().editorActions.setEditor(CreateEditorObject(dataToCreatePou))
-      getState().tabsActions.updateTabs(CreateTabObject(dataToCreatePou))
-      getState().workspaceActions.createPou(CreatePouObject(dataToCreatePou))
+      try {
+        const res = getState().workspaceActions.createPou(CreatePouObject(dataToCreatePou))
+        if (!res.ok) throw new Error()
+        getState().editorActions.setEditor(CreateEditorObject(dataToCreatePou))
+        getState().tabsActions.updateTabs(CreateTabObject(dataToCreatePou))
+        return true
+      } catch (_error) {
+        return false
+      }
     },
     update: () => {},
     delete: () => {},

@@ -18,6 +18,7 @@ export type IProjectServiceResponse = {
     title: string
     description: string
   }
+  message?: string
   data?: {
     meta: {
       path: string
@@ -74,12 +75,6 @@ class ProjectService {
       }
     }
 
-    // Check if the data provided is valid, then create a JS Object with the project base structure
-    // const createdXmlAsObject = ProjectSchema.parse(xmlProjectAsObject)
-
-    // Create the project XML structure using xmlbuilder2.
-    // const projectAsXml = create({ version: '1.0', encoding: 'utf-8' }, xmlProjectAsObject)
-
     CreateJSONFile({
       path: filePath,
       fileName: 'data',
@@ -98,22 +93,6 @@ class ProjectService {
       store.set('last_projects', [projectPath, ...lastProjects])
     }
 
-    /**
-     * Serialize the XML structure and write it to a file.
-     * If the file creation failed, return an error response,
-     * otherwise return a successful response with the created file path.
-     */
-
-    // writeFile(projectPath, projectAsXml.end({ prettyPrint: true }), (error) => {
-    //   if (error) throw error
-    //   return {
-    //     success: false,
-    //     error: {
-    //       title: i18n.t('projectServiceResponses:createProject.errors.internalError.title'),
-    //       description: i18n.t('projectServiceResponses:createProject.errors.internalError.description'),
-    //     },
-    //   }
-    // })
     return {
       success: true,
       data: {
@@ -188,23 +167,17 @@ class ProjectService {
    * @param xmlSerializedAsObject - The XML data to be serialized and saved.
    * @returns A `promise` of `ResponseService` type.
    */
-  saveProject(data: { projectPath: string; projectData: IProject }) {
+  saveProject(data: { projectPath: string; projectData: IProject }): IProjectServiceResponse {
     const { projectPath, projectData } = data
     // Check if required parameters are provided.
     if (!projectPath || !projectData)
       return {
         success: false,
-        reason: {
-          title: i18n.t('saveProject:errors.failedToSaveFile.title'),
-          description: i18n.t('saveProject:errors.failedToSaveFile.description'),
+        error: {
+          title: i18n.t('projectServiceResponses:saveProject.errors.missingParams.title'),
+          description: i18n.t('projectServiceResponses:saveProject.errors.missingParams.description'),
         },
       }
-
-    // Serialize the XML data using xmlbuilder2.
-    // const projectAsXml = create(
-    //   // { parser: { cdata: (projectAsObj) => projectAsObj } },
-    //   projectAsObj,
-    // )
 
     const normalizedDataToWrite = JSON.stringify(projectData, null, 2)
 
@@ -217,19 +190,16 @@ class ProjectService {
       if (error) throw error
       return {
         success: false,
-        reason: {
-          title: i18n.t('saveProject:errors.failedToSaveFile.title'),
-          description: i18n.t('saveProject:errors.failedToSaveFile.description'),
+        error: {
+          title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
+          description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description'),
         },
       }
     })
 
     return {
       success: true,
-      reason: {
-        title: i18n.t('saveProject:success.successToSaveFile.title'),
-        description: i18n.t('saveProject:success.successToSaveFile.description'),
-      },
+      message: i18n.t('projectServiceResponses:saveProject.success.successToSaveFile.message'),
     }
   }
 }
