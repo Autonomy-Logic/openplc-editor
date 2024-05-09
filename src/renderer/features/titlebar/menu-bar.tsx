@@ -7,9 +7,7 @@ import { i18n } from '@utils/i18n'
 export const MenuBar = () => {
   const {
     workspaceActions: { switchAppTheme },
-    workspaceState: {
-      systemConfigs: { shouldUseDarkMode },
-    },
+    systemConfigs: { shouldUseDarkMode },
   } = useOpenPLCStore()
 
   /**

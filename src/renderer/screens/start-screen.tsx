@@ -39,6 +39,30 @@ const StartScreen = () => {
     }
   }
 
+  const handleOpenProject = async () => {
+    const { success, data, error } = await window.bridge.newOpenProject()
+    if (success && data) {
+      setUserWorkspace({
+        editingState: 'unsaved',
+        projectPath: data.meta.path,
+        projectData: data.content,
+        projectName: 'new-project',
+      })
+      navigate('/workspace')
+      toast({
+        title: 'Project opened!',
+        description: 'Your project was opened, and loaded.',
+        variant: 'default',
+      })
+    } else {
+      toast({
+        title: 'Cannot open the project.',
+        description: error?.description,
+        variant: 'fail',
+      })
+    }
+  }
+
   return (
     <>
       <StartSideContent>
@@ -47,7 +71,7 @@ const StartScreen = () => {
             <MenuItem onClick={() => handleCreateProject()}>
               <PlusIcon className='stroke-white' /> New Project
             </MenuItem>
-            <MenuItem ghosted onClick={() => console.log('open project')}>
+            <MenuItem ghosted onClick={() => handleOpenProject()}>
               <FolderIcon /> Open
             </MenuItem>
             <MenuItem ghosted>

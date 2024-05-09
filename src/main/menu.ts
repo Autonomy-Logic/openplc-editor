@@ -51,6 +51,7 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save/open-request', 1)
   }
 
+  // !Deprecated
   handleSaveProject(channel: string): void {
     this.mainWindow.webContents.send(channel, 'Save project request')
   }

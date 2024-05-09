@@ -9,8 +9,10 @@ type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 const rendererProcessBridge = {
   startOpenProject: () => ipcRenderer.invoke('start-screen/project:open'),
   startCreateProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('start-screen/project:create'),
+  newOpenProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open-project'),
+
   createProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:create', callback),
-  openProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:open', callback),
+  openProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:open-project', callback),
   saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
   setStoreValue: (key: string, val: string) => ipcRenderer.send('app:store-set', key, val),

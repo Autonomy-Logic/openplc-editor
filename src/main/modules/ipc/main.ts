@@ -26,6 +26,11 @@ class MainProcessBridge implements MainIpcModule {
       const response = await this.projectService.openProject()
       return response
     })
+
+    this.ipcMain.handle('project:open-project', async () => {
+      const response = await this.projectService.openProject()
+      return response
+    })
     this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
     // this.ipcMain.on('project:save-response', (_event, data: ProjectDto) => this.projectService.saveProject(data))
     /**
@@ -51,8 +56,6 @@ class MainProcessBridge implements MainIpcModule {
       (_event, { projectPath, projectData }: { projectPath: string; projectData: IProject }) =>
         this.projectService.saveProject({ projectPath, projectData }),
     )
-
-    // Wip: From here
   }
 
   mainIpcEventHandlers = {
