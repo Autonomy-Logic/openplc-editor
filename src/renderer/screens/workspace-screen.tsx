@@ -20,6 +20,7 @@ import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
+import LineGraph from './charts/lineGraph'
 
 const WorkspaceScreen = () => {
   const navigate = useNavigate()
@@ -117,17 +118,17 @@ const WorkspaceScreen = () => {
                   minSize={15}
                   className='flex-1 grow  rounded-lg border-2 border-neutral-200 bg-white p-4 data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
                 >
-                  <Tabs.Root defaultValue='console' className='flex h-full w-full flex-col gap-4 overflow-hidden'>
+                  <Tabs.Root defaultValue='console' className='flex h-full w-full flex-col gap-2 overflow-hidden'>
                     <Tabs.List className='flex  h-7 w-64 gap-4'>
                       <Tabs.Trigger
                         value='console'
-                        className='h-7 w-16 dark:bg-neutral-900 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white  dark:text-neutral-700'
+                        className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
                       >
                         Console
                       </Tabs.Trigger>
                       <Tabs.Trigger
                         value='debug'
-                        className='h-7 w-16 dark:bg-neutral-900 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white  dark:text-neutral-700'
+                        className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
                       >
                         Debugger
                       </Tabs.Trigger>
@@ -135,8 +136,11 @@ const WorkspaceScreen = () => {
                     <Tabs.Content value='console' className='w-full '>
                       console
                     </Tabs.Content>
-                    <Tabs.Content value='debug' className='h-full w-full'>
-                      <div className='flex h-full w-full justify-between rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
+                    <Tabs.Content
+                      value='debug'
+                      className='debug-panel flex h-full w-full flex-col gap-2 overflow-hidden rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'
+                    >
+                      <div className='header flex justify-between '>
                         <div className='flex gap-4'>
                           <button className='flex h-7 w-[133px] items-center justify-center gap-2 rounded-md bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
                             <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
@@ -146,6 +150,7 @@ const WorkspaceScreen = () => {
                             <select className='h-7 w-[88px] rounded-md border border-neutral-200 bg-white outline-none dark:bg-neutral-900'></select>
                           </div>
                         </div>
+
                         <div className='flex gap-2'>
                           <button
                             onClick={() => setIsPaused(!isPaused)}
@@ -161,6 +166,9 @@ const WorkspaceScreen = () => {
                             <NextIcon className='h-[10px] w-[14px]' />
                           </button>
                         </div>
+                      </div>
+                      <div className='chart-content h-full w-full  overflow-auto p-2'>
+                        <LineGraph />
                       </div>
                     </Tabs.Content>
                   </Tabs.Root>
