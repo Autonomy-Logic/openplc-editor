@@ -39,6 +39,9 @@ export default function LineGraph() {
           },
         },
       },
+      zoom: {
+        autoScaleYaxis: false,
+      },
       dataLabels: {
         enabled: false,
       },
@@ -49,14 +52,7 @@ export default function LineGraph() {
         text: 'Stepline Chart',
         align: 'left',
       },
-      xaxis: {
-        type: 'numeric',
-        labels: {
-          formatter: function (value: number) {
-            return value.toFixed(0)
-          },
-        },
-      },
+
       yaxis: {
         max: 1,
         min: 0,
@@ -71,10 +67,9 @@ export default function LineGraph() {
 
   return (
     <Chart
-      className=' overflow-auto !stroke-red-500'
+      className='  !overflow-auto !stroke-red-500'
       options={chartData.options}
       series={chartData.series}
-      width='80%'
       height='300px'
       type='line'
     />
