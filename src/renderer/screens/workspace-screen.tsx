@@ -177,7 +177,7 @@ const WorkspaceScreen = () => {
                         </div>
                       </div>
                       <div className='chart-content h-full w-full   p-2'>
-                        <p className='text-xl text-white font-bold'>{data}</p>
+                        <p className='text-xl text-black dark:text-white font-bold'>{data}</p>
                         <LineGraph range={range} data={data} setData={setData} />
                       </div>
                     </Tabs.Content>

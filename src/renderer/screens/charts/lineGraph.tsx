@@ -2,32 +2,38 @@ import { useEffect, useState } from 'react'
 import Chart from 'react-apexcharts'
 
 type ChartData = {
-  range: number
+  range?: number
   data: boolean[]
   setData: React.Dispatch<React.SetStateAction<boolean[]>>
 }
 
 export default function LineGraph({ range, data, setData }: ChartData) {
   const [latestData, setLatestData] = useState<boolean | undefined>(false)
+
   useEffect(() => {
     const interval = setInterval(() => {
-      setData((prevData) => [...prevData, !prevData[prevData.length - 1] || prevData.length === 0])
+      setData(prevData => [...prevData, !prevData[prevData.length - 1] || prevData.length === 0])
     }, 1000)
 
     return () => clearInterval(interval)
   }, [])
+
   useEffect(() => {
     setLatestData(data[data.length - 1])
   }, [data])
-  const mapDataToBinary = (data: boolean[]) => {
-    return data.map((value) => (value ? 1 : 0))
+
+  const mapDataToYAxis = (data: boolean[]) => {
+    return data.map(value => (value ? 1 : 0))
   }
 
-  console.log(latestData)
+  const mapDataToXAxis = (data: boolean[]) => {
+    return Array.from({ length: data.length }, (_, i) => i) 
+  }
+
   const chartData = {
     series: [
       {
-        data: mapDataToBinary(data),
+        data: mapDataToYAxis(data),
       },
     ],
     options: {
@@ -61,18 +67,21 @@ export default function LineGraph({ range, data, setData }: ChartData) {
         },
       },
       xaxis: {
-        type: 'numeric',
+        categories: mapDataToXAxis(data),
         range: range,
+     
       },
       yaxis: {
+        min: 0,
+        max: 1,
         tickAmount: 2,
-        
       },
       stroke: {
         curve: 'stepline',
       },
     },
   }
+
   return (
     <div>
       <Chart options={chartData.options} series={chartData.series} height='120px' type='line' />
