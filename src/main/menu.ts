@@ -47,10 +47,6 @@ export default class MenuBuilder {
     return menu
   }
 
-  handleSaveProjectRequest() {
-    this.mainWindow.webContents.send('project:save/request')
-  }
-
   async handleCreateProject() {
     const response = await this.projectService.createProject()
     this.mainWindow.webContents.send('project:create-accelerator', response)
@@ -61,10 +57,10 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:open-accelerator', response)
   }
 
-  // !Deprecated
-  handleSaveProject(channel: string): void {
-    this.mainWindow.webContents.send(channel, 'Save project request')
+  handleSaveProject() {
+    this.mainWindow.webContents.send('project:save-accelerator')
   }
+
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -109,7 +105,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.save'),
           accelerator: 'Cmd+S',
-          click: () => console.warn('Save button clicked! This is not working yet.'),
+          click: () => this.handleSaveProject(),
         },
         {
           label: i18n.t('menu:file.submenu.saveAs'),
@@ -324,7 +320,7 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.save'),
             accelerator: 'Ctrl+S',
-            click: () => this.handleSaveProjectRequest(),
+            click: () => this.handleSaveProject(),
           },
           {
             label: i18n.t('menu:file.submenu.saveAs'),

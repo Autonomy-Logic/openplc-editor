@@ -5,6 +5,11 @@ import { platform } from 'process'
 import { IProject } from '../../../types/PLC'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 
+type IDataToWrite = {
+  projectPath: string
+  projectData: IProject
+}
+
 class MainProcessBridge implements MainIpcModule {
   ipcMain
   mainWindow
@@ -26,11 +31,10 @@ class MainProcessBridge implements MainIpcModule {
       return response
     })
 
-    this.ipcMain.handle(
-      'project:save/write-data',
-      (_event, { projectPath, projectData }: { projectPath: string; projectData: IProject }) =>
-        this.projectService.saveProject({ projectPath, projectData }),
+    this.ipcMain.handle('project:save', (_event, { projectPath, projectData }: IDataToWrite) =>
+      this.projectService.saveProject({ projectPath, projectData }),
     )
+
     this.ipcMain.handle('system:get-system-info', () => {
       return { OS: platform, architecture: 'x64', prefersDarkMode: nativeTheme.shouldUseDarkColors }
     })

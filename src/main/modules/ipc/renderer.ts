@@ -6,6 +6,19 @@ import { IProjectServiceResponse } from '../../services/project-service'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
+type IDataToWrite = {
+  projectPath: string
+  projectData: IProject
+}
+
+type ISaveDataResponse = {
+  success: boolean
+  reason: {
+    title: string
+    description: string
+  }
+}
+
 const rendererProcessBridge = {
   /**
    * Handlers for creating projects.
@@ -26,8 +39,16 @@ const rendererProcessBridge = {
 
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
 
+  /**
+   * Handlers for opening projects.
+   * As for the click and for the accelerator type.
+   */
+  saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
+  saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
+    ipcRenderer.invoke('project:save', dataToWrite),
+
   /** -------------------------------------------------------------------------------------------- */
-  saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
+  // saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
   setStoreValue: (key: string, val: string) => ipcRenderer.send('app:store-set', key, val),
   /**
@@ -46,18 +67,7 @@ const rendererProcessBridge = {
   reloadWindow: () => ipcRenderer.send('window:reload'),
   handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
   winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
-  handleSaveProjectOpenRequest: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:save/open-request', callback),
-  handleSaveProjectWriteData: (dataToWrite: {
-    projectPath: string
-    projectData: IProject
-  }): Promise<{
-    success: boolean
-    reason: {
-      title: string
-      description: string
-    }
-  }> => ipcRenderer.invoke('project:save/write-data', dataToWrite),
+
   // WIP: Refactoring
   // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),
   // createPou: (callback: any) => ipcRenderer.on('pou:create', callback),

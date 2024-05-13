@@ -1,12 +1,16 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import RecentProjectIcon from '@root/renderer/assets/icons/interface/Recent'
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@utils/cn'
 import { i18n } from '@utils/i18n'
+import _ from 'lodash'
 
 export const MenuBar = () => {
   const {
-    workspaceActions: { switchAppTheme },
+    projectData,
+    projectPath,
+    workspaceActions: { switchAppTheme, setUserWorkspace, setEditingState },
     systemConfigs: { shouldUseDarkMode },
   } = useOpenPLCStore()
 
@@ -17,6 +21,71 @@ export const MenuBar = () => {
   const handleChangeTheme = () => {
     window.bridge.winHandleUpdateTheme()
     switchAppTheme()
+  }
+
+  const handleCreateProject = async () => {
+    const { success, data, error } = await window.bridge.createProject()
+    if (success && data) {
+      setUserWorkspace({
+        editingState: 'unsaved',
+        projectPath: data.meta.path,
+        projectData: data.content,
+        projectName: 'new-project',
+      })
+      toast({
+        title: 'The project was created successfully!',
+        description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
+        variant: 'default',
+      })
+    } else {
+      toast({
+        title: 'Cannot create a project!',
+        description: error?.description,
+        variant: 'fail',
+      })
+    }
+  }
+
+  const handleOpenProject = async () => {
+    const { success, data, error } = await window.bridge.openProject()
+    if (success && data) {
+      setUserWorkspace({
+        editingState: 'unsaved',
+        projectPath: data.meta.path,
+        projectData: data.content,
+        projectName: 'new-project',
+      })
+      toast({
+        title: 'Project opened!',
+        description: 'Your project was opened, and loaded.',
+        variant: 'default',
+      })
+    } else {
+      toast({
+        title: 'Cannot open the project.',
+        description: error?.description,
+        variant: 'fail',
+      })
+    }
+  }
+
+  const handleSaveProject = async () => {
+    const { success, reason } = await window.bridge.saveProject({ projectPath, projectData })
+    if (success) {
+      _.debounce(() => setEditingState('saved'), 1000)()
+      toast({
+        title: 'Changes saved!',
+        description: 'The project was saved successfully!',
+        variant: 'default',
+      })
+    } else {
+      _.debounce(() => setEditingState('unsaved'), 1000)()
+      toast({
+        title: 'Error in the save request!',
+        description: reason.description,
+        variant: 'fail',
+      })
+    }
   }
 
   const recentProjects = [
@@ -48,16 +117,16 @@ export const MenuBar = () => {
         <MenuPrimitive.Trigger className={triggerDefaultStyle}>{i18n.t('menu:file.label')}</MenuPrimitive.Trigger>
         <MenuPrimitive.Portal>
           <MenuPrimitive.Content sideOffset={16} className={contentDefaultStyle}>
-            <MenuPrimitive.Item className={itemDefaultStyle}>
+            <MenuPrimitive.Item className={itemDefaultStyle} onClick={void handleCreateProject}>
               <span>{i18n.t('menu:file.submenu.new')}</span>
               <span className={acceleratorDefaultStyle}>{'Ctrl + N'}</span>
             </MenuPrimitive.Item>
-            <MenuPrimitive.Item className={itemDefaultStyle}>
+            <MenuPrimitive.Item className={itemDefaultStyle} onClick={void handleOpenProject}>
               <span>{i18n.t('menu:file.submenu.open')}</span>
               <span className={acceleratorDefaultStyle}>{'Ctrl + O'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={separatorDefaultStyle} />
-            <MenuPrimitive.Item className={itemDefaultStyle} disabled>
+            <MenuPrimitive.Item className={itemDefaultStyle} onClick={void handleSaveProject}>
               <span>{i18n.t('menu:file.submenu.save')}</span>
               <span className={acceleratorDefaultStyle}>{'Ctrl + S'}</span>
             </MenuPrimitive.Item>
