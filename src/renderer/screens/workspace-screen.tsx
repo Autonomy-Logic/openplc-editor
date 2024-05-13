@@ -29,6 +29,9 @@ const WorkspaceScreen = () => {
   } = useOpenPLCStore()
 
   const [isPaused, setIsPaused] = useState(false)
+  const [range, setRange] = useState(10)
+  const [data, setData] = useState([false])
+
 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
@@ -146,8 +149,14 @@ const WorkspaceScreen = () => {
                             <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
                           </button>
                           <div className='flex gap-2'>
-                            <input className='h-7 w-9 items-center rounded-md border border-neutral-200 bg-white p-2 text-center text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-neutral-900' />
-                            <select className='h-7 w-[88px] rounded-md border border-neutral-200 bg-white outline-none dark:bg-neutral-900'></select>
+                            <input
+                              type='text'
+                              onChange={(e) => setRange(Number(e.target.value))}
+                              className='h-7 w-9 items-center rounded-md border border-neutral-200 bg-white p-2 text-center text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-neutral-900'
+                            />
+                            <select className='h-7 w-[88px] rounded-md border border-neutral-200 bg-white outline-none dark:bg-neutral-900'>
+                              <option value='seconds'>seconds</option>
+                            </select>
                           </div>
                         </div>
 
@@ -167,8 +176,9 @@ const WorkspaceScreen = () => {
                           </button>
                         </div>
                       </div>
-                      <div className='chart-content h-full w-full  overflow-auto p-2'>
-                        <LineGraph />
+                      <div className='chart-content h-full w-full   p-2'>
+                        <p className='text-xl text-white font-bold'>{data}</p>
+                        <LineGraph range={range} data={data} setData={setData} />
                       </div>
                     </Tabs.Content>
                   </Tabs.Root>

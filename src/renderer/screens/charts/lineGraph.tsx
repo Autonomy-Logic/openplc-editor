@@ -1,26 +1,29 @@
 import { useEffect, useState } from 'react'
 import Chart from 'react-apexcharts'
 
-export default function LineGraph() {
-  const [data, setData] = useState([false])
+type ChartData = {
+  range: number
+  data: boolean[]
+  setData: React.Dispatch<React.SetStateAction<boolean[]>>
+}
 
-  const changeData = () => {
-    setData([...data, !data[data.length - 1]])
-  }
-
+export default function LineGraph({ range, data, setData }: ChartData) {
+  const [latestData, setLatestData] = useState<boolean | undefined>(false)
   useEffect(() => {
     const interval = setInterval(() => {
-      changeData()
-      console.log(data)
+      setData((prevData) => [...prevData, !prevData[prevData.length - 1] || prevData.length === 0])
     }, 1000)
 
     return () => clearInterval(interval)
+  }, [])
+  useEffect(() => {
+    setLatestData(data[data.length - 1])
   }, [data])
-
   const mapDataToBinary = (data: boolean[]) => {
     return data.map((value) => (value ? 1 : 0))
   }
 
+  console.log(latestData)
   const chartData = {
     series: [
       {
@@ -30,48 +33,50 @@ export default function LineGraph() {
     options: {
       chart: {
         type: 'line',
-        height: 350,
         animations: {
           enabled: true,
           easing: 'linear',
           dynamicAnimation: {
+            enabled: true,
             speed: 1000,
+            animateGradually: {
+              enabled: true,
+              delay: 150,
+            },
           },
         },
+        toolbar: {
+          show: false,
+          autoSelected: 'pan',
+        },
+        dataLabels: {
+          enabled: true,
+        },
+        title: {
+          text: 'Stepline Chart',
+          align: 'left',
+        },
+        markers: {
+          size: 0,
+        },
       },
-      zoom: {
-        autoScaleYaxis: false,
+      xaxis: {
+        type: 'numeric',
+        range: range,
       },
-      dataLabels: {
-        enabled: false,
+      yaxis: {
+        tickAmount: 2,
+        
       },
       stroke: {
         curve: 'stepline',
       },
-      title: {
-        text: 'Stepline Chart',
-        align: 'left',
-      },
-
-      yaxis: {
-        max: 1,
-        min: 0,
-
-        floating: false,
-      },
-      markers: {
-        size: 0,
-      },
     },
   }
-
   return (
-    <Chart
-      className='  !overflow-auto !stroke-red-500'
-      options={chartData.options}
-      series={chartData.series}
-      height='300px'
-      type='line'
-    />
+    <div>
+      <Chart options={chartData.options} series={chartData.series} height='120px' type='line' />
+      <p className='pl-[90%] text-white'>{latestData ? 'false' : 'true'}</p>
+    </div>
   )
 }
