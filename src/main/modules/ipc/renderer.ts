@@ -7,12 +7,26 @@ import { IProjectServiceResponse } from '../../services/project-service'
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
 const rendererProcessBridge = {
-  startOpenProject: () => ipcRenderer.invoke('start-screen/project:open'),
-  startCreateProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('start-screen/project:create'),
-  newOpenProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open-project'),
+  /**
+   * Handlers for creating projects.
+   * As for the click and for the accelerator type.
+   */
 
-  createProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:create', callback),
-  openProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:open-project', callback),
+  createProjectAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:create-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+
+  createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
+
+  /**
+   * Handlers for opening projects.
+   * As for the click and for the accelerator type.
+   */
+  openProjectAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+
+  openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
+
+  /** -------------------------------------------------------------------------------------------- */
   saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
   setStoreValue: (key: string, val: string) => ipcRenderer.send('app:store-set', key, val),

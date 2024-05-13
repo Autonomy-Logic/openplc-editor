@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
+import { IProjectServiceResponse } from '@root/main/services/project-service'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'
@@ -16,7 +18,7 @@ const StartScreen = () => {
   } = useOpenPLCStore()
 
   const handleCreateProject = async () => {
-    const { success, data, error } = await window.bridge.startCreateProject()
+    const { success, data, error } = await window.bridge.createProject()
     if (success && data) {
       setUserWorkspace({
         editingState: 'unsaved',
@@ -40,7 +42,7 @@ const StartScreen = () => {
   }
 
   const handleOpenProject = async () => {
-    const { success, data, error } = await window.bridge.newOpenProject()
+    const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
       setUserWorkspace({
         editingState: 'unsaved',
@@ -62,6 +64,62 @@ const StartScreen = () => {
       })
     }
   }
+
+  useEffect(() => {
+    const handleCreateProjectAccelerator = () => {
+      window.bridge.createProjectAccelerator((_event, response: IProjectServiceResponse) => {
+        const { data, error } = response
+        if (data) {
+          setUserWorkspace({
+            editingState: 'unsaved',
+            projectPath: data.meta.path,
+            projectData: data.content,
+            projectName: 'new-project',
+          })
+          navigate('/workspace')
+          toast({
+            title: 'The project was created successfully!',
+            description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
+            variant: 'default',
+          })
+        } else {
+          toast({
+            title: 'Cannot create a project!',
+            description: error?.description,
+            variant: 'fail',
+          })
+        }
+      })
+    }
+    const handleOpenProjectAccelerator = () => {
+      window.bridge.openProjectAccelerator((_event, response: IProjectServiceResponse) => {
+        const { data, error } = response
+        if (data) {
+          setUserWorkspace({
+            editingState: 'unsaved',
+            projectPath: data.meta.path,
+            projectData: data.content,
+            projectName: 'new-project',
+          })
+          navigate('/workspace')
+          toast({
+            title: 'Project opened!',
+            description: 'Your project was opened, and loaded.',
+            variant: 'default',
+          })
+        } else {
+          toast({
+            title: 'Cannot open the project.',
+            description: error?.description,
+            variant: 'fail',
+          })
+        }
+      })
+    }
+
+    handleCreateProjectAccelerator()
+    handleOpenProjectAccelerator()
+  }, [])
 
   return (
     <>
