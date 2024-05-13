@@ -117,16 +117,16 @@ export const MenuBar = () => {
         <MenuPrimitive.Trigger className={triggerDefaultStyle}>{i18n.t('menu:file.label')}</MenuPrimitive.Trigger>
         <MenuPrimitive.Portal>
           <MenuPrimitive.Content sideOffset={16} className={contentDefaultStyle}>
-            <MenuPrimitive.Item className={itemDefaultStyle} onClick={void handleCreateProject}>
+            <MenuPrimitive.Item className={itemDefaultStyle} onClick={() => void handleCreateProject()}>
               <span>{i18n.t('menu:file.submenu.new')}</span>
               <span className={acceleratorDefaultStyle}>{'Ctrl + N'}</span>
             </MenuPrimitive.Item>
-            <MenuPrimitive.Item className={itemDefaultStyle} onClick={void handleOpenProject}>
+            <MenuPrimitive.Item className={itemDefaultStyle} onClick={() => void handleOpenProject()}>
               <span>{i18n.t('menu:file.submenu.open')}</span>
               <span className={acceleratorDefaultStyle}>{'Ctrl + O'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={separatorDefaultStyle} />
-            <MenuPrimitive.Item className={itemDefaultStyle} onClick={void handleSaveProject}>
+            <MenuPrimitive.Item className={itemDefaultStyle} onClick={() => void handleSaveProject()}>
               <span>{i18n.t('menu:file.submenu.save')}</span>
               <span className={acceleratorDefaultStyle}>{'Ctrl + S'}</span>
             </MenuPrimitive.Item>
