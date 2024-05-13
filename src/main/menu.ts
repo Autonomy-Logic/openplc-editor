@@ -47,13 +47,20 @@ export default class MenuBuilder {
     return menu
   }
 
-  handleSaveProjectRequest() {
-    this.mainWindow.webContents.send('project:save/open-request', 1)
+  async handleCreateProject() {
+    const response = await this.projectService.createProject()
+    this.mainWindow.webContents.send('project:create-accelerator', response)
   }
 
-  handleSaveProject(channel: string): void {
-    this.mainWindow.webContents.send(channel, 'Save project request')
+  async handleOpenProject() {
+    const response = await this.projectService.openProject()
+    this.mainWindow.webContents.send('project:open-accelerator', response)
   }
+
+  handleSaveProject() {
+    this.mainWindow.webContents.send('project:save-accelerator')
+  }
+
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -87,18 +94,18 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.new'),
           accelerator: 'Cmd+N',
-          click: () => console.warn('New button clicked! This is not working yet.'),
+          click: () => void this.handleCreateProject(),
         },
         {
           label: i18n.t('menu:file.submenu.open'),
           accelerator: 'Cmd+O',
-          click: () => console.warn('New button clicked! This is not working yet.'),
+          click: () => void this.handleOpenProject(),
         },
         { type: 'separator' },
         {
           label: i18n.t('menu:file.submenu.save'),
           accelerator: 'Cmd+S',
-          click: () => console.warn('Save button clicked! This is not working yet.'),
+          click: () => this.handleSaveProject(),
         },
         {
           label: i18n.t('menu:file.submenu.saveAs'),
@@ -303,17 +310,17 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.new'),
             accelerator: 'Ctrl+N',
-            click: () => console.log('New'),
+            click: () => void this.handleCreateProject(),
           },
           {
             label: i18n.t('menu:file.submenu.open'),
             accelerator: 'Ctrl+O',
-            click: () => console.log('New'),
+            click: () => void this.handleOpenProject(),
           },
           {
             label: i18n.t('menu:file.submenu.save'),
             accelerator: 'Ctrl+S',
-            click: () => this.handleSaveProjectRequest(),
+            click: () => this.handleSaveProject(),
           },
           {
             label: i18n.t('menu:file.submenu.saveAs'),

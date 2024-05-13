@@ -5,6 +5,11 @@ import { platform } from 'process'
 import { IProject } from '../../../types/PLC'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 
+type IDataToWrite = {
+  projectPath: string
+  projectData: IProject
+}
+
 class MainProcessBridge implements MainIpcModule {
   ipcMain
   mainWindow
@@ -17,21 +22,19 @@ class MainProcessBridge implements MainIpcModule {
     this.store = store
   }
   setupMainIpcListener() {
-    this.ipcMain.handle('start-screen/project:create', async () => {
+    this.ipcMain.handle('project:create', async () => {
       const response = await this.projectService.createProject()
       return response
     })
-
-    this.ipcMain.handle('start-screen/project:open', async () => {
+    this.ipcMain.handle('project:open', async () => {
       const response = await this.projectService.openProject()
       return response
     })
-    this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
-    // this.ipcMain.on('project:save-response', (_event, data: ProjectDto) => this.projectService.saveProject(data))
-    /**
-     * Send the OS information to the renderer process
-     * Refactor: This can be optimized.
-     */
+
+    this.ipcMain.handle('project:save', (_event, { projectPath, projectData }: IDataToWrite) =>
+      this.projectService.saveProject({ projectPath, projectData }),
+    )
+
     this.ipcMain.handle('system:get-system-info', () => {
       return { OS: platform, architecture: 'x64', prefersDarkMode: nativeTheme.shouldUseDarkColors }
     })
@@ -46,13 +49,7 @@ class MainProcessBridge implements MainIpcModule {
     })
     this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
     this.ipcMain.on('system:update-theme', () => this.mainIpcEventHandlers.handleUpdateTheme())
-    this.ipcMain.handle(
-      'project:save/write-data',
-      (_event, { projectPath, projectData }: { projectPath: string; projectData: IProject }) =>
-        this.projectService.saveProject({ projectPath, projectData }),
-    )
-
-    // Wip: From here
+    this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
   }
 
   mainIpcEventHandlers = {

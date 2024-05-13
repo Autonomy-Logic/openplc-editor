@@ -25,7 +25,25 @@
       }
     }
   },
-  "openProject": {},
+  "openProject": {
+    "success": {
+      "status": 200,
+      "title": "Success to open file",
+      "description": "Your project was opened successfully"
+    },
+    "errors": {
+      "canceled": {
+        "status": 400,
+        "title": "Operation canceled",
+        "description": "Operation canceled by the user."
+      },
+      "readFile": {
+        "status": 500,
+        "title": "Failed to read file!",
+        "description": "Could not read the file."
+      }
+    }
+  },
   "saveProject": {
     "success": {
       "successToSaveFile": {

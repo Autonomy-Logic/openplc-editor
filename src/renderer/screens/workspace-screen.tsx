@@ -24,7 +24,7 @@ const WorkspaceScreen = () => {
 
   useEffect(() => {
     const handleSaveProject = async () => {
-      const { success, reason } = await window.bridge.handleSaveProjectWriteData({ projectPath, projectData })
+      const { success, reason } = await window.bridge.saveProject({ projectPath, projectData })
       if (success) {
         _.debounce(() => setEditingState('saved'), 1000)()
         toast({
@@ -47,7 +47,7 @@ const WorkspaceScreen = () => {
     }
   }, [editingState])
 
-  window.bridge.handleSaveProjectOpenRequest((_event) => {
+  window.bridge.saveProjectAccelerator((_event) => {
     setEditingState('save-request')
     toast({
       title: 'Save changes',
