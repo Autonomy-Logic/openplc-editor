@@ -12,7 +12,6 @@ type IEditorState = {
 
 type IEditorActions = {
   setEditor: (editorToBeCreated: IEditorProps) => void
-  // updateEditor: (dataToUpdateEditor: Partial<IEditorState>) => void
   clearEditor: () => void
 }
 
@@ -33,17 +32,11 @@ export const createEditorSlice: StateCreator<IEditorSlice, [], [], IEditorSlice>
           slice.editor = editorToBeCreated
         }),
       ),
-    // updateEditor: (dataToUpdateEditor: Partial<IEditorProps>): void =>
-    //   setState(
-    //     produce((slice: IEditorSlice) => {
-    //       const { editor } = slice.editorState
-    //       const editorExists = editors.find((editor) => editor.path === dataToUpdateEditor.path)
-    //       if (editorExists) {
-    //         Object.assign(editors[editors.indexOf(editorExists)], dataToUpdateEditor)
-    //       }
-    //     }),
-    //   ),
     clearEditor: (): void =>
-      setState(produce((slice: IEditorSlice) => (slice.editor = { name: '', path: '', language: '' }))),
+      setState(
+        produce((slice: IEditorSlice) => {
+          slice.editor = { name: '', path: '', language: '' }
+        }),
+      ),
   },
 })

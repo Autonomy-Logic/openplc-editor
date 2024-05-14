@@ -11,6 +11,8 @@ export const MenuBar = () => {
     projectData,
     projectPath,
     workspaceActions: { switchAppTheme, setUserWorkspace, setEditingState },
+    editorActions: { clearEditor },
+    tabsActions: { clearTabs },
     systemConfigs: { shouldUseDarkMode },
   } = useOpenPLCStore()
 
@@ -32,6 +34,8 @@ export const MenuBar = () => {
         projectData: data.content,
         projectName: 'new-project',
       })
+      clearEditor()
+      clearTabs()
       toast({
         title: 'The project was created successfully!',
         description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
@@ -55,6 +59,8 @@ export const MenuBar = () => {
         projectData: data.content,
         projectName: 'new-project',
       })
+      clearEditor()
+      clearTabs()
       toast({
         title: 'Project opened!',
         description: 'Your project was opened, and loaded.',
