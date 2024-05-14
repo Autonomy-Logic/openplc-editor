@@ -12,7 +12,7 @@ export default function LineGraph({ range, data, setData }: ChartData) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setData(prevData => [...prevData, !prevData[prevData.length - 1] || prevData.length === 0])
+      setData((prevData) => [...prevData, !prevData[prevData.length - 1] || prevData.length === 0])
     }, 1000)
 
     return () => clearInterval(interval)
@@ -23,11 +23,11 @@ export default function LineGraph({ range, data, setData }: ChartData) {
   }, [data])
 
   const mapDataToYAxis = (data: boolean[]) => {
-    return data.map(value => (value ? 1 : 0))
+    return data.map((value) => (value ? 1 : 0))
   }
 
   const mapDataToXAxis = (data: boolean[]) => {
-    return Array.from({ length: data.length }, (_, i) => i) 
+    return Array.from({ length: data.length }, (_, i) => i)
   }
 
   const chartData = {
@@ -69,7 +69,7 @@ export default function LineGraph({ range, data, setData }: ChartData) {
       xaxis: {
         categories: mapDataToXAxis(data),
         range: range,
-     
+        tickAmount: data.length,
       },
       yaxis: {
         min: 0,
@@ -78,14 +78,29 @@ export default function LineGraph({ range, data, setData }: ChartData) {
       },
       stroke: {
         curve: 'stepline',
+        width: 2,
+        colors: ['#0464FB'],
+      },
+      grid: {
+        borderColor: '#f1f1f1',
+        xaxis: {
+          lines: {
+            show: true,
+          },
+        },
+        yaxis: {
+          lines: {
+            show: true,
+          },
+        },
       },
     },
   }
 
   return (
-    <div>
-      <Chart options={chartData.options} series={chartData.series} height='120px' type='line' />
-      <p className='pl-[90%] text-white'>{latestData ? 'false' : 'true'}</p>
+    <div className='w-full '>
+      <Chart width={'100%'} options={chartData.options} series={chartData.series} height='120px' type='line' />
+      <p className='pl-[90%] text-black dark:text-white'>{latestData ? 'true' : 'false'}</p>
     </div>
   )
 }

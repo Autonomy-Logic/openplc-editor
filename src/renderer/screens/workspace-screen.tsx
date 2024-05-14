@@ -15,12 +15,13 @@ import {
 import NextIcon from '../assets/icons/interface/Next'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
+import LineGraph from '../components/_molecules/debugger/charts/lineGraph'
+import VariablePanel from '../components/_molecules/debugger/variablePanel'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
-import LineGraph from './charts/lineGraph'
 
 const WorkspaceScreen = () => {
   const navigate = useNavigate()
@@ -31,7 +32,6 @@ const WorkspaceScreen = () => {
   const [isPaused, setIsPaused] = useState(false)
   const [range, setRange] = useState(10)
   const [data, setData] = useState([false])
-
 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
@@ -139,47 +139,46 @@ const WorkspaceScreen = () => {
                     <Tabs.Content value='console' className='w-full '>
                       console
                     </Tabs.Content>
-                    <Tabs.Content
-                      value='debug'
-                      className='debug-panel flex h-full w-full flex-col gap-2 overflow-hidden rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'
-                    >
-                      <div className='header flex justify-between '>
-                        <div className='flex gap-4'>
-                          <button className='flex h-7 w-[133px] items-center justify-center gap-2 rounded-md bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
-                            <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
-                          </button>
+                    <Tabs.Content value='debug' className='debug-panel flex h-full w-full gap-2  overflow-hidden'>
+                      <div className='flex h-full w-full  flex-col gap-2  rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
+                        <div className='header flex justify-between '>
+                          <div className='flex gap-4'>
+                            <button className='flex h-7 w-[133px] items-center justify-center gap-2 rounded-md bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
+                              <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
+                            </button>
+                            <div className='flex gap-2'>
+                              <input
+                                type='text'
+                                onChange={(e) => setRange(Number(e.target.value))}
+                                className='h-7 w-9 items-center rounded-md border border-neutral-200 bg-white p-2 text-center text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-neutral-900'
+                              />
+                              <select className='h-7 w-[88px] rounded-md border border-neutral-200 bg-white outline-none dark:bg-neutral-900'>
+                                <option value='seconds'>seconds</option>
+                              </select>
+                            </div>
+                          </div>
+
                           <div className='flex gap-2'>
-                            <input
-                              type='text'
-                              onChange={(e) => setRange(Number(e.target.value))}
-                              className='h-7 w-9 items-center rounded-md border border-neutral-200 bg-white p-2 text-center text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-neutral-900'
-                            />
-                            <select className='h-7 w-[88px] rounded-md border border-neutral-200 bg-white outline-none dark:bg-neutral-900'>
-                              <option value='seconds'>seconds</option>
-                            </select>
+                            <button
+                              onClick={() => setIsPaused(!isPaused)}
+                              className='flex h-7 w-[38px] items-center justify-center rounded-md  bg-brand outline-none'
+                            >
+                              {isPaused ? (
+                                <PlayIcon fill='#FFFFFF' className='h-fit w-[10px]' />
+                              ) : (
+                                <PauseIcon fill='#FFFFFF' className='h-fit w-[10px]' />
+                              )}
+                            </button>
+                            <button className='flex h-7 w-[38px] items-center justify-center  rounded-md bg-neutral-50 outline-none dark:bg-neutral-850'>
+                              <NextIcon className='h-[10px] w-[14px]' />
+                            </button>
                           </div>
                         </div>
-
-                        <div className='flex gap-2'>
-                          <button
-                            onClick={() => setIsPaused(!isPaused)}
-                            className='flex h-7 w-[38px] items-center justify-center rounded-md  bg-brand outline-none'
-                          >
-                            {isPaused ? (
-                              <PlayIcon fill='#FFFFFF' className='h-fit w-[10px]' />
-                            ) : (
-                              <PauseIcon fill='#FFFFFF' className='h-fit w-[10px]' />
-                            )}
-                          </button>
-                          <button className='flex h-7 w-[38px] items-center justify-center  rounded-md bg-neutral-50 outline-none dark:bg-neutral-850'>
-                            <NextIcon className='h-[10px] w-[14px]' />
-                          </button>
+                        <div className='chart-content flex h-full w-full  gap-2 overflow-hidden p-2'>
+                          <LineGraph range={range} data={data} setData={setData} />
                         </div>
                       </div>
-                      <div className='chart-content h-full w-full   p-2'>
-                        <p className='text-xl text-black dark:text-white font-bold'>{data}</p>
-                        <LineGraph range={range} data={data} setData={setData} />
-                      </div>
+                      <VariablePanel />
                     </Tabs.Content>
                   </Tabs.Root>
                 </ResizablePanel>
