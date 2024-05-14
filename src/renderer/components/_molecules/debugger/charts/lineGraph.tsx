@@ -5,18 +5,22 @@ type ChartData = {
   range?: number
   data: boolean[]
   setData: React.Dispatch<React.SetStateAction<boolean[]>>
+  isPaused: boolean
+  setIsPaused: React.Dispatch<React.SetStateAction<boolean>>
 }
 
-export default function LineGraph({ range, data, setData }: ChartData) {
+export default function LineGraph({ range, data, setData, isPaused, setIsPaused }: ChartData) {
   const [latestData, setLatestData] = useState<boolean | undefined>(false)
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setData((prevData) => [...prevData, !prevData[prevData.length - 1] || prevData.length === 0])
+      if (!isPaused) {
+        setData((prevData) => [...prevData, !prevData[prevData.length - 1] || prevData.length === 0])
+      }
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [isPaused, data])
 
   useEffect(() => {
     setLatestData(data[data.length - 1])
@@ -28,6 +32,10 @@ export default function LineGraph({ range, data, setData }: ChartData) {
 
   const mapDataToXAxis = (data: boolean[]) => {
     return Array.from({ length: data.length }, (_, i) => i)
+  }
+
+  const handleChartClick = () => {
+    setIsPaused(!isPaused)
   }
 
   const chartData = {
@@ -52,7 +60,7 @@ export default function LineGraph({ range, data, setData }: ChartData) {
           },
         },
         toolbar: {
-          show: false,
+          show: true,
           autoSelected: 'pan',
         },
         dataLabels: {
@@ -70,12 +78,36 @@ export default function LineGraph({ range, data, setData }: ChartData) {
         categories: mapDataToXAxis(data),
         range: range,
         tickAmount: 5,
+        tickPlacement: 'on',
+        labels: {
+          show: true,
+          rotate: -45,
+        },
+        crosshairs: {
+          show: true,
+          position: 'back',
+        },
+        tooltip: {
+          enabled: true,
+        },
+        axisBorder: {
+          show: true,
+          offsetX: 0,
+          offsetY: 0,
+        },
+        axisTicks: {
+          show: true,
+          borderType: 'solid',
+          color: '#b1b9c8',
+          height: 6,
+          offsetX: 0,
+          offsetY: 0,
+        },
       },
       yaxis: {
         min: 0,
         max: 1,
         tickAmount: 4,
-        
       },
       stroke: {
         curve: 'stepline',
@@ -106,7 +138,19 @@ export default function LineGraph({ range, data, setData }: ChartData) {
   return (
     <div className='w-full '>
       <Chart width={'100%'} options={chartData.options} series={chartData.series} height='120px' type='line' />
-      <p className='pl-[90%] text-black dark:text-white'>{latestData ? 'true' : 'false'}</p>
+      <div className='pl-[90%] text-black dark:text-white'>
+        {latestData ? (
+          <div className='flex items-center gap-1'>
+            <p className='h-1 w-1 rounded-full bg-green-400' />
+            True
+          </div>
+        ) : (
+          <div className='flex items-center gap-1'>
+            <p className='h-1 w-1 rounded-full bg-red-500' />
+            False
+          </div>
+        )}{' '}
+      </div>
     </div>
   )
 }

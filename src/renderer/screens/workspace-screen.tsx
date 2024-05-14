@@ -33,6 +33,14 @@ const WorkspaceScreen = () => {
   const [range, setRange] = useState(10)
   const [data, setData] = useState([false])
 
+  const updateRange = (value: number) => {
+    if (value > 100) {
+      setRange(100)
+    } else {
+      setRange(value)
+    }
+  }
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -149,7 +157,7 @@ const WorkspaceScreen = () => {
                             <div className='flex gap-2'>
                               <input
                                 type='text'
-                                onChange={(e) => setRange(Number(e.target.value))}
+                                onChange={(e) => updateRange(Number(e.target.value))}
                                 className='h-7 w-9 items-center rounded-md border border-neutral-200 bg-white p-2 text-center text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-neutral-900'
                               />
                               <select className='h-7 w-[88px] rounded-md border border-neutral-200 bg-white outline-none dark:bg-neutral-900'>
@@ -175,7 +183,7 @@ const WorkspaceScreen = () => {
                           </div>
                         </div>
                         <div className='chart-content  h-full w-full  gap-2 overflow-hidden p-2'>
-                          <LineGraph range={range} data={data} setData={setData} />
+                          <LineGraph isPaused={isPaused} setIsPaused={setIsPaused} range={range} data={data} setData={setData} />
                         </div>
                       </div>
                       <VariablePanel />
