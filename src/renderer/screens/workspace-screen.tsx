@@ -12,7 +12,7 @@ import {
   TransferIcon,
   ZoomInOut,
 } from '../assets'
-import NextIcon from '../assets/icons/interface/Next'
+// import NextIcon from '../assets/icons/interface/Next'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
 import LineGraph from '../components/_molecules/debugger/charts/lineGraph'
@@ -169,12 +169,12 @@ const WorkspaceScreen = () => {
                                 <PauseIcon fill='#FFFFFF' className='h-fit w-[10px]' />
                               )}
                             </button>
-                            <button className='flex h-7 w-[38px] items-center justify-center  rounded-md bg-neutral-50 outline-none dark:bg-neutral-850'>
+                            {/* <button className='flex h-7 w-[38px] items-center justify-center  rounded-md bg-neutral-50 outline-none dark:bg-neutral-850'>
                               <NextIcon className='h-[10px] w-[14px]' />
-                            </button>
+                            </button> */}
                           </div>
                         </div>
-                        <div className='chart-content flex h-full w-full  gap-2 overflow-hidden p-2'>
+                        <div className='chart-content  h-full w-full  gap-2 overflow-hidden p-2'>
                           <LineGraph range={range} data={data} setData={setData} />
                         </div>
                       </div>

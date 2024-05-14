@@ -69,12 +69,13 @@ export default function LineGraph({ range, data, setData }: ChartData) {
       xaxis: {
         categories: mapDataToXAxis(data),
         range: range,
-        tickAmount: data.length,
+        tickAmount: 5,
       },
       yaxis: {
         min: 0,
         max: 1,
-        tickAmount: 2,
+        tickAmount: 4,
+        
       },
       stroke: {
         curve: 'stepline',
@@ -82,15 +83,20 @@ export default function LineGraph({ range, data, setData }: ChartData) {
         colors: ['#0464FB'],
       },
       grid: {
-        borderColor: '#f1f1f1',
+        row: {
+          colors: ['#F5F7F8'],
+        },
+        borderColor: '#b1b9c8',
         xaxis: {
           lines: {
             show: true,
+            offsetY: 5,
           },
         },
         yaxis: {
           lines: {
             show: true,
+            offsetY: 5,
           },
         },
       },
