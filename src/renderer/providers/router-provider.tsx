@@ -1,8 +1,13 @@
 import { AppLayout } from '@components/_templates'
-import { ReactNode } from 'react'
+import { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { createBrowserRouter, RouterProvider as ReactRouterProvider } from 'react-router-dom'
 
-import { StartScreen, WorkspaceScreen } from '../screens'
+import { Example } from '../components/_molecules'
+import { WorkspaceScreen } from '../screens'
+
+const TestLayout = (props: ComponentPropsWithoutRef<'div'>) => {
+  return <div {...props} className='align-center mx-auto flex h-full w-full justify-center' />
+}
 
 const router = createBrowserRouter([
   {
@@ -12,7 +17,11 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <StartScreen />,
+        element: (
+          <TestLayout>
+            <Example />{' '}
+          </TestLayout>
+        ),
       },
       {
         id: 'workspace',
