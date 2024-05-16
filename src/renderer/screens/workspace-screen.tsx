@@ -2,21 +2,13 @@ import * as Tabs from '@radix-ui/react-tabs'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import {
-  DebuggerIcon,
-  DownloadIcon,
-  ExitIcon,
-  PauseIcon,
-  PlayIcon,
-  SearchIcon,
-  TransferIcon,
-  ZoomInOut,
-} from '../assets'
+import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
 // import NextIcon from '../assets/icons/interface/Next'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
 import LineGraph from '../components/_molecules/debugger/charts/lineGraph'
 import VariablePanel from '../components/_molecules/debugger/variablePanel'
+import Header from '../components/_molecules/header'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
@@ -167,19 +159,7 @@ const WorkspaceScreen = () => {
                           </div>
 
                           <div className='flex gap-2'>
-                            <button
-                              onClick={() => setIsPaused(!isPaused)}
-                              className='flex h-7 w-[38px] items-center justify-center rounded-md  bg-brand outline-none'
-                            >
-                              {isPaused ? (
-                                <PlayIcon fill='#FFFFFF' className='h-fit w-[10px]' />
-                              ) : (
-                                <PauseIcon fill='#FFFFFF' className='h-fit w-[10px]' />
-                              )}
-                            </button>
-                            {/* <button className='flex h-7 w-[38px] items-center justify-center  rounded-md bg-neutral-50 outline-none dark:bg-neutral-850'>
-                              <NextIcon className='h-[10px] w-[14px]' />
-                            </button> */}
+                            <Header isPaused={isPaused} setIsPaused={setIsPaused} />
                           </div>
                         </div>
                         <div className='chart-content  h-full w-full  gap-2 overflow-hidden p-2'>
