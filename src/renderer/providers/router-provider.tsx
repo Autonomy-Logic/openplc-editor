@@ -2,7 +2,7 @@ import { AppLayout } from '@components/_templates'
 import { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { createBrowserRouter, RouterProvider as ReactRouterProvider } from 'react-router-dom'
 
-import { Example } from '../components/_molecules'
+import { VariablesTable } from '../components/_molecules'
 import { WorkspaceScreen } from '../screens'
 
 const TestLayout = (props: ComponentPropsWithoutRef<'div'>) => {
@@ -19,7 +19,7 @@ const router = createBrowserRouter([
         index: true,
         element: (
           <TestLayout>
-            <Example />{' '}
+            <VariablesTable />{' '}
           </TestLayout>
         ),
       },
