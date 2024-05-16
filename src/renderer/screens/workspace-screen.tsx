@@ -31,7 +31,7 @@ const WorkspaceScreen = () => {
 
   const [isPaused, setIsPaused] = useState(false)
   const [range, setRange] = useState(10)
-  const [data, setData] = useState([false])
+  const [data, setData] = useState(false)
 
   const updateRange = (value: number) => {
     if (value > 100) {
@@ -183,7 +183,7 @@ const WorkspaceScreen = () => {
                           </div>
                         </div>
                         <div className='chart-content  h-full w-full  gap-2 overflow-hidden p-2'>
-                          <LineGraph isPaused={isPaused} setIsPaused={setIsPaused} range={range} data={data} setData={setData} />
+                          <LineGraph isPaused={isPaused} range={range} value={data} setData={setData} />
                         </div>
                       </div>
                       <VariablePanel />

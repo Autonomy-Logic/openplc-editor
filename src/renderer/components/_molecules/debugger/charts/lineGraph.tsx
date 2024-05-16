@@ -1,108 +1,50 @@
 import { useEffect, useState } from 'react'
+import { Props } from 'react-apexcharts'
 import Chart from 'react-apexcharts'
 
 type ChartData = {
   range?: number
-  data: boolean[]
-  setData: React.Dispatch<React.SetStateAction<boolean[]>>
+  value: boolean
+  setData: React.Dispatch<React.SetStateAction<boolean>>
   isPaused: boolean
-  setIsPaused: React.Dispatch<React.SetStateAction<boolean>>
 }
 
-export default function LineGraph({ range, data, setData, isPaused, setIsPaused }: ChartData) {
-  const [latestData, setLatestData] = useState<boolean | undefined>(false)
-
+export default function LineGraph({ range, value, setData, isPaused }: ChartData) {
+  const [history, setHistory] = useState<boolean[]>([value])
+  const [chartInterval, setChartInterval] = useState<number[]>([0])
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isPaused) {
-        setData((prevData) => [...prevData, !prevData[prevData.length - 1] || prevData.length === 0])
+        setChartInterval((prevData) => [...prevData, prevData.length])
+        setData((prevData) => !prevData)
       }
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [isPaused, data])
+  }, [isPaused, value])
 
   useEffect(() => {
-    setLatestData(data[data.length - 1])
-  }, [data])
+    setHistory((prevHistory) => [...prevHistory, !prevHistory[prevHistory.length - 1]]) 
+    console.log(history)
+  }, [value])
 
-  const mapDataToYAxis = (data: boolean[]) => {
-    return data.map((value) => (value ? 1 : 0))
-  }
-
-  const mapDataToXAxis = (data: boolean[]) => {
-    return Array.from({ length: data.length }, (_, i) => i)
-  }
-
-  const handleChartClick = () => {
-    setIsPaused(!isPaused)
-  }
-
-  const chartData = {
+  const chartData: Props = {
     series: [
       {
-        data: mapDataToYAxis(data),
+        data: history.map((val) => (val ? 1 : 0)),
       },
     ],
     options: {
       chart: {
         type: 'line',
-        animations: {
-          enabled: true,
-          easing: 'linear',
-          dynamicAnimation: {
-            enabled: true,
-            speed: 1000,
-            animateGradually: {
-              enabled: true,
-              delay: 150,
-            },
-          },
-        },
+        offsetX: 0,
         toolbar: {
           show: true,
-          autoSelected: 'pan',
-        },
-        dataLabels: {
-          enabled: true,
-        },
-        title: {
-          text: 'Stepline Chart',
-          align: 'left',
-        },
-        markers: {
-          size: 0,
         },
       },
       xaxis: {
-        categories: mapDataToXAxis(data),
         range: range,
-        tickAmount: 5,
-        tickPlacement: 'on',
-        labels: {
-          show: true,
-          rotate: -45,
-        },
-        crosshairs: {
-          show: true,
-          position: 'back',
-        },
-        tooltip: {
-          enabled: true,
-        },
-        axisBorder: {
-          show: true,
-          offsetX: 0,
-          offsetY: 0,
-        },
-        axisTicks: {
-          show: true,
-          borderType: 'solid',
-          color: '#b1b9c8',
-          height: 6,
-          offsetX: 0,
-          offsetY: 0,
-        },
+        categories: chartInterval.map((i) => i.toString()),
       },
       yaxis: {
         min: 0,
@@ -139,7 +81,7 @@ export default function LineGraph({ range, data, setData, isPaused, setIsPaused 
     <div className='w-full '>
       <Chart width={'100%'} options={chartData.options} series={chartData.series} height='120px' type='line' />
       <div className='pl-[90%] text-black dark:text-white'>
-        {latestData ? (
+        {history ? (
           <div className='flex items-center gap-1'>
             <p className='h-1 w-1 rounded-full bg-green-400' />
             True
