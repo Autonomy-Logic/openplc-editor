@@ -6,6 +6,7 @@ import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIco
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
+import { VariablesTable } from '../components/_molecules'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
@@ -114,10 +115,7 @@ const WorkspaceScreen = () => {
                         defaultSize={25}
                         className='flex h-full w-full flex-1 flex-col gap-4'
                       >
-                        {/**
-                         * TODO: refactor the variable component
-                         */}
-                        {/* <Variables /> */}
+                        <VariablesTable />
                       </ResizablePanel>
                       <ResizableHandle className='h-[1px] w-full bg-brand-light' />
                       <ResizablePanel

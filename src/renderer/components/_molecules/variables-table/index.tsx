@@ -2,8 +2,8 @@ import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '
 import { useState } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
-import { EditableCell } from './editable-cell'
-import { SelectableClassCell, SelectableTypeCell } from './selectable-cell'
+import { EditableDocumentationCell, EditableNameCell } from './editable-cell'
+import { SelectableClassCell, SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 
 export type IVariable = {
   id: number
@@ -19,12 +19,12 @@ const columnHelper = createColumnHelper<IVariable>()
 
 const columns = [
   columnHelper.accessor('id', { header: '#', cell: (info) => info.getValue() }),
-  columnHelper.accessor('name', { header: 'Name', size: 200, cell: EditableCell }),
+  columnHelper.accessor('name', { header: 'Name', size: 200, cell: EditableNameCell }),
   columnHelper.accessor('class', { header: 'Class', size: 200, cell: SelectableClassCell }),
   columnHelper.accessor('type', { header: 'Type', size: 200, cell: SelectableTypeCell }),
-  columnHelper.accessor('location', { header: 'Location', size: 200, cell: EditableCell }),
-  columnHelper.accessor('documentation', { header: 'Documentation', size: 200, cell: (info) => info.getValue() }),
-  columnHelper.accessor('debug', { header: 'Debug', size: 55, cell: (info) => info.getValue() }),
+  columnHelper.accessor('location', { header: 'Location', size: 200, cell: EditableNameCell }),
+  columnHelper.accessor('documentation', { header: 'Documentation', size: 200, cell: EditableDocumentationCell }),
+  columnHelper.accessor('debug', { header: 'Debug', size: 55, cell: SelectableDebugCell }),
 ]
 
 const variables: IVariable[] = [
@@ -93,7 +93,6 @@ const VariablesTable = () => {
     getCoreRowModel: getCoreRowModel(),
   })
 
-  // console.log(data)
   return (
     <Table context='Variables'>
       <TableHeader>

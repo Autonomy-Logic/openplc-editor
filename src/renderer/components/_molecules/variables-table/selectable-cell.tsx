@@ -1,3 +1,4 @@
+import { DebuggerIcon } from '@root/renderer/assets'
 import { CellContext } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
@@ -92,4 +93,30 @@ const SelectableClassCell = ({ getValue, row: { index }, column: { id }, table }
   )
 }
 
-export { SelectableClassCell, SelectableTypeCell }
+const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
+  const initialValue = getValue<boolean>()
+  // We need to keep and update the state of the cell normally
+  const [cellValue, setCellValue] = useState(initialValue)
+
+  // When the input is blurred, we'll call our table meta's updateData function
+  const _onBlur = () => {
+    // Todo: Must update the data in the store
+    table.options.meta?.updateData(index, id, cellValue)
+  }
+
+  // If the initialValue is changed external, sync it up with our state
+  useEffect(() => {
+    setCellValue(initialValue)
+  }, [initialValue])
+
+  return (
+    <div
+      className='flex h-full w-full cursor-pointer items-center justify-center'
+      onClick={() => setCellValue(!cellValue)}
+    >
+      <DebuggerIcon variant={cellValue ? 'default' : 'muted'} />
+    </div>
+  )
+}
+
+export { SelectableClassCell, SelectableDebugCell, SelectableTypeCell }
