@@ -2,16 +2,7 @@ import { type CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
-
-type IVariable = {
-  id: number
-  name: string
-  class: 'input' | 'output'
-  type: 'BOOL' | 'INT' | 'DATE'
-  location: string
-  debug: boolean
-  documentation: string
-}
+import { type IVariable } from '.'
 
 declare module '@tanstack/react-table' {
   // This is a helper interface that adds the `updateData` property to the table meta.
@@ -42,7 +33,7 @@ const EditableCell = ({ getValue, row: { index }, column: { id }, table }: IEdit
       value={cellValue as string}
       onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
-      className='flex max-w-20 flex-1 bg-transparent outline-none'
+      className='flex w-full max-w-[200px] flex-1 bg-transparent text-center outline-none'
     />
   )
 }

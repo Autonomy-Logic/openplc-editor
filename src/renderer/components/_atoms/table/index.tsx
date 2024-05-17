@@ -5,7 +5,7 @@ const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { co
   ({ className, context, ...res }, ref) => (
     <div
       aria-label='Table container'
-      className='h-fit w-fit rounded-md border border-neutral-500 dark:border-neutral-850'
+      className='mt-4 h-fit w-fit rounded-md border border-neutral-500 dark:border-neutral-850'
     >
       <table
         aria-label={`${context} table`}
@@ -25,7 +25,7 @@ const TableHeader = forwardRef<HTMLTableSectionElement, ComponentPropsWithRef<'t
       aria-label='Table header'
       ref={ref}
       className={cn(
-        'h-8 divide-x divide-neutral-500 border-b border-neutral-500 dark:divide-neutral-850 dark:border-neutral-850',
+        'h-8 cursor-default divide-x divide-neutral-500 border-b border-neutral-500 dark:divide-neutral-850 dark:border-neutral-850',
         className,
       )}
       {...res}
@@ -67,7 +67,10 @@ const TableCell = forwardRef<HTMLTableCellElement, ComponentPropsWithRef<'td'>>(
   <td
     aria-label='Table cell'
     ref={ref}
-    className={cn('h-full max-h-8 max-w-[200px] p-2 text-neutral-700 dark:text-neutral-500', className)}
+    className={cn(
+      'h-full max-h-8 max-w-[200px] p-2 text-neutral-700 has-[:focus]:has-[input]:bg-neutral-200 dark:text-neutral-500 dark:has-[:focus]:has-[input]:bg-neutral-800',
+      className,
+    )}
     {...res}
   />
 ))
