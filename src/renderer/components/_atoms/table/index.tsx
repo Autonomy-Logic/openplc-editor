@@ -5,7 +5,7 @@ const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { co
   ({ className, context, ...res }, ref) => (
     <div
       aria-label='Table container'
-      className='mt-4 h-fit w-fit rounded-md border border-neutral-500 dark:border-neutral-850'
+      className='h-fit w-fit min-w-[1035px] rounded-md border border-neutral-500 dark:border-neutral-850'
     >
       <table
         aria-label={`${context} table`}
@@ -68,7 +68,7 @@ const TableCell = forwardRef<HTMLTableCellElement, ComponentPropsWithRef<'td'>>(
     aria-label='Table cell'
     ref={ref}
     className={cn(
-      'h-full max-h-8 max-w-[200px] p-2 text-neutral-700 has-[:focus]:has-[input]:bg-neutral-200 has-[:focus]:has-[textarea]:bg-neutral-200 dark:text-neutral-500 dark:has-[:focus]:has-[input]:bg-neutral-800 dark:has-[:focus]:has-[textarea]:bg-neutral-800',
+      'h-full max-h-8 w-[200px] p-2 text-neutral-700 has-[:focus]:has-[input]:bg-neutral-200 has-[:focus]:has-[textarea]:bg-neutral-200 lg:w-[300px] 2xl:w-[375px] dark:text-neutral-500 dark:has-[:focus]:has-[input]:bg-neutral-800 dark:has-[:focus]:has-[textarea]:bg-neutral-800',
       className,
     )}
     {...res}
@@ -81,7 +81,7 @@ const TableHead = forwardRef<HTMLTableCellElement, ComponentPropsWithRef<'th'>>(
   <th
     aria-label='Table header cell'
     ref={ref}
-    className={cn('max-h-8 max-w-[200px] p-2 text-neutral-850 dark:text-neutral-300', className)}
+    className={cn('max-h-8 w-[200px] p-2 text-neutral-850 lg:w-[300px] 2xl:w-[375px] dark:text-neutral-300', className)}
     {...res}
   />
 ))

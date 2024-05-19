@@ -19,12 +19,12 @@ const columnHelper = createColumnHelper<IVariable>()
 
 const columns = [
   columnHelper.accessor('id', { header: '#', cell: (info) => info.getValue() }),
-  columnHelper.accessor('name', { header: 'Name', size: 200, cell: EditableNameCell }),
-  columnHelper.accessor('class', { header: 'Class', size: 200, cell: SelectableClassCell }),
-  columnHelper.accessor('type', { header: 'Type', size: 200, cell: SelectableTypeCell }),
-  columnHelper.accessor('location', { header: 'Location', size: 200, cell: EditableNameCell }),
-  columnHelper.accessor('documentation', { header: 'Documentation', size: 200, cell: EditableDocumentationCell }),
-  columnHelper.accessor('debug', { header: 'Debug', size: 55, cell: SelectableDebugCell }),
+  columnHelper.accessor('name', { header: 'Name', cell: EditableNameCell }),
+  columnHelper.accessor('class', { header: 'Class', cell: SelectableClassCell }),
+  columnHelper.accessor('type', { header: 'Type', cell: SelectableTypeCell }),
+  columnHelper.accessor('location', { header: 'Location', cell: EditableNameCell }),
+  columnHelper.accessor('documentation', { header: 'Documentation', cell: EditableDocumentationCell }),
+  columnHelper.accessor('debug', { header: 'Debug', cell: SelectableDebugCell }),
 ]
 
 const variables: IVariable[] = [
@@ -99,7 +99,9 @@ const VariablesTable = () => {
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
-              <TableHead key={header.id}>{flexRender(header.column.columnDef.header, header.getContext())}</TableHead>
+              <TableHead className='first:max-w-32 last:max-w-16' key={header.id}>
+                {flexRender(header.column.columnDef.header, header.getContext())}
+              </TableHead>
             ))}
           </TableRow>
         ))}
@@ -108,7 +110,7 @@ const VariablesTable = () => {
         {table.getRowModel().rows.map((row) => (
           <TableRow key={row.id} className='h-8'>
             {row.getVisibleCells().map((cell) => (
-              <TableCell className={`w-[${cell.column.getSize()}px]`} key={cell.id}>
+              <TableCell className='first:max-w-32 last:max-w-16' key={cell.id}>
                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
               </TableCell>
             ))}

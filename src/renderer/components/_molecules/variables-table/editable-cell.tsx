@@ -34,7 +34,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: I
       value={cellValue}
       onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
-      className='flex w-full max-w-[200px] flex-1 bg-transparent text-center outline-none'
+      className='flex w-full max-w-[400px] flex-1 bg-transparent text-center outline-none'
     />
   )
 }
@@ -58,7 +58,7 @@ const EditableDocumentationCell = ({ getValue, row: { index }, column: { id }, t
     <PrimitivePopover.Root>
       <PrimitivePopover.Trigger asChild>
         <div className='flex h-full w-full cursor-text items-center justify-center'>
-          <span className='truncate'>{cellValue}</span>
+          <p className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'>{cellValue}</p>
         </div>
       </PrimitivePopover.Trigger>
       <PrimitivePopover.Portal>
@@ -66,14 +66,14 @@ const EditableDocumentationCell = ({ getValue, row: { index }, column: { id }, t
           align='center'
           side='bottom'
           sideOffset={-32}
-          className='h-fit w-[200px] rounded-lg bg-white p-2 drop-shadow-lg dark:bg-neutral-950'
+          className='h-fit w-[175px] rounded-lg bg-white p-2 drop-shadow-lg lg:w-[275px] 2xl:w-[375px] dark:bg-neutral-950'
         >
           <textarea
             value={cellValue}
             onChange={(e) => setCellValue(e.target.value)}
             onBlur={onBlur}
             rows={5}
-            className='flex w-full max-w-[200px] flex-1 resize-none bg-transparent text-start outline-none'
+            className='w-full max-w-[375px] flex-1 resize-none bg-transparent text-start outline-none'
           />
         </PrimitivePopover.Content>
       </PrimitivePopover.Portal>

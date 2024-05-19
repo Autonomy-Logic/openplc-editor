@@ -14,9 +14,10 @@ const SelectTrigger = forwardRef<ElementRef<typeof PrimitiveSelect.Trigger>, ISe
       <PrimitiveSelect.Trigger className={className} {...rest} ref={forwardedRef}>
         <PrimitiveSelect.Value placeholder={placeholder} />
         {withIndicator && (
-          <PrimitiveSelect.Icon>
-            <ArrowIcon size='sm' className='rotate-270 stroke-brand' />
-          </PrimitiveSelect.Icon>
+          <ArrowIcon
+            size='sm'
+            className='rotate-270 stroke-brand-light transition-all group-data-[state=open]:rotate-90 group-data-[state=open]:stroke-brand'
+          />
         )}
       </PrimitiveSelect.Trigger>
     )
