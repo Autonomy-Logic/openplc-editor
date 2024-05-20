@@ -6,15 +6,19 @@ const Select = PrimitiveSelect.Root
 
 type ISelectTriggerProps = ComponentPropsWithoutRef<typeof PrimitiveSelect.Trigger> & {
   placeholder?: string
+  withIndicator?: boolean
 }
 const SelectTrigger = forwardRef<ElementRef<typeof PrimitiveSelect.Trigger>, ISelectTriggerProps>(
-  ({ placeholder, className, ...rest }, forwardedRef) => {
+  ({ placeholder, withIndicator = false, className, ...rest }, forwardedRef) => {
     return (
       <PrimitiveSelect.Trigger className={className} {...rest} ref={forwardedRef}>
         <PrimitiveSelect.Value placeholder={placeholder} />
-        <PrimitiveSelect.Icon>
-          <ArrowIcon size='sm' className='rotate-270 stroke-brand ' />
-        </PrimitiveSelect.Icon>
+        {withIndicator && (
+          <ArrowIcon
+            size='sm'
+            className='rotate-270 stroke-brand-light transition-all group-data-[state=open]:rotate-90 group-data-[state=open]:stroke-brand'
+          />
+        )}
       </PrimitiveSelect.Trigger>
     )
   },

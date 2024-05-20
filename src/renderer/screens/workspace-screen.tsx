@@ -9,6 +9,7 @@ import { MonacoEditor } from '../components/_features/[workspace]/editor'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
+import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
 
@@ -112,12 +113,9 @@ const WorkspaceScreen = () => {
                         collapsedSize={0}
                         minSize={20}
                         defaultSize={25}
-                        className='flex h-full w-full flex-1 flex-col gap-4'
+                        className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'
                       >
-                        {/**
-                         * TODO: refactor the variable component
-                         */}
-                        {/* <Variables /> */}
+                        <VariablesEditor />
                       </ResizablePanel>
                       <ResizableHandle className='h-[1px] w-full bg-brand-light' />
                       <ResizablePanel

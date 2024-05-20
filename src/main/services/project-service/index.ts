@@ -29,7 +29,7 @@ class ProjectService {
   async createProject(): Promise<IProjectServiceResponse> {
     const { canceled, filePaths } = await dialog.showOpenDialog(this.serviceManager, {
       title: i18n.t('createProject:dialog.title'),
-      properties: ['openDirectory'],
+      properties: ['openDirectory', 'createDirectory'],
     })
 
     if (canceled)
