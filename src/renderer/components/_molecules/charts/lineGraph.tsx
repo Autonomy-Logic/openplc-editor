@@ -48,7 +48,7 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
       yaxis: {
         min: 0,
         max: 1,
-        tickAmount: 4,
+        tickAmount: 3,
       },
       stroke: {
         curve: 'stepline',
@@ -69,7 +69,7 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
         yaxis: {
           lines: {
             show: true,
-            offsetY: 5,
+            offsetY: 3,
           },
         },
       },
@@ -77,22 +77,20 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
   }
 
   return (
-    <div className='w-full '>
-      <div>
-        <Chart width={'100%'} options={chartData.options} series={chartData.series} height='105px' type='line' />
-        <div className='pl-[90%] text-black dark:text-white'>
-          {value ? (
-            <div className='flex items-center gap-1'>
-              <p className='h-1 w-1 rounded-full bg-red-500' />
-              False
-            </div>
-          ) : (
-            <div className='flex items-center gap-1'>
-              <p className='h-1 w-1 rounded-full bg-green-500' />
-              True
-            </div>
-          )}
-        </div>
+    <div className=' w-full'>
+      <Chart width={'100%'} options={chartData.options} series={chartData.series} height='105px' type='line' />
+      <div className=' text-cp-base font-semibold text-black dark:text-white'>
+        {value ? (
+          <div className='flex  items-center  justify-end gap-1'>
+            <p className='h-1 w-1 rounded-full bg-red-500' />
+            False
+          </div>
+        ) : (
+          <div className='flex items-center justify-end gap-1'>
+            <p className='h-1 w-1 rounded-full bg-green-500' />
+            True
+          </div>
+        )}
       </div>
     </div>
   )
