@@ -24,8 +24,7 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
   }, [isPaused, value])
 
   useEffect(() => {
-    setHistory((prevHistory) => [...prevHistory, !prevHistory[prevHistory.length - 1]]) 
-    console.log(history)
+    setHistory((prevHistory) => [...prevHistory, !prevHistory[prevHistory.length - 1]])
   }, [value])
 
   const chartData: Props = {
@@ -79,19 +78,21 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
 
   return (
     <div className='w-full '>
-      <Chart width={'100%'} options={chartData.options} series={chartData.series} height='120px' type='line' />
-      <div className='pl-[90%] text-black dark:text-white'>
-        {history ? (
-          <div className='flex items-center gap-1'>
-            <p className='h-1 w-1 rounded-full bg-green-400' />
-            True
-          </div>
-        ) : (
-          <div className='flex items-center gap-1'>
-            <p className='h-1 w-1 rounded-full bg-red-500' />
-            False
-          </div>
-        )}{' '}
+      <div>
+        <Chart width={'100%'} options={chartData.options} series={chartData.series} height='120px' type='line' />
+        <div className='pl-[90%] text-black dark:text-white'>
+          {value ? (
+            <div className='flex items-center gap-1'>
+              <p className='h-1 w-1 rounded-full bg-red-500' />
+              False
+            </div>
+          ) : (
+            <div className='flex items-center gap-1'>
+              <p className='h-1 w-1 rounded-full bg-green-500' />
+              True
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
