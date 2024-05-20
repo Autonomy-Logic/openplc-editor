@@ -9,8 +9,8 @@ const variableShape = z.object({
   type: z.lazy(() => dataTypeSchema),
   location: z.string().optional(),
   initialValue: z.string().optional(),
-  debug: z.boolean().default(false),
   documentation: z.string().optional(),
+  debug: z.boolean().default(false),
 })
 
 type IVariable = z.infer<typeof variableShape>
