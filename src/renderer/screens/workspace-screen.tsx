@@ -6,6 +6,7 @@ import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIco
 // import NextIcon from '../assets/icons/interface/Next'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
+import ConsolePanel from '../components/_molecules/console'
 import LineGraph from '../components/_molecules/debugger/charts/lineGraph'
 import VariablePanel from '../components/_molecules/debugger/variablePanel'
 import Header from '../components/_molecules/header'
@@ -14,7 +15,6 @@ import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
-import ConsolePanel from '../components/_molecules/console'
 
 const WorkspaceScreen = () => {
   const navigate = useNavigate()
@@ -170,7 +170,7 @@ const WorkspaceScreen = () => {
                               <Header isPaused={isPaused} setIsPaused={setIsPaused} />
                             </div>
                           </div>
-                          <div className='chart-content  h-full w-full  gap-2 overflow-hidden p-2'>
+                          <div className='chart-content  h-full w-full  gap-2 overflow-hidden'>
                             <LineGraph isPaused={isPaused} range={range} value={data} setData={setData} />
                           </div>
                         </div>

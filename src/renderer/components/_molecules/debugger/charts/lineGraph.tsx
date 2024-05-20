@@ -38,7 +38,7 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
         type: 'line',
         offsetX: 0,
         toolbar: {
-          show: true,
+          show: false,
         },
       },
       xaxis: {
@@ -79,7 +79,7 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
   return (
     <div className='w-full '>
       <div>
-        <Chart width={'100%'} options={chartData.options} series={chartData.series} height='120px' type='line' />
+        <Chart width={'100%'} options={chartData.options} series={chartData.series} height='105px' type='line' />
         <div className='pl-[90%] text-black dark:text-white'>
           {value ? (
             <div className='flex items-center gap-1'>
