@@ -43,6 +43,7 @@ const dataTypeSchema = z.object({
     z.object({
       type: z.literal('enumerated'),
       values: z.array(z.string()).optional(),
+      /** The initial value must be one of the values created */
       initialValue: z.string().optional(),
     }),
     /** This array needs to be reviewed */
@@ -74,7 +75,6 @@ const dataTypeSchema = z.object({
       ]),
       /** This property needs to be updated to validate if the right number is higher than the left */
       dimensions: z.string().regex(/^(\d+)\.\.(\d+)$/),
-      initialValue: z.string().optional(),
     }),
     /** This structure needs to be reviewed */
     z.object({
@@ -140,7 +140,6 @@ const dataTypeSchema = z.object({
               }),
             }),
           ]),
-          initialValue: z.string().optional(),
         }),
       ),
     }),
