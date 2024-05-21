@@ -104,8 +104,8 @@ const WorkspaceScreen = () => {
                   id='consolePanel'
                   order={2}
                   collapsible
-                  defaultSize={31}
-                  minSize={15}
+                  defaultSize={30.5}
+                  minSize={25}
                   className='flex-1 grow  rounded-lg border-2 border-neutral-200 bg-white p-4 data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
                 >
                   <Tabs.Root defaultValue='console' className='flex h-full w-full flex-col gap-2 overflow-hidden'>

@@ -18,7 +18,7 @@ export default function Debugger() {
   }
   return (
     <div className='h-full w-full'>
-      <div className='flex w-full flex-col gap-2  rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
+      <div className='flex w-full flex-col rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
         <div className='header flex justify-between '>
           <div className='flex gap-4'>
             <button className='flex h-7 w-[133px] items-center justify-center gap-2 rounded-md bg-inherit bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
@@ -44,16 +44,16 @@ export default function Debugger() {
           <LineGraph isPaused={isPaused} range={range} value={data} setData={setData} />
         </div>
       </div>
-      <div className='flex w-full justify-between p-2 text-cp-base font-semibold text-neutral-1000 dark:text-neutral-50'>
-            <div>
-              <span>time</span>
-              <p className='font-normal'>0m 0s 0ms</p>
-            </div>
-            <div>
-              <span>ticks</span>
-              <p className='font-normal'>0</p>
-            </div>
-          </div>
+      <div className='flex w-full justify-between p-[6px] pb-0 text-cp-base font-semibold text-neutral-1000 dark:text-neutral-50'>
+        <div>
+          <span>time</span>
+          <p className='font-normal'>0m 0s 0ms</p>
+        </div>
+        <div>
+          <span>ticks</span>
+          <p className='font-normal'>0</p>
+        </div>
+      </div>
     </div>
   )
 }

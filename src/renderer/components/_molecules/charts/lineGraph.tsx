@@ -41,6 +41,7 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
           show: false,
         },
       },
+
       xaxis: {
         range: range,
         categories: chartInterval.map((i) => i.toString()),
@@ -88,7 +89,7 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
 
   return (
     <div className='  w-full'>
-      <Chart width={'100%'} options={chartData.options} series={chartData.series} height='105px' type='line' />
+      <Chart width={'100%'} options={chartData.options} series={chartData.series} height={115} type='line' />
       <div className=' text-cp-base font-semibold text-black dark:text-neutral-50'>
         {value ? (
           <div className='flex  items-center  justify-end gap-1'>
