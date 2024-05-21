@@ -1,7 +1,7 @@
 
 export default function ConsolePanel() {
   return (
-    <div className=' h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark dark:text-white'>
+    <div className=' h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark dark:text-neutral-50'>
       Start build in C:\Users\Pichau\OpenPLC_Editor\editor\examples\Blink\build Generating SoftPLC
       <br /> IEC-61131 ST/IL/SFC code...
       <br /> Collecting data types

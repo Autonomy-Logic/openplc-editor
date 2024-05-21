@@ -44,11 +44,21 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
       xaxis: {
         range: range,
         categories: chartInterval.map((i) => i.toString()),
+        labels: {
+          style: {
+            cssClass: 'apexcharts-xaxis-label',
+          },
+        },
       },
       yaxis: {
         min: 0,
         max: 1,
         tickAmount: 3,
+        labels: {
+          style: {
+            cssClass: 'apexcharts-yaxis-label',
+          },
+        },
       },
       stroke: {
         curve: 'stepline',
@@ -77,9 +87,9 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
   }
 
   return (
-    <div className=' w-full'>
+    <div className=' h-full w-full'>
       <Chart width={'100%'} options={chartData.options} series={chartData.series} height='105px' type='line' />
-      <div className=' text-cp-base font-semibold text-black dark:text-white'>
+      <div className=' text-cp-base font-semibold text-black dark:text-neutral-50'>
         {value ? (
           <div className='flex  items-center  justify-end gap-1'>
             <p className='h-1 w-1 rounded-full bg-red-500' />

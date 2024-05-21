@@ -121,11 +121,11 @@
   }
 
   .oplc-scrollbar::-webkit-scrollbar {
-    @apply flex h-1 w-1 transition-colors duration-[160ms] ease-in-out rounded-lg bg-neutral-200 dark:bg-neutral-850;
+    @apply flex h-1 w-1 rounded-lg bg-neutral-200 transition-colors duration-[160ms] ease-in-out dark:bg-neutral-850;
   }
 
   .oplc-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-[--primary-medium] bg-opacity-30 rounded-lg hover:bg-opacity-100 transition-colors ease-in-out duration-700;
+    @apply rounded-lg bg-[--primary-medium] bg-opacity-30 transition-colors duration-700 ease-in-out hover:bg-opacity-100;
   }
 
   .oplc-scrollbar::-webkit-scrollbar-corner {
@@ -141,7 +141,7 @@
   }
 
   .scroll-area::-webkit-scrollbar {
-    @apply flex transition-colors duration-[160ms] ease-out w-[6px] rounded-lg bg-neutral-200 dark:bg-neutral-850;
+    @apply flex w-[6px] rounded-lg bg-neutral-200 transition-colors duration-[160ms] ease-out dark:bg-neutral-850;
   }
 
   .scroll-area:hover::-webkit-scrollbar-thumb {
@@ -149,7 +149,7 @@
   }
 
   .scroll-area::-webkit-scrollbar-thumb {
-    @apply bg-[#0350c9] bg-opacity-30 rounded-lg hover:bg-opacity-100 transition-colors ease-in-out duration-700;
+    @apply rounded-lg bg-[#0350c9] bg-opacity-30 transition-colors duration-700 ease-in-out hover:bg-opacity-100;
   }
 
   .scroll-area-horizontal {
@@ -169,7 +169,7 @@
   }
 
   .scroll-area-horizontal::-webkit-scrollbar-thumb {
-    @apply bg-[--primary-medium] bg-opacity-30 rounded-lg hover:bg-opacity-100 transition-colors ease-in-out duration-700;
+    @apply rounded-lg bg-[--primary-medium] bg-opacity-30 transition-colors duration-700 ease-in-out hover:bg-opacity-100;
   }
 }
 
@@ -209,3 +209,8 @@
 .dark ::-webkit-scrollbar {
   @apply bg-gray-900;
 } */
+
+.apexcharts-yaxis-label tspan,
+.apexcharts-xaxis-label tspan {
+  @apply fill-neutral-1000 dark:fill-neutral-50;
+}
