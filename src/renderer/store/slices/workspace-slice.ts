@@ -50,6 +50,7 @@ type IWorkspaceActions = {
   updatePou: (dataToBeUpdated: { name: string; content: string }) => void
   deletePou: (pouToBeDeleted: string) => void
   createVariable: (variableToBeCreated: IVariableDTO) => void
+  updateVariable: (dataToBeUpdated: IVariableDTO) => void
 }
 
 type IWorkspaceSlice = IWorkspaceState & {
@@ -163,6 +164,34 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
               pou.data.variables.push(variableToBeCreated.data)
             } else {
               console.error(`Pou ${variableToBeCreated.associatedPou} not found`)
+            }
+          } else {
+            console.error(`Scope ${scope} not found or invalid params`)
+          }
+        }),
+      )
+    },
+    /** This must be validated */
+    updateVariable: (dataToBeUpdated: IVariableDTO): void => {
+      setState(
+        produce((slice: IWorkspaceSlice) => {
+          const { scope } = dataToBeUpdated
+          if (scope === 'global') {
+            const index = slice.projectData.globalVariables.findIndex(
+              (variable) => variable.name === dataToBeUpdated.data.name,
+            )
+            if (index !== -1) {
+              slice.projectData.globalVariables[index] = dataToBeUpdated.data
+            }
+          } else if (scope === 'local' && dataToBeUpdated.associatedPou) {
+            const pou = slice.projectData.pous.find((pou) => pou.data.name === dataToBeUpdated.associatedPou)
+            if (pou) {
+              const index = pou.data.variables.findIndex((variable) => variable.name === dataToBeUpdated.data.name)
+              if (index !== -1) {
+                pou.data.variables[index] = dataToBeUpdated.data
+              }
+            } else {
+              console.error(`Pou ${dataToBeUpdated.associatedPou} not found`)
             }
           } else {
             console.error(`Scope ${scope} not found or invalid params`)
