@@ -14,6 +14,7 @@ const VariablesEditor = () => {
   const {
     editor: { name },
     projectData: { pous },
+    workspaceActions: { createVariable },
   } = useOpenPLCStore()
   const [filterValue, setFilterValue] = useState('filter')
   const [tableData, setTableData] = useState<IVariable[]>([])
@@ -32,6 +33,22 @@ const VariablesEditor = () => {
     const variablesToTable = pous.filter((pou) => pou.data.name === name)[0].data.variables
     setTableData(variablesToTable)
   }, [name, pous])
+
+  const handleCreateVariable = () => {
+    createVariable({
+      scope: 'local',
+      associatedPou: name,
+      data: {
+        id: 0,
+        name: 'new-variable',
+        debug: false,
+        type: { scope: 'base-type', value: 'string' },
+        class: 'input',
+        location: '',
+        documentation: '',
+      },
+    })
+  }
 
   return (
     <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
@@ -96,7 +113,7 @@ const VariablesEditor = () => {
             <div
               aria-label='Add table row button'
               className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => console.log('Button clicked')}
+              onClick={() => handleCreateVariable()}
             >
               <PlusIcon className='!stroke-brand' />
             </div>

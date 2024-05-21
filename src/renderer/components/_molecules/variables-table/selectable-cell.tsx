@@ -45,7 +45,7 @@ const VariableTypes = [
 const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
   const { value } = getValue<IVariable['type']>()
   // We need to keep and update the state of the cell normally
-  const [cellValue, setCellValue] = useState(value)
+  const [cellValue, setCellValue] = useState<IVariable['type']['value']>(value)
 
   // When the input is blurred, we'll call our table meta's updateData function
   const _onBlur = () => {
@@ -57,12 +57,13 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
   useEffect(() => {
     setCellValue(value)
   }, [value])
+
   return (
     <PrimitiveDropdown.Root>
       <PrimitiveDropdown.Trigger asChild>
         <div className='flex h-full w-full cursor-pointer justify-center outline-none'>
           <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-            {cellValue as string}
+            {cellValue === null ? '' : (cellValue as unknown as string)}
           </span>
         </div>
       </PrimitiveDropdown.Trigger>

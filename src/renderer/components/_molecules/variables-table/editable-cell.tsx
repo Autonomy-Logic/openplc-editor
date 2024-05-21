@@ -40,9 +40,9 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: I
 }
 
 const EditableDocumentationCell = ({ getValue, row: { index }, column: { id }, table }: IEditableCellProps) => {
-  const initialValue = getValue<string>()
+  const initialValue = getValue<string | undefined>()
   // We need to keep and update the state of the cell normally
-  const [cellValue, setCellValue] = useState(initialValue)
+  const [cellValue, setCellValue] = useState(initialValue ?? '')
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = () => {
@@ -51,7 +51,7 @@ const EditableDocumentationCell = ({ getValue, row: { index }, column: { id }, t
   }
   // If the initialValue is changed external, sync it up with our state
   useEffect(() => {
-    setCellValue(initialValue)
+    if (initialValue) setCellValue(initialValue)
   }, [initialValue])
 
   return (
