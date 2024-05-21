@@ -1,9 +1,9 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
+import { type IVariable } from '@root/types/PLC'
 import { type CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
-import { type IVariable } from '.'
 
 declare module '@tanstack/react-table' {
   // This is a helper interface that adds the `updateData` property to the table meta.
@@ -73,7 +73,7 @@ const EditableDocumentationCell = ({ getValue, row: { index }, column: { id }, t
             onChange={(e) => setCellValue(e.target.value)}
             onBlur={onBlur}
             rows={5}
-            className='w-full max-w-[375px] flex-1 resize-none bg-transparent text-start outline-none'
+            className='w-full max-w-[375px] flex-1 resize-none bg-transparent text-start text-neutral-900 outline-none dark:text-neutral-100'
           />
         </PrimitivePopover.Content>
       </PrimitivePopover.Portal>

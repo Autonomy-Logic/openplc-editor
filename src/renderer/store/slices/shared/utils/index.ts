@@ -30,6 +30,17 @@ const CreatePouObject = ({ type, name, language }: IPouProps): ICreatedPouObject
           language,
           body: `This is the body of ${name}`,
           returnType: 'BOOL',
+          variables: [
+            {
+              id: 0,
+              name: 'Variable test',
+              class: 'input',
+              type: { scope: 'base-type', value: 'bool' },
+              location: '%123',
+              debug: false,
+              documentation: 'Doc for var 1',
+            },
+          ],
         },
       }
     case 'function-block':
@@ -39,6 +50,7 @@ const CreatePouObject = ({ type, name, language }: IPouProps): ICreatedPouObject
           name: name,
           language,
           body: `This is the body of ${name}`,
+          variables: [],
         },
       }
     case 'program':
@@ -48,6 +60,17 @@ const CreatePouObject = ({ type, name, language }: IPouProps): ICreatedPouObject
           name: name,
           language,
           body: `This is the body of ${name}`,
+          variables: [
+            {
+              id: 0,
+              name: 'Variable test',
+              class: 'input',
+              type: { scope: 'base-type', value: 'bool' },
+              location: '%123',
+              debug: false,
+              documentation: 'Doc for var 1',
+            },
+          ],
         },
       }
   }

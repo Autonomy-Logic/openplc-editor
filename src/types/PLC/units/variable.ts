@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 import { dataTypeSchema } from './data-type'
 
-const variableShape = z.object({
+const variableSchema = z.object({
   id: z.number(),
   name: z.string(),
   class: z.enum(['input', 'output', 'inOut', 'external', 'local', 'temp']),
@@ -70,11 +70,11 @@ const variableShape = z.object({
     }),
   ]),
   location: z.string().optional(),
-  initialValue: z.string().optional(),
+  // initialValue: z.string().optional(),
   documentation: z.string().optional(),
   debug: z.boolean().default(false),
 })
 
-type IVariable = z.infer<typeof variableShape>
+type IVariable = z.infer<typeof variableSchema>
 
-export { IVariable, variableShape }
+export { IVariable, variableSchema }

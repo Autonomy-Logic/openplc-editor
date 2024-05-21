@@ -1,5 +1,6 @@
 import * as PrimitiveSelect from '@radix-ui/react-select'
 import { ArrowIcon } from '@root/renderer/assets'
+import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, ElementRef, forwardRef, ReactElement } from 'react'
 
 const Select = PrimitiveSelect.Root
@@ -76,4 +77,23 @@ const SelectItem = forwardRef<ElementRef<typeof PrimitiveSelect.Item>, ISelectIt
   },
 )
 
-export { Select, SelectContent, SelectItem, SelectTrigger }
+const SelectGroup = PrimitiveSelect.Group
+
+const SelectSeparator = () => <PrimitiveSelect.Separator className='m-[5px] h-px bg-brand' />
+
+type ISelectLabelProps = ComponentPropsWithoutRef<typeof PrimitiveSelect.Label>
+
+const SelectLabel = forwardRef<ElementRef<typeof PrimitiveSelect.Label>, ISelectLabelProps>(
+  ({ className, ...res }, forwardedRef) => {
+    return (
+      <PrimitiveSelect.Label
+        className={cn('text-center font-caption text-xs font-medium text-neutral-700 dark:text-white', className)}
+        {...res}
+        ref={forwardedRef}
+      >
+        {res.children}
+      </PrimitiveSelect.Label>
+    )
+  },
+)
+export { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger }

@@ -2,13 +2,21 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { IVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 import { VariablesTable } from '../../_molecules'
+
 const VariablesEditor = () => {
+  const {
+    editor: { name },
+    projectData: { pous },
+  } = useOpenPLCStore()
   const [filterValue, setFilterValue] = useState('filter')
+  const [tableData, setTableData] = useState<IVariable[]>([])
   const [visualizationType, setVisualizationType] = useState<'code' | 'table'>('table')
 
   const FilterOptions = ['local', 'input', 'output', 'inOut', 'external', 'temp']
@@ -19,6 +27,11 @@ const VariablesEditor = () => {
     },
     [visualizationType],
   )
+
+  useEffect(() => {
+    const variablesToTable = pous.filter((pou) => pou.data.name === name)[0].data.variables
+    setTableData(variablesToTable)
+  }, [name, pous])
 
   return (
     <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
@@ -137,7 +150,7 @@ const VariablesEditor = () => {
           />
         </div>
       </div>
-      <VariablesTable />
+      <VariablesTable tableData={tableData} />
     </div>
   )
 }
