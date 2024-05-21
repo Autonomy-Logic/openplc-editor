@@ -87,7 +87,7 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
   }
 
   return (
-    <div className=' h-full w-full'>
+    <div className='  w-full'>
       <Chart width={'100%'} options={chartData.options} series={chartData.series} height='105px' type='line' />
       <div className=' text-cp-base font-semibold text-black dark:text-neutral-50'>
         {value ? (

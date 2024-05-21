@@ -17,22 +17,22 @@ export default function Debugger() {
     }
   }
   return (
-    <div className='w-full h-full'>
-      <div className='flex h-full w-full flex-col gap-2  rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
+    <div className='h-full w-full'>
+      <div className='flex w-full flex-col gap-2  rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
         <div className='header flex justify-between '>
           <div className='flex gap-4'>
-            <button className='bg-inherit flex h-7 w-[133px] items-center justify-center gap-2 rounded-md bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
+            <button className='flex h-7 w-[133px] items-center justify-center gap-2 rounded-md bg-inherit bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
               <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
             </button>
             <div className='flex gap-2'>
               <input
                 type='text'
                 onChange={(e) => updateRange(Number(e.target.value))}
-                className='bg-inherit h-7 w-9 items-center rounded-md border dark:text-neutral-50 border-neutral-200  p-2 text-center text-cp-sm font-medium text-neutral-1000 outline-none '
+                className='h-7 w-9 items-center rounded-md border border-neutral-200 bg-inherit p-2  text-center text-cp-sm font-medium text-neutral-1000 outline-none dark:text-neutral-50 '
               />
-              <select className='bg-inherit h-7 w-[88px] rounded-md border dark:text-neutral-50 border-neutral-200 outline-none'>
+              <select className='h-7 w-[88px] rounded-md border border-neutral-200 bg-inherit outline-none dark:text-neutral-50'>
                 <option value='seconds'>seconds</option>
-              </select> 
+              </select>
             </div>
           </div>
 
@@ -41,7 +41,10 @@ export default function Debugger() {
           </div>
         </div>
         <div className='chart-content  h-full w-full  gap-2 overflow-hidden'>
-          <div className='flex w-full justify-between p-2 text-cp-base font-semibold text-neutral-1000 dark:text-neutral-50'>
+          <LineGraph isPaused={isPaused} range={range} value={data} setData={setData} />
+        </div>
+      </div>
+      <div className='flex w-full justify-between p-2 text-cp-base font-semibold text-neutral-1000 dark:text-neutral-50'>
             <div>
               <span>time</span>
               <p className='font-normal'>0m 0s 0ms</p>
@@ -51,9 +54,6 @@ export default function Debugger() {
               <p className='font-normal'>0</p>
             </div>
           </div>
-          <LineGraph isPaused={isPaused} range={range} value={data} setData={setData} />
-        </div>
-      </div>
     </div>
   )
 }
