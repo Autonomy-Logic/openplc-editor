@@ -1,9 +1,9 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
+import { type IVariable } from '@root/types/PLC'
 import { type CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
-import { type IVariable } from '.'
 
 declare module '@tanstack/react-table' {
   // This is a helper interface that adds the `updateData` property to the table meta.
@@ -40,9 +40,9 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: I
 }
 
 const EditableDocumentationCell = ({ getValue, row: { index }, column: { id }, table }: IEditableCellProps) => {
-  const initialValue = getValue<string>()
+  const initialValue = getValue<string | undefined>()
   // We need to keep and update the state of the cell normally
-  const [cellValue, setCellValue] = useState(initialValue)
+  const [cellValue, setCellValue] = useState(initialValue ?? '')
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = () => {
@@ -51,7 +51,7 @@ const EditableDocumentationCell = ({ getValue, row: { index }, column: { id }, t
   }
   // If the initialValue is changed external, sync it up with our state
   useEffect(() => {
-    setCellValue(initialValue)
+    if (initialValue) setCellValue(initialValue)
   }, [initialValue])
 
   return (
@@ -73,7 +73,7 @@ const EditableDocumentationCell = ({ getValue, row: { index }, column: { id }, t
             onChange={(e) => setCellValue(e.target.value)}
             onBlur={onBlur}
             rows={5}
-            className='w-full max-w-[375px] flex-1 resize-none bg-transparent text-start outline-none'
+            className='w-full max-w-[375px] flex-1 resize-none bg-transparent text-start text-neutral-900 outline-none dark:text-neutral-100'
           />
         </PrimitivePopover.Content>
       </PrimitivePopover.Portal>

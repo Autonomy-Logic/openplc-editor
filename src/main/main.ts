@@ -19,8 +19,10 @@ import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { ProjectService } from './services'
+import { EditorService, ProjectService, UserService } from './services'
 
+const _editorService = new EditorService()
+const _userService = new UserService()
 class AppUpdater {
   constructor() {
     log.transports.file.level = 'info'
@@ -185,6 +187,8 @@ const createMainWindow = async () => {
   /**
    * Add event listeners...
    */
+
+  mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
 
   // Handles the creation of the menu
   const menuBuilder = new MenuBuilder(mainWindow)

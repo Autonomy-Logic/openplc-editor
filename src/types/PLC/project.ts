@@ -4,6 +4,7 @@ import { dataTypeSchema } from './units/data-type'
 import { functionSchema } from './units/function'
 import { functionBlockSchema } from './units/function-block'
 import { programSchema } from './units/program'
+import { variableSchema } from './units/variable'
 
 const projectSchema = z.object({
   dataTypes: z.array(z.lazy(() => dataTypeSchema)),
@@ -23,7 +24,7 @@ const projectSchema = z.object({
       }),
     ]),
   ),
-  globalVariables: z.array(z.string()).optional(),
+  globalVariables: z.array(z.lazy(() => variableSchema)),
 })
 
 type IProject = z.infer<typeof projectSchema>
