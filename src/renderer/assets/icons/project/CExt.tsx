@@ -1,7 +1,7 @@
 import { cn } from '@utils/cn'
-import { ComponentProps } from 'react'
+import { ComponentPropsWithoutRef } from 'react'
 
-type ICExtIconProps = ComponentProps<'svg'> & {
+type ICExtIconProps = ComponentPropsWithoutRef<'svg'> & {
   size?: 'sm' | 'md' | 'lg'
 }
 
@@ -15,13 +15,13 @@ export const CExtIcon = (props: ICExtIconProps) => {
   const { className, size = 'sm', ...res } = props
   return (
     <svg
-      role='button'
       viewBox='0 0 28 28'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'
       className={cn(`${sizeClasses[size]}`, className)}
       {...res}
     >
+      <title>CExt Icon</title>
       <path
         d='M26 19.3333V11.1667C26 8.58934 23.851 6.5 21.2 6.5H18C16.9614 6.5 15.9509 6.1725 15.12 5.56667L12.88 3.93333C12.0491 3.3275 11.0386 3 10 3H6.8C4.14903 3 2 5.08934 2 7.66667V19.3333C2 21.9107 4.14903 24 6.8 24H21.2C23.851 24 26 21.9107 26 19.3333Z'
         fill='#023C97'

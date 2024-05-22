@@ -1,8 +1,9 @@
 import { z } from 'zod'
 
 const dataTypeSchema = z.object({
-  dataTypeName: z.string(),
-  derivationType: z.discriminatedUnion('type', [
+  id: z.number(),
+  name: z.string(),
+  derivation: z.discriminatedUnion('type', [
     z.object({
       type: z.literal('directly'),
       baseType: z.enum([

@@ -5,11 +5,11 @@ import { useNavigate } from 'react-router-dom'
 import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
-import { MonacoEditor } from '../components/_features/[workspace]/editor'
+import { DataTypeEditor } from '../components/_features/[workspace]/editor'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
-import { VariablesEditor } from '../components/_organisms/variables-editor'
+// import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
 
@@ -100,7 +100,8 @@ const WorkspaceScreen = () => {
                   defaultSize={75}
                   className='flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950'
                 >
-                  {tabs.length > 0 ? (
+                  <DataTypeEditor />
+                  {/* {tabs.length > 0 ? (
                     <ResizablePanelGroup
                       id='editorContentPanelGroup'
                       direction='vertical'
@@ -131,7 +132,7 @@ const WorkspaceScreen = () => {
                     <p className='mx-auto my-auto flex cursor-default select-none flex-col items-center gap-1 font-display text-xl font-medium'>
                       No tabs open
                     </p>
-                  )}
+                  )} */}
                 </ResizablePanel>
                 <ResizableHandle className='mt-2' />
                 <ResizablePanel

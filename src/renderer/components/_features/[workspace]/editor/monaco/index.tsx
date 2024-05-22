@@ -35,7 +35,7 @@ const MonacoEditor = (): ReturnType<typeof PrimitiveEditor> => {
 
   // console.log('Editor instance: ', editorRef.current?.getModel()?.uri.path)
   // console.log('Monaco instance: ', monacoRef.current?.editor.getEditors())
-  console.log('Pous ->', pous)
+  // console.log('Pous ->', pous)
 
   return (
     <PrimitiveEditor

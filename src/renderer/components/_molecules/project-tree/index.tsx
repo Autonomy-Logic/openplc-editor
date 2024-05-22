@@ -1,10 +1,14 @@
 import {
+  ArrayIcon,
   ArrowIcon,
+  CExtIcon,
   DataTypeIcon,
   DeviceIcon,
+  EnumIcon,
   FBDIcon,
   FunctionBlockIcon,
   FunctionIcon,
+  GenericIcon,
   ILIcon,
   LDIcon,
   PLCIcon,
@@ -12,6 +16,7 @@ import {
   ResourceIcon,
   SFCIcon,
   STIcon,
+  StructureIcon,
 } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
@@ -62,36 +67,54 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
 }
 
 type IProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
-  branchTarget: 'dataType' | 'function' | 'function-block' | 'program' | 'device'
+  isSubBranch?: boolean
+  branchTarget:
+    | 'data-type'
+    | 'function'
+    | 'function-block'
+    | 'program'
+    | 'device'
+    | 'array'
+    | 'enum'
+    | 'structure'
+    | 'generic-data-type'
   children?: ReactNode
 }
 
 const BranchSources = {
-  dataType: { BranchIcon: DataTypeIcon, label: 'Data Types' },
+  'data-type': { BranchIcon: DataTypeIcon, label: 'Data Types' },
   function: { BranchIcon: FunctionIcon, label: 'Functions' },
   'function-block': { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
   program: { BranchIcon: ProgramIcon, label: 'Programs' },
   device: { BranchIcon: DeviceIcon, label: 'Device' },
+  'generic-data-type': { BranchIcon: CExtIcon, label: 'Directly / Sub Range' },
+  array: { BranchIcon: ArrayIcon, label: 'Arrays' },
+  enum: { BranchIcon: EnumIcon, label: 'Enums' },
+  structure: { BranchIcon: StructureIcon, label: 'Structures' },
 }
-const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranchProps) => {
+const ProjectTreeBranch = ({ branchTarget, isSubBranch = false, children, ...res }: IProjectTreeBranchProps) => {
   const {
-    projectData: { pous },
+    projectData: { pous, dataTypes },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState(false)
-  const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-
   const { BranchIcon, label } = BranchSources[branchTarget]
+  const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
+  const hasAssociatedPouOrDataType = pous.some((pou) => pou.type === branchTarget) || dataTypes.length > 0
 
-  const hasAssociatedPOU = pous.some((pou) => pou.type === branchTarget)
-  useEffect(() => setBranchIsOpen(hasAssociatedPOU), [hasAssociatedPOU])
+  useEffect(() => setBranchIsOpen(hasAssociatedPouOrDataType), [hasAssociatedPouOrDataType])
 
   return (
-    <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
+    <li
+      aria-expanded={branchIsOpen}
+      className='cursor-pointer aria-expanded:cursor-default '
+      {...res}
+      data-branch={isSubBranch ? 'sub-branch' : 'branch'}
+    >
       <div
         className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
-        onClick={hasAssociatedPOU ? handleBranchVisibility : undefined}
+        onClick={hasAssociatedPouOrDataType ? handleBranchVisibility : undefined}
       >
-        {hasAssociatedPOU ? (
+        {hasAssociatedPouOrDataType ? (
           <ArrowIcon
             direction='right'
             className={cn(
@@ -138,10 +161,10 @@ const LeafSources = {
   fbd: { LeafIcon: FBDIcon },
   sfc: { LeafIcon: SFCIcon },
   ld: { LeafIcon: LDIcon },
-  dt: { LeafIcon: DataTypeIcon },
+  dt: { LeafIcon: GenericIcon },
   res: { LeafIcon: ResourceIcon },
 }
-const ProjectTreeLeaf = ({ leafLang, label = 'Data Type', ...res }: IProjectTreeLeafProps) => {
+const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => {
   const {
     editor: { name },
   } = useOpenPLCStore()

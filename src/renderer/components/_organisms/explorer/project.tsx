@@ -8,7 +8,7 @@ import { CreatePou } from '../../_features/[workspace]/create-pou'
 
 const Project = () => {
   const {
-    projectData: { pous },
+    projectData: { pous, dataTypes },
     tabsActions: { updateTabs },
     editorActions: { setEditor },
   } = useOpenPLCStore()
@@ -50,7 +50,52 @@ const Project = () => {
       </div>
       {/* Data display */}
       <ProjectTreeRoot label={Name}>
-        <ProjectTreeBranch branchTarget='dataType' />
+        <ProjectTreeBranch branchTarget='data-type'>
+          <ProjectTreeBranch branchTarget='generic-data-type' isSubBranch>
+            {dataTypes
+              ?.filter(({ derivation }) => derivation.type === 'directly' || derivation.type === 'sub-range')
+              .map(({ id, name }) => <ProjectTreeLeaf key={id} leafLang='dt' label={name} />)}
+          </ProjectTreeBranch>
+          <ProjectTreeBranch branchTarget='array' isSubBranch>
+            {dataTypes
+              ?.filter(({ derivation }) => derivation.type === 'array')
+              .map(({ id, name }) => (
+                <ProjectTreeLeaf
+                  key={id}
+                  leafLang='dt'
+                  label={name}
+                  /** Todo: Update the tab state */
+                  // onClick={() => handleCreateTab('array', data.name, data.language)}
+                />
+              ))}
+          </ProjectTreeBranch>
+          <ProjectTreeBranch branchTarget='enum' isSubBranch>
+            {dataTypes
+              ?.filter(({ derivation }) => derivation.type === 'enumerated')
+              .map(({ id, name }) => (
+                <ProjectTreeLeaf
+                  key={id}
+                  leafLang='dt'
+                  label={name}
+                  /** Todo: Update the tab state */
+                  // onClick={() => handleCreateTab('enum', data.name, data.language)}
+                />
+              ))}
+          </ProjectTreeBranch>
+          <ProjectTreeBranch branchTarget='structure' isSubBranch>
+            {dataTypes
+              ?.filter(({ derivation }) => derivation.type === 'structure')
+              .map(({ id, name }) => (
+                <ProjectTreeLeaf
+                  key={id}
+                  leafLang='dt'
+                  label={name}
+                  /** Todo: Update the tab state */
+                  // onClick={() => handleCreateTab('structure', data.name, data.language)}
+                />
+              ))}
+          </ProjectTreeBranch>
+        </ProjectTreeBranch>
         <ProjectTreeBranch branchTarget='function'>
           {pous
             ?.filter(({ type }) => type === 'function')
