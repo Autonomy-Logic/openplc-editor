@@ -73,7 +73,7 @@ const Card = (props: ICardProps): ReactNode => {
         <Popover.Content id={`create-${target}-content`} sideOffset={14} alignOffset={-7} align='start' side='right'>
           <div
             id='pou-card-root'
-            className='flex h-fit w-[225px] flex-col gap-3 rounded-lg border border-brand-light bg-white p-2 px-3 pb-3 pt-2 drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+            className='flex h-fit w-[225px] flex-col gap-3 rounded-lg border border-brand-light bg-white px-3 pb-3 pt-2 drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
           >
             <div id='pou-card-label-container' className='flex h-8 w-full flex-col items-center justify-between'>
               <div className='flex w-full select-none items-center gap-2'>

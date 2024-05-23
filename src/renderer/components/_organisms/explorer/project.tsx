@@ -51,11 +51,6 @@ const Project = () => {
       {/* Data display */}
       <ProjectTreeRoot label={Name}>
         <ProjectTreeBranch branchTarget='data-type'>
-          <ProjectTreeBranch branchTarget='generic-data-type' isSubBranch>
-            {dataTypes
-              ?.filter(({ derivation }) => derivation.type === 'directly' || derivation.type === 'sub-range')
-              .map(({ id, name }) => <ProjectTreeLeaf key={id} leafLang='dt' label={name} />)}
-          </ProjectTreeBranch>
           <ProjectTreeBranch branchTarget='array' isSubBranch>
             {dataTypes
               ?.filter(({ derivation }) => derivation.type === 'array')

@@ -1,7 +1,6 @@
 import {
   ArrayIcon,
   ArrowIcon,
-  CExtIcon,
   DataTypeIcon,
   DeviceIcon,
   EnumIcon,
@@ -68,16 +67,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
 
 type IProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
   isSubBranch?: boolean
-  branchTarget:
-    | 'data-type'
-    | 'function'
-    | 'function-block'
-    | 'program'
-    | 'device'
-    | 'array'
-    | 'enum'
-    | 'structure'
-    | 'generic-data-type'
+  branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'device' | 'array' | 'enum' | 'structure'
   children?: ReactNode
 }
 
@@ -87,7 +77,6 @@ const BranchSources = {
   'function-block': { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
   program: { BranchIcon: ProgramIcon, label: 'Programs' },
   device: { BranchIcon: DeviceIcon, label: 'Device' },
-  'generic-data-type': { BranchIcon: CExtIcon, label: 'Directly / Sub Range' },
   array: { BranchIcon: ArrayIcon, label: 'Arrays' },
   enum: { BranchIcon: EnumIcon, label: 'Enums' },
   structure: { BranchIcon: StructureIcon, label: 'Structures' },
