@@ -212,5 +212,5 @@
 
 .apexcharts-yaxis-label tspan,
 .apexcharts-xaxis-label tspan {
-  @apply fill-neutral-1000 dark:fill-neutral-50;
+  @apply fill-neutral-1000 dark:fill-neutral-50 !text-[10px];
 }

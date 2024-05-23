@@ -9,7 +9,7 @@ type IHeaderProps = {
 
 const Header = ({ isPaused, setIsPaused }: IHeaderProps) => {
   return (
-    <div className='header flex justify-between '>
+    <div className='header  flex justify-between '>
       <div className='flex gap-4'>
         <Button
           onClick={() => setIsPaused(!isPaused)}

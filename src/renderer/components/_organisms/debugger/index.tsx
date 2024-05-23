@@ -17,13 +17,13 @@ export default function Debugger() {
     }
   }
   return (
-    <div className='h-full w-full'>
+    <div className='h-full w-full text-cp-sm'>
       <div className='flex w-full flex-col rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
-        <div className='header flex justify-between '>
+        <div className='header  flex justify-between '>
           <div className='flex gap-4'>
-            <button className='flex h-7 w-[133px] items-center justify-center gap-2 rounded-md bg-inherit bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
+            <div className='flex h-7 w-[133px] items-center justify-center gap-2 rounded-md bg-inherit select-none bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
               <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
-            </button>
+            </div>
             <div className='flex gap-2'>
               <input
                 type='text'
