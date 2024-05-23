@@ -1,4 +1,4 @@
-import { IFunction, IFunctionBlock, IProgram } from '@root/types/PLC'
+import { IDatatype, IFunction, IFunctionBlock, IProgram } from '@root/types/PLC'
 
 type IPouProps = {
   type: 'program' | 'function' | 'function-block'
@@ -107,4 +107,36 @@ const CreateTabObject = ({ name, language, type }: IPouProps): ICreatedTabObject
   }
 }
 
-export { CreateEditorObject, CreatePouObject, CreateTabObject }
+const CreateDatatypeObject = (derivation: 'enum' | 'struct' | 'array'): IDatatype => {
+  switch (derivation) {
+    case 'array':
+      return {
+        id: 0,
+        name: 'New array datatype',
+        derivation: {
+          type: 'array',
+          baseType: 'bool',
+          dimensions: [],
+        },
+      }
+    case 'enum':
+      return {
+        id: 0,
+        name: 'New enum datatype',
+        derivation: {
+          type: 'enumerated',
+          values: [],
+        },
+      }
+    case 'struct':
+      return {
+        id: 0,
+        name: 'New structure datatype',
+        derivation: {
+          type: 'structure',
+          elements: [],
+        },
+      }
+  }
+}
+export { CreateDatatypeObject, CreateEditorObject, CreatePouObject, CreateTabObject }

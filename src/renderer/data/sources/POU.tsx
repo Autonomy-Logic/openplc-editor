@@ -1,4 +1,5 @@
 import {
+  DataTypeIcon,
   FBDIcon,
   FunctionBlockIcon,
   FunctionIcon,
@@ -39,6 +40,7 @@ const CreatePouSources = {
   function: <FunctionIcon size='sm' />,
   'function-block': <FunctionBlockIcon size='sm' />,
   program: <ProgramIcon size='sm' />,
+  'data-type': <DataTypeIcon size='sm' />,
 }
 
 export { CreatePouSources, PouLanguageSources }

@@ -83,12 +83,12 @@ const BranchSources = {
 }
 const ProjectTreeBranch = ({ branchTarget, isSubBranch = false, children, ...res }: IProjectTreeBranchProps) => {
   const {
-    projectData: { pous, dataTypes },
+    projectData: { pous },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState(false)
   const { BranchIcon, label } = BranchSources[branchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-  const hasAssociatedPouOrDataType = pous.some((pou) => pou.type === branchTarget) || dataTypes.length > 0
+  const hasAssociatedPouOrDataType = pous.some((pou) => pou.type === branchTarget)
 
   useEffect(() => setBranchIsOpen(hasAssociatedPouOrDataType), [hasAssociatedPouOrDataType])
 
@@ -100,7 +100,10 @@ const ProjectTreeBranch = ({ branchTarget, isSubBranch = false, children, ...res
       data-branch={isSubBranch ? 'sub-branch' : 'branch'}
     >
       <div
-        className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
+        className={cn(
+          'flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900',
+          isSubBranch && 'ml-4',
+        )}
         onClick={hasAssociatedPouOrDataType ? handleBranchVisibility : undefined}
       >
         {hasAssociatedPouOrDataType ? (

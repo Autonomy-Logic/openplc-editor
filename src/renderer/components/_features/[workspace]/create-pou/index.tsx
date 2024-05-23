@@ -6,7 +6,12 @@ import { Card } from './card'
 
 const CreatePou = () => {
   const [isContainerOpen, setIsContainerOpen] = useState(false)
-  const CreatePouTypes: ('function' | 'function-block' | 'program')[] = ['function', 'function-block', 'program']
+  const CreatePouTypes: ('function' | 'function-block' | 'program' | 'data-type')[] = [
+    'function',
+    'function-block',
+    'program',
+    'data-type',
+  ]
 
   return (
     <Popover.Root onOpenChange={setIsContainerOpen} open={isContainerOpen}>

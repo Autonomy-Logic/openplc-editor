@@ -1,6 +1,12 @@
-import { IFunction, IFunctionBlock, IProgram, IProject, IVariable } from '@root/types/PLC/index'
+import { IDatatype, IFunction, IFunctionBlock, IProgram, IProject, IVariable } from '@root/types/PLC/index'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
+
+// type IDatatypeDTO = {
+//   id: number
+//   name: string
+//   derivation: 'enum' | 'struct' | 'array'
+// }
 
 type IVariableDTO = {
   scope: 'global' | 'local'
@@ -51,6 +57,7 @@ type IWorkspaceActions = {
   deletePou: (pouToBeDeleted: string) => void
   createVariable: (variableToBeCreated: IVariableDTO) => void
   updateVariable: (dataToBeUpdated: IVariableDTO) => void
+  createDatatype: (dataToCreate: IDatatype) => void
 }
 
 type IWorkspaceSlice = IWorkspaceState & {
@@ -195,6 +202,19 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
             }
           } else {
             console.error(`Scope ${scope} not found or invalid params`)
+          }
+        }),
+      )
+    },
+    createDatatype: (dataToCreate: IDatatype) => {
+      setState(
+        produce((slice: IWorkspaceSlice) => {
+          const { name } = dataToCreate
+          const dataExists = slice.projectData.dataTypes.find((datatype) => datatype.name === name)
+          if (!dataExists) {
+            slice.projectData.dataTypes.push(dataToCreate)
+          } else {
+            console.error(`Datatype ${name} already exists`)
           }
         }),
       )
