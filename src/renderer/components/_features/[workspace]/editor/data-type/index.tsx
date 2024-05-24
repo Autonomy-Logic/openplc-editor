@@ -3,7 +3,11 @@ import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '
 
 import { DataTypeActions } from './actions'
 
-const DataTypeEditor = () => {
+type IDataTypeEditorProps = {
+  derivation: 'enum' | 'struct' | 'array'
+}
+const DataTypeEditor = (props: IDataTypeEditorProps) => {
+  const { derivation } = props
   return (
     <div aria-label='Data type editor container' className='flex h-full w-full flex-col items-center p-2'>
       <div
@@ -86,7 +90,7 @@ const DataTypeEditor = () => {
           {/* <div aria-label='Data type content actions container'></div> */}
         </div>
         <div aria-label='Data type content editor container'>
-          <DataTypeActions _derivation='array' />
+          <DataTypeActions _derivation={derivation} />
         </div>
       </div>
     </div>

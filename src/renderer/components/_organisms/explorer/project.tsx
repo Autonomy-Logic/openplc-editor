@@ -1,4 +1,9 @@
-import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '@components/_molecules/project-tree'
+import {
+  ProjectTreeBranch,
+  ProjectTreeLeaf,
+  ProjectTreeNestedBranch,
+  ProjectTreeRoot,
+} from '@components/_molecules/project-tree'
 import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { ITabProps } from '@root/renderer/store/slices'
@@ -29,7 +34,7 @@ const Project = () => {
   }
 
   return (
-    <div className='max-w-[184px]'>
+    <div className='w-full'>
       {/* Actions handler */}
       <div id='project-actions-container' className='relative z-10 my-3 flex w-[200px] justify-around px-2'>
         <div
@@ -51,11 +56,12 @@ const Project = () => {
       {/* Data display */}
       <ProjectTreeRoot label={Name}>
         <ProjectTreeBranch branchTarget='data-type'>
-          <ProjectTreeBranch branchTarget='array' isSubBranch>
+          <ProjectTreeNestedBranch nestedBranchTarget='array'>
             {dataTypes
               ?.filter(({ derivation }) => derivation.type === 'array')
               .map(({ id, name }) => (
                 <ProjectTreeLeaf
+                  nested
                   key={id}
                   leafLang='dt'
                   label={name}
@@ -63,12 +69,13 @@ const Project = () => {
                   // onClick={() => handleCreateTab('array', data.name, data.language)}
                 />
               ))}
-          </ProjectTreeBranch>
-          <ProjectTreeBranch branchTarget='enum' isSubBranch>
+          </ProjectTreeNestedBranch>
+          <ProjectTreeNestedBranch nestedBranchTarget='enum'>
             {dataTypes
               ?.filter(({ derivation }) => derivation.type === 'enumerated')
               .map(({ id, name }) => (
                 <ProjectTreeLeaf
+                  nested
                   key={id}
                   leafLang='dt'
                   label={name}
@@ -76,12 +83,13 @@ const Project = () => {
                   // onClick={() => handleCreateTab('enum', data.name, data.language)}
                 />
               ))}
-          </ProjectTreeBranch>
-          <ProjectTreeBranch branchTarget='structure' isSubBranch>
+          </ProjectTreeNestedBranch>
+          <ProjectTreeNestedBranch nestedBranchTarget='structure'>
             {dataTypes
               ?.filter(({ derivation }) => derivation.type === 'structure')
               .map(({ id, name }) => (
                 <ProjectTreeLeaf
+                  nested
                   key={id}
                   leafLang='dt'
                   label={name}
@@ -89,7 +97,7 @@ const Project = () => {
                   // onClick={() => handleCreateTab('structure', data.name, data.language)}
                 />
               ))}
-          </ProjectTreeBranch>
+          </ProjectTreeNestedBranch>
         </ProjectTreeBranch>
         <ProjectTreeBranch branchTarget='function'>
           {pous

@@ -66,8 +66,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
 }
 
 type IProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
-  isSubBranch?: boolean
-  branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'device' | 'array' | 'enum' | 'structure'
+  branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'device'
   children?: ReactNode
 }
 
@@ -77,36 +76,94 @@ const BranchSources = {
   'function-block': { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
   program: { BranchIcon: ProgramIcon, label: 'Programs' },
   device: { BranchIcon: DeviceIcon, label: 'Device' },
-  array: { BranchIcon: ArrayIcon, label: 'Arrays' },
-  enum: { BranchIcon: EnumIcon, label: 'Enums' },
-  structure: { BranchIcon: StructureIcon, label: 'Structures' },
 }
-const ProjectTreeBranch = ({ branchTarget, isSubBranch = false, children, ...res }: IProjectTreeBranchProps) => {
+const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranchProps) => {
   const {
-    projectData: { pous },
+    projectData: { pous, dataTypes },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState(false)
   const { BranchIcon, label } = BranchSources[branchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-  const hasAssociatedPouOrDataType = pous.some((pou) => pou.type === branchTarget)
-
-  useEffect(() => setBranchIsOpen(hasAssociatedPouOrDataType), [hasAssociatedPouOrDataType])
+  const hasAssociatedPou =
+    pous.some((pou) => pou.type === branchTarget) || (branchTarget === 'data-type' && dataTypes.length > 0)
+  useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
 
   return (
     <li
       aria-expanded={branchIsOpen}
       className='cursor-pointer aria-expanded:cursor-default '
       {...res}
-      data-branch={isSubBranch ? 'sub-branch' : 'branch'}
+      // data-branch={isSubBranch ? 'sub-branch' : 'branch'}
     >
       <div
-        className={cn(
-          'flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900',
-          isSubBranch && 'ml-4',
-        )}
-        onClick={hasAssociatedPouOrDataType ? handleBranchVisibility : undefined}
+        className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
+        onClick={hasAssociatedPou ? handleBranchVisibility : undefined}
       >
-        {hasAssociatedPouOrDataType ? (
+        {hasAssociatedPou ? (
+          <ArrowIcon
+            direction='right'
+            className={cn(
+              `mr-[6px] h-4 w-4 stroke-brand-light transition-all ${branchIsOpen && 'rotate-270 stroke-brand'}`,
+            )}
+          />
+        ) : (
+          <div className='w-[22px]' />
+        )}
+        <BranchIcon />
+        <span
+          className={cn(
+            'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+            branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
+          )}
+        >
+          {label}
+        </span>
+      </div>
+
+      {children && branchIsOpen && (
+        <div>
+          <ul>
+            {children && (
+              <div>
+                <ul className='list-none p-0'>{children}</ul>
+              </div>
+            )}
+          </ul>
+        </div>
+      )}
+    </li>
+  )
+}
+
+// 'ml-4',
+
+type IProjectTreeNestedBranchProps = ComponentPropsWithoutRef<'li'> & {
+  nestedBranchTarget: 'array' | 'enum' | 'structure'
+  children?: ReactNode
+}
+
+const NestedBranchSources = {
+  array: { BranchIcon: ArrayIcon, label: 'Arrays' },
+  enum: { BranchIcon: EnumIcon, label: 'Enums' },
+  structure: { BranchIcon: StructureIcon, label: 'Structures' },
+}
+const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProjectTreeNestedBranchProps) => {
+  const {
+    projectData: { dataTypes },
+  } = useOpenPLCStore()
+  const [branchIsOpen, setBranchIsOpen] = useState(false)
+  const { BranchIcon, label } = NestedBranchSources[nestedBranchTarget]
+  const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
+  const hasAssociatedDataType = dataTypes.some((dataType) => dataType.derivation.type === nestedBranchTarget)
+  useEffect(() => setBranchIsOpen(hasAssociatedDataType), [hasAssociatedDataType])
+
+  return (
+    <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
+      <div
+        className='ml-4 flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
+        onClick={hasAssociatedDataType ? handleBranchVisibility : undefined}
+      >
+        {hasAssociatedDataType ? (
           <ArrowIcon
             direction='right'
             className={cn(
@@ -143,6 +200,7 @@ const ProjectTreeBranch = ({ branchTarget, isSubBranch = false, children, ...res
 }
 
 type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
+  nested?: boolean
   leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'dt' | 'res'
   label?: string
 }
@@ -156,7 +214,7 @@ const LeafSources = {
   dt: { LeafIcon: GenericIcon },
   res: { LeafIcon: ResourceIcon },
 }
-const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => {
+const ProjectTreeLeaf = ({ leafLang, label, nested = false, ...res }: IProjectTreeLeafProps) => {
   const {
     editor: { name },
   } = useOpenPLCStore()
@@ -169,6 +227,7 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
     <li
       className={cn(
         'ml-4 flex cursor-pointer flex-row items-center py-1 pl-4 hover:bg-slate-50 dark:hover:bg-neutral-900',
+        nested && 'ml-8',
         name === label && 'bg-slate-50 dark:bg-neutral-900',
       )}
       onClick={handleLeafSelection}
@@ -186,4 +245,4 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
     </li>
   )
 }
-export { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot }
+export { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeNestedBranch, ProjectTreeRoot }
