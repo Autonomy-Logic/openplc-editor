@@ -7,8 +7,8 @@ const programSchema = z.object({
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(z.lazy(() => variableSchema)),
-  body: z.string().optional(),
-  documentation: z.string().optional(),
+  body: z.string(),
+  documentation: z.string(),
 })
 
 type IProgram = z.infer<typeof programSchema>

@@ -8,8 +8,8 @@ const functionSchema = z.object({
   returnType: z.enum(['BOOL', 'INT', 'DINT']),
   /** Array of variable - will be implemented */
   variables: z.array(z.lazy(() => variableSchema)),
-  body: z.string().optional(),
-  documentation: z.string().optional(),
+  body: z.string(),
+  documentation: z.string(),
 })
 
 type IFunction = z.infer<typeof functionSchema>

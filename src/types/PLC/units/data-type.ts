@@ -37,9 +37,9 @@ const dataTypeSchema = z.object({
     /** This enumerated needs to be reviewed */
     z.object({
       type: z.literal('enumerated'),
-      values: z.array(z.string()).optional(),
+      values: z.array(z.string()),
       /** The initial value must be one of the values created */
-      initialValue: z.string().optional(),
+      initialValue: z.string(),
     }),
     /** This structure needs to be reviewed */
     z.object({

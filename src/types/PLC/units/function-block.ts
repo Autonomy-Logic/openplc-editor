@@ -7,8 +7,8 @@ const functionBlockSchema = z.object({
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(z.lazy(() => variableSchema)),
-  body: z.string().optional(),
-  documentation: z.string().optional(),
+  body: z.string(),
+  documentation: z.string(),
 })
 
 type IFunctionBlock = z.infer<typeof functionBlockSchema>
