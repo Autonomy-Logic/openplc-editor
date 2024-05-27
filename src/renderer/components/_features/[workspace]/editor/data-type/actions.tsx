@@ -2,7 +2,7 @@ import { MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 
 type IDataTypeActionsProps = {
-  _derivation: 'enum' | 'struct' | 'array'
+  derivation: 'enumerated' | 'structure' | 'array'
 }
 
 const ArrayTableActions = () => {
@@ -299,13 +299,13 @@ const StructTableActions = () => {
 }
 
 const DataTypeActions = (props: IDataTypeActionsProps) => {
-  const { _derivation } = props
+  const { derivation } = props
 
   return (
     <div className='flex flex-col gap-8'>
-      <ArrayTableActions />
-      <EnumTableActions />
-      <StructTableActions />
+      {derivation === 'array' && <ArrayTableActions />}
+      {derivation === 'enumerated' && <EnumTableActions />}
+      {derivation === 'structure' && <StructTableActions />}
     </div>
   )
 }

@@ -1,38 +1,80 @@
 import { StateCreator } from 'zustand'
 
-import { IEditorSlice } from '../editor-slice'
+import { EditorSlice } from '../editor'
 import { ITabsSlice } from '../tabs-slice'
 import { IWorkspaceSlice } from '../workspace-slice'
-import { CreateEditorObject, CreatePouObject, CreateTabObject } from './utils'
+import { CreateDatatypeObject, CreateEditorObject, CreatePouObject, CreateTabObject } from './utils'
 
-type IDataToCreatePou = {
+type PropsToCreatePou = {
   name: string
   type: 'program' | 'function' | 'function-block'
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
 }
+
+type _PropsToCreateDataType = {
+  name: string
+}
 export type ISharedSlice = {
   pouActions: {
-    create: (dataToCreatePou: IDataToCreatePou) => boolean
+    create: {
+      pou: (propsToCreatePou: PropsToCreatePou) => boolean
+      dataType: (derivation: 'enumerated' | 'structure' | 'array') => boolean
+    }
     update: () => void
     delete: () => void
   }
 }
 
-export const createSharedSlice: StateCreator<IEditorSlice & ITabsSlice & IWorkspaceSlice, [], [], ISharedSlice> = (
+export const createSharedSlice: StateCreator<EditorSlice & ITabsSlice & IWorkspaceSlice, [], [], ISharedSlice> = (
   _setState,
   getState,
 ) => ({
   pouActions: {
-    create: (dataToCreatePou: IDataToCreatePou) => {
-      try {
-        const res = getState().workspaceActions.createPou(CreatePouObject(dataToCreatePou))
-        if (!res.ok) throw new Error()
-        getState().editorActions.setEditor(CreateEditorObject(dataToCreatePou))
-        getState().tabsActions.updateTabs(CreateTabObject(dataToCreatePou))
-        return true
-      } catch (_error) {
+    create: {
+      pou: (propsToCreatePou: PropsToCreatePou) => {
+        if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
+          const res = getState().workspaceActions.createPou(CreatePouObject(propsToCreatePou))
+          if (!res.ok) throw new Error()
+          const data = CreateEditorObject({
+            type: 'plc-textual',
+            name: propsToCreatePou.name,
+            language: propsToCreatePou.language,
+            derivation: propsToCreatePou.type,
+          })
+          getState().editorActions.setEditor({ editor: data })
+          getState().tabsActions.updateTabs(CreateTabObject(propsToCreatePou))
+          return true
+        }
+
+        if (
+          propsToCreatePou.language === 'ld' ||
+          propsToCreatePou.language === 'sfc' ||
+          propsToCreatePou.language === 'fbd'
+        ) {
+          const res = getState().workspaceActions.createPou(CreatePouObject(propsToCreatePou))
+          if (!res.ok) throw new Error()
+          const data = CreateEditorObject({
+            type: 'plc-graphical',
+            name: propsToCreatePou.name,
+            language: propsToCreatePou.language,
+            derivation: propsToCreatePou.type,
+          })
+          getState().editorActions.setEditor({ editor: data })
+          getState().tabsActions.updateTabs(CreateTabObject(propsToCreatePou))
+          return true
+        }
         return false
-      }
+      },
+      dataType: (derivation: 'enumerated' | 'structure' | 'array') => {
+        getState().workspaceActions.createDatatype(CreateDatatypeObject(derivation))
+        const data = CreateEditorObject({
+          type: 'plc-datatype',
+          derivation,
+        })
+        getState().editorActions.setEditor({ editor: data })
+        // getState().tabsActions.updateTabs(CreateTabObject({ name: derivation, type: 'program', language: 'il' }))
+        return true
+      },
     },
     update: () => {},
     delete: () => {},

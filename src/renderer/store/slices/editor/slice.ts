@@ -1,23 +1,26 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import { IEditorData, IEditorSlice } from './types'
+import { EditorSlice, EditorState } from './types'
 
-export const createEditorSlice: StateCreator<IEditorSlice, [], [], IEditorSlice> = (setState) => ({
+export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> = (setState) => ({
   editor: {
     type: 'available',
+    meta: {
+      name: 'name as string',
+    },
   },
   editorActions: {
     setEditor: ({ editor }) =>
       setState(
-        produce((state: IEditorData) => {
+        produce((state: EditorState) => {
           state.editor = editor
         }),
       ),
     clearEditor: (): void =>
       setState(
-        produce((state: IEditorData) => {
-          state.editor = { type: 'available' }
+        produce((state: EditorState) => {
+          state.editor = { type: 'available', meta: { name: 'name as string' } }
         }),
       ),
   },

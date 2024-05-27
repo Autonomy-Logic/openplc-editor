@@ -9,7 +9,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { ITabProps } from '@root/renderer/store/slices'
 import { CreateEditorObject } from '@root/renderer/store/slices/shared/utils'
 
-import { CreatePou } from '../../_features/[workspace]/create-pou'
+import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
 const Project = () => {
   const {
@@ -49,8 +49,8 @@ const Project = () => {
             {Name}
           </span>
         </div>
-        <div id='create-pou-container'>
-          <CreatePou />
+        <div id='create-plc-container'>
+          <CreatePLCElement />
         </div>
       </div>
       {/* Data display */}

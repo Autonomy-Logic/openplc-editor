@@ -2,7 +2,8 @@ import { BrowserWindow, dialog } from 'electron'
 import { promises, readFile, writeFile } from 'fs'
 import { join } from 'path'
 
-import { IProject, projectSchema } from '../../../types/PLC'
+// import { projectSchema } from '../../../types/PLC'
+import { PLCProjectData, PLCProjectDataSchema } from '../../../types/PLC/test'
 import { i18n } from '../../../utils/i18n'
 import { store } from '../../modules/store' // This must be refactored
 import { baseJsonStructure } from './data'
@@ -19,7 +20,7 @@ export type IProjectServiceResponse = {
     meta: {
       path: string
     }
-    content: IProject
+    content: PLCProjectData
   }
 }
 
@@ -128,7 +129,7 @@ class ProjectService {
       }
     }
 
-    const parsedFile = projectSchema.safeParse(JSON.parse(file as string))
+    const parsedFile = PLCProjectDataSchema.safeParse(JSON.parse(file as string))
 
     if (!parsedFile.success) {
       return {
@@ -150,7 +151,7 @@ class ProjectService {
     }
   }
 
-  saveProject(data: { projectPath: string; projectData: IProject }): IProjectServiceResponse {
+  saveProject(data: { projectPath: string; projectData: PLCProjectData }): IProjectServiceResponse {
     const { projectPath, projectData } = data
     if (!projectPath || !projectData)
       return {

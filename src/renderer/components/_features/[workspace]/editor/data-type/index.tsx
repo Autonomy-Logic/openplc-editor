@@ -4,7 +4,7 @@ import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '
 import { DataTypeActions } from './actions'
 
 type IDataTypeEditorProps = {
-  derivation: 'enum' | 'struct' | 'array'
+  derivation: 'enumerated' | 'structure' | 'array'
 }
 const DataTypeEditor = (props: IDataTypeEditorProps) => {
   const { derivation } = props
@@ -90,7 +90,7 @@ const DataTypeEditor = (props: IDataTypeEditorProps) => {
           {/* <div aria-label='Data type content actions container'></div> */}
         </div>
         <div aria-label='Data type content editor container'>
-          <DataTypeActions _derivation={derivation} />
+          <DataTypeActions derivation={derivation} />
         </div>
       </div>
     </div>

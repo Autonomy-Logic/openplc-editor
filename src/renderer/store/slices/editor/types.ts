@@ -1,13 +1,16 @@
 import z from 'zod'
 
-/** This is a zod schema for the editor slice data.
+/** This is a zod schema for the editor slice state.
  * It is used to validate the editor data if needed,
  * in most cases you can use the type inferred from it.
  */
-const editorDataSchema = z.object({
+const editorStateSchema = z.object({
   editor: z.discriminatedUnion('type', [
     z.object({
       type: z.literal('available'),
+      meta: z.object({
+        name: z.string(),
+      }),
     }),
     z.object({
       type: z.literal('plc-textual'),
@@ -29,7 +32,7 @@ const editorDataSchema = z.object({
       type: z.literal('plc-datatype'),
       meta: z.object({
         name: z.string(),
-        derivation: z.enum(['enum', 'struct', 'array']),
+        derivation: z.enum(['enumerated', 'structure', 'array']),
       }),
     }),
     z.object({
@@ -46,14 +49,18 @@ const editorDataSchema = z.object({
  * in most cases you can use the type inferred from it.
  */
 const editorActionsSchema = z.object({
-  setEditor: z.function().args(editorDataSchema).returns(z.void()),
+  setEditor: z.function().args(editorStateSchema).returns(z.void()),
   clearEditor: z.function().returns(z.void()),
 })
 
-type IEditorData = z.infer<typeof editorDataSchema>
-type IEditorActions = z.infer<typeof editorActionsSchema>
-type IEditorSlice = IEditorData & {
-  editorActions: IEditorActions
+/** The state, the source of truth that drives our app. - Concept based on Redux */
+type EditorState = z.infer<typeof editorStateSchema>
+/** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */
+type EditorActions = z.infer<typeof editorActionsSchema>
+type EditorSlice = EditorState & {
+  editorActions: EditorActions
 }
 
-export { editorDataSchema, type IEditorActions, type IEditorData, type IEditorSlice }
+export { editorStateSchema }
+
+export type { EditorActions, EditorSlice, EditorState }

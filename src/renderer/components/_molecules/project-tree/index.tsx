@@ -216,7 +216,9 @@ const LeafSources = {
 }
 const ProjectTreeLeaf = ({ leafLang, label, nested = false, ...res }: IProjectTreeLeafProps) => {
   const {
-    editor: { name },
+    editor: {
+      meta: { name },
+    },
   } = useOpenPLCStore()
   const [leafIsSelected, setLeafIsSelected] = useState(false)
   const { LeafIcon } = LeafSources[leafLang]
