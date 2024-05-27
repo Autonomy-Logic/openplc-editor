@@ -45,7 +45,7 @@ export default function Debugger({ graphList }: DebuggerData) {
             <Header isPaused={isPaused} setIsPaused={setIsPaused} />
           </div>
         </div>
-        <div className='chart-content flex h-auto w-full flex-col gap-2 overflow-y-auto'>
+        <div className='chart-content flex h-auto w-full flex-col gap-2 overflow-y-auto overflow-x-hidden'>
           {graphList.map((variableName, index) => (
             <LineGraph
               key={index}

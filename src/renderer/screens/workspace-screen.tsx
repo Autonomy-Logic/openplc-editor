@@ -27,6 +27,11 @@ const WorkspaceScreen = () => {
     { name: 'a', type: 'int' },
     { name: 'b', type: 'int' },
     { name: 'c', type: 'int' },
+    { name: 'd', type: 'int' },
+    { name: 'e', type: 'int' },
+    { name: 'f', type: 'int' },
+    { name: 'g', type: 'int' },
+    { name: 'h', type: 'int' },
   ]
 
   return (
