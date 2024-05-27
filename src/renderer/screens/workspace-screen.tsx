@@ -1,4 +1,5 @@
 import * as Tabs from '@radix-ui/react-tabs'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
@@ -19,6 +20,14 @@ const WorkspaceScreen = () => {
   const {
     tabsState: { tabs },
   } = useOpenPLCStore()
+
+  const [graphList, setGraphList] = useState<string[]>([])
+
+  const variables = [
+    { name: 'a', type: 'int' },
+    { name: 'b', type: 'int' },
+    { name: 'c', type: 'int' },
+  ]
 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
@@ -78,9 +87,7 @@ const WorkspaceScreen = () => {
                         defaultSize={25}
                         className='flex h-full w-full flex-1 flex-col gap-4'
                       >
-                        {/**
-                         * TODO: refactor the variable component
-                         */}
+                        {/* TODO: refactor the variable component */}
                         {/* <Variables /> */}
                       </ResizablePanel>
                       <ResizableHandle className='h-[1px] w-full bg-brand-light' />
@@ -133,8 +140,8 @@ const WorkspaceScreen = () => {
                       value='debug'
                       className='debug-panel flex  h-full w-full gap-2 overflow-hidden  data-[state=inactive]:hidden'
                     >
-                      <Debugger />
-                      <VariablePanel />
+                      <Debugger graphList={graphList} />
+                      <VariablePanel variables={variables} graphList={graphList} setGraphList={setGraphList} />
                     </Tabs.Content>
                   </Tabs.Root>
                 </ResizablePanel>

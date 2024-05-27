@@ -4,7 +4,11 @@ import { useState } from 'react'
 import LineGraph from '../../_molecules/charts/lineGraph'
 import Header from '../../_molecules/header'
 
-export default function Debugger() {
+type DebuggerData = {
+  graphList: string[]
+}
+
+export default function Debugger({ graphList }: DebuggerData) {
   const [isPaused, setIsPaused] = useState(false)
   const [range, setRange] = useState(10)
   const [data, setData] = useState(false)
@@ -16,19 +20,20 @@ export default function Debugger() {
       setRange(value)
     }
   }
+
   return (
     <div className='h-full w-full text-cp-sm'>
-      <div className='flex w-full flex-col rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
-        <div className='header  flex justify-between '>
+      <div className='flex h-full w-full flex-col gap-1 rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
+        <div className='header flex justify-between'>
           <div className='flex gap-4'>
-            <div className='flex h-7 w-[133px] items-center justify-center gap-2 rounded-md bg-inherit select-none bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
+            <div className='flex h-7 w-[133px] select-none items-center justify-center gap-2 rounded-md bg-inherit bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
               <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
             </div>
             <div className='flex gap-2'>
               <input
                 type='text'
                 onChange={(e) => updateRange(Number(e.target.value))}
-                className='h-7 w-9 items-center rounded-md border border-neutral-200 bg-inherit p-2  text-center text-cp-sm font-medium text-neutral-1000 outline-none dark:text-neutral-50 '
+                className='h-7 w-9 items-center rounded-md border border-neutral-200 bg-inherit p-2 text-center text-cp-sm font-medium text-neutral-1000 outline-none dark:text-neutral-50'
               />
               <select className='h-7 w-[88px] rounded-md border border-neutral-200 bg-inherit outline-none dark:text-neutral-50'>
                 <option value='seconds'>seconds</option>
@@ -40,8 +45,17 @@ export default function Debugger() {
             <Header isPaused={isPaused} setIsPaused={setIsPaused} />
           </div>
         </div>
-        <div className='chart-content  h-full w-full  gap-2 overflow-hidden'>
-          <LineGraph isPaused={isPaused} range={range} value={data} setData={setData} />
+        <div className='chart-content flex h-auto w-full flex-col gap-2 overflow-y-auto'>
+          {graphList.map((variableName, index) => (
+            <LineGraph
+              key={index}
+              variables={[variableName]}
+              isPaused={isPaused}
+              range={range}
+              value={data}
+              setData={setData}
+            />
+          ))}
         </div>
       </div>
       <div className='flex w-full justify-between p-[6px] pb-0 text-cp-base font-semibold text-neutral-1000 dark:text-neutral-50'>
