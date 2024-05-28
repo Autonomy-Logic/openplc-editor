@@ -7,7 +7,7 @@ import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIco
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
 import ConsolePanel from '../components/_molecules/console'
-import VariablePanel from '../components/_molecules/variablePanel'
+import VariablePanel from '../components/_molecules/variable-panel'
 import Debugger from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
@@ -28,10 +28,6 @@ const WorkspaceScreen = () => {
     { name: 'b', type: 'int' },
     { name: 'c', type: 'int' },
     { name: 'd', type: 'int' },
-    { name: 'e', type: 'int' },
-    { name: 'f', type: 'int' },
-    { name: 'g', type: 'int' },
-    { name: 'h', type: 'int' },
   ]
 
   return (

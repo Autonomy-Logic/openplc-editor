@@ -54,22 +54,6 @@ export default function VariablePanel({ variables, setGraphList, graphList }: Va
           <p className='text-cp-sm font-medium text-neutral-1000'>TOF0</p>
           <p className='text-cp-sm font-medium text-neutral-400'>TOF</p>
         </div>
-        <div className='flex justify-between'>
-          <p className='text-cp-sm font-medium text-neutral-1000'>TON0</p>
-          <p className='text-cp-sm font-medium text-neutral-400'>TON</p>
-        </div>
-        <div className='flex justify-between'>
-          <p className='text-cp-sm font-medium text-neutral-1000'>TOF0</p>
-          <p className='text-cp-sm font-medium text-neutral-400'>TOF</p>
-        </div>
-        <div className='flex justify-between'>
-          <p className='text-cp-sm font-medium text-neutral-1000'>TON0</p>
-          <p className='text-cp-sm font-medium text-neutral-400'>TON</p>
-        </div>
-        <div className='flex justify-between'>
-          <p className='text-cp-sm font-medium text-neutral-1000'>TOF0</p>
-          <p className='text-cp-sm font-medium text-neutral-400'>TOF</p>
-        </div>
       </div>
     </div>
   )

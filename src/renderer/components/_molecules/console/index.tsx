@@ -1,38 +1,65 @@
+import { TrashIcon } from '@radix-ui/react-icons'
+import { cn } from '@root/utils'
+import { useState } from 'react'
 
 export default function ConsolePanel() {
+  /**
+   * type 0: normal message
+   * type 1: warning message
+   * type 2: error message
+   * type 3: success message
+   */
+
+  const [message, setMessage] = useState([
+    {
+      message: 'Start build in C:UsersPichauOpenPLC_EditoreditorexamplesBlink/build Generating SoftPLC',
+      type: 0,
+    },
+
+    {
+      message: 'IEC-61131 ST/IL/SFC code...',
+      type: 3,
+    },
+
+    {
+      message: 'Collecting data types',
+      type: 0,
+    },
+
+    {
+      message: 'Generating code...',
+      type: 0,
+    },
+
+    {
+      message: 'warning: cannot find POU "blink"',
+      type: 2,
+    },
+    {
+      message: 'Error: POU not found',
+      type: 1,
+    },
+  ])
+  //className='text-brand-medium
+
   return (
     <div className=' h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark dark:text-neutral-50'>
-      Start build in C:\Users\Pichau\OpenPLC_Editor\editor\examples\Blink\build Generating SoftPLC
-      <br /> IEC-61131 ST/IL/SFC code...
-      <br /> Collecting data types
-      <br /> Collecting POUs
-      <br /> Generate <span className='text-brand-medium'>POU Blink</span>
-      <br /> Generate Config(s)
-      <br /> Compiling IEC Program into C code...
-      <br /> Extracting Located Variables...
-      <br /> C code generated successfully. PLC :
-      <br /> [CC] <span className='text-brand-medium'>plc_main.c - plc_main.o</span>
-      <br /> [CC] <span className='text-brand-medium'>plc_debugger.c - plc_debugger.o</span>
-      <br /> py_ext :
-      <br /> [CC] <span className='text-brand-medium'>py_ext.c - py_ext.o</span>
-      <br /> PLC :
-      <br /> [CC] <span className='text-brand-medium'>Config0.c - Config0.o</span>
-      <br /> [CC] <span className='text-brand-medium'>Res0.c - Res0.o</span>
-      <br /> Linking :
-      <br />{' '}
-      <span className='text-brand-medium'>[CC] plc_main.o plc_debugger.o py_ext.o Config0.o Res0.o - Teste.dll</span>
-      <br /> Successfully built.
-      <br /> PYRO connecting to URI : PYROLOC://127.0.0.1:61355
-      <br /> PLC did not provide identity and security infomation.
-      <br /> Latest build does not match with connected target.
-      <br /> PLC data transfered successfully.
-      <br /> Retain size 0
-      <br /> PLCobject : NewPLC (0dc7b1348468726e71ec5d51ac22ce72)
-      <br /> PLC installed successfully.
-      <br /> PLCobject : PLC started
-      <br /> PLCobject : Python extensions started
-      <br /> Starting PLC
-      <br /> PLCobject : PLC stopped
+      <button className='border border-neutral-200 p-2 rounded-lg bg-brand-light' onClick={() => setMessage([])}>
+       <TrashIcon className='h-4 w-4 stroke-neutral-medium' />
+      </button>{' '}
+      {message.map((msg) => (
+        <p
+          key={msg.message}
+          className={cn({
+            'text-[#011432]': msg.type === 0,
+            'text-yellow-600': msg.type === 1,
+            'text-red-700': msg.type === 2,
+            'text-brand-medium': msg.type === 3,
+          })}
+        >
+          {msg.message}
+        </p>
+      ))}
     </div>
   )
 }
