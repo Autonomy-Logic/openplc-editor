@@ -51,10 +51,10 @@ export default function ConsolePanel() {
         <p
           key={msg.message}
           className={cn({
-            'text-[#011432]': msg.type === 0,
+            'text-[#011432] dark:text-white': msg.type === 0,
             'text-yellow-600': msg.type === 1,
             'text-red-700': msg.type === 2,
-            'text-brand-medium': msg.type === 3,
+            'text-brand-medium dark:text-brand': msg.type === 3,
           })}
         >
           {msg.message}
