@@ -33,19 +33,19 @@ export default function ConsolePanel() {
 
     {
       message: 'warning: cannot find POU "blink"',
-      type: 2,
+      type: 1,
     },
     {
       message: 'Error: POU not found',
-      type: 1,
+      type: 2,
     },
   ])
   //className='text-brand-medium
 
   return (
     <div className=' h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark dark:text-neutral-50'>
-      <button className='border border-neutral-200 p-2 rounded-lg bg-brand-light' onClick={() => setMessage([])}>
-       <TrashIcon className='h-4 w-4 stroke-neutral-medium' />
+      <button className='rounded-lg border border-neutral-200 bg-brand-light p-2' onClick={() => setMessage([])}>
+        <TrashIcon className='stroke-neutral-medium h-4 w-4' />
       </button>{' '}
       {message.map((msg) => (
         <p

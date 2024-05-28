@@ -35,7 +35,7 @@ export default function VariablePanel({ variables, setGraphList, graphList }: Va
               <ViewIcon
                 type='button'
                 className={` cursor-pointer`}
-                stroke={graphList?.includes(variable.name) ? '#B4D0FE' : ''}
+                stroke={graphList?.includes(variable.name) ? '' : '#B4D0FE'}
                 onClick={() => toggleGraphVisibility(variable.name)}
               />
               {variable.name}
