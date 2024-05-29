@@ -46,7 +46,7 @@ export default function ConsolePanel() {
     <div className=' h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark dark:text-neutral-50'>
       <button className='rounded-lg border border-neutral-200 bg-brand-light p-2' onClick={() => setMessage([])}>
         <TrashIcon className='stroke-neutral-medium h-4 w-4' />
-      </button>{' '}
+      </button>
       {message.map((msg) => (
         <p
           key={msg.message}
