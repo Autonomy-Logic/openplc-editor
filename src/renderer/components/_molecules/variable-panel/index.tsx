@@ -44,7 +44,7 @@ export default function VariablePanel({ variables, setGraphList, graphList }: Va
           </div>
         ))}
       </div>
-      <hr className='w-48 stroke-neutral-200 stroke-[1.5px]' />
+      <hr className='w-full stroke-neutral-200 stroke-[1.5px]' />
       <div className='flex h-auto flex-col gap-2 overflow-auto whitespace-nowrap pb-2'>
         <div className='flex justify-between'>
           <p className='text-cp-sm font-medium dark:text-white text-neutral-1000'>TON0</p>
