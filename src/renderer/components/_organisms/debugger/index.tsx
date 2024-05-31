@@ -1,5 +1,5 @@
 import * as Select from '@radix-ui/react-select'
-import { DebuggerIcon } from '@root/renderer/assets'
+import { ArrowIcon, DebuggerIcon } from '@root/renderer/assets'
 import { useState } from 'react'
 
 import LineGraph from '../../_molecules/charts/lineGraph'
@@ -30,15 +30,15 @@ export default function Debugger({ graphList }: DebuggerData) {
             <div className='flex h-7 w-[133px] select-none items-center justify-center gap-2 rounded-md bg-inherit bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
               <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
             </div>
-            <div className='flex gap-2'>
-          
+            <div className='flex gap-2  z-[999999] relative'>
               <Select.Root onValueChange={(value) => updateRange(Number(value))}>
                 <Select.Trigger
                   value={String(range)}
-                  className='h-7 flex justify-between px-2 items-center w-[88px] rounded-md border border-neutral-200 bg-inherit outline-none dark:text-neutral-50'
+                  className='bg-neultral-100 flex h-7 w-[88px] items-center justify-between rounded-md border border-neutral-200 px-2 outline-none dark:bg-neutral-900 dark:text-neutral-50'
                 >
-                  <p>{range}</p>
-                  <Select.Icon />
+                  {range > 59 && <div className='flex gap-1'>{range >= 60 ? '1' : ''} min</div>}
+                  {range < 60 && <div className='flex gap-1'>{range} sec</div>}
+                  <ArrowIcon direction='down' className='stroke-brand' />
                 </Select.Trigger>
 
                 <Select.Content
@@ -46,22 +46,22 @@ export default function Debugger({ graphList }: DebuggerData) {
                   position='popper'
                   align='center'
                   side='bottom'
-                  className='w-[--radix-select-trigger-width] flex-col rounded-sm px-2 gap-1 border border-neutral-200 '
+                  className='w-[--radix-select-trigger-width] z-[999999] bg-white overflow-hidden flex-col gap-1 rounded-md border border-neutral-200 dark:bg-neutral-900  '
                 >
                   <Select.Item
-                    className='w-full cursor-pointer rounded-sm p-1 hover:bg-neutral-100 dark:hover:bg-neutral-200'
+                    className='w-full cursor-pointer rounded-sm p-1 hover:bg-neutral-100 dark:hover:bg-neutral-850'
                     value={'1'}
                   >
                     1 second
                   </Select.Item>
                   <Select.Item
-                    className='w-full cursor-pointer rounded-sm p-1 hover:bg-neutral-100 dark:hover:bg-neutral-200'
+                    className='w-full cursor-pointer rounded-sm p-1 hover:bg-neutral-100 dark:hover:bg-neutral-850'
                     value={'2'}
                   >
                     2 seconds
                   </Select.Item>
                   <Select.Item
-                    className='w-full cursor-pointer rounded-sm p-1 hover:bg-neutral-100 dark:hover:bg-neutral-200'
+                    className='w-full cursor-pointer rounded-sm p-1 hover:bg-neutral-100 dark:hover:bg-neutral-850'
                     value={'60'}
                   >
                     1 min

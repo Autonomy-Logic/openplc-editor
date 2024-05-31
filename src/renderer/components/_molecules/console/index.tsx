@@ -1,4 +1,3 @@
-import { TrashIcon } from '@radix-ui/react-icons'
 import { cn } from '@root/utils'
 import { useState } from 'react'
 
@@ -10,7 +9,7 @@ export default function ConsolePanel() {
    * type 3: success message
    */
 
-  const [message, setMessage] = useState([
+  const [message] = useState([
     {
       message: 'Start build in C:UsersPichauOpenPLC_EditoreditorexamplesBlink/build Generating SoftPLC',
       type: 0,
@@ -44,13 +43,11 @@ export default function ConsolePanel() {
 
   return (
     <div className=' h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark dark:text-neutral-50'>
-      <button className='rounded-lg border border-neutral-200 bg-brand-light p-2' onClick={() => setMessage([])}>
-        <TrashIcon className='stroke-neutral-medium h-4 w-4' />
-      </button>
       {message.map((msg) => (
         <p
+        
           key={msg.message}
-          className={cn({
+          className={cn('font-normal', {
             'text-[#011432] dark:text-white': msg.type === 0,
             'text-yellow-600': msg.type === 1,
             'text-red-700': msg.type === 2,

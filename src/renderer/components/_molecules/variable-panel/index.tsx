@@ -38,21 +38,21 @@ export default function VariablePanel({ variables, setGraphList, graphList }: Va
                 stroke={graphList?.includes(variable.name) ? '' : '#B4D0FE'}
                 onClick={() => toggleGraphVisibility(variable.name)}
               />
-              {variable.name}
+              <p className='text-neutral-1000 dark:text-white'>{variable.name}</p>
             </div>
-            <p className='text-neutral-400'>{variable.type}</p>
+            <p className='text-neutral-400 dark:text-neutral-700'>{variable.type}</p>
           </div>
         ))}
       </div>
       <hr className='w-48 stroke-neutral-200 stroke-[1.5px]' />
       <div className='flex h-auto flex-col gap-2 overflow-auto whitespace-nowrap pb-2'>
         <div className='flex justify-between'>
-          <p className='text-cp-sm font-medium text-neutral-1000'>TON0</p>
-          <p className='text-cp-sm font-medium text-neutral-400'>TON</p>
+          <p className='text-cp-sm font-medium dark:text-white text-neutral-1000'>TON0</p>
+          <p className='text-cp-sm font-medium text-neutral-400 dark:text-neutral-700'>TON</p>
         </div>
         <div className='flex justify-between'>
-          <p className='text-cp-sm font-medium text-neutral-1000'>TOF0</p>
-          <p className='text-cp-sm font-medium text-neutral-400'>TOF</p>
+          <p className='text-cp-sm font-medium dark:text-white text-neutral-1000'>TOF0</p>
+          <p className='text-cp-sm font-medium text-neutral-400 dark:text-neutral-700'>TOF</p>
         </div>
       </div>
     </div>
