@@ -19,6 +19,14 @@ const Project = () => {
   } = useOpenPLCStore()
   const Name = 'Project Name'
 
+  const editorType = {
+    il: 'plc-textual',
+    st: 'plc-textual',
+    ld: 'plc-graphical',
+    sfc: 'plc-graphical',
+    fbd: 'plc-graphical',
+  } as const
+
   const handleCreateTab = (
     type: 'program' | 'function' | 'function-block',
     name: string,
@@ -30,7 +38,8 @@ const Project = () => {
       language,
     }
     updateTabs(tabToBeCreated)
-    setEditor(CreateEditorObject(tabToBeCreated))
+    const editor = CreateEditorObject({ type: editorType[language], derivation: type, language, name })
+    setEditor({ editor })
   }
 
   return (
@@ -70,7 +79,7 @@ const Project = () => {
                 />
               ))}
           </ProjectTreeNestedBranch>
-          <ProjectTreeNestedBranch nestedBranchTarget='enum'>
+          <ProjectTreeNestedBranch nestedBranchTarget='enumerated'>
             {dataTypes
               ?.filter(({ derivation }) => derivation.type === 'enumerated')
               .map(({ id, name }) => (

@@ -138,13 +138,13 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
 // 'ml-4',
 
 type IProjectTreeNestedBranchProps = ComponentPropsWithoutRef<'li'> & {
-  nestedBranchTarget: 'array' | 'enum' | 'structure'
+  nestedBranchTarget: 'array' | 'enumerated' | 'structure'
   children?: ReactNode
 }
 
 const NestedBranchSources = {
   array: { BranchIcon: ArrayIcon, label: 'Arrays' },
-  enum: { BranchIcon: EnumIcon, label: 'Enums' },
+  enumerated: { BranchIcon: EnumIcon, label: 'Enums' },
   structure: { BranchIcon: StructureIcon, label: 'Structures' },
 }
 const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProjectTreeNestedBranchProps) => {

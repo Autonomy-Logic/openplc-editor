@@ -4,7 +4,7 @@ import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '
 import { DataTypeActions } from './actions'
 
 type IDataTypeEditorProps = {
-  derivation: 'enumerated' | 'structure' | 'array'
+  derivation?: 'enumerated' | 'structure' | 'array'
 }
 const DataTypeEditor = (props: IDataTypeEditorProps) => {
   const { derivation } = props

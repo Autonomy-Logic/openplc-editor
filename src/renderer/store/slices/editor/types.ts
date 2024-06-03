@@ -49,7 +49,10 @@ const editorStateSchema = z.object({
  * in most cases you can use the type inferred from it.
  */
 const editorActionsSchema = z.object({
-  setEditor: z.function().args(editorStateSchema).returns(z.void()),
+  setEditor: z
+    .function()
+    .args(editorStateSchema.pick({ editor: true }))
+    .returns(z.void()),
   clearEditor: z.function().returns(z.void()),
 })
 

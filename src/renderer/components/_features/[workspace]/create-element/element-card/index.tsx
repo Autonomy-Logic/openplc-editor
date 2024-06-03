@@ -41,6 +41,8 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
+    console.log(data)
+
     try {
       const pouWasCreated = create.pou(data)
       if (!pouWasCreated) throw new TypeError()
