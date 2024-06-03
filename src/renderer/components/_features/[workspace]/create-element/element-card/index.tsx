@@ -11,20 +11,21 @@ import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
-import { useToast } from '../../[app]/toast/use-toast'
+import { useToast } from '../../../[app]/toast/use-toast'
+import { CreateDataType } from './data-type-element'
 
-type ICardProps = {
+type ElementCardProps = {
   target: 'function' | 'function-block' | 'program' | 'data-type'
   closeContainer: Dispatch<SetStateAction<boolean>>
 }
 
-type IPouFormProps = {
+type CreatePouFormProps = {
   type: 'function' | 'function-block' | 'program'
   name: string
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
 }
 
-const Card = (props: ICardProps): ReactNode => {
+const ElementCard = (props: ElementCardProps): ReactNode => {
   const { toast } = useToast()
   const { target, closeContainer } = props
   const {
@@ -33,15 +34,17 @@ const Card = (props: ICardProps): ReactNode => {
     handleSubmit,
     setError,
     formState: { errors },
-  } = useForm<IPouFormProps>()
+  } = useForm<CreatePouFormProps>()
   const {
     pouActions: { create },
     workspaceActions: { createDatatype },
   } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
-  const submitData: SubmitHandler<IPouFormProps> = (data) => {
+  const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
+    console.log(data)
+
     try {
-      const pouWasCreated = create(data)
+      const pouWasCreated = create.pou(data)
       if (!pouWasCreated) throw new TypeError()
       toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
       closeContainer((prev) => !prev)
@@ -58,8 +61,9 @@ const Card = (props: ICardProps): ReactNode => {
     setIsOpen(false)
   }
 
-  const handleCreateDatatype = (derivation: 'enum' | 'struct' | 'array') => {
+  const handleCreateDatatype = (derivation: 'enumerated' | 'structure' | 'array') => {
     const data = CreateDatatypeObject(derivation)
+    console.log(data)
     createDatatype(data)
     closeContainer((prev) => !prev)
     setIsOpen(false)
@@ -87,33 +91,9 @@ const Card = (props: ICardProps): ReactNode => {
           >
             {target === 'data-type' ? (
               <>
-                <div
-                  onClick={() => handleCreateDatatype('array')}
-                  className='relative flex h-7 w-full cursor-pointer select-none items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                >
-                  <ArrayIcon />
-                  <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
-                    Array
-                  </p>
-                </div>
-                <div
-                  onClick={() => handleCreateDatatype('enum')}
-                  className='relative flex h-7 w-full cursor-pointer select-none items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                >
-                  <EnumIcon />
-                  <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
-                    Enumerated
-                  </p>
-                </div>
-                <div
-                  onClick={() => handleCreateDatatype('struct')}
-                  className='relative flex h-7 w-full cursor-pointer select-none items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                >
-                  <StructureIcon />
-                  <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
-                    Structure
-                  </p>
-                </div>
+                <CreateDataType derivation='array' onClick={() => handleCreateDatatype('array')} />
+                <CreateDataType derivation='enumerated' onClick={() => handleCreateDatatype('enumerated')} />
+                <CreateDataType derivation='structure' onClick={() => handleCreateDatatype('structure')} />
               </>
             ) : (
               <>
@@ -127,7 +107,10 @@ const Card = (props: ICardProps): ReactNode => {
                   <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
                 </div>
                 <div id='pou-card-form'>
-                  <form onSubmit={handleSubmit(submitData)} className='flex h-fit w-full select-none flex-col gap-3'>
+                  <form
+                    onSubmit={handleSubmit(handleCreatePou)}
+                    className='flex h-fit w-full select-none flex-col gap-3'
+                  >
                     <input type='hidden' {...register('type')} value={target} />
                     <div id='pou-name-form-container' className='flex w-full flex-col'>
                       <label
@@ -236,4 +219,4 @@ const Card = (props: ICardProps): ReactNode => {
   )
 }
 
-export { Card }
+export { ElementCard }

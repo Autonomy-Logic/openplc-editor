@@ -2,12 +2,12 @@ import { TStoreType } from '@root/main/contracts/types/modules/store'
 import { Event, nativeTheme } from 'electron'
 import { platform } from 'process'
 
-import { IProject } from '../../../types/PLC'
+import { PLCProjectData } from '../../../types/PLC/test'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 
 type IDataToWrite = {
   projectPath: string
-  projectData: IProject
+  projectData: PLCProjectData
 }
 
 class MainProcessBridge implements MainIpcModule {

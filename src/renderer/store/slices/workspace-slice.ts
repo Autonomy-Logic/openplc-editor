@@ -1,31 +1,38 @@
-import { IFunction, IFunctionBlock, IProgram, IProject, IVariable } from '@root/types/PLC/index'
+import { IDatatype } from '@root/types/PLC/index'
+import type { PLCFunction, PLCFunctionBlock, PLCProgram, PLCProjectData, PLCVariable } from '@root/types/PLC/test'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
+
+// type IDatatypeDTO = {
+//   id: number
+//   name: string
+//   derivation: 'enum' | 'struct' | 'array'
+// }
 
 type IVariableDTO = {
   scope: 'global' | 'local'
   associatedPou?: string
-  data: IVariable
+  data: PLCVariable
 }
 
 type IPouDTO =
   | {
       type: 'program'
-      data: IProgram
+      data: PLCProgram
     }
   | {
       type: 'function'
-      data: IFunction
+      data: PLCFunction
     }
   | {
       type: 'function-block'
-      data: IFunctionBlock
+      data: PLCFunctionBlock
     }
 
 type IWorkspaceState = {
   projectName: string
   projectPath: string
-  projectData: IProject
+  projectData: PLCProjectData
   editingState: 'save-request' | 'saved' | 'unsaved'
   systemConfigs: {
     OS: 'win32' | 'linux' | 'darwin' | ''
@@ -51,6 +58,7 @@ type IWorkspaceActions = {
   deletePou: (pouToBeDeleted: string) => void
   createVariable: (variableToBeCreated: IVariableDTO) => void
   updateVariable: (dataToBeUpdated: IVariableDTO) => void
+  createDatatype: (dataToCreate: IDatatype) => void
 }
 
 type IWorkspaceSlice = IWorkspaceState & {
@@ -195,6 +203,19 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
             }
           } else {
             console.error(`Scope ${scope} not found or invalid params`)
+          }
+        }),
+      )
+    },
+    createDatatype: (dataToCreate: IDatatype) => {
+      setState(
+        produce((slice: IWorkspaceSlice) => {
+          const { name } = dataToCreate
+          const dataExists = slice.projectData.dataTypes.find((datatype) => datatype.name === name)
+          if (!dataExists) {
+            slice.projectData.dataTypes.push(dataToCreate)
+          } else {
+            console.error(`Datatype ${name} already exists`)
           }
         }),
       )

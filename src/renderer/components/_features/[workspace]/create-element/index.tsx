@@ -2,11 +2,11 @@ import * as Popover from '@radix-ui/react-popover'
 import { PlusIcon } from '@root/renderer/assets'
 import { useState } from 'react'
 
-import { Card } from './card'
+import { ElementCard } from './element-card'
 
-const CreatePou = () => {
+const CreatePLCElement = () => {
   const [isContainerOpen, setIsContainerOpen] = useState(false)
-  const CreatePouTypes: ('function' | 'function-block' | 'program' | 'data-type')[] = [
+  const CreatePLCElementTypes: ('function' | 'function-block' | 'program' | 'data-type')[] = [
     'function',
     'function-block',
     'program',
@@ -16,7 +16,8 @@ const CreatePou = () => {
   return (
     <Popover.Root onOpenChange={setIsContainerOpen} open={isContainerOpen}>
       <Popover.Trigger
-        id='create-pou-trigger'
+        id='create-plc-element-trigger'
+        aria-label='Create PLC element trigger component'
         type='button'
         className='flex h-8 w-10 items-center justify-center rounded-lg bg-brand'
         onClick={() => setIsContainerOpen((prev) => !prev)}
@@ -30,8 +31,8 @@ const CreatePou = () => {
           align='end'
           className='flex h-fit w-[188px] flex-col gap-2 rounded-lg border border-brand-light bg-white p-2 shadow-card dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card'
         >
-          {CreatePouTypes.map((target) => (
-            <Card key={`unique ${target}`} target={target} closeContainer={setIsContainerOpen} />
+          {CreatePLCElementTypes.map((target) => (
+            <ElementCard key={`unique ${target}`} target={target} closeContainer={setIsContainerOpen} />
           ))}
         </Popover.Content>
       </Popover.Portal>
@@ -39,4 +40,4 @@ const CreatePou = () => {
   )
 }
 
-export { CreatePou }
+export { CreatePLCElement }

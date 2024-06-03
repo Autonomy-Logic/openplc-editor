@@ -5,11 +5,20 @@ import { useOpenPLCStore } from '@process:renderer/store'
 import * as monaco from 'monaco-editor'
 import { useRef } from 'react'
 
-const MonacoEditor = (): ReturnType<typeof PrimitiveEditor> => {
+type monacoEditorProps = {
+  path: string
+  name: string
+  language: 'il' | 'st'
+}
+
+type monacoEditorOptionsType = monaco.editor.IStandaloneEditorConstructionOptions
+
+const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
+  const { language, path, name } = props
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
   const monacoRef = useRef<null | typeof monaco>(null)
   const {
-    editor: { path, language, name },
+    // editor: { path, language, name },
     systemConfigs: { shouldUseDarkMode },
     projectData: { pous },
     workspaceActions: { updatePou },
@@ -33,12 +42,19 @@ const MonacoEditor = (): ReturnType<typeof PrimitiveEditor> => {
     updatePou({ name, content: value })
   }
 
+  const monacoEditorUserOptions: monacoEditorOptionsType = {
+    minimap: {
+      enabled: false,
+    },
+  }
+
   // console.log('Editor instance: ', editorRef.current?.getModel()?.uri.path)
   // console.log('Monaco instance: ', monacoRef.current?.editor.getEditors())
-  console.log('Pous ->', pous)
+  // console.log('Pous ->', pous)
 
   return (
     <PrimitiveEditor
+      options={monacoEditorUserOptions}
       height='100%'
       width='100%'
       path={path}
