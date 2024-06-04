@@ -165,13 +165,6 @@ type EditorPropsType = z.infer<typeof editorProps>
 
 type CreateEditorObjectType = z.infer<typeof createEditorObjectSchema>
 
-// type ICreatedEditorObject = {
-//   name: string
-//   path: string
-//   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
-//   value: string
-// }
-
 const CreateEditorObject = (props: EditorPropsType): CreateEditorObjectType['editor'] => {
   const { type, name, language, derivation } = editorProps.parse(props)
   const normalizedPath = `/data/pous/${derivation}/${name}`
