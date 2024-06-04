@@ -24,12 +24,12 @@ const WorkspaceScreen = () => {
   const [graphList, setGraphList] = useState<string[]>([])
 
   const variables = [
-    { name: 'a', type: 'int' },
-    { name: 'b', type: 'int' },
-    { name: 'c', type: 'int' },
-    { name: 'd', type: 'int' },
+    { name: 'a', type: 'int', key: '1' },
+    { name: 'b', type: 'int', key: '2' },
+    { name: 'c', type: 'int', key: '3' },
+    { name: 'd', type: 'int', key: '4' },
   ]
-
+  console.log(graphList)
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>

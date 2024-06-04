@@ -30,7 +30,7 @@ export default function Debugger({ graphList }: DebuggerData) {
             <div className='flex h-7 w-[133px] select-none items-center justify-center gap-2 rounded-md bg-inherit bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
               <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
             </div>
-            <div className='flex gap-2  z-[999999] relative'>
+            <div className='flex gap-2 z-[999999] relative'>
               <Select.Root onValueChange={(value) => updateRange(Number(value))}>
                 <Select.Trigger
                   value={String(range)}
@@ -46,39 +46,27 @@ export default function Debugger({ graphList }: DebuggerData) {
                   position='popper'
                   align='center'
                   side='bottom'
-                  className='w-[--radix-select-trigger-width] z-[999999] bg-white overflow-hidden flex-col gap-1 rounded-md border border-neutral-200 dark:bg-neutral-900  '
+                  className='w-[--radix-select-trigger-width] z-[999999] bg-white overflow-hidden flex-col gap-1 rounded-md border border-neutral-200 dark:bg-neutral-900'
                 >
-                  <Select.Item
-                    className='w-full cursor-pointer rounded-sm p-1 hover:bg-neutral-100 dark:hover:bg-neutral-850'
-                    value={'1'}
-                  >
-                    1 second
-                  </Select.Item>
-                  <Select.Item
-                    className='w-full cursor-pointer rounded-sm p-1 hover:bg-neutral-100 dark:hover:bg-neutral-850'
-                    value={'2'}
-                  >
-                    2 seconds
-                  </Select.Item>
-                  <Select.Item
-                    className='w-full cursor-pointer rounded-sm p-1 hover:bg-neutral-100 dark:hover:bg-neutral-850'
-                    value={'60'}
-                  >
-                    1 min
-                  </Select.Item>
+                  {[1, 2, 60].map((value) => (
+                    <Select.Item
+                      key={value}
+                      className='w-full cursor-pointer rounded-sm p-1 hover:bg-neutral-100 dark:hover:bg-neutral-850'
+                      value={String(value)}
+                    >
+                      {value === 60 ? '1 min' : `${value} second${value > 1 ? 's' : ''}`}
+                    </Select.Item>
+                  ))}
                 </Select.Content>
               </Select.Root>
             </div>
           </div>
-
-          <div className='flex gap-2'>
-            <Header isPaused={isPaused} setIsPaused={setIsPaused} />
-          </div>
+          <Header isPaused={isPaused} setIsPaused={setIsPaused} />
         </div>
         <div className='chart-content flex h-auto w-full flex-col gap-2 overflow-y-auto overflow-x-hidden'>
-          {graphList.map((variableName, index) => (
+          {graphList.map((variableName) => (
             <LineGraph
-              key={index}
+              key={variableName}
               variables={[variableName]}
               isPaused={isPaused}
               range={range}
