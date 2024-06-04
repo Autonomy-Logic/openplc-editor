@@ -139,10 +139,17 @@ const WorkspaceScreen = () => {
                     </Tabs.Content>
                     <Tabs.Content
                       value='debug'
-                      className='debug-panel flex  h-full w-full gap-2 overflow-hidden  data-[state=inactive]:hidden'
+                      className='debug-panel flex  h-full w-full overflow-hidden  data-[state=inactive]:hidden'
                     >
-                      <Debugger graphList={graphList} />
-                      <VariablePanel variables={variables} graphList={graphList} setGraphList={setGraphList} />
+                      <ResizablePanelGroup direction='horizontal' className='flex h-full  w-full '>
+                        <ResizablePanel minSize={20} defaultSize={100} className='h-full w-full'>
+                          <Debugger graphList={graphList} />
+                        </ResizablePanel>
+                        <ResizableHandle className='w-2 bg-transparent' />
+                        <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
+                          <VariablePanel variables={variables} graphList={graphList} setGraphList={setGraphList} />
+                        </ResizablePanel>
+                      </ResizablePanelGroup>
                     </Tabs.Content>
                   </Tabs.Root>
                 </ResizablePanel>
