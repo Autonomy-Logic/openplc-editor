@@ -37,9 +37,9 @@ export default function VariablePanel({ variables, setGraphList, graphList }: Va
                 stroke={graphList?.includes(variable.name) ? '' : '#B4D0FE'}
                 onClick={() => toggleGraphVisibility(variable.name)}
               />
-              <p className='text-neutral-1000 dark:text-white'>{variable.name}</p>
+              <p className='text-neutral-1000 dark:text-white '>{variable.name}</p>
             </div>
-            <p className='text-neutral-400 dark:text-neutral-700'>{variable.type}</p>
+            <p className='text-neutral-400 dark:text-neutral-700 uppercase'>{variable.type}</p>
           </div>
         ))}
       </div>

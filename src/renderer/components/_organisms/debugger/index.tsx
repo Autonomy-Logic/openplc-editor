@@ -30,14 +30,22 @@ export default function Debugger({ graphList }: DebuggerData) {
             <div className='flex h-7 w-[133px] select-none items-center justify-center gap-2 rounded-md bg-inherit bg-neutral-100 text-cp-sm font-medium text-neutral-1000 outline-none dark:bg-brand-dark dark:text-white'>
               <DebuggerIcon fill='#0464fb' className='h-3 w-3 stroke-brand' /> debugger terminal
             </div>
-            <div className='flex gap-2 z-[999999] relative'>
+            <div className='relative z-[999999] flex gap-2'>
               <Select.Root onValueChange={(value) => updateRange(Number(value))}>
                 <Select.Trigger
                   value={String(range)}
                   className='bg-neultral-100 flex h-7 w-[88px] items-center justify-between rounded-md border border-neutral-200 px-2 outline-none dark:bg-neutral-900 dark:text-neutral-50'
                 >
-                  {range > 59 && <div className='flex gap-1'>{range >= 60 ? '1' : ''} min</div>}
-                  {range < 60 && <div className='flex gap-1'>{range} sec</div>}
+                  {range > 59 && (
+                    <div className='flex gap-1'>
+                      {range >= 60 ? '1' : ''} minute{'s'}
+                    </div>
+                  )}
+                  {range < 60 && (
+                    <div className='flex gap-1'>
+                      {range} second{'s'}
+                    </div>
+                  )}
                   <ArrowIcon direction='down' className='stroke-brand' />
                 </Select.Trigger>
 
@@ -46,7 +54,7 @@ export default function Debugger({ graphList }: DebuggerData) {
                   position='popper'
                   align='center'
                   side='bottom'
-                  className='w-[--radix-select-trigger-width] z-[999999] bg-white overflow-hidden flex-col gap-1 rounded-md border border-neutral-200 dark:bg-neutral-900'
+                  className='z-[999999] w-[--radix-select-trigger-width] flex-col gap-1 overflow-hidden rounded-md border border-neutral-200 bg-white dark:bg-neutral-900'
                 >
                   {[1, 2, 60].map((value) => (
                     <Select.Item
@@ -54,7 +62,7 @@ export default function Debugger({ graphList }: DebuggerData) {
                       className='w-full cursor-pointer rounded-sm p-1 hover:bg-neutral-100 dark:hover:bg-neutral-850'
                       value={String(value)}
                     >
-                      {value === 60 ? '1 min' : `${value} second${value > 1 ? 's' : ''}`}
+                      {value === 60 ? '1 minute' : `${value} second${value > 1 ? 's' : ''}`}
                     </Select.Item>
                   ))}
                 </Select.Content>
