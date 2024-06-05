@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
-// import NextIcon from '../assets/icons/interface/Next'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { MonacoEditor } from '../components/_features/[workspace]/editor'
 import ConsolePanel from '../components/_molecules/console'
