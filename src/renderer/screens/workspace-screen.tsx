@@ -1,24 +1,72 @@
 import * as Tabs from '@radix-ui/react-tabs'
+import _ from 'lodash'
+import { useEffect } from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
 import { ActivityBarButton } from '../components/_atoms/buttons'
-import { MonacoEditor } from '../components/_features/[workspace]/editor'
+import { toast } from '../components/_features/[app]/toast/use-toast'
+import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import ConsolePanel from '../components/_molecules/console'
 import VariablePanel from '../components/_molecules/variable-panel'
 import Debugger from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
+// import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
+
+const GraphicalEditor = () => {
+  return <p>This gonna be a graphical editor to handle the graphical languages</p>
+}
 
 const WorkspaceScreen = () => {
   const navigate = useNavigate()
   const {
-    tabsState: { tabs },
+    tabs,
+    projectData,
+    projectPath,
+    editingState,
+    editor,
+    workspaceActions: { setEditingState },
   } = useOpenPLCStore()
+
+  useEffect(() => {
+    const handleSaveProject = async () => {
+      const { success, reason } = await window.bridge.saveProject({ projectPath, projectData })
+      if (success) {
+        _.debounce(() => setEditingState('saved'), 1000)()
+        toast({
+          title: 'Changes saved!',
+          description: 'The project was saved successfully!',
+          variant: 'default',
+        })
+      } else {
+        _.debounce(() => setEditingState('unsaved'), 1000)()
+        toast({
+          title: 'Error in the save request!',
+          description: reason.description,
+          variant: 'fail',
+        })
+      }
+    }
+
+    if (editingState === 'save-request') {
+      void handleSaveProject()
+    }
+  }, [editingState])
+
+  window.bridge.saveProjectAccelerator((_event) => {
+    setEditingState('save-request')
+    toast({
+      title: 'Save changes',
+      description: 'Trying to save the changes in the project file.',
+      variant: 'warn',
+    })
+  })
+
 
   const [graphList, setGraphList] = useState<string[]>([])
 
@@ -72,34 +120,51 @@ const WorkspaceScreen = () => {
                   defaultSize={75}
                   className='flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950'
                 >
+                  {/**
+                   * TODO: Need to be refactored.
+                   * Must handle 3 types of editors: Textual editor, data type editor and graphical editor
+                   */}
                   {tabs.length > 0 ? (
-                    <ResizablePanelGroup
-                      id='editorContentPanelGroup'
-                      direction='vertical'
-                      className='flex flex-1 flex-col gap-2'
-                    >
-                      <ResizablePanel
-                        id='variableTablePanel'
-                        order={1}
-                        collapsible
-                        collapsedSize={0}
-                        minSize={20}
-                        defaultSize={25}
-                        className='flex h-full w-full flex-1 flex-col gap-4'
-                      >
-                        {/* TODO: refactor the variable component */}
-                        {/* <Variables /> */}
-                      </ResizablePanel>
-                      <ResizableHandle className='h-[1px] w-full bg-brand-light' />
-                      <ResizablePanel
-                        id='textualEditorPanel'
-                        order={2}
-                        defaultSize={75}
-                        className='mt-6 flex-1 flex-grow rounded-md'
-                      >
-                        <MonacoEditor />
-                      </ResizablePanel>
-                    </ResizablePanelGroup>
+                    <>
+                      {editor['type'] === 'plc-datatype' && (
+                        <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
+                          <DataTypeEditor />{' '}
+                        </div>
+                      )}
+                      {editor['type'] === 'plc-graphical' && <GraphicalEditor />}
+                      {editor['type'] === 'plc-textual' && (
+                        <ResizablePanelGroup
+                          id='editorContentPanelGroup'
+                          direction='vertical'
+                          className='flex flex-1 flex-col gap-2'
+                        >
+                          <ResizablePanel
+                            id='variableTablePanel'
+                            order={1}
+                            collapsible
+                            collapsedSize={0}
+                            minSize={20}
+                            defaultSize={25}
+                            className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'
+                          >
+                            {/* <VariablesEditor /> */} <p> Here will go the variable table editor</p>
+                          </ResizablePanel>
+                          <ResizableHandle className='h-[1px] w-full bg-brand-light' />
+                          <ResizablePanel
+                            id='textualEditorPanel'
+                            order={2}
+                            defaultSize={75}
+                            className='mt-6 flex-1 flex-grow rounded-md'
+                          >
+                            <MonacoEditor
+                              name={editor.meta.name}
+                              language={editor.meta.language}
+                              path={editor.meta.path}
+                            />
+                          </ResizablePanel>
+                        </ResizablePanelGroup>
+                      )}
+                    </>
                   ) : (
                     <p className='mx-auto my-auto flex cursor-default select-none flex-col items-center gap-1 font-display text-xl font-medium'>
                       No tabs open

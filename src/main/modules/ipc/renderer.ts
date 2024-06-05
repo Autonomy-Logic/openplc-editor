@@ -1,16 +1,54 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
+import { PLCProjectData } from '../../../types/PLC/test'
 import { IProjectServiceResponse } from '../../services/project-service'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
+type IDataToWrite = {
+  projectPath: string
+  projectData: PLCProjectData
+}
+
+type ISaveDataResponse = {
+  success: boolean
+  reason: {
+    title: string
+    description: string
+  }
+}
+
 const rendererProcessBridge = {
-  startOpenProject: () => ipcRenderer.invoke('start-screen/project:open'),
-  startCreateProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('start-screen/project:create'),
-  createProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:create', callback),
-  openProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:open', callback),
-  saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
+  /**
+   * Handlers for creating projects.
+   * As for the click and for the accelerator type.
+   */
+
+  createProjectAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:create-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+
+  createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
+
+  /**
+   * Handlers for opening projects.
+   * As for the click and for the accelerator type.
+   */
+  openProjectAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+
+  openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
+
+  /**
+   * Handlers for opening projects.
+   * As for the click and for the accelerator type.
+   */
+  saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
+  saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
+    ipcRenderer.invoke('project:save', dataToWrite),
+
+  /** -------------------------------------------------------------------------------------------- */
+  // saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
   setStoreValue: (key: string, val: string) => ipcRenderer.send('app:store-set', key, val),
   /**
@@ -29,6 +67,7 @@ const rendererProcessBridge = {
   reloadWindow: () => ipcRenderer.send('window:reload'),
   handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
   winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
+
   // WIP: Refactoring
   // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),
   // createPou: (callback: any) => ipcRenderer.on('pou:create', callback),

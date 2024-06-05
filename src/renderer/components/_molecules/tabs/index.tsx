@@ -1,18 +1,18 @@
 import { ITabProps } from '@process:renderer/store/slices/tabs-slice'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { CreateEditorObject } from '@root/renderer/store/slices/shared/utils'
+// import { CreateEditorObject } from '@root/renderer/store/slices/shared/utils'
 import { useEffect, useRef, useState } from 'react'
 
 import { Tab, TabList } from '../../_atoms'
 
 const Tabs = () => {
   const {
-    tabsState: { tabs },
+    tabs,
+    editor,
     tabsActions: { sortTabs },
-    editorState: { editor },
-    editorActions: { setEditor },
+    // editorActions: { setEditor },
   } = useOpenPLCStore()
-  const [selectedTab, setSelectedTab] = useState(editor.name)
+  const [selectedTab, setSelectedTab] = useState(editor.meta.name)
   const hasTabs = tabs.length > 0
   const dndTab = useRef<number>(0)
   const replaceTab = useRef<number>(0)
@@ -30,7 +30,7 @@ const Tabs = () => {
   const handleClickedTab = (tab: ITabProps) => {
     if (tab.name === selectedTab) return
     setSelectedTab(tab.name)
-    setEditor(CreateEditorObject(tab))
+    // setEditor(CreateEditorObject(tab))
   }
 
   const handleRemoveTab = (tabToRemove: string) => {
@@ -38,14 +38,14 @@ const Tabs = () => {
     const candidate = draftTabs.slice(-1)[0]
     if (!candidate) {
       sortTabs(draftTabs)
-      setEditor({
-        name: '',
-        language: 'openplc',
-        path: '',
-      })
+      // setEditor({
+      //   name: '',
+      //   language: 'openplc',
+      //   path: '',
+      // })
     } else {
       setSelectedTab(candidate.name)
-      setEditor(CreateEditorObject(candidate))
+      // setEditor(CreateEditorObject(candidate))
       sortTabs(draftTabs)
     }
   }
@@ -53,15 +53,15 @@ const Tabs = () => {
   const handleDragStart = ({ tab, idx }: { tab: ITabProps; idx: number }) => {
     dndTab.current = idx
     setSelectedTab(tab.name)
-    setEditor(CreateEditorObject(tab))
+    // setEditor(CreateEditorObject(tab))
   }
   const handleDragEnter = (idx: number) => {
     replaceTab.current = idx
   }
 
   useEffect(() => {
-    setSelectedTab(editor.name)
-  }, [editor.name])
+    setSelectedTab(editor.meta.name)
+  }, [editor.meta.name])
 
   return (
     <TabList>

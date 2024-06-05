@@ -41,7 +41,7 @@ const Variables = () => {
             <div className='flex gap-4'>
               <div className='flex items-center gap-4 text-xs font-medium text-neutral-1000 dark:text-neutral-300'>
                 Description:
-                <input className='h-8 w-80 rounded-lg border border-neutral-100 bg-inherit px-2 text-[10px] font-medium text-neutral-850 focus:outline-none dark:text-white ' />
+                <input className='h-8 w-80 rounded-lg border border-neutral-100 bg-inherit px-2 text-[10px] font-medium text-neutral-850 focus:outline-none dark:text-white' />
               </div>
               <div className='flex items-center gap-4 text-xs font-medium text-neutral-1000 dark:text-neutral-300'>
                 Class Filter:
@@ -63,13 +63,17 @@ const Variables = () => {
             size='md'
             onClick={() => setVisibility('table')}
             currentVisible={visibility === 'table'}
-            className={visibility === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900 '}
+            className={
+              visibility === 'table' ? 'rounded-l-md fill-brand' : 'rounded-l-md fill-neutral-100 dark:fill-neutral-900'
+            }
           />
           <CodeIcon
             size='md'
             onClick={() => setVisibility('code')}
             currentVisible={visibility === 'code'}
-            className={visibility === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900 '}
+            className={
+              visibility === 'code' ? 'rounded-r-md fill-brand' : 'rounded-r-md fill-neutral-100 dark:fill-neutral-900'
+            }
           />
         </div>
       </div>

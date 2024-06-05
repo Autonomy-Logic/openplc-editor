@@ -4,7 +4,7 @@
       "created": {
         "status": 201,
         "title": "Project created",
-        "description": "The project was created successfully."
+        "description": "The project was created successfully! \nYou can now add a POU to your project to start working in OpenPLC Editor"
       }
     },
     "errors": {
@@ -25,6 +25,43 @@
       }
     }
   },
-  "openProject": {},
-  "saveProject": {}
+  "openProject": {
+    "success": {
+      "status": 200,
+      "title": "Success to open file",
+      "description": "Your project was opened successfully"
+    },
+    "errors": {
+      "canceled": {
+        "status": 400,
+        "title": "Operation canceled",
+        "description": "Operation canceled by the user."
+      },
+      "readFile": {
+        "status": 500,
+        "title": "Failed to read file!",
+        "description": "Could not read the file."
+      }
+    }
+  },
+  "saveProject": {
+    "success": {
+      "successToSaveFile": {
+        "status": 200,
+        "message": "Your project was saved successfully"
+      }
+    },
+    "errors": {
+      "failedToSaveFile": {
+        "status": 500,
+        "title": "Failed to save file",
+        "description": "Unable to save project"
+      },
+      "missingParams": {
+        "status": 409,
+        "title": "Missing parameters",
+        "description": "Missing parameters"
+      }
+    }
+  }
 }

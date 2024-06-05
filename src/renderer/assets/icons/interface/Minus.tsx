@@ -1,7 +1,7 @@
 import { cn } from '@utils/cn'
-import { ComponentProps } from 'react'
+import { ComponentPropsWithoutRef } from 'react'
 
-type IMinusIconProps = ComponentProps<'svg'> & {
+type IMinusIconProps = ComponentPropsWithoutRef<'svg'> & {
   size?: 'sm' | 'md' | 'lg'
 }
 
@@ -15,13 +15,13 @@ export const MinusIcon = (props: IMinusIconProps) => {
   const { className, size = 'sm', ...res } = props
   return (
     <svg
-      role='button'
       viewBox='0 0 14 2'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'
       className={cn(`${sizeClasses[size]}`, className)}
       {...res}
     >
+      <title>Minus Icon</title>
       <path d='M1.28571 1H12.7143' stroke='#0464FB' strokeWidth='1.5' strokeLinecap='round' />
     </svg>
   )

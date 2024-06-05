@@ -1,57 +1,114 @@
 import { z } from 'zod'
 
 const dataTypeSchema = z.object({
-  dataTypeName: z.string(),
-  derivationType: z.discriminatedUnion('type', [
-    z.object({
-      type: z.literal('directly'),
-      baseType: z.enum([
-        'BOOL',
-        'SINT',
-        'INT',
-        'DINT',
-        'LINT',
-        'USINT',
-        'UINT',
-        'UDINT',
-        'ULINT',
-        'REAL',
-        'LREAL',
-        'TIME',
-        'DATE',
-        'TOD',
-        'DT',
-        'STRING',
-        'BYTE',
-        'WORD',
-        'DWORD',
-        'LWORD',
-        'LOGLEVEL',
-        /** Can also be a local datatype - created by the user */
-      ]),
-    }),
-    /** This sub range needs to be created/reviewed */
-    z.object({
-      type: z.literal('subRange'),
-      baseType: z.string().default('Will be created later'),
-    }),
-    /** This enumerated needs to be created/reviewed */
-    z.object({
-      type: z.literal('enumerated'),
-      baseType: z.string().default('Will be created later'),
-    }),
-    /** This array needs to be created/reviewed */
+  id: z.number(),
+  name: z.string(),
+  derivation: z.discriminatedUnion('type', [
+    /** This array needs to be reviewed */
     z.object({
       type: z.literal('array'),
-      baseType: z.string().default('Will be created later'),
+      baseType: z.enum([
+        'bool',
+        'sint',
+        'int',
+        'dint',
+        'lint',
+        'usint',
+        'uint',
+        'udint',
+        'ulint',
+        'real',
+        'lreal',
+        'time',
+        'date',
+        'tod',
+        'dt',
+        'string',
+        'byte',
+        'word',
+        'dword',
+        'lword',
+        'loglevel',
+        /** Can also be a local datatype - created by the user */
+      ]),
+      /** This property needs to be updated to validate if the right number is higher than the left */
+      dimensions: z.array(z.string().regex(/^(\d+)\.\.(\d+)$/)),
     }),
-    /** This structure needs to be created/reviewed */
+    /** This enumerated needs to be reviewed */
+    z.object({
+      type: z.literal('enumerated'),
+      values: z.array(z.string()),
+      /** The initial value must be one of the values created */
+      initialValue: z.string(),
+    }),
+    /** This structure needs to be reviewed */
     z.object({
       type: z.literal('structure'),
-      baseType: z.string().default('Will be created later'),
+      elements: z.array(
+        z.object({
+          id: z.number(),
+          name: z.string(),
+          type: z.discriminatedUnion('type', [
+            z.object({
+              type: z.literal('base-type'),
+              value: z.enum([
+                'bool',
+                'sint',
+                'int',
+                'dint',
+                'lint',
+                'usint',
+                'uint',
+                'udint',
+                'ulint',
+                'real',
+                'lreal',
+                'time',
+                'date',
+                'tod',
+                'dt',
+                'string',
+                'byte',
+                'word',
+                'dword',
+                'lword',
+                'loglevel',
+              ]),
+            }),
+            z.object({
+              type: z.literal('array'),
+              value: z.object({
+                baseType: z.enum([
+                  'bool',
+                  'sint',
+                  'int',
+                  'dint',
+                  'lint',
+                  'usint',
+                  'uint',
+                  'udint',
+                  'ulint',
+                  'real',
+                  'lreal',
+                  'time',
+                  'date',
+                  'tod',
+                  'dt',
+                  'string',
+                  'byte',
+                  'word',
+                  'dword',
+                  'lword',
+                ]),
+                /** This property needs to be updated to validate if the right number is higher than the left */
+                dimensions: z.string().regex(/^(\d+)\.\.(\d+)$/),
+              }),
+            }),
+          ]),
+        }),
+      ),
     }),
   ]),
-  initialValue: z.string().default('Will be created later'),
 })
 
 type IDatatype = z.infer<typeof dataTypeSchema>

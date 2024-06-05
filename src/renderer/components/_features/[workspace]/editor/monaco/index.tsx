@@ -5,9 +5,24 @@ import { useOpenPLCStore } from '@process:renderer/store'
 import * as monaco from 'monaco-editor'
 import { useRef } from 'react'
 
-const MonacoEditor = (): ReturnType<typeof PrimitiveEditor> => {
+type monacoEditorProps = {
+  path: string
+  name: string
+  language: 'il' | 'st'
+}
+
+type monacoEditorOptionsType = monaco.editor.IStandaloneEditorConstructionOptions
+
+const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEditor> => {
+  const { language, path, name } = props
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
   const monacoRef = useRef<null | typeof monaco>(null)
+  const {
+    // editor: { path, language, name },
+    systemConfigs: { shouldUseDarkMode },
+    projectData: { pous },
+    workspaceActions: { updatePou },
+  } = useOpenPLCStore()
 
   function handleEditorDidMount(
     editor: null | monaco.editor.IStandaloneCodeEditor,
@@ -22,21 +37,24 @@ const MonacoEditor = (): ReturnType<typeof PrimitiveEditor> => {
     monacoRef.current = monacoInstance
   }
 
-  console.log(editorRef.current?.getModel()?.uri.path)
-  // console.log(monacoRef.current?.editor.getModels())
+  function handleWriteInPou(value: string | undefined) {
+    if (!value) return
+    updatePou({ name, content: value })
+  }
 
-  const {
-    editorState: {
-      editor: { path, language, name },
+  const monacoEditorUserOptions: monacoEditorOptionsType = {
+    minimap: {
+      enabled: false,
     },
-    workspaceState: {
-      systemConfigs: { shouldUseDarkMode },
-      projectData: { pous },
-    },
-  } = useOpenPLCStore()
+  }
+
+  // console.log('Editor instance: ', editorRef.current?.getModel()?.uri.path)
+  // console.log('Monaco instance: ', monacoRef.current?.editor.getEditors())
+  // console.log('Pous ->', pous)
 
   return (
     <PrimitiveEditor
+      options={monacoEditorUserOptions}
       height='100%'
       width='100%'
       path={path}
@@ -44,7 +62,7 @@ const MonacoEditor = (): ReturnType<typeof PrimitiveEditor> => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       defaultValue={pous.find((pou) => pou.data.name === name)?.data.body}
       onMount={handleEditorDidMount}
-      onChange={(v) => console.log(v)}
+      onChange={handleWriteInPou}
       theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
     />
   )

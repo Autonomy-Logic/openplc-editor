@@ -1,7 +1,7 @@
 import { cn } from '@utils/cn'
-import { ComponentProps } from 'react'
+import { ComponentPropsWithoutRef } from 'react'
 
-type IPlusIconProps = ComponentProps<'svg'> & {
+type IPlusIconProps = ComponentPropsWithoutRef<'svg'> & {
   size?: 'sm' | 'md' | 'lg'
 }
 
@@ -15,13 +15,13 @@ export const PlusIcon = (props: IPlusIconProps) => {
   const { className, size = 'sm', ...res } = props
   return (
     <svg
-      role='button'
       viewBox='0 0 18 18'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'
       className={cn(`${sizeClasses[size]}`, className)}
       {...res}
     >
+      <title>Plus Icon</title>
       <path d='M1.5 9H16.5M9 1.5L9 16.5' stroke='inherit' strokeWidth='1.5' strokeLinecap='round' />
     </svg>
   )
