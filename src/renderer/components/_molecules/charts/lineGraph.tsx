@@ -13,7 +13,7 @@ type ChartData = {
 export default function LineGraph({ range, value, setData, isPaused }: ChartData) {
   const [history, setHistory] = useState<boolean[]>([value])
   const [chartInterval, setChartInterval] = useState<number[]>([0])
-  const [graphColors, setGraphColors] = useState({
+  const [graphColors, setGraphColors] = useState<{ stroke: string; row: string; border: string }>({
     stroke: '',
     row: '',
     border: '',
