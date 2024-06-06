@@ -6,7 +6,7 @@ import {
 } from '@components/_molecules/project-tree'
 import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { ITabProps } from '@root/renderer/store/slices'
+import { TabsProps } from '@root/renderer/store/slices'
 import { CreateEditorObject } from '@root/renderer/store/slices/shared/utils'
 
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
@@ -25,21 +25,56 @@ const Project = () => {
     ld: 'plc-graphical',
     sfc: 'plc-graphical',
     fbd: 'plc-graphical',
+    array: 'plc-datatype',
+    enumerated: 'plc-datatype',
+    structure: 'plc-datatype',
   } as const
 
-  const handleCreateTab = (
-    type: 'program' | 'function' | 'function-block',
-    name: string,
-    language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd',
-  ) => {
-    const tabToBeCreated: ITabProps = {
-      type,
+  const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
+    let language
+    let derivation
+    const tabToBeCreated = {
       name,
-      language,
+      path,
+      elementType,
     }
     updateTabs(tabToBeCreated)
-    const editor = CreateEditorObject({ type: editorType[language], derivation: type, language, name })
-    setEditor({ editor })
+    switch (elementType.type) {
+      case 'program':
+        language = elementType.language
+        derivation = null
+        break
+      case 'function':
+        language = elementType.language
+        derivation = null
+        break
+      case 'function-block':
+        language = elementType.language
+        derivation = null
+        break
+      case 'data-type':
+        derivation = elementType.derivation
+        language = null
+    }
+
+    if (language === null && derivation !== null) {
+      const editor = CreateEditorObject({
+        type: editorType[derivation],
+        name,
+        derivation: derivation,
+      })
+      setEditor({ editor })
+    }
+    if (language !== null && derivation === null) {
+      const pouType = elementType.type as 'program' | 'function' | 'function-block'
+      const editor = CreateEditorObject({
+        type: editorType[language],
+        name,
+        language: language,
+        derivation: pouType,
+      })
+      setEditor({ editor })
+    }
   }
 
   return (
@@ -75,7 +110,13 @@ const Project = () => {
                   leafLang='dt'
                   label={name}
                   /** Todo: Update the tab state */
-                  // onClick={() => handleCreateTab('array', data.name, data.language)}
+                  onClick={() =>
+                    handleCreateTab({
+                      name,
+                      path: `/data/data-types/array/${name}`,
+                      elementType: { type: 'data-type', derivation: 'array' },
+                    })
+                  }
                 />
               ))}
           </ProjectTreeNestedBranch>
@@ -89,7 +130,13 @@ const Project = () => {
                   leafLang='dt'
                   label={name}
                   /** Todo: Update the tab state */
-                  // onClick={() => handleCreateTab('enum', data.name, data.language)}
+                  onClick={() =>
+                    handleCreateTab({
+                      name,
+                      path: `/data/data-types/enumerated/${name}`,
+                      elementType: { type: 'data-type', derivation: 'enumerated' },
+                    })
+                  }
                 />
               ))}
           </ProjectTreeNestedBranch>
@@ -103,7 +150,13 @@ const Project = () => {
                   leafLang='dt'
                   label={name}
                   /** Todo: Update the tab state */
-                  // onClick={() => handleCreateTab('structure', data.name, data.language)}
+                  onClick={() =>
+                    handleCreateTab({
+                      name,
+                      path: `/data/data-types/structure/${name}`,
+                      elementType: { type: 'data-type', derivation: 'structure' },
+                    })
+                  }
                 />
               ))}
           </ProjectTreeNestedBranch>
@@ -117,7 +170,13 @@ const Project = () => {
                 leafLang={data.language}
                 label={data.name}
                 /** Todo: Update the tab state */
-                onClick={() => handleCreateTab('function', data.name, data.language)}
+                onClick={() =>
+                  handleCreateTab({
+                    name: data.name,
+                    path: `/data/pous/function/${data.name}`,
+                    elementType: { type: 'function', language: data.language },
+                  })
+                }
               />
             ))}
         </ProjectTreeBranch>
@@ -130,7 +189,13 @@ const Project = () => {
                 leafLang={data.language}
                 label={data.name}
                 /** Todo: Update the tab state */
-                onClick={() => handleCreateTab('function-block', data.name, data.language)}
+                onClick={() =>
+                  handleCreateTab({
+                    name: data.name,
+                    path: `/data/pous/function-block/${data.name}`,
+                    elementType: { type: 'function-block', language: data.language },
+                  })
+                }
               />
             ))}
         </ProjectTreeBranch>
@@ -143,7 +208,13 @@ const Project = () => {
                 leafLang={data.language}
                 label={data.name}
                 /** Todo: Update the tab state */
-                onClick={() => handleCreateTab('program', data.name, data.language)}
+                onClick={() =>
+                  handleCreateTab({
+                    name: data.name,
+                    path: `/data/pous/program/${data.name}`,
+                    elementType: { type: 'program', language: data.language },
+                  })
+                }
               />
             ))}
         </ProjectTreeBranch>

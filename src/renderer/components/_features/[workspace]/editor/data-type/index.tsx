@@ -52,27 +52,27 @@ const DataTypeEditor = (props: IDataTypeEditorProps) => {
               className='h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-brand-light bg-white shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card'
             >
               <SelectItem
-                value='Option 1'
+                value='Array'
                 className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
               >
                 <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                  Option 1
+                  Array
                 </span>
               </SelectItem>
               <SelectItem
-                value='Option 2'
+                value='Enumerated'
                 className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
               >
                 <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                  Option 2
+                  Enumerated
                 </span>
               </SelectItem>
               <SelectItem
-                value='Option 3'
+                value='Structure'
                 className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
               >
                 <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                  Option 3
+                  Structure
                 </span>
               </SelectItem>
             </SelectContent>

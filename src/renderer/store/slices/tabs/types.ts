@@ -4,10 +4,27 @@ const tabsPropsSchema = z.object({
   name: z.string(),
   path: z.string().optional(),
   /** TODO:Here must be added a validation to turn the lang required if the elementType is a pou */
-  elementType: z.enum(['program', 'function', 'function-block', 'array', 'enumerated', 'structure']),
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']).optional(),
+  elementType: z.discriminatedUnion('type', [
+    z.object({
+      type: z.literal('program'),
+      language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
+    }),
+    z.object({
+      type: z.literal('function'),
+      language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
+    }),
+    z.object({
+      type: z.literal('function-block'),
+      language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
+    }),
+    z.object({
+      type: z.literal('data-type'),
+      derivation: z.enum(['enumerated', 'structure', 'array']),
+    }),
+  ]),
 })
 
+type TabsProps = z.infer<typeof tabsPropsSchema>
 /** This is a zod schema for the tabs slice state.
  * It is used to validate the tabs data if needed,
  * in most cases you can use the type inferred from it.
@@ -36,6 +53,6 @@ type TabsSlice = TabsState & {
   tabsActions: TabsActions
 }
 
-export { tabsStateSchema }
+export { tabsPropsSchema, tabsStateSchema }
 
-export type { TabsActions, TabsSlice, TabsState }
+export type { TabsActions, TabsProps, TabsSlice, TabsState }
