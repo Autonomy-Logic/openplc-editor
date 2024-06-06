@@ -1,3 +1,4 @@
+import { useOpenPLCStore } from '@root/renderer/store'
 import { useEffect, useState } from 'react'
 import { Props } from 'react-apexcharts'
 import Chart from 'react-apexcharts'
@@ -12,7 +13,30 @@ type ChartData = {
 export default function LineGraph({ range, value, setData, isPaused }: ChartData) {
   const [history, setHistory] = useState<boolean[]>([value])
   const [chartInterval, setChartInterval] = useState<number[]>([0])
+  const [graphColors, setGraphColors] = useState({
+    stroke: '',
+    row: '',
+    border: '',
+  })
+  const {
+    systemConfigs: { shouldUseDarkMode },
+  } = useOpenPLCStore()
 
+  useEffect(() => {
+    if (shouldUseDarkMode) {
+      setGraphColors({
+        stroke: '#B4D0FE',
+        row: '#2E3038',
+        border: '#b1b9c8',
+      })
+    } else {
+      setGraphColors({
+        stroke: '#0464FB',
+        row: '#F5F7F8',
+        border: '#DDE2E8',
+      })
+    }
+  }, [shouldUseDarkMode])
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isPaused) {
@@ -61,13 +85,13 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
       stroke: {
         curve: 'stepline',
         width: 2,
-        colors: ['#0464FB'],
+        colors: [graphColors.stroke],
       },
       grid: {
         row: {
-          colors: ['#F5F7F8'],
+          colors: [graphColors.row],
         },
-        borderColor: '#b1b9c8',
+        borderColor: graphColors.border,
         xaxis: {
           lines: {
             show: true,

@@ -67,14 +67,13 @@ const WorkspaceScreen = () => {
     })
   })
 
-
   const [graphList, setGraphList] = useState<string[]>([])
 
   const variables = [
-    { name: 'a', type: 'int', key: '1' },
-    { name: 'b', type: 'int', key: '2' },
-    { name: 'c', type: 'int', key: '3' },
-    { name: 'd', type: 'int', key: '4' },
+    { name: 'a', type: "false" },
+    { name: 'b', type: "false" },
+    { name: 'c', type: "false" },
+    { name: 'd', type: "false" },
   ]
   console.log(graphList)
   return (
@@ -100,7 +99,7 @@ const WorkspaceScreen = () => {
             <PlayIcon />
           </ActivityBarButton>
         </div>
-        <div className='flex h-20 w-full flex-col gap-6'>
+        <div className='flex h-7 w-full flex-col gap-6'>
           <ActivityBarButton aria-label='Exit' onClick={() => navigate('/')}>
             <ExitIcon />
           </ActivityBarButton>
