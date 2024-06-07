@@ -8,9 +8,9 @@ import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIco
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
-import ConsolePanel from '../components/_molecules/console'
-import VariablePanel from '../components/_molecules/variable-panel'
-import Debugger from '../components/_organisms/debugger'
+import { Console } from '../components/_molecules/console'
+import { VariablesPanel } from '../components/_molecules/variables-panel'
+import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
@@ -70,10 +70,10 @@ const WorkspaceScreen = () => {
   const [graphList, setGraphList] = useState<string[]>([])
 
   const variables = [
-    { name: 'a', type: "false" },
-    { name: 'b', type: "false" },
-    { name: 'c', type: "false" },
-    { name: 'd', type: "false" },
+    { name: 'a', type: 'false' },
+    { name: 'b', type: 'false' },
+    { name: 'c', type: 'false' },
+    { name: 'd', type: 'false' },
   ]
   console.log(graphList)
   return (
@@ -180,7 +180,7 @@ const WorkspaceScreen = () => {
                   className='flex-1 grow  rounded-lg border-2 border-neutral-200 bg-white p-4 data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
                 >
                   <Tabs.Root defaultValue='console' className='flex h-full w-full flex-col gap-2 overflow-hidden'>
-                    <Tabs.List className='flex  h-7 w-64 gap-4'>
+                    <Tabs.List className='flex h-7 w-64 gap-4'>
                       <Tabs.Trigger
                         value='console'
                         className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
@@ -195,10 +195,11 @@ const WorkspaceScreen = () => {
                       </Tabs.Trigger>
                     </Tabs.List>
                     <Tabs.Content
+                      aria-label='Console panel content'
                       value='console'
-                      className='console-panel h-full w-full overflow-hidden p-2 data-[state=inactive]:hidden'
+                      className='h-full w-full overflow-hidden p-2 data-[state=inactive]:hidden'
                     >
-                      <ConsolePanel />
+                      <Console />
                     </Tabs.Content>
                     <Tabs.Content
                       value='debug'
@@ -210,7 +211,7 @@ const WorkspaceScreen = () => {
                         </ResizablePanel>
                         <ResizableHandle className='w-2 bg-transparent' />
                         <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
-                          <VariablePanel variables={variables} graphList={graphList} setGraphList={setGraphList} />
+                          <VariablesPanel variables={variables} graphList={graphList} setGraphList={setGraphList} />
                         </ResizablePanel>
                       </ResizablePanelGroup>
                     </Tabs.Content>

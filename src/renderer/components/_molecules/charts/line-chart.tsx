@@ -1,17 +1,15 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useEffect, useState } from 'react'
-import { Props } from 'react-apexcharts'
+import type { Props as ChartOptions } from 'react-apexcharts'
 import Chart from 'react-apexcharts'
-type ChartData = {
+type ChartProps = {
   range?: number
-  value: boolean
-  setData: React.Dispatch<React.SetStateAction<boolean>>
   isPaused: boolean
-  variables: string[]
 }
 
-export default function LineGraph({ range, value, setData, isPaused }: ChartData) {
-  const [history, setHistory] = useState<boolean[]>([value])
+const LineChart = ({ range, isPaused }: ChartProps) => {
+  const [history, setHistory] = useState<boolean[]>([false])
+  const [data, setData] = useState<boolean>(false)
   const [chartInterval, setChartInterval] = useState<number[]>([0])
   const [graphColors, setGraphColors] = useState<{ stroke: string; row: string; border: string }>({
     stroke: '',
@@ -49,7 +47,7 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
     return () => clearInterval(interval)
   }, [isPaused, setData])
 
-  const chartData: Props = {
+  const chartData: ChartOptions = {
     series: [
       {
         data: history.map((val) => (val ? 1 : 0)),
@@ -65,7 +63,7 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
       },
       xaxis: {
         range: range,
-        categories: chartInterval.map((i) => i.toString()),
+        categories: chartInterval.map((i) => i.toString()), // -> Tick
         labels: {
           style: {
             cssClass: 'apexcharts-xaxis-label',
@@ -112,7 +110,7 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
     <div className='w-full'>
       <Chart width={'100%'} options={chartData.options} series={chartData.series} height={115} type='line' />
       <div className='text-cp-base font-semibold text-black dark:text-neutral-50'>
-        {value ? (
+        {data ? (
           <div className='flex items-center justify-end gap-1'>
             <p className='h-1 w-1 rounded-full bg-red-500' />
             False
@@ -127,3 +125,5 @@ export default function LineGraph({ range, value, setData, isPaused }: ChartData
     </div>
   )
 }
+
+export { LineChart }

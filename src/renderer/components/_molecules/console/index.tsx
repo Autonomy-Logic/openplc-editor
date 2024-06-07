@@ -1,7 +1,6 @@
 import { cn } from '@root/utils'
-import { useState } from 'react'
 
-export default function ConsolePanel() {
+const Console = () => {
   /**
    * type 0: normal message
    * type 1: warning message
@@ -9,7 +8,7 @@ export default function ConsolePanel() {
    * type 3: success message
    */
 
-  const [message] = useState([
+  const message = [
     {
       message: 'Start build in C:UsersPichauOpenPLC_EditoreditorexamplesBlink/build Generating SoftPLC',
       type: 0,
@@ -38,14 +37,15 @@ export default function ConsolePanel() {
       message: 'Error: POU not found',
       type: 2,
     },
-  ])
-  //className='text-brand-medium
+  ]
 
   return (
-    <div className=' h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark dark:text-neutral-50'>
+    <div
+      aria-label='Console'
+      className='h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark dark:text-neutral-50'
+    >
       {message.map((msg) => (
         <p
-        
           key={msg.message}
           className={cn('font-normal', {
             'text-[#011432] dark:text-white': msg.type === 0,
@@ -60,3 +60,5 @@ export default function ConsolePanel() {
     </div>
   )
 }
+
+export { Console }

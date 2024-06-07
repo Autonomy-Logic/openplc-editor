@@ -10,7 +10,7 @@ type VariablePanelProps = {
   graphList?: string[]
   setGraphList: React.Dispatch<React.SetStateAction<string[]>>
 }
-export default function VariablePanel({ variables, setGraphList, graphList }: VariablePanelProps) {
+const VariablesPanel = ({ variables, setGraphList, graphList }: VariablePanelProps) => {
   const toggleGraphVisibility = (variableName: string) => {
     setGraphList((prevGraphList) => {
       if (prevGraphList.includes(variableName)) {
@@ -39,7 +39,7 @@ export default function VariablePanel({ variables, setGraphList, graphList }: Va
               />
               <p className='text-neutral-1000 dark:text-white '>{variable.name}</p>
             </div>
-            <p className='text-neutral-400 dark:text-neutral-700 uppercase'>{variable.type}</p>
+            <p className='uppercase text-neutral-400 dark:text-neutral-700'>{variable.type}</p>
           </div>
         ))}
       </div>
@@ -57,3 +57,5 @@ export default function VariablePanel({ variables, setGraphList, graphList }: Va
     </div>
   )
 }
+
+export { VariablesPanel }

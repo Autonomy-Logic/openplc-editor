@@ -1,18 +1,17 @@
 import * as Select from '@radix-ui/react-select'
-import { ArrowIcon } from '@root/renderer/assets'
+import { ArrowIcon, PauseIcon, PlayIcon } from '@root/renderer/assets'
 import { useState } from 'react'
 
-import LineGraph from '../../_molecules/charts/lineGraph'
-import Header from '../../_molecules/header'
+import { Button } from '../../_atoms'
+import { LineChart } from '../../_molecules/charts/line-chart'
 
 type DebuggerData = {
   graphList: string[]
 }
 
-export default function Debugger({ graphList }: DebuggerData) {
+const Debugger = ({ graphList }: DebuggerData) => {
   const [isPaused, setIsPaused] = useState(false)
   const [range, setRange] = useState(10)
-  const [data, setData] = useState(false)
 
   const updateRange = (value: number) => {
     if (value > 100) {
@@ -27,15 +26,12 @@ export default function Debugger({ graphList }: DebuggerData) {
       <div className='flex h-full w-full flex-col gap-1 rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
         <div className='header relative flex justify-between'>
           <div className='flex '>
-            <span
-              className='flex h-7 select-none items-center justify-center rounded-md bg-inherit  p-2 text-cp-sm font-medium text-neutral-1000 outline-none  dark:text-white'
-            >
+            <span className='flex h-7 select-none items-center justify-center rounded-md bg-inherit  p-2 text-cp-sm font-medium text-neutral-1000 outline-none  dark:text-white'>
               Range
             </span>
             <div className='relative z-[999999] flex gap-2'>
               <Select.Root onValueChange={(value) => updateRange(Number(value))}>
                 <Select.Trigger
-                  
                   value={String(range)}
                   className='bg-neultral-100 flex h-7 w-[88px] items-center justify-between rounded-md border border-neutral-200 px-2 outline-none dark:bg-neutral-900 dark:text-neutral-50'
                 >
@@ -72,17 +68,29 @@ export default function Debugger({ graphList }: DebuggerData) {
               </Select.Root>
             </div>
           </div>
-          <Header isPaused={isPaused} setIsPaused={setIsPaused} />
+          <div aria-label='Debugger header' className='flex justify-between '>
+            <div className='flex gap-4'>
+              <Button
+                onClick={() => setIsPaused(!isPaused)}
+                className='h-7 w-[38px] items-center justify-center rounded-md bg-brand  p-0 outline-none'
+              >
+                {isPaused ? (
+                  <PlayIcon fill='#FFFFFF' className='h-fit w-[10px]' />
+                ) : (
+                  <PauseIcon fill='#FFFFFF' className='h-fit w-[10px]' />
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
         <div className='chart-content flex h-auto w-full flex-col gap-2 overflow-y-auto overflow-x-hidden'>
           {graphList.map((variableName) => (
-            <LineGraph
+            <LineChart
               key={variableName}
-              variables={[variableName]}
               isPaused={isPaused}
               range={range}
-              value={data}
-              setData={setData}
+              // value={data}
+              // setData={setData}
             />
           ))}
         </div>
@@ -100,3 +108,5 @@ export default function Debugger({ graphList }: DebuggerData) {
     </div>
   )
 }
+
+export { Debugger }
