@@ -1,9 +1,9 @@
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
-import { ITabsSlice } from '../tabs-slice'
+import { TabsSlice } from '../tabs'
 import { IWorkspaceSlice } from '../workspace-slice'
-import { CreateDatatypeObject, CreateEditorObject, CreatePouObject, CreateTabObject } from './utils'
+import { CreateDatatypeObject, CreateEditorObject, CreatePouObject } from './utils'
 
 type PropsToCreatePou = {
   name: string
@@ -25,7 +25,7 @@ export type ISharedSlice = {
   }
 }
 
-export const createSharedSlice: StateCreator<EditorSlice & ITabsSlice & IWorkspaceSlice, [], [], ISharedSlice> = (
+export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & IWorkspaceSlice, [], [], ISharedSlice> = (
   _setState,
   getState,
 ) => ({
@@ -42,7 +42,13 @@ export const createSharedSlice: StateCreator<EditorSlice & ITabsSlice & IWorkspa
             derivation: propsToCreatePou.type,
           })
           getState().editorActions.setEditor({ editor: data })
-          getState().tabsActions.updateTabs(CreateTabObject(propsToCreatePou))
+          getState().tabsActions.updateTabs({
+            name: propsToCreatePou.name,
+            elementType: {
+              type: propsToCreatePou.type,
+              language: propsToCreatePou.language,
+            },
+          })
           return true
         }
 
@@ -60,7 +66,13 @@ export const createSharedSlice: StateCreator<EditorSlice & ITabsSlice & IWorkspa
             derivation: propsToCreatePou.type,
           })
           getState().editorActions.setEditor({ editor: data })
-          getState().tabsActions.updateTabs(CreateTabObject(propsToCreatePou))
+          getState().tabsActions.updateTabs({
+            name: propsToCreatePou.name,
+            elementType: {
+              type: propsToCreatePou.type,
+              language: propsToCreatePou.language,
+            },
+          })
           return true
         }
         return false

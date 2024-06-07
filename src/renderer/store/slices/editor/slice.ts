@@ -1,7 +1,7 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import { EditorSlice, EditorState } from './types'
+import type { EditorSlice, EditorState } from './types'
 
 export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> = (setState) => ({
   editor: {

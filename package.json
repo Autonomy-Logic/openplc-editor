@@ -150,6 +150,9 @@
       "!.*",
       "src/**/*"
     ],
-    "logLevel": "quiet"
+    "logLevel": "quiet",
+    "args": [
+      "--trace-warnings"
+    ]
   }
 }
