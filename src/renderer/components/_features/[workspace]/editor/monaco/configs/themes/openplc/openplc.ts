@@ -23,7 +23,7 @@ const darkThemeData: monaco.editor.IStandaloneThemeData = {
   colors: {
     'editor.background': '#121316', // Editor background color.
     'editor.foreground': '#FFFFFF', // Editor foreground color <! The text that appears in the editor !>.
-    'editor.selectionBackground': '#5E6275', // Color of the editor selection. 
+    'editor.selectionBackground': '#5E6275', // Color of the editor selection.
     'editorLineNumber.foreground': '#023C97', // Color of the editor line numbers.
     'editorLineNumber.activeForeground': '#0464fb', // Color of the active editor line number.
     'editor.lineHighlightBackground': '#2E3038', // Background color of the current line highlight.

@@ -1,26 +1,51 @@
-import { CloseIcon, FBDIcon, ILIcon, LDIcon, SFCIcon, STIcon } from '@oplc-icons/index'
+import {
+  ArrayIcon,
+  CloseIcon,
+  EnumIcon,
+  FBDIcon,
+  ILIcon,
+  LDIcon,
+  SFCIcon,
+  STIcon,
+  StructureIcon,
+} from '@oplc-icons/index'
+import type { TabsProps } from '@process:renderer/store/slices/tabs'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef } from 'react'
 
 type ITabProps = ComponentPropsWithoutRef<'div'> & {
   fileName: string
-  fileLang?: 'ld' | 'sfc' | 'fbd' | 'st' | 'il'
-  fileType?: 'program' | 'function' | 'function-block'
+  fileDerivation?: TabsProps['elementType']
   currentTab?: boolean
   handleDeleteTab: () => void
   handleClickedTab: () => void
 }
 
-const LangIcon = {
+const TabIcons = {
   ld: <LDIcon className='h-4 w-4' />,
   sfc: <SFCIcon className='h-4 w-4' />,
   fbd: <FBDIcon className='h-4 w-4' />,
   st: <STIcon className='h-4 w-4' />,
   il: <ILIcon className='h-4 w-4' />,
+  enumerated: <EnumIcon className='h-4 w-4' />,
+  structure: <StructureIcon className='h-4 w-4' />,
+  array: <ArrayIcon className='h-4 w-4' />,
 }
 
 const Tab = (props: ITabProps) => {
-  const { fileName, fileLang = 'ld', currentTab, handleDeleteTab, handleClickedTab, ...res } = props
+  const { fileName, fileDerivation, currentTab, handleDeleteTab, handleClickedTab, ...res } = props
+  let languageOrDerivation: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'array' | 'enumerated' | 'structure' = 'il'
+
+  if (fileDerivation?.type === 'data-type') {
+    languageOrDerivation = fileDerivation?.derivation
+  }
+  if (
+    fileDerivation?.type === 'program' ||
+    fileDerivation?.type === 'function' ||
+    fileDerivation?.type === 'function-block'
+  ) {
+    languageOrDerivation = fileDerivation?.language
+  }
   return (
     <div
       role='tab'
@@ -34,8 +59,8 @@ const Tab = (props: ITabProps) => {
       {...res}
     >
       <div className='flex h-full w-full px-3 py-2 [&_svg]:mr-1' onClick={() => handleClickedTab()}>
-        {LangIcon[fileLang]}
-        <span>{fileName}</span>
+        {TabIcons[languageOrDerivation]}
+        <span className='truncate'>{fileName}</span>
         <span
           aria-hidden='true'
           className={cn(currentTab ? 'bg-brand' : 'bg-transparent', 'absolute inset-x-0 top-0 z-50 h-[3px]')}
@@ -44,7 +69,7 @@ const Tab = (props: ITabProps) => {
       <CloseIcon
         onClick={() => handleDeleteTab()}
         className={cn(
-          'absolute right-2 z-[999] h-4 w-4 rounded-sm stroke-brand p-[0.25px] hover:bg-neutral-300 dark:stroke-brand-light dark:hover:bg-neutral-700',
+          'absolute right-2 z-[999] hidden h-4 w-4 rounded-sm stroke-brand p-[0.25px] hover:bg-neutral-300 group-hover:block dark:stroke-brand-light dark:hover:bg-neutral-700',
         )}
       />
     </div>

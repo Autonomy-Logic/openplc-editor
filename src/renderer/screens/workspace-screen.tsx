@@ -93,7 +93,7 @@ const WorkspaceScreen = () => {
             <TransferIcon />
           </ActivityBarButton>
           <ActivityBarButton aria-label='Debugger'>
-            <DebuggerIcon />
+            <DebuggerIcon variant='muted' />
           </ActivityBarButton>
           <ActivityBarButton aria-label='Play'>
             <PlayIcon />
@@ -127,7 +127,7 @@ const WorkspaceScreen = () => {
                     <>
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
-                          <DataTypeEditor />{' '}
+                          <DataTypeEditor derivation={editor['meta']['derivation']} />{' '}
                         </div>
                       )}
                       {editor['type'] === 'plc-graphical' && <GraphicalEditor />}

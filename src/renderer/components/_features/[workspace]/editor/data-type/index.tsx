@@ -4,7 +4,7 @@ import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '
 import { DataTypeActions } from './actions'
 
 type IDataTypeEditorProps = {
-  derivation?: 'enumerated' | 'structure' | 'array'
+  derivation: 'enumerated' | 'structure' | 'array'
 }
 const DataTypeEditor = (props: IDataTypeEditorProps) => {
   const { derivation } = props
@@ -52,45 +52,40 @@ const DataTypeEditor = (props: IDataTypeEditorProps) => {
               className='h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-brand-light bg-white shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card'
             >
               <SelectItem
-                value='Option 1'
+                value='Array'
                 className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
               >
                 <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                  Option 1
+                  Array
                 </span>
               </SelectItem>
               <SelectItem
-                value='Option 2'
+                value='Enumerated'
                 className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
               >
                 <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                  Option 2
+                  Enumerated
                 </span>
               </SelectItem>
               <SelectItem
-                value='Option 3'
+                value='Structure'
                 className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
               >
                 <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                  Option 3
+                  Structure
                 </span>
               </SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
-      <div
-        aria-label='Data type content container'
-        className='flex h-full w-full flex-col gap-4 border border-neutral-200 bg-transparent'
-      >
-        <div
-          aria-label='Data type content actions container'
-          className='flex h-8 w-full items-center justify-between border border-neutral-400'
-        >
+      <div aria-label='Data type content container' className='flex h-full w-full flex-col gap-4 bg-transparent'>
+        <div aria-label='Data type content actions container'>
+          <DataTypeActions derivation={derivation} />
           {/* <div aria-label='Data type content actions container'></div> */}
         </div>
         <div aria-label='Data type content editor container'>
-          <DataTypeActions derivation={derivation} />
+          <p>Here will go the editor</p>
         </div>
       </div>
     </div>
