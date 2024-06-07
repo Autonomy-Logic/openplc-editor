@@ -99,6 +99,63 @@ const Project = () => {
       </div>
       {/* Data display */}
       <ProjectTreeRoot label={Name}>
+        <ProjectTreeBranch branchTarget='function'>
+          {pous
+            ?.filter(({ type }) => type === 'function')
+            .map(({ data }) => (
+              <ProjectTreeLeaf
+                key={data.name}
+                leafLang={data.language}
+                label={data.name}
+                /** Todo: Update the tab state */
+                onClick={() =>
+                  handleCreateTab({
+                    name: data.name,
+                    path: `/data/pous/function/${data.name}`,
+                    elementType: { type: 'function', language: data.language },
+                  })
+                }
+              />
+            ))}
+        </ProjectTreeBranch>
+        <ProjectTreeBranch branchTarget='function-block'>
+          {pous
+            ?.filter(({ type }) => type === 'function-block')
+            .map(({ data }) => (
+              <ProjectTreeLeaf
+                key={data.name}
+                leafLang={data.language}
+                label={data.name}
+                /** Todo: Update the tab state */
+                onClick={() =>
+                  handleCreateTab({
+                    name: data.name,
+                    path: `/data/pous/function-block/${data.name}`,
+                    elementType: { type: 'function-block', language: data.language },
+                  })
+                }
+              />
+            ))}
+        </ProjectTreeBranch>
+        <ProjectTreeBranch branchTarget='program'>
+          {pous
+            ?.filter(({ type }) => type === 'program')
+            .map(({ data }) => (
+              <ProjectTreeLeaf
+                key={data.name}
+                leafLang={data.language}
+                label={data.name}
+                /** Todo: Update the tab state */
+                onClick={() =>
+                  handleCreateTab({
+                    name: data.name,
+                    path: `/data/pous/program/${data.name}`,
+                    elementType: { type: 'program', language: data.language },
+                  })
+                }
+              />
+            ))}
+        </ProjectTreeBranch>
         <ProjectTreeBranch branchTarget='data-type'>
           <ProjectTreeNestedBranch nestedBranchTarget='array'>
             {dataTypes
@@ -160,63 +217,6 @@ const Project = () => {
                 />
               ))}
           </ProjectTreeNestedBranch>
-        </ProjectTreeBranch>
-        <ProjectTreeBranch branchTarget='function'>
-          {pous
-            ?.filter(({ type }) => type === 'function')
-            .map(({ data }) => (
-              <ProjectTreeLeaf
-                key={data.name}
-                leafLang={data.language}
-                label={data.name}
-                /** Todo: Update the tab state */
-                onClick={() =>
-                  handleCreateTab({
-                    name: data.name,
-                    path: `/data/pous/function/${data.name}`,
-                    elementType: { type: 'function', language: data.language },
-                  })
-                }
-              />
-            ))}
-        </ProjectTreeBranch>
-        <ProjectTreeBranch branchTarget='function-block'>
-          {pous
-            ?.filter(({ type }) => type === 'function-block')
-            .map(({ data }) => (
-              <ProjectTreeLeaf
-                key={data.name}
-                leafLang={data.language}
-                label={data.name}
-                /** Todo: Update the tab state */
-                onClick={() =>
-                  handleCreateTab({
-                    name: data.name,
-                    path: `/data/pous/function-block/${data.name}`,
-                    elementType: { type: 'function-block', language: data.language },
-                  })
-                }
-              />
-            ))}
-        </ProjectTreeBranch>
-        <ProjectTreeBranch branchTarget='program'>
-          {pous
-            ?.filter(({ type }) => type === 'program')
-            .map(({ data }) => (
-              <ProjectTreeLeaf
-                key={data.name}
-                leafLang={data.language}
-                label={data.name}
-                /** Todo: Update the tab state */
-                onClick={() =>
-                  handleCreateTab({
-                    name: data.name,
-                    path: `/data/pous/program/${data.name}`,
-                    elementType: { type: 'program', language: data.language },
-                  })
-                }
-              />
-            ))}
         </ProjectTreeBranch>
         <ProjectTreeBranch branchTarget='device'>{/** Will be filled with device */}</ProjectTreeBranch>
         {/** Maybe a divider component */}

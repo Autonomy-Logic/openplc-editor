@@ -4,7 +4,7 @@ import { useToast } from './use-toast'
 const Toaster = () => {
   const { toasts } = useToast()
   return (
-    <ToastProvider swipeDirection='right'>
+    <ToastProvider swipeDirection='up'>
       {toasts.map(({ id, title, description, action, ...props }) => (
         <Toast key={id} {...props}>
           {title && <ToastTitle>{title}</ToastTitle>}
