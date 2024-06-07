@@ -60,7 +60,7 @@ const Tab = (props: ITabProps) => {
     >
       <div className='flex h-full w-full px-3 py-2 [&_svg]:mr-1' onClick={() => handleClickedTab()}>
         {TabIcons[languageOrDerivation]}
-        <span>{fileName}</span>
+        <span className='truncate'>{fileName}</span>
         <span
           aria-hidden='true'
           className={cn(currentTab ? 'bg-brand' : 'bg-transparent', 'absolute inset-x-0 top-0 z-50 h-[3px]')}
@@ -69,7 +69,7 @@ const Tab = (props: ITabProps) => {
       <CloseIcon
         onClick={() => handleDeleteTab()}
         className={cn(
-          'absolute right-2 z-[999] h-4 w-4 rounded-sm stroke-brand p-[0.25px] hover:bg-neutral-300 dark:stroke-brand-light dark:hover:bg-neutral-700',
+          'absolute right-2 z-[999] hidden h-4 w-4 rounded-sm stroke-brand p-[0.25px] hover:bg-neutral-300 group-hover:block dark:stroke-brand-light dark:hover:bg-neutral-700',
         )}
       />
     </div>

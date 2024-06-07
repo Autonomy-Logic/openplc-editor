@@ -4,7 +4,7 @@ import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '
 import { DataTypeActions } from './actions'
 
 type IDataTypeEditorProps = {
-  derivation?: 'enumerated' | 'structure' | 'array'
+  derivation: 'enumerated' | 'structure' | 'array'
 }
 const DataTypeEditor = (props: IDataTypeEditorProps) => {
   const { derivation } = props
@@ -79,18 +79,13 @@ const DataTypeEditor = (props: IDataTypeEditorProps) => {
           </Select>
         </div>
       </div>
-      <div
-        aria-label='Data type content container'
-        className='flex h-full w-full flex-col gap-4 border border-neutral-200 bg-transparent'
-      >
-        <div
-          aria-label='Data type content actions container'
-          className='flex h-8 w-full items-center justify-between border border-neutral-400'
-        >
+      <div aria-label='Data type content container' className='flex h-full w-full flex-col gap-4 bg-transparent'>
+        <div aria-label='Data type content actions container'>
+          <DataTypeActions derivation={derivation} />
           {/* <div aria-label='Data type content actions container'></div> */}
         </div>
         <div aria-label='Data type content editor container'>
-          <DataTypeActions derivation={derivation} />
+          <p>Here will go the editor</p>
         </div>
       </div>
     </div>
