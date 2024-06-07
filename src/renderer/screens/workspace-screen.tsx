@@ -1,11 +1,16 @@
+import * as Tabs from '@radix-ui/react-tabs'
 import _ from 'lodash'
 import { useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
+import { Console } from '../components/_molecules/console'
+import { VariablesPanel } from '../components/_molecules/variables-panel'
+import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
@@ -62,6 +67,15 @@ const WorkspaceScreen = () => {
     })
   })
 
+  const [graphList, setGraphList] = useState<string[]>([])
+
+  const variables = [
+    { name: 'a', type: 'false' },
+    { name: 'b', type: 'false' },
+    { name: 'c', type: 'false' },
+    { name: 'd', type: 'false' },
+  ]
+  console.log(graphList)
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -85,7 +99,7 @@ const WorkspaceScreen = () => {
             <PlayIcon />
           </ActivityBarButton>
         </div>
-        <div className='flex h-20 w-full flex-col gap-6'>
+        <div className='flex h-7 w-full flex-col gap-6'>
           <ActivityBarButton aria-label='Exit' onClick={() => navigate('/')}>
             <ExitIcon />
           </ActivityBarButton>
@@ -161,11 +175,47 @@ const WorkspaceScreen = () => {
                   id='consolePanel'
                   order={2}
                   collapsible
-                  defaultSize={25}
-                  minSize={15}
-                  className='flex-1 grow rounded-lg border-2 border-neutral-200 bg-white data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
+                  defaultSize={31}
+                  minSize={22}
+                  className='flex-1 grow  rounded-lg border-2 border-neutral-200 bg-white p-4 data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
                 >
-                  <span>Console</span>
+                  <Tabs.Root defaultValue='console' className='flex h-full w-full flex-col gap-2 overflow-hidden'>
+                    <Tabs.List className='flex h-7 w-64 gap-4'>
+                      <Tabs.Trigger
+                        value='console'
+                        className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
+                      >
+                        Console
+                      </Tabs.Trigger>
+                      <Tabs.Trigger
+                        value='debug'
+                        className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
+                      >
+                        Debugger
+                      </Tabs.Trigger>
+                    </Tabs.List>
+                    <Tabs.Content
+                      aria-label='Console panel content'
+                      value='console'
+                      className='h-full w-full overflow-hidden p-2 data-[state=inactive]:hidden'
+                    >
+                      <Console />
+                    </Tabs.Content>
+                    <Tabs.Content
+                      value='debug'
+                      className='debug-panel flex  h-full w-full overflow-hidden  data-[state=inactive]:hidden'
+                    >
+                      <ResizablePanelGroup direction='horizontal' className='flex h-full  w-full '>
+                        <ResizablePanel minSize={20} defaultSize={100} className='h-full w-full'>
+                          <Debugger graphList={graphList} />
+                        </ResizablePanel>
+                        <ResizableHandle className='w-2 bg-transparent' />
+                        <ResizablePanel minSize={15} defaultSize={20} className='h-full w-full'>
+                          <VariablesPanel variables={variables} graphList={graphList} setGraphList={setGraphList} />
+                        </ResizablePanel>
+                      </ResizablePanelGroup>
+                    </Tabs.Content>
+                  </Tabs.Root>
                 </ResizablePanel>
               </ResizablePanelGroup>
             </div>
