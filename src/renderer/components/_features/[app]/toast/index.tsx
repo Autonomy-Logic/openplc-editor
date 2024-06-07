@@ -12,10 +12,7 @@ const ToastViewport = forwardRef<
 >(({ className, ...props }, ref) => (
   <PrimitiveToast.ToastViewport
     ref={ref}
-    className={cn(
-      'absolute inset-x-[40%] bottom-4 right-0 top-4 z-[100] flex h-fit max-h-36 w-[292px] px-4 xl:w-[420px]',
-      className,
-    )}
+    className={cn('absolute bottom-4 right-0 z-[100] flex h-fit max-h-36 w-[292px] px-4 xl:w-[420px]', className)}
     //  -> For fail toasts to be on top
     {...props}
   />
@@ -24,8 +21,8 @@ const ToastViewport = forwardRef<
 ToastViewport.displayName = PrimitiveToast.ToastViewport.displayName
 
 const toastVariants = cva(
-  'group relative pointer-events-auto flex flex-col flex-1 w-full text-neutral-1000 dark:text-white items-start rounded-md shadow-lg px-4 py-3 font-display border border-neutral-200 bg-white dark:bg-neutral-950 dark:border-neutral-850 transition-all data-[swipe=cancel]:translate-y-0 data-[swipe=up]:translate-y-[var(--radix-toast-swipe-end-y)] data-[swipe=move]:translate-y-[var(--radix-toast-swipe-move-y)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=up]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-bottom-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full',
-  // 'group relative pointer-events-auto flex flex-col flex-1 w-full text-neutral-1000 dark:text-white items-start rounded-md shadow-lg px-4 py-3 font-display border border-neutral-200 bg-white dark:bg-neutral-950 dark:border-neutral-850 transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full',
+  // 'group relative pointer-events-auto flex flex-col flex-1 w-full text-neutral-1000 dark:text-white items-start rounded-md shadow-lg px-4 py-3 font-display border border-neutral-200 bg-white dark:bg-neutral-950 dark:border-neutral-850 transition-all data-[swipe=cancel]:translate-y-0 data-[swipe=up]:translate-y-[var(--radix-toast-swipe-end-y)] data-[swipe=move]:translate-y-[var(--radix-toast-swipe-move-y)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=up]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-bottom-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full',
+  'group relative pointer-events-auto flex flex-col flex-1 w-full text-neutral-1000 dark:text-white items-start rounded-md shadow-lg px-4 py-3 font-display border border-neutral-200 bg-white dark:bg-neutral-950 dark:border-neutral-850 transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full',
   {
     variants: {
       variant: {
