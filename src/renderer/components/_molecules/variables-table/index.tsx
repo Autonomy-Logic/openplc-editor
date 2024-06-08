@@ -1,11 +1,11 @@
-import { IVariable } from '@root/types/PLC/index'
+import { PLCVariable } from '@root/types/PLC/test'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
 import { EditableDocumentationCell, EditableNameCell } from './editable-cell'
 import { SelectableClassCell, SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 
-const columnHelper = createColumnHelper<IVariable>()
+const columnHelper = createColumnHelper<PLCVariable>()
 
 const columns = [
   columnHelper.accessor('id', { header: '#', cell: (info) => info.getValue() }),
@@ -17,10 +17,10 @@ const columns = [
   columnHelper.accessor('debug', { header: 'Debug', cell: SelectableDebugCell }),
 ]
 
-type IVariablesTableProps = {
-  tableData: IVariable[]
+type PLCVariablesTableProps = {
+  tableData: PLCVariable[]
 }
-const VariablesTable = ({ tableData }: IVariablesTableProps) => {
+const VariablesTable = ({ tableData }: PLCVariablesTableProps) => {
   const table = useReactTable({
     data: tableData,
     columns: columns,
