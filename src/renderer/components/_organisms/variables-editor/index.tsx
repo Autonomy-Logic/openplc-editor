@@ -3,7 +3,7 @@ import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { IVariable } from '@root/types/PLC'
+import { PLCVariable } from '@root/types/PLC/test'
 import { cn } from '@root/utils'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -12,12 +12,14 @@ import { VariablesTable } from '../../_molecules'
 
 const VariablesEditor = () => {
   const {
-    editor: { name },
+    editor: {
+      meta: { name },
+    },
     projectData: { pous },
     workspaceActions: { createVariable },
   } = useOpenPLCStore()
   const [filterValue, setFilterValue] = useState('filter')
-  const [tableData, setTableData] = useState<IVariable[]>([])
+  const [tableData, setTableData] = useState<PLCVariable[]>([])
   const [visualizationType, setVisualizationType] = useState<'code' | 'table'>('table')
 
   const FilterOptions = ['local', 'input', 'output', 'inOut', 'external', 'temp']
@@ -42,7 +44,7 @@ const VariablesEditor = () => {
         id: 0,
         name: 'new-variable',
         debug: false,
-        type: { scope: 'base-type', value: 'string' },
+        type: { definition: 'base-type', value: 'string' },
         class: 'input',
         location: '',
         documentation: '',

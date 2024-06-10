@@ -1,6 +1,6 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
-import { type IVariable } from '@root/types/PLC'
-import { type CellContext, RowData } from '@tanstack/react-table'
+import type { PLCVariable } from '@root/types/PLC/test'
+import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
@@ -13,7 +13,7 @@ declare module '@tanstack/react-table' {
   }
 }
 
-type IEditableCellProps = CellContext<IVariable, unknown>
+type IEditableCellProps = CellContext<PLCVariable, unknown>
 const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: IEditableCellProps) => {
   const initialValue = getValue<string>()
   // We need to keep and update the state of the cell normally

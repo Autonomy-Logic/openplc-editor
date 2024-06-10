@@ -1,17 +1,17 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { DebuggerIcon } from '@root/renderer/assets'
-import { type IVariable } from '@root/types/PLC'
+import type { PLCVariable } from '@root/types/PLC/test'
 import { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 
-type ISelectableCellProps = CellContext<IVariable, unknown>
+type ISelectableCellProps = CellContext<PLCVariable, unknown>
 
 const VariableTypes = [
   {
-    scope: 'base-type',
+    definition: 'base-type',
     values: [
       'bool',
       'sint',
@@ -37,15 +37,15 @@ const VariableTypes = [
     ],
   },
   {
-    scope: 'user-data-type',
-    values: ['type1', 'type2', 'type3'],
+    definition: 'user-data-type',
+    values: ['userDt1', 'userDt2', 'userDt3'],
   },
 ]
 
 const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
-  const { value } = getValue<IVariable['type']>()
+  const { value } = getValue<PLCVariable['type']>()
   // We need to keep and update the state of the cell normally
-  const [cellValue, setCellValue] = useState<IVariable['type']['value']>(value)
+  const [cellValue, setCellValue] = useState<PLCVariable['type']['value']>(value)
 
   // When the input is blurred, we'll call our table meta's updateData function
   const _onBlur = () => {
@@ -74,11 +74,11 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
           className='h-fit w-[200px] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
         >
           {VariableTypes.map((scope) => (
-            <PrimitiveDropdown.Sub key={scope.scope}>
+            <PrimitiveDropdown.Sub key={scope.definition}>
               <PrimitiveDropdown.SubTrigger asChild>
                 <div className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'>
                   <span className='font-caption text-xs font-medium text-neutral-950 dark:text-neutral-200'>
-                    {_.startCase(scope.scope)}
+                    {_.startCase(scope.definition)}
                   </span>
                 </div>
               </PrimitiveDropdown.SubTrigger>
@@ -90,7 +90,7 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
                   {scope.values.map((value) => (
                     <PrimitiveDropdown.Item
                       key={value}
-                      onSelect={() => setCellValue(value as IVariable['type']['value'])}
+                      onSelect={() => setCellValue(value as PLCVariable['type']['value'])}
                       // value={value}
                       className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                     >

@@ -1,4 +1,6 @@
+import { LibraryTree } from '@root/renderer/features/screens/workspace/components/panels/sidebar-panel/library-tree'
+
 const LibraryExplorer = () => {
-  return <div>LibraryExplorer</div>
+  return <LibraryTree />
 }
 export { LibraryExplorer }
