@@ -80,11 +80,5 @@ const LibraryFile = ({ label, ...res }: ILibraryFileProps) => {
     </li>
   )
 }
-export {
-  type ILibraryFileProps,
-  type ILibraryFolderProps,
-  type ILibraryRootProps,
-  LibraryFile,
-  LibraryFolder,
-  LibraryRoot,
-}
+
+export { LibraryFile,LibraryFolder, LibraryRoot }
