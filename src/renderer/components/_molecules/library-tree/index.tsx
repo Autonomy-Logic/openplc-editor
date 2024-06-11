@@ -24,8 +24,11 @@ const LibraryFolder = ({ label, children, ...res }: ILibraryFolderProps) => {
   const handleFolderVisibility = useCallback(() => setFolderIsOpen(!folderIsOpen), [folderIsOpen])
 
   return (
-    <li className='py-1 pl-2' {...res}>
-      <button type='button' className='flex flex-row items-center' onClick={handleFolderVisibility}>
+    <li className='cursor-pointer aria-expanded:cursor-default ' {...res}>
+      <div
+        className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900 '
+        onClick={handleFolderVisibility}
+      >
         <ArrowIcon
           direction='right'
           className={cn(`h-4 w-4 stroke-brand-light transition-all ${folderIsOpen && 'rotate-270 stroke-brand'}`)}
@@ -39,7 +42,7 @@ const LibraryFolder = ({ label, children, ...res }: ILibraryFolderProps) => {
         >
           {label}
         </span>
-      </button>
+      </div>
       {children && folderIsOpen && (
         <div>
           <ul>
@@ -65,8 +68,12 @@ const LibraryFile = ({ label, ...res }: ILibraryFileProps) => {
   const handleLeafSelection = useCallback(() => setFileIsSelected(!fileIsSelected), [fileIsSelected])
 
   return (
-    <li className='ml-2 py-1 pl-2' {...res}>
-      <button type='button' className='flex flex-row items-center' onClick={handleLeafSelection}>
+    <li
+      onClick={handleLeafSelection}
+      className='ml-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-neutral-900'
+      {...res}
+    >
+      <div className='flex flex-row items-center py-1 pl-2 '>
         <LibraryFileIcon size='sm' />
         <span
           className={cn(
@@ -76,9 +83,9 @@ const LibraryFile = ({ label, ...res }: ILibraryFileProps) => {
         >
           {label}
         </span>
-      </button>
+      </div>
     </li>
   )
 }
 
-export { LibraryFile,LibraryFolder, LibraryRoot }
+export { LibraryFile, LibraryFolder, LibraryRoot }
