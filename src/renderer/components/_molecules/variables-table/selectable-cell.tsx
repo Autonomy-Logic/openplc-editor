@@ -1,18 +1,18 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { DebuggerIcon } from '@root/renderer/assets'
 import type { PLCVariable } from '@root/types/PLC/test'
-import { CellContext } from '@tanstack/react-table'
+import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 
-type ISelectableCellProps = CellContext<Omit<PLCVariable, 'array'>, unknown>
+type SelectableCellProps = CellContext<PLCVariable, unknown>
 
 const VariableTypes = [
   {
     definition: 'base-type',
-    values: [
+    value: [
       'bool',
       'sint',
       'int',
@@ -38,11 +38,11 @@ const VariableTypes = [
   },
   {
     definition: 'user-data-type',
-    values: ['type1', 'type2', 'type3'],
+    value: ['type1', 'type2', 'type3'],
   },
   {
     definition: 'array',
-    values: [
+    value: [
       {
         baseType: 'bool',
         dimensions: '1..2',
@@ -51,7 +51,7 @@ const VariableTypes = [
   },
 ]
 
-const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
+const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }: SelectableCellProps) => {
   const { value } = getValue<PLCVariable['type']>()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState<PLCVariable['type']['value']>(value)
@@ -96,7 +96,7 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
                   sideOffset={5}
                   className='h-fit w-[200px] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
                 >
-                  {scope.values.map((value) => (
+                  {scope.value.map((value) => (
                     <PrimitiveDropdown.Item
                       key={value}
                       onSelect={() => setCellValue(value as PLCVariable['type']['value'])}
@@ -119,7 +119,7 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
 }
 const VariableClasses = ['input', 'output', 'inOut', 'external', 'local', 'temp']
 
-const SelectableClassCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
+const SelectableClassCell = ({ getValue, row: { index }, column: { id }, table }: SelectableCellProps) => {
   const initialValue = getValue()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
@@ -163,7 +163,7 @@ const SelectableClassCell = ({ getValue, row: { index }, column: { id }, table }
   )
 }
 
-const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
+const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }: SelectableCellProps) => {
   const initialValue = getValue<boolean>()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
