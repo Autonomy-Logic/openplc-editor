@@ -70,10 +70,11 @@ const LibraryFile = ({ label, ...res }: ILibraryFileProps) => {
   return (
     <li
       onClick={handleLeafSelection}
-      className='ml-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-neutral-900'
+      className='ml-2  cursor-pointer  pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
       {...res}
     >
-      <div className='flex flex-row items-center py-1 pl-2 '>
+      <div className='flex flex-row items-center gap-[6px] py-1 pl-2 '>
+        <ArrowIcon direction='right' className={`${!fileIsSelected ? 'stroke-brand-light' : 'stroke-brand'}`} />
         <LibraryFileIcon size='sm' />
         <span
           className={cn(
