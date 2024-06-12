@@ -1,11 +1,12 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
-import { DebuggerIcon } from '@root/renderer/assets'
+import { DebuggerIcon, MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import type { PLCVariable } from '@root/types/PLC/test'
 import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
+import { Modal, ModalContent, ModalHeader, ModalTitle, ModalTrigger } from '../modal'
 
 type SelectableCellProps = CellContext<PLCVariable, unknown>
 
@@ -40,15 +41,6 @@ const VariableTypes = [
     definition: 'user-data-type',
     value: ['type1', 'type2', 'type3'],
   },
-  {
-    definition: 'array',
-    value: [
-      {
-        baseType: 'bool',
-        dimensions: '1..2',
-      },
-    ],
-  },
 ]
 
 const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }: SelectableCellProps) => {
@@ -82,11 +74,12 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
           sideOffset={-20}
           className='h-fit w-[200px] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
         >
+          {/** Basic types, that includes the base types and the types created by the user */}
           {VariableTypes.map((scope) => (
             <PrimitiveDropdown.Sub key={scope.definition}>
               <PrimitiveDropdown.SubTrigger asChild>
                 <div className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'>
-                  <span className='font-caption text-xs font-medium text-neutral-950 dark:text-neutral-200'>
+                  <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
                     {_.upperCase(scope.definition)}
                   </span>
                 </div>
@@ -104,7 +97,7 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
                       className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                     >
                       <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                        {value}
+                        {_.upperCase(value)}
                       </span>
                     </PrimitiveDropdown.Item>
                   ))}
@@ -112,6 +105,124 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
               </PrimitiveDropdown.Portal>
             </PrimitiveDropdown.Sub>
           ))}
+          {/** Array type trigger */}
+          <PrimitiveDropdown.Item asChild>
+            <Modal>
+              <ModalTrigger className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'>
+                <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>ARRAY</span>
+              </ModalTrigger>
+              <ModalContent>
+                <ModalHeader>
+                  <ModalTitle>Array type definition</ModalTitle>
+                </ModalHeader>
+                <div
+                  aria-label='Array type definition modal content container'
+                  className='flex h-full w-full flex-col border border-neutral-400'
+                >
+                  <div
+                    aria-label='Header container'
+                    className='flex h-fit w-full flex-col gap-1 border border-blue-500'
+                  >
+                    <div
+                      aria-label='Array base type container'
+                      className='flex h-fit w-full items-center justify-between'
+                    >
+                      <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
+                        Base type
+                      </label>
+                      <Select aria-label='Array data type base type select'>
+                        <SelectTrigger
+                          withIndicator
+                          placeholder='Base type'
+                          className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
+                        />
+                        <SelectContent
+                          position='popper'
+                          side='bottom'
+                          sideOffset={-28}
+                          className='z-[999] h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-brand-light bg-white shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card'
+                        >
+                          <SelectItem
+                            value='Option 1'
+                            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                          >
+                            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                              Option 1
+                            </span>
+                          </SelectItem>
+                          <SelectItem
+                            value='Option 2'
+                            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                          >
+                            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                              Option 2
+                            </span>
+                          </SelectItem>
+                          <SelectItem
+                            value='Option 3'
+                            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                          >
+                            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                              Option 3
+                            </span>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div
+                      aria-label='Array type table actions container'
+                      className='flex h-fit w-full items-center justify-between'
+                    >
+                      <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
+                        Dimensions
+                      </p>
+                      <div
+                        aria-label='Data type table actions buttons container'
+                        className='flex h-full w-fit items-center justify-evenly *:rounded-md *:p-1'
+                      >
+                        <div
+                          aria-label='Add table row button'
+                          className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                          onClick={() => console.log('Button clicked')}
+                        >
+                          <PencilIcon className='!stroke-brand' />
+                        </div>
+                        <div
+                          aria-label='Add table row button'
+                          className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                          onClick={() => console.log('Button clicked')}
+                        >
+                          <PlusIcon className='!stroke-brand' />
+                        </div>
+                        <div
+                          aria-label='Remove table row button'
+                          className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                          onClick={() => console.log('Button clicked')}
+                        >
+                          <MinusIcon />
+                        </div>
+                        <div
+                          aria-label='Move table row up button'
+                          className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                          onClick={() => console.log('Button clicked')}
+                        >
+                          <StickArrowIcon direction='up' />
+                        </div>
+                        <div
+                          aria-label='Move table row down button'
+                          className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                          onClick={() => console.log('Button clicked')}
+                        >
+                          <StickArrowIcon direction='down' />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </ModalContent>
+            </Modal>
+          </PrimitiveDropdown.Item>
         </PrimitiveDropdown.Content>
       </PrimitiveDropdown.Portal>
     </PrimitiveDropdown.Root>

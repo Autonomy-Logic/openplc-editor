@@ -36,13 +36,12 @@ const ModalContent = forwardRef<
     <PrimitiveDialog.Content
       ref={ref}
       className={cn(
-        'fixed left-[50%] top-[50%] z-50 grid h-fit w-full max-w-md gap-4 rounded-lg border border-brand-light bg-white p-4 shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card',
+        'fixed inset-0 z-50 m-auto flex h-[500px] w-[448px] flex-col gap-4 rounded-lg border border-brand-light bg-white p-4 shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card',
         className,
       )}
       {...props}
     >
       {props.children}
-
       <PrimitiveDialog.Close className='absolute right-4 top-4 disabled:pointer-events-none'>
         <CloseIcon className='h-4 w-4 stroke-brand hover:cursor-pointer' />
       </PrimitiveDialog.Close>
@@ -55,7 +54,7 @@ ModalContent.displayName = PrimitiveDialog.Content.displayName
 type ModalHeaderProps = ComponentPropsWithoutRef<'div'>
 
 const ModalHeader = ({ className, ...rest }: ModalHeaderProps) => (
-  <div className={cn('flex flex-col space-y-1.5 text-center sm:text-left', className)} {...rest} />
+  <div className={cn('flex flex-col text-center sm:text-left', className)} {...rest} />
 )
 
 ModalHeader.displayName = 'ModalHeader'

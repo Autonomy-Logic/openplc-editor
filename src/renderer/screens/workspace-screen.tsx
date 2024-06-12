@@ -14,7 +14,7 @@ import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
-// import { VariablesEditor } from '../components/_organisms/variables-editor'
+import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
 
@@ -146,7 +146,7 @@ const WorkspaceScreen = () => {
                             defaultSize={25}
                             className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'
                           >
-                            {/* <VariablesEditor /> */} <p> Here will go the variable table editor</p>
+                            <VariablesEditor />
                           </ResizablePanel>
                           <ResizableHandle className='h-[1px] w-full bg-brand-light' />
                           <ResizablePanel
