@@ -22,18 +22,25 @@ type ILibraryFolderProps = ComponentPropsWithoutRef<'li'> & {
 const LibraryFolder = ({ label, children, ...res }: ILibraryFolderProps) => {
   const [folderIsOpen, setFolderIsOpen] = useState(false)
   const handleFolderVisibility = useCallback(() => setFolderIsOpen(!folderIsOpen), [folderIsOpen])
+  const hasFilesAssociated = children && children.length > 0
 
   return (
     <li className='cursor-pointer aria-expanded:cursor-default ' {...res}>
       <div
-        className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900 '
-        onClick={handleFolderVisibility}
+        className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
+        onClick={hasFilesAssociated ? handleFolderVisibility : undefined}
       >
-        <ArrowIcon
-          direction='right'
-          className={cn(`h-4 w-4 stroke-brand-light transition-all ${folderIsOpen && 'rotate-270 stroke-brand'}`)}
-        />
-        {folderIsOpen ? <LibraryOpenFolderIcon size='sm' /> : <LibraryCloseFolderIcon size='sm' />}
+        {hasFilesAssociated ? (
+          <ArrowIcon
+            direction='right'
+            className={cn(
+              `mr-[6px] h-4 w-4 stroke-brand-light transition-all ${folderIsOpen && 'rotate-270 stroke-brand'}`,
+            )}
+          />
+        ) : (
+          <div className='w-[22px]' />
+        )}
+        {!folderIsOpen ? <LibraryCloseFolderIcon size='sm' /> : <LibraryOpenFolderIcon size='sm' />}
         <span
           className={cn(
             'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
