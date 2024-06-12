@@ -8,7 +8,7 @@ type ILibraryRootProps = ComponentPropsWithoutRef<'ul'> & {
 const LibraryRoot = ({ children, ...res }: ILibraryRootProps) => {
   return (
     <div>
-      <ul className='list-none p-0' {...res}>
+      <ul className='select-none list-none p-0' {...res}>
         {children}
       </ul>
     </div>
@@ -70,7 +70,7 @@ const LibraryFile = ({ label, ...res }: ILibraryFileProps) => {
   return (
     <li
       onClick={handleLeafSelection}
-      className='ml-2  cursor-pointer  pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
+      className={`${fileIsSelected ? 'bg-slate-50 dark:bg-neutral-900' : ''} ml-2  cursor-pointer  pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900`}
       {...res}
     >
       <div className='flex flex-row items-center gap-[6px] py-1 pl-2 '>
