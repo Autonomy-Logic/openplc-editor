@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalTrigger } from '../modal'
+import { ArrayTypeComponent } from './components/array-type.component'
 
 type SelectableCellProps = CellContext<PLCVariable, unknown>
 
@@ -219,6 +220,7 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
                       </div>
                     </div>
                   </div>
+                  <ArrayTypeComponent />
                 </div>
               </ModalContent>
             </Modal>
