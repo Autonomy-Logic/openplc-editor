@@ -67,26 +67,24 @@ const LibraryFolder = ({ label, children, ...res }: ILibraryFolderProps) => {
 
 type ILibraryFileProps = ComponentPropsWithoutRef<'li'> & {
   label: string
+  isSelected: boolean
+  onSelect: () => void
 }
 
-const LibraryFile = ({ label, ...res }: ILibraryFileProps) => {
-  const [fileIsSelected, setFileIsSelected] = useState(false)
-
-  const handleLeafSelection = useCallback(() => setFileIsSelected(!fileIsSelected), [fileIsSelected])
-
+const LibraryFile = ({ label, isSelected, onSelect, ...res }: ILibraryFileProps) => {
   return (
     <li
-      onClick={handleLeafSelection}
-      className={`${fileIsSelected ? 'bg-slate-50 dark:bg-neutral-900' : ''} ml-2  cursor-pointer  pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900`}
+      onClick={onSelect}
+      className={`${isSelected ? 'bg-slate-50 dark:bg-neutral-900' : ''} ml-2 cursor-pointer pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900`}
       {...res}
     >
       <div className='flex flex-row items-center gap-[6px] py-1 pl-2 '>
-        <ArrowIcon direction='right' className={`${!fileIsSelected ? 'stroke-brand-light' : 'stroke-brand'}`} />
+        <ArrowIcon direction='right' className={`${!isSelected ? 'stroke-brand-light' : 'stroke-brand'}`} />
         <LibraryFileIcon size='sm' />
         <span
           className={cn(
             'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
-            fileIsSelected && 'font-medium text-neutral-1000 dark:text-white',
+            isSelected && 'font-medium text-neutral-1000 dark:text-white',
           )}
         >
           {label}
