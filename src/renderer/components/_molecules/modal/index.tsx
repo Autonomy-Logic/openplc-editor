@@ -9,8 +9,6 @@ const ModalTrigger = PrimitiveDialog.Trigger
 
 const ModalPortal = PrimitiveDialog.Portal
 
-// const ModalClose = PrimitiveDialog.Close
-
 const ModalOverlay = forwardRef<
   ElementRef<typeof PrimitiveDialog.Overlay>,
   ComponentPropsWithoutRef<typeof PrimitiveDialog.Overlay>
@@ -36,7 +34,7 @@ const ModalContent = forwardRef<
     <PrimitiveDialog.Content
       ref={ref}
       className={cn(
-        'fixed inset-0 z-50 m-auto flex h-[500px] w-[448px] flex-col gap-4 rounded-lg border border-brand-light bg-white p-4 shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card',
+        'fixed inset-0 z-50 m-auto flex h-[500px] w-[525px] flex-col gap-4 rounded-lg border border-brand-light bg-white p-4 shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card',
         className,
       )}
       {...props}
@@ -61,9 +59,7 @@ ModalHeader.displayName = 'ModalHeader'
 
 type ModalFooterProps = ComponentPropsWithoutRef<'div'>
 
-const ModalFooter = ({ className, ...rest }: ModalFooterProps) => (
-  <div className={cn('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2', className)} {...rest} />
-)
+const ModalFooter = ({ className, ...rest }: ModalFooterProps) => <div className={cn(className)} {...rest} />
 
 ModalFooter.displayName = 'ModalFooter'
 

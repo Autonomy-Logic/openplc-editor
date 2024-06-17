@@ -5,8 +5,8 @@ import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
-import { Modal, ModalContent, ModalHeader, ModalTitle, ModalTrigger } from '../modal'
+import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
+import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle, ModalTrigger } from '../modal'
 import { ArrayTypeComponent } from './components/array-type.component'
 
 type SelectableCellProps = CellContext<PLCVariable, unknown>
@@ -49,12 +49,14 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState<PLCVariable['type']['value']>(value)
 
+  const [arrayModalIsOpen, setArrayModalIsOpen] = useState(false)
+
   // When the input is blurred, we'll call our table meta's updateData function
   const _onBlur = () => {
     // Todo: Must update the data in the store
     table.options.meta?.updateData(index, id, cellValue)
   }
-
+  console.log(arrayModalIsOpen)
   // If the value is changed external, sync it up with our state
   useEffect(() => {
     setCellValue(value)
@@ -108,8 +110,11 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
           ))}
           {/** Array type trigger */}
           <PrimitiveDropdown.Item asChild>
-            <Modal>
-              <ModalTrigger className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'>
+            <Modal onOpenChange={setArrayModalIsOpen} open={arrayModalIsOpen}>
+              <ModalTrigger
+                onClick={() => setArrayModalIsOpen(true)}
+                className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'
+              >
                 <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>ARRAY</span>
               </ModalTrigger>
               <ModalContent>
@@ -118,12 +123,9 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
                 </ModalHeader>
                 <div
                   aria-label='Array type definition modal content container'
-                  className='flex h-full w-full flex-col border border-neutral-400'
+                  className='flex h-full w-full flex-col gap-2'
                 >
-                  <div
-                    aria-label='Header container'
-                    className='flex h-fit w-full flex-col gap-1 border border-blue-500'
-                  >
+                  <div aria-label='Header container' className='flex h-fit w-full flex-col gap-2'>
                     <div
                       aria-label='Array base type container'
                       className='flex h-fit w-full items-center justify-between'
@@ -222,6 +224,14 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
                   </div>
                   <ArrayTypeComponent />
                 </div>
+                <ModalFooter className='flex items-center justify-around'>
+                  <Button className='h-8 justify-center text-xs' onClick={() => setArrayModalIsOpen(false)}>
+                    Save
+                  </Button>
+                  <Button className='h-8 justify-center bg-neutral-100 text-xs text-neutral-1000 hover:bg-neutral-300 focus:bg-neutral-200'>
+                    Cancel
+                  </Button>
+                </ModalFooter>
               </ModalContent>
             </Modal>
           </PrimitiveDropdown.Item>
