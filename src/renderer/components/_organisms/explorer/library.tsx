@@ -79,10 +79,7 @@ const Library = () => {
           className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 dark:bg-brand-dark'
         >
           <BookIcon size='sm' />
-          <span
-            id='project-name'
-            className='pl-1 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'
-          >
+          <span id='project-name' className='pl-1 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'>
             Library
           </span>
         </div>
@@ -91,30 +88,22 @@ const Library = () => {
         </div>
       </div>
       <LibraryRoot>
-        {treeData.map(
-          (data) => (
-            
-            (
-              <LibraryFolder key={data.key} label={data.label} title={data.title}>
-                {data.children.map((child) => (
-                  <LibraryFile
-                    draggable
-                    onDragStart={() => {
-                      console.log('onDragStart', child.children)
-                    }}
-                    key={child.key}
-                    label={child.label}
-                    isSelected={selectedFileKey === child.key}
-                    onSelect={() => setSelectedFileKey(child.key)}
-                  />
-                ))}
-              </LibraryFolder>
-            )
-          ),
-        )}
+        {treeData.map((data) => (
+          <LibraryFolder key={data.key} label={data.label} title={data.title}>
+            {data.children.map((child) => (
+              <LibraryFile
+                key={child.key}
+                label={child.label}
+                isSelected={selectedFileKey === child.key}
+                onSelect={() => setSelectedFileKey(child.key)}
+              />
+            ))}
+          </LibraryFolder>
+        ))}
       </LibraryRoot>
+     
     </div>
-  )
-}
+  );
+};
 
 export { ILibraryFileProps, ILibraryFolderProps, ILibraryRootProps, Library }

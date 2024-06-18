@@ -74,7 +74,10 @@ type ILibraryFileProps = ComponentPropsWithoutRef<'li'> & {
 const LibraryFile = ({ label, isSelected, onSelect, ...res }: ILibraryFileProps) => {
   return (
     <li
-      onClick={onSelect}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', label);
+      }}
       className={`${isSelected ? 'bg-slate-50 dark:bg-neutral-900' : ''} ml-2 cursor-pointer pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900`}
       {...res}
     >
@@ -91,7 +94,7 @@ const LibraryFile = ({ label, isSelected, onSelect, ...res }: ILibraryFileProps)
         </span>
       </div>
     </li>
-  )
+  );
 }
 
 export { LibraryFile, LibraryFolder, LibraryRoot }
