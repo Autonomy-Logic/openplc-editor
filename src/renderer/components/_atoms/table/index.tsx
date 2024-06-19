@@ -5,7 +5,7 @@ const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { co
   ({ className, context, ...res }, ref) => (
     <div
       aria-label='Table container'
-      className='h-fit w-fit min-w-[1035px] rounded-md border border-neutral-500 dark:border-neutral-850'
+      className='h-fit w-fit rounded-md border border-neutral-500 dark:border-neutral-850'
     >
       <table
         aria-label={`${context} table`}
@@ -77,14 +77,37 @@ const TableCell = forwardRef<HTMLTableCellElement, ComponentPropsWithRef<'td'>>(
 
 TableCell.displayName = 'TableCell'
 
-const TableHead = forwardRef<HTMLTableCellElement, ComponentPropsWithRef<'th'>>(({ className, ...res }, ref) => (
-  <th
-    aria-label='Table header cell'
-    ref={ref}
-    className={cn('max-h-8 w-[200px] p-2 text-neutral-850 lg:w-[300px] 2xl:w-[375px] dark:text-neutral-300', className)}
-    {...res}
-  />
-))
+type TableHeadProps = ComponentPropsWithRef<'th'> & {
+  resizable?: boolean
+  isResizing?: boolean
+  resizeHandler?: (event: unknown) => void
+}
+const TableHead = forwardRef<HTMLTableCellElement, TableHeadProps>(
+  ({ className, resizable = false, isResizing, resizeHandler, ...res }, ref) => (
+    <th
+      aria-label='Table header cell'
+      ref={ref}
+      className={cn(
+        'relative max-h-8 w-[200px] p-2 text-neutral-850 lg:w-[300px] 2xl:w-[375px] dark:text-neutral-300',
+        className,
+      )}
+      {...res}
+    >
+      {res.children}
+      {resizable && (
+        <div
+          aria-label='Table header cell resize handle'
+          className={cn(
+            'absolute -right-[3px] top-0 h-full w-[5px] cursor-col-resize touch-none select-none rounded-xl bg-brand opacity-0 hover:opacity-100',
+            { 'bg-brand-dark': isResizing },
+          )}
+          onMouseDown={resizeHandler}
+          onTouchStart={resizeHandler}
+        />
+      )}
+    </th>
+  ),
+)
 
 TableHead.displayName = 'TableHead'
 
