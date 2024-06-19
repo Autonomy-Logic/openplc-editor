@@ -8,13 +8,23 @@ import { SelectableClassCell, SelectableDebugCell, SelectableTypeCell } from './
 const columnHelper = createColumnHelper<PLCVariable>()
 
 const columns = [
-  columnHelper.accessor('id', { header: '#', enableResizing: true, cell: (info) => info.getValue() }),
+  columnHelper.accessor('id', {
+    header: '#',
+    size: 128,
+    maxSize: 128,
+    enableResizing: true,
+    cell: (info) => info.getValue(),
+  }),
   columnHelper.accessor('name', { header: 'Name', enableResizing: true, cell: EditableNameCell }),
   columnHelper.accessor('class', { header: 'Class', enableResizing: true, cell: SelectableClassCell }),
   columnHelper.accessor('type', { header: 'Type', enableResizing: true, cell: SelectableTypeCell }),
   columnHelper.accessor('location', { header: 'Location', enableResizing: true, cell: EditableNameCell }),
-  columnHelper.accessor('documentation', { header: 'Documentation', enableResizing: true, cell: EditableDocumentationCell }),
-  columnHelper.accessor('debug', { header: 'Debug', cell: SelectableDebugCell }),
+  columnHelper.accessor('documentation', {
+    header: 'Documentation',
+    enableResizing: true,
+    cell: EditableDocumentationCell,
+  }),
+  columnHelper.accessor('debug', { header: 'Debug', size: 64, maxSize: 64, cell: SelectableDebugCell }),
 ]
 
 type PLCVariablesTableProps = {
@@ -23,6 +33,9 @@ type PLCVariablesTableProps = {
 const VariablesTable = ({ tableData }: PLCVariablesTableProps) => {
   const table = useReactTable({
     data: tableData,
+    defaultColumn: {
+      size: 300
+    },
     columns: columns,
     columnResizeMode: 'onChange',
     debugTable: true,
@@ -30,7 +43,7 @@ const VariablesTable = ({ tableData }: PLCVariablesTableProps) => {
   })
 
   return (
-    <Table context='Variables'>
+    <Table context='Variables' style={{ width: table.getTotalSize() }}>
       <TableHeader>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
