@@ -5,7 +5,7 @@ import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
-import { Button, InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
+import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle, ModalTrigger } from '../modal'
 
 type SelectableCellProps = CellContext<PLCVariable, unknown>
@@ -50,16 +50,18 @@ type ArrayDimensionProps = {
 const dimensions = ['1..0', '1..1', '1..2']
 
 const ArrayDimensionField = (props: ArrayDimensionProps) => {
+  // border border-neutral-300 dark:border-neutral-700
   const { value } = props
-  const idForInput = `array-dimension-for-${value}`
+  // const idForInput = `array-dimension-for-${value}`
   return (
     <div
       aria-label='Array dimension'
-      className='relative flex h-7 w-full flex-1 rounded-lg border border-neutral-300 bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900'
+      className='flex h-7 w-full flex-1 bg-neutral-100 p-2 font-caption text-xs text-neutral-800 dark:bg-neutral-900 dark:text-neutral-100'
     >
-      <label
+      {value}
+      {/*<label
         htmlFor={idForInput}
-        className='fixed inset-0 z-[999] h-full max-h-7 w-full max-w-9 bg-slate-600 font-caption text-xs text-neutral-800 dark:text-neutral-100'
+        className='fixed inset-0 z-[999] ˝h-full max-h-7 w-full max-w-9 bg-slate-600 font-caption text-xs text-neutral-800 dark:text-neutral-100'
       >
         {value}
       </label>
@@ -67,7 +69,7 @@ const ArrayDimensionField = (props: ArrayDimensionProps) => {
         id={idForInput}
         value={value}
         className='flex h-full w-full items-center justify-start bg-transparent p-2 font-caption text-xs font-normal text-neutral-800 focus:border-none focus:outline-none focus:ring-0 dark:text-neutral-100'
-      />
+      /*/}
     </div>
   )
 }
@@ -250,7 +252,10 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
                       </div>
                     </div>
                   </div>
-                  <div aria-label='Array type table container' className='flex h-fit w-full flex-col gap-2'>
+                  <div
+                    aria-label='Array type table container'
+                    className='flex h-fit w-full flex-col divide-y divide-neutral-500'
+                  >
                     {dimensions.map((dim) => (
                       <ArrayDimensionField value={dim} />
                     ))}
