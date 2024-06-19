@@ -19,7 +19,7 @@
     "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "start:dev": "ts-node scripts/check-port-in-use.js && npm run start:renderer",
-    "start:main": "cross-env NODE_ENV=development electronmon --trace-warnings -r ts-node/register/transpile-only .",
+    "start:main": "cross-env NODE_ENV=development electronmon -r ts-node/register/transpile-only .",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
     "test:unit": "jest --watch",
@@ -154,9 +154,6 @@
       "!.*",
       "src/**/*"
     ],
-    "logLevel": "quiet",
-    "args": [
-      "--trace-warnings"
-    ]
+    "logLevel": "quiet"
   }
 }
