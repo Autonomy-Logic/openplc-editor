@@ -34,7 +34,7 @@ const VariablesTable = ({ tableData }: PLCVariablesTableProps) => {
   const table = useReactTable({
     data: tableData,
     defaultColumn: {
-      size: 300
+      size: 300,
     },
     columns: columns,
     columnResizeMode: 'onChange',
