@@ -1,9 +1,10 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { DebuggerIcon, MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import type { PLCVariable } from '@root/types/PLC/test'
+import { cn } from '@root/utils'
 import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
-import { useEffect, useState } from 'react'
+import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
 import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle, ModalTrigger } from '../modal'
@@ -43,34 +44,33 @@ const VariableTypes = [
   },
 ]
 
-type ArrayDimensionProps = {
+type ArrayDimensionProps = ComponentPropsWithoutRef<'li'> & {
   value: string
 }
 
-const dimensions = ['1..0', '1..1', '1..2']
+const dimensions = ['1..0', '1..1', '1..2', '1..3', '1..4', '1..5', '1..6']
 
 const ArrayDimensionField = (props: ArrayDimensionProps) => {
+  const [rowSelected, setRowSelected] = useState(false)
   // border border-neutral-300 dark:border-neutral-700
-  const { value } = props
+  const { value, className, ...rest } = props
   // const idForInput = `array-dimension-for-${value}`
+  const handleClick = () => {
+    setRowSelected(!rowSelected)
+  }
   return (
-    <div
+    <li
       aria-label='Array dimension'
-      className='flex h-7 w-full flex-1 bg-neutral-100 p-2 font-caption text-xs text-neutral-800 dark:bg-neutral-900 dark:text-neutral-100'
+      aria-selected={rowSelected}
+      onClick={handleClick}
+      className={cn(
+        'flex h-7 w-full flex-1 items-center justify-start bg-transparent px-2 py-3 font-caption text-xs text-neutral-800 hover:cursor-pointer hover:bg-neutral-50 aria-selected:bg-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-600 dark:aria-selected:bg-neutral-700',
+        className,
+      )}
+      {...rest}
     >
       {value}
-      {/*<label
-        htmlFor={idForInput}
-        className='fixed inset-0 z-[999] ˝h-full max-h-7 w-full max-w-9 bg-slate-600 font-caption text-xs text-neutral-800 dark:text-neutral-100'
-      >
-        {value}
-      </label>
-      <InputWithRef
-        id={idForInput}
-        value={value}
-        className='flex h-full w-full items-center justify-start bg-transparent p-2 font-caption text-xs font-normal text-neutral-800 focus:border-none focus:outline-none focus:ring-0 dark:text-neutral-100'
-      /*/}
-    </div>
+    </li>
   )
 }
 
@@ -252,14 +252,14 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
                       </div>
                     </div>
                   </div>
-                  <div
+                  <ul
                     aria-label='Array type table container'
-                    className='flex h-fit w-full flex-col divide-y divide-neutral-500'
+                    className='flex h-fit w-full flex-col *:border-x *:border-b *:border-neutral-300 [&>*:first-child]:rounded-t-lg [&>*:first-child]:border-t [&>*:last-child]:rounded-b-lg'
                   >
-                    {dimensions.map((dim) => (
-                      <ArrayDimensionField value={dim} />
+                    {dimensions.map((dimension) => (
+                      <ArrayDimensionField value={dimension} />
                     ))}
-                  </div>
+                  </ul>
                 </div>
                 <ModalFooter className='flex items-center justify-around'>
                   <Button className='h-8 justify-center text-xs' onClick={() => setArrayModalIsOpen(false)}>
