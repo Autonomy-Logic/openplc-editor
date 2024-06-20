@@ -5,7 +5,6 @@ const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { co
   ({ className, context, ...res }, ref) => (
     <div
       aria-label='Table container'
-      // className='h-fit w-fit rounded-md border border-neutral-500 dark:border-neutral-850'
       className='h-fit w-fit'
     >
       <table
@@ -26,8 +25,7 @@ const TableHeader = forwardRef<HTMLTableSectionElement, ComponentPropsWithRef<'t
       aria-label='Table header'
       ref={ref}
       className={cn(
-        // 'sticky top-0 h-8 cursor-default bg-neutral-50 dark:bg-neutral-950 [&>*:first-child>*:first-child]:rounded-tl-md [&>*:first-child>*:last-child]:rounded-tr-md [&>*:first-child>*]:border-t [&>*:first-child>*]:border-t-transparent',
-        `sticky top-0 h-8 cursor-default bg-neutral-50 dark:bg-neutral-950 [&>*:first-child>*:first-child]:rounded-tl-md [&>*:first-child>*:last-child]:rounded-tr-md [&>*:first-child>*]:border-t`,
+        'sticky top-0 h-8 cursor-default bg-neutral-50 dark:bg-neutral-950',
         className,
       )}
       {...res}
@@ -41,11 +39,7 @@ const TableBody = forwardRef<HTMLTableSectionElement, ComponentPropsWithRef<'tbo
   <tbody
     aria-label='Table body'
     ref={ref}
-    // className={cn('[&>*:last-child>*]:border-b-transparent', className)}
-    className={cn(
-      '[&>*:last-child>*:first-child]:rounded-bl-md [&>*:last-child>*:last-child]:rounded-br-md',
-      className,
-    )}
+    className={cn('', className)}
     {...res}
   />
 ))
@@ -63,8 +57,13 @@ const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'>>(({
     aria-label='Table row'
     ref={ref}
     className={cn(
-      // 'h-8 [&>*]:border-b [&>*]:border-r [&>*]:border-neutral-500 last:[&>*]:border-r-transparent dark:[&>*]:border-neutral-850',
-      'h-8 [&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r [&>*]:border-neutral-500 dark:[&>*]:border-neutral-850',
+      'h-8',
+      // header cell
+      '[&:first-child>th:first-child]:rounded-tl-md [&:first-child>th:last-child]:rounded-tr-md [&:first-child>th]:border-t',
+      // body cell
+      '[&:last-child>td:first-child]:rounded-bl-md [&:last-child>td:last-child]:rounded-br-md',
+      // all cells
+      '[&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r [&>*]:border-neutral-500 dark:[&>*]:border-neutral-850',
       className,
     )}
     {...res}
