@@ -5,12 +5,13 @@ const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { co
   ({ className, context, ...res }, ref) => (
     <div
       aria-label='Table container'
-      className='h-fit w-fit rounded-md border border-neutral-500 dark:border-neutral-850'
+      // className='h-fit w-fit rounded-md border border-neutral-500 dark:border-neutral-850'
+      className='h-fit w-fit'
     >
       <table
         aria-label={`${context} table`}
         ref={ref}
-        className='table-auto text-center font-caption text-xs font-normal dark:divide-neutral-850'
+        className='table-auto border-separate border-spacing-0 text-center font-caption text-xs font-normal'
         {...res}
       />
     </div>
@@ -25,7 +26,8 @@ const TableHeader = forwardRef<HTMLTableSectionElement, ComponentPropsWithRef<'t
       aria-label='Table header'
       ref={ref}
       className={cn(
-        'h-8 cursor-default divide-x divide-neutral-500 border-b border-neutral-500 dark:divide-neutral-850 dark:border-neutral-850',
+        // 'sticky top-0 h-8 cursor-default bg-neutral-50 dark:bg-neutral-950 [&>*:first-child>*:first-child]:rounded-tl-md [&>*:first-child>*:last-child]:rounded-tr-md [&>*:first-child>*]:border-t [&>*:first-child>*]:border-t-transparent',
+        `sticky top-0 h-8 cursor-default bg-neutral-50 dark:bg-neutral-950 [&>*:first-child>*:first-child]:rounded-tl-md [&>*:first-child>*:last-child]:rounded-tr-md [&>*:first-child>*]:border-t`,
         className,
       )}
       {...res}
@@ -39,7 +41,11 @@ const TableBody = forwardRef<HTMLTableSectionElement, ComponentPropsWithRef<'tbo
   <tbody
     aria-label='Table body'
     ref={ref}
-    className={cn('divide-y divide-neutral-500 dark:divide-neutral-850', className)}
+    // className={cn('[&>*:last-child>*]:border-b-transparent', className)}
+    className={cn(
+      '[&>*:last-child>*:first-child]:rounded-bl-md [&>*:last-child>*:last-child]:rounded-br-md',
+      className,
+    )}
     {...res}
   />
 ))
@@ -56,7 +62,11 @@ const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'>>(({
   <tr
     aria-label='Table row'
     ref={ref}
-    className={cn('h-8 divide-x divide-neutral-500 dark:divide-neutral-850', className)}
+    className={cn(
+      // 'h-8 [&>*]:border-b [&>*]:border-r [&>*]:border-neutral-500 last:[&>*]:border-r-transparent dark:[&>*]:border-neutral-850',
+      'h-8 [&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r [&>*]:border-neutral-500 dark:[&>*]:border-neutral-850',
+      className,
+    )}
     {...res}
   />
 ))
