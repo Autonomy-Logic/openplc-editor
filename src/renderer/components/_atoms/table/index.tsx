@@ -21,10 +21,10 @@ const TableHeader = forwardRef<HTMLTableSectionElement, ComponentPropsWithRef<'t
     <thead
       aria-label='Table header'
       ref={ref}
-      className={cn('sticky top-0 h-8 cursor-default bg-neutral-50 dark:bg-neutral-950', className)}
+      className={cn('sticky top-0 h-8 cursor-default bg-neutral-100 dark:bg-neutral-900', className)}
       {...res}
     >
-      <tr className='-z-1 absolute h-1 w-full bg-neutral-50 dark:bg-neutral-950' />
+      <tr className='-z-1 absolute h-1 w-full bg-neutral-100 dark:bg-neutral-900' />
       {res.children}
     </thead>
   ),
@@ -44,23 +44,26 @@ const TableFooter = forwardRef<HTMLTableSectionElement, ComponentPropsWithRef<'t
 
 TableFooter.displayName = 'TableFooter'
 
-const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'>>(({ className, ...res }, ref) => (
-  <tr
-    aria-label='Table row'
-    ref={ref}
-    className={cn(
-      'h-8',
-      // header cell
-      '[&:nth-child(2)>th:first-child]:rounded-tl-md [&:nth-child(2)>th:last-child]:rounded-tr-md [&:nth-child(2)>th]:border-t',
-      // body cell
-      '[&:last-child>td:first-child]:rounded-bl-md [&:last-child>td:last-child]:rounded-br-md',
-      // all cells
-      '[&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r [&>*]:border-neutral-500 dark:[&>*]:border-neutral-850',
-      className,
-    )}
-    {...res}
-  />
-))
+const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'> & { selected?: boolean }>(
+  ({ className, selected, ...res }, ref) => (
+    <tr
+      aria-label='Table row'
+      ref={ref}
+      className={cn(
+        'h-8',
+        // header cell
+        '[&:nth-child(2)>th:first-child]:rounded-tl-md [&:nth-child(2)>th:last-child]:rounded-tr-md [&:nth-child(2)>th]:border-t [&:nth-child(2)>th]:border-t-neutral-500',
+        // body cell
+        '[&:last-child>td:first-child]:rounded-bl-md [&:last-child>td:last-child]:rounded-br-md [&:last-child>td]:border-b-neutral-500 [&>*:first-child]:border-l-neutral-500 [&>*:last-child]:border-r-neutral-500',
+        // all cells
+        '[&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r [&>*]:border-neutral-300 dark:[&>*]:border-neutral-800',
+        { 'bg-neutral-50 dark:bg-neutral-850': selected },
+        className,
+      )}
+      {...res}
+    />
+  ),
+)
 
 TableRow.displayName = 'TableRow'
 
@@ -69,8 +72,9 @@ const TableCell = forwardRef<HTMLTableCellElement, ComponentPropsWithRef<'td'>>(
     aria-label='Table cell'
     ref={ref}
     className={cn(
-      // REVIEW: width is set to 200px, 300px, or 375px based on the screen size, but to make the table resizable we had to change it with Tanstack/react-table
-      'h-full max-h-8 w-[200px] p-2 text-neutral-700 has-[:focus]:has-[input]:bg-neutral-200 has-[:focus]:has-[textarea]:bg-neutral-200 lg:w-[300px] 2xl:w-[375px] dark:text-neutral-500 dark:has-[:focus]:has-[input]:bg-neutral-800 dark:has-[:focus]:has-[textarea]:bg-neutral-800',
+      'h-full max-h-8 w-[200px] text-neutral-700 lg:w-[300px] 2xl:w-[375px] dark:text-neutral-500',
+      'has-[:focus]:has-[input]:bg-neutral-200 has-[button[data-state=open]]:bg-neutral-200 has-[div[data-state=open]]:bg-neutral-200',
+      'dark:has-[:focus]:has-[input]:bg-neutral-850 dark:has-[button[data-state=open]]:bg-neutral-800 dark:has-[div[data-state=open]]:bg-neutral-800',
       className,
     )}
     {...res}
@@ -91,7 +95,7 @@ const TableHead = forwardRef<HTMLTableCellElement, TableHeadProps>(
       ref={ref}
       className={cn(
         // REVIEW: width is set to 200px, 300px, or 375px based on the screen size, but to make the table resizable we had to change it with Tanstack/react-table
-        'relative max-h-8 w-[200px] p-2 text-neutral-850 lg:w-[300px] 2xl:w-[375px] dark:text-neutral-300',
+        'relative max-h-8 w-[200px] text-neutral-850 lg:w-[300px] 2xl:w-[375px] dark:text-neutral-300',
         className,
       )}
       {...res}
