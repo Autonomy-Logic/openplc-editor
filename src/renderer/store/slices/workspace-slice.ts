@@ -71,43 +71,7 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
   projectPath: '',
   projectData: {
     dataTypes: [],
-    pous: [
-      {
-        type: 'program',
-        data: {
-          name: 'Main',
-          body: '',
-          language: 'st',
-          variables: [
-            {
-              id: 0,
-              name: 'variable',
-              type: {
-                value: 'bool',
-                definition: 'base-type',
-              },
-              documentation: '',
-              class: 'input',
-              location: '1..2',
-              debug: false,
-            },
-            {
-              id: 0,
-              name: 'variable',
-              type: {
-                value: 'bool',
-                definition: 'base-type',
-              },
-              documentation: '',
-              class: 'input',
-              location: '1..2',
-              debug: false,
-            },
-          ],
-          documentation: '',
-        },
-      },
-    ],
+    pous: [],
     globalVariables: [],
   },
   systemConfigs: {
