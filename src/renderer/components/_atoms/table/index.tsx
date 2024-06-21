@@ -68,7 +68,7 @@ const TableCell = forwardRef<HTMLTableCellElement, ComponentPropsWithRef<'td'>>(
     aria-label='Table cell'
     ref={ref}
     className={cn(
-      'h-full max-h-8 w-[200px] p-2 text-neutral-700 has-[:focus]:has-[input]:bg-neutral-200 has-[:focus]:has-[textarea]:bg-neutral-200 lg:w-[300px] 2xl:w-[375px] dark:text-neutral-500 dark:has-[:focus]:has-[input]:bg-neutral-800 dark:has-[:focus]:has-[textarea]:bg-neutral-800',
+      'h-full max-h-8 w-[200px] p-2 text-neutral-700 lg:w-[300px] 2xl:w-[375px] dark:text-neutral-500',
       className,
     )}
     {...res}

@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 
-type ISelectableCellProps = CellContext<PLCVariable, unknown>
+type ISelectableCellProps = CellContext<PLCVariable, unknown> & { editable?: boolean }
 
 const VariableTypes = [
   {
@@ -42,7 +42,13 @@ const VariableTypes = [
   },
 ]
 
-const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
+const SelectableTypeCell = ({
+  getValue,
+  row: { index },
+  column: { id },
+  table,
+  editable = true,
+}: ISelectableCellProps) => {
   const { value } = getValue<PLCVariable['type']>()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState<PLCVariable['type']['value']>(value)
@@ -60,12 +66,12 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
 
   return (
     <PrimitiveDropdown.Root>
-      <PrimitiveDropdown.Trigger asChild>
-        <div className='flex h-full w-full cursor-pointer justify-center outline-none'>
+      <PrimitiveDropdown.Trigger asChild disabled={!editable}>
+        <button className='flex h-full w-full cursor-pointer justify-center outline-none disabled:cursor-default'>
           <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
             {cellValue === null ? '' : (cellValue as unknown as string)}
           </span>
-        </div>
+        </button>
       </PrimitiveDropdown.Trigger>
       <PrimitiveDropdown.Portal>
         <PrimitiveDropdown.Content
@@ -110,7 +116,13 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
 }
 const VariableClasses = ['input', 'output', 'inOut', 'external', 'local', 'temp']
 
-const SelectableClassCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
+const SelectableClassCell = ({
+  getValue,
+  row: { index },
+  column: { id },
+  table,
+  editable = true,
+}: ISelectableCellProps) => {
   const initialValue = getValue()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
@@ -131,6 +143,7 @@ const SelectableClassCell = ({ getValue, row: { index }, column: { id }, table }
       <SelectTrigger
         placeholder={cellValue as string}
         className='flex h-full w-full justify-center font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300'
+        disabled={!editable}
       />
       <SelectContent
         position='popper'
@@ -171,12 +184,12 @@ const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }
   }, [initialValue])
 
   return (
-    <div
+    <button
       className='flex h-full w-full cursor-pointer items-center justify-center'
       onClick={() => setCellValue(!cellValue)}
     >
       <DebuggerIcon variant={cellValue ? 'default' : 'muted'} />
-    </div>
+    </button>
   )
 }
 

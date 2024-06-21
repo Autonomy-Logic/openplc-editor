@@ -13,8 +13,8 @@ declare module '@tanstack/react-table' {
   }
 }
 
-type IEditableCellProps = CellContext<PLCVariable, unknown>
-const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: IEditableCellProps) => {
+type IEditableCellProps = CellContext<PLCVariable, unknown> & { editable?: boolean }
+const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
   const initialValue = getValue<string>()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
@@ -35,11 +35,18 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: I
       onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
       className='flex w-full max-w-[400px] flex-1 bg-transparent text-center outline-none'
+      disabled={!editable}
     />
   )
 }
 
-const EditableDocumentationCell = ({ getValue, row: { index }, column: { id }, table }: IEditableCellProps) => {
+const EditableDocumentationCell = ({
+  getValue,
+  row: { index },
+  column: { id },
+  table,
+  editable = true,
+}: IEditableCellProps) => {
   const initialValue = getValue<string | undefined>()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue ?? '')
@@ -56,10 +63,10 @@ const EditableDocumentationCell = ({ getValue, row: { index }, column: { id }, t
 
   return (
     <PrimitivePopover.Root>
-      <PrimitivePopover.Trigger asChild>
-        <div className='flex h-full w-full cursor-text items-center justify-center'>
+      <PrimitivePopover.Trigger asChild disabled={!editable}>
+        <button className='flex h-full w-full cursor-text items-center justify-center disabled:cursor-default'>
           <p className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'>{cellValue}</p>
-        </div>
+        </button>
       </PrimitivePopover.Trigger>
       <PrimitivePopover.Portal>
         <PrimitivePopover.Content

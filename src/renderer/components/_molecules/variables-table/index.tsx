@@ -46,7 +46,7 @@ const VariablesTable = ({ tableData }: PLCVariablesTableProps) => {
           <TableRow key={row.id} className='h-8'>
             {row.getVisibleCells().map((cell) => (
               <TableCell className='first:max-w-32 last:max-w-16' key={cell.id}>
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                {flexRender(cell.column.columnDef.cell, { ...cell.getContext(), editable: true })}
               </TableCell>
             ))}
           </TableRow>
