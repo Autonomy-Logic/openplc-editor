@@ -3,10 +3,7 @@ import { ComponentPropsWithRef, forwardRef } from 'react'
 
 const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { context?: string }>(
   ({ className, context, ...res }, ref) => (
-    <div
-      aria-label='Table container'
-      className='h-fit w-fit'
-    >
+    <div aria-label='Table container' className='h-fit w-fit'>
       <table
         aria-label={`${context} table`}
         ref={ref}
@@ -24,24 +21,19 @@ const TableHeader = forwardRef<HTMLTableSectionElement, ComponentPropsWithRef<'t
     <thead
       aria-label='Table header'
       ref={ref}
-      className={cn(
-        'sticky top-0 h-8 cursor-default bg-neutral-50 dark:bg-neutral-950',
-        className,
-      )}
+      className={cn('sticky top-0 h-8 cursor-default bg-neutral-50 dark:bg-neutral-950', className)}
       {...res}
-    />
+    >
+      <tr className='-z-1 absolute h-1 w-full bg-neutral-50 dark:bg-neutral-950' />
+      {res.children}
+    </thead>
   ),
 )
 
 TableHeader.displayName = 'TableHeader'
 
 const TableBody = forwardRef<HTMLTableSectionElement, ComponentPropsWithRef<'tbody'>>(({ className, ...res }, ref) => (
-  <tbody
-    aria-label='Table body'
-    ref={ref}
-    className={cn('', className)}
-    {...res}
-  />
+  <tbody aria-label='Table body' ref={ref} className={cn('', className)} {...res} />
 ))
 
 TableBody.displayName = 'TableBody'
@@ -59,7 +51,7 @@ const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'>>(({
     className={cn(
       'h-8',
       // header cell
-      '[&:first-child>th:first-child]:rounded-tl-md [&:first-child>th:last-child]:rounded-tr-md [&:first-child>th]:border-t',
+      '[&:nth-child(2)>th:first-child]:rounded-tl-md [&:nth-child(2)>th:last-child]:rounded-tr-md [&:nth-child(2)>th]:border-t',
       // body cell
       '[&:last-child>td:first-child]:rounded-bl-md [&:last-child>td:last-child]:rounded-br-md',
       // all cells
