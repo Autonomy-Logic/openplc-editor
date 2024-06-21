@@ -66,27 +66,27 @@ const EditableDocumentationCell = ({
   return (
     <PrimitivePopover.Root>
       <PrimitivePopover.Trigger asChild>
-        <button
+        <div
           className={cn('flex h-full w-full cursor-text items-center justify-center', {
             'pointer-events-none': !editable,
           })}
         >
           <p className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'>{cellValue}</p>
-        </button>
+        </div>
       </PrimitivePopover.Trigger>
       <PrimitivePopover.Portal>
         <PrimitivePopover.Content
           align='center'
           side='bottom'
           sideOffset={-32}
-          className='h-fit w-[175px] rounded-lg bg-white p-2 drop-shadow-lg lg:w-[275px] 2xl:w-[375px] dark:bg-neutral-950'
+          className='h-fit w-[175px] rounded-lg border border-neutral-100 bg-white p-2 drop-shadow-lg lg:w-[275px] 2xl:w-[375px] dark:border-brand-medium-dark dark:bg-neutral-950'
         >
           <textarea
             value={cellValue}
             onChange={(e) => setCellValue(e.target.value)}
             onBlur={onBlur}
             rows={5}
-            className='w-full max-w-[375px] flex-1 resize-none bg-transparent text-start text-neutral-900 outline-none dark:text-neutral-100'
+            className='w-full max-w-[375px] flex-1 resize-none  bg-transparent text-start text-neutral-900 outline-none  dark:text-neutral-100'
           />
         </PrimitivePopover.Content>
       </PrimitivePopover.Portal>

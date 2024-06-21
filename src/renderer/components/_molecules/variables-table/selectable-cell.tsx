@@ -68,7 +68,7 @@ const SelectableTypeCell = ({
   return (
     <PrimitiveDropdown.Root>
       <PrimitiveDropdown.Trigger asChild>
-        <button
+        <div
           className={cn('flex h-full w-full cursor-pointer justify-center outline-none', {
             'pointer-events-none': !editable,
           })}
@@ -76,7 +76,7 @@ const SelectableTypeCell = ({
           <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
             {cellValue === null ? '' : (cellValue as unknown as string)}
           </span>
-        </button>
+        </div>
       </PrimitiveDropdown.Trigger>
       <PrimitiveDropdown.Portal>
         <PrimitiveDropdown.Content
