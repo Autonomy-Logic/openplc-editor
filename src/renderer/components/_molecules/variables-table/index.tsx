@@ -75,7 +75,7 @@ const VariablesTable = ({ tableData }: PLCVariablesTableProps) => {
           <TableRow
             id={row.id}
             key={row.id}
-            className='h-8'
+            className='h-8 cursor-pointer'
             onClick={(e) => handleRowClick(e.currentTarget)}
             selected={selectedRow === row.id}
           >
