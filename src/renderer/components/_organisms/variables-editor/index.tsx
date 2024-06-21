@@ -169,7 +169,9 @@ const VariablesEditor = () => {
           />
         </div>
       </div>
-      <VariablesTable tableData={tableData} />
+      <div aria-label='Variables editor table container' className='h-full overflow-auto'>
+        <VariablesTable tableData={tableData} />
+      </div>
     </div>
   )
 }
