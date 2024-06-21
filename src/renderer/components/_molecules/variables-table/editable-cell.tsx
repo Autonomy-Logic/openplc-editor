@@ -1,5 +1,6 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import type { PLCVariable } from '@root/types/PLC/test'
+import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
@@ -34,8 +35,9 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
       value={cellValue}
       onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
-      className='flex w-full max-w-[400px] flex-1 bg-transparent text-center outline-none'
-      disabled={!editable}
+      className={cn('flex w-full max-w-[400px] flex-1 bg-transparent text-center outline-none', {
+        'pointer-events-none': !editable,
+      })}
     />
   )
 }
@@ -63,8 +65,12 @@ const EditableDocumentationCell = ({
 
   return (
     <PrimitivePopover.Root>
-      <PrimitivePopover.Trigger asChild disabled={!editable}>
-        <button className='flex h-full w-full cursor-text items-center justify-center disabled:cursor-default'>
+      <PrimitivePopover.Trigger asChild>
+        <button
+          className={cn('flex h-full w-full cursor-text items-center justify-center', {
+            'pointer-events-none': !editable,
+          })}
+        >
           <p className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'>{cellValue}</p>
         </button>
       </PrimitivePopover.Trigger>

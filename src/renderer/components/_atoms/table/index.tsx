@@ -52,14 +52,20 @@ const TableFooter = forwardRef<HTMLTableSectionElement, ComponentPropsWithRef<'t
 
 TableFooter.displayName = 'TableFooter'
 
-const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'>>(({ className, ...res }, ref) => (
-  <tr
-    aria-label='Table row'
-    ref={ref}
-    className={cn('h-8 divide-x divide-neutral-500 dark:divide-neutral-850', className)}
-    {...res}
-  />
-))
+const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'> & { selected?: boolean }>(
+  ({ className, selected, ...res }, ref) => {
+    return (
+      <tr
+        aria-label='Table row'
+        ref={ref}
+        className={cn('h-8 divide-x divide-neutral-500 dark:divide-neutral-850', className, {
+          'bg-neutral-100 dark:bg-neutral-900': selected,
+        })}
+        {...res}
+      />
+    )
+  },
+)
 
 TableRow.displayName = 'TableRow'
 

@@ -1,6 +1,7 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { DebuggerIcon } from '@root/renderer/assets'
 import type { PLCVariable } from '@root/types/PLC/test'
+import { cn } from '@root/utils'
 import { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
@@ -66,8 +67,12 @@ const SelectableTypeCell = ({
 
   return (
     <PrimitiveDropdown.Root>
-      <PrimitiveDropdown.Trigger asChild disabled={!editable}>
-        <button className='flex h-full w-full cursor-pointer justify-center outline-none disabled:cursor-default'>
+      <PrimitiveDropdown.Trigger asChild>
+        <button
+          className={cn('flex h-full w-full cursor-pointer justify-center outline-none', {
+            'pointer-events-none': !editable,
+          })}
+        >
           <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
             {cellValue === null ? '' : (cellValue as unknown as string)}
           </span>
@@ -142,8 +147,10 @@ const SelectableClassCell = ({
     <Select value={cellValue as string} onValueChange={(value) => setCellValue(value)}>
       <SelectTrigger
         placeholder={cellValue as string}
-        className='flex h-full w-full justify-center font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300'
-        disabled={!editable}
+        className={cn(
+          'flex h-full w-full justify-center font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
+          { 'pointer-events-none': !editable },
+        )}
       />
       <SelectContent
         position='popper'
