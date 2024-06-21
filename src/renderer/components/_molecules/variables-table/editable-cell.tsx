@@ -35,7 +35,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
       value={cellValue}
       onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
-      className={cn('flex w-full max-w-[400px] flex-1 bg-transparent text-center outline-none', {
+      className={cn('flex w-full flex-1 bg-transparent text-center outline-none', {
         'pointer-events-none': !editable,
       })}
     />
