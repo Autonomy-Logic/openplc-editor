@@ -35,7 +35,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
       value={cellValue}
       onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
-      className={cn('flex w-full flex-1 bg-transparent text-center outline-none', {
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !editable,
       })}
     />
@@ -67,7 +67,7 @@ const EditableDocumentationCell = ({
     <PrimitivePopover.Root>
       <PrimitivePopover.Trigger asChild>
         <div
-          className={cn('flex h-full w-full cursor-text items-center justify-center', {
+          className={cn('flex h-full w-full cursor-text items-center justify-center p-2', {
             'pointer-events-none': !editable,
           })}
         >

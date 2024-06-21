@@ -69,7 +69,7 @@ const SelectableTypeCell = ({
     <PrimitiveDropdown.Root>
       <PrimitiveDropdown.Trigger asChild>
         <div
-          className={cn('flex h-full w-full cursor-pointer justify-center outline-none', {
+          className={cn('flex h-full w-full cursor-pointer justify-center p-2 outline-none', {
             'pointer-events-none': !editable,
           })}
         >
@@ -148,7 +148,7 @@ const SelectableClassCell = ({
       <SelectTrigger
         placeholder={cellValue as string}
         className={cn(
-          'flex h-full w-full justify-center font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
+          'flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
           { 'pointer-events-none': !editable },
         )}
       />
