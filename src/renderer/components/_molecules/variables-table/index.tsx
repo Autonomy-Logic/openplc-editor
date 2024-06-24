@@ -31,6 +31,7 @@ const columns = [
 type PLCVariablesTableProps = {
   tableData: PLCVariable[]
 }
+
 const VariablesTable = ({ tableData }: PLCVariablesTableProps) => {
   const table = useReactTable({
     data: tableData,
