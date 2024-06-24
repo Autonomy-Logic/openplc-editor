@@ -1,5 +1,13 @@
 import { PLCVariable } from '@root/types/PLC/test'
-import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
+import {
+  ColumnFiltersState,
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  OnChangeFn,
+  useReactTable,
+} from '@tanstack/react-table'
 import { useState } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
@@ -30,21 +38,26 @@ const columns = [
 
 type PLCVariablesTableProps = {
   tableData: PLCVariable[]
+  columnFilters?: ColumnFiltersState
+  setColumnFilters?: OnChangeFn<ColumnFiltersState> | undefined
 }
 
-const VariablesTable = ({ tableData }: PLCVariablesTableProps) => {
+const VariablesTable = ({ tableData, columnFilters, setColumnFilters }: PLCVariablesTableProps) => {
+  const [selectedRow, setSelectedRow] = useState<string>('')
+
   const table = useReactTable({
+    columns: columns,
+    columnResizeMode: 'onChange',
     data: tableData,
+    debugTable: true,
     defaultColumn: {
       size: 300,
     },
-    columns: columns,
-    columnResizeMode: 'onChange',
-    debugTable: true,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    state: { columnFilters },
+    onColumnFiltersChange: setColumnFilters,
   })
-
-  const [selectedRow, setSelectedRow] = useState<string>('')
 
   const handleRowClick = (row: HTMLTableRowElement) => {
     const { id } = row

@@ -5,6 +5,7 @@ import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCVariable } from '@root/types/PLC/test'
 import { cn } from '@root/utils'
+import { ColumnFiltersState } from '@tanstack/react-table'
 import { useCallback, useEffect, useState } from 'react'
 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
@@ -19,6 +20,7 @@ const VariablesEditor = () => {
     workspaceActions: { createVariable },
   } = useOpenPLCStore()
   const [filterValue, setFilterValue] = useState('filter')
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [tableData, setTableData] = useState<PLCVariable[]>([])
   const [visualizationType, setVisualizationType] = useState<'code' | 'table'>('table')
 
@@ -52,6 +54,13 @@ const VariablesEditor = () => {
     })
   }
 
+  const handleFilterChange = (value: string) => {
+    setFilterValue(value)
+    setColumnFilters(
+      prev => prev.filter(filter => filter.id !== 'class').concat({ id: 'class', value })
+    )
+  }
+
   return (
     <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
       <div aria-label='Variables editor actions' className='flex h-8 w-full min-w-[1035px]'>
@@ -81,7 +90,7 @@ const VariablesEditor = () => {
             >
               Class Filter :
             </label>
-            <Select value={filterValue} onValueChange={(value) => setFilterValue(value)}>
+            <Select value={filterValue} onValueChange={handleFilterChange}>
               <SelectTrigger
                 id='class-filter'
                 placeholder={filterValue}
@@ -170,7 +179,7 @@ const VariablesEditor = () => {
         </div>
       </div>
       <div aria-label='Variables editor table container' className='h-full overflow-auto'>
-        <VariablesTable tableData={tableData} />
+        <VariablesTable tableData={tableData} columnFilters={columnFilters} setColumnFilters={setColumnFilters}/>
       </div>
     </div>
   )
