@@ -21,6 +21,7 @@ const VariablesEditor = () => {
   } = useOpenPLCStore()
   const [filterValue, setFilterValue] = useState('All')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [selectedRow, setSelectedRow] = useState<string>('')
   const [tableData, setTableData] = useState<PLCVariable[]>([])
   const [visualizationType, setVisualizationType] = useState<'code' | 'table'>('table')
 
@@ -43,7 +44,6 @@ const VariablesEditor = () => {
       scope: 'local',
       associatedPou: name,
       data: {
-        id: 0,
         name: 'new-variable',
         debug: false,
         type: { definition: 'base-type', value: 'string' },
@@ -54,6 +54,32 @@ const VariablesEditor = () => {
     })
   }
 
+  const handleRemoveVariable = (position: string) => {
+    console.log('Remove variable')
+    setTableData((prev) => {
+      const teste = prev.filter((_, index) => {
+        console.log('Index:', index)
+        console.log('Position:', parseInt(position))
+        return index !== parseInt(position)
+      })
+      console.log('Remove data:', teste)
+      return teste
+    })
+  }
+
+  const handleUpdateVariable = (rowIndex: number, columnId: string, value: unknown) => {
+    setTableData((prev) => {
+      const teste = prev.map((row, index) => {
+        if (index === rowIndex) {
+          return { ...row, [columnId]: value }
+        }
+        return row
+      })
+      console.log('Update data:', teste)
+      return teste
+    })
+  }
+
   const handleFilterChange = (value: string) => {
     setFilterValue(value)
     setColumnFilters((prev) =>
@@ -61,6 +87,10 @@ const VariablesEditor = () => {
         ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: value.toLowerCase() })
         : prev.filter((filter) => filter.id !== 'class'),
     )
+  }
+
+  const handleRowClick = (row: HTMLTableRowElement) => {
+    setSelectedRow(row.id)
   }
 
   return (
@@ -133,7 +163,7 @@ const VariablesEditor = () => {
             <div
               aria-label='Remove table row button'
               className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => console.log('Button clicked')}
+              onClick={() => handleRemoveVariable(selectedRow)}
             >
               <MinusIcon />
             </div>
@@ -181,7 +211,14 @@ const VariablesEditor = () => {
         </div>
       </div>
       <div aria-label='Variables editor table container' className='h-full overflow-auto'>
-        <VariablesTable tableData={tableData} columnFilters={columnFilters} setColumnFilters={setColumnFilters} />
+        <VariablesTable
+          tableData={tableData}
+          columnFilters={columnFilters}
+          setColumnFilters={setColumnFilters}
+          selectedRow={selectedRow}
+          handleRowClick={handleRowClick}
+          handleUpdateVariable={handleUpdateVariable}
+        />
       </div>
     </div>
   )

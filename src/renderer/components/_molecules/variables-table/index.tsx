@@ -8,7 +8,6 @@ import {
   OnChangeFn,
   useReactTable,
 } from '@tanstack/react-table'
-import { useState } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
 import { EditableDocumentationCell, EditableNameCell } from './editable-cell'
@@ -22,7 +21,7 @@ const columns = [
     size: 128,
     maxSize: 128,
     enableResizing: true,
-    cell: (info) => info.getValue(),
+    cell: (props) => props.row.id,
   }),
   columnHelper.accessor('name', { header: 'Name', enableResizing: true, cell: EditableNameCell }),
   columnHelper.accessor('class', { header: 'Class', enableResizing: true, cell: SelectableClassCell }),
@@ -40,11 +39,19 @@ type PLCVariablesTableProps = {
   tableData: PLCVariable[]
   columnFilters?: ColumnFiltersState
   setColumnFilters?: OnChangeFn<ColumnFiltersState> | undefined
+  selectedRow: string
+  handleRowClick: (row: HTMLTableRowElement) => void
+  handleUpdateVariable: (rowIndex: number, columnId: string, value: unknown) => void
 }
 
-const VariablesTable = ({ tableData, columnFilters, setColumnFilters }: PLCVariablesTableProps) => {
-  const [selectedRow, setSelectedRow] = useState<string>('')
-
+const VariablesTable = ({
+  tableData,
+  columnFilters,
+  setColumnFilters,
+  selectedRow,
+  handleRowClick,
+  handleUpdateVariable,
+}: PLCVariablesTableProps) => {
   const table = useReactTable({
     columns: columns,
     columnResizeMode: 'onChange',
@@ -57,12 +64,10 @@ const VariablesTable = ({ tableData, columnFilters, setColumnFilters }: PLCVaria
     getFilteredRowModel: getFilteredRowModel(),
     state: { columnFilters },
     onColumnFiltersChange: setColumnFilters,
+    meta: {
+      updateData: handleUpdateVariable,
+    },
   })
-
-  const handleRowClick = (row: HTMLTableRowElement) => {
-    const { id } = row
-    setSelectedRow(id)
-  }
 
   return (
     <Table context='Variables' style={{ width: table.getTotalSize() }}>

@@ -1,77 +1,72 @@
-import { IDatatype } from '@root/types/PLC/index'
-import type { PLCFunction, PLCFunctionBlock, PLCProgram, PLCProjectData, PLCVariable } from '@root/types/PLC/test'
+import type { PLCDataType } from '@root/types/PLC/test'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-// type IDatatypeDTO = {
-//   id: number
-//   name: string
-//   derivation: 'enum' | 'struct' | 'array'
-// }
+import type { CreatePouRes, PouDTO, VariableDTO, WorkspaceSlice, WorkspaceState } from './types'
 
-type IVariableDTO = {
-  scope: 'global' | 'local'
-  associatedPou?: string
-  data: PLCVariable
-}
-
-type IPouDTO =
-  | {
-      type: 'program'
-      data: PLCProgram
-    }
-  | {
-      type: 'function'
-      data: PLCFunction
-    }
-  | {
-      type: 'function-block'
-      data: PLCFunctionBlock
-    }
-
-type IWorkspaceState = {
-  projectName: string
-  projectPath: string
-  projectData: PLCProjectData
-  editingState: 'save-request' | 'saved' | 'unsaved'
-  systemConfigs: {
-    OS: 'win32' | 'linux' | 'darwin' | ''
-    arch: 'x64' | 'arm' | ''
-    shouldUseDarkMode: boolean
-  }
-}
-
-type ICreatePouRes = {
-  ok: boolean
-  message?: string
-}
-
-type IWorkspaceActions = {
-  setEditingState: (editingState: IWorkspaceState['editingState']) => void
-  setUserWorkspace: (userWorkspaceState: Omit<IWorkspaceState, 'systemConfigs'>) => void
-  setSystemConfigs: (systemConfigs: IWorkspaceState['systemConfigs']) => void
-  switchAppTheme: () => void
-  updateProjectName: (projectName: string) => void
-  updateProjectPath: (projectPath: string) => void
-  createPou: (pouToBeCreated: IPouDTO) => ICreatePouRes
-  updatePou: (dataToBeUpdated: { name: string; content: string }) => void
-  deletePou: (pouToBeDeleted: string) => void
-  createVariable: (variableToBeCreated: IVariableDTO) => void
-  updateVariable: (dataToBeUpdated: IVariableDTO) => void
-  createDatatype: (dataToCreate: IDatatype) => void
-}
-
-type IWorkspaceSlice = IWorkspaceState & {
-  workspaceActions: IWorkspaceActions
-}
-
-const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlice> = (setState) => ({
+const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   editingState: 'unsaved',
   projectName: '',
   projectPath: '',
   projectData: {
     dataTypes: [],
-    pous: [],
+    pous: [
+      {
+        type: 'program',
+        data: {
+          name: 'TestProgram',
+          body: '',
+          language: 'st',
+          variables: [
+            {
+              name: 'variable',
+              type: {
+                value: 'bool',
+                definition: 'base-type',
+              },
+              documentation: '',
+              class: 'local',
+              location: '1..2',
+              debug: false,
+            },
+            {
+              name: 'variable',
+              type: {
+                value: 'bool',
+                definition: 'base-type',
+              },
+              documentation: '',
+              class: 'output',
+              location: '1..2',
+              debug: false,
+            },
+            {
+              name: 'variable',
+              type: {
+                value: 'bool',
+                definition: 'base-type',
+              },
+              documentation: '',
+              class: 'input',
+              location: '1..2',
+              debug: false,
+            },
+            {
+              name: 'variable',
+              type: {
+                value: 'bool',
+                definition: 'base-type',
+              },
+              documentation: '',
+              class: 'output',
+              location: '1..2',
+              debug: false,
+            },
+          ],
+          documentation: '',
+        },
+      },
+    ],
     globalVariables: [],
   },
   systemConfigs: {
@@ -81,16 +76,16 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
   },
 
   workspaceActions: {
-    setEditingState: (editingState: IWorkspaceState['editingState']): void => {
+    setEditingState: (editingState: WorkspaceState['editingState']): void => {
       setState(
-        produce((slice: IWorkspaceSlice) => {
+        produce((slice: WorkspaceSlice) => {
           slice.editingState = editingState
         }),
       )
     },
-    setUserWorkspace: (userWorkspaceState: Omit<IWorkspaceState, 'systemConfigs'>): void => {
+    setUserWorkspace: (userWorkspaceState: Omit<WorkspaceState, 'systemConfigs'>): void => {
       setState(
-        produce((slice: IWorkspaceSlice) => {
+        produce((slice: WorkspaceSlice) => {
           const { projectPath, projectName, projectData } = userWorkspaceState
           slice.projectPath = projectPath
           slice.projectName = projectName
@@ -98,44 +93,45 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
         }),
       )
     },
-    setSystemConfigs: (systemConfigsData: IWorkspaceState['systemConfigs']): void => {
+    setSystemConfigs: (systemConfigsData: WorkspaceState['systemConfigs']): void => {
       setState(
-        produce((slice: IWorkspaceSlice) => {
+        produce((slice: WorkspaceSlice) => {
           slice.systemConfigs = systemConfigsData
         }),
       )
     },
     switchAppTheme: (): void => {
       setState(
-        produce((slice: IWorkspaceSlice) => {
+        produce((slice: WorkspaceSlice) => {
           slice.systemConfigs.shouldUseDarkMode = !slice.systemConfigs.shouldUseDarkMode
         }),
       )
     },
     updateProjectName: (projectName: string): void => {
       setState(
-        produce((slice: IWorkspaceSlice) => {
+        produce((slice: WorkspaceSlice) => {
           slice.projectName = projectName
         }),
       )
     },
     updateProjectPath: (projectPath: string): void => {
       setState(
-        produce((slice: IWorkspaceSlice) => {
+        produce((slice: WorkspaceSlice) => {
           slice.projectPath = projectPath
         }),
       )
     },
-    createPou: (pouToBeCreated: IPouDTO): ICreatePouRes => {
-      let response: ICreatePouRes = { ok: false, message: 'Internal error' }
+    createPou: (pouToBeCreated: PouDTO): CreatePouRes => {
+      let response: CreatePouRes = { ok: false, message: 'Internal error' }
       setState(
-        produce((slice: IWorkspaceSlice) => {
+        produce((slice: WorkspaceSlice) => {
           const pouExists = slice.projectData.pous.find((pou) => {
             return pou.data.name === pouToBeCreated.data.name
           })
           if (!pouExists) {
             slice.projectData.pous.push(pouToBeCreated)
             response = { ok: true, message: 'Pou created successfully' }
+            console.log('pou created:', pouToBeCreated)
           } else {
             response = { ok: false, message: 'Pou already exists' }
           }
@@ -145,7 +141,7 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
     },
     updatePou: (dataToBeUpdated: { name: string; content: string }): void => {
       setState(
-        produce((slice: IWorkspaceSlice) => {
+        produce((slice: WorkspaceSlice) => {
           const draft = slice.projectData.pous.find((pou) => {
             return pou.data.name === dataToBeUpdated.name
           })
@@ -155,14 +151,14 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
     },
     deletePou: (pouToBeDeleted: string): void => {
       setState(
-        produce((slice: IWorkspaceSlice) => {
+        produce((slice: WorkspaceSlice) => {
           slice.projectData.pous = slice.projectData.pous.filter((pou) => pou.data.name !== pouToBeDeleted)
         }),
       )
     },
-    createVariable: (variableToBeCreated: IVariableDTO): void => {
+    createVariable: (variableToBeCreated: VariableDTO): void => {
       setState(
-        produce((slice: IWorkspaceSlice) => {
+        produce((slice: WorkspaceSlice) => {
           const { scope } = variableToBeCreated
           if (scope === 'global') {
             slice.projectData.globalVariables.push(variableToBeCreated.data)
@@ -173,6 +169,7 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
             } else {
               console.error(`Pou ${variableToBeCreated.associatedPou} not found`)
             }
+            console.log('pou:', pou)
           } else {
             console.error(`Scope ${scope} not found or invalid params`)
           }
@@ -180,9 +177,9 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
       )
     },
     /** This must be validated */
-    updateVariable: (dataToBeUpdated: IVariableDTO): void => {
+    updateVariable: (dataToBeUpdated: VariableDTO): void => {
       setState(
-        produce((slice: IWorkspaceSlice) => {
+        produce((slice: WorkspaceSlice) => {
           const { scope } = dataToBeUpdated
           if (scope === 'global') {
             const index = slice.projectData.globalVariables.findIndex(
@@ -207,9 +204,9 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
         }),
       )
     },
-    createDatatype: (dataToCreate: IDatatype) => {
+    createDatatype: (dataToCreate: PLCDataType) => {
       setState(
-        produce((slice: IWorkspaceSlice) => {
+        produce((slice: WorkspaceSlice) => {
           const { name } = dataToCreate
           const dataExists = slice.projectData.dataTypes.find((datatype) => datatype.name === name)
           if (!dataExists) {
@@ -223,4 +220,4 @@ const createWorkspaceSlice: StateCreator<IWorkspaceSlice, [], [], IWorkspaceSlic
   },
 })
 
-export { createWorkspaceSlice, type IWorkspaceSlice }
+export { createWorkspaceSlice }
