@@ -1,4 +1,5 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
+import { cn } from '@root/utils'
 import { DebuggerIcon, MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import type { PLCVariable } from '@root/types/PLC/test'
 import type { CellContext } from '@tanstack/react-table'
@@ -9,12 +10,12 @@ import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '../../
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle, ModalTrigger } from '../modal'
 import { ArrayDimensionsComponent } from './elements/array'
 
-type SelectableCellProps = CellContext<PLCVariable, unknown>
+type ISelectableCellProps = CellContext<PLCVariable, unknown> & { editable?: boolean }
 
 const VariableTypes = [
   {
     definition: 'base-type',
-    value: [
+    values: [
       'bool',
       'sint',
       'int',
@@ -40,13 +41,19 @@ const VariableTypes = [
   },
   {
     definition: 'user-data-type',
-    value: ['type1', 'type2', 'type3'],
+    values: ['userDt1', 'userDt2', 'userDt3'],
   },
 ]
 
 const dimensions = ['1..0', '1..1', '1..2', '1..3', '1..4', '1..5', '1..6']
 
-const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }: SelectableCellProps) => {
+const SelectableTypeCell = ({
+  getValue,
+  row: { index },
+  column: { id },
+  table,
+  editable = true,
+}: ISelectableCellProps) => {
   const { value } = getValue<PLCVariable['type']>()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState<PLCVariable['type']['value']>(value)
@@ -67,7 +74,11 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
   return (
     <PrimitiveDropdown.Root>
       <PrimitiveDropdown.Trigger asChild>
-        <div className='flex h-full w-full cursor-pointer justify-center outline-none'>
+        <div
+          className={cn('flex h-full w-full cursor-pointer justify-center p-2 outline-none', {
+            'pointer-events-none': !editable,
+          })}
+        >
           <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
             {cellValue === null ? '' : _.upperCase(cellValue as unknown as string)}
           </span>
@@ -247,7 +258,13 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
 }
 const VariableClasses = ['input', 'output', 'inOut', 'external', 'local', 'temp']
 
-const SelectableClassCell = ({ getValue, row: { index }, column: { id }, table }: SelectableCellProps) => {
+const SelectableClassCell = ({
+  getValue,
+  row: { index },
+  column: { id },
+  table,
+  editable = true,
+}: ISelectableCellProps) => {
   const initialValue = getValue()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
@@ -267,7 +284,10 @@ const SelectableClassCell = ({ getValue, row: { index }, column: { id }, table }
     <Select value={cellValue as string} onValueChange={(value) => setCellValue(value)}>
       <SelectTrigger
         placeholder={cellValue as string}
-        className='flex h-full w-full justify-center font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300'
+        className={cn(
+          'flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
+          { 'pointer-events-none': !editable },
+        )}
       />
       <SelectContent
         position='popper'
@@ -308,12 +328,12 @@ const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }
   }, [initialValue])
 
   return (
-    <div
+    <button
       className='flex h-full w-full cursor-pointer items-center justify-center'
       onClick={() => setCellValue(!cellValue)}
     >
       <DebuggerIcon variant={cellValue ? 'default' : 'muted'} />
-    </div>
+    </button>
   )
 }
 

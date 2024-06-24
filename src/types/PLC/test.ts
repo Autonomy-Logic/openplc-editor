@@ -146,38 +146,45 @@ const PLCVariableSchema = z.object({
     }),
     z.object({
       definition: z.literal('user-data-type'),
-      /** In fact this will be filled by the data types created by the user */
-      value: z.array(PLCDataTypeSchema),
+      /** In fact this will be filled by the data types created by the user
+       *  This is a mock type just for a presentation.
+       * @deprecated
+       */
+      value: z.enum(['userDt1', 'userDt2', 'userDt3']),
     }),
     z.object({
       definition: z.literal('array'),
-      value: z.object({
-        /** This must also include the data types created by the user */
-        baseType: z.enum([
-          'bool',
-          'sint',
-          'int',
-          'dint',
-          'lint',
-          'usint',
-          'uint',
-          'udint',
-          'ulint',
-          'real',
-          'lreal',
-          'time',
-          'date',
-          'tod',
-          'dt',
-          'string',
-          'byte',
-          'word',
-          'dword',
-          'lword',
-          'loglevel',
-        ]),
-        dimensions: z.string().regex(/^(\d+)\.\.(\d+)$/),
-      }),
+      /** This is a mock type just for a presentation.
+       * @deprecated
+       */
+      value: z.enum(['array', 'dictionary']),
+      // value: z.object({
+      //   /** This must also include the data types created by the user */
+      //   baseType: z.enum([
+      //     'bool',
+      //     'sint',
+      //     'int',
+      //     'dint',
+      //     'lint',
+      //     'usint',
+      //     'uint',
+      //     'udint',
+      //     'ulint',
+      //     'real',
+      //     'lreal',
+      //     'time',
+      //     'date',
+      //     'tod',
+      //     'dt',
+      //     'string',
+      //     'byte',
+      //     'word',
+      //     'dword',
+      //     'lword',
+      //     'loglevel',
+      //   ]),
+      //   dimensions: z.string().regex(/^(\d+)\.\.(\d+)$/),
+      // }),
     }),
   ]),
   location: z.string(),

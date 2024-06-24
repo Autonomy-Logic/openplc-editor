@@ -100,7 +100,7 @@ export const LibraryTree = () => {
   ]
   return (
     <div
-      className='[&::-webkit-scrollbar]:transition-duration-700 flex h-full w-full flex-col overflow-x-auto border-none bg-none
+      className='[&::-webkit-scrollbar]:transition-duration-700 flex h-full w-full flex-col overflow-x-hidden border-none bg-none
 			pr-1
 		[&::-webkit-scrollbar-thumb]:bg-brand
 		[&::-webkit-scrollbar-thumb]:dark:bg-neutral-700

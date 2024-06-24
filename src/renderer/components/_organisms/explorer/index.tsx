@@ -1,6 +1,7 @@
 import { ReactElement } from 'react'
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../panel'
+import { LibraryExplorer } from './library'
 import { Project } from './project'
 
 /**
@@ -25,7 +26,7 @@ const Explorer = (): ReactElement => {
         <ResizableHandle className='bg-neutral-200 dark:bg-neutral-850' />
         <ResizablePanel id='libraryExplorerPanel' order={2} defaultSize={50}>
           {/* The library tree panel will be implemented soon */}
-          <span>Will be implemented soon</span>
+          <LibraryExplorer />
         </ResizablePanel>
       </ResizablePanelGroup>
       <p>Info panel</p>
