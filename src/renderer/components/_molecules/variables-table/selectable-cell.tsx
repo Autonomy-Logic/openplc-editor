@@ -1,7 +1,7 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
-import { cn } from '@root/utils'
 import { DebuggerIcon, MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import type { PLCVariable } from '@root/types/PLC/test'
+import { cn } from '@root/utils'
 import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
@@ -105,7 +105,7 @@ const SelectableTypeCell = ({
                   sideOffset={5}
                   className='h-fit w-[200px] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
                 >
-                  {scope.value.map((value) => (
+                  {scope.values.map((value) => (
                     <PrimitiveDropdown.Item
                       key={value}
                       onSelect={() => setCellValue(value as PLCVariable['type']['value'])}
@@ -311,7 +311,7 @@ const SelectableClassCell = ({
   )
 }
 
-const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }: SelectableCellProps) => {
+const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
   const initialValue = getValue<boolean>()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)

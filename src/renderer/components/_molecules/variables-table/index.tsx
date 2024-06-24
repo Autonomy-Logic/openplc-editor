@@ -1,5 +1,4 @@
 import { PLCVariable } from '@root/types/PLC/test'
-import { PLCVariable } from '@root/types/PLC/test'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useState } from 'react'
 
@@ -7,7 +6,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { EditableDocumentationCell, EditableNameCell } from './editable-cell'
 import { SelectableClassCell, SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 
-const columnHelper = createColumnHelper<PLCVariable>()
 const columnHelper = createColumnHelper<PLCVariable>()
 
 const columns = [
