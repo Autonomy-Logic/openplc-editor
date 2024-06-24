@@ -19,12 +19,12 @@ const VariablesEditor = () => {
     projectData: { pous },
     workspaceActions: { createVariable },
   } = useOpenPLCStore()
-  const [filterValue, setFilterValue] = useState('filter')
+  const [filterValue, setFilterValue] = useState('All')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [tableData, setTableData] = useState<PLCVariable[]>([])
   const [visualizationType, setVisualizationType] = useState<'code' | 'table'>('table')
 
-  const FilterOptions = ['local', 'input', 'output', 'inOut', 'external', 'temp']
+  const FilterOptions = ['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']
 
   const onVisualizationTypeChange = useCallback(
     (value: 'code' | 'table') => {
@@ -56,8 +56,10 @@ const VariablesEditor = () => {
 
   const handleFilterChange = (value: string) => {
     setFilterValue(value)
-    setColumnFilters(
-      prev => prev.filter(filter => filter.id !== 'class').concat({ id: 'class', value })
+    setColumnFilters((prev) =>
+      value !== 'All'
+        ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: value.toLowerCase() })
+        : prev.filter((filter) => filter.id !== 'class'),
     )
   }
 
@@ -179,7 +181,7 @@ const VariablesEditor = () => {
         </div>
       </div>
       <div aria-label='Variables editor table container' className='h-full overflow-auto'>
-        <VariablesTable tableData={tableData} columnFilters={columnFilters} setColumnFilters={setColumnFilters}/>
+        <VariablesTable tableData={tableData} columnFilters={columnFilters} setColumnFilters={setColumnFilters} />
       </div>
     </div>
   )
