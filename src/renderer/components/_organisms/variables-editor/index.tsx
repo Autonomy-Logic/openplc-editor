@@ -5,6 +5,7 @@ import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCVariable } from '@root/types/PLC/test'
 import { cn } from '@root/utils'
+import { ColumnFiltersState } from '@tanstack/react-table'
 import { useCallback, useEffect, useState } from 'react'
 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
@@ -18,11 +19,12 @@ const VariablesEditor = () => {
     projectData: { pous },
     workspaceActions: { createVariable },
   } = useOpenPLCStore()
-  const [filterValue, setFilterValue] = useState('filter')
+  const [filterValue, setFilterValue] = useState('All')
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [tableData, setTableData] = useState<PLCVariable[]>([])
   const [visualizationType, setVisualizationType] = useState<'code' | 'table'>('table')
 
-  const FilterOptions = ['local', 'input', 'output', 'inOut', 'external', 'temp']
+  const FilterOptions = ['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']
 
   const onVisualizationTypeChange = useCallback(
     (value: 'code' | 'table') => {
@@ -50,6 +52,15 @@ const VariablesEditor = () => {
         documentation: '',
       },
     })
+  }
+
+  const handleFilterChange = (value: string) => {
+    setFilterValue(value)
+    setColumnFilters((prev) =>
+      value !== 'All'
+        ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: value.toLowerCase() })
+        : prev.filter((filter) => filter.id !== 'class'),
+    )
   }
 
   return (
@@ -81,7 +92,7 @@ const VariablesEditor = () => {
             >
               Class Filter :
             </label>
-            <Select value={filterValue} onValueChange={(value) => setFilterValue(value)}>
+            <Select value={filterValue} onValueChange={handleFilterChange}>
               <SelectTrigger
                 id='class-filter'
                 placeholder={filterValue}
@@ -170,7 +181,7 @@ const VariablesEditor = () => {
         </div>
       </div>
       <div aria-label='Variables editor table container' className='h-full overflow-auto'>
-        <VariablesTable tableData={tableData} />
+        <VariablesTable tableData={tableData} columnFilters={columnFilters} setColumnFilters={setColumnFilters} />
       </div>
     </div>
   )
