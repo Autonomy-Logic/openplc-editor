@@ -80,11 +80,11 @@ const EditableDocumentationCell = ({
           side='bottom'
           sideOffset={-32}
           className='h-fit w-[175px] rounded-lg border border-neutral-100 bg-white p-2 drop-shadow-lg lg:w-[275px] 2xl:w-[375px] dark:border-brand-medium-dark dark:bg-neutral-950'
+          onInteractOutside={onBlur}
         >
           <textarea
             value={cellValue}
             onChange={(e) => setCellValue(e.target.value)}
-            onBlur={onBlur}
             rows={5}
             className='w-full max-w-[375px] flex-1 resize-none  bg-transparent text-start text-neutral-900 outline-none  dark:text-neutral-100'
           />

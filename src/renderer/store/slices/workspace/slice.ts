@@ -1,4 +1,4 @@
-import type { PLCDataType } from '@root/types/PLC/test'
+import type { PLCDataType, PLCVariable } from '@root/types/PLC/test'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -177,7 +177,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
     /** This must be validated */
-    updateVariable: (dataToBeUpdated: VariableDTO): void => {
+    updateVariable: (dataToBeUpdated: Omit<VariableDTO, 'data'> & { rowId: number, data: Partial<PLCVariable> }): void => {
       setState(
         produce((slice: WorkspaceSlice) => {
           const { scope } = dataToBeUpdated
@@ -186,14 +186,15 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               (variable) => variable.name === dataToBeUpdated.data.name,
             )
             if (index !== -1) {
-              slice.projectData.globalVariables[index] = dataToBeUpdated.data
+              slice.projectData.globalVariables[index] = { ...slice.projectData.globalVariables[index], ...dataToBeUpdated.data }
             }
           } else if (scope === 'local' && dataToBeUpdated.associatedPou) {
             const pou = slice.projectData.pous.find((pou) => pou.data.name === dataToBeUpdated.associatedPou)
             if (pou) {
-              const index = pou.data.variables.findIndex((variable) => variable.name === dataToBeUpdated.data.name)
+              const index = dataToBeUpdated.rowId
               if (index !== -1) {
-                pou.data.variables[index] = dataToBeUpdated.data
+                console.log(dataToBeUpdated.data)
+                pou.data.variables[index] = { ...pou.data.variables[index], ...dataToBeUpdated.data }
               }
             } else {
               console.error(`Pou ${dataToBeUpdated.associatedPou} not found`)

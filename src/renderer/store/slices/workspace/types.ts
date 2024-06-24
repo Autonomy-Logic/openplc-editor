@@ -55,7 +55,7 @@ type WorkspaceActions = {
   updatePou: (dataToBeUpdated: { name: string; content: string }) => void
   deletePou: (pouToBeDeleted: string) => void
   createVariable: (variableToBeCreated: VariableDTO) => void
-  updateVariable: (dataToBeUpdated: VariableDTO) => void
+  updateVariable: (dataToBeUpdated: Omit<VariableDTO, 'data'> & { rowId: number, data: Partial<PLCVariable> }) => void
   createDatatype: (dataToCreate: PLCDataType) => void
 }
 
@@ -63,4 +63,4 @@ type WorkspaceSlice = WorkspaceState & {
   workspaceActions: WorkspaceActions
 }
 
-export { CreatePouRes,PouDTO, VariableDTO, WorkspaceActions, WorkspaceSlice, WorkspaceState }
+export { CreatePouRes, PouDTO, VariableDTO, WorkspaceActions, WorkspaceSlice, WorkspaceState }

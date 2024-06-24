@@ -19,6 +19,7 @@ const VariablesEditor = () => {
     projectData: { pous },
     workspaceActions: { createVariable },
   } = useOpenPLCStore()
+
   const [filterValue, setFilterValue] = useState('All')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [selectedRow, setSelectedRow] = useState<string>('')
@@ -37,6 +38,7 @@ const VariablesEditor = () => {
   useEffect(() => {
     const variablesToTable = pous.filter((pou) => pou.data.name === name)[0].data.variables
     setTableData(variablesToTable)
+    console.log(pous)
   }, [name, pous])
 
   const handleCreateVariable = () => {
@@ -54,6 +56,20 @@ const VariablesEditor = () => {
     })
   }
 
+  // const handleUpdateVariable = (rowIndex: number, columnId: string, value: unknown) => {
+  //   console.log('rowIndex:', rowIndex, 'columnId:', columnId, 'value:', value)
+  //   console.log('associatedPou:', pous.find((pou) => pou.data.name === name)?.data.name)
+
+  //   updateVariable({
+  //     scope: 'local',
+  //     associatedPou: pous.find((pou) => pou.data.name === name)?.data.name,
+  //     rowId: rowIndex,
+  //     data: {
+  //       [columnId]: value,
+  //     }
+  //   })
+  // }
+
   const handleRemoveVariable = (position: string) => {
     console.log('Remove variable')
     setTableData((prev) => {
@@ -63,19 +79,6 @@ const VariablesEditor = () => {
         return index !== parseInt(position)
       })
       console.log('Remove data:', teste)
-      return teste
-    })
-  }
-
-  const handleUpdateVariable = (rowIndex: number, columnId: string, value: unknown) => {
-    setTableData((prev) => {
-      const teste = prev.map((row, index) => {
-        if (index === rowIndex) {
-          return { ...row, [columnId]: value }
-        }
-        return row
-      })
-      console.log('Update data:', teste)
       return teste
     })
   }
@@ -217,7 +220,6 @@ const VariablesEditor = () => {
           setColumnFilters={setColumnFilters}
           selectedRow={selectedRow}
           handleRowClick={handleRowClick}
-          handleUpdateVariable={handleUpdateVariable}
         />
       </div>
     </div>

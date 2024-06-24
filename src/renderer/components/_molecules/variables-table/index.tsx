@@ -1,3 +1,4 @@
+import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCVariable } from '@root/types/PLC/test'
 import {
   ColumnFiltersState,
@@ -41,7 +42,6 @@ type PLCVariablesTableProps = {
   setColumnFilters?: OnChangeFn<ColumnFiltersState> | undefined
   selectedRow: string
   handleRowClick: (row: HTMLTableRowElement) => void
-  handleUpdateVariable: (rowIndex: number, columnId: string, value: unknown) => void
 }
 
 const VariablesTable = ({
@@ -50,8 +50,15 @@ const VariablesTable = ({
   setColumnFilters,
   selectedRow,
   handleRowClick,
-  handleUpdateVariable,
 }: PLCVariablesTableProps) => {
+  const {
+    editor: {
+      meta: { name },
+    },
+    projectData: { pous },
+    workspaceActions: { updateVariable },
+  } = useOpenPLCStore()
+
   const table = useReactTable({
     columns: columns,
     columnResizeMode: 'onChange',
@@ -65,7 +72,16 @@ const VariablesTable = ({
     state: { columnFilters },
     onColumnFiltersChange: setColumnFilters,
     meta: {
-      updateData: handleUpdateVariable,
+      updateData: (rowIndex, columnId, value) => {
+        updateVariable({
+          scope: 'local',
+          associatedPou: pous.find((pou) => pou.data.name === name)?.data.name,
+          rowId: rowIndex,
+          data: {
+            [columnId]: value,
+          },
+        })
+      },
     },
   })
 
