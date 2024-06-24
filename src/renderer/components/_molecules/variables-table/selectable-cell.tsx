@@ -1,13 +1,13 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { DebuggerIcon, MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import type { PLCVariable } from '@root/types/PLC/test'
-import { cn } from '@root/utils'
 import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
-import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle, ModalTrigger } from '../modal'
+import { ArrayDimensionsComponent } from './elements/array'
 
 type SelectableCellProps = CellContext<PLCVariable, unknown>
 
@@ -44,35 +44,7 @@ const VariableTypes = [
   },
 ]
 
-type ArrayDimensionProps = ComponentPropsWithoutRef<'li'> & {
-  value: string
-}
-
 const dimensions = ['1..0', '1..1', '1..2', '1..3', '1..4', '1..5', '1..6']
-
-const ArrayDimensionField = (props: ArrayDimensionProps) => {
-  const [rowSelected, setRowSelected] = useState(false)
-  // border border-neutral-300 dark:border-neutral-700
-  const { value, className, ...rest } = props
-  // const idForInput = `array-dimension-for-${value}`
-  const handleClick = () => {
-    setRowSelected(!rowSelected)
-  }
-  return (
-    <li
-      aria-label='Array dimension'
-      aria-selected={rowSelected}
-      onClick={handleClick}
-      className={cn(
-        'flex h-7 w-full flex-1 items-center justify-start bg-transparent px-2 py-3 font-caption text-xs text-neutral-800 hover:cursor-pointer hover:bg-neutral-50 aria-selected:bg-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-600 dark:aria-selected:bg-neutral-700',
-        className,
-      )}
-      {...rest}
-    >
-      {value}
-    </li>
-  )
-}
 
 const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }: SelectableCellProps) => {
   const { value } = getValue<PLCVariable['type']>()
@@ -97,7 +69,7 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
       <PrimitiveDropdown.Trigger asChild>
         <div className='flex h-full w-full cursor-pointer justify-center outline-none'>
           <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-            {cellValue === null ? '' : (cellValue as unknown as string)}
+            {cellValue === null ? '' : _.upperCase(cellValue as unknown as string)}
           </span>
         </div>
       </PrimitiveDropdown.Trigger>
@@ -113,7 +85,7 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
               <PrimitiveDropdown.SubTrigger asChild>
                 <div className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'>
                   <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                    {_.upperCase(scope.definition)}
+                    {_.startCase(scope.definition)}
                   </span>
                 </div>
               </PrimitiveDropdown.SubTrigger>
@@ -145,7 +117,7 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
                 onClick={() => setArrayModalIsOpen(true)}
                 className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'
               >
-                <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>ARRAY</span>
+                <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>Array</span>
               </ModalTrigger>
               <ModalContent>
                 <ModalHeader>
@@ -252,20 +224,16 @@ const SelectableTypeCell = ({ getValue, row: { index }, column: { id }, table }:
                       </div>
                     </div>
                   </div>
-                  <ul
-                    aria-label='Array type table container'
-                    className='flex h-fit w-full flex-col *:border-x *:border-b *:border-neutral-300 [&>*:first-child]:rounded-t-lg [&>*:first-child]:border-t [&>*:last-child]:rounded-b-lg'
-                  >
-                    {dimensions.map((dimension) => (
-                      <ArrayDimensionField value={dimension} />
-                    ))}
-                  </ul>
+                  <ArrayDimensionsComponent values={dimensions} />
                 </div>
                 <ModalFooter className='flex items-center justify-around'>
                   <Button className='h-8 justify-center text-xs' onClick={() => setArrayModalIsOpen(false)}>
                     Save
                   </Button>
-                  <Button className='h-8 justify-center bg-neutral-100 text-xs text-neutral-1000 hover:bg-neutral-300 focus:bg-neutral-200'>
+                  <Button
+                    onClick={() => setArrayModalIsOpen(false)}
+                    className='h-8 justify-center bg-neutral-100 text-xs text-neutral-1000 hover:bg-neutral-300 focus:bg-neutral-200'
+                  >
                     Cancel
                   </Button>
                 </ModalFooter>
