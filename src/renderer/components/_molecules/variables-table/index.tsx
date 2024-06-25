@@ -73,7 +73,7 @@ const VariablesTable = ({
     onColumnFiltersChange: setColumnFilters,
     meta: {
       updateData: (rowIndex, columnId, value) => {
-        updateVariable({
+        return updateVariable({
           scope: 'local',
           associatedPou: pous.find((pou) => pou.data.name === name)?.data.name,
           rowId: rowIndex,

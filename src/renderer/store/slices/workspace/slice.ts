@@ -2,7 +2,7 @@ import type { PLCDataType, PLCVariable } from '@root/types/PLC/test'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import type { CreatePouRes, PouDTO, VariableDTO, WorkspaceSlice, WorkspaceState } from './types'
+import type { PouDTO, VariableDTO, WorkspaceResponse, WorkspaceSlice, WorkspaceState } from './types'
 
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   editingState: 'unsaved',
@@ -83,6 +83,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+
     setUserWorkspace: (userWorkspaceState: Omit<WorkspaceState, 'systemConfigs'>): void => {
       setState(
         produce((slice: WorkspaceSlice) => {
@@ -93,6 +94,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+
     setSystemConfigs: (systemConfigsData: WorkspaceState['systemConfigs']): void => {
       setState(
         produce((slice: WorkspaceSlice) => {
@@ -100,6 +102,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+
     switchAppTheme: (): void => {
       setState(
         produce((slice: WorkspaceSlice) => {
@@ -107,6 +110,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+
     updateProjectName: (projectName: string): void => {
       setState(
         produce((slice: WorkspaceSlice) => {
@@ -121,8 +125,9 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    createPou: (pouToBeCreated: PouDTO): CreatePouRes => {
-      let response: CreatePouRes = { ok: false, message: 'Internal error' }
+
+    createPou: (pouToBeCreated: PouDTO): WorkspaceResponse => {
+      let response: WorkspaceResponse = { ok: false, message: 'Internal error' }
       setState(
         produce((slice: WorkspaceSlice) => {
           const pouExists = slice.projectData.pous.find((pou) => {
@@ -176,12 +181,11 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    /**
-     * This must be validated (global scope)
-     **/
+
     updateVariable: (
       dataToBeUpdated: Omit<VariableDTO, 'data'> & { rowId: number; data: Partial<PLCVariable> },
-    ): void => {
+    ): WorkspaceResponse => {
+      let response: WorkspaceResponse = { ok: true }
       setState(
         produce((slice: WorkspaceSlice) => {
           const checkIfNameExists = (variables: PLCVariable[], name: string | undefined) => {
@@ -200,6 +204,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               }
             } else {
               console.error(`Variable ${dataToBeUpdated.data.name} already exists`)
+              response = { ok: false, title: 'Variable already exists', message: 'Please make sure that the name is unique' }
             }
           } else if (scope === 'local' && dataToBeUpdated.associatedPou) {
             const pou = slice.projectData.pous.find((pou) => pou.data.name === dataToBeUpdated.associatedPou)
@@ -211,15 +216,19 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
                 }
               } else {
                 console.error(`Variable ${dataToBeUpdated.data.name} already exists`)
+                response = { ok: false, title: 'Variable already exists', message: 'Please make sure that the name is unique' }
               }
             } else {
               console.error(`Pou ${dataToBeUpdated.associatedPou} not found`)
+              response = { ok: false, title: 'Pou not found' }
             }
           } else {
             console.error(`Scope ${scope} not found or invalid params`)
+            response = { ok: false, title: 'Scope not found' }
           }
         }),
       )
+      return response
     },
     deleteVariable: (variableToBeDeleted: Omit<VariableDTO, 'data'> & { rowId: number }): void => {
       setState(
@@ -268,6 +277,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+
     createDatatype: (dataToCreate: PLCDataType) => {
       setState(
         produce((slice: WorkspaceSlice) => {

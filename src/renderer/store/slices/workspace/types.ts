@@ -39,8 +39,9 @@ type WorkspaceState = {
   }
 }
 
-type CreatePouRes = {
+type WorkspaceResponse = {
   ok: boolean
+  title?: string
   message?: string
 }
 
@@ -51,11 +52,13 @@ type WorkspaceActions = {
   switchAppTheme: () => void
   updateProjectName: (projectName: string) => void
   updateProjectPath: (projectPath: string) => void
-  createPou: (pouToBeCreated: PouDTO) => CreatePouRes
+  createPou: (pouToBeCreated: PouDTO) => WorkspaceResponse
   updatePou: (dataToBeUpdated: { name: string; content: string }) => void
   deletePou: (pouToBeDeleted: string) => void
   createVariable: (variableToBeCreated: VariableDTO) => void
-  updateVariable: (dataToBeUpdated: Omit<VariableDTO, 'data'> & { rowId: number; data: Partial<PLCVariable> }) => void
+  updateVariable: (
+    dataToBeUpdated: Omit<VariableDTO, 'data'> & { rowId: number; data: Partial<PLCVariable> },
+  ) => WorkspaceResponse
   deleteVariable: (variableToBeDeleted: Omit<VariableDTO, 'data'> & { rowId: number }) => void
   rearrangeVariables: (variableToBeRearranged: Omit<VariableDTO, 'data'> & { rowId: number; newIndex: number }) => void
   createDatatype: (dataToCreate: PLCDataType) => void
@@ -65,4 +68,16 @@ type WorkspaceSlice = WorkspaceState & {
   workspaceActions: WorkspaceActions
 }
 
-export { CreatePouRes, PouDTO, VariableDTO, WorkspaceActions, WorkspaceSlice, WorkspaceState }
+export {
+  PouDTO,
+  VariableDTO,
+  WorkspaceActions,
+  WorkspaceResponse,
+  WorkspaceSlice,
+  WorkspaceState,
+  // type IDatatypeDTO = {
+  //   id: number
+  //   name: string
+  //   derivation: 'enum' | 'struct' | 'array'
+  // }
+}
