@@ -176,8 +176,12 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    /** This must be validated */
-    updateVariable: (dataToBeUpdated: Omit<VariableDTO, 'data'> & { rowId: number, data: Partial<PLCVariable> }): void => {
+    /**
+     * This must be validated (global scope)
+     **/
+    updateVariable: (
+      dataToBeUpdated: Omit<VariableDTO, 'data'> & { rowId: number; data: Partial<PLCVariable> },
+    ): void => {
       setState(
         produce((slice: WorkspaceSlice) => {
           const { scope } = dataToBeUpdated
@@ -186,18 +190,42 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               (variable) => variable.name === dataToBeUpdated.data.name,
             )
             if (index !== -1) {
-              slice.projectData.globalVariables[index] = { ...slice.projectData.globalVariables[index], ...dataToBeUpdated.data }
+              slice.projectData.globalVariables[index] = {
+                ...slice.projectData.globalVariables[index],
+                ...dataToBeUpdated.data,
+              }
             }
           } else if (scope === 'local' && dataToBeUpdated.associatedPou) {
             const pou = slice.projectData.pous.find((pou) => pou.data.name === dataToBeUpdated.associatedPou)
             if (pou) {
               const index = dataToBeUpdated.rowId
               if (index !== -1) {
-                console.log(dataToBeUpdated.data)
                 pou.data.variables[index] = { ...pou.data.variables[index], ...dataToBeUpdated.data }
               }
             } else {
               console.error(`Pou ${dataToBeUpdated.associatedPou} not found`)
+            }
+          } else {
+            console.error(`Scope ${scope} not found or invalid params`)
+          }
+        }),
+      )
+    },
+    deleteVariable: (variableToBeDeleted: Omit<VariableDTO, 'data'> & { rowId: number }): void => {
+      setState(
+        produce((slice: WorkspaceSlice) => {
+          const { scope } = variableToBeDeleted
+          if (scope === 'global') {
+            slice.projectData.globalVariables.splice(variableToBeDeleted.rowId, 1)
+          } else if (scope === 'local' && variableToBeDeleted.associatedPou) {
+            const pou = slice.projectData.pous.find((pou) => pou.data.name === variableToBeDeleted.associatedPou)
+            if (pou) {
+              const index = variableToBeDeleted.rowId
+              if (index !== -1) {
+                pou.data.variables.splice(index, 1)
+              }
+            } else {
+              console.error(`Pou ${variableToBeDeleted.associatedPou} not found`)
             }
           } else {
             console.error(`Scope ${scope} not found or invalid params`)

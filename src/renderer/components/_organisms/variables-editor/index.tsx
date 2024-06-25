@@ -17,7 +17,7 @@ const VariablesEditor = () => {
       meta: { name },
     },
     projectData: { pous },
-    workspaceActions: { createVariable },
+    workspaceActions: { createVariable, deleteVariable },
   } = useOpenPLCStore()
 
   const [filterValue, setFilterValue] = useState('All')
@@ -56,31 +56,8 @@ const VariablesEditor = () => {
     })
   }
 
-  // const handleUpdateVariable = (rowIndex: number, columnId: string, value: unknown) => {
-  //   console.log('rowIndex:', rowIndex, 'columnId:', columnId, 'value:', value)
-  //   console.log('associatedPou:', pous.find((pou) => pou.data.name === name)?.data.name)
-
-  //   updateVariable({
-  //     scope: 'local',
-  //     associatedPou: pous.find((pou) => pou.data.name === name)?.data.name,
-  //     rowId: rowIndex,
-  //     data: {
-  //       [columnId]: value,
-  //     }
-  //   })
-  // }
-
-  const handleRemoveVariable = (position: string) => {
-    console.log('Remove variable')
-    setTableData((prev) => {
-      const teste = prev.filter((_, index) => {
-        console.log('Index:', index)
-        console.log('Position:', parseInt(position))
-        return index !== parseInt(position)
-      })
-      console.log('Remove data:', teste)
-      return teste
-    })
+  const handleRemoveVariable = () => {
+    deleteVariable({ scope: 'local', associatedPou: name, rowId: parseInt(selectedRow) })
   }
 
   const handleFilterChange = (value: string) => {
@@ -156,20 +133,21 @@ const VariablesEditor = () => {
             aria-label='Variables editor table actions container'
             className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
           >
-            <div
+            <button
               aria-label='Add table row button'
               className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
               onClick={() => handleCreateVariable()}
             >
               <PlusIcon className='!stroke-brand' />
-            </div>
-            <div
+            </button>
+            <button
               aria-label='Remove table row button'
-              className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => handleRemoveVariable(selectedRow)}
+              className='hover:cursor-pointer hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
+              disabled={selectedRow === ''}
+              onClick={() => handleRemoveVariable()}
             >
               <MinusIcon />
-            </div>
+            </button>
             <div
               aria-label='Move table row up button'
               className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'

@@ -278,7 +278,6 @@ const SelectableClassCell = ({
   // When the input is blurred, we'll call our table meta's updateData function
   const onValueChange = (value: string) => {
     // Todo: Must update the data in the store
-    console.log('teste', id, value)
     setCellValue(value)
     table.options.meta?.updateData(index, id, value)
   }
