@@ -52,7 +52,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               debug: false,
             },
             {
-              name: 'variable',
+              name: 'variable-19',
               type: {
                 value: 'bool',
                 definition: 'base-type',
@@ -161,7 +161,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    createVariable: (variableToBeCreated: VariableDTO): void => {
+    createVariable: (variableToBeCreated: VariableDTO & { rowToInsert?: number }): void => {
       setState(
         produce((slice: WorkspaceSlice) => {
           const { scope } = variableToBeCreated
@@ -170,7 +170,11 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           } else if (scope === 'local' && variableToBeCreated.associatedPou) {
             const pou = slice.projectData.pous.find((pou) => pou.data.name === variableToBeCreated.associatedPou)
             if (pou) {
-              pou.data.variables.push(variableToBeCreated.data)
+              if (variableToBeCreated.rowToInsert !== undefined) {
+                pou.data.variables.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
+              } else {
+                pou.data.variables.push(variableToBeCreated.data)
+              }
             } else {
               console.error(`Pou ${variableToBeCreated.associatedPou} not found`)
             }
@@ -204,7 +208,11 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               }
             } else {
               console.error(`Variable ${dataToBeUpdated.data.name} already exists`)
-              response = { ok: false, title: 'Variable already exists', message: 'Please make sure that the name is unique' }
+              response = {
+                ok: false,
+                title: 'Variable already exists',
+                message: 'Please make sure that the name is unique',
+              }
             }
           } else if (scope === 'local' && dataToBeUpdated.associatedPou) {
             const pou = slice.projectData.pous.find((pou) => pou.data.name === dataToBeUpdated.associatedPou)
@@ -216,7 +224,11 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
                 }
               } else {
                 console.error(`Variable ${dataToBeUpdated.data.name} already exists`)
-                response = { ok: false, title: 'Variable already exists', message: 'Please make sure that the name is unique' }
+                response = {
+                  ok: false,
+                  title: 'Variable already exists',
+                  message: 'Please make sure that the name is unique',
+                }
               }
             } else {
               console.error(`Pou ${dataToBeUpdated.associatedPou} not found`)

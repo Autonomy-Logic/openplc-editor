@@ -40,7 +40,7 @@ type PLCVariablesTableProps = {
   tableData: PLCVariable[]
   columnFilters?: ColumnFiltersState
   setColumnFilters?: OnChangeFn<ColumnFiltersState> | undefined
-  selectedRow: string
+  selectedRow: number
   handleRowClick: (row: HTMLTableRowElement) => void
 }
 
@@ -112,7 +112,7 @@ const VariablesTable = ({
             key={row.id}
             className='h-8 cursor-pointer'
             onClick={(e) => handleRowClick(e.currentTarget)}
-            selected={selectedRow === row.id}
+            selected={selectedRow === parseInt(row.id)}
           >
             {row.getVisibleCells().map((cell) => (
               <TableCell
@@ -120,7 +120,10 @@ const VariablesTable = ({
                 style={{ width: cell.column.getSize() }}
                 key={cell.id}
               >
-                {flexRender(cell.column.columnDef.cell, { ...cell.getContext(), editable: selectedRow === row.id })}
+                {flexRender(cell.column.columnDef.cell, {
+                  ...cell.getContext(),
+                  editable: selectedRow === parseInt(row.id),
+                })}
               </TableCell>
             ))}
           </TableRow>

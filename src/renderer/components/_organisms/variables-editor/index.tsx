@@ -20,9 +20,11 @@ const VariablesEditor = () => {
     workspaceActions: { createVariable, deleteVariable, rearrangeVariables },
   } = useOpenPLCStore()
 
+  const ROWS_NOT_SELECTED = -1
+
   const [filterValue, setFilterValue] = useState('All')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [selectedRow, setSelectedRow] = useState<string>('')
+  const [selectedRow, setSelectedRow] = useState<number>(ROWS_NOT_SELECTED)
   const [tableData, setTableData] = useState<PLCVariable[]>([])
   const [visualizationType, setVisualizationType] = useState<'code' | 'table'>('table')
 
@@ -40,33 +42,66 @@ const VariablesEditor = () => {
     setTableData(variablesToTable)
   }, [name, pous])
 
-  const handleCreateVariable = () => {
-    createVariable({
-      scope: 'local',
-      associatedPou: name,
-      data: {
-        name: 'new-variable',
-        debug: false,
-        type: { definition: 'base-type', value: 'string' },
-        class: 'input',
-        location: '',
-        documentation: '',
-      },
-    })
-  }
-
-  const handleRemoveVariable = () => {
-    deleteVariable({ scope: 'local', associatedPou: name, rowId: parseInt(selectedRow) })
-  }
-
-  const handleRearrangeVariables = (index: number) => {
+  const handleRearrangeVariables = (index: number, row?: number) => {
     rearrangeVariables({
       scope: 'local',
       associatedPou: name,
-      rowId: parseInt(selectedRow),
-      newIndex: parseInt(selectedRow) + index,
+      rowId: row ?? selectedRow,
+      newIndex: (row ?? selectedRow) + index,
     })
-    setSelectedRow((prev) => (parseInt(prev) + index).toString())
+    setSelectedRow((prev) => prev + index)
+  }
+
+  const handleCreateVariable = () => {
+    const variables = pous.filter((pou) => pou.data.name === name)[0].data.variables
+    if (variables.length === 0) {
+      createVariable({
+        scope: 'local',
+        associatedPou: name,
+        data: {
+          name: 'new-variable',
+          class: 'input',
+          type: { definition: 'base-type', value: 'string' },
+          location: '',
+          documentation: '',
+          debug: false,
+        },
+      })
+      return
+    }
+
+    const regex = /-\d+$/
+    let variable: null | PLCVariable = null
+    if (selectedRow === ROWS_NOT_SELECTED) {
+      variable = tableData[variables.length - 1]
+    } else {
+      variable = tableData[selectedRow]
+    }
+
+    const newName = variable.name.match(regex)
+      ? variable.name.replace(regex, `-${parseInt(variable.name.match(regex)![0].slice(1)) + 1}`)
+      : variable.name + '-1'
+    const newVariable = {
+      ...variable,
+      name: newName,
+    }
+
+    if (selectedRow === ROWS_NOT_SELECTED) {
+      createVariable({ scope: 'local', associatedPou: name, data: newVariable })
+      setSelectedRow(variables.length)
+      return
+    }
+    createVariable({
+      scope: 'local',
+      associatedPou: name,
+      data: newVariable,
+      rowToInsert: selectedRow + 1,
+    })
+    setSelectedRow((prev) => prev + 1)
+  }
+
+  const handleRemoveVariable = () => {
+    deleteVariable({ scope: 'local', associatedPou: name, rowId: selectedRow })
   }
 
   const handleFilterChange = (value: string) => {
@@ -79,7 +114,7 @@ const VariablesEditor = () => {
   }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
-    setSelectedRow(row.id)
+    setSelectedRow(parseInt(row.id))
   }
 
   return (
@@ -152,7 +187,7 @@ const VariablesEditor = () => {
             <button
               aria-label='Remove table row button'
               className='hover:cursor-pointer hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
-              disabled={selectedRow === ''}
+              disabled={selectedRow === ROWS_NOT_SELECTED}
               onClick={handleRemoveVariable}
             >
               <MinusIcon />
@@ -160,7 +195,7 @@ const VariablesEditor = () => {
             <button
               aria-label='Move table row up button'
               className='hover:cursor-pointer hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
-              disabled={selectedRow === '' || selectedRow === '0'}
+              disabled={selectedRow === ROWS_NOT_SELECTED || selectedRow === 0}
               onClick={() => handleRearrangeVariables(-1)}
             >
               <StickArrowIcon direction='up' />
@@ -168,7 +203,7 @@ const VariablesEditor = () => {
             <button
               aria-label='Move table row down button'
               className='hover:cursor-pointer hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
-              disabled={selectedRow === '' || selectedRow === (tableData.length - 1).toString()}
+              disabled={selectedRow === ROWS_NOT_SELECTED || selectedRow === (tableData.length - 1)}
               onClick={() => handleRearrangeVariables(1)}
             >
               <StickArrowIcon direction='down' />
