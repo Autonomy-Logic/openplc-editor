@@ -17,7 +17,7 @@ const VariablesEditor = () => {
       meta: { name },
     },
     projectData: { pous },
-    workspaceActions: { createVariable, deleteVariable },
+    workspaceActions: { createVariable, deleteVariable, rearrangeVariables },
   } = useOpenPLCStore()
 
   const [filterValue, setFilterValue] = useState('All')
@@ -38,7 +38,6 @@ const VariablesEditor = () => {
   useEffect(() => {
     const variablesToTable = pous.filter((pou) => pou.data.name === name)[0].data.variables
     setTableData(variablesToTable)
-    console.log(pous)
   }, [name, pous])
 
   const handleCreateVariable = () => {
@@ -58,6 +57,16 @@ const VariablesEditor = () => {
 
   const handleRemoveVariable = () => {
     deleteVariable({ scope: 'local', associatedPou: name, rowId: parseInt(selectedRow) })
+  }
+
+  const handleRearrangeVariables = (index: number) => {
+    rearrangeVariables({
+      scope: 'local',
+      associatedPou: name,
+      rowId: parseInt(selectedRow),
+      newIndex: parseInt(selectedRow) + index,
+    })
+    setSelectedRow((prev) => (parseInt(prev) + index).toString())
   }
 
   const handleFilterChange = (value: string) => {
@@ -136,7 +145,7 @@ const VariablesEditor = () => {
             <button
               aria-label='Add table row button'
               className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => handleCreateVariable()}
+              onClick={handleCreateVariable}
             >
               <PlusIcon className='!stroke-brand' />
             </button>
@@ -144,24 +153,26 @@ const VariablesEditor = () => {
               aria-label='Remove table row button'
               className='hover:cursor-pointer hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
               disabled={selectedRow === ''}
-              onClick={() => handleRemoveVariable()}
+              onClick={handleRemoveVariable}
             >
               <MinusIcon />
             </button>
-            <div
+            <button
               aria-label='Move table row up button'
-              className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => console.log('Button clicked')}
+              className='hover:cursor-pointer hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
+              disabled={selectedRow === '' || selectedRow === '0'}
+              onClick={() => handleRearrangeVariables(-1)}
             >
               <StickArrowIcon direction='up' />
-            </div>
-            <div
+            </button>
+            <button
               aria-label='Move table row down button'
-              className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => console.log('Button clicked')}
+              className='hover:cursor-pointer hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
+              disabled={selectedRow === '' || selectedRow === (tableData.length - 1).toString()}
+              onClick={() => handleRearrangeVariables(1)}
             >
               <StickArrowIcon direction='down' />
-            </div>
+            </button>
           </div>
         </div>
         <div

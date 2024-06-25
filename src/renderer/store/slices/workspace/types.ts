@@ -57,6 +57,7 @@ type WorkspaceActions = {
   createVariable: (variableToBeCreated: VariableDTO) => void
   updateVariable: (dataToBeUpdated: Omit<VariableDTO, 'data'> & { rowId: number; data: Partial<PLCVariable> }) => void
   deleteVariable: (variableToBeDeleted: Omit<VariableDTO, 'data'> & { rowId: number }) => void
+  rearrangeVariables: (variableToBeRearranged: Omit<VariableDTO, 'data'> & { rowId: number; newIndex: number }) => void
   createDatatype: (dataToCreate: PLCDataType) => void
 }
 

@@ -243,6 +243,31 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    rearrangeVariables: (
+      variableToBeRearranged: Omit<VariableDTO, 'data'> & { rowId: number; newIndex: number },
+    ): void => {
+      setState(
+        produce((slice: WorkspaceSlice) => {
+          const { scope } = variableToBeRearranged
+          if (scope === 'global') {
+            const { rowId, newIndex } = variableToBeRearranged
+            const [removed] = slice.projectData.globalVariables.splice(rowId, 1)
+            slice.projectData.globalVariables.splice(newIndex, 0, removed)
+          } else if (scope === 'local' && variableToBeRearranged.associatedPou) {
+            const pou = slice.projectData.pous.find((pou) => pou.data.name === variableToBeRearranged.associatedPou)
+            if (pou) {
+              const { rowId, newIndex } = variableToBeRearranged
+              const [removed] = pou.data.variables.splice(rowId, 1)
+              pou.data.variables.splice(newIndex, 0, removed)
+            } else {
+              console.error(`Pou ${variableToBeRearranged.associatedPou} not found`)
+            }
+          } else {
+            console.error(`Scope ${scope} not found or invalid params`)
+          }
+        }),
+      )
+    },
     createDatatype: (dataToCreate: PLCDataType) => {
       setState(
         produce((slice: WorkspaceSlice) => {
