@@ -1,4 +1,3 @@
-// export * from './_tabs-slice'
 export * from './editor'
 export * from './shared'
 export * from './tabs'
