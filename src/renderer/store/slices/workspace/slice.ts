@@ -184,23 +184,33 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     ): void => {
       setState(
         produce((slice: WorkspaceSlice) => {
+          const checkIfNameExists = (variables: PLCVariable[], name: string | undefined) => {
+            return name !== undefined ? variables.some((variable) => variable.name === name) : false
+          }
+
           const { scope } = dataToBeUpdated
           if (scope === 'global') {
-            const index = slice.projectData.globalVariables.findIndex(
-              (variable) => variable.name === dataToBeUpdated.data.name,
-            )
-            if (index !== -1) {
-              slice.projectData.globalVariables[index] = {
-                ...slice.projectData.globalVariables[index],
-                ...dataToBeUpdated.data,
+            if (!checkIfNameExists(slice.projectData.globalVariables, dataToBeUpdated.data.name)) {
+              const index = dataToBeUpdated.rowId
+              if (index !== -1) {
+                slice.projectData.globalVariables[index] = {
+                  ...slice.projectData.globalVariables[index],
+                  ...dataToBeUpdated.data,
+                }
               }
+            } else {
+              console.error(`Variable ${dataToBeUpdated.data.name} already exists`)
             }
           } else if (scope === 'local' && dataToBeUpdated.associatedPou) {
             const pou = slice.projectData.pous.find((pou) => pou.data.name === dataToBeUpdated.associatedPou)
             if (pou) {
-              const index = dataToBeUpdated.rowId
-              if (index !== -1) {
-                pou.data.variables[index] = { ...pou.data.variables[index], ...dataToBeUpdated.data }
+              if (!checkIfNameExists(pou.data.variables, dataToBeUpdated.data.name)) {
+                const index = dataToBeUpdated.rowId
+                if (index !== -1) {
+                  pou.data.variables[index] = { ...pou.data.variables[index], ...dataToBeUpdated.data }
+                }
+              } else {
+                console.error(`Variable ${dataToBeUpdated.data.name} already exists`)
               }
             } else {
               console.error(`Pou ${dataToBeUpdated.associatedPou} not found`)
