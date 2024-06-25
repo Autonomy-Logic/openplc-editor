@@ -49,11 +49,12 @@ const VariablesEditor = () => {
       rowId: row ?? selectedRow,
       newIndex: (row ?? selectedRow) + index,
     })
-    setSelectedRow((prev) => prev + index)
+    setSelectedRow(selectedRow + index)
   }
 
   const handleCreateVariable = () => {
     const variables = pous.filter((pou) => pou.data.name === name)[0].data.variables
+
     if (variables.length === 0) {
       createVariable({
         scope: 'local',
@@ -71,12 +72,8 @@ const VariablesEditor = () => {
     }
 
     const regex = /-\d+$/
-    let variable: null | PLCVariable = null
-    if (selectedRow === ROWS_NOT_SELECTED) {
-      variable = tableData[variables.length - 1]
-    } else {
-      variable = tableData[selectedRow]
-    }
+    const variable: PLCVariable =
+      selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
     const newName = variable.name.match(regex)
       ? variable.name.replace(regex, `-${parseInt(variable.name.match(regex)![0].slice(1)) + 1}`)
@@ -97,11 +94,16 @@ const VariablesEditor = () => {
       data: newVariable,
       rowToInsert: selectedRow + 1,
     })
-    setSelectedRow((prev) => prev + 1)
+    setSelectedRow(selectedRow + 1)
   }
 
   const handleRemoveVariable = () => {
     deleteVariable({ scope: 'local', associatedPou: name, rowId: selectedRow })
+
+    const variables = pous.filter((pou) => pou.data.name === name)[0].data.variables
+    if (selectedRow === variables.length - 1) {
+      setSelectedRow(selectedRow - 1)
+    }
   }
 
   const handleFilterChange = (value: string) => {
@@ -203,7 +205,7 @@ const VariablesEditor = () => {
             <button
               aria-label='Move table row down button'
               className='hover:cursor-pointer hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
-              disabled={selectedRow === ROWS_NOT_SELECTED || selectedRow === (tableData.length - 1)}
+              disabled={selectedRow === ROWS_NOT_SELECTED || selectedRow === tableData.length - 1}
               onClick={() => handleRearrangeVariables(1)}
             >
               <StickArrowIcon direction='down' />

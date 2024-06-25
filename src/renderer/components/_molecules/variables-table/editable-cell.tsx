@@ -25,6 +25,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = () => {
+    if (cellValue === initialValue) return
     const res = table.options.meta?.updateData(index, id, cellValue)
     if (res?.ok) return
     setCellValue(initialValue)

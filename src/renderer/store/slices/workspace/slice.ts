@@ -4,6 +4,10 @@ import { StateCreator } from 'zustand'
 
 import type { PouDTO, VariableDTO, WorkspaceResponse, WorkspaceSlice, WorkspaceState } from './types'
 
+const checkIfNameExists = (variables: PLCVariable[], name: string | undefined) => {
+  return name !== undefined ? variables.some((variable) => variable.name === name) : false
+}
+
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   editingState: 'unsaved',
   projectName: '',
@@ -19,7 +23,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           language: 'st',
           variables: [
             {
-              name: 'variable',
+              name: 'new-variable',
               type: {
                 value: 'bool',
                 definition: 'base-type',
@@ -161,7 +165,9 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    createVariable: (variableToBeCreated: VariableDTO & { rowToInsert?: number }): void => {
+
+    createVariable: (variableToBeCreated: VariableDTO & { rowToInsert?: number }): WorkspaceResponse => {
+      let response: WorkspaceResponse = { ok: true }
       setState(
         produce((slice: WorkspaceSlice) => {
           const { scope } = variableToBeCreated
@@ -170,6 +176,22 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           } else if (scope === 'local' && variableToBeCreated.associatedPou) {
             const pou = slice.projectData.pous.find((pou) => pou.data.name === variableToBeCreated.associatedPou)
             if (pou) {
+              if (checkIfNameExists(pou.data.variables, variableToBeCreated.data.name)) {
+                const regex = /-\d+$/
+                const filteredVariables = pou.data.variables.filter((variable) =>
+                  variable.name.includes(variableToBeCreated.data.name.replace(regex, '')),
+                )
+                const sortedVariables = filteredVariables.sort((a, b) => {
+                  const matchA = a.name.match(regex)
+                  const matchB = b.name.match(regex)
+                  if (matchA && matchB) {
+                    return parseInt(matchA[0].slice(1)) - parseInt(matchB[0].slice(1))
+                  }
+                  return 0
+                })
+                const biggestIndex = sortedVariables[sortedVariables.length - 1].name.match(regex)
+                variableToBeCreated.data.name = `${variableToBeCreated.data.name.replace(regex, '')}-${biggestIndex ? parseInt(biggestIndex[0].slice(1)) + 1 : 1}`
+              }
               if (variableToBeCreated.rowToInsert !== undefined) {
                 pou.data.variables.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
               } else {
@@ -177,25 +199,23 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               }
             } else {
               console.error(`Pou ${variableToBeCreated.associatedPou} not found`)
+              response = { ok: false, title: 'Pou not found' }
             }
             console.log('pou:', pou)
           } else {
             console.error(`Scope ${scope} not found or invalid params`)
+            response = { ok: false, title: 'Scope not found', message: 'Scope not found or invalid params' }
           }
         }),
       )
+      return response
     },
-
     updateVariable: (
       dataToBeUpdated: Omit<VariableDTO, 'data'> & { rowId: number; data: Partial<PLCVariable> },
     ): WorkspaceResponse => {
       let response: WorkspaceResponse = { ok: true }
       setState(
         produce((slice: WorkspaceSlice) => {
-          const checkIfNameExists = (variables: PLCVariable[], name: string | undefined) => {
-            return name !== undefined ? variables.some((variable) => variable.name === name) : false
-          }
-
           const { scope } = dataToBeUpdated
           if (scope === 'global') {
             if (!checkIfNameExists(slice.projectData.globalVariables, dataToBeUpdated.data.name)) {
@@ -236,7 +256,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
             }
           } else {
             console.error(`Scope ${scope} not found or invalid params`)
-            response = { ok: false, title: 'Scope not found' }
+            response = { ok: false, title: 'Scope not found', message: 'Scope not found or invalid params' }
           }
         }),
       )

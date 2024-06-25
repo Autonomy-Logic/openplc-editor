@@ -55,7 +55,7 @@ type WorkspaceActions = {
   createPou: (pouToBeCreated: PouDTO) => WorkspaceResponse
   updatePou: (dataToBeUpdated: { name: string; content: string }) => void
   deletePou: (pouToBeDeleted: string) => void
-  createVariable: (variableToBeCreated: VariableDTO & {rowToInsert?: number}) => void
+  createVariable: (variableToBeCreated: VariableDTO & {rowToInsert?: number}) => WorkspaceResponse
   updateVariable: (
     dataToBeUpdated: Omit<VariableDTO, 'data'> & { rowId: number; data: Partial<PLCVariable> },
   ) => WorkspaceResponse
