@@ -14,7 +14,7 @@ const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
  * This is a validation to check if the variable name is correct.
  **/
 const variableNameValidation = (variableName: string | undefined) => {
-  const regex = /^([A-Za-z0-9]+(_?[A-Za-z0-9]+)+)*$/
+  const regex = /^([A-Za-z_]+(_?[A-Za-z0-9]+)+)$/
   return variableName === undefined || variableName === '' ? false : regex.test(variableName)
 }
 
