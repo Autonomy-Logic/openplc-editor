@@ -14,7 +14,7 @@ const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
  * This is a validation to check if the variable name is correct.
  **/
 const variableNameValidation = (variableName: string | undefined) => {
-  const regex = /^[a-zA-Z]+([A-Z][a-z]+|_[a-zA-Z0-9]+)*_?[0-9]*$/
+  const regex = /^([A-Za-z0-9]+(_?[A-Za-z0-9]+)+)*$/
   return variableName === undefined || variableName === '' ? false : regex.test(variableName)
 }
 
@@ -244,9 +244,9 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           const { scope } = dataToBeUpdated
           switch (scope) {
             case 'global': {
-              const validation = updateVariableValidation(slice.projectData.globalVariables, dataToBeUpdated.data.name)
-              if (!validation.ok) {
-                response = validation
+              const validationResponse = updateVariableValidation(slice.projectData.globalVariables, dataToBeUpdated.data.name)
+              if (!validationResponse.ok) {
+                response = validationResponse
                 break
               }
               const index = dataToBeUpdated.rowId
@@ -266,9 +266,9 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
                 response = { ok: false, title: 'Pou not found' }
                 break
               }
-              const validation = updateVariableValidation(pou.data.variables, dataToBeUpdated.data.name)
-              if (!validation.ok) {
-                response = validation
+              const validationResponse = updateVariableValidation(pou.data.variables, dataToBeUpdated.data.name)
+              if (!validationResponse.ok) {
+                response = validationResponse
                 break
               }
               const index = dataToBeUpdated.rowId
