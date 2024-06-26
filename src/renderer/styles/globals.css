@@ -52,6 +52,9 @@
 }
 
 @layer components {
+  .box {
+    border: none;
+  }
   /* Classes for the custom titlebar*/
   .oplc-titlebar-container {
     position: absolute;
