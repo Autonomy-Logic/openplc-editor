@@ -7,8 +7,78 @@ import type { PouDTO, VariableDTO, WorkspaceResponse, WorkspaceSlice, WorkspaceS
 /**
  * This is a validation to check if the variable name already exists.
  **/
-const checkIfNameExists = (variables: PLCVariable[], name: string | undefined) => {
-  return name !== undefined ? variables.some((variable) => variable.name === name) : false
+const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
+  return variables.some((variable) => variable.name === name)
+}
+/**
+ * This is a validation to check if the variable name is correct.
+ **/
+const variableNameValidation = (variableName: string | undefined) => {
+  const regex = /^[a-zA-Z]+([A-Z][a-z]+|_[a-zA-Z0-9]+)*_?[0-9]*$/
+  return variableName === undefined || variableName === '' ? false : regex.test(variableName)
+}
+
+/**
+ * This is a validation to check if it is needed changing the name of a variable at creation.
+ * If the variable existis change the variable name.
+ **/
+const createVariableValidation = (variables: PLCVariable[], variableName: string) => {
+  if (checkIfVariableExists(variables, variableName)) {
+    const regex = /_\d+$/
+    const filteredVariables = variables.filter((variable: PLCVariable) =>
+      variable.name.includes(variableName.replace(regex, '')),
+    )
+    const sortedVariables = filteredVariables.sort((a, b) => {
+      const matchA = a.name.match(regex)
+      const matchB = b.name.match(regex)
+      if (matchA && matchB) {
+        return parseInt(matchA[0].slice(1)) - parseInt(matchB[0].slice(1))
+      }
+      return 0
+    })
+    const biggestVariable = sortedVariables[sortedVariables.length - 1].name.match(regex)
+    let number = biggestVariable ? parseInt(biggestVariable[0].slice(1)) : 0
+    for (let i = sortedVariables.length - 1; i >= 1; i--) {
+      const previousVariable = sortedVariables[i].name.match(regex)
+      const previousNumber = previousVariable ? parseInt(previousVariable[0].slice(1)) : 0
+      const currentVariable = sortedVariables[i - 1].name.match(regex)
+      const currentNumber = currentVariable ? parseInt(currentVariable[0].slice(1)) : 0
+      if (currentNumber !== previousNumber - 1) {
+        number = currentNumber
+      }
+    }
+    const newVariableName = `${variableName.replace(regex, '')}_${number + 1}`
+    return newVariableName
+  }
+  return variableName
+}
+
+/**
+ * This is a validation to check the name of the variable at update.
+ * If the variable name is invalid, create a response.
+ * If the variable name already exists, create or change a response.
+ **/
+const updateVariableValidation = (variables: PLCVariable[], name: string | undefined) => {
+  let response: WorkspaceResponse = { ok: true }
+  if (!variableNameValidation(name)) {
+    console.error(`Variable "${name}" name is invalid`)
+    response = {
+      ok: false,
+      title: 'Variable name is invalid.',
+      message: `Please make sure that the name is valid. Valid names: CamelCase, PascalCase or SnakeCase.`,
+    }
+  }
+  if (checkIfVariableExists(variables, name as string)) {
+    console.error(`Variable "${name}" already exists`)
+    response = {
+      ok: false,
+      title: response.title ? `${response.title.replace('.', ' ')} and already exists.` : 'Variable already exists',
+      message: response.message
+        ? `${response.message.split('.')[0]} and the name is unique. ${response.message.split('.')[1]}`
+        : 'Please make sure that the name is unique.',
+    }
+  }
+  return response
 }
 
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
@@ -117,44 +187,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       let response: WorkspaceResponse = { ok: true }
       setState(
         produce((slice: WorkspaceSlice) => {
-          /**
-           * This is a validation to check if name exists.
-           * If existis change the variable name.
-           **/
-          const nameValidation = (variables: PLCVariable[], variableName: string) => {
-            if (checkIfNameExists(variables, variableName)) {
-              const regex = /_\d+$/
-              const filteredVariables = variables.filter((variable: PLCVariable) =>
-                variable.name.includes(variableName.replace(regex, '')),
-              )
-              const sortedVariables = filteredVariables.sort((a, b) => {
-                const matchA = a.name.match(regex)
-                const matchB = b.name.match(regex)
-                if (matchA && matchB) {
-                  return parseInt(matchA[0].slice(1)) - parseInt(matchB[0].slice(1))
-                }
-                return 0
-              })
-              const biggestVariable = sortedVariables[sortedVariables.length - 1].name.match(regex)
-              let number = biggestVariable ? parseInt(biggestVariable[0].slice(1)) : 0
-              for (let i = sortedVariables.length - 1; i >= 1; i--) {
-                const previousVariable = sortedVariables[i].name.match(regex)
-                const previousNumber = previousVariable ? parseInt(previousVariable[0].slice(1)) : 0
-                const currentVariable = sortedVariables[i - 1].name.match(regex)
-                const currentNumber = currentVariable ? parseInt(currentVariable[0].slice(1)) : 0
-                if (currentNumber !== previousNumber - 1) {
-                  number = currentNumber
-                }
-              }
-              const newVariableName = `${variableName.replace(regex, '')}_${number + 1}`
-              variableToBeCreated.data.name = newVariableName
-            }
-          }
-
           const { scope } = variableToBeCreated
           switch (scope) {
             case 'global': {
-              nameValidation(slice.projectData.globalVariables, variableToBeCreated.data.name)
+              variableToBeCreated.data.name = createVariableValidation(
+                slice.projectData.globalVariables,
+                variableToBeCreated.data.name,
+              )
               if (variableToBeCreated.rowToInsert !== undefined) {
                 slice.projectData.globalVariables.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
                 break
@@ -171,7 +210,10 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
                 response = { ok: false, title: 'Pou not found' }
                 break
               }
-              nameValidation(pou.data.variables, variableToBeCreated.data.name)
+              variableToBeCreated.data.name = createVariableValidation(
+                pou.data.variables,
+                variableToBeCreated.data.name,
+              )
               if (variableToBeCreated.rowToInsert !== undefined) {
                 pou.data.variables.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
                 break
@@ -180,9 +222,6 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               break
             }
             default: {
-              /**
-               *  This (scope ? scope : '') is a validation to check if scope is never.
-               **/
               console.error(`Scope ${scope ? scope : ''} not found or invalid params`)
               response = {
                 ok: false,
@@ -205,13 +244,9 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           const { scope } = dataToBeUpdated
           switch (scope) {
             case 'global': {
-              if (checkIfNameExists(slice.projectData.globalVariables, dataToBeUpdated.data.name)) {
-                console.error(`Variable ${dataToBeUpdated.data.name} already exists`)
-                response = {
-                  ok: false,
-                  title: 'Variable already exists',
-                  message: 'Please make sure that the name is unique',
-                }
+              const validation = updateVariableValidation(slice.projectData.globalVariables, dataToBeUpdated.data.name)
+              if (!validation.ok) {
+                response = validation
                 break
               }
               const index = dataToBeUpdated.rowId
@@ -231,13 +266,9 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
                 response = { ok: false, title: 'Pou not found' }
                 break
               }
-              if (checkIfNameExists(pou.data.variables, dataToBeUpdated.data.name)) {
-                console.error(`Variable ${dataToBeUpdated.data.name} already exists`)
-                response = {
-                  ok: false,
-                  title: 'Variable already exists',
-                  message: 'Please make sure that the name is unique',
-                }
+              const validation = updateVariableValidation(pou.data.variables, dataToBeUpdated.data.name)
+              if (!validation.ok) {
+                response = validation
                 break
               }
               const index = dataToBeUpdated.rowId
