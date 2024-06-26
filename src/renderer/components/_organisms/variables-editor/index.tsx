@@ -60,9 +60,9 @@ const VariablesEditor = () => {
         scope: 'local',
         associatedPou: name,
         data: {
-          name: 'new-variable',
-          class: 'input',
-          type: { definition: 'base-type', value: 'string' },
+          name: 'LocalVar',
+          class: 'local',
+          type: { definition: 'base-type', value: 'dint' },
           location: '',
           documentation: '',
           debug: false,
@@ -71,27 +71,18 @@ const VariablesEditor = () => {
       return
     }
 
-    const regex = /-\d+$/
     const variable: PLCVariable =
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
-    const newName = variable.name.match(regex)
-      ? variable.name.replace(regex, `-${parseInt(variable.name.match(regex)![0].slice(1)) + 1}`)
-      : variable.name + '-1'
-    const newVariable = {
-      ...variable,
-      name: newName,
-    }
-
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createVariable({ scope: 'local', associatedPou: name, data: newVariable })
+      createVariable({ scope: 'local', associatedPou: name, data: { ...variable } })
       setSelectedRow(variables.length)
       return
     }
     createVariable({
       scope: 'local',
       associatedPou: name,
-      data: newVariable,
+      data: { ...variable },
       rowToInsert: selectedRow + 1,
     })
     setSelectedRow(selectedRow + 1)

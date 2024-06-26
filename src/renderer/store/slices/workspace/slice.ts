@@ -4,6 +4,9 @@ import { StateCreator } from 'zustand'
 
 import type { PouDTO, VariableDTO, WorkspaceResponse, WorkspaceSlice, WorkspaceState } from './types'
 
+/**
+ * This is a validation to check if the variable name already exists.
+ **/
 const checkIfNameExists = (variables: PLCVariable[], name: string | undefined) => {
   return name !== undefined ? variables.some((variable) => variable.name === name) : false
 }
@@ -114,41 +117,80 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       let response: WorkspaceResponse = { ok: true }
       setState(
         produce((slice: WorkspaceSlice) => {
-          const { scope } = variableToBeCreated
-          if (scope === 'global') {
-            slice.projectData.globalVariables.push(variableToBeCreated.data)
-          } else if (scope === 'local' && variableToBeCreated.associatedPou) {
-            const pou = slice.projectData.pous.find((pou) => pou.data.name === variableToBeCreated.associatedPou)
-            if (pou) {
-              if (checkIfNameExists(pou.data.variables, variableToBeCreated.data.name)) {
-                const regex = /-\d+$/
-                const filteredVariables = pou.data.variables.filter((variable) =>
-                  variable.name.includes(variableToBeCreated.data.name.replace(regex, '')),
-                )
-                const sortedVariables = filteredVariables.sort((a, b) => {
-                  const matchA = a.name.match(regex)
-                  const matchB = b.name.match(regex)
-                  if (matchA && matchB) {
-                    return parseInt(matchA[0].slice(1)) - parseInt(matchB[0].slice(1))
-                  }
-                  return 0
-                })
-                const biggestIndex = sortedVariables[sortedVariables.length - 1].name.match(regex)
-                variableToBeCreated.data.name = `${variableToBeCreated.data.name.replace(regex, '')}-${biggestIndex ? parseInt(biggestIndex[0].slice(1)) + 1 : 1}`
+          /**
+           * This is a validation to check if name exists.
+           * If existis change the variable name.
+           **/
+          const nameValidation = (variables: PLCVariable[], variableName: string) => {
+            if (checkIfNameExists(variables, variableName)) {
+              const regex = /_\d+$/
+              const filteredVariables = variables.filter((variable: PLCVariable) =>
+                variable.name.includes(variableName.replace(regex, '')),
+              )
+              const sortedVariables = filteredVariables.sort((a, b) => {
+                const matchA = a.name.match(regex)
+                const matchB = b.name.match(regex)
+                if (matchA && matchB) {
+                  return parseInt(matchA[0].slice(1)) - parseInt(matchB[0].slice(1))
+                }
+                return 0
+              })
+              const biggestVariable = sortedVariables[sortedVariables.length - 1].name.match(regex)
+              let number = biggestVariable ? parseInt(biggestVariable[0].slice(1)) : 0
+              for (let i = sortedVariables.length - 1; i >= 1; i--) {
+                const previousVariable = sortedVariables[i].name.match(regex)
+                const previousNumber = previousVariable ? parseInt(previousVariable[0].slice(1)) : 0
+                const currentVariable = sortedVariables[i - 1].name.match(regex)
+                const currentNumber = currentVariable ? parseInt(currentVariable[0].slice(1)) : 0
+                if (currentNumber !== previousNumber - 1) {
+                  number = currentNumber
+                }
               }
+              const newVariableName = `${variableName.replace(regex, '')}_${number + 1}`
+              variableToBeCreated.data.name = newVariableName
+            }
+          }
+
+          const { scope } = variableToBeCreated
+          switch (scope) {
+            case 'global': {
+              nameValidation(slice.projectData.globalVariables, variableToBeCreated.data.name)
+              if (variableToBeCreated.rowToInsert !== undefined) {
+                slice.projectData.globalVariables.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
+                break
+              }
+              slice.projectData.globalVariables.push(variableToBeCreated.data)
+              break
+            }
+            case 'local': {
+              const pou = variableToBeCreated.associatedPou
+                ? slice.projectData.pous.find((pou) => pou.data.name === variableToBeCreated.associatedPou)
+                : undefined
+              if (!pou) {
+                console.error(`Pou ${variableToBeCreated.associatedPou} not found`)
+                response = { ok: false, title: 'Pou not found' }
+                break
+              }
+              nameValidation(pou.data.variables, variableToBeCreated.data.name)
               if (variableToBeCreated.rowToInsert !== undefined) {
                 pou.data.variables.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
-              } else {
-                pou.data.variables.push(variableToBeCreated.data)
+                break
               }
-            } else {
-              console.error(`Pou ${variableToBeCreated.associatedPou} not found`)
-              response = { ok: false, title: 'Pou not found' }
+              pou.data.variables.push(variableToBeCreated.data)
+              break
             }
-            console.log('pou:', pou)
-          } else {
-            console.error(`Scope ${scope} not found or invalid params`)
-            response = { ok: false, title: 'Scope not found', message: 'Scope not found or invalid params' }
+            default: {
+              /**
+               *  This (scope ? scope : '') is a validation to check if scope is never.
+               **/
+              console.error(`Scope ${scope ? scope : ''} not found or invalid params`)
+              response = {
+                ok: false,
+                title: 'Scope not found',
+                message: 'Check if the scope or the parameters is correct',
+              }
+              break
+            }
           }
         }),
       )
@@ -161,46 +203,53 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce((slice: WorkspaceSlice) => {
           const { scope } = dataToBeUpdated
-          if (scope === 'global') {
-            if (!checkIfNameExists(slice.projectData.globalVariables, dataToBeUpdated.data.name)) {
-              const index = dataToBeUpdated.rowId
-              if (index !== -1) {
-                slice.projectData.globalVariables[index] = {
-                  ...slice.projectData.globalVariables[index],
-                  ...dataToBeUpdated.data,
-                }
-              }
-            } else {
-              console.error(`Variable ${dataToBeUpdated.data.name} already exists`)
-              response = {
-                ok: false,
-                title: 'Variable already exists',
-                message: 'Please make sure that the name is unique',
-              }
-            }
-          } else if (scope === 'local' && dataToBeUpdated.associatedPou) {
-            const pou = slice.projectData.pous.find((pou) => pou.data.name === dataToBeUpdated.associatedPou)
-            if (pou) {
-              if (!checkIfNameExists(pou.data.variables, dataToBeUpdated.data.name)) {
-                const index = dataToBeUpdated.rowId
-                if (index !== -1) {
-                  pou.data.variables[index] = { ...pou.data.variables[index], ...dataToBeUpdated.data }
-                }
-              } else {
+          switch (scope) {
+            case 'global': {
+              if (checkIfNameExists(slice.projectData.globalVariables, dataToBeUpdated.data.name)) {
                 console.error(`Variable ${dataToBeUpdated.data.name} already exists`)
                 response = {
                   ok: false,
                   title: 'Variable already exists',
                   message: 'Please make sure that the name is unique',
                 }
+                break
               }
-            } else {
-              console.error(`Pou ${dataToBeUpdated.associatedPou} not found`)
-              response = { ok: false, title: 'Pou not found' }
+              const index = dataToBeUpdated.rowId
+              if (index === -1) response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+              slice.projectData.globalVariables[index] = {
+                ...slice.projectData.globalVariables[index],
+                ...dataToBeUpdated.data,
+              }
+              break
             }
-          } else {
-            console.error(`Scope ${scope} not found or invalid params`)
-            response = { ok: false, title: 'Scope not found', message: 'Scope not found or invalid params' }
+            case 'local': {
+              const pou = dataToBeUpdated.associatedPou
+                ? slice.projectData.pous.find((pou) => pou.data.name === dataToBeUpdated.associatedPou)
+                : undefined
+              if (!pou) {
+                console.error(`Pou ${dataToBeUpdated.associatedPou} not found`)
+                response = { ok: false, title: 'Pou not found' }
+                break
+              }
+              if (checkIfNameExists(pou.data.variables, dataToBeUpdated.data.name)) {
+                console.error(`Variable ${dataToBeUpdated.data.name} already exists`)
+                response = {
+                  ok: false,
+                  title: 'Variable already exists',
+                  message: 'Please make sure that the name is unique',
+                }
+                break
+              }
+              const index = dataToBeUpdated.rowId
+              if (index === -1) response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+              pou.data.variables[index] = { ...pou.data.variables[index], ...dataToBeUpdated.data }
+              break
+            }
+            default: {
+              console.error(`Scope ${scope ? scope : ''} not found or invalid params`)
+              response = { ok: false, title: 'Scope not found', message: 'Scope not found or invalid params' }
+              break
+            }
           }
         }),
       )
@@ -210,20 +259,34 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce((slice: WorkspaceSlice) => {
           const { scope } = variableToBeDeleted
-          if (scope === 'global') {
-            slice.projectData.globalVariables.splice(variableToBeDeleted.rowId, 1)
-          } else if (scope === 'local' && variableToBeDeleted.associatedPou) {
-            const pou = slice.projectData.pous.find((pou) => pou.data.name === variableToBeDeleted.associatedPou)
-            if (pou) {
-              const index = variableToBeDeleted.rowId
-              if (index !== -1) {
-                pou.data.variables.splice(index, 1)
+          switch (scope) {
+            case 'global': {
+              if (variableToBeDeleted.rowId === -1) {
+                console.error('Variable not found')
+                break
               }
-            } else {
-              console.error(`Pou ${variableToBeDeleted.associatedPou} not found`)
+              slice.projectData.globalVariables.splice(variableToBeDeleted.rowId, 1)
+              break
             }
-          } else {
-            console.error(`Scope ${scope} not found or invalid params`)
+            case 'local': {
+              const pou = variableToBeDeleted.associatedPou
+                ? slice.projectData.pous.find((pou) => pou.data.name === variableToBeDeleted.associatedPou)
+                : undefined
+              if (!pou) {
+                console.error(`Pou ${variableToBeDeleted.associatedPou} not found`)
+                return
+              }
+              if (variableToBeDeleted.rowId === -1) {
+                console.error('Variable not found')
+                break
+              }
+              pou.data.variables.splice(variableToBeDeleted.rowId, 1)
+              break
+            }
+            default: {
+              console.error(`Scope ${scope ? scope : ''} not found or invalid params`)
+              break
+            }
           }
         }),
       )
@@ -234,21 +297,28 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce((slice: WorkspaceSlice) => {
           const { scope } = variableToBeRearranged
-          if (scope === 'global') {
-            const { rowId, newIndex } = variableToBeRearranged
-            const [removed] = slice.projectData.globalVariables.splice(rowId, 1)
-            slice.projectData.globalVariables.splice(newIndex, 0, removed)
-          } else if (scope === 'local' && variableToBeRearranged.associatedPou) {
-            const pou = slice.projectData.pous.find((pou) => pou.data.name === variableToBeRearranged.associatedPou)
-            if (pou) {
+          switch (scope) {
+            case 'global': {
+              const { rowId, newIndex } = variableToBeRearranged
+              const [removed] = slice.projectData.globalVariables.splice(rowId, 1)
+              slice.projectData.globalVariables.splice(newIndex, 0, removed)
+              break
+            }
+            case 'local': {
+              const pou = slice.projectData.pous.find((pou) => pou.data.name === variableToBeRearranged.associatedPou)
+              if (!pou) {
+                console.error(`Pou ${variableToBeRearranged.associatedPou} not found`)
+                return
+              }
               const { rowId, newIndex } = variableToBeRearranged
               const [removed] = pou.data.variables.splice(rowId, 1)
               pou.data.variables.splice(newIndex, 0, removed)
-            } else {
-              console.error(`Pou ${variableToBeRearranged.associatedPou} not found`)
+              break
             }
-          } else {
-            console.error(`Scope ${scope} not found or invalid params`)
+            default: {
+              console.error(`Scope ${scope ? scope : ''} not found or invalid params`)
+              break
+            }
           }
         }),
       )
