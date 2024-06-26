@@ -179,6 +179,7 @@ const VariablesEditor = () => {
             aria-label='Variables editor table actions container'
             className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
           >
+            {/** This can be reviewed */}
             <button
               aria-label='Add table row button'
               className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
