@@ -1,29 +1,35 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
+import { WorkspaceResponse } from '@root/renderer/store/slices/workspace/types'
 import type { PLCVariable } from '@root/types/PLC/test'
 import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
+import { useToast } from '../../_features/[app]/toast/use-toast'
 
 declare module '@tanstack/react-table' {
   // This is a helper interface that adds the `updateData` property to the table meta.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface TableMeta<TData extends RowData> {
-    updateData: (rowIndex: number, columnId: string, value: unknown) => void
+    updateData: (rowIndex: number, columnId: string, value: unknown) => WorkspaceResponse
   }
 }
 
 type IEditableCellProps = CellContext<PLCVariable, unknown> & { editable?: boolean }
 const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
   const initialValue = getValue<string>()
+  const { toast } = useToast()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = () => {
-    // Todo: Must update the data in the store
-    table.options.meta?.updateData(index, id, cellValue)
+    if (cellValue === initialValue) return
+    const res = table.options.meta?.updateData(index, id, cellValue)
+    if (res?.ok) return
+    setCellValue(initialValue)
+    toast({ title: res?.title, description: res?.message, variant: 'fail' })
   }
   // If the initialValue is changed external, sync it up with our state
   useEffect(() => {
@@ -55,7 +61,6 @@ const EditableDocumentationCell = ({
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = () => {
-    // Todo: Must update the data in the store
     table.options.meta?.updateData(index, id, cellValue)
   }
   // If the initialValue is changed external, sync it up with our state
@@ -80,11 +85,11 @@ const EditableDocumentationCell = ({
           side='bottom'
           sideOffset={-32}
           className='h-fit w-[175px] rounded-lg border border-neutral-100 bg-white p-2 drop-shadow-lg lg:w-[275px] 2xl:w-[375px] dark:border-brand-medium-dark dark:bg-neutral-950'
+          onInteractOutside={onBlur}
         >
           <textarea
             value={cellValue}
             onChange={(e) => setCellValue(e.target.value)}
-            onBlur={onBlur}
             rows={5}
             className='w-full max-w-[375px] flex-1 resize-none  bg-transparent text-start text-neutral-900 outline-none  dark:text-neutral-100'
           />

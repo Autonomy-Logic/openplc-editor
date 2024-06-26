@@ -1,3 +1,4 @@
+import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCVariable } from '@root/types/PLC/test'
 import {
   ColumnFiltersState,
@@ -8,7 +9,6 @@ import {
   OnChangeFn,
   useReactTable,
 } from '@tanstack/react-table'
-import { useState } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
 import { EditableDocumentationCell, EditableNameCell } from './editable-cell'
@@ -22,7 +22,7 @@ const columns = [
     size: 128,
     maxSize: 128,
     enableResizing: true,
-    cell: (info) => info.getValue(),
+    cell: (props) => props.row.id,
   }),
   columnHelper.accessor('name', { header: 'Name', enableResizing: true, cell: EditableNameCell }),
   columnHelper.accessor('class', { header: 'Class', enableResizing: true, cell: SelectableClassCell }),
@@ -40,10 +40,24 @@ type PLCVariablesTableProps = {
   tableData: PLCVariable[]
   columnFilters?: ColumnFiltersState
   setColumnFilters?: OnChangeFn<ColumnFiltersState> | undefined
+  selectedRow: number
+  handleRowClick: (row: HTMLTableRowElement) => void
 }
 
-const VariablesTable = ({ tableData, columnFilters, setColumnFilters }: PLCVariablesTableProps) => {
-  const [selectedRow, setSelectedRow] = useState<string>('')
+const VariablesTable = ({
+  tableData,
+  columnFilters,
+  setColumnFilters,
+  selectedRow,
+  handleRowClick,
+}: PLCVariablesTableProps) => {
+  const {
+    editor: {
+      meta: { name },
+    },
+    projectData: { pous },
+    workspaceActions: { updateVariable },
+  } = useOpenPLCStore()
 
   const table = useReactTable({
     columns: columns,
@@ -57,12 +71,19 @@ const VariablesTable = ({ tableData, columnFilters, setColumnFilters }: PLCVaria
     getFilteredRowModel: getFilteredRowModel(),
     state: { columnFilters },
     onColumnFiltersChange: setColumnFilters,
+    meta: {
+      updateData: (rowIndex, columnId, value) => {
+        return updateVariable({
+          scope: 'local',
+          associatedPou: pous.find((pou) => pou.data.name === name)?.data.name,
+          rowId: rowIndex,
+          data: {
+            [columnId]: value,
+          },
+        })
+      },
+    },
   })
-
-  const handleRowClick = (row: HTMLTableRowElement) => {
-    const { id } = row
-    setSelectedRow(id)
-  }
 
   return (
     <Table context='Variables' style={{ width: table.getTotalSize() }}>
@@ -91,7 +112,7 @@ const VariablesTable = ({ tableData, columnFilters, setColumnFilters }: PLCVaria
             key={row.id}
             className='h-8 cursor-pointer'
             onClick={(e) => handleRowClick(e.currentTarget)}
-            selected={selectedRow === row.id}
+            selected={selectedRow === parseInt(row.id)}
           >
             {row.getVisibleCells().map((cell) => (
               <TableCell
@@ -99,7 +120,10 @@ const VariablesTable = ({ tableData, columnFilters, setColumnFilters }: PLCVaria
                 style={{ width: cell.column.getSize() }}
                 key={cell.id}
               >
-                {flexRender(cell.column.columnDef.cell, { ...cell.getContext(), editable: selectedRow === row.id })}
+                {flexRender(cell.column.columnDef.cell, {
+                  ...cell.getContext(),
+                  editable: selectedRow === parseInt(row.id),
+                })}
               </TableCell>
             ))}
           </TableRow>

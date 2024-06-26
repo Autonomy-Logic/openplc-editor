@@ -1,4 +1,4 @@
 export * from './editor'
 export * from './shared'
 export * from './tabs'
-export * from './workspace-slice'
+export * from './workspace'

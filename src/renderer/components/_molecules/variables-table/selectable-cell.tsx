@@ -61,10 +61,12 @@ const SelectableTypeCell = ({
   const [arrayModalIsOpen, setArrayModalIsOpen] = useState(false)
 
   // When the input is blurred, we'll call our table meta's updateData function
-  const _onBlur = () => {
+  const onSelect = (definition: PLCVariable['type']['definition'], value: PLCVariable['type']['value']) => {
     // Todo: Must update the data in the store
-    table.options.meta?.updateData(index, id, cellValue)
+    setCellValue(value)
+    table.options.meta?.updateData(index, id, { definition, value })
   }
+
   console.log(arrayModalIsOpen)
   // If the value is changed external, sync it up with our state
   useEffect(() => {
@@ -108,8 +110,12 @@ const SelectableTypeCell = ({
                   {scope.values.map((value) => (
                     <PrimitiveDropdown.Item
                       key={value}
-                      onSelect={() => setCellValue(value as PLCVariable['type']['value'])}
-                      // value={value}
+                      onSelect={() =>
+                        onSelect(
+                          scope.definition as PLCVariable['type']['definition'],
+                          value as PLCVariable['type']['value'],
+                        )
+                      }
                       className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                     >
                       <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
@@ -270,9 +276,10 @@ const SelectableClassCell = ({
   const [cellValue, setCellValue] = useState(initialValue)
 
   // When the input is blurred, we'll call our table meta's updateData function
-  const _onBlur = () => {
+  const onValueChange = (value: string) => {
     // Todo: Must update the data in the store
-    table.options.meta?.updateData(index, id, cellValue)
+    setCellValue(value)
+    table.options.meta?.updateData(index, id, value)
   }
 
   // If the initialValue is changed external, sync it up with our state
@@ -281,7 +288,7 @@ const SelectableClassCell = ({
   }, [initialValue])
 
   return (
-    <Select value={cellValue as string} onValueChange={(value) => setCellValue(value)}>
+    <Select value={cellValue as string} onValueChange={(value) => onValueChange(value)}>
       <SelectTrigger
         placeholder={cellValue as string}
         className={cn(
@@ -317,9 +324,10 @@ const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }
   const [cellValue, setCellValue] = useState(initialValue)
 
   // When the input is blurred, we'll call our table meta's updateData function
-  const _onBlur = () => {
+  const onClick = () => {
     // Todo: Must update the data in the store
-    table.options.meta?.updateData(index, id, cellValue)
+    setCellValue(!cellValue)
+    table.options.meta?.updateData(index, id, !cellValue)
   }
 
   // If the initialValue is changed external, sync it up with our state
@@ -330,7 +338,7 @@ const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }
   return (
     <button
       className='flex h-full w-full cursor-pointer items-center justify-center'
-      onClick={() => setCellValue(!cellValue)}
+      onClick={onClick}
     >
       <DebuggerIcon variant={cellValue ? 'default' : 'muted'} />
     </button>
