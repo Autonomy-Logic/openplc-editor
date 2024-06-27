@@ -3,7 +3,7 @@ import { ComponentPropsWithRef, forwardRef } from 'react'
 
 const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { context?: string }>(
   ({ className, context, ...res }, ref) => (
-    <div aria-label='Table container' className='h-fit w-fit'>
+    <div aria-label='Table container' className='h-fit w-fit p-1'>
       <table
         aria-label={`${context} table`}
         ref={ref}
@@ -52,11 +52,15 @@ const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'> & {
       className={cn(
         'h-8',
         // header cell
-        '[&:nth-child(2)>th:first-child]:rounded-tl-md [&:nth-child(2)>th:last-child]:rounded-tr-md [&:nth-child(2)>th]:border-t [&:nth-child(2)>th]:border-t-neutral-500',
+        '[&:nth-child(2)>th:first-child]:rounded-tl-md [&:nth-child(2)>th:last-child]:rounded-tr-md [&:nth-child(2)>th]:border-t',
+        '[&:nth-child(2)>th]:border-t-neutral-500',
         // body cell
-        '[&:last-child>td:first-child]:rounded-bl-md [&:last-child>td:last-child]:rounded-br-md [&:last-child>td]:border-b-neutral-500 [&>*:first-child]:border-l-neutral-500 [&>*:last-child]:border-r-neutral-500',
+        '[&:last-child>td:first-child]:rounded-bl-md [&:last-child>td:last-child]:rounded-br-md [&:last-child>td]:border-b-neutral-500',
+        '[&>*:first-child]:border-l-neutral-500 [&>*:last-child]:border-r-neutral-500',
         // all cells
-        '[&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r [&>*]:border-neutral-300 dark:[&>*]:border-neutral-800',
+        '[&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r',
+        '[&>*]:border-neutral-300 dark:[&>*]:border-neutral-800',
+        // selected row
         {
           '[&>td:first-child]:border-l-2 [&>td:last-child]:border-r-2 [&>td]:border-b-2 [&>td]:border-t-2': selected,
           '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand [&>td]:border-t-brand':

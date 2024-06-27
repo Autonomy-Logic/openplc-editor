@@ -19,21 +19,44 @@ const columnHelper = createColumnHelper<PLCVariable>()
 const columns = [
   columnHelper.accessor('id', {
     header: '#',
-    size: 128,
-    maxSize: 128,
+    size: 64,
+    minSize: 64,
+    maxSize: 64,
     enableResizing: true,
     cell: (props) => props.row.id,
   }),
-  columnHelper.accessor('name', { header: 'Name', enableResizing: true, cell: EditableNameCell }),
-  columnHelper.accessor('class', { header: 'Class', enableResizing: true, cell: SelectableClassCell }),
-  columnHelper.accessor('type', { header: 'Type', enableResizing: true, cell: SelectableTypeCell }),
-  columnHelper.accessor('location', { header: 'Location', enableResizing: true, cell: EditableNameCell }),
+  columnHelper.accessor('name', {
+    header: 'Name',
+    enableResizing: true,
+    size: 256,
+    minSize: 256,
+    maxSize: 500,
+    cell: EditableNameCell,
+  }),
+  columnHelper.accessor('class', {
+    header: 'Class',
+    enableResizing: true,
+    cell: SelectableClassCell,
+  }),
+  columnHelper.accessor('type', {
+    header: 'Type',
+    enableResizing: true,
+    cell: SelectableTypeCell,
+  }),
+  columnHelper.accessor('location', {
+    header: 'Location',
+    enableResizing: true,
+    cell: EditableNameCell,
+  }),
   columnHelper.accessor('documentation', {
     header: 'Documentation',
     enableResizing: true,
+    size: 256,
+    minSize: 256,
+    maxSize: 500,
     cell: EditableDocumentationCell,
   }),
-  columnHelper.accessor('debug', { header: 'Debug', size: 64, maxSize: 64, cell: SelectableDebugCell }),
+  columnHelper.accessor('debug', { header: 'Debug', size: 64, minSize: 64, maxSize: 64, cell: SelectableDebugCell }),
 ]
 
 type PLCVariablesTableProps = {
@@ -65,7 +88,9 @@ const VariablesTable = ({
     data: tableData,
     debugTable: true,
     defaultColumn: {
-      size: 300,
+      size: 80,
+      minSize: 80,
+      maxSize: 160,
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -86,13 +111,12 @@ const VariablesTable = ({
   })
 
   return (
-    <Table context='Variables' style={{ width: table.getTotalSize() }}>
+    <Table context='Variables'>
       <TableHeader>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
               <TableHead
-                className='first:max-w-32 last:max-w-16'
                 resizable={header.column.columnDef.enableResizing}
                 isResizing={header.column.getIsResizing()}
                 resizeHandler={header.getResizeHandler()}
@@ -115,11 +139,7 @@ const VariablesTable = ({
             selected={selectedRow === parseInt(row.id)}
           >
             {row.getVisibleCells().map((cell) => (
-              <TableCell
-                className='first:max-w-32 last:max-w-16'
-                style={{ width: cell.column.getSize() }}
-                key={cell.id}
-              >
+              <TableCell style={{ width: cell.column.getSize() }} key={cell.id}>
                 {flexRender(cell.column.columnDef.cell, {
                   ...cell.getContext(),
                   editable: selectedRow === parseInt(row.id),
