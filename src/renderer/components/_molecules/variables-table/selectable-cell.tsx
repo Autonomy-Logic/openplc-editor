@@ -1,6 +1,6 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { DebuggerIcon, MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
-import type { PLCVariable } from '@root/types/PLC/test'
+import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
@@ -90,7 +90,7 @@ const SelectableTypeCell = ({
         <PrimitiveDropdown.Content
           side='bottom'
           sideOffset={-20}
-          className='h-fit w-[200px] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+          className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
           {/** Basic types, that includes the base types and the types created by the user */}
           {VariableTypes.map((scope) => (
@@ -105,7 +105,7 @@ const SelectableTypeCell = ({
               <PrimitiveDropdown.Portal>
                 <PrimitiveDropdown.SubContent
                   sideOffset={5}
-                  className='h-fit w-[200px] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                  className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
                 >
                   {scope.values.map((value) => (
                     <PrimitiveDropdown.Item
@@ -162,7 +162,7 @@ const SelectableTypeCell = ({
                           position='popper'
                           side='bottom'
                           sideOffset={-28}
-                          className='z-[999] h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-brand-light bg-white shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card'
+                          className='box z-[999] h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
                         >
                           <SelectItem
                             value='Option 1'
@@ -300,7 +300,7 @@ const SelectableClassCell = ({
         position='popper'
         side='bottom'
         sideOffset={-20}
-        className='h-fit w-[200px] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+        className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
       >
         {VariableClasses.map((type) => (
           <SelectItem
@@ -336,10 +336,7 @@ const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }
   }, [initialValue])
 
   return (
-    <button
-      className='flex h-full w-full cursor-pointer items-center justify-center'
-      onClick={onClick}
-    >
+    <button className='flex h-full w-full cursor-pointer items-center justify-center' onClick={onClick}>
       <DebuggerIcon variant={cellValue ? 'default' : 'muted'} />
     </button>
   )

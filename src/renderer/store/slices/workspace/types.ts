@@ -1,5 +1,5 @@
-import type { PLCFunction, PLCFunctionBlock, PLCProgram, PLCProjectData, PLCVariable } from '@root/types/PLC/test'
-import { PLCDataType } from '@root/types/PLC/test'
+import type { PLCFunction, PLCFunctionBlock, PLCProgram, PLCProjectData, PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCDataType } from '@root/types/PLC/open-plc'
 
 // type IDatatypeDTO = {
 //   id: number
@@ -55,7 +55,7 @@ type WorkspaceActions = {
   createPou: (pouToBeCreated: PouDTO) => WorkspaceResponse
   updatePou: (dataToBeUpdated: { name: string; content: string }) => void
   deletePou: (pouToBeDeleted: string) => void
-  createVariable: (variableToBeCreated: VariableDTO & {rowToInsert?: number}) => WorkspaceResponse
+  createVariable: (variableToBeCreated: VariableDTO & { rowToInsert?: number }) => WorkspaceResponse
   updateVariable: (
     dataToBeUpdated: Omit<VariableDTO, 'data'> & { rowId: number; data: Partial<PLCVariable> },
   ) => WorkspaceResponse

@@ -58,8 +58,8 @@ module.exports = {
         'slide-in-r-to-l': 'slideInRToL 0.5s ease-in-out',
       },
       boxShadow: {
-        card: '0px 4px 20px 0px rgba(0, 0, 0, 0.25)',
-        'dark-card': '0px 1px 7px 0px rgba(255, 255, 255, 0.25)',
+        oplc: '0px 4px 20px 0px rgba(0, 0, 0, 0.25)',
+        'oplc-dark': '0px 1px 7px 0px rgba(255, 255, 255, 0.25)',
       },
     },
     keyframes: {

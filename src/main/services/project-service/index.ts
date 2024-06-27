@@ -3,7 +3,7 @@ import { promises, readFile, writeFile } from 'fs'
 import { join } from 'path'
 
 // import { projectSchema } from '../../../types/PLC'
-import { PLCProjectData, PLCProjectDataSchema } from '../../../types/PLC/test'
+import { PLCProjectData, PLCProjectDataSchema } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { store } from '../../modules/store' // This must be refactored
 import { baseJsonStructure } from './data'

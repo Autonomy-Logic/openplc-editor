@@ -2,7 +2,7 @@ import { TStoreType } from '@root/main/contracts/types/modules/store'
 import { Event, nativeTheme } from 'electron'
 import { platform } from 'process'
 
-import { PLCProjectData } from '../../../types/PLC/test'
+import { PLCProjectData } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 
 type IDataToWrite = {

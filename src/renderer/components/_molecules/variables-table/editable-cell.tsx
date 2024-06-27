@@ -1,6 +1,6 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { WorkspaceResponse } from '@root/renderer/store/slices/workspace/types'
-import type { PLCVariable } from '@root/types/PLC/test'
+import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
@@ -84,7 +84,7 @@ const EditableDocumentationCell = ({
           align='center'
           side='bottom'
           sideOffset={-32}
-          className='h-fit w-[175px] rounded-lg border border-neutral-100 bg-white p-2 drop-shadow-lg lg:w-[275px] 2xl:w-[375px] dark:border-brand-medium-dark dark:bg-neutral-950'
+          className='box h-fit w-[175px] rounded-lg bg-white p-2 lg:w-[275px] 2xl:w-[375px] dark:bg-neutral-950'
           onInteractOutside={onBlur}
         >
           <textarea

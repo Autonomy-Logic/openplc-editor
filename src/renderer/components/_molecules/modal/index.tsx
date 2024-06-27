@@ -34,7 +34,7 @@ const ModalContent = forwardRef<
     <PrimitiveDialog.Content
       ref={ref}
       className={cn(
-        'fixed inset-0 z-50 m-auto flex h-[500px] w-[525px] flex-col gap-4 rounded-lg border border-brand-light bg-white p-4 shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card',
+        'box fixed inset-0 z-50 m-auto flex h-[500px] w-[525px] flex-col gap-4 rounded-lg bg-white p-4 outline-none dark:bg-neutral-950',
         className,
       )}
       {...props}

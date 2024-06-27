@@ -87,7 +87,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
         <Popover.Content id={`create-${target}-content`} sideOffset={14} alignOffset={-7} align='start' side='right'>
           <div
             id='pou-card-root'
-            className='flex h-fit w-[225px] flex-col gap-3 rounded-lg border border-brand-light bg-white px-3 pb-3 pt-2 drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+            className='box flex h-fit w-[225px] flex-col gap-3 rounded-lg bg-white px-3 pb-3 pt-2 dark:bg-neutral-950'
           >
             {target === 'data-type' ? (
               <>
@@ -163,7 +163,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                 className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
                               />
                               <SelectContent
-                                className='h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                                className='box h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
                                 sideOffset={5}
                                 alignOffset={5}
                                 position='popper'
