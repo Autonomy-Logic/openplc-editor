@@ -1,4 +1,4 @@
-import { PLCDataType, PLCFunction, PLCFunctionBlock, PLCProgram } from '@root/types/PLC/test'
+import { PLCDataType, PLCFunction, PLCFunctionBlock, PLCProgram } from '@root/types/PLC/open-plc'
 import { z } from 'zod'
 
 type PouProps = {

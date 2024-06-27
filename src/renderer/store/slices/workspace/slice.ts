@@ -1,4 +1,4 @@
-import type { PLCDataType, PLCVariable } from '@root/types/PLC/test'
+import type { PLCDataType, PLCVariable } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 

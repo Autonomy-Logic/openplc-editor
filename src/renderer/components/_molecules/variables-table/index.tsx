@@ -1,5 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCVariable } from '@root/types/PLC/test'
+import { PLCVariable } from '@root/types/PLC/open-plc'
 import {
   ColumnFiltersState,
   createColumnHelper,

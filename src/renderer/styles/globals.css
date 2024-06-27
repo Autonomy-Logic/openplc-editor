@@ -53,7 +53,7 @@
 
 @layer components {
   .box {
-    border: none;
+    @apply shadow-oplc dark:shadow-oplc-dark border border-brand-light dark:border-brand-medium-dark;
   }
   /* Classes for the custom titlebar*/
   .oplc-titlebar-container {

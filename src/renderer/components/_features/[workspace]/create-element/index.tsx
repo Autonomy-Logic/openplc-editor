@@ -29,7 +29,7 @@ const CreatePLCElement = () => {
           alignOffset={-7}
           sideOffset={10}
           align='end'
-          className='flex h-fit w-[188px] flex-col gap-2 rounded-lg border border-brand-light bg-white p-2 shadow-card dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card'
+          className='box flex h-fit w-[188px] flex-col gap-2 rounded-lg bg-white p-2 dark:bg-neutral-950'
         >
           {CreatePLCElementTypes.map((target) => (
             <ElementCard key={`unique ${target}`} target={target} closeContainer={setIsContainerOpen} />
