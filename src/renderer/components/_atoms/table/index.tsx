@@ -58,7 +58,10 @@ const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'> & {
         // all cells
         '[&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r [&>*]:border-neutral-300 dark:[&>*]:border-neutral-800',
         {
-          'ring-1 ring-brand [&>td:first-child]:border-l-2 [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-2 [&>td:last-child]:border-r-brand [&>td]:border-t [&>td]:border-b-brand [&>td]:border-t-brand':
+          '[&>td:first-child]:border-l-2 [&>td:last-child]:border-r-2 [&>td]:border-b-2 [&>td]:border-t-2': selected,
+          '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand [&>td]:border-t-brand':
+            selected,
+          'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand dark:[&>td]:border-t-brand':
             selected,
         },
         className,

@@ -1,5 +1,5 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
-import { DebuggerIcon, MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
+import { ArrowIcon, DebuggerIcon, MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext } from '@tanstack/react-table'
@@ -96,16 +96,18 @@ const SelectableTypeCell = ({
           {VariableTypes.map((scope) => (
             <PrimitiveDropdown.Sub key={scope.definition}>
               <PrimitiveDropdown.SubTrigger asChild>
-                <div className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'>
+                <div className='relative flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'>
                   <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
                     {_.startCase(scope.definition)}
                   </span>
+                  <ArrowIcon size='md' direction='right' className='absolute right-1'/>
                 </div>
               </PrimitiveDropdown.SubTrigger>
               <PrimitiveDropdown.Portal>
                 <PrimitiveDropdown.SubContent
                   sideOffset={5}
                   className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+
                 >
                   {scope.values.map((value) => (
                     <PrimitiveDropdown.Item
