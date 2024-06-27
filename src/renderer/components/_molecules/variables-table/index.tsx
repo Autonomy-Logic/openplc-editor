@@ -20,7 +20,7 @@ const columns = [
   columnHelper.accessor('id', {
     header: '#',
     size: 64,
-    minSize: 48,
+    minSize: 64,
     maxSize: 64,
     enableResizing: true,
     cell: (props) => props.row.id,
@@ -28,9 +28,9 @@ const columns = [
   columnHelper.accessor('name', {
     header: 'Name',
     enableResizing: true,
-    size: 224,
-    minSize: 224,
-    maxSize: 500,
+    size: 150,
+    minSize: 150,
+    maxSize: 400,
     cell: EditableNameCell,
   }),
   columnHelper.accessor('class', {
@@ -51,9 +51,9 @@ const columns = [
   columnHelper.accessor('documentation', {
     header: 'Documentation',
     enableResizing: true,
-    size: 263,
-    minSize: 224,
-    maxSize: 500,
+    size: 198,
+    minSize: 198,
+    maxSize: 640,
     cell: EditableDocumentationCell,
   }),
   columnHelper.accessor('debug', { header: 'Debug', size: 64, minSize: 64, maxSize: 64, cell: SelectableDebugCell }),
@@ -88,9 +88,9 @@ const VariablesTable = ({
     data: tableData,
     debugTable: true,
     defaultColumn: {
-      size: 80,
+      size: 128,
       minSize: 80,
-      maxSize: 160,
+      maxSize: 128,
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -111,7 +111,7 @@ const VariablesTable = ({
   })
 
   return (
-    <Table context='Variables'>
+    <Table context='Variables' className='mr-1'>
       <TableHeader>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
