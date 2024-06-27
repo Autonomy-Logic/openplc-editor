@@ -1,4 +1,4 @@
-import { PLCVariable } from '@root/types/PLC/test'
+import { PLCVariable } from '@root/types/PLC/open-plc'
 
 import { WorkspaceResponse } from '../types'
 
