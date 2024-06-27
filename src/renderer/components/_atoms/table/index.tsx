@@ -1,5 +1,5 @@
 import { cn } from '@root/utils'
-import { ComponentPropsWithRef, forwardRef } from 'react'
+import { ComponentPropsWithRef, forwardRef, useEffect, useState } from 'react'
 
 const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { context?: string }>(
   ({ className, context, ...res }, ref) => (
@@ -45,34 +45,58 @@ const TableFooter = forwardRef<HTMLTableSectionElement, ComponentPropsWithRef<'t
 TableFooter.displayName = 'TableFooter'
 
 const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'> & { selected?: boolean }>(
-  ({ className, selected, ...res }, ref) => (
-    <tr
-      aria-label='Table row'
-      ref={ref}
-      className={cn(
-        'h-8',
-        // header cell
-        '[&:nth-child(2)>th:first-child]:rounded-tl-md [&:nth-child(2)>th:last-child]:rounded-tr-md [&:nth-child(2)>th]:border-t',
-        '[&:nth-child(2)>th]:border-t-neutral-500',
-        // body cell
-        '[&:last-child>td:first-child]:rounded-bl-md [&:last-child>td:last-child]:rounded-br-md [&:last-child>td]:border-b-neutral-500',
-        '[&>*:first-child]:border-l-neutral-500 [&>*:last-child]:border-r-neutral-500',
-        // all cells
-        '[&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r',
-        '[&>*]:border-neutral-300 dark:[&>*]:border-neutral-800',
-        // selected row
-        {
-          '[&>td:first-child]:border-l-2 [&>td:last-child]:border-r-2 [&>td]:border-b-2 [&>td]:border-t-2': selected,
-          '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand [&>td]:border-t-brand':
-            selected,
-          'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand dark:[&>td]:border-t-brand':
-            selected,
-        },
-        className,
-      )}
-      {...res}
-    />
-  ),
+  ({ id, className, selected, ...res }, ref) => {
+    const [selectedRow, setSelectedRow] = useState<boolean>(false)
+    const [lastBrother, setLastBrother] = useState<HTMLElement | null>(null)
+
+    if (selectedRow && lastBrother) {
+      lastBrother.className = cn(lastBrother.className, '[&>*]:border-b-brand dark:[&>*]:border-b-brand')
+    }
+    if (!selectedRow && lastBrother) {
+      lastBrother.className = cn(lastBrother.className, '[&>*]:border-neutral-300 dark:[&>*]:border-neutral-800')
+    }
+
+    useEffect(() => {
+      if (selected) {
+        setSelectedRow(true)
+      } else setSelectedRow(false)
+    }, [selected])
+
+    useEffect(() => {
+      let brother = document.getElementById((parseInt(id ?? '0') - 1).toString())
+      if (!brother) brother = document.getElementsByTagName('thead')[0].lastChild as HTMLElement
+      setLastBrother(brother)
+    }, [])
+
+    return (
+      <tr
+        id={id}
+        aria-label='Table row'
+        ref={ref}
+        className={cn(
+          'h-8',
+          // header cell
+          '[&:nth-child(2)>th:first-child]:rounded-tl-md [&:nth-child(2)>th:last-child]:rounded-tr-md [&:nth-child(2)>th]:border-t',
+          '[&:nth-child(2)>th]:border-t-neutral-500',
+          // body cell
+          '[&:last-child>td:first-child]:rounded-bl-md [&:last-child>td:last-child]:rounded-br-md [&:last-child>td]:border-b-neutral-500',
+          '[&>*:first-child]:border-l-neutral-500 [&>*:last-child]:border-r-neutral-500',
+          // all cells
+          '[&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r',
+          '[&>*]:border-neutral-300 dark:[&>*]:border-neutral-800',
+          // selected row,
+          {
+            '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand':
+              selected,
+            'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand':
+              selected,
+          },
+          className,
+        )}
+        {...res}
+      />
+    )
+  },
 )
 
 TableRow.displayName = 'TableRow'
