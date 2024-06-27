@@ -20,7 +20,7 @@ const columns = [
   columnHelper.accessor('id', {
     header: '#',
     size: 64,
-    minSize: 64,
+    minSize: 48,
     maxSize: 64,
     enableResizing: true,
     cell: (props) => props.row.id,
