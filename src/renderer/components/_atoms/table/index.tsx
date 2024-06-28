@@ -46,25 +46,31 @@ TableFooter.displayName = 'TableFooter'
 
 const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'> & { selected?: boolean }>(
   ({ id, className, selected, ...res }, ref) => {
-    const [selectedRow, setSelectedRow] = useState<boolean>(false)
-    const [lastBrother, setLastBrother] = useState<HTMLElement | null>(null)
 
+    /**
+     * This logic is used to add a border to the last cell of the previous row when the current row is selected.
+     * The useEffect is necessary to make sure the lastBrother is set after the row is rendered.
+     *
+     * This have to be reviewed and possibly refactored.
+    **/
+    const [lastBrother, setLastBrother] = useState<HTMLElement | null>(null)
+    const [selectedRow, setSelectedRow] = useState<boolean>(false)
     if (selectedRow && lastBrother) {
       lastBrother.className = cn(lastBrother.className, '[&>*]:border-b-brand dark:[&>*]:border-b-brand')
     }
     if (!selectedRow && lastBrother) {
       lastBrother.className = cn(lastBrother.className, '[&>*]:border-neutral-300 dark:[&>*]:border-neutral-800')
     }
-
     useEffect(() => {
-      if (selected) {
-        setSelectedRow(true)
-      } else setSelectedRow(false)
+      if (selected) setSelectedRow(selected)
+      else setSelectedRow(false)
     }, [selected])
-
     useEffect(() => {
       let brother = document.getElementById((parseInt(id ?? '0') - 1).toString())
-      if (!brother) brother = document.getElementsByTagName('thead')[0].lastChild as HTMLElement
+      if (!brother) {
+        brother = document.getElementsByTagName('thead')[document.getElementsByTagName('thead').length - 1]
+          .lastChild as HTMLElement
+      }
       setLastBrother(brother)
     }, [])
 
