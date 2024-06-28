@@ -2,7 +2,7 @@ import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
 import { TabsSlice } from '../tabs'
-import { IWorkspaceSlice } from '../workspace-slice'
+import { WorkspaceSlice } from '../workspace'
 import { CreateDatatypeObject, CreateEditorObject, CreatePouObject } from './utils'
 
 type PropsToCreatePou = {
@@ -25,7 +25,7 @@ export type ISharedSlice = {
   }
 }
 
-export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & IWorkspaceSlice, [], [], ISharedSlice> = (
+export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & WorkspaceSlice, [], [], ISharedSlice> = (
   _setState,
   getState,
 ) => ({
