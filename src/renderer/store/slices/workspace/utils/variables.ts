@@ -10,9 +10,11 @@ const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
 }
 /**
  * This is a validation to check if the variable name is correct.
+ * CamelCase, PascalCase or SnakeCase and can not be empty.
  **/
 const variableNameValidation = (variableName: string | undefined) => {
-  const regex = /^([A-Za-z_]+(_[A-Za-z0-9])*)$/
+  const regex =
+    /^([a-zA-Z0-9]+(?:[A-Z][a-z0-9]*)*)|([A-Z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)|([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*)$/
   return variableName === undefined ? false : regex.test(variableName)
 }
 

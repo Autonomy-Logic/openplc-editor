@@ -20,7 +20,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           language: 'st',
           variables: [
             {
-              name: 'variable',
+              name: 'variable1',
               type: {
                 value: 'bool',
                 definition: 'base-type',
@@ -31,7 +31,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               debug: false,
             },
             {
-              name: 'variable',
+              name: 'variable2',
               type: {
                 value: 'bool',
                 definition: 'base-type',
@@ -42,7 +42,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               debug: false,
             },
             {
-              name: 'variable',
+              name: 'variable3',
               type: {
                 value: 'bool',
                 definition: 'base-type',
@@ -53,7 +53,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               debug: false,
             },
             {
-              name: 'variable',
+              name: 'variable4',
               type: {
                 value: 'bool',
                 definition: 'base-type',
