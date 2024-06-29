@@ -9,6 +9,7 @@ import { ColumnFiltersState } from '@tanstack/react-table'
 import { useCallback, useEffect, useState } from 'react'
 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
+import { VariablesTableButton } from '../../_atoms/buttons/variables-table'
 import { VariablesTable } from '../../_molecules'
 
 const VariablesEditor = () => {
@@ -60,9 +61,9 @@ const VariablesEditor = () => {
         scope: 'local',
         associatedPou: name,
         data: {
-          name: 'new-variable',
-          class: 'input',
-          type: { definition: 'base-type', value: 'string' },
+          name: 'LocalVar',
+          class: 'local',
+          type: { definition: 'base-type', value: 'dint' },
           location: '',
           documentation: '',
           debug: false,
@@ -71,27 +72,18 @@ const VariablesEditor = () => {
       return
     }
 
-    const regex = /-\d+$/
     const variable: PLCVariable =
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
-    const newName = variable.name.match(regex)
-      ? variable.name.replace(regex, `-${parseInt(variable.name.match(regex)![0].slice(1)) + 1}`)
-      : variable.name + '-1'
-    const newVariable = {
-      ...variable,
-      name: newName,
-    }
-
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createVariable({ scope: 'local', associatedPou: name, data: newVariable })
+      createVariable({ scope: 'local', associatedPou: name, data: { ...variable } })
       setSelectedRow(variables.length)
       return
     }
     createVariable({
       scope: 'local',
       associatedPou: name,
-      data: newVariable,
+      data: { ...variable },
       rowToInsert: selectedRow + 1,
     })
     setSelectedRow(selectedRow + 1)
@@ -180,37 +172,30 @@ const VariablesEditor = () => {
             className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
           >
             {/** This can be reviewed */}
-            <button
-              aria-label='Add table row button'
-              className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={handleCreateVariable}
-            >
+            <VariablesTableButton aria-label='Add table row button' onClick={handleCreateVariable}>
               <PlusIcon className='!stroke-brand' />
-            </button>
-            <button
+            </VariablesTableButton>
+            <VariablesTableButton
               aria-label='Remove table row button'
-              className='hover:cursor-pointer hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
               disabled={selectedRow === ROWS_NOT_SELECTED}
               onClick={handleRemoveVariable}
             >
               <MinusIcon />
-            </button>
-            <button
+            </VariablesTableButton>
+            <VariablesTableButton
               aria-label='Move table row up button'
-              className='hover:cursor-pointer hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
               disabled={selectedRow === ROWS_NOT_SELECTED || selectedRow === 0}
               onClick={() => handleRearrangeVariables(-1)}
             >
               <StickArrowIcon direction='up' />
-            </button>
-            <button
+            </VariablesTableButton>
+            <VariablesTableButton
               aria-label='Move table row down button'
-              className='hover:cursor-pointer hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
               disabled={selectedRow === ROWS_NOT_SELECTED || selectedRow === tableData.length - 1}
               onClick={() => handleRearrangeVariables(1)}
             >
               <StickArrowIcon direction='down' />
-            </button>
+            </VariablesTableButton>
           </div>
         </div>
         <div
@@ -240,7 +225,11 @@ const VariablesEditor = () => {
           />
         </div>
       </div>
-      <div aria-label='Variables editor table container' className='h-full overflow-auto'>
+      <div
+        aria-label='Variables editor table container'
+        className='h-full overflow-y-auto'
+        style={{ scrollbarGutter: 'stable' }}
+      >
         <VariablesTable
           tableData={tableData}
           columnFilters={columnFilters}
