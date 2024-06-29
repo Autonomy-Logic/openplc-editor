@@ -5,43 +5,60 @@ import z from 'zod'
  * in most cases you can use the type inferred from it.
  */
 const editorStateSchema = z.object({
-  editor: z.discriminatedUnion('type', [
-    z.object({
-      type: z.literal('available'),
-      meta: z.object({
-        name: z.string(),
+  editor: z.array(
+    z.discriminatedUnion('type', [
+      z.object({
+        type: z.literal('plc-textual'),
+        meta: z.object({
+          name: z.string(),
+          path: z.string(),
+          language: z.enum(['il', 'st']),
+        }),
+        variable: z.discriminatedUnion('display', [
+          z.object({
+            display: z.literal('table'),
+            description: z.string(),
+            classFilter: z.enum(['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']),
+            selectedRow: z.string(),
+          }),
+          z.object({ display: z.literal('code') }),
+        ]),
       }),
-    }),
-    z.object({
-      type: z.literal('plc-textual'),
-      meta: z.object({
-        name: z.string(),
-        path: z.string(),
-        language: z.enum(['il', 'st']),
+      z.object({
+        type: z.literal('plc-graphical'),
+        meta: z.object({
+          name: z.string(),
+          path: z.string(),
+          language: z.enum(['ld', 'sfc', 'fbd']),
+        }),
+        variable: z.discriminatedUnion('display', [
+          z.object({
+            display: z.literal('table'),
+            description: z.string(),
+            classFilter: z.enum(['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']),
+            selectedRow: z.string(),
+          }),
+          z.object({ display: z.literal('code') }),
+        ]),
       }),
-    }),
-    z.object({
-      type: z.literal('plc-graphical'),
-      meta: z.object({
-        name: z.string(),
-        path: z.string(),
-        language: z.enum(['ld', 'sfc', 'fbd']),
+      z.object({
+        type: z.literal('plc-datatype'),
+        meta: z.object({
+          name: z.string(),
+          derivation: z.enum(['enumerated', 'structure', 'array']),
+        }),
       }),
-    }),
-    z.object({
-      type: z.literal('plc-datatype'),
-      meta: z.object({
-        name: z.string(),
-        derivation: z.enum(['enumerated', 'structure', 'array']),
+      /**
+       * This must be reviewed in the future to fit the resource requirements
+       */
+      z.object({
+        type: z.literal('plc-resource'),
+        meta: z.object({
+          name: z.string(),
+        }),
       }),
-    }),
-    z.object({
-      type: z.literal('plc-variable'),
-      meta: z.object({
-        name: z.string(),
-      }),
-    }),
-  ]),
+    ]),
+  ),
 })
 
 /** This is a zod schema for the editor slice actions.
@@ -49,10 +66,7 @@ const editorStateSchema = z.object({
  * in most cases you can use the type inferred from it.
  */
 const editorActionsSchema = z.object({
-  setEditor: z
-    .function()
-    .args(editorStateSchema.pick({ editor: true }))
-    .returns(z.void()),
+  setEditor: z.function().args(editorStateSchema.shape.editor).returns(z.void()),
   clearEditor: z.function().returns(z.void()),
 })
 
