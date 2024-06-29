@@ -8,12 +8,14 @@ import _ from 'lodash'
 
 export const MenuBar = () => {
   const {
-    projectData,
-    projectPath,
-    workspaceActions: { switchAppTheme, setUserWorkspace, setEditingState },
+    workspace: {
+      projectData,
+      projectPath,
+      systemConfigs: { shouldUseDarkMode },
+    },
     editorActions: { clearEditor },
+    workspaceActions: { switchAppTheme, setUserWorkspace, setEditingState },
     tabsActions: { clearTabs },
-    systemConfigs: { shouldUseDarkMode },
   } = useOpenPLCStore()
 
   /**
@@ -286,7 +288,7 @@ export const MenuBar = () => {
               <span>{i18n.t('menu:display.submenu.theme')}</span>
               <span className={acceleratorDefaultStyle}>{shouldUseDarkMode ? 'dark' : 'light'}</span>
             </MenuPrimitive.Item>
-            {/* 
+            {/*
             <MenuPrimitive.Portal>
               <MenuPrimitive.SubContent sideOffset={18} className={contentDefaultStyle}>
                 <MenuPrimitive.Item

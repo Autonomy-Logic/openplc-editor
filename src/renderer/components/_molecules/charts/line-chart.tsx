@@ -17,7 +17,9 @@ const LineChart = ({ range, isPaused }: ChartProps) => {
     border: '',
   })
   const {
-    systemConfigs: { shouldUseDarkMode },
+    workspace: {
+      systemConfigs: { shouldUseDarkMode },
+    },
   } = useOpenPLCStore()
 
   useEffect(() => {

@@ -78,7 +78,9 @@ const VariablesTable = ({
     editor: {
       meta: { name },
     },
-    projectData: { pous },
+    workspace: {
+      projectData: { pous },
+    },
     workspaceActions: { updateVariable },
   } = useOpenPLCStore()
 
