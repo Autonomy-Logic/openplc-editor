@@ -17,7 +17,9 @@ const VariablesEditor = () => {
     editor: {
       meta: { name },
     },
-    projectData: { pous },
+    workspace: {
+      projectData: { pous },
+    },
     workspaceActions: { createVariable, deleteVariable, rearrangeVariables },
   } = useOpenPLCStore()
 

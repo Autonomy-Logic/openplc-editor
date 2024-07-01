@@ -196,7 +196,7 @@ const PLCVariableSchema = z.object({
 type PLCVariable = z.infer<typeof PLCVariableSchema>
 
 const PLCFunctionSchema = z.object({
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']).default('il'),
+  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
   name: z.string(),
   returnType: z.enum(['BOOL', 'INT', 'DINT']),
   /** Array of variable - will be implemented */
@@ -208,7 +208,7 @@ const PLCFunctionSchema = z.object({
 type PLCFunction = z.infer<typeof PLCFunctionSchema>
 
 const PLCProgramSchema = z.object({
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']).default('il'),
+  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
@@ -219,7 +219,7 @@ const PLCProgramSchema = z.object({
 type PLCProgram = z.infer<typeof PLCProgramSchema>
 
 const PLCFunctionBlockSchema = z.object({
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']).default('il'),
+  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
@@ -252,6 +252,6 @@ const PLCProjectDataSchema = z.object({
 
 type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
-export { PLCFunctionBlockSchema, PLCFunctionSchema, PLCProgramSchema, PLCProjectDataSchema, PLCVariableSchema }
+export { PLCDataTypeSchema,PLCFunctionBlockSchema, PLCFunctionSchema, PLCProgramSchema, PLCProjectDataSchema, PLCVariableSchema }
 
 export type { PLCDataType, PLCFunction, PLCFunctionBlock, PLCProgram, PLCProjectData, PLCVariable }
