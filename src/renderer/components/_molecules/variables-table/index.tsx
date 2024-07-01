@@ -78,9 +78,6 @@ const VariablesTable = ({
     editor: {
       meta: { name },
     },
-    workspace: {
-      projectData: { pous },
-    },
     workspaceActions: { updateVariable },
   } = useOpenPLCStore()
 
@@ -102,7 +99,7 @@ const VariablesTable = ({
       updateData: (rowIndex, columnId, value) => {
         return updateVariable({
           scope: 'local',
-          associatedPou: pous.find((pou) => pou.data.name === name)?.data.name,
+          associatedPou: name,
           rowId: rowIndex,
           data: {
             [columnId]: value,
