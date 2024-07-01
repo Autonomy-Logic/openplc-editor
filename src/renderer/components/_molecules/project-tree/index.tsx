@@ -224,7 +224,7 @@ const ProjectTreeLeaf = ({ leafLang, label, nested = false, ...res }: IProjectTr
   return (
     <li
       className={cn(
-        'ml-4 flex cursor-pointer flex-row items-center py-1 pl-4 hover:bg-slate-50 dark:hover:bg-neutral-900',
+        'ml-4 flex cursor-pointer flex-row items-center py-1 pl-6 hover:bg-slate-50 dark:hover:bg-neutral-900',
         nested && 'ml-8',
         name === label && 'bg-slate-50 dark:bg-neutral-900',
       )}
