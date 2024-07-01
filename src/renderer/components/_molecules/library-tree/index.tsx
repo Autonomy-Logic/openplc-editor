@@ -77,8 +77,7 @@ const LibraryFile = ({ label, isSelected, onSelect, ...res }: ILibraryFileProps)
       className={`${isSelected ? 'bg-slate-50 dark:bg-neutral-900' : ''} ml-2 cursor-pointer pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900`}
       {...res}
     >
-      <div className='flex flex-row items-center gap-[6px] py-1 pl-2 '>
-        <ArrowIcon direction='right' className={`${!isSelected ? 'stroke-brand-light' : 'stroke-brand'}`} />
+      <div className='flex flex-row items-center gap-[6px] py-1 pl-6 '>
         <LibraryFileIcon size='sm' />
         <span
           className={cn(
