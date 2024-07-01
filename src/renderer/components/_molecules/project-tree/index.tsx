@@ -7,7 +7,6 @@ import {
   FBDIcon,
   FunctionBlockIcon,
   FunctionIcon,
-  GenericIcon,
   ILIcon,
   LDIcon,
   PLCIcon,
@@ -196,7 +195,7 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
 
 type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
   nested?: boolean
-  leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'dt' | 'res'
+  leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res'
   label?: string
 }
 
@@ -206,7 +205,9 @@ const LeafSources = {
   fbd: { LeafIcon: FBDIcon },
   sfc: { LeafIcon: SFCIcon },
   ld: { LeafIcon: LDIcon },
-  dt: { LeafIcon: GenericIcon },
+  arr: { LeafIcon: ArrayIcon },
+  enum: { LeafIcon: EnumIcon },
+  str: { LeafIcon: StructureIcon },
   res: { LeafIcon: ResourceIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, label, nested = false, ...res }: IProjectTreeLeafProps) => {
@@ -230,7 +231,7 @@ const ProjectTreeLeaf = ({ leafLang, label, nested = false, ...res }: IProjectTr
       onClick={handleLeafSelection}
       {...res}
     >
-      <LeafIcon />
+      <LeafIcon className='min-h-4 min-w-4' />
       <span
         className={cn(
           'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',

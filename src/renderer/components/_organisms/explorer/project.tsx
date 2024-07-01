@@ -158,7 +158,7 @@ const Project = () => {
               <ProjectTreeLeaf
                 nested
                 key={id}
-                leafLang='dt'
+                leafLang='arr'
                 label={name}
                 /** Todo: Update the tab state */
                 onClick={() =>
@@ -177,7 +177,7 @@ const Project = () => {
               <ProjectTreeLeaf
                 nested
                 key={id}
-                leafLang='dt'
+                leafLang='enum'
                 label={name}
                 /** Todo: Update the tab state */
                 onClick={() =>
@@ -196,7 +196,7 @@ const Project = () => {
               <ProjectTreeLeaf
                 nested
                 key={id}
-                leafLang='dt'
+                leafLang='str'
                 label={name}
                 /** Todo: Update the tab state */
                 onClick={() =>
