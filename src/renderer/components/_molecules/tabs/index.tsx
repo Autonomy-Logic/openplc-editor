@@ -31,7 +31,7 @@ const Tabs = () => {
   const handleClickedTab = (tab: TabsProps) => {
     if (tab.name === selectedTab) return
     setSelectedTab(tab.name)
-    setEditor({ editor: CreateEditorObjectFromTab(tab) })
+    setEditor(CreateEditorObjectFromTab(tab))
   }
 
   const handleRemoveTab = (tabToRemove: string) => {
@@ -39,10 +39,10 @@ const Tabs = () => {
     const candidate = draftTabs.slice(-1)[0]
     if (!candidate) {
       sortTabs(draftTabs)
-      setEditor({ editor: { type: 'available', meta: { name: '' } } })
+      setEditor({type: 'available', meta: { name: '' }})
     } else {
       setSelectedTab(candidate.name)
-      setEditor({ editor: CreateEditorObjectFromTab(candidate) })
+      setEditor(CreateEditorObjectFromTab(candidate))
       sortTabs(draftTabs)
     }
   }
@@ -50,7 +50,7 @@ const Tabs = () => {
   const handleDragStart = ({ tab, idx }: { tab: TabsProps; idx: number }) => {
     dndTab.current = idx
     setSelectedTab(tab.name)
-    setEditor({ editor: CreateEditorObjectFromTab(tab) })
+    setEditor(CreateEditorObjectFromTab(tab))
   }
   const handleDragEnter = (idx: number) => {
     replaceTab.current = idx

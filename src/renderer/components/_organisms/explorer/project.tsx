@@ -7,7 +7,8 @@ import {
 import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
-import { CreateEditorObject } from '@root/renderer/store/slices/shared/utils'
+// import { CreateEditorObject } from '@root/renderer/store/slices/shared/utils'
+import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
 
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
@@ -21,62 +22,26 @@ const Project = () => {
   } = useOpenPLCStore()
   const Name = 'Project Name'
 
-  const editorType = {
-    il: 'plc-textual',
-    st: 'plc-textual',
-    ld: 'plc-graphical',
-    sfc: 'plc-graphical',
-    fbd: 'plc-graphical',
-    array: 'plc-datatype',
-    enumerated: 'plc-datatype',
-    structure: 'plc-datatype',
-  } as const
+  // const editorType = {
+  //   il: 'plc-textual',
+  //   st: 'plc-textual',
+  //   ld: 'plc-graphical',
+  //   sfc: 'plc-graphical',
+  //   fbd: 'plc-graphical',
+  //   array: 'plc-datatype',
+  //   enumerated: 'plc-datatype',
+  //   structure: 'plc-datatype',
+  // } as const
 
   const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
-    let language
-    let derivation
     const tabToBeCreated = {
       name,
       path,
       elementType,
     }
     updateTabs(tabToBeCreated)
-    switch (elementType.type) {
-      case 'program':
-        language = elementType.language
-        derivation = null
-        break
-      case 'function':
-        language = elementType.language
-        derivation = null
-        break
-      case 'function-block':
-        language = elementType.language
-        derivation = null
-        break
-      case 'data-type':
-        derivation = elementType.derivation
-        language = null
-    }
-
-    if (language === null && derivation !== null) {
-      const editor = CreateEditorObject({
-        type: editorType[derivation],
-        name,
-        derivation: derivation,
-      })
-      setEditor({ editor })
-    }
-    if (language !== null && derivation === null) {
-      const pouType = elementType.type as 'program' | 'function' | 'function-block'
-      const editor = CreateEditorObject({
-        type: editorType[language],
-        name,
-        language: language,
-        derivation: pouType,
-      })
-      setEditor({ editor })
-    }
+    const editor = CreateEditorObjectFromTab(tabToBeCreated)
+    setEditor(editor)
   }
 
   return (

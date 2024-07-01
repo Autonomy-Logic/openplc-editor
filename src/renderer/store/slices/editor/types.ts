@@ -20,11 +20,18 @@ const editorVariablesSchema = z.discriminatedUnion('display', [
  */
 const editorModelSchema = z.discriminatedUnion('type', [
   z.object({
+    type: z.literal('available'),
+    meta: z.object({
+      name: z.string(),
+    }),
+  }),
+  z.object({
     type: z.literal('plc-textual'),
     meta: z.object({
       name: z.string(),
       path: z.string(),
       language: z.enum(['il', 'st']),
+      pouType: z.enum(['program', 'function', 'function-block']),
     }),
     variable: editorVariablesSchema,
   }),
@@ -34,6 +41,7 @@ const editorModelSchema = z.discriminatedUnion('type', [
       name: z.string(),
       path: z.string(),
       language: z.enum(['ld', 'sfc', 'fbd']),
+      pouType: z.enum(['program', 'function', 'function-block']),
     }),
     variable: editorVariablesSchema,
   }),
@@ -60,7 +68,8 @@ const editorModelSchema = z.discriminatedUnion('type', [
  * in most cases you can use the type inferred from it.
  */
 const editorStateSchema = z.object({
-  editor: z.array(editorModelSchema),
+  editors: z.array(editorModelSchema),
+  editor: editorModelSchema,
 })
 
 /** This is a zod schema for the editor slice actions.
@@ -71,6 +80,7 @@ const editorActionsSchema = z.object({
   addModel: z.function().args(editorModelSchema).returns(z.void()),
   removeModel: z.function().args(z.string()).returns(z.void()),
   updateModelVariables: z.function().args(z.string(), editorVariablesSchema).returns(z.void()),
+  setEditor: z.function().args(editorModelSchema).returns(z.void()),
   clearEditor: z.function().returns(z.void()),
 })
 

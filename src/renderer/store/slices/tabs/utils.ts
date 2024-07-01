@@ -1,61 +1,94 @@
-import type { EditorState } from '../editor'
+import type { EditorModel } from '../editor'
 import { CreateEditorObject } from '../shared/utils'
 import { TabsProps } from './types'
-const CreateEditorObjectFromTab = (tab: TabsProps): EditorState['editor'] => {
-  const { elementType, name } = tab
-  const editorType = {
-    il: 'plc-textual',
-    st: 'plc-textual',
-    ld: 'plc-graphical',
-    sfc: 'plc-graphical',
-    fbd: 'plc-graphical',
-    array: 'plc-datatype',
-    enumerated: 'plc-datatype',
-    structure: 'plc-datatype',
-  } as const
-  let language
-  let derivation
-  switch (elementType.type) {
-    case 'program':
-      language = elementType.language
-      derivation = null
-      break
-    case 'function':
-      language = elementType.language
-      derivation = null
-      break
-    case 'function-block':
-      language = elementType.language
-      derivation = null
-      break
-    case 'data-type':
-      derivation = elementType.derivation
-      language = null
-  }
 
-  if (language === null && derivation !== null) {
-    const editor = CreateEditorObject({
-      type: editorType[derivation],
-      name,
-      derivation: derivation,
-    })
-    return editor
-  }
-  if (language !== null && derivation === null) {
-    const pouType = elementType.type as 'program' | 'function' | 'function-block'
-    const editor = CreateEditorObject({
-      type: editorType[language],
-      name,
-      language: language,
-      derivation: pouType,
-    })
-    return editor
-  }
-  return {
-    type: 'available',
+const CreatePLCTextualObject = (
+  name: string,
+  language: 'il' | 'st',
+  pouType: 'program' | 'function' | 'function-block',
+): EditorModel => {
+  const editor = CreateEditorObject({
+    type: 'plc-textual',
     meta: {
       name,
+      language: language,
+      path: `/data/pous/${pouType}/${name}`,
+      pouType,
     },
+    variable: {
+      display: 'table',
+      description: '',
+      classFilter: 'All',
+      selectedRow: '-1',
+    },
+  })
+  return editor
+}
+
+const CreatePLCGraphicalObject = (
+  name: string,
+  language: 'ld' | 'sfc' | 'fbd',
+  pouType: 'program' | 'function' | 'function-block',
+): EditorModel => {
+  const editor = CreateEditorObject({
+    type: 'plc-graphical',
+    meta: {
+      name,
+      language: language,
+      path: `/data/pous/${pouType}/${name}`,
+      pouType,
+    },
+    variable: {
+      display: 'table',
+      description: '',
+      classFilter: 'All',
+      selectedRow: '-1',
+    },
+  })
+  return editor
+}
+
+const CreateEditorModelObject = (
+  name: string,
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | null,
+  pouType: 'program' | 'function' | 'function-block' | null,
+  derivation?: 'enumerated' | 'structure' | 'array',
+): EditorModel => {
+  if (derivation) {
+    const editor = CreateEditorObject({
+      type: 'plc-datatype',
+      meta: {
+        name,
+        derivation,
+      },
+    })
+    return editor
+  }
+
+  if (!language || !pouType) {
+    throw new Error('Language and pouType must be defined')
+  }
+
+  if (['ld', 'sfc', 'fbd'].includes(language)) {
+    const editor = CreatePLCGraphicalObject(name, language as 'ld' | 'sfc' | 'fbd', pouType)
+    return editor
+  } else {
+    const editor = CreatePLCTextualObject(name, language as 'il' | 'st', pouType)
+    return editor
+  }
+}
+
+const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
+  const { elementType, name } = tab
+  switch (elementType.type) {
+    case 'program':
+      return CreateEditorModelObject(name, elementType.language, 'program')
+    case 'function':
+      return CreateEditorModelObject(name, elementType.language, 'function')
+    case 'function-block':
+      return CreateEditorModelObject(name, elementType.language, 'function-block')
+    case 'data-type':
+      return CreateEditorModelObject(name, null, null, elementType.derivation)
   }
 }
 
