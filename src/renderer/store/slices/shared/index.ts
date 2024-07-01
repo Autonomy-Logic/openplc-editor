@@ -51,6 +51,7 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
             },
           })
           getState().editorActions.addModel(data)
+          getState().editorActions.setEditor(data)
           getState().tabsActions.updateTabs({
             name: propsToCreatePou.name,
             elementType: {
@@ -84,6 +85,7 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
             },
           })
           getState().editorActions.addModel(data)
+          getState().editorActions.setEditor(data)
           getState().tabsActions.updateTabs({
             name: propsToCreatePou.name,
             elementType: {
@@ -105,6 +107,7 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
           meta: { name: '', derivation },
         })
         getState().editorActions.addModel(data)
+        getState().editorActions.setEditor(data)
         // getState().tabsActions.updateTabs(CreateTabObject({ name: derivation, type: 'program', language: 'il' }))
         return true
       },

@@ -41,8 +41,8 @@ const Project = () => {
     }
     updateTabs(tabToBeCreated)
     const editor = CreateEditorObjectFromTab(tabToBeCreated)
-    setEditor(editor)
     addModel(editor)
+    setEditor(editor)
   }
 
   return (
