@@ -1,5 +1,5 @@
 export * from './breadcrumbs'
-export * from './library'
+export * from './library-tree'
 export * from './modal'
 export * from './project-tree'
 export * from './search'
