@@ -49,7 +49,7 @@ const DataTypeEditor = (props: IDataTypeEditorProps) => {
               position='popper'
               side='bottom'
               sideOffset={-30}
-              className='h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-brand-light bg-white shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card'
+              className='box h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
             >
               <SelectItem
                 value='Array'

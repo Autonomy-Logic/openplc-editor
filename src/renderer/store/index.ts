@@ -1,7 +1,7 @@
 import { createSelectorHooks } from 'auto-zustand-selectors-hook'
 import { create } from 'zustand'
 
-import type { EditorSlice, ISharedSlice, IWorkspaceSlice, TabsSlice } from './slices'
+import type { EditorSlice, ISharedSlice, TabsSlice, WorkspaceSlice } from './slices'
 /**
  * Import all slices to create the store.
  */
@@ -10,7 +10,7 @@ import { createEditorSlice, createSharedSlice, createTabsSlice, createWorkspaceS
 /**
  * Create the base store to be exported as a hook.
  */
-export const openPLCStoreBase = create<IWorkspaceSlice & EditorSlice & TabsSlice & ISharedSlice>()((...a) => ({
+export const openPLCStoreBase = create<WorkspaceSlice & EditorSlice & TabsSlice & ISharedSlice>()((...a) => ({
   ...createWorkspaceSlice(...a),
   ...createEditorSlice(...a),
   ...createTabsSlice(...a),

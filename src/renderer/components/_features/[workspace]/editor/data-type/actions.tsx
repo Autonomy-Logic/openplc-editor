@@ -27,7 +27,7 @@ const ArrayTableActions = () => {
               position='popper'
               side='bottom'
               sideOffset={-28}
-              className='h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-brand-light bg-white shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card'
+              className='box h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
             >
               <SelectItem
                 value='Option 1'
@@ -121,7 +121,7 @@ const ArrayTableActions = () => {
             position='popper'
             side='bottom'
             sideOffset={-28}
-            className='h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-brand-light bg-white shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card'
+            className='box h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
           >
             <SelectItem
               value='Option 1'
@@ -220,7 +220,7 @@ const EnumTableActions = () => {
             position='popper'
             side='bottom'
             sideOffset={-28}
-            className='h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-brand-light bg-white shadow-card outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:shadow-dark-card'
+            className='box h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
           >
             <SelectItem
               value='Option 1'

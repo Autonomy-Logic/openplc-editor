@@ -2,6 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+::-webkit-scrollbar {
+  display: flex;
+  height: 0.25rem;
+  width: 0.25rem;
+  border-radius: 0.5rem;
+  background-color: rgb(221 226 232 / var(--tw-bg-opacity));
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 160ms;
+  @apply dark:bg-neutral-850;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 0.5rem;
+  background-color: var(--primary-medium);
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 700ms;
+  @apply bg-opacity-30 hover:bg-brand-medium hover:bg-opacity-100;
+}
+
+::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
+
 @layer base {
   :root {
     --primary-default: #0464fb;
@@ -20,66 +45,16 @@
     fill: var(--primary-medium-dark);
   }
 
-  /* Explanation: The recent projects carousel viewport (The visible part) */
-  .embla__viewport {
-    overflow: hidden;
+  button {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
   }
-
-  /* Explanation: Container for each card */
-  .embla__container {
-    display: flex;
-    gap: 24px;
-  }
-
-  /* Explanation: Container for all buttons */
-  .embla__buttons {
-    display: flex;
-    align-items: center;
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    left: 1.6rem;
-  }
-
-  /* Explanation: Style for each button in the carousel */
-  /* Code-Block - Start */
-  .embla__button {
-    z-index: 1;
-    color: #023c97;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    width: 4rem;
-    height: 4rem;
-  }
-
-  /* Review: Repeated class */
-  .embla__button {
-    -webkit-appearance: none;
-    background-color: transparent;
-    touch-action: manipulation;
-    display: inline-flex;
-    text-decoration: none;
-    cursor: pointer;
-    border: 0;
-    padding: 0;
-    margin: 0;
-  }
-
-  .embla__button:disabled {
-    opacity: 0.3;
-  }
-
-  .embla__button__svg {
-    width: 65%;
-    height: 65%;
-  }
-
-  /* Code-Block - End */
 }
 
 @layer components {
+  .box {
+    @apply shadow-oplc dark:shadow-oplc-dark border border-brand-light dark:border-brand-medium-dark;
+  }
   /* Classes for the custom titlebar*/
   .oplc-titlebar-container {
     position: absolute;
@@ -112,65 +87,6 @@
     top: var(--oplc-title-bar-height);
     overflow: hidden;
   }
-
-  /* Classes for custom scroll areas */
-
-  /* Explanation: Scrollbar */
-  .oplc-scrollbar:hover::-webkit-scrollbar-thumb {
-    background-color: #0350c9;
-  }
-
-  .oplc-scrollbar::-webkit-scrollbar {
-    @apply flex h-1 w-1 rounded-lg bg-neutral-200 transition-colors duration-[160ms] ease-in-out dark:bg-neutral-850;
-  }
-
-  .oplc-scrollbar::-webkit-scrollbar-thumb {
-    @apply rounded-lg bg-[--primary-medium] bg-opacity-30 transition-colors duration-700 ease-in-out hover:bg-opacity-100;
-  }
-
-  .oplc-scrollbar::-webkit-scrollbar-corner {
-    @apply bg-none;
-  }
-
-  .scroll-area {
-    display: flex;
-    gap: 1.5rem;
-    overflow: auto;
-    flex-wrap: wrap;
-    height: 100%;
-  }
-
-  .scroll-area::-webkit-scrollbar {
-    @apply flex w-[6px] rounded-lg bg-neutral-200 transition-colors duration-[160ms] ease-out dark:bg-neutral-850;
-  }
-
-  .scroll-area:hover::-webkit-scrollbar-thumb {
-    @apply bg-[#0350c9];
-  }
-
-  .scroll-area::-webkit-scrollbar-thumb {
-    @apply rounded-lg bg-[#0350c9] bg-opacity-30 transition-colors duration-700 ease-in-out hover:bg-opacity-100;
-  }
-
-  .scroll-area-horizontal {
-    display: flex;
-    gap: 1.5rem;
-    padding-bottom: 12px;
-    overflow: auto;
-    margin-right: 8px;
-  }
-
-  .scroll-area-horizontal:hover::-webkit-scrollbar-thumb {
-    background-color: #0350c9;
-  }
-
-  .scroll-area-horizontal::-webkit-scrollbar {
-    @apply h-[6px] rounded-lg bg-neutral-200 dark:bg-neutral-850;
-  }
-
-  .scroll-area-horizontal::-webkit-scrollbar-thumb {
-    @apply rounded-lg bg-[--primary-medium] bg-opacity-30 transition-colors duration-700 ease-in-out hover:bg-opacity-100;
-  }
 }
 
 @layer utilities {
@@ -181,36 +97,9 @@
   .no-drag-window {
     -webkit-app-region: no-drag;
   }
-
-  .scrollbar-white ::-webkit-scrollbar {
-    @apply bg-white;
-  }
 }
-
-@layer base {
-  button {
-    @apply outline-none;
-  }
-}
-
-/*
-::-webkit-scrollbar {
-  @apply w-1 bg-neutral-200;
-}
-::-webkit-scrollbar-corner {
-  @apply bg-transparent;
-}
-:-webkit-scrollbar-track {
-  @apply bg-transparent !w-full;
-}
-::-webkit-scrollbar-thumb {
-  @apply rounded-[0.625rem]  bg-brand bg-clip-padding hover:bg-brand-medium;
-}
-.dark ::-webkit-scrollbar {
-  @apply bg-gray-900;
-} */
 
 .apexcharts-yaxis-label tspan,
 .apexcharts-xaxis-label tspan {
-  @apply fill-neutral-1000 dark:fill-neutral-50 !text-[10px];
+  @apply fill-neutral-1000 !text-[10px] dark:fill-neutral-50;
 }

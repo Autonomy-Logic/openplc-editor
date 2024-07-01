@@ -3,11 +3,13 @@ import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCVariable } from '@root/types/PLC/test'
+import { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
+import { ColumnFiltersState } from '@tanstack/react-table'
 import { useCallback, useEffect, useState } from 'react'
 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
+import { VariablesTableButton } from '../../_atoms/buttons/variables-table'
 import { VariablesTable } from '../../_molecules'
 
 const VariablesEditor = () => {
@@ -16,13 +18,18 @@ const VariablesEditor = () => {
       meta: { name },
     },
     projectData: { pous },
-    workspaceActions: { createVariable },
+    workspaceActions: { createVariable, deleteVariable, rearrangeVariables },
   } = useOpenPLCStore()
-  const [filterValue, setFilterValue] = useState('filter')
+
+  const ROWS_NOT_SELECTED = -1
+
+  const [filterValue, setFilterValue] = useState('All')
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [selectedRow, setSelectedRow] = useState<number>(ROWS_NOT_SELECTED)
   const [tableData, setTableData] = useState<PLCVariable[]>([])
   const [visualizationType, setVisualizationType] = useState<'code' | 'table'>('table')
 
-  const FilterOptions = ['local', 'input', 'output', 'inOut', 'external', 'temp']
+  const FilterOptions = ['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']
 
   const onVisualizationTypeChange = useCallback(
     (value: 'code' | 'table') => {
@@ -36,20 +43,72 @@ const VariablesEditor = () => {
     setTableData(variablesToTable)
   }, [name, pous])
 
+  const handleRearrangeVariables = (index: number, row?: number) => {
+    rearrangeVariables({
+      scope: 'local',
+      associatedPou: name,
+      rowId: row ?? selectedRow,
+      newIndex: (row ?? selectedRow) + index,
+    })
+    setSelectedRow(selectedRow + index)
+  }
+
   const handleCreateVariable = () => {
+    const variables = pous.filter((pou) => pou.data.name === name)[0].data.variables
+
+    if (variables.length === 0) {
+      createVariable({
+        scope: 'local',
+        associatedPou: name,
+        data: {
+          name: 'LocalVar',
+          class: 'local',
+          type: { definition: 'base-type', value: 'dint' },
+          location: '',
+          documentation: '',
+          debug: false,
+        },
+      })
+      return
+    }
+
+    const variable: PLCVariable =
+      selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
+
+    if (selectedRow === ROWS_NOT_SELECTED) {
+      createVariable({ scope: 'local', associatedPou: name, data: { ...variable } })
+      setSelectedRow(variables.length)
+      return
+    }
     createVariable({
       scope: 'local',
       associatedPou: name,
-      data: {
-        id: 0,
-        name: 'new-variable',
-        debug: false,
-        type: { definition: 'base-type', value: 'string' },
-        class: 'input',
-        location: '',
-        documentation: '',
-      },
+      data: { ...variable },
+      rowToInsert: selectedRow + 1,
     })
+    setSelectedRow(selectedRow + 1)
+  }
+
+  const handleRemoveVariable = () => {
+    deleteVariable({ scope: 'local', associatedPou: name, rowId: selectedRow })
+
+    const variables = pous.filter((pou) => pou.data.name === name)[0].data.variables
+    if (selectedRow === variables.length - 1) {
+      setSelectedRow(selectedRow - 1)
+    }
+  }
+
+  const handleFilterChange = (value: string) => {
+    setFilterValue(value)
+    setColumnFilters((prev) =>
+      value !== 'All'
+        ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: value.toLowerCase() })
+        : prev.filter((filter) => filter.id !== 'class'),
+    )
+  }
+
+  const handleRowClick = (row: HTMLTableRowElement) => {
+    setSelectedRow(parseInt(row.id))
   }
 
   return (
@@ -81,7 +140,7 @@ const VariablesEditor = () => {
             >
               Class Filter :
             </label>
-            <Select value={filterValue} onValueChange={(value) => setFilterValue(value)}>
+            <Select value={filterValue} onValueChange={handleFilterChange}>
               <SelectTrigger
                 id='class-filter'
                 placeholder={filterValue}
@@ -92,7 +151,7 @@ const VariablesEditor = () => {
                 position='popper'
                 sideOffset={3}
                 align='center'
-                className='h-fit w-40 overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
               >
                 {FilterOptions.map((filter) => (
                   <SelectItem
@@ -112,34 +171,31 @@ const VariablesEditor = () => {
             aria-label='Variables editor table actions container'
             className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
           >
-            <div
-              aria-label='Add table row button'
-              className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => handleCreateVariable()}
-            >
+            {/** This can be reviewed */}
+            <VariablesTableButton aria-label='Add table row button' onClick={handleCreateVariable}>
               <PlusIcon className='!stroke-brand' />
-            </div>
-            <div
+            </VariablesTableButton>
+            <VariablesTableButton
               aria-label='Remove table row button'
-              className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => console.log('Button clicked')}
+              disabled={selectedRow === ROWS_NOT_SELECTED}
+              onClick={handleRemoveVariable}
             >
               <MinusIcon />
-            </div>
-            <div
+            </VariablesTableButton>
+            <VariablesTableButton
               aria-label='Move table row up button'
-              className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => console.log('Button clicked')}
+              disabled={selectedRow === ROWS_NOT_SELECTED || selectedRow === 0}
+              onClick={() => handleRearrangeVariables(-1)}
             >
               <StickArrowIcon direction='up' />
-            </div>
-            <div
+            </VariablesTableButton>
+            <VariablesTableButton
               aria-label='Move table row down button'
-              className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => console.log('Button clicked')}
+              disabled={selectedRow === ROWS_NOT_SELECTED || selectedRow === tableData.length - 1}
+              onClick={() => handleRearrangeVariables(1)}
             >
               <StickArrowIcon direction='down' />
-            </div>
+            </VariablesTableButton>
           </div>
         </div>
         <div
@@ -169,7 +225,19 @@ const VariablesEditor = () => {
           />
         </div>
       </div>
-      <VariablesTable tableData={tableData} />
+      <div
+        aria-label='Variables editor table container'
+        className='h-full overflow-y-auto'
+        style={{ scrollbarGutter: 'stable' }}
+      >
+        <VariablesTable
+          tableData={tableData}
+          columnFilters={columnFilters}
+          setColumnFilters={setColumnFilters}
+          selectedRow={selectedRow}
+          handleRowClick={handleRowClick}
+        />
+      </div>
     </div>
   )
 }

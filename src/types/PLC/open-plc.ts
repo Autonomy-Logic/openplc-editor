@@ -114,7 +114,7 @@ const PLCDataTypeSchema = z.object({
 type PLCDataType = z.infer<typeof PLCDataTypeSchema>
 
 const PLCVariableSchema = z.object({
-  id: z.number(),
+  id: z.string().optional(),
   name: z.string(),
   class: z.enum(['input', 'output', 'inOut', 'external', 'local', 'temp', 'global']),
   type: z.discriminatedUnion('definition', [
