@@ -13,7 +13,9 @@ import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
 const Project = () => {
   const {
-    projectData: { pous, dataTypes },
+    workspace: {
+      projectData: { pous, dataTypes },
+    },
     tabsActions: { updateTabs },
     editorActions: { setEditor },
   } = useOpenPLCStore()

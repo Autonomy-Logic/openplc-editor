@@ -26,9 +26,7 @@ const WorkspaceScreen = () => {
   const navigate = useNavigate()
   const {
     tabs,
-    projectData,
-    projectPath,
-    editingState,
+    workspace: { projectData, projectPath, editingState },
     editor,
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()

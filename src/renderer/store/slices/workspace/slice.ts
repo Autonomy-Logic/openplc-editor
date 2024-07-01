@@ -1,85 +1,83 @@
-import type { PLCDataType, PLCVariable } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import type { PouDTO, VariableDTO, WorkspaceResponse, WorkspaceSlice, WorkspaceState } from './types'
+import type { WorkspaceResponse, WorkspaceSlice } from './types'
 import { createVariableValidation, updateVariableValidation } from './utils/variables'
 
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
-  editingState: 'unsaved',
-  projectName: '',
-  projectPath: '',
-  projectData: {
-    dataTypes: [],
-    pous: [],
-    globalVariables: [],
-  },
-  systemConfigs: {
-    OS: '',
-    arch: '',
-    shouldUseDarkMode: false,
+  workspace: {
+    editingState: 'unsaved',
+    projectName: '',
+    projectPath: '',
+    projectData: {
+      dataTypes: [],
+      pous: [],
+      globalVariables: [],
+    },
+    systemConfigs: {
+      OS: '',
+      arch: '',
+      shouldUseDarkMode: false,
+    },
   },
 
   workspaceActions: {
-    setEditingState: (editingState: WorkspaceState['editingState']): void => {
+    setEditingState: (editingState): void => {
       setState(
-        produce((slice: WorkspaceSlice) => {
-          slice.editingState = editingState
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.editingState = editingState
         }),
       )
     },
-
-    setUserWorkspace: (userWorkspaceState: Omit<WorkspaceState, 'systemConfigs'>): void => {
+    setUserWorkspace: ({ projectPath, projectName, projectData }): void => {
       setState(
-        produce((slice: WorkspaceSlice) => {
-          const { projectPath, projectName, projectData } = userWorkspaceState
-          slice.projectPath = projectPath
-          slice.projectName = projectName
-          slice.projectData = projectData
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.projectPath = projectPath
+          workspace.projectName = projectName
+          workspace.projectData = projectData
         }),
       )
     },
-
-    setSystemConfigs: (systemConfigsData: WorkspaceState['systemConfigs']): void => {
+    setSystemConfigs: (systemConfigsData): void => {
       setState(
-        produce((slice: WorkspaceSlice) => {
-          slice.systemConfigs = systemConfigsData
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.systemConfigs = systemConfigsData
         }),
       )
     },
 
     switchAppTheme: (): void => {
       setState(
-        produce((slice: WorkspaceSlice) => {
-          slice.systemConfigs.shouldUseDarkMode = !slice.systemConfigs.shouldUseDarkMode
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.systemConfigs.shouldUseDarkMode = !workspace.systemConfigs.shouldUseDarkMode
         }),
       )
     },
 
-    updateProjectName: (projectName: string): void => {
+    updateProjectName: (projectName): void => {
       setState(
-        produce((slice: WorkspaceSlice) => {
-          slice.projectName = projectName
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.projectName = projectName
         }),
       )
     },
-    updateProjectPath: (projectPath: string): void => {
+    updateProjectPath: (projectPath): void => {
       setState(
-        produce((slice: WorkspaceSlice) => {
-          slice.projectPath = projectPath
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.projectPath = projectPath
         }),
       )
     },
 
-    createPou: (pouToBeCreated: PouDTO): WorkspaceResponse => {
+    createPou: (pouToBeCreated): WorkspaceResponse => {
       let response: WorkspaceResponse = { ok: false, message: 'Internal error' }
       setState(
-        produce((slice: WorkspaceSlice) => {
-          const pouExists = slice.projectData.pous.find((pou) => {
+        produce(({ workspace }: WorkspaceSlice) => {
+          const pouExists = workspace.projectData.pous.find((pou) => {
             return pou.data.name === pouToBeCreated.data.name
           })
           if (!pouExists) {
-            slice.projectData.pous.push(pouToBeCreated)
+            workspace.projectData.pous.push(pouToBeCreated)
             response = { ok: true, message: 'Pou created successfully' }
             console.log('pou created:', pouToBeCreated)
           } else {
@@ -89,45 +87,49 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
       return response
     },
-    updatePou: (dataToBeUpdated: { name: string; content: string }): void => {
+    updatePou: (dataToBeUpdated): void => {
       setState(
-        produce((slice: WorkspaceSlice) => {
-          const draft = slice.projectData.pous.find((pou) => {
+        produce(({ workspace }: WorkspaceSlice) => {
+          const draft = workspace.projectData.pous.find((pou) => {
             return pou.data.name === dataToBeUpdated.name
           })
           if (draft) draft.data.body = dataToBeUpdated.content
         }),
       )
     },
-    deletePou: (pouToBeDeleted: string): void => {
+    deletePou: (pouToBeDeleted): void => {
       setState(
-        produce((slice: WorkspaceSlice) => {
-          slice.projectData.pous = slice.projectData.pous.filter((pou) => pou.data.name !== pouToBeDeleted)
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.projectData.pous = workspace.projectData.pous.filter((pou) => pou.data.name !== pouToBeDeleted)
         }),
       )
     },
 
-    createVariable: (variableToBeCreated: VariableDTO & { rowToInsert?: number }): WorkspaceResponse => {
+    createVariable: (variableToBeCreated): WorkspaceResponse => {
       let response: WorkspaceResponse = { ok: true }
       setState(
-        produce((slice: WorkspaceSlice) => {
+        produce(({ workspace }: WorkspaceSlice) => {
           const { scope } = variableToBeCreated
           switch (scope) {
             case 'global': {
               variableToBeCreated.data.name = createVariableValidation(
-                slice.projectData.globalVariables,
+                workspace.projectData.globalVariables,
                 variableToBeCreated.data.name,
               )
               if (variableToBeCreated.rowToInsert !== undefined) {
-                slice.projectData.globalVariables.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
+                workspace.projectData.globalVariables.splice(
+                  variableToBeCreated.rowToInsert,
+                  0,
+                  variableToBeCreated.data,
+                )
                 break
               }
-              slice.projectData.globalVariables.push(variableToBeCreated.data)
+              workspace.projectData.globalVariables.push(variableToBeCreated.data)
               break
             }
             case 'local': {
               const pou = variableToBeCreated.associatedPou
-                ? slice.projectData.pous.find((pou) => pou.data.name === variableToBeCreated.associatedPou)
+                ? workspace.projectData.pous.find((pou) => pou.data.name === variableToBeCreated.associatedPou)
                 : undefined
               if (!pou) {
                 console.error(`Pou ${variableToBeCreated.associatedPou} not found`)
@@ -159,17 +161,15 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
       return response
     },
-    updateVariable: (
-      dataToBeUpdated: Omit<VariableDTO, 'data'> & { rowId: number; data: Partial<PLCVariable> },
-    ): WorkspaceResponse => {
+    updateVariable: (dataToBeUpdated): WorkspaceResponse => {
       let response: WorkspaceResponse = { ok: true }
       setState(
-        produce((slice: WorkspaceSlice) => {
+        produce(({ workspace }: WorkspaceSlice) => {
           const { scope } = dataToBeUpdated
           switch (scope) {
             case 'global': {
               const validationResponse = updateVariableValidation(
-                slice.projectData.globalVariables,
+                workspace.projectData.globalVariables,
                 dataToBeUpdated.data.name,
               )
               if (!validationResponse.ok) {
@@ -178,15 +178,15 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               }
               const index = dataToBeUpdated.rowId
               if (index === -1) response = { ok: false, title: 'Variable not found', message: 'Internal error' }
-              slice.projectData.globalVariables[index] = {
-                ...slice.projectData.globalVariables[index],
+              workspace.projectData.globalVariables[index] = {
+                ...workspace.projectData.globalVariables[index],
                 ...dataToBeUpdated.data,
               }
               break
             }
             case 'local': {
               const pou = dataToBeUpdated.associatedPou
-                ? slice.projectData.pous.find((pou) => pou.data.name === dataToBeUpdated.associatedPou)
+                ? workspace.projectData.pous.find((pou) => pou.data.name === dataToBeUpdated.associatedPou)
                 : undefined
               if (!pou) {
                 console.error(`Pou ${dataToBeUpdated.associatedPou} not found`)
@@ -213,9 +213,9 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
       return response
     },
-    deleteVariable: (variableToBeDeleted: Omit<VariableDTO, 'data'> & { rowId: number }): void => {
+    deleteVariable: (variableToBeDeleted): void => {
       setState(
-        produce((slice: WorkspaceSlice) => {
+        produce(({ workspace }: WorkspaceSlice) => {
           const { scope } = variableToBeDeleted
           switch (scope) {
             case 'global': {
@@ -223,12 +223,12 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
                 console.error('Variable not found')
                 break
               }
-              slice.projectData.globalVariables.splice(variableToBeDeleted.rowId, 1)
+              workspace.projectData.globalVariables.splice(variableToBeDeleted.rowId, 1)
               break
             }
             case 'local': {
               const pou = variableToBeDeleted.associatedPou
-                ? slice.projectData.pous.find((pou) => pou.data.name === variableToBeDeleted.associatedPou)
+                ? workspace.projectData.pous.find((pou) => pou.data.name === variableToBeDeleted.associatedPou)
                 : undefined
               if (!pou) {
                 console.error(`Pou ${variableToBeDeleted.associatedPou} not found`)
@@ -249,21 +249,21 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    rearrangeVariables: (
-      variableToBeRearranged: Omit<VariableDTO, 'data'> & { rowId: number; newIndex: number },
-    ): void => {
+    rearrangeVariables: (variableToBeRearranged): void => {
       setState(
-        produce((slice: WorkspaceSlice) => {
+        produce(({ workspace }: WorkspaceSlice) => {
           const { scope } = variableToBeRearranged
           switch (scope) {
             case 'global': {
               const { rowId, newIndex } = variableToBeRearranged
-              const [removed] = slice.projectData.globalVariables.splice(rowId, 1)
-              slice.projectData.globalVariables.splice(newIndex, 0, removed)
+              const [removed] = workspace.projectData.globalVariables.splice(rowId, 1)
+              workspace.projectData.globalVariables.splice(newIndex, 0, removed)
               break
             }
             case 'local': {
-              const pou = slice.projectData.pous.find((pou) => pou.data.name === variableToBeRearranged.associatedPou)
+              const pou = workspace.projectData.pous.find(
+                (pou) => pou.data.name === variableToBeRearranged.associatedPou,
+              )
               if (!pou) {
                 console.error(`Pou ${variableToBeRearranged.associatedPou} not found`)
                 return
@@ -282,13 +282,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
 
-    createDatatype: (dataToCreate: PLCDataType) => {
+    createDatatype: (dataToCreate) => {
       setState(
-        produce((slice: WorkspaceSlice) => {
+        produce(({ workspace }: WorkspaceSlice) => {
           const { name } = dataToCreate
-          const dataExists = slice.projectData.dataTypes.find((datatype) => datatype.name === name)
+          const dataExists = workspace.projectData.dataTypes.find((datatype) => datatype.name === name)
           if (!dataExists) {
-            slice.projectData.dataTypes.push(dataToCreate)
+            workspace.projectData.dataTypes.push(dataToCreate)
           } else {
             console.error(`Datatype ${name} already exists`)
           }
