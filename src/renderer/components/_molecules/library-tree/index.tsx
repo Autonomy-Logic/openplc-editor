@@ -74,7 +74,6 @@ type ILibraryFileProps = ComponentPropsWithoutRef<'li'> & {
 const LibraryFile = ({ label, isSelected, onSelect, ...res }: ILibraryFileProps) => {
   return (
     <li
-      onClick={onSelect}
       className={`${isSelected ? 'bg-slate-50 dark:bg-neutral-900' : ''} ml-2 cursor-pointer pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900`}
       {...res}
     >

@@ -26,11 +26,11 @@ const Library = () => {
       Icon: LibraryCloseFolderIcon,
       title: 'Module Tree',
       children: [
-        { key: '0.1', label: 'P1AM_INIT', Icon: LibraryFileIcon, title: 'Module Leaf', children: 'loren ' },
+        { key: '0.1', label: 'P1AM_INIT', Icon: LibraryFileIcon, title: 'Module Leaf', children: 'loren ipsum ipsum ipsum '},
         { key: '0.2', label: 'P1_16CDR', Icon: LibraryFileIcon, title: 'Module Leaf', children: 'ipsum' },
         { key: '0.3', label: 'P1_08N', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' dolor' },
         { key: '0.4', label: 'P1_16N', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' sit' },
-        { key: '0.5', label: 'P1_16N', Icon: LibraryFileIcon, title: 'Module Leaf', cochildrentent: ' amet' },
+        { key: '0.5', label: 'P1_16N', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' amet' },
         { key: '0.6', label: 'P1_08T', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' consectetur' },
         { key: '0.7', label: 'P1_16TR', Icon: LibraryFileIcon, title: 'Module Leaf', children: '  adipiscing' },
         { key: '0.8', label: 'P1_04AD', Icon: LibraryFileIcon, title: 'Module Leaf', children: '  elit' },
