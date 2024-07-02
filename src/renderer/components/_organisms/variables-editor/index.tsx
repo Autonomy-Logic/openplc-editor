@@ -117,7 +117,7 @@ const VariablesEditor = () => {
         <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
           <div
             aria-label='Variables editor table description container'
-            className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
+            className='flex h-full  min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
           >
             <label
               htmlFor='description'
@@ -127,7 +127,7 @@ const VariablesEditor = () => {
             </label>
             <InputWithRef
               id='description'
-              className='h-full w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
+              className='h-full focus:border-brand w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
             />
           </div>
           <div
