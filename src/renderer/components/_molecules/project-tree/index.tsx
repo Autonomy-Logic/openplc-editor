@@ -231,10 +231,10 @@ const ProjectTreeLeaf = ({ leafLang, label, nested = false, ...res }: IProjectTr
       onClick={handleLeafSelection}
       {...res}
     >
-      <LeafIcon className='min-h-4 min-w-4' />
+      <LeafIcon className='flex-shrink-0' />
       <span
         className={cn(
-          'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+          'ml-1 overflow-hidden text-ellipsis w-[90%] whitespace-nowrap  font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
           name === label && 'font-medium text-neutral-1000 dark:text-white',
         )}
       >
