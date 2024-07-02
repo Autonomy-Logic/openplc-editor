@@ -75,7 +75,9 @@ const WorkspaceScreen = () => {
     { name: 'c', type: 'false' },
     { name: 'd', type: 'false' },
   ]
-  console.log(graphList)
+
+  const [isBottomBarCollapsed, setIsBottomBarCollapsed] = useState(false)
+  
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -112,7 +114,11 @@ const WorkspaceScreen = () => {
           <ResizablePanel id='workspacePanel' order={2} defaultSize={87} className='h-full w-[400px]'>
             <div id='workspaceContentPanel' className='flex h-full flex-1 grow flex-col gap-2 overflow-hidden'>
               {tabs.length > 0 && <Navigation />}
-              <ResizablePanelGroup id='editorPanelGroup' direction='vertical'>
+              <ResizablePanelGroup
+                id='editorPanelGroup'
+                className={`flex h-full ${!isBottomBarCollapsed && 'gap-1'}`}
+                direction='vertical'
+              >
                 <ResizablePanel
                   id='editorPanel'
                   order={1}
@@ -170,10 +176,12 @@ const WorkspaceScreen = () => {
                     </p>
                   )}
                 </ResizablePanel>
-                <ResizableHandle className='mt-2' />
+                <ResizableHandle className=' h-0' />
                 <ResizablePanel
                   id='consolePanel'
                   order={2}
+                  onCollapse={() => setIsBottomBarCollapsed(true)}
+                  onExpand={() => setIsBottomBarCollapsed(false)}
                   collapsible
                   defaultSize={31}
                   minSize={22}
