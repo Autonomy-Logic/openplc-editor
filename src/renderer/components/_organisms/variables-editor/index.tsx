@@ -3,7 +3,6 @@ import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { EditorModel } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { ColumnFiltersState } from '@tanstack/react-table'
@@ -25,26 +24,33 @@ const VariablesEditor = () => {
 
   const ROWS_NOT_SELECTED = -1
 
+  /**
+   * Table data and column filters states to keep track of the table data and column filters
+   */
   const [tableData, setTableData] = useState<PLCVariable[]>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
+  /**
+   * Editor name state to keep track of the editor name
+   * Other states to keep track of the editor's variables and display at the screen
+   */
+  const [editorName, setEditorName] = useState<string | null>(null)
   const [visualizationType, setVisualizationType] = useState<'code' | 'table'>('table')
   const [selectedRow, setSelectedRow] = useState<number>(ROWS_NOT_SELECTED)
-  const [filterValue, setFilterValue] = useState('All')
-
-  const [editorConfig, setEditorConfig] = useState<EditorModel | null>(null)
-
-  const FilterOptions = ['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']
+  const FilterOptions = ['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp'] as const
+  type FilterOptionsType = (typeof FilterOptions)[number]
+  const [filterValue, setFilterValue] = useState<FilterOptionsType>('All')
 
   useEffect(() => {
     const variablesToTable = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     setTableData(variablesToTable)
 
-    console.log('editor', editor)
-    console.log('editorConfig', editorConfig)
-    console.log('editor.name !== editorConfig.name', editor.meta.name !== editorConfig?.meta.name)
-    if (!editorConfig || editorConfig.meta.name !== editor.meta.name) {
-      setEditorConfig(editor)
+    /**
+     * If the editor name is not the same as the current editor name
+     * set the editor name and the editor's variables to the states
+     */
+    if (!editorName || editor.meta.name !== editorName) {
+      setEditorName(editor.meta.name)
       if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
         const { variable } = editor
         if (variable.display === 'table') {
@@ -63,17 +69,27 @@ const VariablesEditor = () => {
     }
   }, [editor, pous])
 
-  useEffect(() => {
-    console.log('newEditorConfig', editorConfig)
-  }, [editorConfig])
+  const updateVariablesTable = (
+    name: string,
+    variables: {
+      display?: 'code' | 'table'
+      selectedRow?: number
+      classFilter?: FilterOptionsType
+      description?: string
+    },
+  ) => {
+    updateModelVariables(name, {
+      display: variables.display ?? visualizationType,
+      selectedRow: variables.selectedRow?.toString() ?? selectedRow.toString(),
+      classFilter: variables.classFilter ?? filterValue,
+      description: variables.description ?? '',
+    })
+  }
 
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {
     setVisualizationType(value)
-    updateModelVariables(editor.meta.name, {
+    updateVariablesTable(editor.meta.name, {
       display: value,
-      selectedRow: selectedRow.toString(),
-      classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-      description: '',
     })
   }
 
@@ -85,11 +101,8 @@ const VariablesEditor = () => {
       newIndex: (row ?? selectedRow) + index,
     })
     setSelectedRow(selectedRow + index)
-    updateModelVariables(editor.meta.name, {
-      display: visualizationType,
-      selectedRow: (selectedRow + index).toString(),
-      classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-      description: '',
+    updateVariablesTable(editor.meta.name, {
+      selectedRow: selectedRow + index,
     })
   }
 
@@ -110,11 +123,8 @@ const VariablesEditor = () => {
         },
       })
       setSelectedRow(0)
-      updateModelVariables(editor.meta.name, {
-        display: visualizationType,
-        selectedRow: '0',
-        classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-        description: '',
+      updateVariablesTable(editor.meta.name, {
+        selectedRow: 0,
       })
       return
     }
@@ -125,11 +135,8 @@ const VariablesEditor = () => {
     if (selectedRow === ROWS_NOT_SELECTED) {
       createVariable({ scope: 'local', associatedPou: editor.meta.name, data: { ...variable } })
       setSelectedRow(variables.length)
-      updateModelVariables(editor.meta.name, {
-        display: visualizationType,
-        selectedRow: variables.length.toString(),
-        classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-        description: '',
+      updateVariablesTable(editor.meta.name, {
+        selectedRow: variables.length,
       })
       return
     }
@@ -140,11 +147,8 @@ const VariablesEditor = () => {
       rowToInsert: selectedRow + 1,
     })
     setSelectedRow(selectedRow + 1)
-    updateModelVariables(editor.meta.name, {
-      display: visualizationType,
-      selectedRow: (selectedRow + 1).toString(),
-      classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-      description: '',
+    updateVariablesTable(editor.meta.name, {
+      selectedRow: selectedRow + 1,
     })
   }
 
@@ -154,37 +158,28 @@ const VariablesEditor = () => {
     const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     if (selectedRow === variables.length - 1) {
       setSelectedRow(selectedRow - 1)
-      updateModelVariables(editor.meta.name, {
-        display: visualizationType,
-        selectedRow: (selectedRow - 1).toString(),
-        classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-        description: '',
+      updateVariablesTable(editor.meta.name, {
+        selectedRow: selectedRow - 1,
       })
     }
   }
 
-  const handleFilterChange = (value: string) => {
+  const handleFilterChange = (value: FilterOptionsType) => {
     setFilterValue(value)
     setColumnFilters((prev) =>
       value !== 'All'
         ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: value.toLowerCase() })
         : prev.filter((filter) => filter.id !== 'class'),
     )
-    updateModelVariables(editor.meta.name, {
-      display: visualizationType,
-      selectedRow: (selectedRow - 1).toString(),
-      classFilter: value as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-      description: '',
+    updateVariablesTable(editor.meta.name, {
+      classFilter: value,
     })
   }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
     setSelectedRow(parseInt(row.id))
-    updateModelVariables(editor.meta.name, {
-      display: visualizationType,
-      selectedRow: row.id,
-      classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-      description: '',
+    updateVariablesTable(editor.meta.name, {
+      selectedRow: parseInt(row.id),
     })
   }
 
