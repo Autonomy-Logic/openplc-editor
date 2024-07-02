@@ -39,6 +39,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
             if (m.meta.name === name) return model
             return m
           })
+          console.log('updateModelVariables', state.editors)
         }),
       ),
 

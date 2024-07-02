@@ -18,7 +18,7 @@ const Project = () => {
       projectData: { pous, dataTypes },
     },
     tabsActions: { updateTabs },
-    editorActions: { setEditor, addModel },
+    editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
   const Name = 'Project Name'
 
@@ -40,7 +40,13 @@ const Project = () => {
       elementType,
     }
     updateTabs(tabToBeCreated)
-    const editor = CreateEditorObjectFromTab(tabToBeCreated)
+    const editor = getEditorFromEditors(tabToBeCreated.name)
+    if (!editor) {
+      const model = CreateEditorObjectFromTab(tabToBeCreated)
+      addModel(model)
+      setEditor(model)
+      return
+    }
     addModel(editor)
     setEditor(editor)
   }
