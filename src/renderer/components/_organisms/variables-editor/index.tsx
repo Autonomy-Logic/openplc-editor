@@ -41,6 +41,9 @@ const VariablesEditor = () => {
   type FilterOptionsType = (typeof FilterOptions)[number]
   const [filterValue, setFilterValue] = useState<FilterOptionsType>('All')
 
+  /**
+   * Update the table data and the editor's variables when the editor or the pous change
+   */
   useEffect(() => {
     const variablesToTable = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     setTableData(variablesToTable)
