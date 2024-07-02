@@ -65,7 +65,7 @@ const EditableDocumentationCell = ({
   }
   // If the initialValue is changed external, sync it up with our state
   useEffect(() => {
-    if (initialValue) setCellValue(initialValue)
+    setCellValue(initialValue ?? '')
   }, [initialValue])
 
   return (

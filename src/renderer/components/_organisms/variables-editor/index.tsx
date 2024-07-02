@@ -15,11 +15,10 @@ import { VariablesTable } from '../../_molecules'
 const VariablesEditor = () => {
   const {
     editor,
-    editors,
     workspace: {
       projectData: { pous },
     },
-    editorActions: { updateModelVariables },
+    // editorActions: { updateModelVariables },
     workspaceActions: { createVariable, deleteVariable, rearrangeVariables },
   } = useOpenPLCStore()
 
@@ -44,12 +43,12 @@ const VariablesEditor = () => {
     const variablesToTable = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     setTableData(variablesToTable)
 
-    if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
-      if (editor.variable.display === 'table') {
-        setFilterValue(editor.variable.classFilter)
-        setSelectedRow(parseInt(editor.variable.selectedRow))
-      }
-    }
+    // if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+    //   if (editor.variable.display === 'table') {
+    //     setFilterValue(editor.variable.classFilter)
+    //     setSelectedRow(parseInt(editor.variable.selectedRow))
+    //   }
+    // }
   }, [editor, pous])
 
   const handleRearrangeVariables = (index: number, row?: number) => {
@@ -60,12 +59,6 @@ const VariablesEditor = () => {
       newIndex: (row ?? selectedRow) + index,
     })
     setSelectedRow(selectedRow + index)
-    updateModelVariables(editor.meta.name, {
-      display: visualizationType,
-      classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-      selectedRow: (selectedRow + index).toString(),
-      description: '',
-    })
   }
 
   const handleCreateVariable = () => {
@@ -93,12 +86,6 @@ const VariablesEditor = () => {
     if (selectedRow === ROWS_NOT_SELECTED) {
       createVariable({ scope: 'local', associatedPou: editor.meta.name, data: { ...variable } })
       setSelectedRow(variables.length)
-      updateModelVariables(editor.meta.name, {
-        display: visualizationType,
-        classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-        selectedRow: variables.length.toString(),
-        description: '',
-      })
       return
     }
     createVariable({
@@ -108,12 +95,6 @@ const VariablesEditor = () => {
       rowToInsert: selectedRow + 1,
     })
     setSelectedRow(selectedRow + 1)
-    updateModelVariables(editor.meta.name, {
-      display: visualizationType,
-      classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-      selectedRow: (selectedRow + 1).toString(),
-      description: '',
-    })
   }
 
   const handleRemoveVariable = () => {
@@ -122,12 +103,6 @@ const VariablesEditor = () => {
     const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     if (selectedRow === variables.length - 1) {
       setSelectedRow(selectedRow - 1)
-      updateModelVariables(editor.meta.name, {
-        display: visualizationType,
-        classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-        selectedRow: (selectedRow - 1).toString(),
-        description: '',
-      })
     }
   }
 
@@ -138,23 +113,10 @@ const VariablesEditor = () => {
         ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: value.toLowerCase() })
         : prev.filter((filter) => filter.id !== 'class'),
     )
-    updateModelVariables(editor.meta.name, {
-      display: visualizationType,
-      classFilter: value as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-      selectedRow: (selectedRow + 1).toString(),
-      description: '',
-    })
   }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
     setSelectedRow(parseInt(row.id))
-    updateModelVariables(editor.meta.name, {
-      display: visualizationType,
-      classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
-      selectedRow: row.id,
-      description: '',
-    })
-    console.log('editors', editors)
   }
 
   return (
