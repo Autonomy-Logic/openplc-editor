@@ -3,7 +3,7 @@ import { StateCreator } from 'zustand'
 
 import type { EditorSlice, EditorState } from './types'
 
-export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> = (setState) => ({
+export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> = (setState, getState) => ({
   editors: [],
 
   editor: {
@@ -20,26 +20,25 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           const model = state.editors.find((model) => model.meta.name === editor.meta.name)
           if (model) return
           state.editors.push(editor)
-          console.log('editor added', state.editors.map((model) => model))
         }),
       ),
     removeModel: (name) =>
       setState(
         produce((state: EditorState) => {
           state.editors = state.editors.filter((model) => model.meta.name !== name)
-          console.log('editor removed', state.editors.map((model) => model))
         }),
       ),
     updateModelVariables: (name, variables) =>
       setState(
         produce((state: EditorState) => {
           const model = state.editors.find((model) => model.meta.name === name)
-          if (model && (model.type === 'plc-textual' || model.type === 'plc-graphical')) {
-            model.variable = variables
-            console.log('editor updated', state.editors.map((model) => model))
-            return
-          }
-          console.log('editor not updated', state.editors.map((model) => model))
+          if (!model || !(model.type === 'plc-textual' || model.type === 'plc-graphical')) return
+          model.variable = variables
+
+          state.editors = state.editors.map((m) => {
+            if (m.meta.name === name) return model
+            return m
+          })
         }),
       ),
 
@@ -47,7 +46,6 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       setState(
         produce((state: EditorState) => {
           state.editor = editor
-          console.log('editor set', editor)
         }),
       ),
     clearEditor: () =>
@@ -64,11 +62,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       ),
 
     getEditorFromEditors: (name) => {
-      let candidate = null
-      produce((state: EditorState) => {
-        candidate = state.editors.find((model) => model.meta.name === name)
-      })
-      return candidate
+      return getState().editors.find((model) => model.meta.name === name) ?? null
     },
   },
 })

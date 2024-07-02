@@ -14,12 +14,12 @@ import { VariablesTable } from '../../_molecules'
 
 const VariablesEditor = () => {
   const {
-    editor: {
-      meta: { name },
-    },
+    editor,
+    editors,
     workspace: {
       projectData: { pous },
     },
+    editorActions: { updateModelVariables },
     workspaceActions: { createVariable, deleteVariable, rearrangeVariables },
   } = useOpenPLCStore()
 
@@ -41,27 +41,41 @@ const VariablesEditor = () => {
   )
 
   useEffect(() => {
-    const variablesToTable = pous.filter((pou) => pou.data.name === name)[0].data.variables
+    const variablesToTable = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     setTableData(variablesToTable)
-  }, [name, pous])
+
+    console.log('editor', editor)
+    if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+      if (editor.variable.display === 'table') {
+        setFilterValue(editor.variable.classFilter)
+        setSelectedRow(parseInt(editor.variable.selectedRow))
+      }
+    }
+  }, [editor, pous])
 
   const handleRearrangeVariables = (index: number, row?: number) => {
     rearrangeVariables({
       scope: 'local',
-      associatedPou: name,
+      associatedPou: editor.meta.name,
       rowId: row ?? selectedRow,
       newIndex: (row ?? selectedRow) + index,
     })
     setSelectedRow(selectedRow + index)
+    updateModelVariables(editor.meta.name, {
+      display: visualizationType,
+      classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
+      selectedRow: (selectedRow + index).toString(),
+      description: '',
+    })
   }
 
   const handleCreateVariable = () => {
-    const variables = pous.filter((pou) => pou.data.name === name)[0].data.variables
+    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
 
     if (variables.length === 0) {
       createVariable({
         scope: 'local',
-        associatedPou: name,
+        associatedPou: editor.meta.name,
         data: {
           name: 'LocalVar',
           class: 'local',
@@ -78,25 +92,43 @@ const VariablesEditor = () => {
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createVariable({ scope: 'local', associatedPou: name, data: { ...variable } })
+      createVariable({ scope: 'local', associatedPou: editor.meta.name, data: { ...variable } })
       setSelectedRow(variables.length)
+      updateModelVariables(editor.meta.name, {
+        display: visualizationType,
+        classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
+        selectedRow: variables.length.toString(),
+        description: '',
+      })
       return
     }
     createVariable({
       scope: 'local',
-      associatedPou: name,
+      associatedPou: editor.meta.name,
       data: { ...variable },
       rowToInsert: selectedRow + 1,
     })
     setSelectedRow(selectedRow + 1)
+    updateModelVariables(editor.meta.name, {
+      display: visualizationType,
+      classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
+      selectedRow: (selectedRow + 1).toString(),
+      description: '',
+    })
   }
 
   const handleRemoveVariable = () => {
-    deleteVariable({ scope: 'local', associatedPou: name, rowId: selectedRow })
+    deleteVariable({ scope: 'local', associatedPou: editor.meta.name, rowId: selectedRow })
 
-    const variables = pous.filter((pou) => pou.data.name === name)[0].data.variables
+    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     if (selectedRow === variables.length - 1) {
       setSelectedRow(selectedRow - 1)
+      updateModelVariables(editor.meta.name, {
+        display: visualizationType,
+        classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
+        selectedRow: (selectedRow - 1).toString(),
+        description: '',
+      })
     }
   }
 
@@ -107,10 +139,23 @@ const VariablesEditor = () => {
         ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: value.toLowerCase() })
         : prev.filter((filter) => filter.id !== 'class'),
     )
+    updateModelVariables(editor.meta.name, {
+      display: visualizationType,
+      classFilter: value as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
+      selectedRow: (selectedRow + 1).toString(),
+      description: '',
+    })
   }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
     setSelectedRow(parseInt(row.id))
+    updateModelVariables(editor.meta.name, {
+      display: visualizationType,
+      classFilter: filterValue as 'All' | 'Local' | 'Input' | 'Output' | 'InOut' | 'External' | 'Temp',
+      selectedRow: row.id,
+      description: '',
+    })
+    console.log('editors', editors)
   }
 
   return (
