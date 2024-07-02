@@ -170,7 +170,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
             case 'global': {
               const validationResponse = updateVariableValidation(
                 workspace.projectData.globalVariables,
-                dataToBeUpdated.data.name,
+                dataToBeUpdated.data,
               )
               if (!validationResponse.ok) {
                 response = validationResponse
@@ -184,6 +184,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               }
               break
             }
+
             case 'local': {
               const pou = dataToBeUpdated.associatedPou
                 ? workspace.projectData.pous.find((pou) => pou.data.name === dataToBeUpdated.associatedPou)
@@ -193,7 +194,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
                 response = { ok: false, title: 'Pou not found' }
                 break
               }
-              const validationResponse = updateVariableValidation(pou.data.variables, dataToBeUpdated.data.name)
+              const validationResponse = updateVariableValidation(pou.data.variables, dataToBeUpdated.data)
               if (!validationResponse.ok) {
                 response = validationResponse
                 break
@@ -203,6 +204,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               pou.data.variables[index] = { ...pou.data.variables[index], ...dataToBeUpdated.data }
               break
             }
+
             default: {
               console.error(`Scope ${scope ? scope : ''} not found or invalid params`)
               response = { ok: false, title: 'Scope not found', message: 'Scope not found or invalid params' }

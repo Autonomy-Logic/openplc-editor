@@ -44,7 +44,6 @@ const VariablesEditor = () => {
     const variablesToTable = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     setTableData(variablesToTable)
 
-    console.log('editor', editor)
     if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
       if (editor.variable.display === 'table') {
         setFilterValue(editor.variable.classFilter)
