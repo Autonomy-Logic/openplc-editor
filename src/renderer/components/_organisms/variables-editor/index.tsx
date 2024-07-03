@@ -181,7 +181,7 @@ const VariablesEditor = () => {
 
   return (
     <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
-      <div aria-label='Variables editor actions' className='flex h-8 w-full min-w-[1035px]'>
+      <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
         {editorVariables.display === 'table' ? (
           <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
             <div
@@ -278,7 +278,9 @@ const VariablesEditor = () => {
         )}
         <div
           aria-label='Variables visualization switch container'
-          className='flex h-fit w-full min-w-[60px] flex-1 items-center justify-center rounded-md'
+          className={cn('flex h-fit w-fit flex-1 items-center justify-center rounded-md', {
+            'absolute right-0': editorVariables.display === 'code',
+          })}
         >
           <TableIcon
             aria-label='Variables table visualization'
