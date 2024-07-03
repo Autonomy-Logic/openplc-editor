@@ -1,5 +1,6 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCVariable } from '@root/types/PLC/open-plc'
+import { cn } from '@root/utils'
 import {
   ColumnFiltersState,
   createColumnHelper,
@@ -9,6 +10,7 @@ import {
   OnChangeFn,
   useReactTable,
 } from '@tanstack/react-table'
+import { useEffect, useRef } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
 import { EditableDocumentationCell, EditableNameCell } from './editable-cell'
@@ -20,7 +22,7 @@ const columns = [
   columnHelper.accessor('id', {
     header: '#',
     size: 64,
-    minSize: 64,
+    minSize: 32,
     maxSize: 64,
     enableResizing: true,
     cell: (props) => props.row.id,
@@ -61,6 +63,7 @@ const columns = [
 
 type PLCVariablesTableProps = {
   tableData: PLCVariable[]
+  filterValue: string
   columnFilters?: ColumnFiltersState
   setColumnFilters?: OnChangeFn<ColumnFiltersState> | undefined
   selectedRow: number
@@ -69,6 +72,7 @@ type PLCVariablesTableProps = {
 
 const VariablesTable = ({
   tableData,
+  filterValue,
   columnFilters,
   setColumnFilters,
   selectedRow,
@@ -80,6 +84,48 @@ const VariablesTable = ({
     },
     workspaceActions: { updateVariable },
   } = useOpenPLCStore()
+
+  const tableHeaderRef = useRef<HTMLTableSectionElement>(null)
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null)
+  const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
+
+  const resetBorders = () => {
+    const parent = tableBodyRef.current
+    const header = tableHeaderRef.current
+    if (!parent?.children || !header?.children) return
+
+    const rows = Array.from(parent.children)
+    const headers = Array.from(header.children)
+    rows.forEach((row) => {
+      row.className = cn(row.className, '[&>*]:border-neutral-300 dark:[&>*]:border-neutral-800')
+    })
+    headers.forEach((header) => {
+      header.className = cn(header.className, '[&>*]:border-b-transparent dark:[&>*]:border-b-transparent')
+    })
+  }
+
+  const setBorders = () => {
+    const row = tableBodyRowRef.current
+    const parent = tableBodyRef.current
+    const header = tableHeaderRef.current
+    if (!row || !parent || !header) return
+
+    const headerRow = row === parent?.firstChild ? header?.lastElementChild : null
+    const element = headerRow ?? row?.previousElementSibling
+    if (element) element.className = cn(element.className, '[&>*]:border-b-brand dark:[&>*]:border-b-brand')
+  }
+
+  useEffect(() => {
+    resetBorders()
+    setBorders()
+  }, [selectedRow])
+
+  useEffect(() => {
+    resetBorders()
+    if (tableBodyRowRef.current) {
+      setBorders()
+    }
+  }, [filterValue])
 
   const table = useReactTable({
     columns: columns,
@@ -97,6 +143,9 @@ const VariablesTable = ({
     onColumnFiltersChange: setColumnFilters,
     meta: {
       updateData: (rowIndex, columnId, value) => {
+        if (filterValue !== undefined && columnId === 'class' && filterValue !== value) {
+          resetBorders()
+        }
         return updateVariable({
           scope: 'local',
           associatedPou: name,
@@ -111,7 +160,7 @@ const VariablesTable = ({
 
   return (
     <Table context='Variables' className='mr-1'>
-      <TableHeader>
+      <TableHeader ref={tableHeaderRef}>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
@@ -128,7 +177,7 @@ const VariablesTable = ({
           </TableRow>
         ))}
       </TableHeader>
-      <TableBody>
+      <TableBody ref={tableBodyRef}>
         {table.getRowModel().rows.map((row) => (
           <TableRow
             id={row.id}
@@ -136,6 +185,7 @@ const VariablesTable = ({
             className='h-8 cursor-pointer'
             onClick={(e) => handleRowClick(e.currentTarget)}
             selected={selectedRow === parseInt(row.id)}
+            ref={selectedRow === parseInt(row.id) ? tableBodyRowRef : null}
           >
             {row.getVisibleCells().map((cell) => (
               <TableCell style={{ width: cell.column.getSize() }} key={cell.id}>

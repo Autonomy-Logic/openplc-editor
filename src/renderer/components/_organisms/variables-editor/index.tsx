@@ -76,38 +76,8 @@ const VariablesEditor = () => {
         })
   }, [editor])
 
-  const updateEditorVariables = (
-    name: string,
-    variables: {
-      display: 'code' | 'table'
-      selectedRow?: number
-      classFilter?: FilterOptionsType
-      description?: string
-    },
-  ) => {
-    if (variables.display === 'table')
-      if (editorVariables.display === 'table')
-        updateModelVariables(name, {
-          display: 'table',
-          selectedRow: variables.selectedRow?.toString() ?? editorVariables.selectedRow,
-          classFilter: variables.classFilter ?? editorVariables.classFilter,
-          description: variables.description ?? '',
-        })
-      else
-        updateModelVariables(name, {
-          display: 'table',
-          selectedRow: variables.selectedRow?.toString() ?? ROWS_NOT_SELECTED.toString(),
-          classFilter: variables.classFilter ?? 'All',
-          description: variables.description ?? '',
-        })
-    else
-      updateModelVariables(name, {
-        display: 'code',
-      })
-  }
-
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {
-    updateEditorVariables(editor.meta.name, {
+    updateModelVariables({
       display: value,
     })
   }
@@ -120,7 +90,7 @@ const VariablesEditor = () => {
       rowId: row ?? parseInt(editorVariables.selectedRow),
       newIndex: (row ?? parseInt(editorVariables.selectedRow)) + index,
     })
-    updateEditorVariables(editor.meta.name, {
+    updateModelVariables({
       display: 'table',
       selectedRow: parseInt(editorVariables.selectedRow) + index,
     })
@@ -145,7 +115,7 @@ const VariablesEditor = () => {
           debug: false,
         },
       })
-      updateEditorVariables(editor.meta.name, {
+      updateModelVariables({
         display: 'table',
         selectedRow: 0,
       })
@@ -157,7 +127,7 @@ const VariablesEditor = () => {
 
     if (selectedRow === ROWS_NOT_SELECTED) {
       createVariable({ scope: 'local', associatedPou: editor.meta.name, data: { ...variable } })
-      updateEditorVariables(editor.meta.name, {
+      updateModelVariables({
         display: 'table',
         selectedRow: variables.length,
       })
@@ -169,7 +139,7 @@ const VariablesEditor = () => {
       data: { ...variable },
       rowToInsert: selectedRow + 1,
     })
-    updateEditorVariables(editor.meta.name, {
+    updateModelVariables({
       display: 'table',
       selectedRow: selectedRow + 1,
     })
@@ -183,7 +153,7 @@ const VariablesEditor = () => {
 
     const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     if (selectedRow === variables.length - 1) {
-      updateEditorVariables(editor.meta.name, {
+      updateModelVariables({
         display: 'table',
         selectedRow: selectedRow - 1,
       })
@@ -196,14 +166,14 @@ const VariablesEditor = () => {
         ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: value.toLowerCase() })
         : prev.filter((filter) => filter.id !== 'class'),
     )
-    updateEditorVariables(editor.meta.name, {
+    updateModelVariables({
       display: 'table',
       classFilter: value,
     })
   }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
-    updateEditorVariables(editor.meta.name, {
+    updateModelVariables({
       display: 'table',
       selectedRow: parseInt(row.id),
     })
@@ -341,6 +311,7 @@ const VariablesEditor = () => {
         >
           <VariablesTable
             tableData={tableData}
+            filterValue={editorVariables.classFilter.toLowerCase()}
             columnFilters={columnFilters}
             setColumnFilters={setColumnFilters}
             selectedRow={parseInt(editorVariables.selectedRow)}

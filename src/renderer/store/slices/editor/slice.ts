@@ -28,12 +28,32 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           state.editors = state.editors.filter((model) => model.meta.name !== name)
         }),
       ),
-    updateModelVariables: (_name, variables) =>
+
+    updateModelVariables: (variables) =>
       setState(
         produce((state: EditorState) => {
           const { editor } = state
           if (!editor || !(editor.type === 'plc-textual' || editor.type === 'plc-graphical')) return
-          editor.variable = variables
+
+          if (variables.display === 'table')
+            if (editor.variable.display === 'table')
+              editor.variable = {
+                display: 'table',
+                selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow,
+                classFilter: variables.classFilter ?? editor.variable.classFilter,
+                description: variables.description ?? editor.variable.description,
+              }
+            else
+              editor.variable = {
+                display: 'table',
+                selectedRow: variables.selectedRow?.toString() ?? '-1',
+                classFilter: variables.classFilter ?? 'All',
+                description: variables.description ?? '',
+              }
+          else
+            editor.variable = {
+              display: 'code',
+            }
         }),
       ),
 
