@@ -3,6 +3,7 @@ import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { VariablesTable as VariablesTableType } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { ColumnFiltersState } from '@tanstack/react-table'
@@ -13,6 +14,7 @@ import { VariablesTableButton } from '../../_atoms/buttons/variables-table'
 import { VariablesTable } from '../../_molecules'
 
 const VariablesEditor = () => {
+  const ROWS_NOT_SELECTED = -1
   const {
     editor,
     workspace: {
@@ -21,8 +23,6 @@ const VariablesEditor = () => {
     editorActions: { updateModelVariables },
     workspaceActions: { createVariable, deleteVariable, rearrangeVariables },
   } = useOpenPLCStore()
-
-  const ROWS_NOT_SELECTED = -1
 
   /**
    * Table data and column filters states to keep track of the table data and column filters
@@ -34,12 +34,14 @@ const VariablesEditor = () => {
    * Editor name state to keep track of the editor name
    * Other states to keep track of the editor's variables and display at the screen
    */
-  const [editorName, setEditorName] = useState<string | null>(null)
-  const [visualizationType, setVisualizationType] = useState<'code' | 'table'>('table')
-  const [selectedRow, setSelectedRow] = useState<number>(ROWS_NOT_SELECTED)
   const FilterOptions = ['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp'] as const
   type FilterOptionsType = (typeof FilterOptions)[number]
-  const [filterValue, setFilterValue] = useState<FilterOptionsType>('All')
+  const [editorVariables, setEditorVariables] = useState<VariablesTableType>({
+    display: 'table',
+    selectedRow: ROWS_NOT_SELECTED.toString(),
+    classFilter: 'All',
+    description: '',
+  })
 
   /**
    * Update the table data and the editor's variables when the editor or the pous change
@@ -47,70 +49,88 @@ const VariablesEditor = () => {
   useEffect(() => {
     const variablesToTable = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     setTableData(variablesToTable)
-
-    /**
-     * If the editor name is not the same as the current editor name
-     * set the editor name and the editor's variables to the states
-     */
-    if (!editorName || editor.meta.name !== editorName) {
-      setEditorName(editor.meta.name)
-      if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
-        const { variable } = editor
-        if (variable.display === 'table') {
-          setSelectedRow(parseInt(variable.selectedRow))
-          setFilterValue(variable.classFilter)
-          setColumnFilters((prev) =>
-            variable.classFilter !== 'All'
-              ? prev
-                  .filter((filter) => filter.id !== 'class')
-                  .concat({ id: 'class', value: variable.classFilter.toLowerCase() })
-              : prev.filter((filter) => filter.id !== 'class'),
-          )
-        }
-        setVisualizationType(variable.display)
-      }
-    }
   }, [editor, pous])
 
-  const updateVariablesTable = (
+  /**
+   * If the editor name is not the same as the current editor name
+   * set the editor name and the editor's variables to the states
+   */
+  useEffect(() => {
+    if (editor.type === 'plc-textual' || editor.type === 'plc-graphical')
+      if (editor.variable.display === 'table') {
+        const { classFilter, description, display, selectedRow } = editor.variable
+        setEditorVariables({
+          display: display,
+          selectedRow: selectedRow,
+          classFilter: classFilter,
+          description: description,
+        })
+        setColumnFilters((prev) =>
+          classFilter !== 'All'
+            ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: classFilter.toLowerCase() })
+            : prev.filter((filter) => filter.id !== 'class'),
+        )
+      } else
+        setEditorVariables({
+          display: editor.variable.display,
+        })
+  }, [editor])
+
+  const updateEditorVariables = (
     name: string,
     variables: {
-      display?: 'code' | 'table'
+      display: 'code' | 'table'
       selectedRow?: number
       classFilter?: FilterOptionsType
       description?: string
     },
   ) => {
-    updateModelVariables(name, {
-      display: variables.display ?? visualizationType,
-      selectedRow: variables.selectedRow?.toString() ?? selectedRow.toString(),
-      classFilter: variables.classFilter ?? filterValue,
-      description: variables.description ?? '',
-    })
+    if (variables.display === 'table')
+      if (editorVariables.display === 'table')
+        updateModelVariables(name, {
+          display: 'table',
+          selectedRow: variables.selectedRow?.toString() ?? editorVariables.selectedRow,
+          classFilter: variables.classFilter ?? editorVariables.classFilter,
+          description: variables.description ?? '',
+        })
+      else
+        updateModelVariables(name, {
+          display: 'table',
+          selectedRow: variables.selectedRow?.toString() ?? ROWS_NOT_SELECTED.toString(),
+          classFilter: variables.classFilter ?? 'All',
+          description: variables.description ?? '',
+        })
+    else
+      updateModelVariables(name, {
+        display: 'code',
+      })
   }
 
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {
-    setVisualizationType(value)
-    updateVariablesTable(editor.meta.name, {
+    updateEditorVariables(editor.meta.name, {
       display: value,
     })
   }
 
   const handleRearrangeVariables = (index: number, row?: number) => {
+    if (editorVariables.display === 'code') return
     rearrangeVariables({
       scope: 'local',
       associatedPou: editor.meta.name,
-      rowId: row ?? selectedRow,
-      newIndex: (row ?? selectedRow) + index,
+      rowId: row ?? parseInt(editorVariables.selectedRow),
+      newIndex: (row ?? parseInt(editorVariables.selectedRow)) + index,
     })
-    setSelectedRow(selectedRow + index)
-    updateVariablesTable(editor.meta.name, {
-      selectedRow: selectedRow + index,
+    updateEditorVariables(editor.meta.name, {
+      display: 'table',
+      selectedRow: parseInt(editorVariables.selectedRow) + index,
     })
   }
 
   const handleCreateVariable = () => {
+    if (editorVariables.display === 'code') return
+
     const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
+    const selectedRow = parseInt(editorVariables.selectedRow)
 
     if (variables.length === 0) {
       createVariable({
@@ -125,8 +145,8 @@ const VariablesEditor = () => {
           debug: false,
         },
       })
-      setSelectedRow(0)
-      updateVariablesTable(editor.meta.name, {
+      updateEditorVariables(editor.meta.name, {
+        display: 'table',
         selectedRow: 0,
       })
       return
@@ -137,8 +157,8 @@ const VariablesEditor = () => {
 
     if (selectedRow === ROWS_NOT_SELECTED) {
       createVariable({ scope: 'local', associatedPou: editor.meta.name, data: { ...variable } })
-      setSelectedRow(variables.length)
-      updateVariablesTable(editor.meta.name, {
+      updateEditorVariables(editor.meta.name, {
+        display: 'table',
         selectedRow: variables.length,
       })
       return
@@ -149,39 +169,42 @@ const VariablesEditor = () => {
       data: { ...variable },
       rowToInsert: selectedRow + 1,
     })
-    setSelectedRow(selectedRow + 1)
-    updateVariablesTable(editor.meta.name, {
+    updateEditorVariables(editor.meta.name, {
+      display: 'table',
       selectedRow: selectedRow + 1,
     })
   }
 
   const handleRemoveVariable = () => {
+    if (editorVariables.display === 'code') return
+
+    const selectedRow = parseInt(editorVariables.selectedRow)
     deleteVariable({ scope: 'local', associatedPou: editor.meta.name, rowId: selectedRow })
 
     const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     if (selectedRow === variables.length - 1) {
-      setSelectedRow(selectedRow - 1)
-      updateVariablesTable(editor.meta.name, {
+      updateEditorVariables(editor.meta.name, {
+        display: 'table',
         selectedRow: selectedRow - 1,
       })
     }
   }
 
   const handleFilterChange = (value: FilterOptionsType) => {
-    setFilterValue(value)
     setColumnFilters((prev) =>
       value !== 'All'
         ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: value.toLowerCase() })
         : prev.filter((filter) => filter.id !== 'class'),
     )
-    updateVariablesTable(editor.meta.name, {
+    updateEditorVariables(editor.meta.name, {
+      display: 'table',
       classFilter: value,
     })
   }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
-    setSelectedRow(parseInt(row.id))
-    updateVariablesTable(editor.meta.name, {
+    updateEditorVariables(editor.meta.name, {
+      display: 'table',
       selectedRow: parseInt(row.id),
     })
   }
@@ -189,90 +212,100 @@ const VariablesEditor = () => {
   return (
     <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
       <div aria-label='Variables editor actions' className='flex h-8 w-full min-w-[1035px]'>
-        <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
-          <div
-            aria-label='Variables editor table description container'
-            className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
-          >
-            <label
-              htmlFor='description'
-              className='w-fit text-base font-medium text-neutral-1000 dark:text-neutral-300'
+        {editorVariables.display === 'table' ? (
+          <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
+            <div
+              aria-label='Variables editor table description container'
+              className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
             >
-              Description :
-            </label>
-            <InputWithRef
-              id='description'
-              className='h-full w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
-            />
-          </div>
-          <div
-            aria-label='Variables editor table class filter container'
-            className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
-          >
-            <label
-              htmlFor='class-filter'
-              className='w-fit text-base font-medium text-neutral-1000 dark:text-neutral-300'
-            >
-              Class Filter :
-            </label>
-            <Select value={filterValue} onValueChange={handleFilterChange}>
-              <SelectTrigger
-                id='class-filter'
-                placeholder={filterValue}
-                withIndicator
-                className='group flex h-full w-44 items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
-              />
-              <SelectContent
-                position='popper'
-                sideOffset={3}
-                align='center'
-                className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+              <label
+                htmlFor='description'
+                className='w-fit text-base font-medium text-neutral-1000 dark:text-neutral-300'
               >
-                {FilterOptions.map((filter) => (
-                  <SelectItem
-                    key={filter}
-                    value={filter}
-                    className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                  >
-                    <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                      {filter}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                Description :
+              </label>
+              <InputWithRef
+                id='description'
+                className='h-full w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
+              />
+            </div>
+            <div
+              aria-label='Variables editor table class filter container'
+              className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
+            >
+              <label
+                htmlFor='class-filter'
+                className='w-fit text-base font-medium text-neutral-1000 dark:text-neutral-300'
+              >
+                Class Filter :
+              </label>
+              <Select value={editorVariables.classFilter} onValueChange={handleFilterChange}>
+                <SelectTrigger
+                  id='class-filter'
+                  placeholder={editorVariables.classFilter}
+                  withIndicator
+                  className='group flex h-full w-44 items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
+                />
+                <SelectContent
+                  position='popper'
+                  sideOffset={3}
+                  align='center'
+                  className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                >
+                  {FilterOptions.map((filter) => (
+                    <SelectItem
+                      key={filter}
+                      value={filter}
+                      className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                    >
+                      <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                        {filter}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div
+              aria-label='Variables editor table actions container'
+              className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
+            >
+              {/** This can be reviewed */}
+              <VariablesTableButton aria-label='Add table row button' onClick={handleCreateVariable}>
+                <PlusIcon className='!stroke-brand' />
+              </VariablesTableButton>
+              <VariablesTableButton
+                aria-label='Remove table row button'
+                disabled={parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED}
+                onClick={handleRemoveVariable}
+              >
+                <MinusIcon />
+              </VariablesTableButton>
+              <VariablesTableButton
+                aria-label='Move table row up button'
+                disabled={
+                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
+                  parseInt(editorVariables.selectedRow) === 0
+                }
+                onClick={() => handleRearrangeVariables(-1)}
+              >
+                <StickArrowIcon direction='up' />
+              </VariablesTableButton>
+              <VariablesTableButton
+                aria-label='Move table row down button'
+                disabled={
+                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
+                  parseInt(editorVariables.selectedRow) === tableData.length - 1
+                }
+                onClick={() => handleRearrangeVariables(1)}
+              >
+                <StickArrowIcon direction='down' />
+              </VariablesTableButton>
+            </div>
           </div>
-          <div
-            aria-label='Variables editor table actions container'
-            className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
-          >
-            {/** This can be reviewed */}
-            <VariablesTableButton aria-label='Add table row button' onClick={handleCreateVariable}>
-              <PlusIcon className='!stroke-brand' />
-            </VariablesTableButton>
-            <VariablesTableButton
-              aria-label='Remove table row button'
-              disabled={selectedRow === ROWS_NOT_SELECTED}
-              onClick={handleRemoveVariable}
-            >
-              <MinusIcon />
-            </VariablesTableButton>
-            <VariablesTableButton
-              aria-label='Move table row up button'
-              disabled={selectedRow === ROWS_NOT_SELECTED || selectedRow === 0}
-              onClick={() => handleRearrangeVariables(-1)}
-            >
-              <StickArrowIcon direction='up' />
-            </VariablesTableButton>
-            <VariablesTableButton
-              aria-label='Move table row down button'
-              disabled={selectedRow === ROWS_NOT_SELECTED || selectedRow === tableData.length - 1}
-              onClick={() => handleRearrangeVariables(1)}
-            >
-              <StickArrowIcon direction='down' />
-            </VariablesTableButton>
-          </div>
-        </div>
+        ) : (
+          <></>
+        )}
         <div
           aria-label='Variables visualization switch container'
           className='flex h-fit w-full min-w-[60px] flex-1 items-center justify-center rounded-md'
@@ -281,9 +314,9 @@ const VariablesEditor = () => {
             aria-label='Variables table visualization'
             onClick={() => handleVisualizationTypeChange('table')}
             size='md'
-            currentVisible={visualizationType === 'table'}
+            currentVisible={editorVariables.display === 'table'}
             className={cn(
-              visualizationType === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
+              editorVariables.display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
               'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
             )}
           />
@@ -292,27 +325,31 @@ const VariablesEditor = () => {
             aria-label='Variables code visualization'
             onClick={() => handleVisualizationTypeChange('code')}
             size='md'
-            currentVisible={visualizationType === 'code'}
+            currentVisible={editorVariables.display === 'code'}
             className={cn(
-              visualizationType === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
+              editorVariables.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
               'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
             )}
           />
         </div>
       </div>
-      <div
-        aria-label='Variables editor table container'
-        className='h-full overflow-y-auto'
-        style={{ scrollbarGutter: 'stable' }}
-      >
-        <VariablesTable
-          tableData={tableData}
-          columnFilters={columnFilters}
-          setColumnFilters={setColumnFilters}
-          selectedRow={selectedRow}
-          handleRowClick={handleRowClick}
-        />
-      </div>
+      {editorVariables.display === 'table' ? (
+        <div
+          aria-label='Variables editor table container'
+          className='h-full overflow-y-auto'
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          <VariablesTable
+            tableData={tableData}
+            columnFilters={columnFilters}
+            setColumnFilters={setColumnFilters}
+            selectedRow={parseInt(editorVariables.selectedRow)}
+            handleRowClick={handleRowClick}
+          />
+        </div>
+      ) : (
+        <></>
+      )}
     </div>
   )
 }

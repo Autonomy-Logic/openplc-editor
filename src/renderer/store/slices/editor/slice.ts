@@ -28,24 +28,31 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           state.editors = state.editors.filter((model) => model.meta.name !== name)
         }),
       ),
-    updateModelVariables: (name, variables) =>
+    updateModelVariables: (_name, variables) =>
       setState(
         produce((state: EditorState) => {
-          const model = state.editors.find((model) => model.meta.name === name)
-          if (!model || !(model.type === 'plc-textual' || model.type === 'plc-graphical')) return
-          model.variable = variables
-
-          state.editors = state.editors.map((m) => {
-            if (m.meta.name === name) return model
-            return m
-          })
+          const { editor } = state
+          if (!editor || !(editor.type === 'plc-textual' || editor.type === 'plc-graphical')) return
+          editor.variable = variables
         }),
       ),
 
-    setEditor: (editor) =>
+    setEditor: (newEditor) =>
       setState(
         produce((state: EditorState) => {
-          state.editor = editor
+          /**
+           * Update the editor state if exists at editors
+           */
+          const oldEditor = getState().editor
+          if (oldEditor.type !== 'available') {
+            state.editors = state.editors.map((model) => {
+              if (model.meta.name === oldEditor.meta.name) {
+                return oldEditor
+              }
+              return model
+            })
+          }
+          state.editor = newEditor
         }),
       ),
     clearEditor: () =>
