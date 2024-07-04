@@ -1,4 +1,4 @@
-import { CloseButton, MaximizeButton, MinimizeButton } from '@process:renderer/components/_atoms/titlebar/right-content/buttons'
+import { CloseButton, MaximizeButton, MinimizeButton } from '@process:renderer/components/_atoms/titlebar/right-content'
 import { useOpenPLCStore } from '@process:renderer/store'
 
 export const TitlebarRightContent = () => {
