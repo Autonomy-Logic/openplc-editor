@@ -31,18 +31,21 @@ const pouDTOSchema = z.discriminatedUnion('type', [
 ])
 type PouDTO = z.infer<typeof pouDTOSchema>
 
+const systemConfigsSchema = z.object({
+  OS: z.enum(['win32', 'linux', 'darwin', '']),
+  arch: z.enum(['x64', 'arm', '']),
+  shouldUseDarkMode: z.boolean(),
+  appIsMaximized: z.boolean(),
+})
+type SystemConfigs = z.infer<typeof systemConfigsSchema>
+
 const workspaceStateSchema = z.object({
   workspace: z.object({
     projectName: z.string(),
     projectPath: z.string(),
     projectData: PLCProjectDataSchema,
     editingState: z.enum(['save-request', 'saved', 'unsaved']),
-    systemConfigs: z.object({
-      OS: z.enum(['win32', 'linux', 'darwin', '']),
-      arch: z.enum(['x64', 'arm', '']),
-      shouldUseDarkMode: z.boolean(),
-      appIsMaximized: z.boolean(),
-    }),
+    systemConfigs: systemConfigsSchema,
   }),
 })
 type WorkspaceState = z.infer<typeof workspaceStateSchema>
@@ -60,7 +63,7 @@ const workspaceActionsSchema = z.object({
     .function()
     .args(workspaceStateSchema.shape.workspace.omit({ systemConfigs: true }))
     .returns(z.void()),
-  setSystemConfigs: z.function().args(workspaceStateSchema.shape.workspace.shape.systemConfigs).returns(z.void()),
+  setSystemConfigs: z.function().args(systemConfigsSchema.partial()).returns(z.void()),
 
   switchAppTheme: z.function().returns(z.void()),
 
@@ -99,5 +102,5 @@ type WorkspaceSlice = WorkspaceState & {
   workspaceActions: WorkspaceActions
 }
 
-export { pouDTOSchema, variableDTOSchema, workspaceActionsSchema, workspaceResponseSchema, workspaceStateSchema }
-export type { PouDTO, VariableDTO, WorkspaceActions, WorkspaceResponse, WorkspaceSlice, WorkspaceState }
+export { pouDTOSchema, systemConfigsSchema,variableDTOSchema, workspaceActionsSchema, workspaceResponseSchema, workspaceStateSchema }
+export type { PouDTO, SystemConfigs,VariableDTO, WorkspaceActions, WorkspaceResponse, WorkspaceSlice, WorkspaceState }

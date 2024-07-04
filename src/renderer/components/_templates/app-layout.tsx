@@ -32,9 +32,6 @@ const AppLayout = (): ReactNode => {
   useEffect(() => {
     window.bridge.isMaximizedWindow((_event, isMaximized: boolean) => {
       setSystemConfigs({
-        OS: '',
-        arch: '',
-        shouldUseDarkMode: false,
         appIsMaximized: isMaximized,
       })
     })

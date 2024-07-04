@@ -42,7 +42,10 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     setSystemConfigs: (systemConfigsData): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
-          workspace.systemConfigs = systemConfigsData
+          workspace.systemConfigs = {
+            ...workspace.systemConfigs,
+            ...systemConfigsData,
+          }
         }),
       )
     },
