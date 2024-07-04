@@ -37,11 +37,21 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
           if (!res.ok) throw new Error()
           const data = CreateEditorObject({
             type: 'plc-textual',
-            name: propsToCreatePou.name,
-            language: propsToCreatePou.language,
-            derivation: propsToCreatePou.type,
+            meta: {
+              name: propsToCreatePou.name,
+              language: propsToCreatePou.language,
+              path: `/data/pous/${propsToCreatePou.type}/${propsToCreatePou.name}`,
+              pouType: propsToCreatePou.type,
+            },
+            variable: {
+              display: 'table',
+              description: '',
+              classFilter: 'All',
+              selectedRow: '-1',
+            },
           })
-          getState().editorActions.setEditor({ editor: data })
+          getState().editorActions.addModel(data)
+          getState().editorActions.setEditor(data)
           getState().tabsActions.updateTabs({
             name: propsToCreatePou.name,
             elementType: {
@@ -61,11 +71,21 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
           if (!res.ok) throw new Error()
           const data = CreateEditorObject({
             type: 'plc-graphical',
-            name: propsToCreatePou.name,
-            language: propsToCreatePou.language,
-            derivation: propsToCreatePou.type,
+            meta: {
+              name: propsToCreatePou.name,
+              language: propsToCreatePou.language,
+              path: `/data/pous/${propsToCreatePou.type}/${propsToCreatePou.name}`,
+              pouType: propsToCreatePou.type,
+            },
+            variable: {
+              display: 'table',
+              description: '',
+              classFilter: 'All',
+              selectedRow: '-1',
+            },
           })
-          getState().editorActions.setEditor({ editor: data })
+          getState().editorActions.addModel(data)
+          getState().editorActions.setEditor(data)
           getState().tabsActions.updateTabs({
             name: propsToCreatePou.name,
             elementType: {
@@ -78,12 +98,16 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
         return false
       },
       dataType: (derivation: 'enumerated' | 'structure' | 'array') => {
+        /**
+         * This is a temporary solution to create a datatype
+         **/
         getState().workspaceActions.createDatatype(CreateDatatypeObject(derivation))
         const data = CreateEditorObject({
           type: 'plc-datatype',
-          derivation,
+          meta: { name: '', derivation },
         })
-        getState().editorActions.setEditor({ editor: data })
+        getState().editorActions.addModel(data)
+        getState().editorActions.setEditor(data)
         // getState().tabsActions.updateTabs(CreateTabObject({ name: derivation, type: 'program', language: 'il' }))
         return true
       },

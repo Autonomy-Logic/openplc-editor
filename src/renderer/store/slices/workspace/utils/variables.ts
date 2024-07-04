@@ -12,10 +12,10 @@ const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
  * This is a validation to check if the variable name is correct.
  * CamelCase, PascalCase or SnakeCase and can not be empty.
  **/
-const variableNameValidation = (variableName: string | undefined) => {
+const variableNameValidation = (variableName: string) => {
   const regex =
     /^([a-zA-Z0-9]+(?:[A-Z][a-z0-9]*)*)|([A-Z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)|([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*)$/
-  return variableName === undefined ? false : regex.test(variableName)
+  return regex.test(variableName)
 }
 
 /**
@@ -58,26 +58,42 @@ const createVariableValidation = (variables: PLCVariable[], variableName: string
  * If the variable name is invalid, create a response.
  * If the variable name already exists, create or change a response.
  **/
-const updateVariableValidation = (variables: PLCVariable[], name: string | undefined) => {
+const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Partial<PLCVariable>) => {
   let response: WorkspaceResponse = { ok: true }
-  if (!variableNameValidation(name)) {
-    console.error(`Variable "${name}" name is invalid`)
-    response = {
-      ok: false,
-      title: 'Variable name is invalid.',
-      message: `Please make sure that the name is valid. Valid names: CamelCase, PascalCase or SnakeCase and can not be empty.`,
+
+  if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
+    const { name } = dataToBeUpdated
+    if (name === '') {
+      console.error('Variable name is empty')
+      response = {
+        ok: false,
+        title: 'Variable name is empty.',
+        message: 'Please make sure that the name is not empty.',
+      }
+      return response
+    }
+
+    if (checkIfVariableExists(variables, name)) {
+      console.error(`Variable "${name}" already exists`)
+      response = {
+        ok: false,
+        title: 'Variable already exists',
+        message: 'Please make sure that the name is unique.',
+      }
+      return response
+    }
+
+    if (!variableNameValidation(name)) {
+      console.error(`Variable "${name}" name is invalid`)
+      response = {
+        ok: false,
+        title: 'Variable name is invalid.',
+        message: `Please make sure that the name is valid. Valid names: CamelCase, PascalCase or SnakeCase.`,
+      }
+      return response
     }
   }
-  if (checkIfVariableExists(variables, name as string)) {
-    console.error(`Variable "${name}" already exists`)
-    response = {
-      ok: false,
-      title: response.title ? `${response.title.replace('.', ' ')} and already exists.` : 'Variable already exists',
-      message: response.message
-        ? `${response.message.split('.')[0]} and the name is unique. ${response.message.split('.')[1]}`
-        : 'Please make sure that the name is unique.',
-    }
-  }
+
   return response
 }
 
