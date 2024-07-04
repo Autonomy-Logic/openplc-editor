@@ -18,6 +18,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       OS: '',
       arch: '',
       shouldUseDarkMode: false,
+      appIsMaximized: false,
     },
   },
 

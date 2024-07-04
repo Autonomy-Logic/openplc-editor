@@ -41,6 +41,7 @@ const workspaceStateSchema = z.object({
       OS: z.enum(['win32', 'linux', 'darwin', '']),
       arch: z.enum(['x64', 'arm', '']),
       shouldUseDarkMode: z.boolean(),
+      appIsMaximized: z.boolean(),
     }),
   }),
 })
@@ -79,9 +80,7 @@ const workspaceActionsSchema = z.object({
     .returns(workspaceResponseSchema),
   updateVariable: z
     .function()
-    .args(
-      variableDTOSchema.omit({ data: true }).extend({ rowId: z.number(), data: PLCVariableSchema.partial() }),
-    )
+    .args(variableDTOSchema.omit({ data: true }).extend({ rowId: z.number(), data: PLCVariableSchema.partial() }))
     .returns(workspaceResponseSchema),
   deleteVariable: z
     .function()
@@ -101,11 +100,4 @@ type WorkspaceSlice = WorkspaceState & {
 }
 
 export { pouDTOSchema, variableDTOSchema, workspaceActionsSchema, workspaceResponseSchema, workspaceStateSchema }
-export type {
-  PouDTO,
-  VariableDTO,
-  WorkspaceActions,
-  WorkspaceResponse,
-  WorkspaceSlice,
-  WorkspaceState,
-}
+export type { PouDTO, VariableDTO, WorkspaceActions, WorkspaceResponse, WorkspaceSlice, WorkspaceState }

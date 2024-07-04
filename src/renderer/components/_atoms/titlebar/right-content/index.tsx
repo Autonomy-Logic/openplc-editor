@@ -1,13 +1,19 @@
-import { CloseIcon, MaximizeIcon, MinimizeIcon } from "./icons"
+import { useOpenPLCStore } from '@root/renderer/store'
+
+import { CloseIcon, ExitMaximizeIcon, MaximizeIcon, MinimizeIcon } from './icons'
 
 export const MaximizeButton = () => {
+  const {
+    workspace: { systemConfigs },
+  } = useOpenPLCStore()
+
   return (
     <button
       type='button'
       className='flex h-full items-center justify-center px-[10px] hover:bg-[#021633] hover:dark:bg-neutral-850'
       onClick={() => window.bridge.maximizeWindow()}
     >
-      <MaximizeIcon />
+      {systemConfigs.appIsMaximized ? <ExitMaximizeIcon /> : <MaximizeIcon />}
     </button>
   )
 }

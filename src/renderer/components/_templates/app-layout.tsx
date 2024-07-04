@@ -15,11 +15,12 @@ const AppLayout = (): ReactNode => {
 
   useEffect(() => {
     const getUserSystemProps = async () => {
-      const { OS, architecture, prefersDarkMode } = await window.bridge.getSystemInfo()
+      const { OS, architecture, prefersDarkMode, appIsMaximized } = await window.bridge.getSystemInfo()
       setSystemConfigs({
         OS,
         arch: architecture,
         shouldUseDarkMode: prefersDarkMode,
+        appIsMaximized,
       })
       if (OS === 'darwin' || OS === 'win32') {
         setIsLinux(false)
@@ -27,6 +28,17 @@ const AppLayout = (): ReactNode => {
     }
     void getUserSystemProps()
   }, [setSystemConfigs])
+
+  useEffect(() => {
+    window.bridge.isMaximizedWindow((_event, isMaximized: boolean) => {
+      setSystemConfigs({
+        OS: '',
+        arch: '',
+        shouldUseDarkMode: false,
+        appIsMaximized: isMaximized,
+      })
+    })
+  }, [])
 
   useEffect(() => {
     window.bridge.handleUpdateTheme((_event) => {

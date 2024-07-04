@@ -150,6 +150,17 @@ const createMainWindow = async () => {
   mainWindow.on('close', saveBounds)
   mainWindow.on('move', saveBounds)
 
+  const isMaximizedWindow = (isMaximized: boolean) => {
+    mainWindow?.webContents.send('window:isMaximized', isMaximized)
+  }
+  mainWindow.on('maximize', () => {
+    isMaximizedWindow(true)
+  })
+  mainWindow.on('unmaximize', () => {
+    isMaximizedWindow(false)
+  })
+
+
   // Maximize the window if bounds are not set
   if (!bounds) {
     mainWindow.maximize()

@@ -36,7 +36,12 @@ class MainProcessBridge implements MainIpcModule {
     )
 
     this.ipcMain.handle('system:get-system-info', () => {
-      return { OS: platform, architecture: 'x64', prefersDarkMode: nativeTheme.shouldUseDarkColors }
+      return {
+        OS: platform,
+        architecture: 'x64',
+        prefersDarkMode: nativeTheme.shouldUseDarkColors,
+        appIsMaximized: this.mainWindow?.isMaximized(),
+      }
     })
     this.ipcMain.on('window-controls:close', () => this.mainWindow?.close())
     this.ipcMain.on('window-controls:minimize', () => this.mainWindow?.minimize())
