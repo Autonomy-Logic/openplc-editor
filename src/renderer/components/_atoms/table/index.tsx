@@ -57,18 +57,19 @@ const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'> & {
           '[&:nth-child(2)>th:first-child]:rounded-tl-md [&:nth-child(2)>th:last-child]:rounded-tr-md [&:nth-child(2)>th]:border-t',
           '[&:nth-child(2)>th]:border-t-neutral-500',
           // body cell
-          '[&:last-child>td:first-child]:rounded-bl-md [&:last-child>td:last-child]:rounded-br-md [&:last-child>td]:border-b-neutral-500',
+          '[&:last-child>td:first-child]:rounded-bl-md [&:last-child>td:last-child]:rounded-br-md',
+          '[&:last-child>td]:border-b-neutral-500',
           '[&>*:first-child]:border-l-neutral-500 [&>*:last-child]:border-r-neutral-500',
           // all cells
           '[&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r',
           '[&>*]:border-neutral-300 dark:[&>*]:border-neutral-800',
           // selected row,
-          {
-            '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand':
-              selected,
-            'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand':
-              selected,
-          },
+          // {
+          //   '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand':
+          //     selected,
+          //   'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand':
+          //     selected,
+          // },
           className,
         )}
         {...res}

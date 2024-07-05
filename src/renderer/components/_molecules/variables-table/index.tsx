@@ -97,10 +97,15 @@ const VariablesTable = ({
     const rows = Array.from(parent.children)
     const headers = Array.from(header.children)
     rows.forEach((row) => {
-      row.className = cn(row.className, '[&>*]:border-neutral-300 dark:[&>*]:border-neutral-800')
+      row.className = cn(
+        row.className,
+        '[&:last-child>td]:border-b-neutral-500 [&>td:first-child]:border-l-neutral-500 [&>td:last-child]:border-r-neutral-500 [&>td]:border-b-neutral-300',
+        'dark:[&>td:first-child]:border-l-neutral-500 dark:[&>td:last-child]:border-r-neutral-500 dark:[&>td]:border-b-neutral-800',
+        'shadow-none dark:shadow-none',
+      )
     })
     headers.forEach((header) => {
-      header.className = cn(header.className, '[&>*]:border-b-transparent dark:[&>*]:border-b-transparent')
+      header.className = cn(header.className, '[&>th]:border-neutral-300 dark:[&>th]:border-neutral-800')
     })
   }
 
@@ -112,7 +117,19 @@ const VariablesTable = ({
 
     const headerRow = row === parent?.firstChild ? header?.lastElementChild : null
     const element = headerRow ?? row?.previousElementSibling
-    if (element) element.className = cn(element.className, '[&>*]:border-b-brand dark:[&>*]:border-b-brand')
+
+    if (element) {
+      element.className = cn(
+        element.className,
+        '[&>td]:border-b-brand dark:[&>td]:border-b-brand',
+        '[&>th]:border-b-brand dark:[&>th]:border-b-brand',
+      )
+    }
+    row.className = cn(
+      row.className,
+      '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand',
+      'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand',
+    )
   }
 
   useEffect(() => {
@@ -143,7 +160,7 @@ const VariablesTable = ({
     onColumnFiltersChange: setColumnFilters,
     meta: {
       updateData: (rowIndex, columnId, value) => {
-        if (filterValue !== undefined && columnId === 'class' && filterValue !== value) {
+        if (columnId === 'class' && filterValue !== undefined && filterValue !== 'all' && filterValue !== value) {
           resetBorders()
         }
         return updateVariable({
