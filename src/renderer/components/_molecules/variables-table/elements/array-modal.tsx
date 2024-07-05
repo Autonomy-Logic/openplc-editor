@@ -42,15 +42,14 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
 
   useEffect(() => {
     const variable = pous
-    .find((pou) => pou.data.name === name)
-    ?.data.variables.find((variable) => variable.name === variableName)
+      .find((pou) => pou.data.name === name)
+      ?.data.variables.find((variable) => variable.name === variableName)
     if (variable && !oldTypeValue) setOldTypeValue(variable?.type)
 
-    console.log('variable', variable)
     setDimensions(variable?.type.definition === 'array' ? variable.type.data.dimensions : [])
   }, [name, variableName, pous])
 
-  const updatePouVariable = ({ dimensions, baseType}: {dimensions: string[], baseType: BaseType}) => {
+  const updatePouVariable = ({ dimensions, baseType }: { dimensions: string[]; baseType: BaseType }) => {
     const formatArrayName = `ARRAY [${dimensions.join(',')}] OF ${typeValue?.toUpperCase() ?? 'DINT'}`
     updateVariable({
       scope: 'local',
@@ -85,21 +84,23 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
   }
 
   const handleRearrangeDimensions = (index: number, direction: 'up' | 'down') => {
+    const draft = [...dimensions]
     if (selectedInput === '') return
     if (direction === 'up') {
       if (index === 0) return
-      const temp = dimensions[index - 1]
-      dimensions[index - 1] = dimensions[index]
-      dimensions[index] = temp
+      const temp = draft[index - 1]
+      draft[index - 1] = draft[index]
+      draft[index] = temp
       setSelectedInput((index - 1).toString())
     } else {
       if (index === dimensions.length - 1) return
-      const temp = dimensions[index + 1]
-      dimensions[index + 1] = dimensions[index]
-      dimensions[index] = temp
+      const temp = draft[index + 1]
+      draft[index + 1] = draft[index]
+      draft[index] = temp
       setSelectedInput((index + 1).toString())
     }
-    setDimensions([...dimensions])
+    setDimensions(draft)
+    updatePouVariable({ dimensions: draft, baseType: typeValue ?? 'dint' })
   }
 
   const handleUpdateType = (value: BaseType) => {
