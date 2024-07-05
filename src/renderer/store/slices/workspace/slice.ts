@@ -18,6 +18,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       OS: '',
       arch: '',
       shouldUseDarkMode: false,
+      isWindowMaximized: false,
     },
   },
 
@@ -50,6 +51,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.systemConfigs.shouldUseDarkMode = !workspace.systemConfigs.shouldUseDarkMode
+        }),
+      )
+    },
+    toggleMaximizedWindow: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.systemConfigs.isWindowMaximized = !workspace.systemConfigs.isWindowMaximized
         }),
       )
     },
