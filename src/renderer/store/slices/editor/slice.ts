@@ -63,7 +63,8 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           /**
            * Update the editor state if exists at editors
            */
-          const oldEditor = getState().editor
+          const oldEditor = state.editor
+          if (oldEditor.meta.name === newEditor.meta.name) return
           if (oldEditor.type !== 'available') {
             state.editors = state.editors.map((model) => {
               if (model.meta.name === oldEditor.meta.name) {
@@ -89,7 +90,9 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       ),
 
     getEditorFromEditors: (name) => {
-      return getState().editors.find((model) => model.meta.name === name) ?? null
+      const { editor, editors } = getState()
+      if (name === editor.meta.name) return editor
+      return editors.find((model) => model.meta.name === name) ?? null
     },
   },
 })
