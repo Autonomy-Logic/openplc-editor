@@ -114,6 +114,7 @@ const PLCVariableSchema = z.object({
               return left < right
             }),
         ),
+        format: z.string(),
       }),
     }),
   ]),

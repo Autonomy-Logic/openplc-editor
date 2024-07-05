@@ -1,5 +1,6 @@
-import { MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
+import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { VariablesTableButton } from '@root/renderer/components/_atoms/buttons/variables-table'
 import {
   Modal,
   ModalContent,
@@ -9,16 +10,19 @@ import {
   ModalTrigger,
 } from '@root/renderer/components/_molecules/modal'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { BaseType, baseTypeSchema } from '@root/types/PLC/open-plc'
+import { useEffect, useState } from 'react'
 
-import { ArrayDimensionsComponent } from './array'
+import { ArrayDimensionsInput } from './array-input'
 
 type ArrayModalProps = {
   variableName: string
+  VariableRow?: number
   arrayModalIsOpen: boolean
   setArrayModalIsOpen: (value: boolean) => void
 }
 
-export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName }: ArrayModalProps) => {
+export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName, VariableRow }: ArrayModalProps) => {
   const {
     editor: {
       meta: { name },
@@ -26,12 +30,84 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
     workspace: {
       projectData: { pous },
     },
+    workspaceActions: { updateVariable },
   } = useOpenPLCStore()
 
-  const variable = pous
-    .find((pou) => pou.data.name === name)
-    ?.data.variables.find((variable) => variable.name === variableName)
-  const dimensions: string[] = variable?.type.definition === 'array' ? variable.type.value.dimensions : []
+  const types = baseTypeSchema.options
+
+  const [dimensions, setDimensions] = useState<string[]>([])
+  const [typeValue, setTypeValue] = useState<BaseType>()
+  const [selectedInput, setSelectedInput] = useState<string>('')
+
+  useEffect(() => {
+    const variable = pous
+      .find((pou) => pou.data.name === name)
+      ?.data.variables.find((variable) => variable.name === variableName)
+    console.log('variable', variable)
+    setDimensions(variable?.type.definition === 'array' ? variable.type.value.dimensions : [])
+  }, [name, variableName, pous])
+
+  const handleAddDimension = () => {
+    setDimensions([...dimensions, ''])
+    setSelectedInput(dimensions.length.toString())
+  }
+
+  const handleRemoveDimension = (index: string) => {
+    if (selectedInput === '') return
+    setDimensions((prev) => prev.filter((_, i) => i.toString() !== index))
+    setSelectedInput('')
+  }
+
+  const handleInputClick = (value: string) => {
+    setSelectedInput(value)
+  }
+
+  const handleRearrangeDimensions = (index: number, direction: 'up' | 'down') => {
+    if (selectedInput === '') return
+    if (direction === 'up') {
+      if (index === 0) return
+      const temp = dimensions[index - 1]
+      dimensions[index - 1] = dimensions[index]
+      dimensions[index] = temp
+      setSelectedInput((index - 1).toString())
+    } else {
+      if (index === dimensions.length - 1) return
+      const temp = dimensions[index + 1]
+      dimensions[index + 1] = dimensions[index]
+      dimensions[index] = temp
+      setSelectedInput((index + 1).toString())
+    }
+    setDimensions([...dimensions])
+  }
+
+  const handleUpdateType = (value: BaseType) => {
+    setTypeValue(value)
+  }
+
+  const handleUpdateDimension = (index: number, value: string) => {
+    if (selectedInput === '') return
+    console.log('index', index, 'value', value)
+    setDimensions((prev) => prev.map((item, i) => (i === index ? value : item)))
+  }
+
+  useEffect(() => {
+    const formatArrayName = `ARRAY [${dimensions.join(',')}] OF ${typeValue?.toUpperCase() ?? 'DINT'}`
+    updateVariable({
+      scope: 'local',
+      associatedPou: name,
+      rowId: VariableRow ?? 0,
+      data: {
+        type: {
+          definition: 'array',
+          value: {
+            baseType: typeValue ?? 'dint',
+            dimensions,
+            format: formatArrayName,
+          },
+        },
+      },
+    })
+  }, [dimensions, typeValue])
 
   return (
     <Modal onOpenChange={setArrayModalIsOpen} open={arrayModalIsOpen}>
@@ -51,7 +127,11 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
               <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
                 Base type
               </label>
-              <Select aria-label='Array data type base type select'>
+              <Select
+                value={typeValue}
+                onValueChange={(value) => handleUpdateType(value as BaseType)}
+                aria-label='Array data type base type select'
+              >
                 <SelectTrigger
                   withIndicator
                   placeholder='Base type'
@@ -63,30 +143,16 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
                   sideOffset={-28}
                   className='box z-[999] h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
                 >
-                  <SelectItem
-                    value='Option 1'
-                    className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                  >
-                    <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                      Option 1
-                    </span>
-                  </SelectItem>
-                  <SelectItem
-                    value='Option 2'
-                    className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                  >
-                    <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                      Option 2
-                    </span>
-                  </SelectItem>
-                  <SelectItem
-                    value='Option 3'
-                    className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                  >
-                    <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                      Option 3
-                    </span>
-                  </SelectItem>
+                  {types.map((type) => (
+                    <SelectItem
+                      value={type}
+                      className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                    >
+                      <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        {type.toUpperCase()}
+                      </span>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -102,45 +168,44 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
                 aria-label='Data type table actions buttons container'
                 className='flex h-full w-fit items-center justify-evenly *:rounded-md *:p-1'
               >
-                <div
-                  aria-label='Add table row button'
-                  className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                  onClick={() => console.log('Button clicked')}
-                >
-                  <PencilIcon className='!stroke-brand' />
-                </div>
-                <div
-                  aria-label='Add table row button'
-                  className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                  onClick={() => console.log('Button clicked')}
-                >
+                <VariablesTableButton aria-label='Add table row button' onClick={() => handleAddDimension()}>
                   <PlusIcon className='!stroke-brand' />
-                </div>
-                <div
+                </VariablesTableButton>
+                <VariablesTableButton
                   aria-label='Remove table row button'
-                  className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                  onClick={() => console.log('Button clicked')}
+                  onClick={() => handleRemoveDimension(selectedInput)}
                 >
                   <MinusIcon />
-                </div>
-                <div
+                </VariablesTableButton>
+                <VariablesTableButton
                   aria-label='Move table row up button'
-                  className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                  onClick={() => console.log('Button clicked')}
+                  onClick={() => handleRearrangeDimensions(Number(selectedInput), 'up')}
                 >
                   <StickArrowIcon direction='up' />
-                </div>
-                <div
+                </VariablesTableButton>
+                <VariablesTableButton
                   aria-label='Move table row down button'
-                  className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                  onClick={() => console.log('Button clicked')}
+                  onClick={() => handleRearrangeDimensions(Number(selectedInput), 'down')}
                 >
                   <StickArrowIcon direction='down' />
-                </div>
+                </VariablesTableButton>
               </div>
             </div>
           </div>
-          <ArrayDimensionsComponent values={dimensions} />
+          <div
+            aria-label='Array type table container'
+            className='flex h-fit w-full flex-col *:border-x *:border-b *:border-neutral-300 [&>*:first-child]:rounded-t-lg [&>*:first-child]:border-t [&>*:last-child]:rounded-b-lg'
+          >
+            {dimensions.map((value, index) => (
+              <ArrayDimensionsInput
+                id={index.toString()}
+                initialValue={value}
+                selectedInput={selectedInput}
+                handleInputClick={handleInputClick}
+                handleUpdateDimension={handleUpdateDimension}
+              />
+            ))}
+          </div>
         </div>
         <ModalFooter className='flex items-center justify-around'>
           <Button className='h-8 justify-center text-xs' onClick={() => setArrayModalIsOpen(false)}>

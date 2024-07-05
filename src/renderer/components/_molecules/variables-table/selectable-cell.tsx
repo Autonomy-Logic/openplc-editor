@@ -109,6 +109,7 @@ const SelectableTypeCell = ({
           <PrimitiveDropdown.Item asChild>
             <ArrayModal
               variableName={variableName}
+              VariableRow={index}
               arrayModalIsOpen={arrayModalIsOpen}
               setArrayModalIsOpen={setArrayModalIsOpen}
             />
