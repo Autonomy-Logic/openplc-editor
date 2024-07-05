@@ -63,13 +63,6 @@ const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'> & {
           // all cells
           '[&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r',
           '[&>*]:border-neutral-300 dark:[&>*]:border-neutral-800',
-          // selected row,
-          // {
-          //   '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand':
-          //     selected,
-          //   'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand':
-          //     selected,
-          // },
           className,
         )}
         {...res}
