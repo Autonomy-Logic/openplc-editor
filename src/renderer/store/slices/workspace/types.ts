@@ -35,7 +35,7 @@ const systemConfigsSchema = z.object({
   OS: z.enum(['win32', 'linux', 'darwin', '']),
   arch: z.enum(['x64', 'arm', '']),
   shouldUseDarkMode: z.boolean(),
-  appIsMaximized: z.boolean(),
+  isWindowMaximized: z.boolean(),
 })
 type SystemConfigs = z.infer<typeof systemConfigsSchema>
 
@@ -63,9 +63,10 @@ const workspaceActionsSchema = z.object({
     .function()
     .args(workspaceStateSchema.shape.workspace.omit({ systemConfigs: true }))
     .returns(z.void()),
-  setSystemConfigs: z.function().args(systemConfigsSchema.partial()).returns(z.void()),
+  setSystemConfigs: z.function().args(systemConfigsSchema).returns(z.void()),
 
   switchAppTheme: z.function().returns(z.void()),
+  toggleMaximizedWindow: z.function().returns(z.void()),
 
   updateProjectName: z.function().args(z.string()).returns(z.void()),
   updateProjectPath: z.function().args(z.string()).returns(z.void()),

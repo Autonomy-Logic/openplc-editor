@@ -13,12 +13,12 @@ export const AppLayout = () => {
 
   useEffect(() => {
     const getUserSystemProps = async () => {
-      const { OS, architecture, prefersDarkMode, appIsMaximized } = await window.bridge.getSystemInfo()
+      const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
       setSystemConfigs({
         OS,
         arch: architecture,
         shouldUseDarkMode: prefersDarkMode,
-        appIsMaximized,
+        isWindowMaximized,
       })
       if (OS === 'darwin' || OS === 'win32') {
         setIsLinux(false)

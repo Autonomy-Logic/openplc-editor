@@ -13,7 +13,7 @@ export const MaximizeButton = () => {
       className='flex h-full items-center justify-center px-[10px] hover:bg-[#021633] hover:dark:bg-neutral-850'
       onClick={() => window.bridge.maximizeWindow()}
     >
-      {systemConfigs.appIsMaximized ? <ExitMaximizeIcon /> : <MaximizeIcon />}
+      {systemConfigs.isWindowMaximized ? <ExitMaximizeIcon /> : <MaximizeIcon />}
     </button>
   )
 }
