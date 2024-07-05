@@ -99,7 +99,8 @@ const PLCVariableSchema = z.object({
       /**
        * @wip
        */
-      value: z.object({
+      value: z.string(),
+      data: z.object({
         /** This must also include the data types created by the user */
         baseType: baseTypeSchema,
         dimensions: z.array(
@@ -114,7 +115,6 @@ const PLCVariableSchema = z.object({
               return left < right
             }),
         ),
-        format: z.string(),
       }),
     }),
   ]),

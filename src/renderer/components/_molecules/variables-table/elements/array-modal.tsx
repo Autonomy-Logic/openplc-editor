@@ -10,7 +10,7 @@ import {
   ModalTrigger,
 } from '@root/renderer/components/_molecules/modal'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { BaseType, baseTypeSchema } from '@root/types/PLC/open-plc'
+import { BaseType, baseTypeSchema, PLCVariable } from '@root/types/PLC/open-plc'
 import { useEffect, useState } from 'react'
 
 import { ArrayDimensionsInput } from './array-input'
@@ -35,17 +35,39 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
 
   const types = baseTypeSchema.options
 
+  const [oldTypeValue, setOldTypeValue] = useState<PLCVariable['type']>()
   const [dimensions, setDimensions] = useState<string[]>([])
   const [typeValue, setTypeValue] = useState<BaseType>()
   const [selectedInput, setSelectedInput] = useState<string>('')
 
   useEffect(() => {
     const variable = pous
-      .find((pou) => pou.data.name === name)
-      ?.data.variables.find((variable) => variable.name === variableName)
+    .find((pou) => pou.data.name === name)
+    ?.data.variables.find((variable) => variable.name === variableName)
+    if (variable && !oldTypeValue) setOldTypeValue(variable?.type)
+
     console.log('variable', variable)
-    setDimensions(variable?.type.definition === 'array' ? variable.type.value.dimensions : [])
+    setDimensions(variable?.type.definition === 'array' ? variable.type.data.dimensions : [])
   }, [name, variableName, pous])
+
+  const updatePouVariable = ({ dimensions, baseType}: {dimensions: string[], baseType: BaseType}) => {
+    const formatArrayName = `ARRAY [${dimensions.join(',')}] OF ${typeValue?.toUpperCase() ?? 'DINT'}`
+    updateVariable({
+      scope: 'local',
+      associatedPou: name,
+      rowId: VariableRow ?? 0,
+      data: {
+        type: {
+          definition: 'array',
+          value: formatArrayName,
+          data: {
+            baseType: baseType ?? 'dint',
+            dimensions,
+          },
+        },
+      },
+    })
+  }
 
   const handleAddDimension = () => {
     setDimensions([...dimensions, ''])
@@ -82,32 +104,33 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
 
   const handleUpdateType = (value: BaseType) => {
     setTypeValue(value)
+    updatePouVariable({ dimensions, baseType: value })
   }
 
   const handleUpdateDimension = (index: number, value: string) => {
     if (selectedInput === '') return
-    console.log('index', index, 'value', value)
-    setDimensions((prev) => prev.map((item, i) => (i === index ? value : item)))
+    const draft = [...dimensions]
+    draft[index] = value
+    setDimensions(draft)
+    updatePouVariable({ dimensions: draft, baseType: typeValue ?? 'dint' })
   }
 
-  useEffect(() => {
-    const formatArrayName = `ARRAY [${dimensions.join(',')}] OF ${typeValue?.toUpperCase() ?? 'DINT'}`
+  const handleSave = () => {
+    updatePouVariable({ dimensions, baseType: typeValue ?? 'dint' })
+    setArrayModalIsOpen(false)
+  }
+
+  const handleCancel = () => {
     updateVariable({
       scope: 'local',
       associatedPou: name,
       rowId: VariableRow ?? 0,
       data: {
-        type: {
-          definition: 'array',
-          value: {
-            baseType: typeValue ?? 'dint',
-            dimensions,
-            format: formatArrayName,
-          },
-        },
+        type: oldTypeValue,
       },
     })
-  }, [dimensions, typeValue])
+    setArrayModalIsOpen(false)
+  }
 
   return (
     <Modal onOpenChange={setArrayModalIsOpen} open={arrayModalIsOpen}>
@@ -208,11 +231,11 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
           </div>
         </div>
         <ModalFooter className='flex items-center justify-around'>
-          <Button className='h-8 justify-center text-xs' onClick={() => setArrayModalIsOpen(false)}>
+          <Button className='h-8 justify-center text-xs' onClick={() => handleSave()}>
             Save
           </Button>
           <Button
-            onClick={() => setArrayModalIsOpen(false)}
+            onClick={() => handleCancel()}
             className='h-8 justify-center bg-neutral-100 text-xs text-neutral-1000 hover:bg-neutral-300 focus:bg-neutral-200'
           >
             Cancel

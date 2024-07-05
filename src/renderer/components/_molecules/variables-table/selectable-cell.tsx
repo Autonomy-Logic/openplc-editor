@@ -30,7 +30,7 @@ const SelectableTypeCell = ({
   table,
   editable = true,
 }: ISelectableCellProps) => {
-  const { value } = getValue<PLCVariable['type']>()
+  const { value, definition } = getValue<PLCVariable['type']>()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState<PLCVariable['type']['value']>(value)
 
@@ -58,7 +58,7 @@ const SelectableTypeCell = ({
           })}
         >
           <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-            {cellValue === null ? '' : _.upperCase(cellValue as unknown as string)}
+            {cellValue === null ? '' : definition === 'array' ? cellValue : _.upperCase(cellValue as unknown as string)}
           </span>
         </div>
       </PrimitiveDropdown.Trigger>
@@ -87,16 +87,11 @@ const SelectableTypeCell = ({
                   {scope.values.map((value) => (
                     <PrimitiveDropdown.Item
                       key={value}
-                      onSelect={() =>
-                        onSelect(
-                          scope.definition as PLCVariable['type']['definition'],
-                          value as PLCVariable['type']['value'],
-                        )
-                      }
+                      onSelect={() => onSelect(scope.definition as PLCVariable['type']['definition'], value)}
                       className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                     >
                       <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                        {_.upperCase(value)}
+                        {definition === 'array' ? value : _.upperCase(value)}
                       </span>
                     </PrimitiveDropdown.Item>
                   ))}
