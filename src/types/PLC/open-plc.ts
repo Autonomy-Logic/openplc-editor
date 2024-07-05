@@ -1,5 +1,30 @@
 import { z } from 'zod'
 
+const baseTypeSchema = z.enum([
+  'bool',
+  'sint',
+  'int',
+  'dint',
+  'lint',
+  'usint',
+  'uint',
+  'udint',
+  'ulint',
+  'real',
+  'lreal',
+  'time',
+  'date',
+  'tod',
+  'dt',
+  'string',
+  'byte',
+  'word',
+  'dword',
+  'lword',
+  'loglevel',
+])
+type BaseType = z.infer<typeof baseTypeSchema>
+
 const PLCDataTypeSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -7,30 +32,7 @@ const PLCDataTypeSchema = z.object({
     /** This array needs to be reviewed */
     z.object({
       type: z.literal('array'),
-      baseType: z.enum([
-        'bool',
-        'sint',
-        'int',
-        'dint',
-        'lint',
-        'usint',
-        'uint',
-        'udint',
-        'ulint',
-        'real',
-        'lreal',
-        'time',
-        'date',
-        'tod',
-        'dt',
-        'string',
-        'byte',
-        'word',
-        'dword',
-        'lword',
-        'loglevel',
-        /** Can also be a local datatype - created by the user */
-      ]),
+      baseType: baseTypeSchema,
       /** This property needs to be updated to validate if the right number is higher than the left */
       dimensions: z.array(z.string().regex(/^(\d+)\.\.(\d+)$/)),
     }),
@@ -51,55 +53,12 @@ const PLCDataTypeSchema = z.object({
           type: z.discriminatedUnion('type', [
             z.object({
               type: z.literal('base-type'),
-              value: z.enum([
-                'bool',
-                'sint',
-                'int',
-                'dint',
-                'lint',
-                'usint',
-                'uint',
-                'udint',
-                'ulint',
-                'real',
-                'lreal',
-                'time',
-                'date',
-                'tod',
-                'dt',
-                'string',
-                'byte',
-                'word',
-                'dword',
-                'lword',
-                'loglevel',
-              ]),
+              value: baseTypeSchema,
             }),
             z.object({
               type: z.literal('array'),
               value: z.object({
-                baseType: z.enum([
-                  'bool',
-                  'sint',
-                  'int',
-                  'dint',
-                  'lint',
-                  'usint',
-                  'uint',
-                  'udint',
-                  'ulint',
-                  'real',
-                  'lreal',
-                  'time',
-                  'date',
-                  'tod',
-                  'dt',
-                  'string',
-                  'byte',
-                  'word',
-                  'dword',
-                  'lword',
-                ]),
+                baseType: baseTypeSchema,
                 /** This property needs to be updated to validate if the right number is higher than the left */
                 dimensions: z.string().regex(/^(\d+)\.\.(\d+)$/),
               }),
@@ -120,29 +79,7 @@ const PLCVariableSchema = z.object({
   type: z.discriminatedUnion('definition', [
     z.object({
       definition: z.literal('base-type'),
-      value: z.enum([
-        'bool',
-        'sint',
-        'int',
-        'dint',
-        'lint',
-        'usint',
-        'uint',
-        'udint',
-        'ulint',
-        'real',
-        'lreal',
-        'time',
-        'date',
-        'tod',
-        'dt',
-        'string',
-        'byte',
-        'word',
-        'dword',
-        'lword',
-        'loglevel',
-      ]),
+      value: baseTypeSchema,
     }),
     z.object({
       definition: z.literal('user-data-type'),
@@ -157,34 +94,27 @@ const PLCVariableSchema = z.object({
       /** This is a mock type just for a presentation.
        * @deprecated
        */
-      value: z.enum(['array', 'dictionary']),
-      // value: z.object({
-      //   /** This must also include the data types created by the user */
-      //   baseType: z.enum([
-      //     'bool',
-      //     'sint',
-      //     'int',
-      //     'dint',
-      //     'lint',
-      //     'usint',
-      //     'uint',
-      //     'udint',
-      //     'ulint',
-      //     'real',
-      //     'lreal',
-      //     'time',
-      //     'date',
-      //     'tod',
-      //     'dt',
-      //     'string',
-      //     'byte',
-      //     'word',
-      //     'dword',
-      //     'lword',
-      //     'loglevel',
-      //   ]),
-      //   dimensions: z.string().regex(/^(\d+)\.\.(\d+)$/),
-      // }),
+      // value: z.enum(['array', 'dictionary']),
+
+      /**
+       * @wip
+       */
+      value: z.object({
+        /** This must also include the data types created by the user */
+        baseType: baseTypeSchema,
+        dimensions: z.array(
+          z
+            .string()
+            .regex(/^(\d+)\.\.(\d+)$/)
+            .refine((value) => {
+              const [left, right] = value.split('..').map(Number)
+              if (left <= 0 || right <= 0) {
+                return false
+              }
+              return left < right
+            }),
+        ),
+      }),
     }),
   ]),
   location: z.string(),
@@ -252,6 +182,14 @@ const PLCProjectDataSchema = z.object({
 
 type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
-export { PLCDataTypeSchema,PLCFunctionBlockSchema, PLCFunctionSchema, PLCProgramSchema, PLCProjectDataSchema, PLCVariableSchema }
+export {
+  baseTypeSchema,
+  PLCDataTypeSchema,
+  PLCFunctionBlockSchema,
+  PLCFunctionSchema,
+  PLCProgramSchema,
+  PLCProjectDataSchema,
+  PLCVariableSchema,
+}
 
-export type { PLCDataType, PLCFunction, PLCFunctionBlock, PLCProgram, PLCProjectData, PLCVariable }
+export type { BaseType, PLCDataType, PLCFunction, PLCFunctionBlock, PLCProgram, PLCProjectData, PLCVariable }
