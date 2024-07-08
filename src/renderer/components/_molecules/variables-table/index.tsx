@@ -32,7 +32,7 @@ const columns = [
     enableResizing: true,
     size: 150,
     minSize: 150,
-    maxSize: 400,
+    maxSize: 300,
     cell: EditableNameCell,
   }),
   columnHelper.accessor('class', {
@@ -43,6 +43,9 @@ const columns = [
   columnHelper.accessor('type', {
     header: 'Type',
     enableResizing: true,
+    size: 128,
+    minSize: 80,
+    maxSize: 300,
     cell: SelectableTypeCell,
   }),
   columnHelper.accessor('location', {
@@ -55,7 +58,7 @@ const columns = [
     enableResizing: true,
     size: 198,
     minSize: 198,
-    maxSize: 640,
+    maxSize: 568,
     cell: EditableDocumentationCell,
   }),
   columnHelper.accessor('debug', { header: 'Debug', size: 64, minSize: 64, maxSize: 64, cell: SelectableDebugCell }),
@@ -185,7 +188,11 @@ const VariablesTable = ({
                 resizable={header.column.columnDef.enableResizing}
                 isResizing={header.column.getIsResizing()}
                 resizeHandler={header.getResizeHandler()}
-                style={{ width: header.getSize() }}
+                style={{
+                  width: header.getSize(),
+                  maxWidth: header.column.columnDef.maxSize,
+                  minWidth: header.column.columnDef.minSize,
+                }}
                 key={header.id}
               >
                 {flexRender(header.column.columnDef.header, header.getContext())}
@@ -205,7 +212,14 @@ const VariablesTable = ({
             ref={selectedRow === parseInt(row.id) ? tableBodyRowRef : null}
           >
             {row.getVisibleCells().map((cell) => (
-              <TableCell style={{ width: cell.column.getSize() }} key={cell.id}>
+              <TableCell
+                style={{
+                  width: cell.column.getSize(),
+                  maxWidth: cell.column.columnDef.maxSize,
+                  minWidth: cell.column.columnDef.minSize,
+                }}
+                key={cell.id}
+              >
                 {flexRender(cell.column.columnDef.cell, {
                   ...cell.getContext(),
                   editable: selectedRow === parseInt(row.id),

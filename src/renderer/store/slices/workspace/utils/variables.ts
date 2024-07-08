@@ -19,6 +19,40 @@ const variableNameValidation = (variableName: string) => {
 }
 
 /**
+ * This is a validation to check if variable is correct.
+ *
+ * The validation have to obey this rules:
+ * 1. There CANNOT be space between the numeric values and dots
+ * 2. The second number MUST always be greater than the first
+ * 3. Only integer numbers can be used (shouldn't accept floating numbers or strings of any type)
+ *
+ * It is exported to be used at array-modal.tsx file present at src/renderer/components/_molecules/variables-table/elements.
+ */
+
+const validateArrayValue = (value: string) => {
+  const [left, right] = value.split('..').map(Number)
+  return Number.isInteger(left) && Number.isInteger(right) && left < right
+}
+const arrayValidation = ({ value }: { value: string }) => {
+  const regex = /^(\d+)\.\.(\d+)$/
+  if (value === '') {
+    return {
+      ok: false,
+      title: 'Invalid array value',
+      message: `The array value can not be empty.`,
+    }
+  }
+  if (!regex.test(value) || !validateArrayValue(value)) {
+    return {
+      ok: false,
+      title: 'Invalid array value',
+      message: `The array value "${value}" is invalid. Pattern: "LEFT_number..RIGHT_number" and RIGHT must be GREATER than LEFT. Example: 0..10.`,
+    }
+  }
+  return { ok: true }
+}
+
+/**
  * This is a validation to check if it is needed changing the name of a variable at creation.
  * If the variable existis change the variable name.
  **/
@@ -97,4 +131,4 @@ const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Par
   return response
 }
 
-export { createVariableValidation, updateVariableValidation }
+export { arrayValidation, createVariableValidation, updateVariableValidation }

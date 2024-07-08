@@ -27,8 +27,8 @@ ModalOverlay.displayName = PrimitiveDialog.Overlay.displayName
 
 const ModalContent = forwardRef<
   ElementRef<typeof PrimitiveDialog.Content>,
-  ComponentPropsWithoutRef<typeof PrimitiveDialog.Content>
->(({ className, ...props }, ref) => (
+  ComponentPropsWithoutRef<typeof PrimitiveDialog.Content> & { onClose?: () => void }
+>(({ className, onClose, ...props }, ref) => (
   <ModalPortal>
     <ModalOverlay />
     <PrimitiveDialog.Content
@@ -40,7 +40,12 @@ const ModalContent = forwardRef<
       {...props}
     >
       {props.children}
-      <PrimitiveDialog.Close className='absolute right-4 top-4 disabled:pointer-events-none'>
+      <PrimitiveDialog.Close
+        onClick={() => {
+          if (onClose) onClose()
+        }}
+        className='absolute right-4 top-4 disabled:pointer-events-none'
+      >
         <CloseIcon className='h-4 w-4 stroke-brand hover:cursor-pointer' />
       </PrimitiveDialog.Close>
     </PrimitiveDialog.Content>
