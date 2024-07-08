@@ -11,12 +11,13 @@ const Tabs = () => {
     tabs,
     editor,
     tabsActions: { sortTabs },
-    editorActions: { setEditor },
+    editorActions: { setEditor, getEditorFromEditors, removeModel },
   } = useOpenPLCStore()
   const [selectedTab, setSelectedTab] = useState(editor.meta.name)
   const hasTabs = tabs.length > 0
   const dndTab = useRef<number>(0)
   const replaceTab = useRef<number>(0)
+
   const handleSort = () => {
     const tabClone = [...tabs]
     const draggedTab = tabClone[dndTab.current]
@@ -31,26 +32,40 @@ const Tabs = () => {
   const handleClickedTab = (tab: TabsProps) => {
     if (tab.name === selectedTab) return
     setSelectedTab(tab.name)
-    setEditor({ editor: CreateEditorObjectFromTab(tab) })
+    const candidate = getEditorFromEditors(tab.name)
+    if (!candidate) {
+      setEditor(CreateEditorObjectFromTab(tab))
+      return
+    }
+    setEditor(candidate)
   }
 
   const handleRemoveTab = (tabToRemove: string) => {
     const draftTabs = tabs.filter((t: TabsProps) => t.name !== tabToRemove)
+    removeModel(tabToRemove)
+
     const candidate = draftTabs.slice(-1)[0]
     if (!candidate) {
       sortTabs(draftTabs)
-      setEditor({ editor: { type: 'available', meta: { name: '' } } })
-    } else {
-      setSelectedTab(candidate.name)
-      setEditor({ editor: CreateEditorObjectFromTab(candidate) })
-      sortTabs(draftTabs)
+      setEditor({ type: 'available', meta: { name: '' } })
+      return
     }
+    setSelectedTab(candidate.name)
+
+    const editor = getEditorFromEditors(candidate.name)
+    if (!editor) {
+      setEditor(CreateEditorObjectFromTab(candidate))
+      sortTabs(draftTabs)
+      return
+    }
+    setEditor(editor)
+    sortTabs(draftTabs)
   }
 
   const handleDragStart = ({ tab, idx }: { tab: TabsProps; idx: number }) => {
     dndTab.current = idx
     setSelectedTab(tab.name)
-    setEditor({ editor: CreateEditorObjectFromTab(tab) })
+    setEditor(CreateEditorObjectFromTab(tab))
   }
   const handleDragEnter = (idx: number) => {
     replaceTab.current = idx

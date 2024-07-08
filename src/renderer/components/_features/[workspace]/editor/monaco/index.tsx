@@ -19,8 +19,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const monacoRef = useRef<null | typeof monaco>(null)
   const {
     // editor: { path, language, name },
-    systemConfigs: { shouldUseDarkMode },
-    projectData: { pous },
+    workspace: {
+      systemConfigs: { shouldUseDarkMode },
+      projectData: { pous },
+    },
     workspaceActions: { updatePou },
   } = useOpenPLCStore()
 

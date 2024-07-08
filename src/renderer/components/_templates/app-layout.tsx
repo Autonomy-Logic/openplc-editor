@@ -1,4 +1,4 @@
-import { TitleBar } from '@root/renderer/features/titlebar'
+import { TitleBar } from '@root/renderer/components/_organisms/titlebar'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { ReactNode, useEffect, useState } from 'react'
@@ -10,16 +10,17 @@ import Toaster from '../_features/[app]/toast/toaster'
 const AppLayout = (): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
-    workspaceActions: { setSystemConfigs, switchAppTheme },
+    workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow },
   } = useOpenPLCStore()
 
   useEffect(() => {
     const getUserSystemProps = async () => {
-      const { OS, architecture, prefersDarkMode } = await window.bridge.getSystemInfo()
+      const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
       setSystemConfigs({
         OS,
         arch: architecture,
         shouldUseDarkMode: prefersDarkMode,
+        isWindowMaximized,
       })
       if (OS === 'darwin' || OS === 'win32') {
         setIsLinux(false)
@@ -27,6 +28,12 @@ const AppLayout = (): ReactNode => {
     }
     void getUserSystemProps()
   }, [setSystemConfigs])
+
+  useEffect(() => {
+    window.bridge.isMaximizedWindow((_event) => {
+      toggleMaximizedWindow()
+    })
+  }, [])
 
   useEffect(() => {
     window.bridge.handleUpdateTheme((_event) => {

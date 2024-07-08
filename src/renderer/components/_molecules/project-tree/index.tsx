@@ -78,7 +78,9 @@ const BranchSources = {
 }
 const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranchProps) => {
   const {
-    projectData: { pous, dataTypes },
+    workspace: {
+      projectData: { pous, dataTypes },
+    },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState(false)
   const { BranchIcon, label } = BranchSources[branchTarget]
@@ -143,9 +145,11 @@ const NestedBranchSources = {
 }
 const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProjectTreeNestedBranchProps) => {
   const {
-    projectData: { dataTypes },
+    workspace: {
+      projectData: { dataTypes },
+    },
   } = useOpenPLCStore()
-  const [branchIsOpen, setBranchIsOpen] = useState(false)
+  const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)
   const { BranchIcon, label } = NestedBranchSources[nestedBranchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
   const hasAssociatedDataType = dataTypes.some((dataType) => dataType.derivation.type === nestedBranchTarget)
@@ -216,7 +220,7 @@ const ProjectTreeLeaf = ({ leafLang, label, nested = false, ...res }: IProjectTr
       meta: { name },
     },
   } = useOpenPLCStore()
-  const [leafIsSelected, setLeafIsSelected] = useState(false)
+  const [leafIsSelected, setLeafIsSelected] = useState<boolean>(false)
   const { LeafIcon } = LeafSources[leafLang]
 
   const handleLeafSelection = useCallback(() => setLeafIsSelected(!leafIsSelected), [leafIsSelected])

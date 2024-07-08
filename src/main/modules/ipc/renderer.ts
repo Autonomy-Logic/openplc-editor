@@ -60,10 +60,12 @@ const rendererProcessBridge = {
     OS: 'linux' | 'darwin' | 'win32' | ''
     architecture: 'x64' | 'arm' | ''
     prefersDarkMode: boolean
+    isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
   closeWindow: () => ipcRenderer.send('window-controls:close'),
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
+  isMaximizedWindow: (callback: IpcRendererCallbacks) => ipcRenderer.on('window-controls:toggle-maximized', (_event) => callback(_event)),
   reloadWindow: () => ipcRenderer.send('window:reload'),
   handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
   winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),

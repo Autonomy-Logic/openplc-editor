@@ -1,5 +1,8 @@
-import { PLCDataType, PLCFunction, PLCFunctionBlock, PLCProgram } from '@root/types/PLC/open-plc'
-import { z } from 'zod'
+import { PLCDataType } from '@root/types/PLC/open-plc'
+
+import type { EditorModel } from '../../editor'
+import { editorModelSchema } from '../../editor'
+import type { PouDTO } from '../../workspace/types'
 
 type PouProps = {
   type: 'program' | 'function' | 'function-block'
@@ -7,21 +10,7 @@ type PouProps = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
 }
 
-type CreatedPouObject =
-  | {
-      type: 'program'
-      data: PLCProgram
-    }
-  | {
-      type: 'function'
-      data: PLCFunction
-    }
-  | {
-      type: 'function-block'
-      data: PLCFunctionBlock
-    }
-
-const CreatePouObject = ({ type, name, language }: PouProps): CreatedPouObject => {
+const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
   switch (type) {
     case 'function':
       return {
@@ -31,17 +20,7 @@ const CreatePouObject = ({ type, name, language }: PouProps): CreatedPouObject =
           language,
           body: `This is the body of ${name}`,
           returnType: 'BOOL',
-          variables: [
-            {
-              id: 0,
-              name: 'Variable test',
-              class: 'input',
-              type: { definition: 'base-type', value: 'bool' },
-              location: '%123',
-              debug: false,
-              documentation: 'Doc for var 1',
-            },
-          ],
+          variables: [],
           documentation: 'Doc for function',
         },
       }
@@ -63,17 +42,7 @@ const CreatePouObject = ({ type, name, language }: PouProps): CreatedPouObject =
           name: name,
           language,
           body: `This is the body of ${name}`,
-          variables: [
-            {
-              id: 0,
-              name: 'Variable test',
-              class: 'input',
-              type: { definition: 'base-type', value: 'bool' },
-              location: '%123',
-              debug: false,
-              documentation: 'Doc for var 1',
-            },
-          ],
+          variables: [],
           documentation: 'Doc for program',
         },
       }
@@ -114,93 +83,40 @@ const CreateDatatypeObject = (derivation: 'enumerated' | 'structure' | 'array'):
   }
 }
 
-const createEditorObjectSchema = z.object({
-  editor: z.discriminatedUnion('type', [
-    z.object({
-      type: z.literal('available'),
-      meta: z.object({
-        name: z.string(),
-      }),
-    }),
-    z.object({
-      type: z.literal('plc-textual'),
-      meta: z.object({
-        name: z.string(),
-        path: z.string(),
-        language: z.enum(['il', 'st']),
-      }),
-    }),
-    z.object({
-      type: z.literal('plc-graphical'),
-      meta: z.object({
-        name: z.string(),
-        path: z.string(),
-        language: z.enum(['ld', 'sfc', 'fbd']),
-      }),
-    }),
-    z.object({
-      type: z.literal('plc-datatype'),
-      meta: z.object({
-        name: z.string(),
-        derivation: z.enum(['enumerated', 'structure', 'array']),
-      }),
-    }),
-    z.object({
-      type: z.literal('plc-variable'),
-      meta: z.object({
-        name: z.string(),
-      }),
-    }),
-  ]),
-})
+// type CreateEditorObjectType = z.infer<typeof createEditorObjectSchema>
 
-const editorProps = z.object({
-  type: z.enum(['available', 'plc-textual', 'plc-graphical', 'plc-datatype', 'plc-variable']),
-  name: z.string().optional(),
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']).optional(),
-  derivation: z.enum(['program', 'function', 'function-block', 'enumerated', 'structure', 'array']).optional(),
-})
-
-type EditorPropsType = z.infer<typeof editorProps>
-
-type CreateEditorObjectType = z.infer<typeof createEditorObjectSchema>
-
-const CreateEditorObject = (props: EditorPropsType): CreateEditorObjectType['editor'] => {
-  const { type, name, language, derivation } = editorProps.parse(props)
-  const normalizedPath = `/data/pous/${derivation}/${name}`
+const CreateEditorObject = (props: EditorModel): EditorModel => {
+  const model = editorModelSchema.parse(props)
+  const { type, meta } = model
 
   switch (type) {
     case 'plc-textual':
       return {
-        type: 'plc-textual',
-        meta: {
-          name: name as string,
-          path: normalizedPath,
-          language: language as 'il' | 'st',
-        },
+        type,
+        meta,
+        variable: model.variable,
       }
     case 'plc-graphical':
       return {
-        type: 'plc-graphical',
-        meta: {
-          name: name as string,
-          path: normalizedPath,
-          language: language as 'ld' | 'sfc' | 'fbd',
-        },
+        type,
+        meta,
+        variable: model.variable,
       }
     case 'plc-datatype':
       return {
-        type: 'plc-datatype',
-        meta: {
-          name: name as string,
-          derivation: derivation as 'enumerated' | 'structure' | 'array',
-        },
+        type,
+        meta,
+      }
+    case 'plc-resource':
+      return {
+        type,
+        meta,
       }
     default:
       return {
         type: 'available',
         meta: {
-          name: 'name as string',
+          name: 'available',
         },
       }
   }

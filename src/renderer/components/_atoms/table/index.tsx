@@ -1,5 +1,5 @@
 import { cn } from '@root/utils'
-import { ComponentPropsWithRef, forwardRef, useEffect, useState } from 'react'
+import { ComponentPropsWithRef, forwardRef } from 'react'
 
 const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { context?: string }>(
   ({ className, context, ...res }, ref) => (
@@ -46,34 +46,6 @@ TableFooter.displayName = 'TableFooter'
 
 const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'> & { selected?: boolean }>(
   ({ id, className, selected, ...res }, ref) => {
-
-    /**
-     * This logic is used to add a border to the last cell of the previous row when the current row is selected.
-     * The useEffect is necessary to make sure the lastBrother is set after the row is rendered.
-     *
-     * This have to be reviewed and possibly refactored.
-    **/
-    const [lastBrother, setLastBrother] = useState<HTMLElement | null>(null)
-    const [selectedRow, setSelectedRow] = useState<boolean>(false)
-    if (selectedRow && lastBrother) {
-      lastBrother.className = cn(lastBrother.className, '[&>*]:border-b-brand dark:[&>*]:border-b-brand')
-    }
-    if (!selectedRow && lastBrother) {
-      lastBrother.className = cn(lastBrother.className, '[&>*]:border-neutral-300 dark:[&>*]:border-neutral-800')
-    }
-    useEffect(() => {
-      if (selected) setSelectedRow(selected)
-      else setSelectedRow(false)
-    }, [selected])
-    useEffect(() => {
-      let brother = document.getElementById((parseInt(id ?? '0') - 1).toString())
-      if (!brother) {
-        brother = document.getElementsByTagName('thead')[document.getElementsByTagName('thead').length - 1]
-          .lastChild as HTMLElement
-      }
-      setLastBrother(brother)
-    }, [])
-
     return (
       <tr
         id={id}
@@ -85,18 +57,12 @@ const TableRow = forwardRef<HTMLTableRowElement, ComponentPropsWithRef<'tr'> & {
           '[&:nth-child(2)>th:first-child]:rounded-tl-md [&:nth-child(2)>th:last-child]:rounded-tr-md [&:nth-child(2)>th]:border-t',
           '[&:nth-child(2)>th]:border-t-neutral-500',
           // body cell
-          '[&:last-child>td:first-child]:rounded-bl-md [&:last-child>td:last-child]:rounded-br-md [&:last-child>td]:border-b-neutral-500',
+          '[&:last-child>td:first-child]:rounded-bl-md [&:last-child>td:last-child]:rounded-br-md',
+          '[&:last-child>td]:border-b-neutral-500',
           '[&>*:first-child]:border-l-neutral-500 [&>*:last-child]:border-r-neutral-500',
           // all cells
           '[&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r',
           '[&>*]:border-neutral-300 dark:[&>*]:border-neutral-800',
-          // selected row,
-          {
-            '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand':
-              selected,
-            'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand':
-              selected,
-          },
           className,
         )}
         {...res}
@@ -112,7 +78,7 @@ const TableCell = forwardRef<HTMLTableCellElement, ComponentPropsWithRef<'td'>>(
     aria-label='Table cell'
     ref={ref}
     className={cn(
-      'h-full max-h-8 w-[200px] text-neutral-700 lg:w-[300px] 2xl:w-[375px] dark:text-neutral-500',
+      'h-full max-h-8 text-neutral-700 dark:text-neutral-500',
       'has-[:focus]:has-[input]:bg-neutral-200 has-[button[data-state=open]]:bg-neutral-200 has-[div[data-state=open]]:bg-neutral-200',
       'dark:has-[:focus]:has-[input]:bg-neutral-850 dark:has-[button[data-state=open]]:bg-neutral-800 dark:has-[div[data-state=open]]:bg-neutral-800',
       className,
