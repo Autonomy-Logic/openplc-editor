@@ -95,7 +95,7 @@ const SelectableTypeCell = ({
                       className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                     >
                       <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                        {definition === 'array' ? value : _.upperCase(value)}
+                        {_.upperCase(value)}
                       </span>
                     </PrimitiveDropdown.Item>
                   ))}
