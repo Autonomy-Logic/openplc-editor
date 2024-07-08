@@ -10,7 +10,7 @@ import { ColumnFiltersState } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
-import { VariablesTableButton } from '../../_atoms/buttons/variables-table'
+import { TableActionButton } from '../../_atoms/buttons/tables-actions'
 import { VariablesTable } from '../../_molecules'
 
 const VariablesEditor = () => {
@@ -241,17 +241,17 @@ const VariablesEditor = () => {
               className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
             >
               {/** This can be reviewed */}
-              <VariablesTableButton aria-label='Add table row button' onClick={handleCreateVariable}>
+              <TableActionButton aria-label='Add table row button' onClick={handleCreateVariable}>
                 <PlusIcon className='!stroke-brand' />
-              </VariablesTableButton>
-              <VariablesTableButton
+              </TableActionButton>
+              <TableActionButton
                 aria-label='Remove table row button'
                 disabled={parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED}
                 onClick={handleRemoveVariable}
               >
                 <MinusIcon />
-              </VariablesTableButton>
-              <VariablesTableButton
+              </TableActionButton>
+              <TableActionButton
                 aria-label='Move table row up button'
                 disabled={
                   parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
@@ -260,8 +260,8 @@ const VariablesEditor = () => {
                 onClick={() => handleRearrangeVariables(-1)}
               >
                 <StickArrowIcon direction='up' />
-              </VariablesTableButton>
-              <VariablesTableButton
+              </TableActionButton>
+              <TableActionButton
                 aria-label='Move table row down button'
                 disabled={
                   parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
@@ -270,7 +270,7 @@ const VariablesEditor = () => {
                 onClick={() => handleRearrangeVariables(1)}
               >
                 <StickArrowIcon direction='down' />
-              </VariablesTableButton>
+              </TableActionButton>
             </div>
           </div>
         ) : (

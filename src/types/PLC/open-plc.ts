@@ -29,12 +29,13 @@ const PLCDataTypeSchema = z.object({
   id: z.number(),
   name: z.string(),
   derivation: z.discriminatedUnion('type', [
-    /** This array needs to be reviewed */
     z.object({
       type: z.literal('array'),
-      baseType: baseTypeSchema,
-      /** This property needs to be updated to validate if the right number is higher than the left */
-      dimensions: z.array(z.string().regex(/^(\d+)\.\.(\d+)$/)),
+      value: z.string(),
+      data: z.object({
+        baseType: baseTypeSchema,
+        dimensions: z.array(z.string()),
+      }),
     }),
     /** This enumerated needs to be reviewed */
     z.object({
@@ -57,10 +58,10 @@ const PLCDataTypeSchema = z.object({
             }),
             z.object({
               type: z.literal('array'),
-              value: z.object({
+              value: z.string(),
+              data: z.object({
                 baseType: baseTypeSchema,
-                /** This property needs to be updated to validate if the right number is higher than the left */
-                dimensions: z.string().regex(/^(\d+)\.\.(\d+)$/),
+                dimensions: z.array(z.string()),
               }),
             }),
           ]),
