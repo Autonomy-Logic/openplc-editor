@@ -114,7 +114,7 @@ export const ArrayModal = ({
     if (dimensionToSave.length === 0) {
       toast({
         title: 'Invalid array',
-        description: 'Array must have at least one dimension',
+        description: 'Array must have at least one not empty dimension',
         variant: 'fail',
       })
       return
