@@ -83,6 +83,7 @@ const WorkspaceScreen = () => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     if (panelRef.current) panelRef.current.resize(25)
   }
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -119,16 +120,12 @@ const WorkspaceScreen = () => {
           <ResizablePanel id='workspacePanel' order={2} defaultSize={87} className='h-full w-[400px]'>
             <div id='workspaceContentPanel' className='flex h-full flex-1 grow flex-col gap-2 overflow-hidden'>
               {tabs.length > 0 && <Navigation />}
-              <ResizablePanelGroup
-                id='editorPanelGroup'
-                className={`flex h-full ${!isBottomBarCollapsed && 'gap-1'}`}
-                direction='vertical'
-              >
+              <ResizablePanelGroup id='editorPanelGroup' className={`flex h-full  gap-2`} direction='vertical'>
                 <ResizablePanel
                   id='editorPanel'
                   order={1}
                   defaultSize={75}
-                  className='flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950'
+                  className='relative  flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950'
                 >
                   {/**
                    * TODO: Need to be refactored.
@@ -160,23 +157,25 @@ const WorkspaceScreen = () => {
                             collapsedSize={0}
                             defaultSize={25}
                             minSize={20}
-                            className={`flex h-full w-full flex-1 flex-col gap-4 overflow-auto`}
+                            className={`relative flex h-full w-full flex-1 flex-col gap-4 overflow-auto`}
                           >
                             <VariablesEditor />
                           </ResizablePanel>
 
                           <ResizableHandle
-                            className={`${isVariablesPanelCollapsed && '!pointer-events-none !hidden !h-0 !w-0 !cursor-none !select-none !bg-none'} flex h-[1px] w-full bg-brand-light `}
+                            // hitAreaMargins={{ coarse: 1, fine: 1 }}
+                            style={{ height: '1px' }}
+                            className={`${isVariablesPanelCollapsed && ' !hidden '}  flex  w-full bg-brand-light `}
                           />
 
                           {isVariablesPanelCollapsed && (
                             <div className='flex w-full justify-center'>
                               <button
-                                className='flex w-auto items-center gap-1 rounded-lg border-brand bg-neutral-50 px-2 py-1 dark:bg-neutral-900'
+                                className='flex w-auto items-center rounded-lg border-brand bg-neutral-50 px-2 py-1 dark:bg-neutral-900'
                                 onClick={togglePanel}
                               >
                                 <p className='text-xs font-medium text-brand-medium dark:text-brand-light'>
-                                  Visible Table
+                                  Expand Table
                                 </p>
                                 <ExitIcon
                                   size='sm'
@@ -206,8 +205,12 @@ const WorkspaceScreen = () => {
                       No tabs open
                     </p>
                   )}
+                  <ResizableHandle
+                    hitAreaMargins={{ coarse: 1, fine: isBottomBarCollapsed ? 3 : 6 }}
+                    style={{ height: '2px' }}
+                    className={`absolute  bottom-0  left-0  w-full transition-colors duration-200  data-[resize-handle-state="hover"]:bg-neutral-700 `}
+                  />
                 </ResizablePanel>
-                <ResizableHandle className=' h-0' />
                 <ResizablePanel
                   id='consolePanel'
                   order={2}
