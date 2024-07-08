@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
+import { DebuggerIcon, DownloadIcon, ExitIcon,PlayIcon, SearchIcon, StickArrowIcon, TransferIcon, ZoomInOut } from '../assets'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
@@ -109,7 +109,7 @@ const WorkspaceScreen = () => {
         </div>
         <div className='flex h-7 w-full flex-col gap-6'>
           <ActivityBarButton aria-label='Exit' onClick={() => navigate('/')}>
-            <ExitIcon />
+            <StickArrowIcon direction='left' className='stroke-[#B4D0FE]' />
           </ActivityBarButton>
         </div>
       </WorkspaceSideContent>
