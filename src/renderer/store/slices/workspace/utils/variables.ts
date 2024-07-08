@@ -19,6 +19,30 @@ const variableNameValidation = (variableName: string) => {
 }
 
 /**
+ * This is a validation to check if variable is correct.
+ *
+ * The validation have to obey this rules:
+ * 1. There CANNOT be space between the numeric values and dots
+ * 2. The second number MUST always be greater than the first
+ * 3. Only integer numbers can be used (shouldn't accept floating numbers or strings of any type)
+ */
+
+const validateArrayValue = (value: string) => {
+  const [left, right] = value.split('..').map(Number)
+  return Number.isInteger(left) && Number.isInteger(right) && left < right
+}
+const arrayValidation = (array: string[]) => {
+  const regex = /^(\d+)\.\.(\d+)$/
+  for (const value of array) {
+    if (value === '') continue
+    if (!regex.test(value) || !validateArrayValue(value)) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
  * This is a validation to check if it is needed changing the name of a variable at creation.
  * If the variable existis change the variable name.
  **/
@@ -89,6 +113,20 @@ const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Par
         ok: false,
         title: 'Variable name is invalid.',
         message: `Please make sure that the name is valid. Valid names: CamelCase, PascalCase or SnakeCase.`,
+      }
+      return response
+    }
+  }
+
+  if (dataToBeUpdated.type?.definition === 'array') {
+    const { dimensions } = dataToBeUpdated.type.data
+    if (!arrayValidation(dimensions)) {
+      console.error('Invalid dimensions')
+      response = {
+        ok: false,
+        title: 'Invalid dimensions',
+        message:
+          'Please make sure that the dimensions are valid. It must be in the format "x..y", y must be greater than x and must be a integer.',
       }
       return response
     }

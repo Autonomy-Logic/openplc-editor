@@ -6,7 +6,7 @@ type ArrayDimensionsComponentProps = ComponentPropsWithoutRef<'div'> & {
   initialValue: string
   selectedInput: string
   handleInputClick: (value: string) => void
-  handleUpdateDimension: (index: number, value: string) => void
+  handleUpdateDimension: (index: number, value: string) => { ok: boolean }
 }
 
 const ArrayDimensionsInput = ({
@@ -20,6 +20,11 @@ const ArrayDimensionsInput = ({
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(e.target.value)
+  }
+
+  const handleUpdate = () => {
+    const res = handleUpdateDimension(Number(id), inputValue)
+    if (!res.ok) setInputValue(initialValue)
   }
 
   useEffect(() => {
@@ -40,7 +45,7 @@ const ArrayDimensionsInput = ({
           'pointer-events-none': selectedInput !== id,
         })}
         onChange={onChange}
-        onBlur={() => handleUpdateDimension(Number(id), inputValue)}
+        onBlur={() => handleUpdate()}
         value={inputValue}
       />
     </div>

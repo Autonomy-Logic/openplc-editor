@@ -91,30 +91,11 @@ const PLCVariableSchema = z.object({
     }),
     z.object({
       definition: z.literal('array'),
-      /** This is a mock type just for a presentation.
-       * @deprecated
-       */
-      // value: z.enum(['array', 'dictionary']),
-
-      /**
-       * @wip
-       */
       value: z.string(),
       data: z.object({
         /** This must also include the data types created by the user */
         baseType: baseTypeSchema,
-        dimensions: z.array(
-          z
-            .string()
-            .regex(/^(\d+)\.\.(\d+)$/)
-            .refine((value) => {
-              const [left, right] = value.split('..').map(Number)
-              if (left <= 0 || right <= 0) {
-                return false
-              }
-              return left < right
-            }),
-        ),
+        dimensions: z.array(z.string()),
       }),
     }),
   ]),
