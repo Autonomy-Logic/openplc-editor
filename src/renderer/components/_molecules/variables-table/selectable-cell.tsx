@@ -35,6 +35,7 @@ const SelectableTypeCell = ({
   const [cellValue, setCellValue] = useState<PLCVariable['type']['value']>(value)
 
   const [arrayModalIsOpen, setArrayModalIsOpen] = useState(false)
+  const [poppoverIsOpen, setPoppoverIsOpen] = useState(false)
   const variableName = table.options.data[index].name
 
   // When the input is blurred, we'll call our table meta's updateData function
@@ -50,7 +51,10 @@ const SelectableTypeCell = ({
   }, [value])
 
   return (
-    <PrimitiveDropdown.Root>
+    <PrimitiveDropdown.Root
+      onOpenChange={setPoppoverIsOpen}
+      open={poppoverIsOpen}
+    >
       <PrimitiveDropdown.Trigger asChild>
         <div
           className={cn('flex h-full w-full cursor-pointer justify-center p-2 outline-none', {
@@ -99,7 +103,6 @@ const SelectableTypeCell = ({
               </PrimitiveDropdown.Portal>
             </PrimitiveDropdown.Sub>
           ))}
-
           {/** Array type trigger */}
           <PrimitiveDropdown.Item asChild>
             <ArrayModal
@@ -107,6 +110,7 @@ const SelectableTypeCell = ({
               VariableRow={index}
               arrayModalIsOpen={arrayModalIsOpen}
               setArrayModalIsOpen={setArrayModalIsOpen}
+              closeContainer={() => setPoppoverIsOpen(false)}
             />
           </PrimitiveDropdown.Item>
         </PrimitiveDropdown.Content>

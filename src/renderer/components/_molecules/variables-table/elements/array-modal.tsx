@@ -11,7 +11,8 @@ import {
   ModalTrigger,
 } from '@root/renderer/components/_molecules/modal'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { BaseType, baseTypeSchema, PLCVariable } from '@root/types/PLC/open-plc'
+import { arrayValidation } from '@root/renderer/store/slices/workspace/utils/variables'
+import { BaseType, baseTypeSchema } from '@root/types/PLC/open-plc'
 import { useEffect, useState } from 'react'
 
 import { ArrayDimensionsInput } from './array-input'
@@ -21,9 +22,16 @@ type ArrayModalProps = {
   VariableRow?: number
   arrayModalIsOpen: boolean
   setArrayModalIsOpen: (value: boolean) => void
+  closeContainer: () => void
 }
 
-export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName, VariableRow }: ArrayModalProps) => {
+export const ArrayModal = ({
+  arrayModalIsOpen,
+  closeContainer,
+  setArrayModalIsOpen,
+  variableName,
+  VariableRow,
+}: ArrayModalProps) => {
   const {
     editor: {
       meta: { name },
@@ -36,16 +44,14 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
 
   const types = baseTypeSchema.options
 
-  const [oldTypeValue, setOldTypeValue] = useState<PLCVariable['type']>()
+  const [selectedInput, setSelectedInput] = useState<string>('')
   const [dimensions, setDimensions] = useState<string[]>([])
   const [typeValue, setTypeValue] = useState<BaseType>('dint')
-  const [selectedInput, setSelectedInput] = useState<string>('')
 
   useEffect(() => {
     const variable = pous
       .find((pou) => pou.data.name === name)
       ?.data.variables.find((variable) => variable.name === variableName)
-    if (variable && !oldTypeValue) setOldTypeValue(variable?.type)
 
     if (variable?.type.definition === 'array') {
       setDimensions(variable.type.data.dimensions)
@@ -56,9 +62,65 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
     }
   }, [name, variableName, pous])
 
-  const updatePouVariable = ({ dimensions, baseType }: { dimensions: string[]; baseType: BaseType }) => {
-    const formatArrayName = `ARRAY [${dimensions.filter((value) => value !== '').join(',')}] OF ${typeValue?.toUpperCase() ?? 'DINT'}`
-    const res = updateVariable({
+  const handleAddDimension = () => {
+    setDimensions((prev) => [...prev, ''])
+    setSelectedInput(dimensions.length.toString())
+  }
+
+  const handleRemoveDimension = (index: string) => {
+    setDimensions((prev) => [...prev.slice(0, Number(index)), ...prev.slice(Number(index) + 1)])
+    setSelectedInput('')
+  }
+
+  const handleRearrangeDimensions = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up') {
+      if (index === 0) return
+      const [removed] = dimensions.splice(index, 1)
+      dimensions.splice(index - 1, 0, removed)
+      setSelectedInput((index - 1).toString())
+      return
+    }
+
+    if (index === dimensions.length - 1) return
+    const [removed] = dimensions.splice(index, 1)
+    dimensions.splice(index + 1, 0, removed)
+    setSelectedInput((index + 1).toString())
+  }
+
+  const handleUpdateType = (value: BaseType) => {
+    setTypeValue(value)
+  }
+
+  const handleUpdateDimension = (index: number, value: string): { ok: boolean } => {
+    const res = arrayValidation({ value: value })
+    if (!res.ok) {
+      toast({
+        title: res.title,
+        description: res.message,
+        variant: 'fail',
+      })
+      return { ok: false }
+    }
+    setDimensions((prev) => [...prev.slice(0, index), value, ...prev.slice(index + 1)])
+    return { ok: true }
+  }
+
+  const handleInputClick = (value: string) => {
+    setSelectedInput(value)
+  }
+
+  const handleSave = () => {
+    const dimensionToSave = dimensions.filter((value) => value !== '')
+    if (dimensionToSave.length === 0) {
+      toast({
+        title: 'Invalid array',
+        description: 'Array must have at least one dimension',
+        variant: 'fail',
+      })
+      return
+    }
+    const formatArrayName = `ARRAY [${dimensionToSave.join(', ')}] OF ${typeValue?.toUpperCase()}`
+    updateVariable({
       scope: 'local',
       associatedPou: name,
       rowId: VariableRow ?? 0,
@@ -67,88 +129,19 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
           definition: 'array',
           value: formatArrayName,
           data: {
-            baseType: baseType,
+            baseType: typeValue,
             dimensions,
           },
         },
       },
     })
-    if (!res.ok) {
-      toast({
-        title: res.title,
-        description: res.message,
-        variant: 'fail',
-      })
-      return false
-    }
-    return true
-  }
-
-  const handleAddDimension = () => {
-    const draft = [...dimensions]
-    draft.push('')
-    updatePouVariable({ dimensions: draft, baseType: typeValue })
-    setSelectedInput(dimensions.length.toString())
-  }
-
-  const handleRemoveDimension = (index: string) => {
-    if (selectedInput === '') return
-    const draft = [...dimensions]
-    draft.splice(Number(index), 1)
-    updatePouVariable({ dimensions: draft, baseType: typeValue })
-    setSelectedInput('')
-  }
-
-  const handleInputClick = (value: string) => {
-    setSelectedInput(value)
-  }
-
-  const handleRearrangeDimensions = (index: number, direction: 'up' | 'down') => {
-    const draft = [...dimensions]
-    if (selectedInput === '') return
-    if (direction === 'up') {
-      if (index === 0) return
-      const temp = draft[index - 1]
-      draft[index - 1] = draft[index]
-      draft[index] = temp
-      setSelectedInput((index - 1).toString())
-    } else {
-      if (index === dimensions.length - 1) return
-      const temp = draft[index + 1]
-      draft[index + 1] = draft[index]
-      draft[index] = temp
-      setSelectedInput((index + 1).toString())
-    }
-    updatePouVariable({ dimensions: draft, baseType: typeValue })
-  }
-
-  const handleUpdateType = (value: BaseType) => {
-    updatePouVariable({ dimensions, baseType: value })
-  }
-
-  const handleUpdateDimension = (index: number, value: string): { ok: boolean } => {
-    if (selectedInput === '') return { ok: false }
-    const draft = [...dimensions]
-    draft[index] = value
-    const res = updatePouVariable({ dimensions: draft, baseType: typeValue })
-    return { ok: res }
-  }
-
-  const handleSave = () => {
-    updatePouVariable({ dimensions, baseType: typeValue })
     setArrayModalIsOpen(false)
+    closeContainer()
   }
 
   const handleCancel = () => {
-    updateVariable({
-      scope: 'local',
-      associatedPou: name,
-      rowId: VariableRow ?? 0,
-      data: {
-        type: oldTypeValue,
-      },
-    })
     setArrayModalIsOpen(false)
+    closeContainer()
   }
 
   return (
@@ -159,7 +152,12 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
       >
         <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>Array</span>
       </ModalTrigger>
-      <ModalContent>
+      <ModalContent
+        onEscapeKeyDown={handleCancel}
+        onPointerDownOutside={handleCancel}
+        onInteractOutside={handleCancel}
+        onClose={handleCancel}
+      >
         <ModalHeader>
           <ModalTitle>Array type definition</ModalTitle>
         </ModalHeader>

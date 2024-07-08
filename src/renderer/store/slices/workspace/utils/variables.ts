@@ -25,21 +25,31 @@ const variableNameValidation = (variableName: string) => {
  * 1. There CANNOT be space between the numeric values and dots
  * 2. The second number MUST always be greater than the first
  * 3. Only integer numbers can be used (shouldn't accept floating numbers or strings of any type)
+ *
+ * It is exported to be used at array-modal.tsx file present at src/renderer/components/_molecules/variables-table/elements.
  */
 
 const validateArrayValue = (value: string) => {
   const [left, right] = value.split('..').map(Number)
   return Number.isInteger(left) && Number.isInteger(right) && left < right
 }
-const arrayValidation = (array: string[]) => {
+const arrayValidation = ({ value }: { value: string }) => {
   const regex = /^(\d+)\.\.(\d+)$/
-  for (const value of array) {
-    if (value === '') continue
-    if (!regex.test(value) || !validateArrayValue(value)) {
-      return false
+  if (value === '') {
+    return {
+      ok: false,
+      title: 'Invalid array value',
+      message: `The array value can not be empty.`,
     }
   }
-  return true
+  if (!regex.test(value) || !validateArrayValue(value)) {
+    return {
+      ok: false,
+      title: 'Invalid array value',
+      message: `The array value "${value}" is invalid. Pattern: "LEFT_number..RIGHT_number" and RIGHT must be GREATER than LEFT. Example: 0..10.`,
+    }
+  }
+  return { ok: true }
 }
 
 /**
@@ -118,21 +128,7 @@ const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Par
     }
   }
 
-  if (dataToBeUpdated.type?.definition === 'array') {
-    const { dimensions } = dataToBeUpdated.type.data
-    if (!arrayValidation(dimensions)) {
-      console.error('Invalid dimensions')
-      response = {
-        ok: false,
-        title: 'Invalid dimensions',
-        message:
-          'Please make sure that the dimensions are valid. It must be in the format "x..y", y must be greater than x and must be a integer.',
-      }
-      return response
-    }
-  }
-
   return response
 }
 
-export { createVariableValidation, updateVariableValidation }
+export { arrayValidation, createVariableValidation, updateVariableValidation }
