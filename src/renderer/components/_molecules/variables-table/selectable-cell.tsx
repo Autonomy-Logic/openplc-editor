@@ -57,7 +57,7 @@ const SelectableTypeCell = ({
             'pointer-events-none': !editable,
           })}
         >
-          <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+          <span className='line-clamp-1 font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
             {cellValue === null ? '' : definition === 'array' ? cellValue : _.upperCase(cellValue as unknown as string)}
           </span>
         </div>

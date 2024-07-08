@@ -67,7 +67,7 @@ export const ArrayModal = ({ arrayModalIsOpen, setArrayModalIsOpen, variableName
           definition: 'array',
           value: formatArrayName,
           data: {
-            baseType: baseType ?? 'dint',
+            baseType: baseType,
             dimensions,
           },
         },
