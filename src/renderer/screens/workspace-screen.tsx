@@ -75,7 +75,7 @@ const WorkspaceScreen = () => {
     { name: 'c', type: 'false' },
     { name: 'd', type: 'false' },
   ]
-  const [isBottomBarCollapsed, setIsBottomBarCollapsed] = useState(false)
+
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
   const panelRef = useRef(null)
 
@@ -206,16 +206,14 @@ const WorkspaceScreen = () => {
                     </p>
                   )}
                   <ResizableHandle
-                    hitAreaMargins={{ coarse: 1, fine: isBottomBarCollapsed ? 3 : 6 }}
+                    hitAreaMargins={{ coarse: 10, fine: 6 }}
                     style={{ height: '2px' }}
-                    className={`absolute  bottom-0  left-0  w-full transition-colors duration-200  data-[resize-handle-state="hover"]:bg-neutral-700 `}
+                    className={`absolute bottom-0 left-0  w-full  transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-neutral-700  data-[resize-handle-state="hover"]:bg-neutral-700 `}
                   />
                 </ResizablePanel>
                 <ResizablePanel
                   id='consolePanel'
                   order={2}
-                  onCollapse={() => setIsBottomBarCollapsed(true)}
-                  onExpand={() => setIsBottomBarCollapsed(false)}
                   collapsible
                   defaultSize={31}
                   minSize={22}
