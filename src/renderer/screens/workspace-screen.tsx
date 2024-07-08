@@ -124,6 +124,7 @@ const WorkspaceScreen = () => {
                 <ResizablePanel
                   id='editorPanel'
                   order={1}
+                  minSize={15}
                   defaultSize={75}
                   className='relative  flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950'
                 >
@@ -208,7 +209,7 @@ const WorkspaceScreen = () => {
                   <ResizableHandle
                     hitAreaMargins={{ coarse: 10, fine: 6 }}
                     style={{ height: '2px' }}
-                    className={`absolute bottom-0 left-0  w-full  transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-neutral-700  data-[resize-handle-state="hover"]:bg-neutral-700 `}
+                    className={`absolute bottom-0 left-0  w-full transition-colors  duration-200  data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
                   />
                 </ResizablePanel>
                 <ResizablePanel
