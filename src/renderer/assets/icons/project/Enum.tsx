@@ -1,7 +1,7 @@
 import { cn } from '@utils/cn'
 import { ComponentPropsWithoutRef } from 'react'
 
-type IEnumIconProps = ComponentPropsWithoutRef<'svg'> & {
+type EnumIconProps = ComponentPropsWithoutRef<'svg'> & {
   size?: 'sm' | 'md' | 'lg'
 }
 
@@ -11,7 +11,7 @@ const sizeClasses = {
   lg: 'w-12 h-12',
 }
 
-export const EnumIcon = (props: IEnumIconProps) => {
+export const EnumIcon = (props: EnumIconProps) => {
   const { className, size = 'sm', ...res } = props
   return (
     <svg
@@ -23,62 +23,60 @@ export const EnumIcon = (props: IEnumIconProps) => {
     >
       <title>Enum Icon</title>
       <path
-        d='M26.0005 19.3333V11.1667C26.0005 8.58934 23.8515 6.5 21.2005 6.5H18.0005C16.9619 6.5 15.9514 6.1725 15.1205 5.56667L12.8805 3.93333C12.0496 3.3275 11.0391 3 10.0005 3H6.80049C4.14952 3 2.00049 5.08934 2.00049 7.66667V19.3333C2.00049 21.9107 4.14952 24 6.80049 24H21.2005C23.8515 24 26.0005 21.9107 26.0005 19.3333Z'
+        opacity='0.4'
+        d='M3.49988 20.9997V6.99968C3.49988 4.42235 5.58922 2.33301 8.16655 2.33301L15.1665 2.33302L24.4999 11.6664V20.9997C24.4999 23.577 22.4105 25.6664 19.8332 25.6664H8.16654C5.58922 25.6664 3.49988 23.577 3.49988 20.9997Z'
         fill='#023C97'
       />
-      <g clipPath='url(#clip0_2002_48373)'>
-        <path
-          opacity='0.4'
-          d='M13.3003 10.3217H20.4681'
-          stroke='#B4D0FE'
-          strokeWidth='1.05'
-          strokeLinecap='round'
-          strokeLinejoin='round'
-        />
-        <path
-          opacity='0.4'
-          d='M13.4199 13.1217H20.4683'
-          stroke='#B4D0FE'
-          strokeWidth='1.05'
-          strokeLinecap='round'
-          strokeLinejoin='round'
-        />
-        <path
-          d='M10.1499 13.4717H8.3999H9.2749V9.97174L8.3999 10.8467'
-          stroke='white'
-          strokeWidth='1.05'
-          strokeLinecap='round'
-          strokeLinejoin='round'
-        />
-        <path
-          opacity='0.4'
-          d='M13.3003 16.6217H20.4681'
-          stroke='#B4D0FE'
-          strokeWidth='1.05'
-          strokeLinecap='round'
-          strokeLinejoin='round'
-        />
-        <path
-          opacity='0.4'
-          d='M13.4199 19.4217H20.4683'
-          stroke='#B4D0FE'
-          strokeWidth='1.05'
-          strokeLinecap='round'
-          strokeLinejoin='round'
-        />
-        <path
-          d='M8.3999 16.2717H10.1499V17.6717L8.3999 18.7217V19.7717H10.3249'
-          stroke='white'
-          strokeWidth='1.05'
-          strokeLinecap='round'
-          strokeLinejoin='round'
-        />
-      </g>
-      <defs>
-        <clipPath id='clip0_2002_48373'>
-          <rect width='18' height='18' fill='white' transform='translate(23.0005 4.99994) rotate(90)' />
-        </clipPath>
-      </defs>
+      <path
+        d='M15.1661 6.99977V2.3331L24.4995 11.6664H19.8328C17.2555 11.6664 15.1661 9.5771 15.1661 6.99977Z'
+        fill='#023C97'
+      />
+      <path
+        opacity='0.4'
+        d='M13.5 13.373H18.6199'
+        stroke='#B4D0FE'
+        strokeWidth='0.75'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+      />
+      <path
+        opacity='0.4'
+        d='M13.5854 15.373H18.62'
+        stroke='#B4D0FE'
+        strokeWidth='0.75'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+      />
+      <path
+        d='M11.25 15.623H10H10.625V13.123L10 13.748'
+        stroke='white'
+        strokeWidth='0.75'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+      />
+      <path
+        opacity='0.4'
+        d='M13.5 17.873H18.6199'
+        stroke='#B4D0FE'
+        strokeWidth='0.75'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+      />
+      <path
+        opacity='0.4'
+        d='M13.5854 19.873H18.62'
+        stroke='#B4D0FE'
+        strokeWidth='0.75'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+      />
+      <path
+        d='M10 17.623H11.25V18.623L10 19.373V20.123H11.375'
+        stroke='white'
+        strokeWidth='0.75'
+        strokeLinecap='round'
+        strokeLinejoin='round'
+      />
     </svg>
   )
 }

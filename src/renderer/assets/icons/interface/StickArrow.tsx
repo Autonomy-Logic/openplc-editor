@@ -24,7 +24,7 @@ export const StickArrowIcon = (props: IStickArrowIconProps) => {
   return (
     <svg
       viewBox='0 0 28 28'
-      fill='none'
+      fill='inherit'
       xmlns='http://www.w3.org/2000/svg'
       className={cn(`${sizeClasses[size]} ${directionClasses[direction]}`, className)}
       {...res}
@@ -32,7 +32,7 @@ export const StickArrowIcon = (props: IStickArrowIconProps) => {
       <title>Stick Arrow Icon</title>
       <path
         d='M22.1667 13.9999H5.8333M22.1667 13.9999L15.3611 6.9999M22.1667 13.9999L15.3611 20.9999'
-        stroke='#0464FB'
+        stroke='inherit'
         strokeWidth='1.5'
         strokeLinecap='round'
         strokeLinejoin='round'

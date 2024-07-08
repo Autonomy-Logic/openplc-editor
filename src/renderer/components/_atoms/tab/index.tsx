@@ -22,14 +22,14 @@ type ITabProps = ComponentPropsWithoutRef<'div'> & {
 }
 
 const TabIcons = {
-  ld: <LDIcon className='h-4 w-4' />,
-  sfc: <SFCIcon className='h-4 w-4' />,
-  fbd: <FBDIcon className='h-4 w-4' />,
-  st: <STIcon className='h-4 w-4' />,
-  il: <ILIcon className='h-4 w-4' />,
-  enumerated: <EnumIcon className='h-4 w-4' />,
-  structure: <StructureIcon className='h-4 w-4' />,
-  array: <ArrayIcon className='h-4 w-4' />,
+  ld: <LDIcon className='h-4 w-4 flex-shrink-0' />,
+  sfc: <SFCIcon className='h-4 w-4 flex-shrink-0' />,
+  fbd: <FBDIcon className='h-4 w-4 flex-shrink-0' />,
+  st: <STIcon className='h-4 w-4 flex-shrink-0' />,
+  il: <ILIcon className='h-4 w-4 flex-shrink-0' />,
+  enumerated: <EnumIcon className='h-4 w-4 flex-shrink-0' />,
+  structure: <StructureIcon className='h-4 w-4 flex-shrink-0' />,
+  array: <ArrayIcon className='h-4 w-4 flex-shrink-0' />,
 }
 
 const Tab = (props: ITabProps) => {
@@ -58,9 +58,9 @@ const Tab = (props: ITabProps) => {
       aria-current={currentTab ? 'page' : undefined}
       {...res}
     >
-      <div className='flex h-full w-full px-3 py-2 [&_svg]:mr-1' onClick={() => handleClickedTab()}>
+      <div className='flex gap-1 items-center h-full w-full px-3 py-2 ' onClick={() => handleClickedTab()}>
         {TabIcons[languageOrDerivation]}
-        <span className='truncate'>{fileName}</span>
+        <span className='overflow-hidden text-ellipsis whitespace-nowrap flex-grow'>{fileName}</span>
         <span
           aria-hidden='true'
           className={cn(currentTab ? 'bg-brand' : 'bg-transparent', 'absolute inset-x-0 top-0 z-50 h-[3px]')}

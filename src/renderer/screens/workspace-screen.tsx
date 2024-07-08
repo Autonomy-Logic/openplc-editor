@@ -1,10 +1,10 @@
 import * as Tabs from '@radix-ui/react-tabs'
 import _ from 'lodash'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, SearchIcon, TransferIcon, ZoomInOut } from '../assets'
+import { DebuggerIcon, DownloadIcon, ExitIcon,PlayIcon, SearchIcon, StickArrowIcon, TransferIcon, ZoomInOut } from '../assets'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
@@ -73,7 +73,15 @@ const WorkspaceScreen = () => {
     { name: 'c', type: 'false' },
     { name: 'd', type: 'false' },
   ]
-  console.log(graphList)
+
+  const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
+  const panelRef = useRef(null)
+
+  const togglePanel = () => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    if (panelRef.current) panelRef.current.resize(25)
+  }
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -99,7 +107,7 @@ const WorkspaceScreen = () => {
         </div>
         <div className='flex h-7 w-full flex-col gap-6'>
           <ActivityBarButton aria-label='Exit' onClick={() => navigate('/')}>
-            <ExitIcon />
+            <StickArrowIcon direction='left' className='stroke-[#B4D0FE]' />
           </ActivityBarButton>
         </div>
       </WorkspaceSideContent>
@@ -110,12 +118,13 @@ const WorkspaceScreen = () => {
           <ResizablePanel id='workspacePanel' order={2} defaultSize={87} className='h-full w-[400px]'>
             <div id='workspaceContentPanel' className='flex h-full flex-1 grow flex-col gap-2 overflow-hidden'>
               {tabs.length > 0 && <Navigation />}
-              <ResizablePanelGroup id='editorPanelGroup' direction='vertical'>
+              <ResizablePanelGroup id='editorPanelGroup' className={`flex h-full  gap-2`} direction='vertical'>
                 <ResizablePanel
                   id='editorPanel'
                   order={1}
+                  minSize={15}
                   defaultSize={75}
-                  className='flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950'
+                  className='relative  flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950'
                 >
                   {/**
                    * TODO: Need to be refactored.
@@ -136,21 +145,49 @@ const WorkspaceScreen = () => {
                           className='flex flex-1 flex-col gap-2'
                         >
                           <ResizablePanel
+                            ref={panelRef}
                             id='variableTablePanel'
                             order={1}
                             collapsible
+                            onCollapse={() => {
+                              setIsVariablesPanelCollapsed(true)
+                            }}
+                            onExpand={() => setIsVariablesPanelCollapsed(false)}
                             collapsedSize={0}
-                            minSize={20}
                             defaultSize={25}
-                            className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'
+                            minSize={20}
+                            className={`relative flex h-full w-full flex-1 flex-col gap-4 overflow-auto`}
                           >
                             <VariablesEditor />
                           </ResizablePanel>
-                          <ResizableHandle className='h-[1px] w-full bg-brand-light' />
+
+                          <ResizableHandle
+                            // hitAreaMargins={{ coarse: 1, fine: 1 }}
+                            style={{ height: '1px' }}
+                            className={`${isVariablesPanelCollapsed && ' !hidden '}  flex  w-full bg-brand-light `}
+                          />
+
+                          {isVariablesPanelCollapsed && (
+                            <div className='flex w-full justify-center'>
+                              <button
+                                className='flex w-auto items-center rounded-lg border-brand bg-neutral-50 px-2 py-1 dark:bg-neutral-900'
+                                onClick={togglePanel}
+                              >
+                                <p className='text-xs font-medium text-brand-medium dark:text-brand-light'>
+                                  Expand Table
+                                </p>
+                                <ExitIcon
+                                  size='sm'
+                                  className='-rotate-90 select-none fill-brand-medium  stroke-brand dark:fill-brand-light dark:stroke-brand-light'
+                                />
+                              </button>
+                            </div>
+                          )}
+
                           <ResizablePanel
+                            defaultSize={75}
                             id='textualEditorPanel'
                             order={2}
-                            defaultSize={75}
                             className='mt-6 flex-1 flex-grow rounded-md'
                           >
                             <MonacoEditor
@@ -167,8 +204,12 @@ const WorkspaceScreen = () => {
                       No tabs open
                     </p>
                   )}
+                  <ResizableHandle
+                    hitAreaMargins={{ coarse: 10, fine: 6 }}
+                    style={{ height: '2px' }}
+                    className={`absolute bottom-0 left-0  w-full transition-colors  duration-200  data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
+                  />
                 </ResizablePanel>
-                <ResizableHandle className='mt-2' />
                 <ResizablePanel
                   id='consolePanel'
                   order={2}

@@ -18,7 +18,7 @@ export const ExitIcon = (props: IIconProps) => {
     >
       <path
         d='M5.8335 14L22.1668 14M5.8335 14L12.6391 21M5.8335 14L12.6391 7'
-        stroke='#B4D0FE'
+        stroke='inherit'
         strokeWidth='1.5'
         strokeLinecap='round'
         strokeLinejoin='round'
