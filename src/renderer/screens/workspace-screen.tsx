@@ -96,11 +96,11 @@ const WorkspaceScreen = () => {
   }
 
   useEffect(() => {
-    const action = collapseAll ? 'collapse' : 'expand';
-    [explorerPanelRef, workspacePanelRef, consolePanelRef].forEach(ref => {
-      if (ref.current) ref.current[action]();
-    });
-  }, [collapseAll]);
+    const action = collapseAll ? 'collapse' : 'expand'
+    ;[explorerPanelRef, workspacePanelRef, consolePanelRef].forEach((ref) => {
+      if (ref.current) ref.current[action]()
+    })
+  }, [collapseAll])
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -240,8 +240,8 @@ const WorkspaceScreen = () => {
                   <ResizableHandle
                     id='consoleResizeHandle'
                     hitAreaMargins={{ coarse: 2, fine: 2 }}
-                    style={{ height: '2px' }}
-                    className={`absolute bottom-0 left-0 right-0 mx-2 w-full  px-2 transition-colors  duration-200  data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
+                    style={{ height: '2px', width: 'calc(100% - 16px)' }}
+                    className={`absolute bottom-0 left-0 mx-2 transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700 data-[resize-handle-state="hover"]:dark:bg-neutral-700`}
                   />
                 </ResizablePanel>
                 <ResizablePanel

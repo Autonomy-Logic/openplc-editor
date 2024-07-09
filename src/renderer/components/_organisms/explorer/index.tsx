@@ -20,6 +20,7 @@ const Explorer = (props): ReactElement => {
       collapsible={true}
       minSize={11}
       defaultSize={13}
+      maxSize={80}
       className='flex h-full w-[200px] flex-col overflow-auto rounded-lg border-2 border-inherit border-neutral-200 bg-white data-[panel-size="0.0"]:hidden dark:border-neutral-850 dark:bg-neutral-950'
     >
       <ResizablePanelGroup id='explorerPanelGroup' direction='vertical' className='h-full flex-1'>
