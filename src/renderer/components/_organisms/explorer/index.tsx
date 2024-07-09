@@ -9,9 +9,11 @@ import { Project } from './project'
  *
  * @return {ReactElement} The rendered Explorer component
  */
-const Explorer = (): ReactElement => {
+const Explorer = (props): ReactElement => {
+  const { prop } = props
   return (
     <ResizablePanel
+      ref={prop}
       id='explorerPanel'
       order={1}
       collapsible={true}
