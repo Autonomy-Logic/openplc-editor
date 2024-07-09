@@ -49,15 +49,17 @@ const ArrayDataType = () => {
                 <MinusIcon />
               </TableActionButton>
               <TableActionButton aria-label='Move table row up button' onClick={() => console.log('Button clicked')}>
-                <StickArrowIcon direction='up' />
+                <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
               </TableActionButton>
               <TableActionButton aria-label='Move table row down button' onClick={() => console.log('Button clicked')}>
-                <StickArrowIcon direction='down' />
+                <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
               </TableActionButton>
             </div>
           </div>
         </div>
+        <div className='w-1/2'>
         <ArrayDTInitialValueContainer />
+        </div>
       </div>
 
       <Table aria-label='Array data type table' className='w-1/2'>

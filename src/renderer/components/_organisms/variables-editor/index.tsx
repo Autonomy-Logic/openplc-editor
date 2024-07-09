@@ -259,7 +259,7 @@ const VariablesEditor = () => {
                 }
                 onClick={() => handleRearrangeVariables(-1)}
               >
-                <StickArrowIcon direction='up' />
+                <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
               </TableActionButton>
               <TableActionButton
                 aria-label='Move table row down button'
@@ -269,7 +269,7 @@ const VariablesEditor = () => {
                 }
                 onClick={() => handleRearrangeVariables(1)}
               >
-                <StickArrowIcon direction='down' />
+                <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
               </TableActionButton>
             </div>
           </div>

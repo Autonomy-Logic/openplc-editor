@@ -2,6 +2,8 @@ import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '
 import { ArrayDataType } from '@root/renderer/components/_molecules/data-types/array'
 import { EnumeratorDataType } from '@root/renderer/components/_molecules/data-types/enumerated'
 
+import { DataTypeActions } from './actions'
+
 type IDataTypeEditorProps = {
   derivation: 'enumerated' | 'structure' | 'array'
 }
@@ -81,6 +83,7 @@ const DataTypeEditor = (props: IDataTypeEditorProps) => {
       <div aria-label='Data type content container' className='h-full w-full'>
         {derivation === 'array' && <ArrayDataType />}
         {derivation === 'enumerated' && <EnumeratorDataType />}
+        <DataTypeActions derivation={derivation} />
       </div>
     </div>
   )

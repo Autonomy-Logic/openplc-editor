@@ -1,12 +1,13 @@
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 
-const ArrayDTInitialValueContainer = () => {
+export const EnumeratorDTInitialValueContainer = () => {
   return (
-    <div aria-label='Array data type initial value container' className='flex h-fit w-full items-center justify-end'>
+    <div aria-label='Enum data type initial value container' className='flex h-full w-full items-center justify-end '>
       <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
         Initial Value
       </label>
-      <Select aria-label='Array data type initial value select'>
+
+      <Select aria-label='Enum data type initial value select'>
         <SelectTrigger
           withIndicator
           placeholder='Initial Value'
@@ -47,5 +48,3 @@ const ArrayDTInitialValueContainer = () => {
     </div>
   )
 }
-
-export { ArrayDTInitialValueContainer }

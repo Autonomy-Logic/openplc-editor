@@ -42,7 +42,6 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const [isOpen, setIsOpen] = useState(false)
 
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
-    console.log(data)
     try {
       const pouWasCreated = create.pou(data)
       if (!pouWasCreated) throw new TypeError()
@@ -63,7 +62,6 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
 
   const handleCreateDatatype = (derivation: 'enumerated' | 'structure' | 'array') => {
     const data = CreateDatatypeObject(derivation)
-    console.log(data)
     createDatatype(data)
     closeContainer((prev) => !prev)
     setIsOpen(false)

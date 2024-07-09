@@ -1,6 +1,4 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
-import { ArrayDataType } from '@root/renderer/components/_molecules/data-types/array'
-import { EnumeratorDataType } from '@root/renderer/components/_molecules/data-types/enumerated'
 
 type IDataTypeActionsProps = {
   derivation: 'enumerated' | 'structure' | 'array'
@@ -38,14 +36,14 @@ const StructTableActions = () => {
           className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
           onClick={() => console.log('Button clicked')}
         >
-          <StickArrowIcon direction='up' />
+          <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
         </div>
         <div
           aria-label='Move table row down button'
           className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
           onClick={() => console.log('Button clicked')}
         >
-          <StickArrowIcon direction='down' />
+          <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
         </div>
       </div>
     </div>
@@ -57,8 +55,6 @@ const DataTypeActions = (props: IDataTypeActionsProps) => {
 
   return (
     <div className='flex flex-col gap-8'>
-      {derivation === 'array' && <ArrayDataType />}
-      {derivation === 'enumerated' && <EnumeratorDataType />}
       {derivation === 'structure' && <StructTableActions />}
     </div>
   )
