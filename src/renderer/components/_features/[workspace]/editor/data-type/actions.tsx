@@ -1,6 +1,6 @@
 import { MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
-import { ArrayTableActions } from '@root/renderer/components/_molecules/data-types/array-table-actions'
+import { ArrayDataType } from '@root/renderer/components/_molecules/data-types/array'
 
 type IDataTypeActionsProps = {
   derivation: 'enumerated' | 'structure' | 'array'
@@ -156,7 +156,7 @@ const DataTypeActions = (props: IDataTypeActionsProps) => {
 
   return (
     <div className='flex flex-col gap-8'>
-      {derivation === 'array' && <ArrayTableActions />}
+      {derivation === 'array' && <ArrayDataType />}
       {derivation === 'enumerated' && <EnumTableActions />}
       {derivation === 'structure' && <StructTableActions />}
     </div>

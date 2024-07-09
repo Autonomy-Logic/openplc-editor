@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { DTBaseTypeContainer } from '../base-type'
 import { ArrayDTInitialValueContainer } from './initial-value'
 
-const ArrayTableActions = () => {
+const ArrayDataType = () => {
 
   const {
     workspace: {
@@ -67,4 +67,4 @@ const ArrayTableActions = () => {
   )
 }
 
-export { ArrayTableActions }
+export { ArrayDataType }
