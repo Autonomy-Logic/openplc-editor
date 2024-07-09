@@ -2,7 +2,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer
 
 const DTBaseTypeContainer = () => {
   return (
-    <div aria-label='Array data type base type container' className='flex h-full w-full'>
+    <div aria-label='Array data type base type container' className='flex h-fit w-full items-center justify-between'>
       <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
         Base type
       </label>

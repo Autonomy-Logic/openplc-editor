@@ -2,7 +2,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer
 
 const ArrayDTInitialValueContainer = () => {
   return (
-    <div aria-label='Array data type initial value container' className='flex h-full w-1/2 items-center justify-end'>
+    <div aria-label='Array data type initial value container' className='flex h-fit w-1/2 items-center justify-end'>
       <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
         Initial Value
       </label>

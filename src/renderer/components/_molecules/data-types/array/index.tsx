@@ -33,7 +33,7 @@ const ArrayDataType = () => {
           <DTBaseTypeContainer />
           <div
             aria-label='Array data type table actions container'
-            className='flex h-full w-full items-center justify-between'
+            className='flex h-fit w-full items-center justify-between'
           >
             <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
               Dimensions
