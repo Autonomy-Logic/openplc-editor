@@ -1,5 +1,6 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { Table, TableBody, TableCell, TableRow } from '@root/renderer/components/_atoms'
+import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCDataType } from '@root/types/PLC/open-plc'
 import { useEffect, useState } from 'react'
@@ -36,34 +37,18 @@ const StructureDataType = () => {
             aria-label='Data type table actions buttons container'
             className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
           >
-            <div
-              aria-label='Add table row button'
-              className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => console.log('Button clicked')}
-            >
+            <TableActionButton aria-label='Add table row button' onClick={() => console.log('Button clicked')}>
               <PlusIcon className='!stroke-brand' />
-            </div>
-            <div
-              aria-label='Remove table row button'
-              className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => console.log('Button clicked')}
-            >
+            </TableActionButton>
+            <TableActionButton aria-label='Remove table row button' onClick={() => console.log('Button clicked')}>
               <MinusIcon />
-            </div>
-            <div
-              aria-label='Move table row up button'
-              className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => console.log('Button clicked')}
-            >
+            </TableActionButton>
+            <TableActionButton aria-label='Move table row up button' onClick={() => console.log('Button clicked')}>
               <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
-            </div>
-            <div
-              aria-label='Move table row down button'
-              className='hover:cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900'
-              onClick={() => console.log('Button clicked')}
-            >
+            </TableActionButton>
+            <TableActionButton aria-label='Move table row down button' onClick={() => console.log('Button clicked')}>
               <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
-            </div>
+            </TableActionButton>
           </div>
         </div>
       </div>
