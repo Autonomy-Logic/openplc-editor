@@ -53,8 +53,9 @@ const PLCDataTypeSchema = z.object({
           name: z.string(),
           type: z.discriminatedUnion('type', [
             z.object({
-              type: z.literal('base-type'),
-              value: baseTypeSchema,
+              definition: z.literal('base-type'),
+              type: baseTypeSchema,
+              value: z.string(),
             }),
             z.object({
               type: z.literal('array'),
