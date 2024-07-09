@@ -7,7 +7,6 @@ import {
   FBDIcon,
   FunctionBlockIcon,
   FunctionIcon,
-  GenericIcon,
   ILIcon,
   LDIcon,
   PLCIcon,
@@ -200,7 +199,7 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
 
 type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
   nested?: boolean
-  leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'dt' | 'res'
+  leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res'
   label?: string
 }
 
@@ -210,7 +209,9 @@ const LeafSources = {
   fbd: { LeafIcon: FBDIcon },
   sfc: { LeafIcon: SFCIcon },
   ld: { LeafIcon: LDIcon },
-  dt: { LeafIcon: GenericIcon },
+  arr: { LeafIcon: ArrayIcon },
+  enum: { LeafIcon: EnumIcon },
+  str: { LeafIcon: StructureIcon },
   res: { LeafIcon: ResourceIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, label, nested = false, ...res }: IProjectTreeLeafProps) => {
@@ -227,17 +228,17 @@ const ProjectTreeLeaf = ({ leafLang, label, nested = false, ...res }: IProjectTr
   return (
     <li
       className={cn(
-        'ml-4 flex cursor-pointer flex-row items-center py-1 pl-4 hover:bg-slate-50 dark:hover:bg-neutral-900',
+        'ml-4 flex cursor-pointer flex-row items-center py-1 pl-6 hover:bg-slate-50 dark:hover:bg-neutral-900',
         nested && 'ml-8',
         name === label && 'bg-slate-50 dark:bg-neutral-900',
       )}
       onClick={handleLeafSelection}
       {...res}
     >
-      <LeafIcon />
+      <LeafIcon className='flex-shrink-0' />
       <span
         className={cn(
-          'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+          'ml-1 overflow-hidden text-ellipsis w-[90%] whitespace-nowrap  font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
           name === label && 'font-medium text-neutral-1000 dark:text-white',
         )}
       >

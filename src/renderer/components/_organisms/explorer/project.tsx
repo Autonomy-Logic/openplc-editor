@@ -1,9 +1,4 @@
-import {
-  ProjectTreeBranch,
-  ProjectTreeLeaf,
-  ProjectTreeNestedBranch,
-  ProjectTreeRoot,
-} from '@components/_molecules/project-tree'
+import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '@components/_molecules/project-tree'
 import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
@@ -131,66 +126,62 @@ const Project = () => {
             ))}
         </ProjectTreeBranch>
         <ProjectTreeBranch branchTarget='data-type'>
-          <ProjectTreeNestedBranch nestedBranchTarget='array'>
-            {dataTypes
-              ?.filter(({ derivation }) => derivation.type === 'array')
-              .map(({ id, name }) => (
-                <ProjectTreeLeaf
-                  nested
-                  key={id}
-                  leafLang='dt'
-                  label={name}
-                  /** Todo: Update the tab state */
-                  onClick={() =>
-                    handleCreateTab({
-                      name,
-                      path: `/data/data-types/array/${name}`,
-                      elementType: { type: 'data-type', derivation: 'array' },
-                    })
-                  }
-                />
-              ))}
-          </ProjectTreeNestedBranch>
-          <ProjectTreeNestedBranch nestedBranchTarget='enumerated'>
-            {dataTypes
-              ?.filter(({ derivation }) => derivation.type === 'enumerated')
-              .map(({ id, name }) => (
-                <ProjectTreeLeaf
-                  nested
-                  key={id}
-                  leafLang='dt'
-                  label={name}
-                  /** Todo: Update the tab state */
-                  onClick={() =>
-                    handleCreateTab({
-                      name,
-                      path: `/data/data-types/enumerated/${name}`,
-                      elementType: { type: 'data-type', derivation: 'enumerated' },
-                    })
-                  }
-                />
-              ))}
-          </ProjectTreeNestedBranch>
-          <ProjectTreeNestedBranch nestedBranchTarget='structure'>
-            {dataTypes
-              ?.filter(({ derivation }) => derivation.type === 'structure')
-              .map(({ id, name }) => (
-                <ProjectTreeLeaf
-                  nested
-                  key={id}
-                  leafLang='dt'
-                  label={name}
-                  /** Todo: Update the tab state */
-                  onClick={() =>
-                    handleCreateTab({
-                      name,
-                      path: `/data/data-types/structure/${name}`,
-                      elementType: { type: 'data-type', derivation: 'structure' },
-                    })
-                  }
-                />
-              ))}
-          </ProjectTreeNestedBranch>
+          {dataTypes
+            ?.filter(({ derivation }) => derivation.type === 'array')
+            .map(({ id, name }) => (
+              <ProjectTreeLeaf
+                nested
+                key={id}
+                leafLang='arr'
+                label={name}
+                /** Todo: Update the tab state */
+                onClick={() =>
+                  handleCreateTab({
+                    name,
+                    path: `/data/data-types/array/${name}`,
+                    elementType: { type: 'data-type', derivation: 'array' },
+                  })
+                }
+              />
+            ))}
+
+          {dataTypes
+            ?.filter(({ derivation }) => derivation.type === 'enumerated')
+            .map(({ id, name }) => (
+              <ProjectTreeLeaf
+                nested
+                key={id}
+                leafLang='enum'
+                label={name}
+                /** Todo: Update the tab state */
+                onClick={() =>
+                  handleCreateTab({
+                    name,
+                    path: `/data/data-types/enumerated/${name}`,
+                    elementType: { type: 'data-type', derivation: 'enumerated' },
+                  })
+                }
+              />
+            ))}
+
+          {dataTypes
+            ?.filter(({ derivation }) => derivation.type === 'structure')
+            .map(({ id, name }) => (
+              <ProjectTreeLeaf
+                nested
+                key={id}
+                leafLang='str'
+                label={name}
+                /** Todo: Update the tab state */
+                onClick={() =>
+                  handleCreateTab({
+                    name,
+                    path: `/data/data-types/structure/${name}`,
+                    elementType: { type: 'data-type', derivation: 'structure' },
+                  })
+                }
+              />
+            ))}
         </ProjectTreeBranch>
         <ProjectTreeBranch branchTarget='device'>{/** Will be filled with device */}</ProjectTreeBranch>
         {/** Maybe a divider component */}
