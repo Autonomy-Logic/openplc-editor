@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import * as Tabs from '@radix-ui/react-tabs'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
@@ -137,7 +138,11 @@ const WorkspaceScreen = () => {
         </div>
       </WorkspaceSideContent>
       <WorkspaceMainContent>
-        <ResizablePanelGroup id='mainContentPanelGroup' direction='horizontal' className='h-full flex relative gap-2 w-full'>
+        <ResizablePanelGroup
+          id='mainContentPanelGroup'
+          direction='horizontal'
+          className='relative flex h-full w-full gap-2'
+        >
           <Explorer prop={explorerPanelRef} />
 
           <ResizablePanel
@@ -145,11 +150,12 @@ const WorkspaceScreen = () => {
             id='workspacePanel'
             order={2}
             defaultSize={87}
-            className='h-full flex w-[400px]'
+            className='relative flex h-full w-[400px]'
           >
             <ResizableHandle
-              hitAreaMargins={{ coarse: 6, fine: 6 }}
-              className={`  my-2 w-[2px] py-2 transition-colors  duration-200  data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
+              id='workspaceHandle'
+              hitAreaMargins={{ coarse: 3, fine: 3 }}
+              className={` absolute bottom-0  top-0 z-[99] my-[2px] w-[4px] py-2 transition-colors  duration-200  data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
             />
             <div id='workspaceContentPanel' className='flex h-full flex-1 grow flex-col gap-2 overflow-hidden'>
               {tabs.length > 0 && <Navigation />}
@@ -239,7 +245,8 @@ const WorkspaceScreen = () => {
                     </p>
                   )}
                   <ResizableHandle
-                    hitAreaMargins={{ coarse: 0, fine: 6 }}
+                    id='consoleResizeHandle'
+                    hitAreaMargins={{ coarse: 2, fine: 2 }}
                     style={{ height: '2px' }}
                     className={`absolute bottom-0 left-0 right-0 mx-2 w-full  px-2 transition-colors  duration-200  data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
                   />
