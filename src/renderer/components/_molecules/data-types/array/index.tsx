@@ -23,7 +23,7 @@ const ArrayDataType = () => {
   }, [dataTypes])
 
   useEffect(() => {
-    console.log(dataTypesState)
+    console.log('array data type', dataTypesState)
   }, [dataTypesState])
 
   return (

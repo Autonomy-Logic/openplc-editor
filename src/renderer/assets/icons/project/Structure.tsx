@@ -31,7 +31,7 @@ export const StructureIcon = (props: StructureIconProps) => {
         d='M15.1661 6.99977V2.3331L24.4995 11.6664H19.8328C17.2555 11.6664 15.1661 9.5771 15.1661 6.99977Z'
         fill='#023C97'
       />
-      <mask id='mask0_113_22' maskType='luminance' maskUnits='userSpaceOnUse' x='8' y='11' width='10' height='11'>
+      <mask id='mask0_113_22' maskUnits='userSpaceOnUse' x='8' y='11' width='10' height='11'>
         <path d='M18 11.9287H8V21.9287H18V11.9287Z' fill='white' />
       </mask>
       <g mask='url(#mask0_113_22)'>
