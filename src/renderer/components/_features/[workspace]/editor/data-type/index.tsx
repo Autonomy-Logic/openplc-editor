@@ -1,7 +1,8 @@
 // import { MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { ArrayDataType } from '@root/renderer/components/_molecules/data-types/array'
 
-import { DataTypeActions } from './actions'
+// import { DataTypeActions } from './actions'
 
 type IDataTypeEditorProps = {
   derivation: 'enumerated' | 'structure' | 'array'
@@ -79,14 +80,8 @@ const DataTypeEditor = (props: IDataTypeEditorProps) => {
           </Select>
         </div>
       </div>
-      <div aria-label='Data type content container' className='flex h-full w-full flex-col gap-4 bg-transparent'>
-        <div aria-label='Data type content actions container'>
-          <DataTypeActions derivation={derivation} />
-          {/* <div aria-label='Data type content actions container'></div> */}
-        </div>
-        <div aria-label='Data type content editor container'>
-          <p>Here will go the editor</p>
-        </div>
+      <div aria-label='Data type content container' className='h-full w-full'>
+        {derivation === 'array' && <ArrayDataType />}
       </div>
     </div>
   )
