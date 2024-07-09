@@ -1,8 +1,6 @@
-// import { MinusIcon, PencilIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { ArrayDataType } from '@root/renderer/components/_molecules/data-types/array'
-
-// import { DataTypeActions } from './actions'
+import { EnumeratorDataType } from '@root/renderer/components/_molecules/data-types/enumerated'
 
 type IDataTypeEditorProps = {
   derivation: 'enumerated' | 'structure' | 'array'
@@ -82,6 +80,7 @@ const DataTypeEditor = (props: IDataTypeEditorProps) => {
       </div>
       <div aria-label='Data type content container' className='h-full w-full'>
         {derivation === 'array' && <ArrayDataType />}
+        {derivation === 'enumerated' && <EnumeratorDataType />}
       </div>
     </div>
   )
