@@ -96,18 +96,11 @@ const WorkspaceScreen = () => {
   }
 
   useEffect(() => {
-    if (collapseAll) {
-      if (explorerPanelRef.current) explorerPanelRef.current.collapse()
-      if (workspacePanelRef.current) workspacePanelRef.current.collapse()
-      if (consolePanelRef.current) consolePanelRef.current.collapse()
-    }
-
-    if (!collapseAll) {
-      if (explorerPanelRef.current) explorerPanelRef.current.expand()
-      if (workspacePanelRef.current) workspacePanelRef.current.expand()
-      if (consolePanelRef.current) consolePanelRef.current.expand()
-    }
-  }, [collapseAll])
+    const action = collapseAll ? 'collapse' : 'expand';
+    [explorerPanelRef, workspacePanelRef, consolePanelRef].forEach(ref => {
+      if (ref.current) ref.current[action]();
+    });
+  }, [collapseAll]);
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>

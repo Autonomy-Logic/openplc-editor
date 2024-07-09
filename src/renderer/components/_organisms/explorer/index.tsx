@@ -11,6 +11,7 @@ import { Project } from './project'
  */
 const Explorer = (props): ReactElement => {
   const { prop } = props
+
   return (
     <ResizablePanel
       ref={prop}
@@ -22,11 +23,14 @@ const Explorer = (props): ReactElement => {
       className='flex h-full w-[200px] flex-col overflow-auto rounded-lg border-2 border-inherit border-neutral-200 bg-white data-[panel-size="0.0"]:hidden dark:border-neutral-850 dark:bg-neutral-950'
     >
       <ResizablePanelGroup id='explorerPanelGroup' direction='vertical' className='h-full flex-1'>
-        <ResizablePanel id='projectExplorerPanel' order={1} defaultSize={50}>
+        <ResizablePanel id='projectExplorerPanel' order={1} defaultSize={50} maxSize={80}>
           <Project />
         </ResizablePanel>
-        <ResizableHandle className='bg-neutral-200 dark:bg-neutral-850' />
-        <ResizablePanel id='libraryExplorerPanel' order={2} defaultSize={50}>
+        <ResizableHandle
+          style={{ height: '1px' }}
+          className={`bg-neutral-200  transition-colors  duration-200  data-[resize-handle-active="pointer"]:bg-brand-light  data-[resize-handle-state="hover"]:bg-brand-light dark:bg-neutral-850 data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
+        />
+        <ResizablePanel id='libraryExplorerPanel' order={2} defaultSize={50} maxSize={80}>
           {/* The library tree panel will be implemented soon */}
           <Library />
         </ResizablePanel>
