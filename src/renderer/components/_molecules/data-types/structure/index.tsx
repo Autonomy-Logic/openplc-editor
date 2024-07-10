@@ -1,9 +1,47 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
-import { Table, TableBody, TableCell, TableRow } from '@root/renderer/components/_atoms'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@root/renderer/components/_atoms'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCDataType } from '@root/types/PLC/open-plc'
+import { PLCDataTypeDerivationSchema, PLCDataTypeStructureElement } from '@root/types/PLC/open-plc'
+import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
+import { z } from 'zod'
+
+const Structure = PLCDataTypeDerivationSchema.options[2]
+type PLCDataTypeStructure = z.infer<typeof Structure>
+
+const columnHelper = createColumnHelper<PLCDataTypeStructureElement>()
+const columns = [
+  columnHelper.accessor('id', {
+    header: '#',
+    size: 64,
+    minSize: 32,
+    maxSize: 64,
+    enableResizing: true,
+    cell: (props) => props.row.id,
+  }),
+  columnHelper.accessor('name', {
+    header: 'Name',
+    enableResizing: true,
+    size: 150,
+    minSize: 150,
+    maxSize: 300,
+  }),
+  columnHelper.accessor('type.value', {
+    header: 'Type',
+    enableResizing: true,
+    size: 150,
+    minSize: 150,
+    maxSize: 300,
+  }),
+  columnHelper.accessor('initialValue', {
+    header: 'Initial Value',
+    enableResizing: true,
+    size: 150,
+    minSize: 150,
+    maxSize: 300,
+  }),
+]
 
 const StructureDataType = () => {
   const {
@@ -12,16 +50,26 @@ const StructureDataType = () => {
     },
   } = useOpenPLCStore()
 
-  const [dataTypesState, setDataTypesState] = useState<PLCDataType>()
+  const [dataTypesState, setDataTypesState] = useState<PLCDataTypeStructure['elements']>([])
 
   useEffect(() => {
-    const arrayDataType = dataTypes.find((dataType) => dataType.derivation.type === 'structure')
-    setDataTypesState(arrayDataType)
+    const structureDataType = dataTypes.filter((dataType) => dataType.derivation.type === 'structure')
+    structureDataType.forEach((dataType) => {
+      if (dataType.derivation.type === 'structure') {
+        setDataTypesState(dataType.derivation.elements)
+      }
+    })
   }, [dataTypes])
 
   useEffect(() => {
     console.log('structure data type', dataTypesState)
   }, [dataTypesState])
+
+  const table = useReactTable({
+    columns: columns,
+    data: dataTypesState,
+    getCoreRowModel: getCoreRowModel(),
+  })
 
   return (
     <div aria-label='Struct data type container' className='flex h-full w-full flex-col gap-4 bg-transparent'>
@@ -53,17 +101,47 @@ const StructureDataType = () => {
         </div>
       </div>
 
-      <Table aria-label='Structure data type table' className='w-1/2'>
+      <Table context='Variables' className='mr-1'>
+        <TableHeader>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <TableHead
+                  resizable={header.column.columnDef.enableResizing}
+                  isResizing={header.column.getIsResizing()}
+                  resizeHandler={header.getResizeHandler()}
+                  style={{
+                    width: header.getSize(),
+                    maxWidth: header.column.columnDef.maxSize,
+                    minWidth: header.column.columnDef.minSize,
+                  }}
+                  key={header.id}
+                >
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
         <TableBody>
-          {dataTypesState?.derivation.type === 'structure' &&
-            dataTypesState.derivation.elements.map((dimension, index) => (
-              <TableRow
-                key={index}
-                className='[&:first-child>*]:rounded-t-md [&:first-child>*]:border-t [&:first-child>*]:border-t-neutral-500'
-              >
-                <TableCell className='p-2'>{dimension.name}</TableCell>
-              </TableRow>
-            ))}
+          {table.getRowModel().rows.map((row) => (
+            <TableRow id={row.id} key={row.id} className='h-8 cursor-pointer'>
+              {row.getVisibleCells().map((cell) => (
+                <TableCell
+                  style={{
+                    width: cell.column.getSize(),
+                    maxWidth: cell.column.columnDef.maxSize,
+                    minWidth: cell.column.columnDef.minSize,
+                  }}
+                  key={cell.id}
+                >
+                  {flexRender(cell.column.columnDef.cell, {
+                    ...cell.getContext(),
+                  })}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
     </div>

@@ -25,51 +25,55 @@ const baseTypeSchema = z.enum([
 ])
 type BaseType = z.infer<typeof baseTypeSchema>
 
-const PLCDataTypeSchema = z.object({
-  id: z.number(),
+const PLCDataTypeStructureElementSchema = z.object({
+  id: z.string().optional(),
   name: z.string(),
-  derivation: z.discriminatedUnion('type', [
+  type: z.discriminatedUnion('definition', [
     z.object({
-      type: z.literal('array'),
+      definition: z.literal('base-type'),
+      value: z.string(),
+    }),
+    z.object({
+      definition: z.literal('array'),
       value: z.string(),
       data: z.object({
         baseType: baseTypeSchema,
         dimensions: z.array(z.string()),
       }),
     }),
-    /** This enumerated needs to be reviewed */
-    z.object({
-      type: z.literal('enumerated'),
-      values: z.array(z.string()),
-      /** The initial value must be one of the values created */
-      initialValue: z.string(),
-    }),
-    /** This structure needs to be reviewed */
-    z.object({
-      type: z.literal('structure'),
-      elements: z.array(
-        z.object({
-          id: z.number(),
-          name: z.string(),
-          type: z.discriminatedUnion('type', [
-            z.object({
-              definition: z.literal('base-type'),
-              type: baseTypeSchema,
-              value: z.string(),
-            }),
-            z.object({
-              type: z.literal('array'),
-              value: z.string(),
-              data: z.object({
-                baseType: baseTypeSchema,
-                dimensions: z.array(z.string()),
-              }),
-            }),
-          ]),
-        }),
-      ),
-    }),
   ]),
+  initialValue: z.string().optional(),
+})
+type PLCDataTypeStructureElement = z.infer<typeof PLCDataTypeStructureElementSchema>
+
+const PLCDataTypeDerivationSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('array'),
+    value: z.string(),
+    data: z.object({
+      baseType: baseTypeSchema,
+      dimensions: z.array(z.string()),
+    }),
+    initialValue: z.string(),
+  }),
+  /** This enumerated needs to be reviewed */
+  z.object({
+    type: z.literal('enumerated'),
+    values: z.array(z.string()),
+    /** The initial value must be one of the values created */
+    initialValue: z.string(),
+  }),
+  /** This structure needs to be reviewed */
+  z.object({
+    type: z.literal('structure'),
+    elements: z.array(PLCDataTypeStructureElementSchema),
+  }),
+])
+
+const PLCDataTypeSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  derivation: PLCDataTypeDerivationSchema,
 })
 
 type PLCDataType = z.infer<typeof PLCDataTypeSchema>
@@ -168,7 +172,9 @@ type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
 export {
   baseTypeSchema,
+  PLCDataTypeDerivationSchema,
   PLCDataTypeSchema,
+  PLCDataTypeStructureElementSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
   PLCProgramSchema,
@@ -176,4 +182,4 @@ export {
   PLCVariableSchema,
 }
 
-export type { BaseType, PLCDataType, PLCFunction, PLCFunctionBlock, PLCProgram, PLCProjectData, PLCVariable }
+export type { BaseType, PLCDataType, PLCDataTypeStructureElement,PLCFunction, PLCFunctionBlock, PLCProgram, PLCProjectData, PLCVariable }
