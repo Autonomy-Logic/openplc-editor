@@ -136,7 +136,7 @@ const WorkspaceScreen = () => {
           direction='horizontal'
           className='relative flex h-full w-full gap-2'
         >
-          <Explorer prop={explorerPanelRef} />
+          <Explorer collapse={explorerPanelRef} />
 
           <ResizablePanel
             ref={workspacePanelRef}

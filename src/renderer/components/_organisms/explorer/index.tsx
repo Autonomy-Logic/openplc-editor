@@ -1,3 +1,4 @@
+// eslint-disable @typescript-eslint/no-explicit-any
 import { ReactElement } from 'react'
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../panel'
@@ -9,12 +10,12 @@ import { Project } from './project'
  *
  * @return {ReactElement} The rendered Explorer component
  */
-const Explorer = (props): ReactElement => {
-  const { prop } = props
 
+const Explorer = ({ collapse }): ReactElement => {
   return (
     <ResizablePanel
-      ref={prop}
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      ref={collapse}
       id='explorerPanel'
       order={1}
       collapsible={true}
