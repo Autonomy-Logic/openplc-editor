@@ -31,7 +31,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
     <div className='select-none'>
       <ul className='list-none p-0' {...res}>
         <li
-          className=' flex cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
+          className=' flex cursor-pointer flex-row items-center py-1 pl-3 hover:bg-slate-50 dark:hover:bg-neutral-900'
           onClick={handleVisibility}
         >
           <ArrowIcon
@@ -49,7 +49,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
           </span>
         </li>
         {children && isOpen && (
-          <div className='pl-2'>
+          <div className=''>
             <ul>
               {children && (
                 <div>
@@ -92,7 +92,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
   return (
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
       <div
-        className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
+        className='flex w-full cursor-pointer flex-row items-center py-1 pl-[20px] hover:bg-slate-50 dark:hover:bg-neutral-900'
         onClick={hasAssociatedPou ? handleBranchVisibility : undefined}
       >
         {hasAssociatedPou ? (
@@ -214,7 +214,7 @@ const LeafSources = {
   str: { LeafIcon: StructureIcon },
   res: { LeafIcon: ResourceIcon },
 }
-const ProjectTreeLeaf = ({ leafLang, label, nested = false, ...res }: IProjectTreeLeafProps) => {
+const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => {
   const {
     editor: {
       meta: { name },
@@ -228,8 +228,8 @@ const ProjectTreeLeaf = ({ leafLang, label, nested = false, ...res }: IProjectTr
   return (
     <li
       className={cn(
-        'ml-4 flex cursor-pointer flex-row items-center py-1 pl-6 hover:bg-slate-50 dark:hover:bg-neutral-900',
-        nested && 'ml-8',
+        ' flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
+
         name === label && 'bg-slate-50 dark:bg-neutral-900',
       )}
       onClick={handleLeafSelection}
@@ -238,7 +238,7 @@ const ProjectTreeLeaf = ({ leafLang, label, nested = false, ...res }: IProjectTr
       <LeafIcon className='flex-shrink-0' />
       <span
         className={cn(
-          'ml-1 overflow-hidden text-ellipsis w-[90%] whitespace-nowrap  font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+          'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
           name === label && 'font-medium text-neutral-1000 dark:text-white',
         )}
       >
