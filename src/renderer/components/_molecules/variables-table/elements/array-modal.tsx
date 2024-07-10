@@ -1,6 +1,6 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
-import { VariablesTableButton } from '@root/renderer/components/_atoms/buttons/variables-table'
+import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import {
   Modal,
@@ -208,27 +208,27 @@ export const ArrayModal = ({
                 aria-label='Data type table actions buttons container'
                 className='flex h-full w-fit items-center justify-evenly *:rounded-md *:p-1'
               >
-                <VariablesTableButton aria-label='Add table row button' onClick={() => handleAddDimension()}>
+                <TableActionButton aria-label='Add table row button' onClick={() => handleAddDimension()}>
                   <PlusIcon className='!stroke-brand' />
-                </VariablesTableButton>
-                <VariablesTableButton
+                </TableActionButton>
+                <TableActionButton
                   aria-label='Remove table row button'
                   onClick={() => handleRemoveDimension(selectedInput)}
                 >
                   <MinusIcon />
-                </VariablesTableButton>
-                <VariablesTableButton
+                </TableActionButton>
+                <TableActionButton
                   aria-label='Move table row up button'
                   onClick={() => handleRearrangeDimensions(Number(selectedInput), 'up')}
                 >
                   <StickArrowIcon direction='up' />
-                </VariablesTableButton>
-                <VariablesTableButton
+                </TableActionButton>
+                <TableActionButton
                   aria-label='Move table row down button'
                   onClick={() => handleRearrangeDimensions(Number(selectedInput), 'down')}
                 >
                   <StickArrowIcon direction='down' />
-                </VariablesTableButton>
+                </TableActionButton>
               </div>
             </div>
           </div>

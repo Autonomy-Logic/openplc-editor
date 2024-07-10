@@ -58,7 +58,7 @@ const Card = (props: ICardProps): ReactNode => {
     setIsOpen(false)
   }
 
-  const handleCreateDatatype = (derivation: 'enum' | 'struct' | 'array') => {
+  const handleCreateDatatype = (derivation: 'enumerated' | 'structure' | 'array') => {
     const data = CreateDatatypeObject(derivation)
     createDatatype(data)
     closeContainer((prev) => !prev)

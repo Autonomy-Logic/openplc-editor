@@ -1,12 +1,12 @@
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, ReactNode } from 'react'
 
-type VariablesTableButtonProps = ComponentPropsWithoutRef<'button'> & {
+type TableActionButtonProps = ComponentPropsWithoutRef<'button'> & {
   children: ReactNode
   className?: string
 }
 
-const VariablesTableButton = ({ className, children, ...props }: VariablesTableButtonProps) => {
+const TableActionButton = ({ className, children, ...props }: TableActionButtonProps) => {
   return (
     <button
       className={cn(
@@ -20,4 +20,4 @@ const VariablesTableButton = ({ className, children, ...props }: VariablesTableB
   )
 }
 
-export { VariablesTableButton }
+export { TableActionButton }

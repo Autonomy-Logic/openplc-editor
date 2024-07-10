@@ -7,7 +7,7 @@ const Table = forwardRef<HTMLTableElement, ComponentPropsWithRef<'table'> & { co
       <table
         aria-label={`${context} table`}
         ref={ref}
-        className='table-auto border-separate border-spacing-0 text-center font-caption text-xs font-normal'
+        className='w-full table-auto border-separate border-spacing-0 text-center font-caption text-xs font-normal'
         {...res}
       />
     </div>
