@@ -92,7 +92,9 @@ const WorkspaceScreen = () => {
   const consolePanelRef = useRef(null)
 
   const togglePanel = () => {
-    if (panelRef.current) panelRef.current.resize(25)
+    if (panelRef.current) {
+      panelRef.current.resize(25)
+    }
   }
 
   useEffect(() => {

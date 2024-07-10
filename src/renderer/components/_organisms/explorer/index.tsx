@@ -1,5 +1,5 @@
-// eslint-disable @typescript-eslint/no-explicit-any
-import { ReactElement } from 'react'
+import { LegacyRef, ReactElement } from 'react'
+import { ImperativePanelHandle } from 'react-resizable-panels'
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../panel'
 import { Library } from './library'
@@ -11,10 +11,13 @@ import { Project } from './project'
  * @return {ReactElement} The rendered Explorer component
  */
 
-const Explorer = ({ collapse }): ReactElement => {
+type explorerProps = {
+  collapse: LegacyRef<ImperativePanelHandle> | undefined
+}
+
+const Explorer = ({ collapse }: explorerProps): ReactElement => {
   return (
     <ResizablePanel
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       ref={collapse}
       id='explorerPanel'
       order={1}

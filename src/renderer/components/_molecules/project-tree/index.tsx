@@ -49,7 +49,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
           </span>
         </li>
         {children && isOpen && (
-          <div className=''>
+          <div>
             <ul>
               {children && (
                 <div>
