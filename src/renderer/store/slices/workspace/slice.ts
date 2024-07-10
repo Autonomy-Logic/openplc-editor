@@ -296,7 +296,6 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           const { name } = dataToCreate
-          console.log('creating datatype', dataToCreate)
           const dataExists = workspace.projectData.dataTypes.find((datatype) => datatype.name === name)
           if (!dataExists) {
             workspace.projectData.dataTypes.push(dataToCreate)
