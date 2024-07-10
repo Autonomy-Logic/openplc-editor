@@ -1,10 +1,20 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import * as Tabs from '@radix-ui/react-tabs'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { DebuggerIcon, DownloadIcon, ExitIcon,PlayIcon, SearchIcon, StickArrowIcon, TransferIcon, ZoomInOut } from '../assets'
+import {
+  DebuggerIcon,
+  DownloadIcon,
+  ExitIcon,
+  PlayIcon,
+  SearchIcon,
+  StickArrowIcon,
+  TransferIcon,
+  ZoomInOut,
+} from '../assets'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
@@ -75,13 +85,24 @@ const WorkspaceScreen = () => {
   ]
 
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
+  const [collapseAll, setCollapseAll] = useState(false)
   const panelRef = useRef(null)
+  const explorerPanelRef = useRef(null)
+  const workspacePanelRef = useRef(null)
+  const consolePanelRef = useRef(null)
 
   const togglePanel = () => {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    if (panelRef.current) panelRef.current.resize(25)
+    if (panelRef.current) {
+      panelRef.current.resize(25)
+    }
   }
 
+  useEffect(() => {
+    const action = collapseAll ? 'collapse' : 'expand'
+    ;[explorerPanelRef, workspacePanelRef, consolePanelRef].forEach((ref) => {
+      if (ref.current) ref.current[action]()
+    })
+  }, [collapseAll])
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -89,7 +110,7 @@ const WorkspaceScreen = () => {
           <ActivityBarButton aria-label='Search'>
             <SearchIcon />
           </ActivityBarButton>
-          <ActivityBarButton aria-label='Zoom'>
+          <ActivityBarButton onClick={() => setCollapseAll(!collapseAll)} aria-label='Zoom'>
             <ZoomInOut />
           </ActivityBarButton>
           <ActivityBarButton aria-label='Download'>
@@ -112,10 +133,25 @@ const WorkspaceScreen = () => {
         </div>
       </WorkspaceSideContent>
       <WorkspaceMainContent>
-        <ResizablePanelGroup id='mainContentPanelGroup' direction='horizontal' className='h-full w-full'>
-          <Explorer />
-          <ResizableHandle className='mr-2' />
-          <ResizablePanel id='workspacePanel' order={2} defaultSize={87} className='h-full w-[400px]'>
+        <ResizablePanelGroup
+          id='mainContentPanelGroup'
+          direction='horizontal'
+          className='relative flex h-full w-full gap-2'
+        >
+          <Explorer collapse={explorerPanelRef} />
+
+          <ResizablePanel
+            ref={workspacePanelRef}
+            id='workspacePanel'
+            order={2}
+            defaultSize={87}
+            className='relative flex h-full w-[400px]'
+          >
+            <ResizableHandle
+              id='workspaceHandle'
+              hitAreaMargins={{ coarse: 3, fine: 3 }}
+              className={` absolute bottom-0  top-0 z-[99] my-[2px] w-[4px] py-2 transition-colors  duration-200  data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
+            />
             <div id='workspaceContentPanel' className='flex h-full flex-1 grow flex-col gap-2 overflow-hidden'>
               {tabs.length > 0 && <Navigation />}
               <ResizablePanelGroup id='editorPanelGroup' className={`flex h-full  gap-2`} direction='vertical'>
@@ -162,7 +198,6 @@ const WorkspaceScreen = () => {
                           </ResizablePanel>
 
                           <ResizableHandle
-                            // hitAreaMargins={{ coarse: 1, fine: 1 }}
                             style={{ height: '1px' }}
                             className={`${isVariablesPanelCollapsed && ' !hidden '}  flex  w-full bg-brand-light `}
                           />
@@ -205,12 +240,14 @@ const WorkspaceScreen = () => {
                     </p>
                   )}
                   <ResizableHandle
-                    hitAreaMargins={{ coarse: 10, fine: 6 }}
-                    style={{ height: '2px' }}
-                    className={`absolute bottom-0 left-0  w-full transition-colors  duration-200  data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
+                    id='consoleResizeHandle'
+                    hitAreaMargins={{ coarse: 2, fine: 2 }}
+                    style={{ height: '2px', width: 'calc(100% - 16px)' }}
+                    className={`absolute bottom-0 left-0 mx-2 transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700 data-[resize-handle-state="hover"]:dark:bg-neutral-700`}
                   />
                 </ResizablePanel>
                 <ResizablePanel
+                  ref={consolePanelRef}
                   id='consolePanel'
                   order={2}
                   collapsible
