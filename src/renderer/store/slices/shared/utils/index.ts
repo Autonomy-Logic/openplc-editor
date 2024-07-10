@@ -57,8 +57,11 @@ const CreateDatatypeObject = (derivation: 'enumerated' | 'structure' | 'array'):
         name: 'New array datatype',
         derivation: {
           type: 'array',
-          baseType: 'bool',
-          dimensions: [],
+          value: 'ARRAY [] OF BOOL',
+          data: {
+            baseType: 'bool',
+            dimensions: [],
+          }
         },
       }
     case 'enumerated':
