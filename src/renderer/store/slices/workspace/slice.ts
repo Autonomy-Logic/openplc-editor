@@ -11,7 +11,68 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     projectPath: '',
     projectData: {
       dataTypes: [],
-      pous: [],
+      pous: [
+        {
+          type: 'function',
+          data: {
+            language: 'ld',
+            name: 'aaa',
+            returnType: 'BOOL',
+            variables: [
+              {
+                name: 'LocalVar',
+                class: 'local',
+                type: {
+                  definition: 'array',
+                  value: 'ARRAY [1..2] OF DINT',
+                  data: {
+                    baseType: 'dint',
+                    dimensions: ['1..2'],
+                  },
+                },
+                location: '123',
+                documentation: 'asd',
+                debug: false,
+              },
+              {
+                name: 'LocalVar_1',
+                class: 'local',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '123',
+                documentation: 'asd',
+                debug: false,
+              },
+              {
+                name: 'LocalVar_4',
+                class: 'local',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '123',
+                documentation: 'asd',
+                debug: false,
+              },
+              {
+                name: 'LocalVar_5',
+                class: 'local',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '123',
+                documentation: 'asd',
+                debug: false,
+              },
+            ],
+            body: 'This is the body of aaa',
+            documentation: 'Doc for function',
+          },
+        },
+      ],
       globalVariables: [],
     },
     systemConfigs: {
