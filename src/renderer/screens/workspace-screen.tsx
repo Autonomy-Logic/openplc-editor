@@ -18,36 +18,16 @@ import {
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
+import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { Console } from '../components/_molecules/console'
-import { CreateRung } from '../components/_molecules/rung/create-rung'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
-import { Rung } from '../components/_organisms/rung'
 import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
-
-const GraphicalEditor = () => {
-  const [rungs, setRungs] = useState<string[]>([])
-
-  return (
-    <div className='h-full w-full overflow-y-auto' style={{ scrollbarGutter: 'stable' }}>
-      <div className='flex flex-1 flex-col gap-4 p-1'>
-        {rungs.map((_rung, index) => (
-          <Rung key={index} />
-        ))}
-        <CreateRung
-          onClick={() => {
-            setRungs([...rungs, ''])
-          }}
-        />
-      </div>
-    </div>
-  )
-}
 
 const WorkspaceScreen = () => {
   const navigate = useNavigate()
@@ -190,8 +170,7 @@ const WorkspaceScreen = () => {
                           <DataTypeEditor derivation={editor['meta']['derivation']} />{' '}
                         </div>
                       )}
-                      {editor['type'] === 'plc-graphical' && <GraphicalEditor />}
-                      {editor['type'] === 'plc-textual' && (
+                      {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
                         <ResizablePanelGroup
                           id='editorContentPanelGroup'
                           direction='vertical'
@@ -242,14 +221,28 @@ const WorkspaceScreen = () => {
                             order={2}
                             className='mt-6 flex-1 flex-grow rounded-md'
                           >
-                            <MonacoEditor
-                              name={editor.meta.name}
-                              language={editor.meta.language}
-                              path={editor.meta.path}
-                            />
+                            {editor['type'] === 'plc-textual' ? (
+                              <MonacoEditor
+                                name={editor.meta.name}
+                                language={editor.meta.language}
+                                path={editor.meta.path}
+                              />
+                            ) : (
+                              <GraphicalEditor
+                                name={editor.meta.name}
+                                language={editor.meta.language}
+                                path={editor.meta.path}
+                              />
+                            )}
                           </ResizablePanel>
                         </ResizablePanelGroup>
                       )}
+                      <ResizableHandle
+                        id='consoleResizeHandle'
+                        hitAreaMargins={{ coarse: 2, fine: 2 }}
+                        style={{ height: '2px', width: 'calc(100% - 16px)' }}
+                        className={`absolute bottom-0 left-0 mx-2 transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700 data-[resize-handle-state="hover"]:dark:bg-neutral-700`}
+                      />
                     </>
                   ) : (
                     <p className='mx-auto my-auto flex cursor-default select-none flex-col items-center gap-1 font-display text-xl font-medium'>
