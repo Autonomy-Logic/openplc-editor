@@ -7,7 +7,7 @@ export const RungSection = ({ children }: PropsWithChildren) => {
     setIsOpen(!isOpen)
   }
   return (
-    <div className='w-full'>
+    <div aria-label='Rung section container' className='w-full'>
       <RungSectionHeader onClick={handleOpenSection} isOpen={isOpen} />
       {isOpen && <RungSectionBody>{children}</RungSectionBody>}
     </div>
