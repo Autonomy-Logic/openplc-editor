@@ -18,6 +18,7 @@ import {
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
+import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { Console } from '../components/_molecules/console'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Debugger } from '../components/_organisms/debugger'
@@ -28,9 +29,6 @@ import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
 
-const GraphicalEditor = () => {
-  return <p>This gonna be a graphical editor to handle the graphical languages</p>
-}
 
 const WorkspaceScreen = () => {
   const navigate = useNavigate()
