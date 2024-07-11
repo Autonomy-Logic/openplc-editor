@@ -19,28 +19,31 @@ import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import { Console } from '../components/_molecules/console'
-import { CreateRung } from '../components/_molecules/rung-section/create-rung'
+import { CreateRung } from '../components/_molecules/rung/create-rung'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
-import { RungSection } from '../components/_organisms/rung-section'
+import { Rung } from '../components/_organisms/rung'
 import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
 
 const GraphicalEditor = () => {
-
   const [rungs, setRungs] = useState<string[]>([])
 
   return (
     <div className='h-full w-full overflow-y-auto' style={{ scrollbarGutter: 'stable' }}>
-      <div className='p-1 flex flex-1 flex-col gap-4'>
+      <div className='flex flex-1 flex-col gap-4 p-1'>
         {rungs.map((_rung, index) => (
-          <RungSection key={index} />
+          <Rung key={index} />
         ))}
-        <CreateRung onClick={() => { setRungs([...rungs, '']) }} />
+        <CreateRung
+          onClick={() => {
+            setRungs([...rungs, ''])
+          }}
+        />
       </div>
     </div>
   )
