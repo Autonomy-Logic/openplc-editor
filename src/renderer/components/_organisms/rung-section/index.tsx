@@ -1,7 +1,7 @@
 import { RungSectionBody, RungSectionHeader } from '@components/_molecules/rung-section'
-import { useState } from 'react'
+import { PropsWithChildren, useState } from 'react'
 
-export const RungSection = () => {
+export const RungSection = ({ children }: PropsWithChildren) => {
   const [isOpen, setIsOpen] = useState(false)
   const handleOpenSection = () => {
     setIsOpen(!isOpen)
@@ -9,7 +9,7 @@ export const RungSection = () => {
   return (
     <div className='w-full'>
       <RungSectionHeader onClick={handleOpenSection} isOpen={isOpen} />
-      {isOpen && <RungSectionBody />}
+      {isOpen && <RungSectionBody>{children}</RungSectionBody>}
     </div>
   )
 }
