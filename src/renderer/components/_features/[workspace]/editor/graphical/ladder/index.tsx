@@ -1,9 +1,9 @@
 import React from 'react'
 
-export default function LadderEditor({ name, path }: { name: string; path: string }) {
+export default function LadderEditor() {
   return (
     <div>
-      heres the {name} {path}
+      heres the ladder
     </div>
   )
 }

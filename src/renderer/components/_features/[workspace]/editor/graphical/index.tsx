@@ -10,7 +10,7 @@ type GraphicalEditorProps = ComponentPropsWithoutRef<'div'> & {
   path: string
 }
 
-const GraphicalEditor = ({ name, language, path }: GraphicalEditorProps) => {
+const GraphicalEditor = ({ language }: GraphicalEditorProps) => {
   const editorComponents = {
     sfc: SfcEditor,
     fbd: FbdEditor,
@@ -21,9 +21,9 @@ const GraphicalEditor = ({ name, language, path }: GraphicalEditorProps) => {
 
   return (
     <div className='h-full w-full overflow-y-auto '>
-      <div className='h-[1800px]'>
-        <EditorComponent name={name} path={path} />
-      </div>
+      {/* <div className='h-[1800px]'> */}
+        <EditorComponent />
+      {/* </div> */}
     </div>
   )
 }
