@@ -29,7 +29,6 @@ import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
 
-
 const WorkspaceScreen = () => {
   const navigate = useNavigate()
   const {
@@ -171,7 +170,13 @@ const WorkspaceScreen = () => {
                           <DataTypeEditor derivation={editor['meta']['derivation']} />{' '}
                         </div>
                       )}
-                      {editor['type'] === 'plc-graphical' && <GraphicalEditor />}
+                      {editor['type'] === 'plc-graphical' && (
+                        <GraphicalEditor
+                          name={editor.meta.name}
+                          language={editor.meta.language}
+                          path={editor.meta.path}
+                        />
+                      )}
                       {editor['type'] === 'plc-textual' && (
                         <ResizablePanelGroup
                           id='editorContentPanelGroup'
