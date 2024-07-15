@@ -1,4 +1,4 @@
-import { CoordinateExtent, Edge, Node } from '@xyflow/react'
+import { ConnectionLineType, CoordinateExtent, Edge, Node } from '@xyflow/react'
 import { useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
@@ -56,6 +56,10 @@ export const RungBody = () => {
           translateExtent: viewport,
           nodeExtent: viewport,
           onNodeDragStop: viewportSize,
+          connectionLineType: ConnectionLineType.SmoothStep,
+          defaultEdgeOptions: {
+            type: 'smoothstep',
+          },
         }}
       />
     </div>
