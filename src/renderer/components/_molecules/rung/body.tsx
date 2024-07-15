@@ -1,23 +1,36 @@
 import { CoordinateExtent, Edge, Node } from '@xyflow/react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
 
 export const RungBody = () => {
+  const [initialNodes, setInitialNodes] = useState<Node[]>([
+    {
+      id: '1',
+      data: { label: 'Hello' },
+      position: { x: 0, y: 0 },
+      type: 'input',
+      draggable: false,
+    },
+    {
+      id: '2',
+      data: { label: 'World' },
+      position: { x: 100, y: 100 },
+    },
+  ])
+  const [initialEdges, setInitialEdges] = useState<Edge[]>([])
 
-  const [nodes, setNodes] = useState<Node[]>([])
-  const [edges, setEdges] = useState<Edge[]>([])
   const [viewport, setViewport] = useState<CoordinateExtent>([
     [0, 0],
-    [0, 0],
+    [1100, 200],
   ])
 
   const viewportSize = () => {
-    let width: number = 1000
-    let height: number = 150
-    nodes.forEach((node) => {
+    let width: number = viewport[1][0]
+    let height: number = viewport[1][1]
+    initialNodes.forEach((node) => {
       const { position } = node
-      const { x, y } = position
+      const { x = 0, y = 0 } = position
       if (x > width) width = x + 10
       if (y > height) height = y + 10
     })
@@ -27,17 +40,17 @@ export const RungBody = () => {
     ])
   }
 
-  useEffect(() => {
-    viewportSize()
-  }, [])
-
   return (
-    <div aria-label='Rung body' className='h-52 w-full rounded-b-lg border border-t-0 p-1 dark:border-neutral-800'>
+    <div aria-label='Rung body' className='h-52 w-full rounded-b-lg border border-t-0 dark:border-neutral-800'>
       <FlowPanel
-        edges={edges}
-        setEdges={setEdges}
-        nodes={nodes}
-        setNodes={setNodes}
+        /**
+         * Initial value for edges and nodes
+         * @WIP - must be refactored to use workspace slice
+         */
+        edgesInitialValue={initialEdges}
+        nodesInitialValue={initialNodes}
+        setEdgesInitialValue={setInitialEdges}
+        setNodesInitialValue={setInitialNodes}
         viewportConfig={{
           snapToGrid: true,
           translateExtent: viewport,
