@@ -9,25 +9,49 @@ import {
   ModalTrigger,
 } from '@root/renderer/components/_molecules'
 import { useState } from 'react'
+import { JsxElement } from 'typescript'
 
 import imageMock from './mockImages/Group112.png'
 import image1 from './mockImages/image1.png'
 import image2 from './mockImages/image2.png'
-export default function BlockElement() {
+
+type TreeChild = {
+  key: string
+  label: string
+  Icon: JsxElement
+  title: string
+  children: string
+  image: string
+}
+
+type TreeNode = {
+  key: string
+  label: string
+  Icon: JsxElement
+  title: string
+  children: TreeChild[] | never[]
+}
+
+const BlockElement = () => {
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
-  const [imageToDisplay, setImageToDisplay] = useState(null)
+  const [selectedFile, setSelectedFile] = useState<{ image: string; text: string } | null>(null)
   const [formState, setFormState] = useState({
     name: '',
     inputs: '',
     executionOrder: '',
   })
+
   const isFormValid = formState.name && formState.inputs && formState.executionOrder
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target
     setFormState((prevState) => ({ ...prevState, [id]: value }))
   }
-  const treeData = [
+
+  const lorem =
+    ' Lorem ipsum dolor sit amet consectetur adipisicing elit. Autem blanditiis voluptates eius quasi quam illum deserunt perspiciatis magnam, corrupti vel! Nesciunt nostrum maxime aliquid amet asperiores quibusdam ipsam impedit corporis?'
+
+  const treeData: TreeNode[] = [
     {
       key: '0',
       label: 'P1AM_Modules',
@@ -39,7 +63,7 @@ export default function BlockElement() {
           label: 'P1AM_INIT',
           Icon: LibraryFileIcon,
           title: 'Module Leaf',
-          children: 'loren ipsum ipsum ipsum ',
+          children: 1 + lorem,
           image: imageMock,
         },
         {
@@ -47,7 +71,7 @@ export default function BlockElement() {
           label: 'P1_16CDR',
           Icon: LibraryFileIcon,
           title: 'Module Leaf',
-          children: 'ipsum',
+          children: 2 + lorem,
           image: image1,
         },
         {
@@ -55,7 +79,7 @@ export default function BlockElement() {
           label: 'P1_08N',
           Icon: LibraryFileIcon,
           title: 'Module Leaf',
-          children: ' dolor',
+          children: 3 + lorem,
           image: image2,
         },
         {
@@ -63,7 +87,7 @@ export default function BlockElement() {
           label: 'P1_16N',
           Icon: LibraryFileIcon,
           title: 'Module Leaf',
-          children: ' sit',
+          children: lorem,
           image: imageMock,
         },
         {
@@ -71,7 +95,7 @@ export default function BlockElement() {
           label: 'P1_16N',
           Icon: LibraryFileIcon,
           title: 'Module Leaf',
-          children: ' amet',
+          children: lorem,
           image: image1,
         },
         {
@@ -79,7 +103,7 @@ export default function BlockElement() {
           label: 'P1_08T',
           Icon: LibraryFileIcon,
           title: 'Module Leaf',
-          children: ' consectetur',
+          children: lorem,
           image: image2,
         },
         {
@@ -87,7 +111,7 @@ export default function BlockElement() {
           label: 'P1_16TR',
           Icon: LibraryFileIcon,
           title: 'Module Leaf',
-          children: '  adipiscing',
+          children: lorem,
           image: imageMock,
         },
         {
@@ -95,7 +119,7 @@ export default function BlockElement() {
           label: 'P1_04AD',
           Icon: LibraryFileIcon,
           title: 'Module Leaf',
-          children: '  elit',
+          children: lorem,
           image: image1,
         },
       ],
@@ -133,46 +157,38 @@ export default function BlockElement() {
     },
   ]
 
-  const labelStyle = 'text-sm font-medium text-neutral-950'
-
+  const labelStyle = 'text-sm font-medium text-neutral-950 dark:text-white'
+  const inputStyle =
+    'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 p-[10px] text-cp-xs text-neutral-700 outline-none focus:border-brand'
   return (
     <Modal>
       <ModalTrigger>Open</ModalTrigger>
       <ModalContent className='h-[739px] w-[413px] flex-col gap-8 px-6 py-4'>
-        <span className='text-xl font-medium text-neutral-950'>Block Properties</span>
+        <span className='text-xl font-medium text-neutral-950 dark:text-neutral-700'>Block Properties</span>
         <div className='flex h-[587px] w-full gap-6'>
           <div id='container-modifier-variable' className='h-full w-[178px]'>
             <div className='flex h-full w-full flex-col gap-2'>
               <label className={labelStyle}>Type:</label>
               <div className='flex h-[30px] w-full gap-2'>
-                <InputWithRef
-                  className='border-neural-100 h-full  w-full  rounded-lg border p-[10px] text-cp-xs text-neutral-700 outline-none focus:border-brand'
-                  placeholder='Search'
-                  type='text'
-                />
+                <InputWithRef className={inputStyle} placeholder='Search' type='text' />
                 <div className='flex h-full w-10 items-center justify-center rounded-lg bg-brand'>
                   <MagnifierIcon />
                 </div>
               </div>
-              <div className='border-neural-100 h-[388px] w-full rounded-lg border px-1 py-4'>
+              <div className='border-neural-100  h-[388px] w-full rounded-lg border px-1 py-4 dark:border-neutral-850'>
                 <div className='h-full w-full overflow-y-auto'>
                   <LibraryRoot>
                     {treeData.map((data) => (
                       <LibraryFolder key={data.key} label={data.label} title={data.title}>
                         {data.children.map((child) => (
                           <LibraryFile
-                            draggable
-                            onDragStart={(e) => {
-                              e.dataTransfer.setData('text/plain', child.children)
-                            }}
                             key={child.key}
                             label={child.label}
                             isSelected={selectedFileKey === child.key}
                             onSelect={() => setSelectedFileKey(child.key)}
                             onClick={() => {
                               setSelectedFileKey(child.key)
-                              // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                              setImageToDisplay(child.image)
+                              setSelectedFile({ image: child.image, text: child.children })
                             }}
                           />
                         ))}
@@ -181,7 +197,9 @@ export default function BlockElement() {
                   </LibraryRoot>
                 </div>
               </div>
-              <div className='border-neural-100 flex-grow rounded-lg border'></div>
+              <div className='border-neural-100  h-full max-h-[119px] overflow-hidden rounded-lg border px-1 py-4 text-xs font-medium text-neutral-950 dark:border-neutral-850 dark:text-neutral-100'>
+                <p className='h-full overflow-y-auto dark:text-neutral-100'>{selectedFile?.text}</p>
+              </div>
             </div>
           </div>
           <div id='preview' className='flex h-full w-[163px] flex-col gap-2'>
@@ -190,7 +208,7 @@ export default function BlockElement() {
             </label>
             <InputWithRef
               id='name'
-              className='border-neural-100 h-[30px] w-full select-none rounded-lg border p-[10px] text-cp-xs text-neutral-700 outline-none focus:border-brand'
+              className={inputStyle}
               placeholder=''
               type='text'
               value={formState.name}
@@ -201,7 +219,7 @@ export default function BlockElement() {
             </label>
             <InputWithRef
               id='inputs'
-              className='border-neural-100 h-[30px] w-full select-none rounded-lg border p-[10px] text-cp-xs text-neutral-700 outline-none focus:border-brand'
+              className={inputStyle}
               placeholder=''
               type='number'
               value={formState.inputs}
@@ -212,7 +230,7 @@ export default function BlockElement() {
             </label>
             <InputWithRef
               id='executionOrder'
-              className='border-neural-100 h-[30px] w-full rounded-lg border p-[10px] text-cp-xs text-neutral-700 outline-none focus:border-brand'
+              className={inputStyle}
               placeholder=''
               type='number'
               value={formState.executionOrder}
@@ -223,9 +241,11 @@ export default function BlockElement() {
             </label>
             <div
               id='block-preview'
-              className='flex flex-grow items-center justify-center rounded-lg border-[2px] border-brand-dark'
+              className='flex flex-grow items-center justify-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'
             >
-              {imageToDisplay && <img className='h-fit w-full' src={imageToDisplay} alt='' />}
+              {selectedFile?.image && (
+                <img draggable='false' className='h-fit w-full select-none' src={selectedFile.image} alt='' />
+              )}
             </div>
           </div>
         </div>
@@ -244,3 +264,5 @@ export default function BlockElement() {
     </Modal>
   )
 }
+
+export default BlockElement
