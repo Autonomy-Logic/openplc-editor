@@ -164,7 +164,7 @@ const BlockElement = () => {
     <Modal>
       <ModalTrigger>Open</ModalTrigger>
       <ModalContent className='h-[739px] w-[413px] flex-col gap-8 px-6 py-4'>
-        <span className='text-xl font-medium text-neutral-950 dark:text-neutral-700'>Block Properties</span>
+        <span className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</span>
         <div className='flex h-[587px] w-full gap-6'>
           <div id='container-modifier-variable' className='h-full w-[178px]'>
             <div className='flex h-full w-full flex-col gap-2'>
@@ -251,12 +251,12 @@ const BlockElement = () => {
         </div>
         <div className='flex !h-8 w-full gap-1'>
           <button
-            className={`h-full w-full items-center rounded-lg text-center text-white ${isFormValid ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'}`}
+            className={`h-full w-full items-center rounded-lg text-center font-medium text-white ${isFormValid ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'}`}
             disabled={!isFormValid}
           >
             Ok
           </button>
-          <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center text-neutral-1000'>
+          <button className='h-full dark:text-neutral-100 dark:bg-neutral-850 w-full  items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000'>
             Cancel
           </button>
         </div>
