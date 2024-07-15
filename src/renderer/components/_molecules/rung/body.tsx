@@ -22,7 +22,7 @@ export const RungBody = () => {
 
   const [viewport, setViewport] = useState<CoordinateExtent>([
     [0, 0],
-    [1100, 200],
+    [1500, 200],
   ])
 
   const viewportSize = () => {
