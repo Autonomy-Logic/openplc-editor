@@ -10,9 +10,23 @@ import {
 } from '@root/renderer/components/_molecules'
 import { useState } from 'react'
 
+import imageMock from './mockImages/Group112.png'
+import image1 from './mockImages/image1.png'
+import image2 from './mockImages/image2.png'
 export default function BlockElement() {
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
+  const [imageToDisplay, setImageToDisplay] = useState(null)
+  const [formState, setFormState] = useState({
+    name: '',
+    inputs: '',
+    executionOrder: '',
+  })
+  const isFormValid = formState.name && formState.inputs && formState.executionOrder
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target
+    setFormState((prevState) => ({ ...prevState, [id]: value }))
+  }
   const treeData = [
     {
       key: '0',
@@ -26,14 +40,64 @@ export default function BlockElement() {
           Icon: LibraryFileIcon,
           title: 'Module Leaf',
           children: 'loren ipsum ipsum ipsum ',
+          image: imageMock,
         },
-        { key: '0.2', label: 'P1_16CDR', Icon: LibraryFileIcon, title: 'Module Leaf', children: 'ipsum' },
-        { key: '0.3', label: 'P1_08N', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' dolor' },
-        { key: '0.4', label: 'P1_16N', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' sit' },
-        { key: '0.5', label: 'P1_16N', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' amet' },
-        { key: '0.6', label: 'P1_08T', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' consectetur' },
-        { key: '0.7', label: 'P1_16TR', Icon: LibraryFileIcon, title: 'Module Leaf', children: '  adipiscing' },
-        { key: '0.8', label: 'P1_04AD', Icon: LibraryFileIcon, title: 'Module Leaf', children: '  elit' },
+        {
+          key: '0.2',
+          label: 'P1_16CDR',
+          Icon: LibraryFileIcon,
+          title: 'Module Leaf',
+          children: 'ipsum',
+          image: image1,
+        },
+        {
+          key: '0.3',
+          label: 'P1_08N',
+          Icon: LibraryFileIcon,
+          title: 'Module Leaf',
+          children: ' dolor',
+          image: image2,
+        },
+        {
+          key: '0.4',
+          label: 'P1_16N',
+          Icon: LibraryFileIcon,
+          title: 'Module Leaf',
+          children: ' sit',
+          image: imageMock,
+        },
+        {
+          key: '0.5',
+          label: 'P1_16N',
+          Icon: LibraryFileIcon,
+          title: 'Module Leaf',
+          children: ' amet',
+          image: image1,
+        },
+        {
+          key: '0.6',
+          label: 'P1_08T',
+          Icon: LibraryFileIcon,
+          title: 'Module Leaf',
+          children: ' consectetur',
+          image: image2,
+        },
+        {
+          key: '0.7',
+          label: 'P1_16TR',
+          Icon: LibraryFileIcon,
+          title: 'Module Leaf',
+          children: '  adipiscing',
+          image: imageMock,
+        },
+        {
+          key: '0.8',
+          label: 'P1_04AD',
+          Icon: LibraryFileIcon,
+          title: 'Module Leaf',
+          children: '  elit',
+          image: image1,
+        },
       ],
     },
     {
@@ -76,13 +140,13 @@ export default function BlockElement() {
       <ModalTrigger>Open</ModalTrigger>
       <ModalContent className='h-[739px] w-[413px] flex-col gap-8 px-6 py-4'>
         <span className='text-xl font-medium text-neutral-950'>Block Properties</span>
-        <div className='flex h-[587px] w-full gap-6  '>
-          <div id='container-modifier-variable' className='h-full w-[178px] '>
-            <div className=' flex h-full w-full flex-col gap-2'>
+        <div className='flex h-[587px] w-full gap-6'>
+          <div id='container-modifier-variable' className='h-full w-[178px]'>
+            <div className='flex h-full w-full flex-col gap-2'>
               <label className={labelStyle}>Type:</label>
               <div className='flex h-[30px] w-full gap-2'>
                 <InputWithRef
-                  className='border-neural-100 h-full w-full rounded-lg border p-[10px] text-cp-xs text-neutral-700 '
+                  className='border-neural-100 h-full  w-full  rounded-lg border p-[10px] text-cp-xs text-neutral-700 outline-none focus:border-brand'
                   placeholder='Search'
                   type='text'
                 />
@@ -90,8 +154,8 @@ export default function BlockElement() {
                   <MagnifierIcon />
                 </div>
               </div>
-              <div className='border-neural-100 h-[388px] w-full rounded-lg  border px-1 py-4'>
-                <div className=' h-full w-full overflow-y-auto '>
+              <div className='border-neural-100 h-[388px] w-full rounded-lg border px-1 py-4'>
+                <div className='h-full w-full overflow-y-auto'>
                   <LibraryRoot>
                     {treeData.map((data) => (
                       <LibraryFolder key={data.key} label={data.label} title={data.title}>
@@ -105,6 +169,11 @@ export default function BlockElement() {
                             label={child.label}
                             isSelected={selectedFileKey === child.key}
                             onSelect={() => setSelectedFileKey(child.key)}
+                            onClick={() => {
+                              setSelectedFileKey(child.key)
+                              // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                              setImageToDisplay(child.image)
+                            }}
                           />
                         ))}
                       </LibraryFolder>
@@ -116,49 +185,58 @@ export default function BlockElement() {
             </div>
           </div>
           <div id='preview' className='flex h-full w-[163px] flex-col gap-2'>
-            <label htmlFor='block-name' className={labelStyle}>
+            <label htmlFor='name' className={labelStyle}>
               Name:
             </label>
             <InputWithRef
-              id='block-name'
-              className='border-neural-100 h-[30px] w-full rounded-lg border p-[10px] text-cp-xs text-neutral-700 '
+              id='name'
+              className='border-neural-100 h-[30px] w-full select-none rounded-lg border p-[10px] text-cp-xs text-neutral-700 outline-none focus:border-brand'
               placeholder=''
               type='text'
+              value={formState.name}
+              onChange={handleInputChange}
             />
-            <label htmlFor='block-inputs' className={labelStyle}>
-              inputs:
+            <label htmlFor='inputs' className={labelStyle}>
+              Inputs:
             </label>
             <InputWithRef
-              id='block-inputs'
-              className='border-neural-100 h-[30px] w-full rounded-lg border p-[10px] text-cp-xs text-neutral-700 '
+              id='inputs'
+              className='border-neural-100 h-[30px] w-full select-none rounded-lg border p-[10px] text-cp-xs text-neutral-700 outline-none focus:border-brand'
               placeholder=''
               type='number'
+              value={formState.inputs}
+              onChange={handleInputChange}
             />
-            <label htmlFor='block-execution-order' className={labelStyle}>
+            <label htmlFor='executionOrder' className={labelStyle}>
               Execution Order:
             </label>
             <InputWithRef
-              id='block-execution-order'
-              className='border-neural-100 h-[30px] w-full rounded-lg border p-[10px] text-cp-xs text-neutral-700 '
+              id='executionOrder'
+              className='border-neural-100 h-[30px] w-full rounded-lg border p-[10px] text-cp-xs text-neutral-700 outline-none focus:border-brand'
               placeholder=''
               type='number'
+              value={formState.executionOrder}
+              onChange={handleInputChange}
             />
-            <label htmlFor='block-execution-control' className={labelStyle}>
-              Execution Control:
-            </label>
-            <div className='h-1 w-1 border border-neutral-100'></div>
             <label htmlFor='block-preview' className={labelStyle}>
               Preview
             </label>
-            <input
+            <div
               id='block-preview'
-              className='flex flex-grow items-center justify-center rounded-lg border border-neutral-100'
-            ></input>
+              className='flex flex-grow items-center justify-center rounded-lg border-[2px] border-brand-dark'
+            >
+              {imageToDisplay && <img className='h-fit w-full' src={imageToDisplay} alt='' />}
+            </div>
           </div>
         </div>
         <div className='flex !h-8 w-full gap-1'>
-          <button className=' h-full w-full items-center  rounded-lg bg-brand text-center text-white'>Ok</button>
-          <button className=' h-full w-full items-center rounded-lg bg-neutral-100 text-center text-neutral-1000'>
+          <button
+            className={`h-full w-full items-center rounded-lg text-center text-white ${isFormValid ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'}`}
+            disabled={!isFormValid}
+          >
+            Ok
+          </button>
+          <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center text-neutral-1000'>
             Cancel
           </button>
         </div>
