@@ -32,7 +32,15 @@ const BlockElement = () => {
     const { id, value } = e.target
     setFormState((prevState) => ({ ...prevState, [id]: value }))
   }
-
+  const handleClearForm = () => {
+    setFormState({
+      name: '',
+      inputs: '',
+      executionOrder: '',
+    })
+    setSelectedFileKey(null)
+    setSelectedFile(null)
+  }
   const lorem =
     ' Lorem ipsum dolor sit amet consectetur adipisicing elit. Autem blanditiis voluptates eius quasi quam illum deserunt perspiciatis magnam, corrupti vel! Nesciunt nostrum maxime aliquid amet asperiores quibusdam ipsam impedit corporis?'
 
@@ -177,7 +185,7 @@ const BlockElement = () => {
   return (
     <Modal>
       <ModalTrigger>Open</ModalTrigger>
-      <ModalContent className='h-[739px] w-[413px] flex-col gap-8 px-6 py-4'>
+      <ModalContent  onClose={() => handleClearForm() } className='h-[739px] w-[413px] flex-col gap-8 px-6 py-4'>
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</ModalTitle>
         <div className='flex h-[587px] w-full gap-6'>
           <div id='container-modifier-variable' className='h-full w-[178px]'>
