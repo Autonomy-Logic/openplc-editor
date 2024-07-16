@@ -196,7 +196,7 @@ const VariablesEditor = () => {
               </label>
               <InputWithRef
                 id='description'
-                className='h-full w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
+                className='h-full w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
               />
             </div>
             <div
