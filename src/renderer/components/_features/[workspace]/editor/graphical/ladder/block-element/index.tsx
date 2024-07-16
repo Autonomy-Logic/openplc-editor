@@ -8,9 +8,10 @@ import {
   LibraryRoot,
   Modal,
   ModalContent,
+  ModalTitle,
   ModalTrigger,
 } from '@root/renderer/components/_molecules'
-import { useState } from 'react'
+import { ReactElement, useState } from 'react'
 
 import imageMock from './mockImages/Group112.png'
 import image1 from './mockImages/image1.png'
@@ -35,17 +36,32 @@ const BlockElement = () => {
   const lorem =
     ' Lorem ipsum dolor sit amet consectetur adipisicing elit. Autem blanditiis voluptates eius quasi quam illum deserunt perspiciatis magnam, corrupti vel! Nesciunt nostrum maxime aliquid amet asperiores quibusdam ipsam impedit corporis?'
 
-  const treeData = [
+  type TreeDataChildren = {
+    key: string
+    label: string
+    icon: ReactElement
+    title: string
+    children: string
+    image: string
+  }
+
+  const treeData: Array<{
+    key: string
+    label: string
+    icon: ReactElement
+    title: string
+    children: TreeDataChildren[]
+  }> = [
     {
       key: '0',
       label: 'P1AM_Modules',
-      Icon: LibraryCloseFolderIcon,
+      icon: <LibraryCloseFolderIcon size='sm' />,
       title: 'Module Tree',
       children: [
         {
           key: '0.1',
           label: 'P1AM_INIT',
-          Icon: LibraryFileIcon,
+          icon: <LibraryFileIcon />,
           title: 'Module Leaf',
           children: 1 + lorem,
           image: imageMock,
@@ -53,7 +69,7 @@ const BlockElement = () => {
         {
           key: '0.2',
           label: 'P1_16CDR',
-          Icon: LibraryFileIcon,
+          icon: <LibraryFileIcon />,
           title: 'Module Leaf',
           children: 2 + lorem,
           image: image1,
@@ -61,7 +77,7 @@ const BlockElement = () => {
         {
           key: '0.3',
           label: 'P1_08N',
-          Icon: LibraryFileIcon,
+          icon: <LibraryFileIcon />,
           title: 'Module Leaf',
           children: 3 + lorem,
           image: image2,
@@ -69,7 +85,7 @@ const BlockElement = () => {
         {
           key: '0.4',
           label: 'P1_16N',
-          Icon: LibraryFileIcon,
+          icon: <LibraryFileIcon />,
           title: 'Module Leaf',
           children: lorem,
           image: imageMock,
@@ -77,7 +93,7 @@ const BlockElement = () => {
         {
           key: '0.5',
           label: 'P1_16N',
-          Icon: LibraryFileIcon,
+          icon: <LibraryFileIcon />,
           title: 'Module Leaf',
           children: lorem,
           image: image1,
@@ -85,7 +101,7 @@ const BlockElement = () => {
         {
           key: '0.6',
           label: 'P1_08T',
-          Icon: LibraryFileIcon,
+          icon: <LibraryFileIcon />,
           title: 'Module Leaf',
           children: lorem,
           image: image2,
@@ -93,7 +109,7 @@ const BlockElement = () => {
         {
           key: '0.7',
           label: 'P1_16TR',
-          Icon: LibraryFileIcon,
+          icon: <LibraryFileIcon />,
           title: 'Module Leaf',
           children: lorem,
           image: imageMock,
@@ -101,7 +117,7 @@ const BlockElement = () => {
         {
           key: '0.8',
           label: 'P1_04AD',
-          Icon: LibraryFileIcon,
+          icon: <LibraryFileIcon />,
           title: 'Module Leaf',
           children: lorem,
           image: image1,
@@ -111,32 +127,39 @@ const BlockElement = () => {
     {
       key: '1',
       label: 'Jaguar',
-      Icon: LibraryCloseFolderIcon,
+      icon: <LibraryCloseFolderIcon size='sm' />,
       title: 'Module Tree',
       children: [],
     },
     {
       key: '2',
       label: 'Arduino',
-      Icon: LibraryCloseFolderIcon,
+      icon: <LibraryCloseFolderIcon size='sm' />,
       title: 'Module Tree',
       children: [],
     },
     {
       key: '3',
       label: 'Communication',
-      Icon: LibraryCloseFolderIcon,
+      icon: <LibraryCloseFolderIcon size='sm' />,
       title: 'Module Tree',
       children: [],
     },
     {
       key: '4',
       label: 'Sequent Microsystems',
-      Icon: LibraryCloseFolderIcon,
+      icon: <LibraryCloseFolderIcon size='sm' />,
       title: 'Module Tree',
       children: [
-        { key: '0.1', label: 'P1AM_INIT', Icon: LibraryFileIcon, title: 'Module Leaf', children: [] },
-        { key: '0.2', label: 'P1_16CDR', Icon: LibraryFileIcon, title: 'Module Leaf', children: [] },
+        {
+          key: '0.1',
+          label: 'P1AM_INIT',
+          icon: <LibraryFileIcon />,
+          title: 'Module Leaf',
+          image: imageMock,
+          children: '',
+        },
+        { key: '0.2', label: 'P1_16CDR', icon: <LibraryFileIcon />, title: 'Module Leaf', image: image1, children: '' },
       ],
     },
   ]
@@ -148,7 +171,7 @@ const BlockElement = () => {
     <Modal>
       <ModalTrigger>Open</ModalTrigger>
       <ModalContent className='h-[739px] w-[413px] flex-col gap-8 px-6 py-4'>
-        <span className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</span>
+        <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</ModalTitle>
         <div className='flex h-[587px] w-full gap-6'>
           <div id='container-modifier-variable' className='h-full w-[178px]'>
             <div className='flex h-full w-full flex-col gap-2'>
@@ -223,7 +246,7 @@ const BlockElement = () => {
             <label htmlFor='executionControl' className={labelStyle}>
               Execution Control:
             </label>
-            <Checkbox.Root className='h-4 w-4 cursor-pointer rounded-[4px] border border-neutral-300 dark:border-neutral-850 text-brand'>
+            <Checkbox.Root className='h-4 w-4 cursor-pointer rounded-[4px] border border-neutral-300 text-brand dark:border-neutral-850'>
               <Checkbox.Indicator className='h-4 w-4'>
                 <CheckIcon />
               </Checkbox.Indicator>
