@@ -153,13 +153,20 @@ const BlockElement = () => {
       children: [
         {
           key: '0.1',
-          label: 'P1AM_INIT',
+          label: 'P12AM_INIT',
           icon: <LibraryFileIcon />,
           title: 'Module Leaf',
           image: imageMock,
           children: '',
         },
-        { key: '0.2', label: 'P1_16CDR', icon: <LibraryFileIcon />, title: 'Module Leaf', image: image1, children: '' },
+        {
+          key: '0.2',
+          label: 'P13_16CDR',
+          icon: <LibraryFileIcon />,
+          title: 'Module Leaf',
+          image: image1,
+          children: '',
+        },
       ],
     },
   ]
@@ -189,12 +196,12 @@ const BlockElement = () => {
                       <LibraryFolder key={data.key} label={data.label} title={data.title}>
                         {data.children.map((child) => (
                           <LibraryFile
-                            key={child.key}
+                            key={`${data.key}-${child.key}`}
                             label={child.label}
-                            isSelected={selectedFileKey === child.key}
-                            onSelect={() => setSelectedFileKey(child.key)}
+                            isSelected={selectedFileKey === `${data.key}-${child.key}`}
+                            onSelect={() => setSelectedFileKey(`${data.key}-${child.key}`)}
                             onClick={() => {
-                              setSelectedFileKey(child.key)
+                              setSelectedFileKey(`${data.key}-${child.key}`)
                               setSelectedFile({ image: child.image, text: child.children })
                             }}
                           />
