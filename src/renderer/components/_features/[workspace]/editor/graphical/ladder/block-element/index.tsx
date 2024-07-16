@@ -1,3 +1,5 @@
+import * as Checkbox from '@radix-ui/react-checkbox'
+import { CheckIcon } from '@radix-ui/react-icons'
 import { LibraryCloseFolderIcon, LibraryFileIcon, MagnifierIcon } from '@root/renderer/assets'
 import { InputWithRef } from '@root/renderer/components/_atoms'
 import {
@@ -9,28 +11,10 @@ import {
   ModalTrigger,
 } from '@root/renderer/components/_molecules'
 import { useState } from 'react'
-import { JsxElement } from 'typescript'
 
 import imageMock from './mockImages/Group112.png'
 import image1 from './mockImages/image1.png'
 import image2 from './mockImages/image2.png'
-
-type TreeChild = {
-  key: string
-  label: string
-  Icon: JsxElement
-  title: string
-  children: string
-  image: string
-}
-
-type TreeNode = {
-  key: string
-  label: string
-  Icon: JsxElement
-  title: string
-  children: TreeChild[] | never[]
-}
 
 const BlockElement = () => {
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
@@ -51,7 +35,7 @@ const BlockElement = () => {
   const lorem =
     ' Lorem ipsum dolor sit amet consectetur adipisicing elit. Autem blanditiis voluptates eius quasi quam illum deserunt perspiciatis magnam, corrupti vel! Nesciunt nostrum maxime aliquid amet asperiores quibusdam ipsam impedit corporis?'
 
-  const treeData: TreeNode[] = [
+  const treeData = [
     {
       key: '0',
       label: 'P1AM_Modules',
@@ -236,6 +220,14 @@ const BlockElement = () => {
               value={formState.executionOrder}
               onChange={handleInputChange}
             />
+            <label htmlFor='executionControl' className={labelStyle}>
+              Execution Control:
+            </label>
+            <Checkbox.Root className='h-4 w-4 cursor-pointer rounded-[4px] border border-neutral-300 dark:border-neutral-850 text-brand'>
+              <Checkbox.Indicator className='h-4 w-4'>
+                <CheckIcon />
+              </Checkbox.Indicator>
+            </Checkbox.Root>
             <label htmlFor='block-preview' className={labelStyle}>
               Preview
             </label>
@@ -256,7 +248,7 @@ const BlockElement = () => {
           >
             Ok
           </button>
-          <button className='h-full dark:text-neutral-100 dark:bg-neutral-850 w-full  items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000'>
+          <button className='h-full w-full items-center rounded-lg  bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
             Cancel
           </button>
         </div>
