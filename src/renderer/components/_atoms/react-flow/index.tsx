@@ -3,17 +3,21 @@ import '@xyflow/react/dist/style.css'
 import {
   addEdge,
   Background,
-  BackgroundProps,
   Connection,
-  ControlProps,
   Controls,
   Edge,
   Node,
   ReactFlow,
-  ReactFlowProps,
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+} from '@xyflow/react'
+import type {
+  BackgroundProps,
+  ConnectionLineType,
+  ControlProps,
+  CoordinateExtent,
+  ReactFlowProps,
 } from '@xyflow/react'
 import { useCallback, useEffect } from 'react'
 
