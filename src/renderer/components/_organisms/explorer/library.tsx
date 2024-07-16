@@ -26,7 +26,13 @@ const Library = () => {
       Icon: LibraryCloseFolderIcon,
       title: 'Module Tree',
       children: [
-        { key: '0.1', label: 'P1AM_INIT', Icon: LibraryFileIcon, title: 'Module Leaf', children: 'loren ipsum ipsum ipsum '},
+        {
+          key: '0.1',
+          label: 'P1AM_INIT',
+          Icon: LibraryFileIcon,
+          title: 'Module Leaf',
+          children: 'loren ipsum ipsum ipsum ',
+        },
         { key: '0.2', label: 'P1_16CDR', Icon: LibraryFileIcon, title: 'Module Leaf', children: 'ipsum' },
         { key: '0.3', label: 'P1_08N', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' dolor' },
         { key: '0.4', label: 'P1_16N', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' sit' },
@@ -63,8 +69,8 @@ const Library = () => {
       Icon: LibraryCloseFolderIcon,
       title: 'Module Tree',
       children: [
-        { key: '0.1', label: 'P1AM_INIT', Icon: LibraryFileIcon, title: 'Module Leaf', children: [] },
-        { key: '0.2', label: 'P1_16CDR', Icon: LibraryFileIcon, title: 'Module Leaf', children: [] },
+        { key: '0.1', label: 'P1AM_INIT', Icon: LibraryFileIcon, title: 'Module Leaf', children: '  elit' },
+        { key: '0.2', label: 'P1_16CDR', Icon: LibraryFileIcon, title: 'Module Leaf', children: '  elit adad ' },
       ],
     },
   ]
