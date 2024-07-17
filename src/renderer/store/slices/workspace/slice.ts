@@ -11,19 +11,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     projectPath: '',
     projectData: {
       dataTypes: [],
-      pous: [
-        {
-          type: 'function',
-          data: {
-            name: 'ccc',
-            language: 'ld',
-            body: 'This is the body of ccc',
-            returnType: 'BOOL',
-            variables: [],
-            documentation: 'Doc for function',
-          },
-        },
-      ],
+      pous: [],
       globalVariables: [],
     },
     systemConfigs: {

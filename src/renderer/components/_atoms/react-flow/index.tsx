@@ -1,36 +1,18 @@
 import '@xyflow/react/dist/style.css'
 
+import type { BackgroundProps, ControlProps, Edge, Node, ReactFlowProps } from '@xyflow/react'
 import {
   addEdge,
   Background,
   Connection,
   Controls,
-  Edge,
-  Node,
   ReactFlow,
-  ReactFlowProvider,
   useEdgesState,
   useNodesState,
 } from '@xyflow/react'
-import type {
-  BackgroundProps,
-  ConnectionLineType,
-  ControlProps,
-  CoordinateExtent,
-  ReactFlowProps,
-} from '@xyflow/react'
-import { useCallback, useEffect } from 'react'
+import { PropsWithChildren, useCallback } from 'react'
 
-type FlowPanelProps = {
-  /**
-   * Initial value for edges and nodes
-   * @WIP - must be refactored to use workspace slice
-   */
-  edgesInitialValue: Edge[]
-  nodesInitialValue: Node[]
-  setNodesInitialValue: (nodes: Node[]) => void
-  setEdgesInitialValue: (edges: Edge[]) => void
-
+type FlowPanelProps = PropsWithChildren & {
   backgroundConfig?: BackgroundProps
   viewportConfig?: Omit<ReactFlowProps, 'nodes' | 'edges' | 'onNodesChange' | 'onEdgesChange' | 'onConnect'>
   controls?: boolean
@@ -39,43 +21,32 @@ type FlowPanelProps = {
 }
 
 export const FlowPanel = ({
-  edgesInitialValue,
-  nodesInitialValue,
-  setEdgesInitialValue,
-  setNodesInitialValue,
+  children,
   backgroundConfig,
   viewportConfig,
   controls = false,
   controlsConfig,
   constrolsStyle,
 }: FlowPanelProps) => {
-  const [edges, setEdges, onEdgesChange] = useEdgesState(edgesInitialValue)
-  const [nodes, setNodes, onNodesChange] = useNodesState(nodesInitialValue)
+  const initialEdgeValue: Edge[] = []
+  const initialNodeValue: Node[] = []
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdgeValue)
+  const [nodes, _setNodes, onNodesChange] = useNodesState(initialNodeValue)
 
   const onConnect = useCallback((params: Connection) => setEdges((eds) => addEdge(params, eds)), [setEdges])
 
-  useEffect(() => {
-    setEdges(edgesInitialValue)
-    setNodes(nodesInitialValue)
-    return () => {
-      setEdgesInitialValue(edges)
-      setNodesInitialValue(nodes)
-    }
-  }, [])
-
   return (
-    <ReactFlowProvider>
-      <ReactFlow
-        edges={edges}
-        onEdgesChange={onEdgesChange}
-        nodes={nodes}
-        onNodesChange={onNodesChange}
-        onConnect={onConnect}
-        {...viewportConfig}
-      >
-        <Background {...backgroundConfig} />
-        {controls && <Controls {...controlsConfig} className={constrolsStyle} />}
-      </ReactFlow>
-    </ReactFlowProvider>
+    <ReactFlow
+      edges={edges}
+      onEdgesChange={onEdgesChange}
+      nodes={nodes}
+      onNodesChange={onNodesChange}
+      onConnect={onConnect}
+      {...viewportConfig}
+    >
+      <Background {...backgroundConfig} />
+      {controls && <Controls {...controlsConfig} className={constrolsStyle} />}
+      {children}
+    </ReactFlow>
   )
 }
