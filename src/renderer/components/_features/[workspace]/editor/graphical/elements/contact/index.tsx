@@ -1,14 +1,40 @@
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { Modal, ModalContent, ModalTitle, ModalTrigger } from '@root/renderer/components/_molecules'
 import { useState } from 'react'
+
+import imageMock from '../mockImages/Group112.png'
+import image1 from '../mockImages/image1.png'
+import image2 from '../mockImages/image2.png'
 const ContactELement = () => {
   const FilterOptions = ['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp'] as const
   const [selectedOption, setSelectedOption] = useState(FilterOptions[0])
-
+  const [selectedModifier, setSelectedModifier] = useState<string | null>(null)
   const handleSelectChange = (value: string) => {
     setSelectedOption(value)
   }
 
+  const modifierOptions: { label: string; contact: string }[] = [
+    {
+      label: 'normal',
+      contact: imageMock,
+    },
+    {
+      label: 'negated',
+      contact: image1,
+    },
+    {
+      label: 'rising edge',
+      contact: image2,
+    },
+    {
+      label: 'falling edge',
+      contact: imageMock,
+    },
+  ]
+  const getModifierContact = (label: string) => {
+    const modifier = modifierOptions.find((modifier) => modifier.label === label)
+    return modifier ? modifier.contact : ''
+  }
   return (
     <Modal>
       <ModalTrigger>Open Contact</ModalTrigger>
@@ -17,11 +43,21 @@ const ContactELement = () => {
         <div className='flex h-[316px] w-full gap-10'>
           <div className='relative h-full w-full text-sm font-medium text-neutral-950'>
             <span>Modifier</span>
-            <ul className='mt-4 flex flex-col gap-4 '>
-              {['Normal', 'Negated', 'Rising Edge', 'Falling Edge'].map((modifier, index) => (
-                <li key={index} className='flex items-center'>
-                  <input type='radio' name='modifier' id={modifier} className='mr-2' />
-                  <label htmlFor={modifier}>{modifier}</label>
+            <ul className='mt-4 flex flex-col gap-4'>
+              {modifierOptions.map((modifier, index) => (
+                <li
+                  key={index}
+                  className='flex cursor-pointer items-center gap-2'
+                  onClick={() => setSelectedModifier(modifier.label)}
+                >
+                  <input
+                    type='radio'
+                    name='modifier'
+                    id={modifier.label}
+                    checked={selectedModifier === modifier.label}
+                    onChange={() => setSelectedModifier(modifier.label)}
+                  />
+                  <label htmlFor={modifier.label}>{modifier.label}</label>
                 </li>
               ))}
             </ul>
@@ -58,7 +94,21 @@ const ContactELement = () => {
               </div>
             </div>
           </div>
-          <div className='h-full w-full'></div>
+          <div className='h-full w-full flex-col'>
+            <label htmlFor='block-preview' className='text-sm font-medium text-neutral-950 dark:text-white'>
+              Preview
+            </label>
+            <div className='flex h-full w-full items-center justify-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'>
+              {selectedModifier && (
+                <img
+                  draggable='false'
+                  className='h-fit w-full select-none'
+                  src={getModifierContact(selectedModifier)}
+                  alt='Modifier Preview'
+                />
+              )}
+            </div>
+          </div>
         </div>
         <div className='flex !h-8 w-full gap-1'>
           <button className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white'>
