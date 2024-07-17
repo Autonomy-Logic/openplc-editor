@@ -1,15 +1,17 @@
 import { RungBody, RungHeader } from '@root/renderer/components/_molecules/rung'
-import { PropsWithChildren, useState } from 'react'
+import { useState } from 'react'
 
-export const Rung = ({ children }: PropsWithChildren) => {
-  const [isOpen, setIsOpen] = useState(false)
+export const Rung = () => {
+  const [isOpen, setIsOpen] = useState<boolean>(false)
+
   const handleOpenSection = () => {
     setIsOpen(!isOpen)
   }
+
   return (
     <div aria-label='Rung container' className='w-full'>
       <RungHeader onClick={handleOpenSection} isOpen={isOpen} />
-      {isOpen && <RungBody>{children}</RungBody>}
+      {isOpen && <RungBody />}
     </div>
   )
 }

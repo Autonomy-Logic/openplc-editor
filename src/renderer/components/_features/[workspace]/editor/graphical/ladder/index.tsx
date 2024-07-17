@@ -8,7 +8,7 @@ export default function LadderEditor() {
   const [rungs, setRungs] = useState<string[]>([])
   return (
     <div className='h-full w-full overflow-y-auto' style={{ scrollbarGutter: 'stable' }}>
-      <div className='flex flex-1 flex-col gap-4 p-1'>
+      <div className='flex flex-1 flex-col gap-4 px-2'>
         {rungs.map((_rung, index) => (
           <Rung key={index} />
         ))}
