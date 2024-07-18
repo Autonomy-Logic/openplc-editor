@@ -58,7 +58,7 @@ const ContactELement = () => {
                   <input
                     type='radio'
                     name='modifier'
-                    className={`h-4 w-4 appearance-none rounded-full bg-white checked:border-[5px]  checked:border-brand focus:outline-none  focus:ring-brand-dark`}
+                    className={` border-1 h-4 w-4 appearance-none rounded-full border  border-[#D1D5DB]   ring-0 checked:border-[5px] checked:border-brand    dark:border-neutral-850 dark:bg-neutral-300`}
                     id={modifier.label}
                     checked={selectedModifier === modifier.label}
                     onChange={() => setSelectedModifier(modifier.label)}
