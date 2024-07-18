@@ -1,0 +1,52 @@
+import '@xyflow/react/dist/style.css'
+
+import type { BackgroundProps, ControlProps, Edge, Node, ReactFlowProps } from '@xyflow/react'
+import {
+  addEdge,
+  Background,
+  Connection,
+  Controls,
+  ReactFlow,
+  useEdgesState,
+  useNodesState,
+} from '@xyflow/react'
+import { PropsWithChildren, useCallback } from 'react'
+
+type FlowPanelProps = PropsWithChildren & {
+  backgroundConfig?: BackgroundProps
+  viewportConfig?: Omit<ReactFlowProps, 'nodes' | 'edges' | 'onNodesChange' | 'onEdgesChange' | 'onConnect'>
+  controls?: boolean
+  controlsConfig?: ControlProps
+  constrolsStyle?: string
+}
+
+export const FlowPanel = ({
+  children,
+  backgroundConfig,
+  viewportConfig,
+  controls = false,
+  controlsConfig,
+  constrolsStyle,
+}: FlowPanelProps) => {
+  const initialEdgeValue: Edge[] = []
+  const initialNodeValue: Node[] = []
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdgeValue)
+  const [nodes, _setNodes, onNodesChange] = useNodesState(initialNodeValue)
+
+  const onConnect = useCallback((params: Connection) => setEdges((eds) => addEdge(params, eds)), [setEdges])
+
+  return (
+    <ReactFlow
+      edges={edges}
+      onEdgesChange={onEdgesChange}
+      nodes={nodes}
+      onNodesChange={onNodesChange}
+      onConnect={onConnect}
+      {...viewportConfig}
+    >
+      <Background {...backgroundConfig} />
+      {controls && <Controls {...controlsConfig} className={constrolsStyle} />}
+      {children}
+    </ReactFlow>
+  )
+}
