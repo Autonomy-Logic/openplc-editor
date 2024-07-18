@@ -13,9 +13,9 @@ import {
 } from '@root/renderer/components/_molecules'
 import { ReactElement, useState } from 'react'
 
-import imageMock from './mockImages/Group112.png'
-import image1 from './mockImages/image1.png'
-import image2 from './mockImages/image2.png'
+import imageMock from '../mockImages/Group112.png'
+import image1 from '../mockImages/image1.png'
+import image2 from '../mockImages/image2.png'
 
 const BlockElement = () => {
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
