@@ -1,12 +1,12 @@
 import type { CoordinateExtent } from '@xyflow/react'
-import { getNodesBounds, Panel, useReactFlow, useStore } from '@xyflow/react'
+import { getNodesBounds, Panel, useNodes, useReactFlow } from '@xyflow/react'
 import { useEffect, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
 
 export const RungBody = () => {
   const flow = useReactFlow()
-  const nodes = useStore((state) => state.nodes)
+  const nodes = useNodes()
 
   /**
    * Default flow panel extent:
@@ -17,10 +17,7 @@ export const RungBody = () => {
    * maxX: 1500 | maxY: 200
    */
   const defaultFlowPanelExtent: [number, number] = [1500, 200]
-  const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([
-    [0, 0],
-    defaultFlowPanelExtent,
-  ])
+  const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([[0, 0], defaultFlowPanelExtent])
 
   /**
    * Default width and height of nodes:
@@ -53,7 +50,13 @@ export const RungBody = () => {
    */
   useEffect(() => {
     const bounds = getNodesBounds(nodes)
-    const [panelExtentWidth, panelExtentHeight] = flowPanelExtent[1]
+    let [panelExtentWidth, panelExtentHeight] = flowPanelExtent[1]
+    const [defaultWidth, defaultHeight] = defaultFlowPanelExtent
+
+    // If the bounds are less than the default extent, set the panel extent to the default extent
+    if (bounds.width < defaultWidth) panelExtentWidth = defaultWidth
+    if (bounds.height < defaultHeight) panelExtentHeight = defaultHeight
+
     setFlowPanelExtent([
       [0, 0],
       [Math.max(bounds.width, panelExtentWidth), Math.max(bounds.height, panelExtentHeight)],
