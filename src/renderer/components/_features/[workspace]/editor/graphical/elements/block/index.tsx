@@ -1,5 +1,4 @@
-import * as Checkbox from '@radix-ui/react-checkbox'
-import { CheckIcon } from '@radix-ui/react-icons'
+import * as Switch from '@radix-ui/react-switch'
 import { LibraryCloseFolderIcon, LibraryFileIcon, MagnifierIcon } from '@root/renderer/assets'
 import { InputWithRef } from '@root/renderer/components/_atoms'
 import {
@@ -185,7 +184,10 @@ const BlockElement = () => {
   return (
     <Modal>
       <ModalTrigger>Open</ModalTrigger>
-      <ModalContent  onClose={() => handleClearForm() } className='h-[739px] w-[468px] select-none flex-col gap-8 px-8 py-4'>
+      <ModalContent
+        onClose={() => handleClearForm()}
+        className='h-[739px] w-[468px] select-none flex-col gap-8 px-8 py-4'
+      >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</ModalTitle>
         <div className='flex h-[587px] w-full justify-between'>
           <div id='container-modifier-variable' className='h-full w-[185px]'>
@@ -258,14 +260,17 @@ const BlockElement = () => {
               value={formState.executionOrder}
               onChange={handleInputChange}
             />
-            <label htmlFor='executionControl' className={labelStyle}>
-              Execution Control:
-            </label>
-            <Checkbox.Root className='h-4 w-4 cursor-pointer rounded-[4px] border border-neutral-300 text-brand dark:border-neutral-850'>
-              <Checkbox.Indicator className='h-4 w-4'>
-                <CheckIcon />
-              </Checkbox.Indicator>
-            </Checkbox.Root>
+            <div className='flex items-center gap-2'>
+              <label htmlFor='executionControlSwitch' className={labelStyle}>
+                Execution Control:
+              </label>
+              <Switch.Root
+                className='relative h-4 w-[29px]  cursor-pointer  rounded-full bg-neutral-300 shadow-[0_4_4_1px] outline-none transition-all duration-150 data-[state=checked]:bg-brand  dark:bg-neutral-850'
+                id='executionControlSwitch'
+              >
+                <Switch.Thumb className=' block h-[14px] w-[14px] translate-x-0.5 rounded-full   bg-white shadow-[0_0_4_1px] transition-all duration-150 will-change-transform data-[state=checked]:translate-x-[14px]' />
+              </Switch.Root>
+            </div>
             <label htmlFor='block-preview' className={labelStyle}>
               Preview
             </label>
