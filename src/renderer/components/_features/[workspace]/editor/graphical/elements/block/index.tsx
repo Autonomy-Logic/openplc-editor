@@ -185,10 +185,10 @@ const BlockElement = () => {
   return (
     <Modal>
       <ModalTrigger>Open</ModalTrigger>
-      <ModalContent  onClose={() => handleClearForm() } className='h-[739px] w-[413px] flex-col gap-8 px-6 py-4'>
+      <ModalContent  onClose={() => handleClearForm() } className='h-[739px] w-[468px] select-none flex-col gap-8 px-8 py-4'>
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</ModalTitle>
-        <div className='flex h-[587px] w-full gap-6'>
-          <div id='container-modifier-variable' className='h-full w-[178px]'>
+        <div className='flex h-[587px] w-full justify-between'>
+          <div id='container-modifier-variable' className='h-full w-[185px]'>
             <div className='flex h-full w-full flex-col gap-2'>
               <label className={labelStyle}>Type:</label>
               <div className='flex h-[30px] w-full gap-2'>
@@ -224,7 +224,7 @@ const BlockElement = () => {
               </div>
             </div>
           </div>
-          <div id='preview' className='flex h-full w-[163px] flex-col gap-2'>
+          <div id='preview' className='flex h-full w-[185px] flex-col gap-2'>
             <label htmlFor='name' className={labelStyle}>
               Name:
             </label>
@@ -279,7 +279,7 @@ const BlockElement = () => {
             </div>
           </div>
         </div>
-        <div className='flex !h-8 w-full gap-1'>
+        <div className='flex !h-8 w-full gap-6'>
           <button
             className={`h-full w-full items-center rounded-lg text-center font-medium text-white ${isFormValid ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'}`}
             disabled={!isFormValid}
