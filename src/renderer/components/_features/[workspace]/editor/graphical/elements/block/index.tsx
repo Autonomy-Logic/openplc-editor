@@ -1,5 +1,6 @@
 import * as Switch from '@radix-ui/react-switch'
 import { LibraryCloseFolderIcon, LibraryFileIcon, MagnifierIcon } from '@root/renderer/assets'
+import ArrowButton from '@root/renderer/assets/icons/interface/ArrowButton'
 import { InputWithRef } from '@root/renderer/components/_atoms'
 import {
   LibraryFile,
@@ -241,25 +242,45 @@ const BlockElement = () => {
             <label htmlFor='inputs' className={labelStyle}>
               Inputs:
             </label>
-            <InputWithRef
-              id='inputs'
-              className={inputStyle}
-              placeholder=''
-              type='number'
-              value={formState.inputs}
-              onChange={handleInputChange}
-            />
+            <div className='flex items-center gap-1'>
+              <InputWithRef
+                id='inputs'
+                className={`[-moz-appearance:_textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none ${inputStyle}`}
+                placeholder=''
+                type='number'
+                value={formState.inputs}
+                onChange={handleInputChange}
+              />
+              <div className='flex flex-col items-center gap-0.5'>
+                <div className='flex h-3 w-[17px] cursor-pointer items-center justify-center rounded-[2px] bg-neutral-200 p-0.5 transition-all duration-100 hover:bg-neutral-500 active:bg-neutral-600'>
+                  <ArrowButton className='h-2 w-3' direction='up' />
+                </div>
+                <div className='flex h-3 w-[17px] cursor-pointer items-center justify-center rounded-[2px] bg-neutral-200 p-0.5 transition-all duration-100 hover:bg-neutral-500 active:bg-neutral-600'>
+                  <ArrowButton className='h-2 w-3' direction='down' />
+                </div>
+              </div>
+            </div>
             <label htmlFor='executionOrder' className={labelStyle}>
               Execution Order:
             </label>
-            <InputWithRef
-              id='executionOrder'
-              className={inputStyle}
-              placeholder=''
-              type='number'
-              value={formState.executionOrder}
-              onChange={handleInputChange}
-            />
+            <div className='flex items-center gap-1'>
+              <InputWithRef
+                id='executionOrder'
+                className={`[-moz-appearance:_textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none ${inputStyle}`}
+                placeholder=''
+                type='number'
+                value={formState.executionOrder}
+                onChange={handleInputChange}
+              />
+              <div className='flex flex-col items-center gap-0.5'>
+                <div className='flex h-3 w-[17px] cursor-pointer items-center justify-center rounded-[2px] bg-neutral-200 p-0.5 transition-all duration-100 hover:bg-neutral-500 active:bg-neutral-600'>
+                  <ArrowButton className='h-2 w-3' direction='up' />
+                </div>
+                <div className='flex h-3 w-[17px] cursor-pointer items-center justify-center rounded-[2px] bg-neutral-200 p-0.5 transition-all duration-100 hover:bg-neutral-500 active:bg-neutral-600'>
+                  <ArrowButton className='h-2 w-3' direction='down' />
+                </div>
+              </div>
+            </div>
             <div className='flex items-center gap-2'>
               <label htmlFor='executionControlSwitch' className={labelStyle}>
                 Execution Control:
