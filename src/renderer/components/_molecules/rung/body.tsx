@@ -7,47 +7,64 @@ import { FlowPanel } from '../../_atoms/react-flow'
 export const RungBody = () => {
   const flow = useReactFlow()
   const nodes = useStore((state) => state.nodes)
+
+  /**
+   * Default flow panel extent:
+   * width: 1500
+   * height: 200
+   */
+  const defaultFlowPanelExtent: [number, number] = [1500, 200]
   const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([
     [0, 0],
-    [1500, 200],
+    defaultFlowPanelExtent,
   ])
 
+  /**
+   * Default width and height of nodes:
+   * width: 150
+   * height: 40
+   */
   useEffect(() => {
     flow?.addNodes([
       {
         id: '1',
         position: { x: 0, y: 0 },
         data: { label: 'Node 1' },
+        width: 150,
+        height: 40,
       },
       {
         id: '2',
         position: { x: 1350, y: 160 },
         data: { label: 'Node 2' },
+        width: 150,
+        height: 40,
       },
     ])
   }, [])
 
+  /**
+   * Update flow panel extent based on the bounds of the nodes
+   * To make the getNodesBounds function work, the nodes must have width and height properties set in the node data
+   * This useEffect will run every time the nodes array changes (i.e. when a node is added or removed)
+   */
   useEffect(() => {
-    console.log('Nodes:', nodes)
     const bounds = getNodesBounds(nodes)
     const [panelExtentWidth, panelExtentHeight] = flowPanelExtent[1]
-    const newPanelExtent: CoordinateExtent = [
+    setFlowPanelExtent([
       [0, 0],
       [Math.max(bounds.width, panelExtentWidth), Math.max(bounds.height, panelExtentHeight)],
-    ]
-    setFlowPanelExtent(newPanelExtent)
+    ])
   }, [nodes.length])
-
-  useEffect(() => {
-    console.log('Flow panel extent:', flowPanelExtent)
-  }, [flowPanelExtent])
 
   const handleAddNode = () => {
     flow?.addNodes([
       {
         id: '3',
-        position: { x: 300, y: 100 },
+        position: { x: 1500, y: 200 },
         data: { label: 'Node 3' },
+        width: 150,
+        height: 40,
       },
     ])
   }
