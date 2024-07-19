@@ -53,7 +53,7 @@
 
 @layer components {
   .box {
-    @apply shadow-oplc dark:shadow-oplc-dark border border-brand-light dark:border-brand-medium-dark;
+    @apply border border-brand-light shadow-oplc dark:border-brand-medium-dark dark:shadow-oplc-dark;
   }
   /* Classes for the custom titlebar*/
   .oplc-titlebar-container {
@@ -86,6 +86,14 @@
     bottom: 0;
     top: var(--oplc-title-bar-height);
     overflow: hidden;
+  }
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    appearance: textfield;
   }
 }
 

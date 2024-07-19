@@ -1,6 +1,5 @@
 import * as Switch from '@radix-ui/react-switch'
 import { LibraryCloseFolderIcon, LibraryFileIcon, MagnifierIcon } from '@root/renderer/assets'
-import ArrowButton from '@root/renderer/assets/icons/interface/ArrowButton'
 import { InputWithRef } from '@root/renderer/components/_atoms'
 import {
   LibraryFile,
@@ -13,6 +12,7 @@ import {
 } from '@root/renderer/components/_molecules'
 import { ReactElement, useState } from 'react'
 
+import ArrowButtonGroup from '../arrow-button-group'
 import imageMock from '../mockImages/Group112.png'
 import image1 from '../mockImages/image1.png'
 import image2 from '../mockImages/image2.png'
@@ -41,6 +41,21 @@ const BlockElement = () => {
     setSelectedFileKey(null)
     setSelectedFile(null)
   }
+
+  const handleIncrement = (field: 'inputs' | 'executionOrder') => {
+    setFormState(prevState => {
+      const newValue = Math.min(Number(prevState[field]) + 1, 20); 
+      return { ...prevState, [field]: String(newValue) };
+    });
+  };
+
+  const handleDecrement = (field: 'inputs' | 'executionOrder') => {
+    setFormState((prevState) => ({
+      ...prevState,
+      [field]: String(Math.max(Number(prevState[field]) - 1, 0)),
+    }))
+  }
+
   const lorem =
     ' Lorem ipsum dolor sit amet consectetur adipisicing elit. Autem blanditiis voluptates eius quasi quam illum deserunt perspiciatis magnam, corrupti vel! Nesciunt nostrum maxime aliquid amet asperiores quibusdam ipsam impedit corporis?'
 
@@ -185,10 +200,7 @@ const BlockElement = () => {
   return (
     <Modal>
       <ModalTrigger>Open</ModalTrigger>
-      <ModalContent
-        onClose={() => handleClearForm()}
-        className='h-[739px] w-[468px] select-none flex-col gap-8 px-8 py-4'
-      >
+      <ModalContent onClose={handleClearForm} className='h-[739px] w-[468px] select-none flex-col gap-8 px-8 py-4'>
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</ModalTitle>
         <div className='flex h-[587px] w-full justify-between'>
           <div id='container-modifier-variable' className='h-full w-[185px]'>
@@ -200,7 +212,7 @@ const BlockElement = () => {
                   <MagnifierIcon />
                 </div>
               </div>
-              <div className='border-neural-100  h-[388px] w-full rounded-lg border px-1 py-4 dark:border-neutral-850'>
+              <div className='border-neural-100 h-[388px] w-full rounded-lg border px-1 py-4 dark:border-neutral-850'>
                 <div className='h-full w-full overflow-y-auto'>
                   <LibraryRoot>
                     {treeData.map((data) => (
@@ -222,7 +234,7 @@ const BlockElement = () => {
                   </LibraryRoot>
                 </div>
               </div>
-              <div className='border-neural-100  h-full max-h-[119px] overflow-hidden rounded-lg border px-1 py-4 text-xs font-medium text-neutral-950 dark:border-neutral-850 dark:text-neutral-100'>
+              <div className='border-neural-100 h-full max-h-[119px] overflow-hidden rounded-lg border px-1 py-4 text-xs font-medium text-neutral-950 dark:border-neutral-850 dark:text-neutral-100'>
                 <p className='h-full overflow-y-auto dark:text-neutral-100'>{selectedFile?.text}</p>
               </div>
             </div>
@@ -245,20 +257,16 @@ const BlockElement = () => {
             <div className='flex items-center gap-1'>
               <InputWithRef
                 id='inputs'
-                className={`[-moz-appearance:_textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none ${inputStyle}`}
+                className={`${inputStyle}`}
                 placeholder=''
                 type='number'
                 value={formState.inputs}
                 onChange={handleInputChange}
               />
-              <div className='flex flex-col items-center gap-0.5'>
-                <div className='flex h-3 w-[17px] cursor-pointer items-center justify-center rounded-[2px] bg-neutral-200 p-0.5 transition-all duration-100 hover:bg-neutral-500 active:bg-neutral-600'>
-                  <ArrowButton className='h-2 w-3' direction='up' />
-                </div>
-                <div className='flex h-3 w-[17px] cursor-pointer items-center justify-center rounded-[2px] bg-neutral-200 p-0.5 transition-all duration-100 hover:bg-neutral-500 active:bg-neutral-600'>
-                  <ArrowButton className='h-2 w-3' direction='down' />
-                </div>
-              </div>
+              <ArrowButtonGroup
+                onIncrement={() => handleIncrement('inputs')}
+                onDecrement={() => handleDecrement('inputs')}
+              />
             </div>
             <label htmlFor='executionOrder' className={labelStyle}>
               Execution Order:
@@ -266,30 +274,26 @@ const BlockElement = () => {
             <div className='flex items-center gap-1'>
               <InputWithRef
                 id='executionOrder'
-                className={`[-moz-appearance:_textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none ${inputStyle}`}
+                className={`${inputStyle}`}
                 placeholder=''
                 type='number'
                 value={formState.executionOrder}
                 onChange={handleInputChange}
               />
-              <div className='flex flex-col items-center gap-0.5'>
-                <div className='flex h-3 w-[17px] cursor-pointer items-center justify-center rounded-[2px] bg-neutral-200 p-0.5 transition-all duration-100 hover:bg-neutral-500 active:bg-neutral-600'>
-                  <ArrowButton className='h-2 w-3' direction='up' />
-                </div>
-                <div className='flex h-3 w-[17px] cursor-pointer items-center justify-center rounded-[2px] bg-neutral-200 p-0.5 transition-all duration-100 hover:bg-neutral-500 active:bg-neutral-600'>
-                  <ArrowButton className='h-2 w-3' direction='down' />
-                </div>
-              </div>
+              <ArrowButtonGroup
+                onIncrement={() => handleIncrement('executionOrder')}
+                onDecrement={() => handleDecrement('executionOrder')}
+              />
             </div>
             <div className='flex items-center gap-2'>
               <label htmlFor='executionControlSwitch' className={labelStyle}>
                 Execution Control:
               </label>
               <Switch.Root
-                className='relative h-4 w-[29px]  cursor-pointer  rounded-full bg-neutral-300 shadow-[0_4_4_1px] outline-none transition-all duration-150 data-[state=checked]:bg-brand  dark:bg-neutral-850'
+                className='relative h-4 w-[29px] cursor-pointer rounded-full bg-neutral-300 shadow-[0_4_4_1px] outline-none transition-all duration-150 data-[state=checked]:bg-brand dark:bg-neutral-850'
                 id='executionControlSwitch'
               >
-                <Switch.Thumb className=' block h-[14px] w-[14px] translate-x-0.5 rounded-full   bg-white shadow-[0_0_4_1px] transition-all duration-150 will-change-transform data-[state=checked]:translate-x-[14px]' />
+                <Switch.Thumb className='block h-[14px] w-[14px] translate-x-0.5 rounded-full bg-white shadow-[0_0_4_1px] transition-all duration-150 will-change-transform data-[state=checked]:translate-x-[14px]' />
               </Switch.Root>
             </div>
             <label htmlFor='block-preview' className={labelStyle}>
@@ -312,7 +316,7 @@ const BlockElement = () => {
           >
             Ok
           </button>
-          <button className='h-full w-full items-center rounded-lg  bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
+          <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
             Cancel
           </button>
         </div>
