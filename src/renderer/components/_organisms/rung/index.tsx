@@ -10,7 +10,7 @@ export const Rung = () => {
   }
 
   return (
-    <div aria-label='Rung container' className='w-full'>
+    <div aria-label='Rung container' className='overflow w-full'>
       <RungHeader onClick={handleOpenSection} isOpen={isOpen} />
       {isOpen && (
         <ReactFlowProvider>

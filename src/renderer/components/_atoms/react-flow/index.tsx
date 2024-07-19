@@ -5,6 +5,7 @@ import { addEdge, Background, Connection, Controls, ReactFlow, useEdgesState, us
 import { PropsWithChildren, useCallback } from 'react'
 
 type FlowPanelProps = PropsWithChildren & {
+  background?: boolean
   backgroundConfig?: BackgroundProps
   viewportConfig?: Omit<ReactFlowProps, 'nodes' | 'edges' | 'onNodesChange' | 'onEdgesChange' | 'onConnect'>
   controls?: boolean
@@ -14,6 +15,7 @@ type FlowPanelProps = PropsWithChildren & {
 
 export const FlowPanel = ({
   children,
+  background,
   backgroundConfig,
   viewportConfig,
   controls = false,
@@ -34,7 +36,7 @@ export const FlowPanel = ({
       onConnect={onConnect}
       {...viewportConfig}
     >
-      <Background {...backgroundConfig} />
+      {background && <Background {...backgroundConfig} />}
       {controls && <Controls {...controlsConfig} className={constrolsStyle} />}
       {children}
     </ReactFlow>
