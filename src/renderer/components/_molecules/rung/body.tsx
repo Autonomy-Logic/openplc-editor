@@ -12,6 +12,9 @@ export const RungBody = () => {
    * Default flow panel extent:
    * width: 1500
    * height: 200
+   * -- Which means:
+   * minX: 0    | minY: 0
+   * maxX: 1500 | maxY: 200
    */
   const defaultFlowPanelExtent: [number, number] = [1500, 200]
   const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([
