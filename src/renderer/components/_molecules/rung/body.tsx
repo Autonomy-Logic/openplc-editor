@@ -1,5 +1,5 @@
 import type { CoordinateExtent, Node } from '@xyflow/react'
-import { getNodesBounds, Panel, useNodes, useReactFlow, useViewport } from '@xyflow/react'
+import { getNodesBounds, Panel, useNodes, useReactFlow } from '@xyflow/react'
 import { useEffect, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
@@ -7,7 +7,6 @@ import { FlowPanel } from '../../_atoms/react-flow'
 export const RungBody = () => {
   const flow = useReactFlow()
   const nodes = useNodes()
-  const viewport = useViewport()
 
   /**
    * Default flow panel extent:
@@ -50,9 +49,7 @@ export const RungBody = () => {
    * This useEffect will run every time the nodes array changes (i.e. when a node is added or removed)
    */
   useEffect(() => {
-    console.log('Nodes:', nodes)
     const bounds = getNodesBounds(nodes)
-    console.log('Bounds:', bounds)
     const [defaultWidth, defaultHeight] = defaultFlowPanelExtent
 
     // If the bounds are less than the default extent, set the panel extent to the default extent
@@ -64,10 +61,6 @@ export const RungBody = () => {
       [bounds.width, bounds.height],
     ])
   }, [nodes.length])
-
-  useEffect(() => {
-    console.log('Viewport:', viewport)
-  }, [viewport])
 
   const handleAddNode = () => {
     let biggestId: number = 0
@@ -106,38 +99,38 @@ export const RungBody = () => {
   }
 
   return (
-    <div
-      aria-label='Rung body'
-      className='h-fit w-full overflow-x-auto rounded-b-lg border border-t-0 dark:border-neutral-800'
-    >
-      <div
-        style={{
-          minHeight: '208px',
-          height: flowPanelExtent[1][1] + 8,
-          minWidth: '100%',
-          width: flowPanelExtent[1][0] + 8,
-        }}
-      >
-        <FlowPanel
-          viewportConfig={{
-            nodeExtent: flowPanelExtent,
-            translateExtent: flowPanelExtent,
-            panActivationKeyCode: null,
-            panOnDrag: false,
-            panOnScroll: false,
-            zoomActivationKeyCode: null,
-            zoomOnDoubleClick: false,
-            zoomOnPinch: false,
-            zoomOnScroll: false,
+    <div className='h-fit w-full rounded-b-lg border border-t-0 p-1 dark:border-neutral-800'>
+      <div aria-label='Rung body' className='h-full w-full overflow-x-auto'>
+        <div
+          style={{
+            minHeight: '208px',
+            height: flowPanelExtent[1][1] + 8,
+            minWidth: '100%',
+            width: flowPanelExtent[1][0] + 8,
           }}
         >
-          <Panel position='bottom-left'>
-            <button onClick={handleAddNode}>Add Node</button>
-          </Panel>
-          <Panel position='bottom-right'>
-            <button onClick={handleRemoveNode}>Remove Node</button>
-          </Panel>
-        </FlowPanel>
+          <FlowPanel
+            viewportConfig={{
+              nodeExtent: flowPanelExtent,
+              translateExtent: flowPanelExtent,
+              panActivationKeyCode: null,
+              panOnDrag: false,
+              panOnScroll: false,
+              zoomActivationKeyCode: null,
+              zoomOnDoubleClick: false,
+              zoomOnPinch: false,
+              zoomOnScroll: false,
+              preventScrolling: false,
+            }}
+          >
+            <Panel position='bottom-left'>
+              <button onClick={handleAddNode}>Add Node</button>
+            </Panel>
+            <Panel position='bottom-right'>
+              <button onClick={handleRemoveNode}>Remove Node</button>
+            </Panel>
+          </FlowPanel>
+        </div>
       </div>
     </div>
   )
