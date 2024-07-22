@@ -1,4 +1,5 @@
 import { RungBody, RungHeader } from '@root/renderer/components/_molecules/rung'
+import { ReactFlowProvider } from '@xyflow/react'
 import { useState } from 'react'
 
 export const Rung = () => {
@@ -9,9 +10,13 @@ export const Rung = () => {
   }
 
   return (
-    <div aria-label='Rung container' className='w-full'>
+    <div aria-label='Rung container' className='overflow w-full'>
       <RungHeader onClick={handleOpenSection} isOpen={isOpen} />
-      {isOpen && <RungBody />}
+      {isOpen && (
+        <ReactFlowProvider>
+          <RungBody />
+        </ReactFlowProvider>
+      )}
     </div>
   )
 }
