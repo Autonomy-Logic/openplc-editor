@@ -25,7 +25,7 @@ const BlockElement = () => {
     inputs: '',
     executionOrder: '',
   })
-  const [filterText, setFilterText] = useState('') // Novo estado para o filtro
+  const [filterText, setFilterText] = useState('')
 
   const isFormValid = formState.name && formState.inputs && formState.executionOrder
 
@@ -46,7 +46,7 @@ const BlockElement = () => {
     })
     setSelectedFileKey(null)
     setSelectedFile(null)
-    setFilterText('') 
+    setFilterText('')
   }
 
   const handleIncrement = (field: 'inputs' | 'executionOrder') => {
@@ -222,6 +222,7 @@ const BlockElement = () => {
   const labelStyle = 'text-sm font-medium text-neutral-950 dark:text-white'
   const inputStyle =
     'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 p-[10px] text-cp-xs text-neutral-700 outline-none focus:border-brand'
+
   return (
     <Modal>
       <ModalTrigger>Open</ModalTrigger>
@@ -244,13 +245,18 @@ const BlockElement = () => {
                 </div>
               </div>
               <div className='border-neural-100 h-[388px] w-full rounded-lg border px-1 py-4 dark:border-neutral-850'>
-                <div className='h-full w-full overflow-y-auto'>
+                <div className='h-full w-full overflow-auto'>
                   <LibraryRoot>
                     {filteredTreeData.map((data) => (
-                      <LibraryFolder key={data.key} label={data.label} title={data.title}>
+                      <LibraryFolder
+                        key={data.key}
+                        label={data.label}
+                        initiallyOpen={false}
+                        shouldBeOpen={filterText.length > 0}
+                      >
                         {data.children.map((child) => (
                           <LibraryFile
-                            key={`${data.key}-${child.key}`}
+                            key={child.key}
                             label={child.label}
                             isSelected={selectedFileKey === `${data.key}-${child.key}`}
                             onSelect={() => setSelectedFileKey(`${data.key}-${child.key}`)}
@@ -288,7 +294,7 @@ const BlockElement = () => {
             <div className='flex items-center gap-1'>
               <InputWithRef
                 id='inputs'
-                className={`${inputStyle}`}
+                className={inputStyle}
                 placeholder=''
                 type='number'
                 value={formState.inputs}
@@ -305,7 +311,7 @@ const BlockElement = () => {
             <div className='flex items-center gap-1'>
               <InputWithRef
                 id='executionOrder'
-                className={`${inputStyle}`}
+                className={inputStyle}
                 placeholder=''
                 type='number'
                 value={formState.executionOrder}
@@ -355,5 +361,4 @@ const BlockElement = () => {
     </Modal>
   )
 }
-
 export default BlockElement
