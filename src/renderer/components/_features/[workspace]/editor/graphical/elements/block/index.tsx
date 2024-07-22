@@ -25,6 +25,7 @@ const BlockElement = () => {
     inputs: '',
     executionOrder: '',
   })
+  const [filterText, setFilterText] = useState('') // Novo estado para o filtro
 
   const isFormValid = formState.name && formState.inputs && formState.executionOrder
 
@@ -32,6 +33,11 @@ const BlockElement = () => {
     const { id, value } = e.target
     setFormState((prevState) => ({ ...prevState, [id]: value }))
   }
+
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilterText(e.target.value.toLowerCase())
+  }
+
   const handleClearForm = () => {
     setFormState({
       name: '',
@@ -40,14 +46,15 @@ const BlockElement = () => {
     })
     setSelectedFileKey(null)
     setSelectedFile(null)
+    setFilterText('') 
   }
 
   const handleIncrement = (field: 'inputs' | 'executionOrder') => {
-    setFormState(prevState => {
-      const newValue = Math.min(Number(prevState[field]) + 1, 20); 
-      return { ...prevState, [field]: String(newValue) };
-    });
-  };
+    setFormState((prevState) => {
+      const newValue = Math.min(Number(prevState[field]) + 1, 20)
+      return { ...prevState, [field]: String(newValue) }
+    })
+  }
 
   const handleDecrement = (field: 'inputs' | 'executionOrder') => {
     setFormState((prevState) => ({
@@ -194,6 +201,24 @@ const BlockElement = () => {
     },
   ]
 
+  const filterTreeData = (filterText: string) => {
+    return treeData.reduce(
+      (acc, folder) => {
+        const filteredChildren = folder.children.filter((child) => child.label.toLowerCase().includes(filterText))
+        if (filteredChildren.length > 0 || folder.label.toLowerCase().includes(filterText)) {
+          acc.push({
+            ...folder,
+            children: filteredChildren,
+          })
+        }
+        return acc
+      },
+      [] as typeof treeData,
+    )
+  }
+
+  const filteredTreeData = filterTreeData(filterText)
+
   const labelStyle = 'text-sm font-medium text-neutral-950 dark:text-white'
   const inputStyle =
     'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 p-[10px] text-cp-xs text-neutral-700 outline-none focus:border-brand'
@@ -207,7 +232,13 @@ const BlockElement = () => {
             <div className='flex h-full w-full flex-col gap-2'>
               <label className={labelStyle}>Type:</label>
               <div className='flex h-[30px] w-full gap-2'>
-                <InputWithRef className={inputStyle} placeholder='Search' type='text' />
+                <InputWithRef
+                  className={inputStyle}
+                  placeholder='Search'
+                  type='text'
+                  value={filterText}
+                  onChange={handleFilterChange}
+                />
                 <div className='flex h-full w-10 items-center justify-center rounded-lg bg-brand'>
                   <MagnifierIcon />
                 </div>
@@ -215,7 +246,7 @@ const BlockElement = () => {
               <div className='border-neural-100 h-[388px] w-full rounded-lg border px-1 py-4 dark:border-neutral-850'>
                 <div className='h-full w-full overflow-y-auto'>
                   <LibraryRoot>
-                    {treeData.map((data) => (
+                    {filteredTreeData.map((data) => (
                       <LibraryFolder key={data.key} label={data.label} title={data.title}>
                         {data.children.map((child) => (
                           <LibraryFile
