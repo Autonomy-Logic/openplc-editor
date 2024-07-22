@@ -17,17 +17,166 @@ import imageMock from '../mockImages/Group112.png'
 import image1 from '../mockImages/image1.png'
 import image2 from '../mockImages/image2.png'
 
+type TreeDataChildren = {
+  key: string
+  label: string
+  icon: ReactElement
+  title: string
+  children: string
+  image: string
+}
+
+const lorem =
+  ' Lorem ipsum dolor sit amet consectetur adipisicing elit. Autem blanditiis voluptates eius quasi quam illum deserunt perspiciatis magnam, corrupti vel! Nesciunt nostrum maxime aliquid amet asperiores quibusdam ipsam impedit corporis?'
+
+const treeData: Array<{
+  key: string
+  label: string
+  icon: ReactElement
+  title: string
+  children: TreeDataChildren[]
+}> = [
+  {
+    key: '0',
+    label: 'P1AM_Modules',
+    icon: <LibraryCloseFolderIcon size='sm' />,
+    title: 'Module Tree',
+    children: [
+      {
+        key: '0.1',
+        label: 'P1AM_INIT',
+        icon: <LibraryFileIcon />,
+        title: 'Module Leaf',
+        children: 1 + lorem,
+        image: imageMock,
+      },
+      {
+        key: '0.2',
+        label: 'P1_16CDR',
+        icon: <LibraryFileIcon />,
+        title: 'Module Leaf',
+        children: 2 + lorem,
+        image: image1,
+      },
+      {
+        key: '0.3',
+        label: 'P1_08N',
+        icon: <LibraryFileIcon />,
+        title: 'Module Leaf',
+        children: 3 + lorem,
+        image: image2,
+      },
+      {
+        key: '0.4',
+        label: 'P1_16N',
+        icon: <LibraryFileIcon />,
+        title: 'Module Leaf',
+        children: lorem,
+        image: imageMock,
+      },
+      {
+        key: '0.5',
+        label: 'P1_16N',
+        icon: <LibraryFileIcon />,
+        title: 'Module Leaf',
+        children: lorem,
+        image: image1,
+      },
+      {
+        key: '0.6',
+        label: 'P1_08T',
+        icon: <LibraryFileIcon />,
+        title: 'Module Leaf',
+        children: lorem,
+        image: image2,
+      },
+      {
+        key: '0.7',
+        label: 'P1_16TR',
+        icon: <LibraryFileIcon />,
+        title: 'Module Leaf',
+        children: lorem,
+        image: imageMock,
+      },
+      {
+        key: '0.8',
+        label: 'P1_04AD',
+        icon: <LibraryFileIcon />,
+        title: 'Module Leaf',
+        children: lorem,
+        image: image1,
+      },
+    ],
+  },
+  {
+    key: '1',
+    label: 'Jaguar',
+    icon: <LibraryCloseFolderIcon size='sm' />,
+    title: 'Module Tree',
+    children: [],
+  },
+  {
+    key: '2',
+    label: 'Arduino',
+    icon: <LibraryCloseFolderIcon size='sm' />,
+    title: 'Module Tree',
+    children: [],
+  },
+  {
+    key: '3',
+    label: 'Communication',
+    icon: <LibraryCloseFolderIcon size='sm' />,
+    title: 'Module Tree',
+    children: [],
+  },
+  {
+    key: '4',
+    label: 'Sequent Microsystems',
+    icon: <LibraryCloseFolderIcon size='sm' />,
+    title: 'Module Tree',
+    children: [
+      {
+        key: '0.1',
+        label: 'P12AM_INIT',
+        icon: <LibraryFileIcon />,
+        title: 'Module Leaf',
+        image: imageMock,
+        children: '',
+      },
+      {
+        key: '0.2',
+        label: 'P13_16CDR',
+        icon: <LibraryFileIcon />,
+        title: 'Module Leaf',
+        image: image1,
+        children: '',
+      },
+    ],
+  },
+]
+const filterTreeData = (filterText: string) => {
+  return treeData.reduce(
+    //acc - accumulator
+    (acc, folder) => {
+      const filteredChildren = folder.children.filter((child) => child.label.toLowerCase().includes(filterText))
+      if (filteredChildren.length > 0 || folder.label.toLowerCase().includes(filterText)) {
+        acc.push({
+          ...folder,
+          children: filteredChildren,
+        })
+      }
+      return acc
+    },
+    [] as typeof treeData,
+  )
+}
 const BlockElement = () => {
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<{ image: string; text: string } | null>(null)
-  const [formState, setFormState] = useState({
-    name: '',
-    inputs: '',
-    executionOrder: '',
-  })
+  const [formState, setFormState] = useState({ name: '', inputs: '', executionOrder: '' })
   const [filterText, setFilterText] = useState('')
 
-  const isFormValid = formState.name && formState.inputs && formState.executionOrder
+  const isFormValid = Object.values(formState).every((value) => value !== '')
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target
@@ -39,21 +188,17 @@ const BlockElement = () => {
   }
 
   const handleClearForm = () => {
-    setFormState({
-      name: '',
-      inputs: '',
-      executionOrder: '',
-    })
+    setFormState({ name: '', inputs: '', executionOrder: '' })
     setSelectedFileKey(null)
     setSelectedFile(null)
     setFilterText('')
   }
 
   const handleIncrement = (field: 'inputs' | 'executionOrder') => {
-    setFormState((prevState) => {
-      const newValue = Math.min(Number(prevState[field]) + 1, 20)
-      return { ...prevState, [field]: String(newValue) }
-    })
+    setFormState((prevState) => ({
+      ...prevState,
+      [field]: String(Math.min(Number(prevState[field]) + 1, 20)),
+    }))
   }
 
   const handleDecrement = (field: 'inputs' | 'executionOrder') => {
@@ -61,160 +206,6 @@ const BlockElement = () => {
       ...prevState,
       [field]: String(Math.max(Number(prevState[field]) - 1, 0)),
     }))
-  }
-
-  const lorem =
-    ' Lorem ipsum dolor sit amet consectetur adipisicing elit. Autem blanditiis voluptates eius quasi quam illum deserunt perspiciatis magnam, corrupti vel! Nesciunt nostrum maxime aliquid amet asperiores quibusdam ipsam impedit corporis?'
-
-  type TreeDataChildren = {
-    key: string
-    label: string
-    icon: ReactElement
-    title: string
-    children: string
-    image: string
-  }
-
-  const treeData: Array<{
-    key: string
-    label: string
-    icon: ReactElement
-    title: string
-    children: TreeDataChildren[]
-  }> = [
-    {
-      key: '0',
-      label: 'P1AM_Modules',
-      icon: <LibraryCloseFolderIcon size='sm' />,
-      title: 'Module Tree',
-      children: [
-        {
-          key: '0.1',
-          label: 'P1AM_INIT',
-          icon: <LibraryFileIcon />,
-          title: 'Module Leaf',
-          children: 1 + lorem,
-          image: imageMock,
-        },
-        {
-          key: '0.2',
-          label: 'P1_16CDR',
-          icon: <LibraryFileIcon />,
-          title: 'Module Leaf',
-          children: 2 + lorem,
-          image: image1,
-        },
-        {
-          key: '0.3',
-          label: 'P1_08N',
-          icon: <LibraryFileIcon />,
-          title: 'Module Leaf',
-          children: 3 + lorem,
-          image: image2,
-        },
-        {
-          key: '0.4',
-          label: 'P1_16N',
-          icon: <LibraryFileIcon />,
-          title: 'Module Leaf',
-          children: lorem,
-          image: imageMock,
-        },
-        {
-          key: '0.5',
-          label: 'P1_16N',
-          icon: <LibraryFileIcon />,
-          title: 'Module Leaf',
-          children: lorem,
-          image: image1,
-        },
-        {
-          key: '0.6',
-          label: 'P1_08T',
-          icon: <LibraryFileIcon />,
-          title: 'Module Leaf',
-          children: lorem,
-          image: image2,
-        },
-        {
-          key: '0.7',
-          label: 'P1_16TR',
-          icon: <LibraryFileIcon />,
-          title: 'Module Leaf',
-          children: lorem,
-          image: imageMock,
-        },
-        {
-          key: '0.8',
-          label: 'P1_04AD',
-          icon: <LibraryFileIcon />,
-          title: 'Module Leaf',
-          children: lorem,
-          image: image1,
-        },
-      ],
-    },
-    {
-      key: '1',
-      label: 'Jaguar',
-      icon: <LibraryCloseFolderIcon size='sm' />,
-      title: 'Module Tree',
-      children: [],
-    },
-    {
-      key: '2',
-      label: 'Arduino',
-      icon: <LibraryCloseFolderIcon size='sm' />,
-      title: 'Module Tree',
-      children: [],
-    },
-    {
-      key: '3',
-      label: 'Communication',
-      icon: <LibraryCloseFolderIcon size='sm' />,
-      title: 'Module Tree',
-      children: [],
-    },
-    {
-      key: '4',
-      label: 'Sequent Microsystems',
-      icon: <LibraryCloseFolderIcon size='sm' />,
-      title: 'Module Tree',
-      children: [
-        {
-          key: '0.1',
-          label: 'P12AM_INIT',
-          icon: <LibraryFileIcon />,
-          title: 'Module Leaf',
-          image: imageMock,
-          children: '',
-        },
-        {
-          key: '0.2',
-          label: 'P13_16CDR',
-          icon: <LibraryFileIcon />,
-          title: 'Module Leaf',
-          image: image1,
-          children: '',
-        },
-      ],
-    },
-  ]
-
-  const filterTreeData = (filterText: string) => {
-    return treeData.reduce(
-      (acc, folder) => {
-        const filteredChildren = folder.children.filter((child) => child.label.toLowerCase().includes(filterText))
-        if (filteredChildren.length > 0 || folder.label.toLowerCase().includes(filterText)) {
-          acc.push({
-            ...folder,
-            children: filteredChildren,
-          })
-        }
-        return acc
-      },
-      [] as typeof treeData,
-    )
   }
 
   const filteredTreeData = filterTreeData(filterText)
@@ -241,8 +232,7 @@ const BlockElement = () => {
                   value={filterText}
                   onChange={handleFilterChange}
                 />
-
-                <label className='realtive right-0 stroke-brand' htmlFor='Search-File'>
+                <label className='relative right-0 stroke-brand' htmlFor='Search-File'>
                   <MagnifierIcon size='sm' className='stroke-brand' />
                 </label>
               </div>
@@ -363,4 +353,5 @@ const BlockElement = () => {
     </Modal>
   )
 }
+
 export default BlockElement
