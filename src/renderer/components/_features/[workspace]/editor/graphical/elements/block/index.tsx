@@ -232,17 +232,19 @@ const BlockElement = () => {
           <div id='container-modifier-variable' className='h-full w-[185px]'>
             <div className='flex h-full w-full flex-col gap-2'>
               <label className={labelStyle}>Type:</label>
-              <div className='flex h-[30px] w-full gap-2'>
+              <div className={`relative flex items-center focus-within:border-brand ${inputStyle}`}>
                 <InputWithRef
-                  className={inputStyle}
+                  className='h-full w-full bg-inherit outline-none'
+                  id='Search-File'
                   placeholder='Search'
                   type='text'
                   value={filterText}
                   onChange={handleFilterChange}
                 />
-                <div className='flex h-full w-10 items-center justify-center rounded-lg bg-brand'>
-                  <MagnifierIcon />
-                </div>
+
+                <label className='realtive right-0 stroke-brand' htmlFor='Search-File'>
+                  <MagnifierIcon size='sm' className='stroke-brand' />
+                </label>
               </div>
               <div className='border-neural-100 h-[388px] w-full rounded-lg border px-1 py-4 dark:border-neutral-850'>
                 <div className='h-full w-full overflow-auto'>
