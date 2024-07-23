@@ -1,10 +1,8 @@
 import { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 
-type AppNode = Node
-
 type FlowState = {
   id: string
-  nodes: AppNode[]
+  nodes: Node[]
   edges: Edge[]
 }
 
@@ -13,11 +11,18 @@ type RungsState = {
 }
 
 type FlowActions = {
+  addRung: (rung: FlowState) => void
+  removeRung: (rungId: string) => void
+
   onNodesChange: ({ changes, rungId }: { changes: NodeChange<Node>[]; rungId: string }) => void
   onEdgesChange: ({ changes, rungId }: { changes: EdgeChange<Edge>[]; rungId: string }) => void
   onConnect: ({ changes, rungId }: { changes: Connection; rungId: string }) => void
-  setNodes: ({ nodes, rungId }: { nodes: AppNode[]; rungId: string }) => void
+
+  setNodes: ({ nodes, rungId }: { nodes: Node[]; rungId: string }) => void
+  updateNode: ({ node, rungId }: { node: Node; rungId: string }) => void
+
   setEdges: ({ edges, rungId }: { edges: Edge[]; rungId: string }) => void
+  updateEdge: ({ edge, rungId }: { edge: Edge; rungId: string }) => void
 }
 
 /** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */
