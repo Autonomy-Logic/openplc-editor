@@ -1,7 +1,7 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowState } from '@root/renderer/store/slices'
-import type { CoordinateExtent, Node, OnEdgesChange, OnNodesChange } from '@xyflow/react'
-import { applyEdgeChanges, applyNodeChanges, Edge, getNodesBounds, Panel } from '@xyflow/react'
+import type { CoordinateExtent, Node, OnConnect, OnEdgesChange, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
+import { addEdge, applyEdgeChanges, applyNodeChanges, getNodesBounds, Panel } from '@xyflow/react'
 import { useCallback, useEffect, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
@@ -12,8 +12,8 @@ type RungBodyProps = {
 
 export const RungBody = ({ rung }: RungBodyProps) => {
   const { flowActions } = useOpenPLCStore()
-  const [nodes, setNodes] = useState<Node[]>(rung.nodes)
-  const [edges, setEdges] = useState<Edge[]>(rung.edges)
+  const [rungLocal, setRungLocal] = useState<FlowState>(rung)
+  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
 
   /**
    * Default flow panel extent:
@@ -26,23 +26,19 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   const defaultFlowPanelExtent: [number, number] = [1500, 200]
   const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([[0, 0], defaultFlowPanelExtent])
 
-  useEffect(() => {
-    setNodes(rung.nodes)
-    console.log('rung.nodes', rung.nodes)
-  }, [rung.nodes])
-
-  useEffect(() => {
-    setEdges(rung.edges)
-    console.log('rung.edges', rung.edges)
-  }, [rung.edges])
-
   /**
    * Update flow panel extent based on the bounds of the nodes
    * To make the getNodesBounds function work, the nodes must have width and height properties set in the node data
    * This useEffect will run every time the nodes array changes (i.e. when a node is added or removed)
    */
   useEffect(() => {
-    const bounds = getNodesBounds(nodes)
+    const zeroPositionNode: Node = {
+      id: '-1',
+      position: { x: 0, y: 0 },
+      data: { label: 'Node 0' },
+      measured: { width: 150, height: 40 },
+    }
+    const bounds = getNodesBounds([zeroPositionNode, ...rungLocal.nodes])
     const [defaultWidth, defaultHeight] = defaultFlowPanelExtent
 
     // If the bounds are less than the default extent, set the panel extent to the default extent
@@ -53,45 +49,72 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       [0, 0],
       [bounds.width, bounds.height],
     ])
-  }, [nodes])
+  }, [rungLocal.nodes.length])
 
   const handleAddNode = () => {
-    const lastNode = nodes[nodes.length - 1]
-    flowActions.setNodes({
-      rungId: rung.id,
-      nodes: [
-        ...nodes,
-        {
-          id: `${nodes.length + 1}`,
-          position: { x: lastNode.position.x + 150, y: lastNode.position.y + 40 },
-          data: { label: `Node ${nodes.length + 1}` },
-          width: 150,
-          height: 40,
-        },
-      ],
-    })
+    const lastNode = rungLocal.nodes[rungLocal.nodes.length - 1]
+    const newNode: Node = {
+      id: `${rungLocal.nodes.length + 1}`,
+      position: { x: lastNode.position.x + 150, y: lastNode.position.y + 60 },
+      data: { label: `Node ${rungLocal.nodes.length + 1}` },
+      measured: { width: 150, height: 40 },
+    }
+    setRungLocal((rung) => ({
+      ...rung,
+      nodes: [...rungLocal.nodes, newNode],
+    }))
+    flowActions.setNodes({ rungId: rungLocal.id, nodes: [...rungLocal.nodes, newNode] })
   }
 
   const handleRemoveNode = () => {
+    setRungLocal((rung) => ({
+      ...rung,
+      nodes: rungLocal.nodes.filter((node) => node.id !== `${rungLocal.nodes.length}`),
+    }))
     flowActions.setNodes({
-      rungId: rung.id,
-      nodes: nodes.filter((node) => node.id !== `${nodes.length}`),
+      rungId: rungLocal.id,
+      nodes: rungLocal.nodes.filter((node) => node.id !== `${rungLocal.nodes.length}`),
     })
   }
 
-  const onNodesChange: OnNodesChange = useCallback(
+  const onNodesChange: OnNodesChange<Node> = useCallback(
     (changes) => {
-      setNodes((nds) => applyNodeChanges(changes, nds))
+      setRungLocal((rung) => ({
+        ...rung,
+        nodes: applyNodeChanges(changes, rung.nodes),
+      }))
     },
-    [setNodes],
+    [setRungLocal],
   )
+
+  const onNodeDragStop = () => {
+    if (reactFlowInstance) {
+      const flow = reactFlowInstance.toObject()
+      flowActions.setNodes({ rungId: rungLocal.id, nodes: flow.nodes })
+      flowActions.setEdges({ rungId: rungLocal.id, edges: flow.edges })
+    }
+  }
 
   const onEdgesChange: OnEdgesChange = useCallback(
     (changes) => {
-      setEdges((eds) => applyEdgeChanges(changes, eds))
-      flowActions.onEdgesChange({ changes, rungId: rung.id })
+      setRungLocal((rung) => ({
+        ...rung,
+        edges: applyEdgeChanges(changes, rung.edges),
+      }))
+      flowActions.onEdgesChange({ rungId: rungLocal.id, changes })
     },
-    [setEdges],
+    [setRungLocal, flowActions],
+  )
+
+  const onConnect: OnConnect = useCallback(
+    (connection) => {
+      setRungLocal((rung) => ({
+        ...rung,
+        edges: addEdge(connection, rung.edges),
+      }))
+      flowActions.onConnect({ rungId: rungLocal.id, changes: connection })
+    },
+    [setRungLocal, flowActions],
   )
 
   return (
@@ -107,12 +130,13 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         >
           <FlowPanel
             viewportConfig={{
-              nodes: nodes,
-              edges: edges,
+              nodes: rungLocal.nodes,
+              edges: rungLocal.edges,
+              onInit: setReactFlowInstance,
               onNodesChange: onNodesChange,
-              onNodeDragStop: (_, node) => flowActions.updateNode({ node, rungId: rung.id }),
+              onNodeDragStop: onNodeDragStop,
               onEdgesChange: onEdgesChange,
-              onConnect: (changes) => flowActions.onConnect({ changes, rungId: rung.id }),
+              onConnect: onConnect,
 
               nodeExtent: flowPanelExtent,
               translateExtent: flowPanelExtent,
