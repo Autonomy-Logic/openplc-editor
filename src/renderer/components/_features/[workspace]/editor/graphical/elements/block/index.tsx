@@ -212,12 +212,12 @@ const BlockElement = () => {
 
   const labelStyle = 'text-sm font-medium text-neutral-950 dark:text-white'
   const inputStyle =
-    'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 p-[10px] text-cp-xs text-neutral-700 outline-none focus:border-brand'
+    'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
 
   return (
     <Modal>
       <ModalTrigger>Open</ModalTrigger>
-      <ModalContent onClose={handleClearForm} className='h-[739px] w-[468px] select-none flex-col gap-8 px-8 py-4'>
+      <ModalContent onClose={handleClearForm} className='h-[739px] w-[498px] select-none flex-col gap-8 px-8 py-4'>
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</ModalTitle>
         <div className='flex h-[587px] w-full justify-between'>
           <div id='container-modifier-variable' className='h-full w-[185px]'>
