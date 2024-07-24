@@ -3,7 +3,7 @@ import imageMock from '../mockImages/Group112.png'
 import image1 from '../mockImages/image1.png'
 import image2 from '../mockImages/image2.png'
 
-const contactModifiers = [
+const coilModifiers = [
   { label: 'normal', contact: imageMock },
   { label: 'negated', contact: image1 },
   { label: 'set', contact: image2 },
@@ -12,6 +12,6 @@ const contactModifiers = [
   { label: 'falling edge', contact: imageMock },
 ]
 
-export const ContactElement = () => (
-  <ElementEditor title='Edit Coil Values' triggerLabel='Open Coil' modifierOptions={contactModifiers} />
+export const CoilElement = () => (
+  <ElementEditor title='Edit Coil Values' triggerLabel='Open Coil' modifierOptions={coilModifiers} />
 )

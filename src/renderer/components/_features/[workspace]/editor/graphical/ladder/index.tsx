@@ -3,7 +3,8 @@ import { Rung } from '@root/renderer/components/_organisms/rung'
 import { useState } from 'react'
 
 import BlockElement from '../elements/block'
-import ContactELement from '../elements/contact'
+import { CoilElement } from '../elements/coil'
+import { ContactElement } from '../elements/contact'
 
 export default function LadderEditor() {
   const [rungs, setRungs] = useState<string[]>([])
@@ -19,7 +20,8 @@ export default function LadderEditor() {
           }}
         />
         <BlockElement />
-        <ContactELement />
+        <ContactElement />
+        <CoilElement />
       </div>
     </div>
   )
