@@ -217,10 +217,10 @@ const BlockElement = () => {
   return (
     <Modal>
       <ModalTrigger>Open</ModalTrigger>
-      <ModalContent onClose={handleClearForm} className='h-[739px] w-[498px] select-none flex-col gap-8 px-8 py-4'>
+      <ModalContent onClose={handleClearForm} className='h-[739px] w-[498px] select-none flex-col gap-8 px-9 py-4'>
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</ModalTitle>
         <div className='flex h-[587px] w-full justify-between'>
-          <div id='container-modifier-variable' className='h-full w-[185px]'>
+          <div id='container-modifier-variable' className='h-full w-[200px]'>
             <div className='flex h-full w-full flex-col gap-2'>
               <label className={labelStyle}>Type:</label>
               <div className={`relative flex items-center focus-within:border-brand ${inputStyle}`}>
@@ -268,7 +268,7 @@ const BlockElement = () => {
               </div>
             </div>
           </div>
-          <div id='preview' className='flex h-full w-[185px] flex-col gap-2'>
+          <div id='preview' className='flex h-full w-[200px] flex-col gap-2'>
             <label htmlFor='name' className={labelStyle}>
               Name:
             </label>
@@ -340,12 +340,12 @@ const BlockElement = () => {
         </div>
         <div className='flex !h-8 w-full gap-6'>
           <button
-            className={`h-full w-full items-center rounded-lg text-center font-medium text-white ${isFormValid ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'}`}
+            className={`h-full w-[200px] items-center rounded-lg text-center font-medium text-white ${isFormValid ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'}`}
             disabled={!isFormValid}
           >
             Ok
           </button>
-          <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
+          <button className='h-full w-[200px] items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
             Cancel
           </button>
         </div>
