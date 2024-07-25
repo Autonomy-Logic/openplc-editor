@@ -5,19 +5,19 @@ import imageMock from '../mockImages/Group112.png'
 import image1 from '../mockImages/image1.png'
 import image2 from '../mockImages/image2.png'
 
-const ContactElement = () => {
+const CoilElement = () => {
   const [selectedModifier, setSelectedModifier] = useState<string | null>(null)
   const coilModifiers = [
-    { label: 'normal', contact: imageMock },
-    { label: 'negated', contact: image1 },
-    { label: 'set', contact: image2 },
-    { label: 'reset', contact: imageMock },
-    { label: 'rising edge', contact: image2 },
-    { label: 'falling edge', contact: imageMock },
+    { label: 'normal', coil: imageMock },
+    { label: 'negated', coil: image1 },
+    { label: 'set', coil: image2 },
+    { label: 'reset', coil: imageMock },
+    { label: 'rising edge', coil: image2 },
+    { label: 'falling edge', coil: imageMock },
   ]
-  const getModifierContact = (label: string) => {
+  const getModifierCoil = (label: string) => {
     const modifier = coilModifiers.find((modifier) => modifier.label === label)
-    return modifier ? modifier.contact : ''
+    return modifier ? modifier.coil : ''
   }
 
   const handleCloseModal = () => {
@@ -26,7 +26,7 @@ const ContactElement = () => {
 
   return (
     <Modal>
-      <ModalTrigger>Open Contact</ModalTrigger>
+      <ModalTrigger>Open Coil</ModalTrigger>
       <ModalContent
         onClose={handleCloseModal}
         className='h-[498px] w-[468px] select-none flex-col justify-between px-8 py-4'
@@ -66,7 +66,7 @@ const ContactElement = () => {
                 <img
                   draggable='false'
                   className='h-fit w-full select-none'
-                  src={getModifierContact(selectedModifier)}
+                  src={getModifierCoil(selectedModifier)}
                   alt='Modifier Preview'
                 />
               )}
@@ -89,4 +89,4 @@ const ContactElement = () => {
   )
 }
 
-export default ContactElement
+export default CoilElement
