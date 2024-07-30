@@ -217,10 +217,10 @@ const BlockElement = () => {
   return (
     <Modal>
       <ModalTrigger>Open</ModalTrigger>
-      <ModalContent onClose={handleClearForm} className='h-[739px] w-[498px] select-none flex-col gap-8 px-9 py-4'>
+      <ModalContent onClose={handleClearForm} className='h-[739px] w-[625px] select-none flex-col gap-8 px-14 py-4'>
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</ModalTitle>
         <div className='flex h-[587px] w-full justify-between'>
-          <div id='container-modifier-variable' className='h-full w-[200px]'>
+          <div id='container-modifier-variable' className='h-full w-[236px]'>
             <div className='flex h-full w-full flex-col gap-2'>
               <label className={labelStyle}>Type:</label>
               <div className={`relative flex items-center focus-within:border-brand ${inputStyle}`}>
@@ -263,12 +263,12 @@ const BlockElement = () => {
                   </LibraryRoot>
                 </div>
               </div>
-              <div className='border-neural-100 h-full max-h-[119px] overflow-hidden rounded-lg border px-1 py-4 text-xs font-medium text-neutral-950 dark:border-neutral-850 dark:text-neutral-100'>
+              <div className='border-neural-100 h-full max-h-[119px] overflow-hidden rounded-lg border px-2 py-4 text-xs font-normal text-neutral-950 dark:border-neutral-850 dark:text-neutral-100'>
                 <p className='h-full overflow-y-auto dark:text-neutral-100'>{selectedFile?.text}</p>
               </div>
             </div>
           </div>
-          <div id='preview' className='flex h-full w-[200px] flex-col gap-2'>
+          <div id='preview' className='flex h-full w-[236px] flex-col gap-2'>
             <label htmlFor='name' className={labelStyle}>
               Name:
             </label>
@@ -330,7 +330,7 @@ const BlockElement = () => {
             </label>
             <div
               id='block-preview'
-              className='flex flex-grow items-center justify-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'
+              className='flex flex-grow items-center -center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'
             >
               {selectedFile?.image && (
                 <img draggable='false' className='h-fit w-full select-none' src={selectedFile.image} alt='' />
@@ -338,14 +338,14 @@ const BlockElement = () => {
             </div>
           </div>
         </div>
-        <div className='flex !h-8 w-full gap-6'>
+        <div className='flex !h-8 w-full gap-7 justify-evenly'>
           <button
-            className={`h-full w-[200px] items-center rounded-lg text-center font-medium text-white ${isFormValid ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'}`}
+            className={`h-full w-[236px] items-center rounded-lg text-center font-medium text-white ${isFormValid ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'}`}
             disabled={!isFormValid}
           >
             Ok
           </button>
-          <button className='h-full w-[200px] items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
+          <button className='h-full w-[236px] items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
             Cancel
           </button>
         </div>
