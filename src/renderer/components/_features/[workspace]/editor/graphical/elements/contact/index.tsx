@@ -86,7 +86,7 @@ const ContactELement = () => {
             </div>
           </div>
         </div>
-        <div className='flex !h-8 w-full gap-6'>
+        <div className='flex !h-8 w-full gap-6 '>
           <button
             className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'
             disabled={!selectedModifier}
