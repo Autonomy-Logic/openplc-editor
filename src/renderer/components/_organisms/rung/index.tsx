@@ -25,19 +25,29 @@ export const Rung = ({ id }: RungProps) => {
         id,
         nodes: [
           {
-            id: '1',
+            id: 'left-rail',
+            type: 'powerRail',
             position: { x: 0, y: 0 },
-            data: { label: 'Node 1' },
-            measured: { width: 150, height: 40 },
+            data: { position: 'right', rungId: 'left-rail' },
+            draggable: false,
+            selectable: false,
           },
           {
-            id: '2',
-            position: { x: 1350, y: 160 },
-            data: { label: 'Node 2' },
-            measured: { width: 150, height: 40 },
+            id: 'right-rail',
+            type: 'powerRail',
+            position: { x: 1500, y: 0 },
+            data: { position: 'left', rungId: 'right-rail' },
+            draggable: false,
+            selectable: false,
           },
         ],
-        edges: [],
+        edges: [
+          {
+            id: 'e1-2',
+            source: 'left-rail',
+            target: 'right-rail',
+          },
+        ],
       }
       flowActions.addRung(newRung)
       setRung(newRung)
