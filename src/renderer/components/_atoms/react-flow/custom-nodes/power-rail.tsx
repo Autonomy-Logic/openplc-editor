@@ -6,8 +6,8 @@ type PowerRailProps = NodeProps<PowerRailNode>
 export const POWER_RAIL_WIDTH = 3
 export const POWER_RAIL_HEIGHT = 200
 
-export const POWER_RAIL_CONNECTOR_X_OFFSET = POWER_RAIL_WIDTH + 1
-export const POWER_RAIL_CONNECTOR_Y_OFFSET = POWER_RAIL_HEIGHT / 2
+const POWER_RAIL_CONNECTOR_X_OFFSET = POWER_RAIL_WIDTH
+const POWER_RAIL_CONNECTOR_Y_OFFSET = POWER_RAIL_HEIGHT / 2
 
 export const PowerRail = ({ data }: PowerRailProps) => {
   const { position } = data
@@ -20,11 +20,9 @@ export const PowerRail = ({ data }: PowerRailProps) => {
 
   return (
     <>
-      <div aria-label='left-power-rail'>
-        <svg width={POWER_RAIL_WIDTH} height={POWER_RAIL_HEIGHT} xmlns='http://www.w3.org/2000/svg'>
-          <rect width={POWER_RAIL_WIDTH} height={POWER_RAIL_HEIGHT} className='fill-black dark:fill-neutral-500' />
-        </svg>
-      </div>
+      <svg width={POWER_RAIL_WIDTH} height={POWER_RAIL_HEIGHT} xmlns='http://www.w3.org/2000/svg'>
+        <rect width={POWER_RAIL_WIDTH} height={POWER_RAIL_HEIGHT} className='fill-neutral-500' />
+      </svg>
       <Handle
         position={handlePosition}
         type={handleType}

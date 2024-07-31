@@ -40,7 +40,7 @@ export const Rung = ({ id }: RungProps) => {
           {
             id: 'right-rail',
             type: 'powerRail',
-            position: { x: 1500, y: 0 },
+            position: { x: 1500 - powerRail.width, y: 0 },
             data: { position: 'left', rungId: 'right-rail' },
             width: powerRail.width,
             height: powerRail.height,

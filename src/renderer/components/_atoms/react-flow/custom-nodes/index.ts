@@ -1,4 +1,4 @@
-import { POWER_RAIL_CONNECTOR_X_OFFSET, POWER_RAIL_HEIGHT, POWER_RAIL_WIDTH, PowerRail } from './power-rail'
+import { POWER_RAIL_HEIGHT, POWER_RAIL_WIDTH, PowerRail } from './power-rail'
 
 export const customNodeTypes = {
   powerRail: PowerRail,
@@ -6,7 +6,7 @@ export const customNodeTypes = {
 
 export const customNodesStyles = {
   powerRail: {
-    width: POWER_RAIL_CONNECTOR_X_OFFSET + POWER_RAIL_WIDTH,
+    width: POWER_RAIL_WIDTH,
     height: POWER_RAIL_HEIGHT,
   },
 }
