@@ -42,6 +42,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       measured: { width: 150, height: 40 },
     }
     const bounds = getNodesBounds([zeroPositionNode, ...rungLocal.nodes])
+    console.log(rungLocal.nodes)
+    console.log(bounds)
     const [defaultWidth, defaultHeight] = defaultFlowPanelExtent
 
     // If the bounds are less than the default extent, set the panel extent to the default extent

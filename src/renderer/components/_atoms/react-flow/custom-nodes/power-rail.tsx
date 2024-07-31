@@ -3,11 +3,11 @@ import { Handle, Node, NodeProps, Position } from '@xyflow/react'
 type PowerRailNode = Node<{ position: 'left' | 'right'; rungId: string }, 'text'>
 type PowerRailProps = NodeProps<PowerRailNode>
 
-const POWER_RAIL_WIDTH = 3
-const POWER_RAIL_HEIGHT = 200
+export const POWER_RAIL_WIDTH = 3
+export const POWER_RAIL_HEIGHT = 200
 
-const POWER_RAIL_CONNECTOR_X_OFFSET = POWER_RAIL_WIDTH + 1
-const POWER_RAIL_CONNECTOR_Y_OFFSET = POWER_RAIL_HEIGHT / 2
+export const POWER_RAIL_CONNECTOR_X_OFFSET = POWER_RAIL_WIDTH + 1
+export const POWER_RAIL_CONNECTOR_Y_OFFSET = POWER_RAIL_HEIGHT / 2
 
 export const PowerRail = ({ data }: PowerRailProps) => {
   const { position } = data
