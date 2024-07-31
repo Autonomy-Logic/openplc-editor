@@ -12,7 +12,7 @@ export default function LadderEditor() {
     <div className='h-full w-full overflow-y-auto' style={{ scrollbarGutter: 'stable' }}>
       <div className='flex flex-1 flex-col gap-4 px-2'>
         {rungs.map((_rung, index) => (
-          <Rung key={index} />
+          <Rung key={index} id={index.toString()} />
         ))}
         <CreateRung
           onClick={() => {
