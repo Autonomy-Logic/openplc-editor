@@ -1,3 +1,5 @@
+import * as Checkbox from '@radix-ui/react-checkbox'
+import { CheckIcon } from '@radix-ui/react-icons'
 import { InputWithRef } from '@root/renderer/components/_atoms'
 import { Modal, ModalContent, ModalTitle, ModalTrigger } from '@root/renderer/components/_molecules'
 import React from 'react'
@@ -15,15 +17,39 @@ export default function SearchInProject() {
               <InputWithRef className='h-[30px] w-full rounded-lg border border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-100' />
             </div>
             <div className=' flex flex-col justify-between'>
-              <div>
-                <p className='whitespace-nowrap text-cp-base font-medium text-neutral-950 dark:text-white '>
+              <div className=' flex items-center gap-2'>
+                <Checkbox.Root
+                  className='  flex h-4 w-4 appearance-none items-center justify-center rounded-sm  border border-neutral-300 outline-none dark:border-neutral-850  dark:bg-neutral-700 '
+                  defaultChecked
+                  id='sensitive-case'
+                >
+                  <Checkbox.Indicator className='text-brand'>
+                    <CheckIcon />
+                  </Checkbox.Indicator>
+                </Checkbox.Root>
+                <label
+                  htmlFor='sensitive-case'
+                  className='whitespace-nowrap cursor-pointer text-cp-base font-medium text-neutral-950 dark:text-white '
+                >
                   Sensitive case
-                </p>
+                </label>
               </div>
-              <div>
-                <p className='whitespace-nowrap text-cp-base font-medium text-neutral-950 dark:text-white '>
+              <div className=' flex items-center gap-2'>
+                <Checkbox.Root
+                  className='  flex h-4 w-4 appearance-none items-center justify-center rounded-sm border   border-neutral-300 outline-none dark:border-neutral-850  dark:bg-neutral-700 '
+                  defaultChecked
+                  id=' regular-expression'
+                >
+                  <Checkbox.Indicator className='text-brand'>
+                    <CheckIcon />
+                  </Checkbox.Indicator>
+                </Checkbox.Root>
+                <label
+                  htmlFor=' regular-expression'
+                  className='whitespace-nowrap text-cp-base cursor-pointer font-medium text-neutral-950 dark:text-white '
+                >
                   Regular Expression
-                </p>
+                </label>
               </div>
             </div>
           </div>
