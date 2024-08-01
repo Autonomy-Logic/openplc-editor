@@ -5,6 +5,15 @@ import { Modal, ModalContent, ModalTitle, ModalTrigger } from '@root/renderer/co
 import React from 'react'
 
 export default function SearchInProject() {
+  const scopeElements = [
+    {
+      value: '  Sensitive case',
+    },
+    {
+      value: '  regular expression',
+    },
+  ]
+
   return (
     <Modal>
       <ModalTrigger>Search</ModalTrigger>
@@ -20,7 +29,6 @@ export default function SearchInProject() {
               <div className=' flex items-center gap-2'>
                 <Checkbox.Root
                   className='  flex h-4 w-4 appearance-none items-center justify-center rounded-sm  border border-neutral-300 outline-none dark:border-neutral-850  dark:bg-neutral-700 '
-                  defaultChecked
                   id='sensitive-case'
                 >
                   <Checkbox.Indicator className='text-brand'>
@@ -29,7 +37,7 @@ export default function SearchInProject() {
                 </Checkbox.Root>
                 <label
                   htmlFor='sensitive-case'
-                  className='whitespace-nowrap cursor-pointer text-cp-base font-medium text-neutral-950 dark:text-white '
+                  className='cursor-pointer whitespace-nowrap text-cp-base font-medium text-neutral-950 dark:text-white '
                 >
                   Sensitive case
                 </label>
@@ -37,7 +45,6 @@ export default function SearchInProject() {
               <div className=' flex items-center gap-2'>
                 <Checkbox.Root
                   className='  flex h-4 w-4 appearance-none items-center justify-center rounded-sm border   border-neutral-300 outline-none dark:border-neutral-850  dark:bg-neutral-700 '
-                  defaultChecked
                   id=' regular-expression'
                 >
                   <Checkbox.Indicator className='text-brand'>
@@ -46,14 +53,36 @@ export default function SearchInProject() {
                 </Checkbox.Root>
                 <label
                   htmlFor=' regular-expression'
-                  className='whitespace-nowrap text-cp-base cursor-pointer font-medium text-neutral-950 dark:text-white '
+                  className='cursor-pointer whitespace-nowrap text-cp-base font-medium text-neutral-950 dark:text-white '
                 >
                   Regular Expression
                 </label>
               </div>
             </div>
           </div>
-          <div className=' h-[183px]  w-full'></div>
+          <div className=' h-[183px]  w-full'>
+            <div className='flex h-full w-full  gap-4'>
+              <div className='flex  flex-col gap-4  '>
+                <span className='text-base font-medium text-neutral-950 dark:text-white'>Scope:</span>
+                {scopeElements.map((element) => (
+                  <div className=' flex items-center gap-2' key={element.value}>
+                    <input
+                      type='radio'
+                      id={element.value}
+                      className={`border-1 h-4 w-4 cursor-pointer appearance-none rounded-full border border-[#D1D5DB] ring-0 checked:border-[5px] checked:border-brand dark:border-neutral-850 dark:bg-neutral-300`}
+                    />
+                    <label
+                      htmlFor={element.value}
+                      className='white-space-nowrap cursor-pointer text-sm font-medium text-neutral-950 dark:text-white'
+                    >
+                      {element.value}
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <div className=' flex h-full flex-1  rounded-md border-2 border-brand-dark p-2 dark:border-neutral-850'></div>
+            </div>
+          </div>
           <div className='flex !h-8 w-full gap-6'>
             <button className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'>
               Confirm
