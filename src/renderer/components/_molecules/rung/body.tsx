@@ -5,14 +5,18 @@ import { addEdge, applyEdgeChanges, applyNodeChanges, getNodesBounds, Panel } fr
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
-import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
+import { customNodeTypes, nodesBuilder } from '../../_atoms/react-flow/custom-nodes'
+import { connectNodes, disconnectNodes } from './utils'
 
 type RungBodyProps = {
   rung: FlowState
 }
 
 export const RungBody = ({ rung }: RungBodyProps) => {
+  const GAP_BETWEEN_NODES = 10
+
   const { flowActions } = useOpenPLCStore()
+
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
   const [rungLocal, setRungLocal] = useState<FlowState>(rung)
@@ -39,11 +43,10 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       id: '-1',
       position: { x: 0, y: 0 },
       data: { label: 'Node 0' },
-      measured: { width: 150, height: 40 },
+      width: 150,
+      height: 40,
     }
     const bounds = getNodesBounds([zeroPositionNode, ...rungLocal.nodes])
-    console.log(rungLocal.nodes)
-    console.log(bounds)
     const [defaultWidth, defaultHeight] = defaultFlowPanelExtent
 
     // If the bounds are less than the default extent, set the panel extent to the default extent
@@ -56,30 +59,67 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     ])
   }, [rungLocal.nodes.length])
 
-  const handleAddNode = () => {
-    const lastNode = rungLocal.nodes[rungLocal.nodes.length - 1]
-    const newNode: Node = {
-      id: `${rungLocal.nodes.length + 1}`,
-      position: { x: lastNode.position.x + 150, y: lastNode.position.y + 60 },
-      data: { label: `Node ${rungLocal.nodes.length + 1}` },
-      measured: { width: 150, height: 40 },
+  useEffect(() => {
+    console.log('local rung', rungLocal), [rungLocal]
+  })
+
+  const updateFlowStore = () => {
+    if (reactFlowInstance) {
+      const flow = reactFlowInstance.toObject()
+      flowActions.setNodes({ rungId: rungLocal.id, nodes: flow.nodes })
+      flowActions.setEdges({ rungId: rungLocal.id, edges: flow.edges })
     }
+  }
+
+  const handleAddNode = () => {
+    const leftPowerRailNode = rungLocal.nodes.find((node) => node.id === 'left-rail') as Node
+    const rightPowerRailNode = rungLocal.nodes.find((node) => node.id === 'right-rail') as Node
+
+    const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
+
+    const lastNode = nodes[nodes.length - 1] ?? leftPowerRailNode
+    const lastNodeHandles = lastNode.data.handles as { type: 'source' | 'target'; x: number; y: number }[]
+    const sourceLastNodeHandle = lastNodeHandles.find((handle) => handle.type === 'source')
+
+    console.log('sourceLastNodeHandle', sourceLastNodeHandle)
+
+    const newNode: Node = nodesBuilder.mockNode({
+      id: `node-${nodes.length}`,
+      label: `Node ${nodes.length}`,
+      posX: lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES,
+      posY: sourceLastNodeHandle?.y ?? lastNode.position.y,
+      handleX: lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES,
+      handleY: sourceLastNodeHandle?.y ?? lastNode.position.y,
+    })
+
+    let newEdge = rung.edges
+    newEdge = connectNodes(rungLocal, lastNode.id, newNode.id)
+
     setRungLocal((rung) => ({
       ...rung,
-      nodes: [...rungLocal.nodes, newNode],
+      nodes: [leftPowerRailNode, ...nodes, newNode, rightPowerRailNode],
+      edges: newEdge,
     }))
-    flowActions.setNodes({ rungId: rungLocal.id, nodes: [...rungLocal.nodes, newNode] })
+    updateFlowStore()
   }
 
   const handleRemoveNode = () => {
+    const leftPowerRailNode: Node = rungLocal.nodes.find((node) => node.id === 'left-rail') as Node
+    const rightPowerRailNode: Node = rungLocal.nodes.find((node) => node.id === 'right-rail') as Node
+
+    const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
+    const lastNode: Node = nodes[nodes.length - 1]
+    if (!lastNode) return
+
+    const edge = rungLocal.edges.find((edge) => edge.source === lastNode.id)
+    const newEdges = disconnectNodes(rungLocal, edge?.source ?? '', edge?.target ?? '')
+
     setRungLocal((rung) => ({
       ...rung,
-      nodes: rungLocal.nodes.filter((node) => node.id !== `${rungLocal.nodes.length}`),
+      nodes: [leftPowerRailNode, ...nodes.slice(0, -1), rightPowerRailNode],
+      edges: newEdges,
     }))
-    flowActions.setNodes({
-      rungId: rungLocal.id,
-      nodes: rungLocal.nodes.filter((node) => node.id !== `${rungLocal.nodes.length}`),
-    })
+    updateFlowStore()
   }
 
   const onNodesChange: OnNodesChange<Node> = useCallback(
@@ -92,21 +132,13 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     [setRungLocal],
   )
 
-  const onNodeDragStop = () => {
-    if (reactFlowInstance) {
-      const flow = reactFlowInstance.toObject()
-      flowActions.setNodes({ rungId: rungLocal.id, nodes: flow.nodes })
-      flowActions.setEdges({ rungId: rungLocal.id, edges: flow.edges })
-    }
-  }
-
   const onEdgesChange: OnEdgesChange = useCallback(
     (changes) => {
       setRungLocal((rung) => ({
         ...rung,
         edges: applyEdgeChanges(changes, rung.edges),
       }))
-      flowActions.onEdgesChange({ rungId: rungLocal.id, changes })
+      updateFlowStore()
     },
     [setRungLocal, flowActions],
   )
@@ -117,7 +149,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         ...rung,
         edges: addEdge(connection, rung.edges),
       }))
-      flowActions.onConnect({ rungId: rungLocal.id, changes: connection })
     },
     [setRungLocal, flowActions],
   )
@@ -141,9 +172,10 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               edges: rungLocal.edges,
               onInit: setReactFlowInstance,
               onNodesChange: onNodesChange,
-              onNodeDragStop: onNodeDragStop,
+              onNodeDragStop: updateFlowStore,
               onEdgesChange: onEdgesChange,
               onConnect: onConnect,
+              onConnectEnd: updateFlowStore,
 
               nodeExtent: flowPanelExtent,
               translateExtent: flowPanelExtent,

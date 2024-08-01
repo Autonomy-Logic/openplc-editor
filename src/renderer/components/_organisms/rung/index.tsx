@@ -3,7 +3,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowState } from '@root/renderer/store/slices'
 import { useState } from 'react'
 
-import { customNodesStyles } from '../../_atoms/react-flow/custom-nodes'
+import { customNodesStyles, nodesBuilder } from '../../_atoms/react-flow/custom-nodes'
 
 type RungProps = {
   id: string
@@ -27,26 +27,22 @@ export const Rung = ({ id }: RungProps) => {
       const newRung = {
         id,
         nodes: [
-          {
+          nodesBuilder.powerRail({
             id: 'left-rail',
-            type: 'powerRail',
-            position: { x: 0, y: 0 },
-            data: { position: 'right', rungId: 'left-rail' },
-            width: powerRail.width,
-            height: powerRail.height,
-            draggable: false,
-            selectable: false,
-          },
-          {
+            posX: 0,
+            posY: 0,
+            connector: 'right',
+            handleX: powerRail.width,
+            handleY: powerRail.height / 2,
+          }),
+          nodesBuilder.powerRail({
             id: 'right-rail',
-            type: 'powerRail',
-            position: { x: 1500 - powerRail.width, y: 0 },
-            data: { position: 'left', rungId: 'right-rail' },
-            width: powerRail.width,
-            height: powerRail.height,
-            draggable: false,
-            selectable: false,
-          },
+            posX: 1500 - powerRail.width,
+            posY: 0,
+            connector: 'left',
+            handleX: 1500 - powerRail.width,
+            handleY: powerRail.height / 2,
+          }),
         ],
         edges: [
           {
