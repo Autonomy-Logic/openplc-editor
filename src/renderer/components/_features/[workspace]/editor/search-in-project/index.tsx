@@ -7,10 +7,28 @@ import React from 'react'
 export default function SearchInProject() {
   const scopeElements = [
     {
-      value: '  Sensitive case',
+      value: '  whole project',
     },
     {
-      value: '  regular expression',
+      value: '  only elements',
+    },
+  ]
+
+  const scopeElementsOptions = [
+    {
+      value: '  data type',
+    },
+    {
+      value: '  function',
+    },
+    {
+      value: '  function block',
+    },
+    {
+      value: '  program',
+    },
+    {
+      value: '  configuration',
     },
   ]
 
@@ -37,7 +55,7 @@ export default function SearchInProject() {
                 </Checkbox.Root>
                 <label
                   htmlFor='sensitive-case'
-                  className='cursor-pointer whitespace-nowrap text-cp-base font-medium text-neutral-950 dark:text-white '
+                  className='white-space-nowrap cursor-pointer whitespace-nowrap text-sm font-medium text-neutral-950 dark:text-white'
                 >
                   Sensitive case
                 </label>
@@ -53,14 +71,14 @@ export default function SearchInProject() {
                 </Checkbox.Root>
                 <label
                   htmlFor=' regular-expression'
-                  className='cursor-pointer whitespace-nowrap text-cp-base font-medium text-neutral-950 dark:text-white '
+                  className='white-space-nowrap cursor-pointer whitespace-nowrap text-sm font-medium text-neutral-950 dark:text-white'
                 >
                   Regular Expression
                 </label>
               </div>
             </div>
           </div>
-          <div className=' h-[183px]  w-full'>
+          <div className=' h-[183px]  w-full px-2 py-4'>
             <div className='flex h-full w-full  gap-4'>
               <div className='flex  flex-col gap-4  '>
                 <span className='text-base font-medium text-neutral-950 dark:text-white'>Scope:</span>
@@ -73,22 +91,43 @@ export default function SearchInProject() {
                     />
                     <label
                       htmlFor={element.value}
-                      className='white-space-nowrap cursor-pointer text-sm font-medium text-neutral-950 dark:text-white'
+                      className='white-space-nowrap cursor-pointer text-sm font-medium capitalize text-neutral-950 dark:text-white'
                     >
                       {element.value}
                     </label>
                   </div>
                 ))}
               </div>
-              <div className=' flex h-full flex-1  rounded-md border-2 border-brand-dark p-2 dark:border-neutral-850'></div>
+              <div className=' flex h-[153px] flex-1 items-center  rounded-md border-2 border-brand-dark p-2 dark:border-neutral-850'>
+                <div className=' flex w-full flex-col gap-[7px]'>
+                  {scopeElementsOptions.map((element) => (
+                    <div className='flex items-center gap-2 ' key={element.value}>
+                      <Checkbox.Root
+                        id={element.value}
+                        className='  flex h-4 w-4 appearance-none items-center justify-center rounded-sm border border-neutral-300 outline-none dark:border-neutral-850  dark:bg-neutral-700 '
+                      >
+                        <Checkbox.Indicator className='text-brand'>
+                          <CheckIcon />
+                        </Checkbox.Indicator>
+                      </Checkbox.Root>
+                      <label
+                        htmlFor={element.value}
+                        className='text-sm font-medium capitalize text-neutral-950 dark:text-white'
+                      >
+                        {element.value}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
           <div className='flex !h-8 w-full gap-6'>
             <button className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'>
-              Confirm
+              Locate
             </button>
             <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
-              Cancel
+              Close
             </button>
           </div>
         </div>
