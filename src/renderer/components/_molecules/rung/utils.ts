@@ -1,5 +1,8 @@
-import { FlowState } from '@root/renderer/store/slices'
-import { Edge } from '@xyflow/react'
+import type { FlowState } from '@root/renderer/store/slices'
+import type { Edge, Node } from '@xyflow/react'
+import { getNodesBounds } from '@xyflow/react'
+
+import { CustomHandleProps } from '../../_atoms/react-flow/custom-nodes/handle'
 
 /**
  * EDGES
@@ -57,3 +60,46 @@ export const disconnectNodes = (rung: FlowState, sourceNodeId: string, targetNod
 /**
  * NODES
  */
+
+export const changePowerRailBounds = ({
+  rung,
+  nodes,
+  gapNodes,
+  defaultBounds,
+}: {
+  rung: FlowState
+  nodes: Node[]
+  gapNodes: number
+  defaultBounds: [number, number]
+}): Node | undefined => {
+  const rightPowerRailNode = rung.nodes.find((node) => node.id === 'right-rail') as Node
+  if (!rightPowerRailNode) return undefined
+
+  const handles = rightPowerRailNode.data.handles as CustomHandleProps[]
+  const nodeBounds = getNodesBounds(nodes)
+
+  // If the width of the nodes is greater than the default bounds, update the right power rail node
+  if (nodeBounds.width + gapNodes > defaultBounds[0]) {
+    const newRail = {
+      ...rightPowerRailNode,
+      position: { x: nodeBounds.width + gapNodes, y: rightPowerRailNode.position.y },
+      data: {
+        ...rightPowerRailNode.data,
+        handles: handles.map((handle) => ({ ...handle, x: nodeBounds.width + gapNodes })),
+      },
+    }
+    return newRail
+  }
+
+  // If the width of the nodes is less than the default bounds, update the right power rail node to the default bounds
+  const newRail = {
+    ...rightPowerRailNode,
+    position: { x: defaultBounds[0] - (rightPowerRailNode.width ?? 0), y: rightPowerRailNode.position.y },
+    data: {
+      ...rightPowerRailNode.data,
+      handles: handles.map((handle) => ({ ...handle, x: defaultBounds[0] - (rightPowerRailNode.width ?? 0) })),
+    },
+  }
+
+  return newRail
+}

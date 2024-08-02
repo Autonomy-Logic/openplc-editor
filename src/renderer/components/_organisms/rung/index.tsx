@@ -10,14 +10,16 @@ type RungProps = {
 }
 
 export const Rung = ({ id }: RungProps) => {
-  const [isOpen, setIsOpen] = useState<boolean>(false)
-
   const { rungs, flowActions } = useOpenPLCStore()
+
+  const [isOpen, setIsOpen] = useState<boolean>(false)
   const [rung, setRung] = useState<FlowState>({
     id,
     nodes: [],
     edges: [],
   })
+
+  const defaultBodyPanelExtent: [number, number] = [1530, 200]
 
   const findRung = () => {
     const rung = rungs.find((rung) => rung.id === id)
@@ -37,21 +39,23 @@ export const Rung = ({ id }: RungProps) => {
           }),
           nodesBuilder.powerRail({
             id: 'right-rail',
-            posX: 1500 - powerRail.width,
+            posX: defaultBodyPanelExtent[0] - powerRail.width,
             posY: 0,
             connector: 'left',
-            handleX: 1500 - powerRail.width,
+            handleX: defaultBodyPanelExtent[0] - powerRail.width,
             handleY: powerRail.height / 2,
           }),
         ],
         edges: [
           {
-            id: 'e1-2',
+            id: 'e_left-rail_right-rail',
             source: 'left-rail',
             target: 'right-rail',
+            type: 'step',
           },
         ],
       }
+      console.log('newRung', newRung)
       flowActions.addRung(newRung)
       setRung(newRung)
     }
@@ -65,7 +69,7 @@ export const Rung = ({ id }: RungProps) => {
   return (
     <div aria-label='Rung container' className='overflow w-full'>
       <RungHeader onClick={handleOpenSection} isOpen={isOpen} />
-      {isOpen && <RungBody rung={rung} />}
+      {isOpen && <RungBody rung={rung} defaultFlowPanelExtent={defaultBodyPanelExtent} />}
     </div>
   )
 }
