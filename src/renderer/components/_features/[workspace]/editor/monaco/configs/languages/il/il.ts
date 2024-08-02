@@ -10,19 +10,16 @@ export const language: languages.IMonarchLanguage = {
         {
           cases: {
             '@keywords': 'keyword',
-            '@operators': 'operators',
             '@typeKeywords': 'type',
+            '@operators': 'operator',
+            '@default': 'identifier',
           },
         },
       ],
-      [
-        /\/\/.*/,
-        'comment', // Tokenize comment of line
-      ],
-      [
-        /\(\*[\s\S]*?\*\)/,
-        'block-comment', // Tokenize block of comment
-      ],
+      [/\/\/.*/, 'comment'], // Tokenize single line comment
+      [/\(\*[\s\S]*?\*\)/, 'comment'], // Tokenize block comment
+      [/\d+/, 'number'], // Tokenize numbers
+      [/[;,.]/, 'delimiter'], // Tokenize delimiters
     ],
   },
   keywords: ['VAR', 'END_VAR', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT', 'VAR_TEMP', 'VAR_GLOBAL', 'VAR_EXTERNAL'],
@@ -74,6 +71,5 @@ export const language: languages.IMonarchLanguage = {
     'JMP',
     'CAL',
     'RET',
-    ')',
   ],
 }
