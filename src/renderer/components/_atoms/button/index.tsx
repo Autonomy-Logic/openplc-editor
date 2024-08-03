@@ -6,8 +6,9 @@ type IButtonProps = ComponentProps<'button'> & {
   children?: ReactNode
 }
 
+// This is being moved
 const GhostedClasses =
-  'bg-transparent focus:bg-transparent text-neutral-1000 hover:text-brand hover:bg-transparent dark:text-white justify-start hover:opacity-90 font-medium'
+  'bg-transparent dark:text-white text-neutral-1000 font-medium hover:bg-transparent hover:text-brand hover:opacity-90 justify-start'
 
 const Button = (props: IButtonProps) => {
   const { children, ghosted, className, ...res } = props
