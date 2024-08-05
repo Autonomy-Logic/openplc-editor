@@ -1,12 +1,12 @@
 import { registerLanguage } from '../_.register';
 import { conf as languageConfiguration, language as monarchLanguage } from './il';
 
-// Mock da função 'registerLanguage' usando Jest.
+// Mock the 'registerLanguage' function using Jest.
 jest.mock('../_.register', () => ({
   registerLanguage: jest.fn(),
 }));
 
-// Função para registrar a linguagem IL
+// Function to register the IL language
 function registerILLanguage() {
   registerLanguage({
     def: {
@@ -20,13 +20,13 @@ function registerILLanguage() {
   });
 }
 
-// Testes para funcionalidades relacionadas à linguagem IL
+// Tests for IL language-related functionalities
 describe('IL language tests', () => {
   it('should register IL language', () => {
-    // Chama a função que registra a linguagem IL
+    // Call the function that registers the IL language
     registerILLanguage();
 
-    // Verifica se a função 'registerLanguage' foi chamada com os argumentos esperados
+    // Verify if the 'registerLanguage' function was called with the expected arguments
     expect(registerLanguage).toHaveBeenCalledWith({
       def: {
         id: 'il',
@@ -40,12 +40,12 @@ describe('IL language tests', () => {
   });
 
   test('IL language configuration is valid', () => {
-    // Valida a configuração da linguagem IL
+    // Validate the IL language configuration
     expect(languageConfiguration).toBeTruthy();
   });
 
   test('IL monarch language is valid', () => {
-    // Valida a linguagem IL no formato Monarch
+    // Validate the IL monarch language
     expect(monarchLanguage).toBeTruthy();
   });
 });
