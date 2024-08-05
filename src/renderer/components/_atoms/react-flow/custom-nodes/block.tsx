@@ -9,28 +9,27 @@ export const BLOCK_WIDTH = 130
 export const BLOCK_HEIGHT = 150
 
 export const BLOCK_CONNECTOR_X = BLOCK_WIDTH
-export const BLOCK_CONNECTOR_1_Y = 50
-export const BLOCK_CONNECTOR_2_Y = 90
-export const BLOCK_CONNECTOR_3_Y = 130
+export const BLOCK_CONNECTOR_Y = 50
+export const BLOCK_CONNECTOR_Y_OFFSET = 40
 
 export const Block = ({ data }: BlockProps) => {
   return (
     <>
       <div
-        className='relative flex flex-col rounded-md border border-neutral-850 bg-neutral-900'
+        className='relative flex flex-col rounded-md border border-neutral-850 bg-white dark:bg-neutral-900 hover:border-brand'
         style={{
           width: BLOCK_WIDTH,
           height: BLOCK_HEIGHT,
         }}
       >
         <div className='flex h-fit w-full justify-center py-1 text-sm'>TON</div>
-        <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_1_Y - 11, left: 7 }}> EN </div>
-        <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_2_Y - 11, left: 7 }}> IN </div>
-        <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_3_Y - 11, left: 7 }}> PT </div>
+        <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_Y - 11, left: 7 }}> EN </div>
+        <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_Y + BLOCK_CONNECTOR_Y_OFFSET - 11, left: 7 }}> IN </div>
+        <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_Y + (2 * BLOCK_CONNECTOR_Y_OFFSET) - 11, left: 7 }}> PT </div>
 
-        <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_1_Y - 11, right: 7 }}> ENO </div>
-        <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_2_Y - 11, right: 7 }}> Q   </div>
-        <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_3_Y - 11, right: 7 }}> ET  </div>
+        <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_Y - 11, right: 7 }}> ENO </div>
+        <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_Y + BLOCK_CONNECTOR_Y_OFFSET - 11, right: 7 }}> Q   </div>
+        <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_Y + (2 * BLOCK_CONNECTOR_Y_OFFSET) - 11, right: 7 }}> ET  </div>
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
@@ -66,7 +65,7 @@ export const buildBlockNode = ({
         x: handleX,
         y: handleY,
         style: {
-          top: BLOCK_CONNECTOR_1_Y,
+          top: BLOCK_CONNECTOR_Y,
           left: 0,
         }
       },
@@ -78,7 +77,7 @@ export const buildBlockNode = ({
         x: handleX + BLOCK_CONNECTOR_X,
         y: handleY,
         style: {
-          top: BLOCK_CONNECTOR_1_Y,
+          top: BLOCK_CONNECTOR_Y,
           right: 0,
         }
       },
@@ -88,9 +87,9 @@ export const buildBlockNode = ({
         type: 'target',
         isConnectable: false,
         x: handleX,
-        y: handleY + BLOCK_CONNECTOR_2_Y,
+        y: handleY + BLOCK_CONNECTOR_Y + BLOCK_CONNECTOR_Y_OFFSET,
         style: {
-          top: BLOCK_CONNECTOR_2_Y,
+          top: BLOCK_CONNECTOR_Y + BLOCK_CONNECTOR_Y_OFFSET,
           left: 0,
         }
       },
@@ -100,9 +99,9 @@ export const buildBlockNode = ({
         type: 'source',
         isConnectable: false,
         x: handleX + BLOCK_CONNECTOR_X,
-        y: handleY + BLOCK_CONNECTOR_2_Y,
+        y: handleY + BLOCK_CONNECTOR_Y + BLOCK_CONNECTOR_Y_OFFSET,
         style: {
-          top: BLOCK_CONNECTOR_2_Y,
+          top: BLOCK_CONNECTOR_Y + BLOCK_CONNECTOR_Y_OFFSET,
           right: 0,
         }
       },
@@ -112,9 +111,9 @@ export const buildBlockNode = ({
         type: 'target',
         isConnectable: false,
         x: handleX,
-        y: handleY + BLOCK_CONNECTOR_3_Y,
+        y: handleY + BLOCK_CONNECTOR_Y + (2 * BLOCK_CONNECTOR_Y_OFFSET),
         style: {
-          top: BLOCK_CONNECTOR_3_Y,
+          top: BLOCK_CONNECTOR_Y + (2 * BLOCK_CONNECTOR_Y_OFFSET),
           left: 0,
         }
       },
@@ -124,9 +123,9 @@ export const buildBlockNode = ({
         type: 'source',
         isConnectable: false,
         x: handleX + BLOCK_CONNECTOR_X,
-        y: handleY + BLOCK_CONNECTOR_3_Y,
+        y: handleY + BLOCK_CONNECTOR_Y + (2 * BLOCK_CONNECTOR_Y_OFFSET),
         style: {
-          top: BLOCK_CONNECTOR_3_Y,
+          top: BLOCK_CONNECTOR_Y + (2 * BLOCK_CONNECTOR_Y_OFFSET),
           right: 0,
         }
       }
@@ -135,5 +134,4 @@ export const buildBlockNode = ({
   width: BLOCK_WIDTH,
   height: BLOCK_HEIGHT,
   draggable: false,
-  selectable: false,
 })

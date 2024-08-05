@@ -119,8 +119,8 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
       default:
         // mock block
         newNode = nodesBuilder.mockNode({
-          id: `block-${nodes.length}`,
-          label: `block-${nodes.length}`,
+          id: `mock-${nodes.length}`,
+          label: `mock-${nodes.length}`,
           posX,
           posY,
           handleX,

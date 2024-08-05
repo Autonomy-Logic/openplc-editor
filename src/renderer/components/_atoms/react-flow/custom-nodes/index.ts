@@ -1,4 +1,12 @@
-import { Block, BLOCK_CONNECTOR_1_Y, BLOCK_CONNECTOR_X, BLOCK_HEIGHT, BLOCK_WIDTH, buildBlockNode } from './block'
+import {
+  Block,
+  BLOCK_CONNECTOR_X,
+  BLOCK_CONNECTOR_Y,
+  BLOCK_CONNECTOR_Y_OFFSET,
+  BLOCK_HEIGHT,
+  BLOCK_WIDTH,
+  buildBlockNode,
+} from './block'
 import { buildMockNode, MockNode } from './mock-node'
 import {
   buildPowerRailNode,
@@ -29,7 +37,8 @@ export const customNodesStyles = {
     height: BLOCK_HEIGHT,
     handle: {
       x: BLOCK_CONNECTOR_X,
-      y: BLOCK_CONNECTOR_1_Y,
+      y: BLOCK_CONNECTOR_Y,
+      offsetY: BLOCK_CONNECTOR_Y_OFFSET,
     },
   },
 }

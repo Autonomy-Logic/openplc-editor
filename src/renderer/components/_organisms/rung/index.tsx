@@ -55,7 +55,6 @@ export const Rung = ({ id }: RungProps) => {
           },
         ],
       }
-      console.log('newRung', newRung)
       flowActions.addRung(newRung)
       setRung(newRung)
     }
