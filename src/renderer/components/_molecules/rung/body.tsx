@@ -5,7 +5,7 @@ import { addEdge, applyEdgeChanges, applyNodeChanges, getNodesBounds, Panel } fr
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
-import { customNodeTypes, nodesBuilder } from '../../_atoms/react-flow/custom-nodes'
+import { customNodesStyles, customNodeTypes, nodesBuilder } from '../../_atoms/react-flow/custom-nodes'
 import { changePowerRailBounds, connectNodes, disconnectNodes } from './utils'
 
 /**
@@ -79,7 +79,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
    * The posX and posY are the coordinates of the node in the flow panel.
    */
 
-  const handleAddNode = () => {
+  const handleAddNode = (newNodeType: string = 'mockNode') => {
     const leftPowerRailNode = rungLocal.nodes.find((node) => node.id === 'left-rail') as Node
     let rightPowerRailNode = rungLocal.nodes.find((node) => node.id === 'right-rail') as Node
 
@@ -89,14 +89,45 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
     const lastNodeHandles = lastNode.data.handles as { type: 'source' | 'target'; x: number; y: number }[]
     const sourceLastNodeHandle = lastNodeHandles.find((handle) => handle.type === 'source')
 
-    const newNode: Node = nodesBuilder.mockNode({
-      id: `node-${nodes.length}`,
-      label: `Node ${nodes.length}`,
-      posX: lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES,
-      posY: lastNode.type === 'mockNode' ? lastNode.position.y : (sourceLastNodeHandle?.y ?? 20) - 20,
-      handleX: lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES,
-      handleY: sourceLastNodeHandle?.y ?? 0,
-    })
+    let yOffset = 0
+    switch (newNodeType) {
+      case 'block':
+        yOffset = customNodesStyles.block.handle.y
+        break
+      default:
+        // mock block
+        yOffset = 20
+        break
+    }
+
+    const posX = lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES
+    const posY = lastNode.type === newNodeType ? lastNode.position.y : (sourceLastNodeHandle?.y ?? yOffset) - yOffset
+    const handleX = lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES
+    const handleY = sourceLastNodeHandle?.y ?? 0
+
+    let newNode: Node
+    switch (newNodeType) {
+      case 'block':
+        newNode = nodesBuilder.block({
+          id: `block-${nodes.length}`,
+          posX,
+          posY,
+          handleX,
+          handleY,
+        })
+        break
+      default:
+        // mock block
+        newNode = nodesBuilder.mockNode({
+          id: `block-${nodes.length}`,
+          label: `block-${nodes.length}`,
+          posX,
+          posY,
+          handleX,
+          handleY,
+        })
+        break
+    }
 
     const newRightPowerRail = changePowerRailBounds({
       rung: rungLocal,
@@ -208,7 +239,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
             }}
           >
             <Panel position='bottom-left'>
-              <button onClick={handleAddNode}>Add Node</button>
+              <button onClick={() => handleAddNode('block')}>Add Node</button>
             </Panel>
             <Panel position='bottom-right'>
               <button onClick={handleRemoveNode}>Remove Node</button>
