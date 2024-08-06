@@ -32,7 +32,7 @@ export const Block = ({ data }: BlockProps) => {
         <Tooltip>
           <TooltipTrigger>
             <div
-              className='relative flex flex-col rounded-md border border-neutral-850 bg-white hover:border-brand dark:bg-neutral-900'
+              className='relative flex flex-col rounded-md border border-neutral-850 bg-white hover:border-transparent hover:ring-2 hover:ring-brand dark:bg-neutral-900'
               style={{
                 width: BLOCK_WIDTH,
                 height: BLOCK_HEIGHT,

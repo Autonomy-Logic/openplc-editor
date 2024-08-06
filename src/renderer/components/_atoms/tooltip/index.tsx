@@ -23,12 +23,13 @@ const TooltipContent = ({ children, className, ...rest }: TooltipContentProps) =
       <PrimitiveTooltip.Content
         {...rest}
         className={cn(
-          'h-fit max-h-56 w-fit max-w-96 overflow-y-auto rounded-md border border-neutral-850 bg-white p-4 shadow-md dark:bg-neutral-900 dark:text-white',
-          className
+          'z-[999] h-fit max-h-56 w-fit max-w-96 overflow-y-auto rounded-md border border-neutral-850 bg-white p-4 shadow-md dark:bg-neutral-900 dark:text-white',
+          'group',
+          className,
         )}
       >
         {children}
-        <PrimitiveTooltip.Arrow className='fill-white dark:fill-neutral-900' />
+        <PrimitiveTooltip.Arrow className='fill-neutral-850 group-data-[side=bottom]:mt-1 group-data-[side=left]:ml-1 group-data-[side=right]:mr-1 group-data-[side=top]:mb-1' />
       </PrimitiveTooltip.Content>
     </PrimitiveTooltip.Portal>
   )
