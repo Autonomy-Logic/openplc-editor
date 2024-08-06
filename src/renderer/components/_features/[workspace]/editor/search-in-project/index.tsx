@@ -1,8 +1,7 @@
 import * as Checkbox from '@radix-ui/react-checkbox'
 import { CheckIcon } from '@radix-ui/react-icons'
-import { SearchIcon } from '@root/renderer/assets'
 import { InputWithRef } from '@root/renderer/components/_atoms'
-import { Modal, ModalContent, ModalTitle, ModalTrigger } from '@root/renderer/components/_molecules'
+
 
 type OptionProps = {
   id: string
@@ -31,7 +30,7 @@ const CheckboxOption = ({ id, label }: OptionProps) => (
     </Checkbox.Root>
     <label
       htmlFor={id}
-      className='cursor-pointer whitespace-nowrap text-sm font-medium text-neutral-950 dark:text-white'
+      className='cursor-pointer whitespace-nowrap text-sm capitalize font-medium text-neutral-950 dark:text-white'
     >
       {label}
     </label>
@@ -53,12 +52,7 @@ const RadioOption = ({ id, label }: OptionProps) => (
 
 export default function SearchInProject() {
   return (
-    <Modal>
-      <ModalTrigger>
-        <SearchIcon />
-      </ModalTrigger>
-      <ModalContent className='h-[424px] w-[668px] select-none flex-col justify-between px-8 py-4'>
-        <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Search in Project</ModalTitle>
+  
         <div className='flex h-full w-full flex-col gap-8'>
           <div className='flex h-[57px] w-full gap-6'>
             <div className='flex w-full flex-col justify-between'>
@@ -96,7 +90,6 @@ export default function SearchInProject() {
             </button>
           </div>
         </div>
-      </ModalContent>
-    </Modal>
+   
   )
 }

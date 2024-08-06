@@ -2,7 +2,6 @@ import { CreateRung } from '@root/renderer/components/_molecules/rung/create-run
 import { Rung } from '@root/renderer/components/_organisms/rung'
 import { useState } from 'react'
 
-import SearchInProject from '../../search-in-project'
 import BlockElement from '../elements/block'
 import CoilElement from '../elements/coil'
 import ContactElement from '../elements/contact'
@@ -23,7 +22,6 @@ export default function LadderEditor() {
         <BlockElement />
         <ContactElement />
         <CoilElement />
-        <SearchInProject />
       </div>
     </div>
   )

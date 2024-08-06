@@ -1,11 +1,21 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import * as Tabs from '@radix-ui/react-tabs'
+import { Modal, ModalContent, ModalTitle, ModalTrigger } from '@root/renderer/components/_molecules'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, StickArrowIcon, TransferIcon, ZoomInOut } from '../assets'
+import {
+  DebuggerIcon,
+  DownloadIcon,
+  ExitIcon,
+  PlayIcon,
+  SearchIcon,
+  StickArrowIcon,
+  TransferIcon,
+  ZoomInOut,
+} from '../assets'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
@@ -95,9 +105,19 @@ const WorkspaceScreen = () => {
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
         <div className='my-5 flex h-fit w-full flex-col gap-10'>
-          <ActivityBarButton aria-label='Search'>
-            <SearchInProject />
-          </ActivityBarButton>
+          <Modal>
+            <ModalTrigger>
+              <ActivityBarButton aria-label='Search'>
+                <SearchIcon />
+              </ActivityBarButton>
+            </ModalTrigger>
+            <ModalContent className='h-[424px] w-[668px] select-none flex-col justify-between px-8 py-4'>
+              <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>
+                Search in Project
+              </ModalTitle>
+              <SearchInProject />
+            </ModalContent>
+          </Modal>
           <ActivityBarButton onClick={() => setCollapseAll(!collapseAll)} aria-label='Zoom'>
             <ZoomInOut />
           </ActivityBarButton>
