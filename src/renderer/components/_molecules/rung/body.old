@@ -2,37 +2,28 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowState } from '@root/renderer/store/slices'
 import type { CoordinateExtent, Node, OnConnect, OnEdgesChange, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { addEdge, applyEdgeChanges, applyNodeChanges, getNodesBounds, Panel } from '@xyflow/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
-import { customNodeTypes, nodesBuilder } from '../../_atoms/react-flow/custom-nodes'
-import { changePowerRailBounds, connectNodes, disconnectNodes } from './utils'
 
-/**
- * Default flow panel extent:
- * width: 1530
- * height: 208
- */
 type RungBodyProps = {
   rung: FlowState
-  defaultFlowPanelExtent: [number, number]
 }
 
-export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBodyProps) => {
-  const GAP_BETWEEN_NODES = 50
-
+export const RungBody = ({ rung }: RungBodyProps) => {
   const { flowActions } = useOpenPLCStore()
-
-  const nodeTypes = useMemo(() => customNodeTypes, [])
-
   const [rungLocal, setRungLocal] = useState<FlowState>(rung)
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
 
   /**
+   * Default flow panel extent:
+   * width: 1500
+   * height: 200
    * -- Which means:
    * minX: 0    | minY: 0
-   * maxX: 1530 | maxY: 200
+   * maxX: 1500 | maxY: 200
    */
+  const defaultFlowPanelExtent: [number, number] = [1500, 200]
   const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([[0, 0], defaultFlowPanelExtent])
 
   /**
@@ -45,8 +36,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
       id: '-1',
       position: { x: 0, y: 0 },
       data: { label: 'Node 0' },
-      width: 150,
-      height: 40,
+      measured: { width: 150, height: 40 },
     }
     const bounds = getNodesBounds([zeroPositionNode, ...rungLocal.nodes])
     const [defaultWidth, defaultHeight] = defaultFlowPanelExtent
@@ -61,85 +51,30 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
     ])
   }, [rungLocal.nodes.length])
 
-  useEffect(() => {
-    updateFlowStore()
-  }, [rungLocal.nodes.length])
-
-  const updateFlowStore = () => {
-    if (reactFlowInstance) {
-      const flow = reactFlowInstance.toObject()
-      flowActions.setNodes({ rungId: rungLocal.id, nodes: flow.nodes })
-      flowActions.setEdges({ rungId: rungLocal.id, edges: flow.edges })
-    }
-  }
-
-  /**
-   * All the handles below are mocks, so it probably gonna need some adjustments to work with real handles.
-   * The handleX and handleY are the coordinates of the handle in the node.
-   * The posX and posY are the coordinates of the node in the flow panel.
-   */
-
   const handleAddNode = () => {
-    const leftPowerRailNode = rungLocal.nodes.find((node) => node.id === 'left-rail') as Node
-    let rightPowerRailNode = rungLocal.nodes.find((node) => node.id === 'right-rail') as Node
-
-    const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
-
-    const lastNode = nodes[nodes.length - 1] ?? leftPowerRailNode
-    const lastNodeHandles = lastNode.data.handles as { type: 'source' | 'target'; x: number; y: number }[]
-    const sourceLastNodeHandle = lastNodeHandles.find((handle) => handle.type === 'source')
-
-    const newNode: Node = nodesBuilder.mockNode({
-      id: `node-${nodes.length}`,
-      label: `Node ${nodes.length}`,
-      posX: lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES,
-      posY: lastNode.type === 'mockNode' ? lastNode.position.y : (sourceLastNodeHandle?.y ?? 20) - 20,
-      handleX: lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES,
-      handleY: sourceLastNodeHandle?.y ?? 0,
-    })
-
-    const newRightPowerRail = changePowerRailBounds({
-      rung: rungLocal,
-      nodes: [leftPowerRailNode, ...nodes, newNode],
-      gapNodes: GAP_BETWEEN_NODES,
-      defaultBounds: defaultFlowPanelExtent,
-    })
-    if (newRightPowerRail) rightPowerRailNode = newRightPowerRail
-
-    let newEdge = rung.edges
-    newEdge = connectNodes(rungLocal, lastNode.id, newNode.id)
-
+    const lastNode = rungLocal.nodes[rungLocal.nodes.length - 1]
+    const newNode: Node = {
+      id: `${rungLocal.nodes.length + 1}`,
+      position: { x: lastNode.position.x + 150, y: lastNode.position.y + 60 },
+      data: { label: `Node ${rungLocal.nodes.length + 1}` },
+      measured: { width: 150, height: 40 },
+    }
     setRungLocal((rung) => ({
       ...rung,
-      nodes: [leftPowerRailNode, ...nodes, newNode, rightPowerRailNode],
-      edges: newEdge,
+      nodes: [...rungLocal.nodes, newNode],
     }))
+    flowActions.setNodes({ rungId: rungLocal.id, nodes: [...rungLocal.nodes, newNode] })
   }
 
   const handleRemoveNode = () => {
-    const leftPowerRailNode: Node = rungLocal.nodes.find((node) => node.id === 'left-rail') as Node
-    let rightPowerRailNode: Node = rungLocal.nodes.find((node) => node.id === 'right-rail') as Node
-
-    const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
-    const lastNode: Node = nodes[nodes.length - 1]
-    if (!lastNode) return
-
-    const newRightPowerRail = changePowerRailBounds({
-      rung: rungLocal,
-      nodes: [leftPowerRailNode, ...nodes.slice(0, -1)],
-      gapNodes: GAP_BETWEEN_NODES,
-      defaultBounds: defaultFlowPanelExtent,
-    })
-    if (newRightPowerRail) rightPowerRailNode = newRightPowerRail
-
-    const edge = rungLocal.edges.find((edge) => edge.source === lastNode.id)
-    const newEdges = disconnectNodes(rungLocal, edge?.source ?? '', edge?.target ?? '')
-
     setRungLocal((rung) => ({
       ...rung,
-      nodes: [leftPowerRailNode, ...nodes.slice(0, -1), rightPowerRailNode],
-      edges: newEdges,
+      nodes: rungLocal.nodes.filter((node) => node.id !== `${rungLocal.nodes.length}`),
     }))
+    flowActions.setNodes({
+      rungId: rungLocal.id,
+      nodes: rungLocal.nodes.filter((node) => node.id !== `${rungLocal.nodes.length}`),
+    })
   }
 
   const onNodesChange: OnNodesChange<Node> = useCallback(
@@ -152,6 +87,14 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
     [setRungLocal],
   )
 
+  const onNodeDragStop = () => {
+    if (reactFlowInstance) {
+      const flow = reactFlowInstance.toObject()
+      flowActions.setNodes({ rungId: rungLocal.id, nodes: flow.nodes })
+      flowActions.setEdges({ rungId: rungLocal.id, edges: flow.edges })
+    }
+  }
+
   const onEdgesChange: OnEdgesChange = useCallback(
     (changes) => {
       setRungLocal((rung) => ({
@@ -160,7 +103,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
       }))
       flowActions.onEdgesChange({ rungId: rungLocal.id, changes })
     },
-    [setRungLocal],
+    [setRungLocal, flowActions],
   )
 
   const onConnect: OnConnect = useCallback(
@@ -169,8 +112,9 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
         ...rung,
         edges: addEdge(connection, rung.edges),
       }))
+      flowActions.onConnect({ rungId: rungLocal.id, changes: connection })
     },
-    [setRungLocal],
+    [setRungLocal, flowActions],
   )
 
   return (
@@ -178,22 +122,21 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
       <div aria-label='Rung body' className='h-full w-full overflow-x-auto'>
         <div
           style={{
+            minHeight: '208px',
             height: flowPanelExtent[1][1] + 8,
-            width: flowPanelExtent[1][0],
+            minWidth: '100%',
+            width: flowPanelExtent[1][0] + 8,
           }}
         >
           <FlowPanel
             viewportConfig={{
-              nodeTypes: nodeTypes,
-
               nodes: rungLocal.nodes,
               edges: rungLocal.edges,
               onInit: setReactFlowInstance,
               onNodesChange: onNodesChange,
-              onNodeDragStop: updateFlowStore,
+              onNodeDragStop: onNodeDragStop,
               onEdgesChange: onEdgesChange,
               onConnect: onConnect,
-              onConnectEnd: updateFlowStore,
 
               nodeExtent: flowPanelExtent,
               translateExtent: flowPanelExtent,
