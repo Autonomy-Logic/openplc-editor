@@ -1,5 +1,6 @@
 import * as Checkbox from '@radix-ui/react-checkbox'
 import { CheckIcon } from '@radix-ui/react-icons'
+import { SearchIcon } from '@root/renderer/assets'
 import { InputWithRef } from '@root/renderer/components/_atoms'
 import { Modal, ModalContent, ModalTitle, ModalTrigger } from '@root/renderer/components/_molecules'
 
@@ -53,7 +54,9 @@ const RadioOption = ({ id, label }: OptionProps) => (
 export default function SearchInProject() {
   return (
     <Modal>
-      <ModalTrigger>Search</ModalTrigger>
+      <ModalTrigger>
+        <SearchIcon />
+      </ModalTrigger>
       <ModalContent className='h-[424px] w-[668px] select-none flex-col justify-between px-8 py-4'>
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Search in Project</ModalTitle>
         <div className='flex h-full w-full flex-col gap-8'>

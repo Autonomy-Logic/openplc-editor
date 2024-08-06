@@ -5,20 +5,12 @@ import { useEffect, useRef } from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import {
-  DebuggerIcon,
-  DownloadIcon,
-  ExitIcon,
-  PlayIcon,
-  SearchIcon,
-  StickArrowIcon,
-  TransferIcon,
-  ZoomInOut,
-} from '../assets'
+import { DebuggerIcon, DownloadIcon, ExitIcon, PlayIcon, StickArrowIcon, TransferIcon, ZoomInOut } from '../assets'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
+import SearchInProject from '../components/_features/[workspace]/editor/search-in-project'
 import { Console } from '../components/_molecules/console'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Debugger } from '../components/_organisms/debugger'
@@ -37,7 +29,6 @@ const WorkspaceScreen = () => {
     editor,
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()
-
   useEffect(() => {
     const handleSaveProject = async () => {
       const { success, reason } = await window.bridge.saveProject({ projectPath, projectData })
@@ -105,7 +96,7 @@ const WorkspaceScreen = () => {
       <WorkspaceSideContent>
         <div className='my-5 flex h-fit w-full flex-col gap-10'>
           <ActivityBarButton aria-label='Search'>
-            <SearchIcon />
+            <SearchInProject />
           </ActivityBarButton>
           <ActivityBarButton onClick={() => setCollapseAll(!collapseAll)} aria-label='Zoom'>
             <ZoomInOut />
