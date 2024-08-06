@@ -139,7 +139,7 @@ export const buildBlockNode = ({
       glbX: handleX,
       glbY: handleY + index * BLOCK_CONNECTOR_Y_OFFSET,
       relX: 0,
-      relY: index * BLOCK_CONNECTOR_Y_OFFSET,
+      relY: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
       style: {
         top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
         left: 0,
@@ -156,7 +156,7 @@ export const buildBlockNode = ({
       glbX: handleX + BLOCK_CONNECTOR_X,
       glbY: handleY + index * BLOCK_CONNECTOR_Y_OFFSET,
       relX: BLOCK_CONNECTOR_X,
-      relY: index * BLOCK_CONNECTOR_Y_OFFSET,
+      relY: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
       style: {
         top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
         right: 0,
