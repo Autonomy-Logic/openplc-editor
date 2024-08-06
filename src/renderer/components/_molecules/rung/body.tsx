@@ -63,7 +63,6 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
-    console.log('Rung body nodes length changed', rungLocal.nodes)
     updateFlowStore()
   }, [rungLocal.nodes.length])
 
