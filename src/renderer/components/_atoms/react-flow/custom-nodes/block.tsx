@@ -78,7 +78,7 @@ export const Block = ({ data }: BlockProps) => {
               ))}
             </div>
           </TooltipTrigger>
-          <TooltipContent side='bottom'>{tooltipContent}</TooltipContent>
+          <TooltipContent side='right'>{tooltipContent}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
       <div
