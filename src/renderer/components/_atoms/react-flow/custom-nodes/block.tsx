@@ -1,9 +1,11 @@
-import { Node, NodeProps } from '@xyflow/react'
+import { Node, NodeProps, Position } from '@xyflow/react'
+import { useState } from 'react'
 
+import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
-import { CustomHandle, CustomHandleProps } from './handle'
+import { buildHandle, CustomHandle, CustomHandleProps } from './handle'
 
-type BlockNode = Node<{ handles: CustomHandleProps[]; blockType: 'TON' }, 'text'>
+type BlockNode = Node<{ handles: CustomHandleProps[]; blockType: 'template' }, 'text'>
 type BlockProps = NodeProps<BlockNode>
 
 export const BLOCK_WIDTH = 130
@@ -13,21 +15,38 @@ export const BLOCK_CONNECTOR_X = BLOCK_WIDTH
 export const BLOCK_CONNECTOR_Y = 50
 export const BLOCK_CONNECTOR_Y_OFFSET = 40
 
-export const BLOCK_TOP_LABEL_Y = 28 // If altered, also alter in the Block component. Actual: "-top-[28px]"
+export const BLOCK_TOP_LABEL_Y = 28
 
-const BLOCK_TYPES = {
-  TON: {
-    name: 'TON',
-    leftConnectors: ['EN', 'IN', 'PT'],
-    rightConnectors: ['ENO', 'Q', 'ET'],
+type BlockTypes = {
+  [key: string]: {
+    name: string
+    leftConnectors: string[]
+    rightConnectors: string[]
+    tooltipContent: string
+  }
+}
+const BLOCK_TYPES: BlockTypes = {
+  template: {
+    name: '???',
+    leftConnectors: ['EN', 'PT'],
+    rightConnectors: ['EN0'],
+    tooltipContent: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam aliquam tristique tincidunt. Duis elementum
+            tortor sem, non convallis orci facilisis at. Suspendisse id bibendum nisl. Mauris ac massa diam. Mauris
+            ultrices massa justo, sed vehicula tellus rhoncus eget. Suspendisse lacinia nec dolor vitae sollicitudin.
+            Interdum et malesuada fames ac ante ipsum primis in faucibus. Quisque rutrum, tellus eu maximus cursus,
+            metus urna eleifend ex, vitae accumsan nisl neque luctus diam. Quisque vel dui vel eros lobortis maximus non
+            eget mauris. Aenean aliquet, justo id tempor placerat, ipsum purus molestie justo, sed euismod est arcu
+            fermentum odio. Nullam et mauris leo. Aenean magna ex, sollicitudin at consequat non, cursus nec elit. Morbi
+            sodales porta elementum.`,
   },
 }
 
 export const Block = ({ data }: BlockProps) => {
-  const { name, leftConnectors, rightConnectors } = BLOCK_TYPES[data.blockType]
+  const [blockLabelValue, setBlockLabelValue] = useState<string>('???')
+  const { name, leftConnectors, rightConnectors, tooltipContent } = BLOCK_TYPES[data.blockType]
 
   return (
-    <>
+    <div className='relative'>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger>
@@ -39,154 +58,124 @@ export const Block = ({ data }: BlockProps) => {
               }}
             >
               <div className='flex h-fit w-full justify-center py-1 text-sm'>{name}</div>
-              <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_Y - 11, left: 7 }}>
-                {leftConnectors[0]}
-              </div>
-              <div
-                className='absolute text-sm'
-                style={{ top: BLOCK_CONNECTOR_Y + BLOCK_CONNECTOR_Y_OFFSET - 11, left: 7 }}
-              >
-                {leftConnectors[1]}
-              </div>
-              <div
-                className='absolute text-sm'
-                style={{ top: BLOCK_CONNECTOR_Y + 2 * BLOCK_CONNECTOR_Y_OFFSET - 11, left: 7 }}
-              >
-                {leftConnectors[2]}
-              </div>
-
-              <div className='absolute text-sm' style={{ top: BLOCK_CONNECTOR_Y - 11, right: 7 }}>
-                {rightConnectors[0]}
-              </div>
-              <div
-                className='absolute text-sm'
-                style={{ top: BLOCK_CONNECTOR_Y + BLOCK_CONNECTOR_Y_OFFSET - 11, right: 7 }}
-              >
-                {rightConnectors[1]}
-              </div>
-              <div
-                aria-label='Block top label'
-                className='absolute text-sm'
-                style={{ top: BLOCK_CONNECTOR_Y + 2 * BLOCK_CONNECTOR_Y_OFFSET - 11, right: 7 }}
-              >
-                {rightConnectors[2]}
-              </div>
-              <div className='absolute -top-[28px] flex w-full justify-center'>TON0</div>
+              {leftConnectors.map((connector, index) => (
+                <div
+                  key={index}
+                  className='absolute text-sm'
+                  style={{ top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET - 11, left: 7 }}
+                >
+                  {connector}
+                </div>
+              ))}
+              {rightConnectors.map((connector, index) => (
+                <div
+                  key={index}
+                  className='absolute text-sm'
+                  style={{ top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET - 11, right: 7 }}
+                >
+                  {connector}
+                </div>
+              ))}
             </div>
           </TooltipTrigger>
-          <TooltipContent>
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam aliquam tristique tincidunt. Duis elementum
-            tortor sem, non convallis orci facilisis at. Suspendisse id bibendum nisl. Mauris ac massa diam. Mauris
-            ultrices massa justo, sed vehicula tellus rhoncus eget. Suspendisse lacinia nec dolor vitae sollicitudin.
-            Interdum et malesuada fames ac ante ipsum primis in faucibus. Quisque rutrum, tellus eu maximus cursus,
-            metus urna eleifend ex, vitae accumsan nisl neque luctus diam. Quisque vel dui vel eros lobortis maximus non
-            eget mauris. Aenean aliquet, justo id tempor placerat, ipsum purus molestie justo, sed euismod est arcu
-            fermentum odio. Nullam et mauris leo. Aenean magna ex, sollicitudin at consequat non, cursus nec elit. Morbi
-            sodales porta elementum.
-          </TooltipContent>
+          <TooltipContent side='bottom'>{tooltipContent}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
+      <div
+        className='absolute flex justify-center'
+        style={{
+          top: -BLOCK_TOP_LABEL_Y,
+          width: BLOCK_WIDTH,
+        }}
+      >
+        <InputWithRef
+          value={blockLabelValue}
+          onChange={(e) => setBlockLabelValue(e.target.value)}
+          className='w-full bg-transparent text-center outline-none'
+        />
+      </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}
-    </>
+    </div>
   )
 }
 
+/**
+ *
+ * @param id: string - The id of the block node
+ * @param posX: number - The x coordinate of the block node in the flow panel
+ * @param posY: number - The y coordinate of the block node in the flow panel
+ * @param handleX: number - The x coordinate of the handle based on the global position (inside the flow panel)
+ * @param handleY: number - The y coordinate of the handle based on the global position (inside the flow panel)
+ * @param blockType: 'template' - The type of the block node
+ * @returns BlockNode
+ */
 export const buildBlockNode = ({
   id,
   posX,
   posY,
   handleX,
   handleY,
+  blockType = 'template',
 }: {
   id: string
   posX: number
   posY: number
   handleX: number
   handleY: number
-}) => ({
-  id,
-  type: 'block',
-  position: { x: posX, y: posY },
-  data: {
-    blockType: 'TON',
-    handles: [
-      {
-        id: 'input',
-        position: 'left',
-        type: 'target',
-        isConnectable: false,
-        x: handleX,
-        y: handleY,
-        style: {
-          top: BLOCK_CONNECTOR_Y,
-          left: 0,
-        },
+  blockType?: 'template'
+}) => {
+  const type = BLOCK_TYPES[blockType]
+  const leftConnectors = type.leftConnectors
+  const rightConnectors = type.rightConnectors
+
+  const leftHandles = leftConnectors.map((connector, index) =>
+    buildHandle({
+      id: `${connector}`,
+      position: Position.Left,
+      type: 'target',
+      isConnectable: false,
+      glbX: handleX,
+      glbY: handleY + index * BLOCK_CONNECTOR_Y_OFFSET,
+      relX: 0,
+      relY: index * BLOCK_CONNECTOR_Y_OFFSET,
+      style: {
+        top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
+        left: 0,
       },
-      {
-        id: 'output',
-        position: 'right',
-        type: 'source',
-        isConnectable: false,
-        x: handleX + BLOCK_CONNECTOR_X,
-        y: handleY,
-        style: {
-          top: BLOCK_CONNECTOR_Y,
-          right: 0,
-        },
+    }),
+  )
+
+  const rightHandles = rightConnectors.map((connector, index) =>
+    buildHandle({
+      id: `${connector}`,
+      position: Position.Right,
+      type: 'source',
+      isConnectable: false,
+      glbX: handleX + BLOCK_CONNECTOR_X,
+      glbY: handleY + index * BLOCK_CONNECTOR_Y_OFFSET,
+      relX: BLOCK_CONNECTOR_X,
+      relY: index * BLOCK_CONNECTOR_Y_OFFSET,
+      style: {
+        top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
+        right: 0,
       },
-      {
-        id: 'IN',
-        position: 'left',
-        type: 'target',
-        isConnectable: false,
-        x: handleX,
-        y: handleY + BLOCK_CONNECTOR_Y + BLOCK_CONNECTOR_Y_OFFSET,
-        style: {
-          top: BLOCK_CONNECTOR_Y + BLOCK_CONNECTOR_Y_OFFSET,
-          left: 0,
-        },
-      },
-      {
-        id: 'Q',
-        position: 'right',
-        type: 'source',
-        isConnectable: false,
-        x: handleX + BLOCK_CONNECTOR_X,
-        y: handleY + BLOCK_CONNECTOR_Y + BLOCK_CONNECTOR_Y_OFFSET,
-        style: {
-          top: BLOCK_CONNECTOR_Y + BLOCK_CONNECTOR_Y_OFFSET,
-          right: 0,
-        },
-      },
-      {
-        id: 'PT',
-        position: 'left',
-        type: 'target',
-        isConnectable: false,
-        x: handleX,
-        y: handleY + BLOCK_CONNECTOR_Y + 2 * BLOCK_CONNECTOR_Y_OFFSET,
-        style: {
-          top: BLOCK_CONNECTOR_Y + 2 * BLOCK_CONNECTOR_Y_OFFSET,
-          left: 0,
-        },
-      },
-      {
-        id: 'ET',
-        position: 'right',
-        type: 'source',
-        isConnectable: false,
-        x: handleX + BLOCK_CONNECTOR_X,
-        y: handleY + BLOCK_CONNECTOR_Y + 2 * BLOCK_CONNECTOR_Y_OFFSET,
-        style: {
-          top: BLOCK_CONNECTOR_Y + 2 * BLOCK_CONNECTOR_Y_OFFSET,
-          right: 0,
-        },
-      },
-    ],
-  },
-  width: BLOCK_WIDTH,
-  height: BLOCK_HEIGHT,
-  draggable: false,
-})
+    }),
+  )
+
+  const handles = [...leftHandles, ...rightHandles]
+
+  return {
+    id,
+    type: 'block',
+    position: { x: posX, y: posY },
+    data: {
+      blockType,
+      handles,
+    },
+    width: BLOCK_WIDTH,
+    height: BLOCK_HEIGHT,
+    draggable: false,
+  }
+}

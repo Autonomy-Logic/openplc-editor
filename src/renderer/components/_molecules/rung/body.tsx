@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodesStyles, customNodeTypes, nodesBuilder } from '../../_atoms/react-flow/custom-nodes'
+import { CustomHandleProps } from '../../_atoms/react-flow/custom-nodes/handle'
 import { changePowerRailBounds, connectNodes, disconnectNodes } from './utils'
 
 /**
@@ -62,6 +63,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
+    console.log('Rung body nodes length changed', rungLocal.nodes)
     updateFlowStore()
   }, [rungLocal.nodes.length])
 
@@ -86,7 +88,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
     const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
 
     const lastNode = nodes[nodes.length - 1] ?? leftPowerRailNode
-    const lastNodeHandles = lastNode.data.handles as { type: 'source' | 'target'; x: number; y: number }[]
+    const lastNodeHandles = lastNode.data.handles as CustomHandleProps[]
     const sourceLastNodeHandle = lastNodeHandles.find((handle) => handle.type === 'source')
 
     let yOffset = 0
@@ -101,15 +103,16 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
     }
 
     const posX = lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES
-    const posY = lastNode.type === newNodeType ? lastNode.position.y : (sourceLastNodeHandle?.y ?? yOffset) - yOffset
+    const posY =
+      lastNode.type === newNodeType ? lastNode.position.y : (sourceLastNodeHandle?.glbPosition.y ?? yOffset) - yOffset
     const handleX = lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES
-    const handleY = sourceLastNodeHandle?.y ?? 0
+    const handleY = sourceLastNodeHandle?.glbPosition.y ?? 0
 
     let newNode: Node
     switch (newNodeType) {
       case 'block':
         newNode = nodesBuilder.block({
-          id: `block-${nodes.length}`,
+          id: `templateBlock-${nodes.length}`,
           posX,
           posY,
           handleX,
