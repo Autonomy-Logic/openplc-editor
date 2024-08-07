@@ -5,8 +5,8 @@ import { addEdge, applyEdgeChanges, applyNodeChanges, getNodesBounds, Panel } fr
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
-import { customNodeTypes, nodesBuilder } from '../../_atoms/react-flow/custom-nodes'
-import { changePowerRailBounds, connectNodes, disconnectNodes } from './utils'
+import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
+import { addNewNode, removeNode } from './ladder-utils'
 
 /**
  * Default flow panel extent:
@@ -15,12 +15,9 @@ import { changePowerRailBounds, connectNodes, disconnectNodes } from './utils'
  */
 type RungBodyProps = {
   rung: FlowState
-  defaultFlowPanelExtent: [number, number]
 }
 
-export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBodyProps) => {
-  const GAP_BETWEEN_NODES = 50
-
+export const RungBody = ({ rung }: RungBodyProps) => {
   const { flowActions } = useOpenPLCStore()
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
@@ -29,11 +26,11 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
 
   /**
-   * -- Which means:
+   * -- Which means, by default, the flow panel extent is:
    * minX: 0    | minY: 0
    * maxX: 1530 | maxY: 200
    */
-  const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([[0, 0], defaultFlowPanelExtent])
+  const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([[0, 0], rung?.flowViewport ?? [1530, 200]])
 
   /**
    * Update flow panel extent based on the bounds of the nodes
@@ -49,7 +46,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
       height: 40,
     }
     const bounds = getNodesBounds([zeroPositionNode, ...rungLocal.nodes])
-    const [defaultWidth, defaultHeight] = defaultFlowPanelExtent
+    const [defaultWidth, defaultHeight] = rung?.flowViewport ?? [1530, 200]
 
     // If the bounds are less than the default extent, set the panel extent to the default extent
     if (bounds.width < defaultWidth) bounds.width = defaultWidth
@@ -73,73 +70,21 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
     }
   }
 
-  /**
-   * All the handles below are mocks, so it probably gonna need some adjustments to work with real handles.
-   * The handleX and handleY are the coordinates of the handle in the node.
-   * The posX and posY are the coordinates of the node in the flow panel.
-   */
-
-  const handleAddNode = () => {
-    const leftPowerRailNode = rungLocal.nodes.find((node) => node.id === 'left-rail') as Node
-    let rightPowerRailNode = rungLocal.nodes.find((node) => node.id === 'right-rail') as Node
-
-    const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
-
-    const lastNode = nodes[nodes.length - 1] ?? leftPowerRailNode
-    const lastNodeHandles = lastNode.data.handles as { type: 'source' | 'target'; x: number; y: number }[]
-    const sourceLastNodeHandle = lastNodeHandles.find((handle) => handle.type === 'source')
-
-    const newNode: Node = nodesBuilder.mockNode({
-      id: `node-${nodes.length}`,
-      label: `Node ${nodes.length}`,
-      posX: lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES,
-      posY: lastNode.type === 'mockNode' ? lastNode.position.y : (sourceLastNodeHandle?.y ?? 20) - 20,
-      handleX: lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES,
-      handleY: sourceLastNodeHandle?.y ?? 0,
+  const handleAddNode = (newNodeType: string = 'mockNode') => {
+    const { nodes, edges } = addNewNode({
+      rungLocal,
+      newNodeType,
+      defaultBounds: rung?.flowViewport ?? [1530, 200],
     })
-
-    const newRightPowerRail = changePowerRailBounds({
-      rung: rungLocal,
-      nodes: [leftPowerRailNode, ...nodes, newNode],
-      gapNodes: GAP_BETWEEN_NODES,
-      defaultBounds: defaultFlowPanelExtent,
-    })
-    if (newRightPowerRail) rightPowerRailNode = newRightPowerRail
-
-    let newEdge = rung.edges
-    newEdge = connectNodes(rungLocal, lastNode.id, newNode.id)
-
-    setRungLocal((rung) => ({
-      ...rung,
-      nodes: [leftPowerRailNode, ...nodes, newNode, rightPowerRailNode],
-      edges: newEdge,
-    }))
+    setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
 
   const handleRemoveNode = () => {
-    const leftPowerRailNode: Node = rungLocal.nodes.find((node) => node.id === 'left-rail') as Node
-    let rightPowerRailNode: Node = rungLocal.nodes.find((node) => node.id === 'right-rail') as Node
-
-    const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
-    const lastNode: Node = nodes[nodes.length - 1]
-    if (!lastNode) return
-
-    const newRightPowerRail = changePowerRailBounds({
-      rung: rungLocal,
-      nodes: [leftPowerRailNode, ...nodes.slice(0, -1)],
-      gapNodes: GAP_BETWEEN_NODES,
-      defaultBounds: defaultFlowPanelExtent,
+    const { nodes, edges } = removeNode({
+      rungLocal,
+      defaultBounds: rung?.flowViewport ?? [1530, 200],
     })
-    if (newRightPowerRail) rightPowerRailNode = newRightPowerRail
-
-    const edge = rungLocal.edges.find((edge) => edge.source === lastNode.id)
-    const newEdges = disconnectNodes(rungLocal, edge?.source ?? '', edge?.target ?? '')
-
-    setRungLocal((rung) => ({
-      ...rung,
-      nodes: [leftPowerRailNode, ...nodes.slice(0, -1), rightPowerRailNode],
-      edges: newEdges,
-    }))
+    setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
 
   const onNodesChange: OnNodesChange<Node> = useCallback(
@@ -207,8 +152,11 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
               preventScrolling: false,
             }}
           >
+            <Panel position='top-left'>
+              <button onClick={() => handleAddNode()}>Add Mock Node</button>
+            </Panel>
             <Panel position='bottom-left'>
-              <button onClick={handleAddNode}>Add Node</button>
+              <button onClick={() => handleAddNode('block')}>Add Block Node</button>
             </Panel>
             <Panel position='bottom-right'>
               <button onClick={handleRemoveNode}>Remove Node</button>

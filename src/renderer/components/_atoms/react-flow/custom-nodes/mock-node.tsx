@@ -18,6 +18,16 @@ export const MockNode = ({ data }: MockNodeProps) => {
   )
 }
 
+/**
+ *
+ * @param id: string - The id of the mock node
+ * @param label: string - The label of the mock node
+ * @param posX: number - The x coordinate of the mock node in the flow panel
+ * @param posY: number - The y coordinate of the mock node in the flow panel
+ * @param handleX: number - The x coordinate of the handle based on the global position (inside the flow panel)
+ * @param handleY: number - The y coordinate of the handle based on the global position (inside the flow panel)
+ * @returns MockNode
+ */
 export const buildMockNode = ({
   id,
   label,
@@ -44,16 +54,28 @@ export const buildMockNode = ({
         position: 'left',
         type: 'target',
         isConnectable: false,
-        x: handleX,
-        y: handleY,
+        glbPosition: {
+          x: handleX,
+          y: handleY,
+        },
+        relPosition: {
+          x: 0,
+          y: 20,
+        },
       },
       {
         id: 'right',
         position: 'right',
         type: 'source',
         isConnectable: false,
-        x: handleX + 150,
-        y: handleY,
+        glbPosition: {
+          x: handleX + 150,
+          y: handleY,
+        },
+        relPosition: {
+          x: 150,
+          y: 20,
+        },
       },
     ],
   },
