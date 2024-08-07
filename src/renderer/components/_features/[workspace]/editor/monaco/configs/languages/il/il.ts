@@ -4,32 +4,48 @@ export const conf: languages.LanguageConfiguration = {
   /**
    * This defines the block that will be auto closed
    */
-  // autoClosingPairs: [{ open: 'open_string', close: 'close_string' }],
+  autoClosingPairs: [
+    { open: '(', close: ')' },
+    { open: '[', close: ']' },
+    { open: '{', close: '}' },
+    { open: '"', close: '"' },
+    { open: "'", close: "'" },
+  ],
   /**
    * This defines the block that will be colorized
    */
-  // colorizedBracketPairs: [['first', 'second']],
+  colorizedBracketPairs: [
+    ['(', ')'],
+    ['[', ']'],
+    ['{', '}'],
+  ],
   /**
    * This defines the comment setting
    */
-  // comments: {
-  //   lineComment: '//',
-  //   blockComment: ['/*', '*/'],
-  // }
+  comments: {
+    lineComment: '//',
+    blockComment: ['(*', '*)'],
+  },
   /**
    * This defines the folding setting
    */
-  // folding: {
-  //   markers: {
-  //     start: RegExp,
-  //     end: RegExp,
-  //   },
-  // }
+  folding: {
+    markers: {
+      start: /^\s*#region\b/,
+      end: /^\s*#endregion\b/,
+    },
+  },
+  brackets: [
+    ['{', '}'],
+    ['[', ']'],
+    ['(', ')'],
+  ],
 }
 
 export const language: languages.IMonarchLanguage = {
   tokenizer: {
     root: [
+      [/LABEL:/, 'label'],
       [
         /[a-zA-Z_]\w*/,
         {
@@ -41,13 +57,60 @@ export const language: languages.IMonarchLanguage = {
           },
         },
       ],
-      [/\/\/.*/, 'comment'], // Tokenize single line comment
-      [/\(\*[\s\S]*?\*\)/, 'comment'], // Tokenize block comment
-      [/\d+/, 'number'], // Tokenize numbers
-      [/[;,.]/, 'delimiter'], // Tokenize delimiters
+      { include: '@whitespace' },
+      // Delimiters and operators
+      [/[{}()[\]]/, '@brackets'], // Tokenize brackets
+      [/[<>](?![=><!~?:&|+\-*/^%])/, '@brackets'],
+      [/[=><!~?:&|+\-*/^%]/, 'operator'],
+      // Numbers
+      [/\d+\.\d*\([eE][-+]?\d+\)?/, 'number.float'], //Tokenize float number
+      [/\d+/, 'number'],
+      // Comments
+      [/\/\/.*/, 'comment'],
+      [/\(\*[\s\S]*?\*\)/, 'comment'],
+      // Strings
+      [/"([^"\\]|\\.)*$/, 'string.invalid'], // non-terminated string
+      [/"/, 'string', '@string'],
+    ],
+    string: [
+      [/[^"\\]+/, 'string'],
+      [/\\./, 'string.escape'],
+      [/"/, 'string', '@pop'],
+    ],
+    whitespace: [
+      [/[ \t\r\n]+/, 'white'], // Tokenize whitespace (spaces, tabs, line breaks)
     ],
   },
-  keywords: ['VAR', 'END_VAR', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT', 'VAR_TEMP', 'VAR_GLOBAL', 'VAR_EXTERNAL'],
+  keywords: [
+    'PROGRAM',
+    'END_PROGRAM',
+    'FUNCTION',
+    'END_FUNCTION',
+    'FUNCTION_BLOCK',
+    'END_FUNCTION_BLOCK',
+    'VAR',
+    'END_VAR',
+    'VAR_INPUT',
+    'VAR_OUTPUT',
+    'VAR_IN_OUT',
+    'VAR_TEMP',
+    'VAR_GLOBAL',
+    'VAR_EXTERNAL',
+    'IF',
+    'THEN',
+    'ELSE',
+    'END_IF',
+    'FOR',
+    'TO',
+    'DO',
+    'END_FOR',
+    'WHILE',
+    'END_WHILE',
+    'REPEAT',
+    'UNTIL',
+    'END_REPEAT',
+    'RETURN',
+  ],
   typeKeywords: [
     'BOOL',
     'SINT',
