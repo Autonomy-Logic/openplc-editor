@@ -1,7 +1,7 @@
 import { RungBody, RungHeader } from '@root/renderer/components/_molecules/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowState } from '@root/renderer/store/slices'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { customNodesStyles, nodesBuilder } from '../../_atoms/react-flow/custom-nodes'
 
@@ -12,12 +12,12 @@ type RungProps = {
 export const Rung = ({ id }: RungProps) => {
   const { rungs, flowActions } = useOpenPLCStore()
 
-  const [isOpen, setIsOpen] = useState<boolean>(false)
-  const [rung, setRung] = useState<FlowState>({
-    id,
-    nodes: [],
-    edges: [],
-  })
+  const [isOpen, setIsOpen] = useState<boolean>(true)
+  const [rung, setRung] = useState<FlowState>()
+
+  useEffect(() => {
+    findRung()
+  }, [])
 
   const defaultBodyPanelExtent: [number, number] = [1530, 200]
 
@@ -68,7 +68,7 @@ export const Rung = ({ id }: RungProps) => {
   return (
     <div aria-label='Rung container' className='overflow w-full'>
       <RungHeader onClick={handleOpenSection} isOpen={isOpen} />
-      {isOpen && <RungBody rung={rung} defaultFlowPanelExtent={defaultBodyPanelExtent} />}
+      {isOpen && rung && <RungBody rung={rung} defaultFlowPanelExtent={defaultBodyPanelExtent} />}
     </div>
   )
 }
