@@ -29,7 +29,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
 
   /**
-   * -- Which means:
+   * -- Which means, by default, the flow panel extent is:
    * minX: 0    | minY: 0
    * maxX: 1530 | maxY: 200
    */

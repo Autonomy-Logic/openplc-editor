@@ -19,7 +19,7 @@ export const Rung = ({ id }: RungProps) => {
     findRung()
   }, [])
 
-  const defaultBodyPanelExtent: [number, number] = [1530, 200]
+  const defaultBodyPanelExtent: [number, number] = [1530, 250]
 
   const findRung = () => {
     const rung = rungs.find((rung) => rung.id === id)
