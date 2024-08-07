@@ -60,7 +60,7 @@ export const buildMockNode = ({
         },
         relPosition: {
           x: 0,
-          y: 0,
+          y: 20,
         },
       },
       {
@@ -74,7 +74,7 @@ export const buildMockNode = ({
         },
         relPosition: {
           x: 150,
-          y: 0,
+          y: 20,
         },
       },
     ],

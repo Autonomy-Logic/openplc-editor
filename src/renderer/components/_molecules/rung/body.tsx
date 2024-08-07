@@ -5,9 +5,8 @@ import { addEdge, applyEdgeChanges, applyNodeChanges, getNodesBounds, Panel } fr
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
-import { customNodesStyles, customNodeTypes, nodesBuilder } from '../../_atoms/react-flow/custom-nodes'
-import { CustomHandleProps } from '../../_atoms/react-flow/custom-nodes/handle'
-import { changePowerRailBounds, connectNodes, disconnectNodes } from './utils'
+import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
+import { addNewNode, removeNode } from './ladder-utils'
 
 /**
  * Default flow panel extent:
@@ -20,7 +19,7 @@ type RungBodyProps = {
 }
 
 export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBodyProps) => {
-  const GAP_BETWEEN_NODES = 50
+  // const GAP_BETWEEN_NODES = 50
 
   const { flowActions } = useOpenPLCStore()
 
@@ -63,6 +62,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
+    console.log('rungLocal.nodes.length', rungLocal.nodes)
     updateFlowStore()
   }, [rungLocal.nodes.length])
 
@@ -74,105 +74,21 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
     }
   }
 
-  /**
-   * All the handles below are mocks, so it probably gonna need some adjustments to work with real handles.
-   * The handleX and handleY are the coordinates of the handle in the node.
-   * The posX and posY are the coordinates of the node in the flow panel.
-   */
-
   const handleAddNode = (newNodeType: string = 'mockNode') => {
-    const leftPowerRailNode = rungLocal.nodes.find((node) => node.id === 'left-rail') as Node
-    let rightPowerRailNode = rungLocal.nodes.find((node) => node.id === 'right-rail') as Node
-
-    const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
-
-    const lastNode = nodes[nodes.length - 1] ?? leftPowerRailNode
-    const lastNodeHandles = lastNode.data.handles as CustomHandleProps[]
-    const sourceLastNodeHandle = lastNodeHandles.find((handle) => handle.type === 'source')
-
-    let yOffset = 0
-    switch (newNodeType) {
-      case 'block':
-        yOffset = customNodesStyles.block.handle.y
-        break
-      default:
-        // mock block
-        yOffset = 20
-        break
-    }
-
-    const posX = lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES
-    const posY =
-      lastNode.type === newNodeType ? lastNode.position.y : (sourceLastNodeHandle?.glbPosition.y ?? yOffset) - yOffset
-    const handleX = lastNode.position.x + (lastNode.width ?? 0) + GAP_BETWEEN_NODES
-    const handleY = sourceLastNodeHandle?.glbPosition.y ?? 0
-
-    let newNode: Node
-    switch (newNodeType) {
-      case 'block':
-        newNode = nodesBuilder.block({
-          id: `templateBlock-${nodes.length}`,
-          posX,
-          posY,
-          handleX,
-          handleY,
-        })
-        break
-      default:
-        // mock block
-        newNode = nodesBuilder.mockNode({
-          id: `mock-${nodes.length}`,
-          label: `mock-${nodes.length}`,
-          posX,
-          posY,
-          handleX,
-          handleY,
-        })
-        break
-    }
-
-    const newRightPowerRail = changePowerRailBounds({
-      rung: rungLocal,
-      nodes: [leftPowerRailNode, ...nodes, newNode],
-      gapNodes: GAP_BETWEEN_NODES,
+    const { nodes, edges } = addNewNode({
+      rungLocal,
+      newNodeType,
       defaultBounds: defaultFlowPanelExtent,
     })
-    if (newRightPowerRail) rightPowerRailNode = newRightPowerRail
-
-    let newEdge = rung.edges
-    newEdge = connectNodes(rungLocal, lastNode.id, newNode.id)
-
-    setRungLocal((rung) => ({
-      ...rung,
-      nodes: [leftPowerRailNode, ...nodes, newNode, rightPowerRailNode],
-      edges: newEdge,
-    }))
+    setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
 
   const handleRemoveNode = () => {
-    const leftPowerRailNode: Node = rungLocal.nodes.find((node) => node.id === 'left-rail') as Node
-    let rightPowerRailNode: Node = rungLocal.nodes.find((node) => node.id === 'right-rail') as Node
-
-    const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
-    const lastNode: Node = nodes[nodes.length - 1]
-    if (!lastNode) return
-
-    const newRightPowerRail = changePowerRailBounds({
-      rung: rungLocal,
-      nodes: [leftPowerRailNode, ...nodes.slice(0, -1)],
-      gapNodes: GAP_BETWEEN_NODES,
+    const { nodes, edges } = removeNode({
+      rungLocal,
       defaultBounds: defaultFlowPanelExtent,
     })
-    if (newRightPowerRail) rightPowerRailNode = newRightPowerRail
-
-    const edge = rungLocal.edges.find((edge) => edge.source === lastNode.id)
-    const newEdges = disconnectNodes(rungLocal, edge?.source ?? '', edge?.target ?? '')
-
-    setRungLocal((rung) => ({
-      ...rung,
-      nodes: [leftPowerRailNode, ...nodes.slice(0, -1), rightPowerRailNode],
-      edges: newEdges,
-    }))
+    setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
 
   const onNodesChange: OnNodesChange<Node> = useCallback(
@@ -240,8 +156,11 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
               preventScrolling: false,
             }}
           >
+            <Panel position='top-left'>
+              <button onClick={() => handleAddNode()}>Add Mock Node</button>
+            </Panel>
             <Panel position='bottom-left'>
-              <button onClick={() => handleAddNode('block')}>Add Node</button>
+              <button onClick={() => handleAddNode('block')}>Add Block Node</button>
             </Panel>
             <Panel position='bottom-right'>
               <button onClick={handleRemoveNode}>Remove Node</button>

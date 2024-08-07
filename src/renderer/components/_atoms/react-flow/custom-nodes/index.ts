@@ -23,22 +23,47 @@ export const customNodeTypes = {
   mockNode: MockNode,
 }
 
-export const customNodesStyles = {
+type CustomNodeTypes = {
+  [key: string]: {
+    width: number
+    height: number
+    gapBetweenNodes: number
+    handle: {
+      x: number
+      y: number
+      offsetY: number
+    }
+  }
+}
+export const customNodesStyles: CustomNodeTypes = {
   powerRail: {
     width: POWER_RAIL_WIDTH,
     height: POWER_RAIL_HEIGHT,
+    gapBetweenNodes: 0,
     handle: {
       x: POWER_RAIL_CONNECTOR_X,
       y: POWER_RAIL_CONNECTOR_Y,
+      offsetY: 0,
     },
   },
   block: {
     width: BLOCK_WIDTH,
     height: BLOCK_HEIGHT,
+    gapBetweenNodes: 100,
     handle: {
       x: BLOCK_CONNECTOR_X,
       y: BLOCK_CONNECTOR_Y,
       offsetY: BLOCK_CONNECTOR_Y_OFFSET,
+    },
+  },
+  mockNode: {
+    width: 150,
+    height: 40,
+    gapBetweenNodes: 50,
+    handle: {
+      x: 0,
+      y: 20,
+      offsetY: 0,
     },
   },
 }
