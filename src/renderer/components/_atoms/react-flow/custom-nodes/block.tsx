@@ -28,8 +28,8 @@ type BlockTypes = {
 const BLOCK_TYPES: BlockTypes = {
   template: {
     name: '???',
-    leftConnectors: ['EN', 'PT'],
-    rightConnectors: ['EN0'],
+    leftConnectors: ['???', '??'],
+    rightConnectors: ['???'],
     tooltipContent: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam aliquam tristique tincidunt. Duis elementum
             tortor sem, non convallis orci facilisis at. Suspendisse id bibendum nisl. Mauris ac massa diam. Mauris
             ultrices massa justo, sed vehicula tellus rhoncus eget. Suspendisse lacinia nec dolor vitae sollicitudin.
