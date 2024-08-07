@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import * as Tabs from '@radix-ui/react-tabs'
+import { Modal, ModalContent, ModalTitle, ModalTrigger } from '@root/renderer/components/_molecules'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
@@ -19,6 +20,7 @@ import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
+import SearchInProject from '../components/_features/[workspace]/editor/search-in-project'
 import { Console } from '../components/_molecules/console'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Debugger } from '../components/_organisms/debugger'
@@ -37,7 +39,6 @@ const WorkspaceScreen = () => {
     editor,
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()
-
   useEffect(() => {
     const handleSaveProject = async () => {
       const { success, reason } = await window.bridge.saveProject({ projectPath, projectData })
@@ -104,9 +105,19 @@ const WorkspaceScreen = () => {
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
         <div className='my-5 flex h-fit w-full flex-col gap-10'>
-          <ActivityBarButton aria-label='Search'>
-            <SearchIcon />
-          </ActivityBarButton>
+          <Modal>
+            <ModalTrigger>
+              <ActivityBarButton aria-label='Search'>
+                <SearchIcon />
+              </ActivityBarButton>
+            </ModalTrigger>
+            <ModalContent className='h-[424px] w-[668px] select-none flex-col justify-between px-8 py-4'>
+              <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>
+                Search in Project
+              </ModalTitle>
+              <SearchInProject />
+            </ModalContent>
+          </Modal>
           <ActivityBarButton onClick={() => setCollapseAll(!collapseAll)} aria-label='Zoom'>
             <ZoomInOut />
           </ActivityBarButton>
