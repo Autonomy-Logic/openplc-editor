@@ -15,12 +15,9 @@ import { addNewNode, removeNode } from './ladder-utils'
  */
 type RungBodyProps = {
   rung: FlowState
-  defaultFlowPanelExtent: [number, number]
 }
 
-export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBodyProps) => {
-  // const GAP_BETWEEN_NODES = 50
-
+export const RungBody = ({ rung }: RungBodyProps) => {
   const { flowActions } = useOpenPLCStore()
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
@@ -33,7 +30,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
    * minX: 0    | minY: 0
    * maxX: 1530 | maxY: 200
    */
-  const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([[0, 0], defaultFlowPanelExtent])
+  const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([[0, 0], rung?.flowViewport ?? [1530, 200]])
 
   /**
    * Update flow panel extent based on the bounds of the nodes
@@ -49,7 +46,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
       height: 40,
     }
     const bounds = getNodesBounds([zeroPositionNode, ...rungLocal.nodes])
-    const [defaultWidth, defaultHeight] = defaultFlowPanelExtent
+    const [defaultWidth, defaultHeight] = rung?.flowViewport ?? [1530, 200]
 
     // If the bounds are less than the default extent, set the panel extent to the default extent
     if (bounds.width < defaultWidth) bounds.width = defaultWidth
@@ -62,7 +59,6 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
-    console.log('rungLocal.nodes.length', rungLocal.nodes)
     updateFlowStore()
   }, [rungLocal.nodes.length])
 
@@ -78,7 +74,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
     const { nodes, edges } = addNewNode({
       rungLocal,
       newNodeType,
-      defaultBounds: defaultFlowPanelExtent,
+      defaultBounds: rung?.flowViewport ?? [1530, 200],
     })
     setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
@@ -86,7 +82,7 @@ export const RungBody = ({ rung, defaultFlowPanelExtent = [1530, 200] }: RungBod
   const handleRemoveNode = () => {
     const { nodes, edges } = removeNode({
       rungLocal,
-      defaultBounds: defaultFlowPanelExtent,
+      defaultBounds: rung?.flowViewport ?? [1530, 200],
     })
     setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
