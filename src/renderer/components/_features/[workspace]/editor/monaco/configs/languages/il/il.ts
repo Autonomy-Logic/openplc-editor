@@ -1,6 +1,31 @@
 import { languages } from 'monaco-editor'
 
-export const conf: languages.LanguageConfiguration = {}
+export const conf: languages.LanguageConfiguration = {
+  /**
+   * This defines the block that will be auto closed
+   */
+  // autoClosingPairs: [{ open: 'open_string', close: 'close_string' }],
+  /**
+   * This defines the block that will be colorized
+   */
+  // colorizedBracketPairs: [['first', 'second']],
+  /**
+   * This defines the comment setting
+   */
+  // comments: {
+  //   lineComment: '//',
+  //   blockComment: ['/*', '*/'],
+  // }
+  /**
+   * This defines the folding setting
+   */
+  // folding: {
+  //   markers: {
+  //     start: RegExp,
+  //     end: RegExp,
+  //   },
+  // }
+}
 
 export const language: languages.IMonarchLanguage = {
   tokenizer: {
