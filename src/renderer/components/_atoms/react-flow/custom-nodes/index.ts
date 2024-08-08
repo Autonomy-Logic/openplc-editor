@@ -1,26 +1,13 @@
-import {
-  Block,
-  BLOCK_CONNECTOR_X,
-  BLOCK_CONNECTOR_Y,
-  BLOCK_CONNECTOR_Y_OFFSET,
-  BLOCK_HEIGHT,
-  BLOCK_WIDTH,
-  buildBlockNode,
-} from './block'
-import { buildMockNode, MockNode } from './mock-node'
-import {
-  buildPowerRailNode,
-  POWER_RAIL_CONNECTOR_X,
-  POWER_RAIL_CONNECTOR_Y,
-  POWER_RAIL_HEIGHT,
-  POWER_RAIL_WIDTH,
-  PowerRail,
-} from './power-rail'
+import * as blockNode from './block'
+import * as contactNode from './contact'
+import * as mockNode from './mock-node'
+import * as powerRailNode from './power-rail'
 
 export const customNodeTypes = {
-  powerRail: PowerRail,
-  block: Block,
-  mockNode: MockNode,
+  block: blockNode.Block,
+  contact: contactNode.Contact,
+  powerRail: powerRailNode.PowerRail,
+  mockNode: mockNode.MockNode,
 }
 
 type CustomNodeTypes = {
@@ -36,24 +23,34 @@ type CustomNodeTypes = {
   }
 }
 export const customNodesStyles: CustomNodeTypes = {
-  powerRail: {
-    width: POWER_RAIL_WIDTH,
-    height: POWER_RAIL_HEIGHT,
-    gapBetweenNodes: 0,
+  block: {
+    width: blockNode.BLOCK_WIDTH,
+    height: blockNode.BLOCK_HEIGHT,
+    gapBetweenNodes: 100,
     handle: {
-      x: POWER_RAIL_CONNECTOR_X,
-      y: POWER_RAIL_CONNECTOR_Y,
+      x: blockNode.BLOCK_CONNECTOR_X,
+      y: blockNode.BLOCK_CONNECTOR_Y,
+      offsetY: blockNode.BLOCK_CONNECTOR_Y_OFFSET,
+    },
+  },
+  contact: {
+    width: contactNode.CONTACT_BLOCK_WIDTH,
+    height: contactNode.CONTACT_BLOCK_HEIGHT,
+    gapBetweenNodes: 50,
+    handle: {
+      x: contactNode.CONTACT_CONNECTOR_X,
+      y: contactNode.CONTACT_CONNECTOR_Y,
       offsetY: 0,
     },
   },
-  block: {
-    width: BLOCK_WIDTH,
-    height: BLOCK_HEIGHT,
-    gapBetweenNodes: 100,
+  powerRail: {
+    width: powerRailNode.POWER_RAIL_WIDTH,
+    height: powerRailNode.POWER_RAIL_HEIGHT,
+    gapBetweenNodes: 0,
     handle: {
-      x: BLOCK_CONNECTOR_X,
-      y: BLOCK_CONNECTOR_Y,
-      offsetY: BLOCK_CONNECTOR_Y_OFFSET,
+      x: powerRailNode.POWER_RAIL_CONNECTOR_X,
+      y: powerRailNode.POWER_RAIL_CONNECTOR_Y,
+      offsetY: 0,
     },
   },
   mockNode: {
@@ -69,7 +66,8 @@ export const customNodesStyles: CustomNodeTypes = {
 }
 
 export const nodesBuilder = {
-  powerRail: buildPowerRailNode,
-  block: buildBlockNode,
-  mockNode: buildMockNode,
+  block: blockNode.buildBlockNode,
+  contact: contactNode.buildContactNode,
+  powerRail: powerRailNode.buildPowerRailNode,
+  mockNode: mockNode.buildMockNode,
 }
