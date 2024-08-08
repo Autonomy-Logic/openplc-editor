@@ -73,8 +73,6 @@ const WorkspaceScreen = () => {
     })
   })
 
-  const [graphList, setGraphList] = useState<string[]>([])
-
   const variables = [
     { name: 'a', type: 'false' },
     { name: 'b', type: 'false' },
@@ -82,6 +80,7 @@ const WorkspaceScreen = () => {
     { name: 'd', type: 'false' },
   ]
 
+  const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
   const [collapseAll, setCollapseAll] = useState(false)
   const panelRef = useRef(null)
@@ -101,6 +100,13 @@ const WorkspaceScreen = () => {
       if (ref.current) ref.current[action]()
     })
   }, [collapseAll])
+
+  const isLadderEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'ld'
+  useEffect(() => {
+    if (isLadderEditor) {
+      console.log('O editor atual é LD')
+    }
+  }, [editor])
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>

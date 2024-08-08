@@ -43,7 +43,7 @@ const StartScreen = () => {
 
   const handleOpenProject = async () => {
     const { success, data, error } = await window.bridge.openProject()
-    console.log(success, data, error)
+    // console.log(success, data, error)
     if (success && data) {
       setUserWorkspace({
         editingState: 'unsaved',
@@ -139,7 +139,7 @@ const StartScreen = () => {
           </MenuSection>
           <MenuDivider />
           <MenuSection id='2'>
-            <MenuItem onClick={() => console.log('create project')} ghosted>
+            <MenuItem  ghosted>
               <StickArrowIcon className='rotate-180' /> Quit
             </MenuItem>
           </MenuSection>
