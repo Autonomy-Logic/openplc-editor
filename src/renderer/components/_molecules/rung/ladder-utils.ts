@@ -141,7 +141,6 @@ export const nodeBuild = ({
         posY,
         handleX,
         handleY,
-        variation: 'fallingEdge'
       })
     default:
       // mock block

@@ -153,7 +153,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
             }}
           >
             <Panel position='top-left'>
-              <button onClick={() => handleAddNode('contact')}>Add Mock Node</button>
+              <button onClick={() => handleAddNode('contact')}>Add Contact Node</button>
             </Panel>
             <Panel position='bottom-left'>
               <button onClick={() => handleAddNode('block')}>Add Block Node</button>
