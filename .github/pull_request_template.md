@@ -1,8 +1,19 @@
-## Issue reference
+# Pull request info
 
-This PR refer to the # issue.
+## References
+
+### If applicable substitute the issue reference to the one that this PR refers
+
+This PR resolve the *#issue_number*.
+
+### Link to Linear task
+
+*[linear task](link to linear)*
 
 ## Description of the changes proposed
+
+- ...
+- ...
 
 ## DOD checklist
 
