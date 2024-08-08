@@ -16,6 +16,10 @@ import {
   TransferIcon,
   ZoomInOut,
 } from '../assets'
+import BlockIcon from '../assets/icons/project/Block'
+import CoilIcon from '../assets/icons/project/Coil'
+import ContactIcon from '../assets/icons/project/Contact'
+import LoopIcon from '../assets/icons/project/Loop'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
@@ -107,6 +111,28 @@ const WorkspaceScreen = () => {
       console.log('O editor atual é LD')
     }
   }, [editor])
+
+  const ldActivityIcons = () => {
+    if (isLadderEditor) {
+      return (
+        <>
+          <ActivityBarButton aria-label='Contact'>
+            <ContactIcon size='sm' />
+          </ActivityBarButton>
+          <ActivityBarButton aria-label='Coil'>
+            <CoilIcon />
+          </ActivityBarButton>
+          <ActivityBarButton aria-label='Loop'>
+            <LoopIcon />
+          </ActivityBarButton>
+          <ActivityBarButton aria-label='Block'>
+            <BlockIcon />
+          </ActivityBarButton>
+        </>
+      )
+    }
+  }
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -127,6 +153,7 @@ const WorkspaceScreen = () => {
           <ActivityBarButton onClick={() => setCollapseAll(!collapseAll)} aria-label='Zoom'>
             <ZoomInOut />
           </ActivityBarButton>
+          {ldActivityIcons()}
           <ActivityBarButton aria-label='Download'>
             <DownloadIcon />
           </ActivityBarButton>
