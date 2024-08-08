@@ -1,22 +1,24 @@
 import { RungBody, RungHeader } from '@root/renderer/components/_molecules/rung'
-import { ReactFlowProvider } from '@xyflow/react'
+import { FlowState } from '@root/renderer/store/slices'
 import { useState } from 'react'
 
-export const Rung = () => {
-  const [isOpen, setIsOpen] = useState<boolean>(false)
+
+type RungProps = {
+  id: string
+  rung: FlowState
+}
+
+export const Rung = ({ id, rung }: RungProps) => {
+  const [isOpen, setIsOpen] = useState<boolean>(true)
 
   const handleOpenSection = () => {
     setIsOpen(!isOpen)
   }
 
   return (
-    <div aria-label='Rung container' className='overflow w-full'>
+    <div aria-label='Rung container' className='overflow w-full' id={id}>
       <RungHeader onClick={handleOpenSection} isOpen={isOpen} />
-      {isOpen && (
-        <ReactFlowProvider>
-          <RungBody />
-        </ReactFlowProvider>
-      )}
+      {isOpen && <RungBody rung={rung} />}
     </div>
   )
 }

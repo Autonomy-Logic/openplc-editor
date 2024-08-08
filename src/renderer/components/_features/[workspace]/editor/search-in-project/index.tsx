@@ -1,14 +1,14 @@
-import * as Checkbox from '@radix-ui/react-checkbox'
-import { CheckIcon } from '@radix-ui/react-icons'
-import { InputWithRef } from '@root/renderer/components/_atoms'
-
+import * as Checkbox from '@radix-ui/react-checkbox';
+import { CheckIcon } from '@radix-ui/react-icons';
+import { InputWithRef } from '@root/renderer/components/_atoms';
+import { useEffect, useState } from 'react';
 
 type OptionProps = {
-  id: string
-  label: string
-}
+  id: string;
+  label: string;
+};
 
-const scopeElements = [{ value: 'whole project' }, { value: 'only elements' }]
+const scopeElements = [{ value: 'whole project' }, { value: 'only elements' }];
 
 const scopeElementsOptions = [
   { value: 'data type' },
@@ -16,80 +16,182 @@ const scopeElementsOptions = [
   { value: 'function block' },
   { value: 'program' },
   { value: 'configuration' },
-]
+];
 
-const CheckboxOption = ({ id, label }: OptionProps) => (
-  <div className='flex items-center gap-2'>
+const CheckboxOption = ({
+  id,
+  label,
+  disabled = false,
+  checked = false,
+  onChange,
+}: OptionProps & { disabled?: boolean; checked?: boolean; onChange?: () => void }) => (
+  <div className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
     <Checkbox.Root
-      className='flex h-4 w-4 appearance-none items-center justify-center rounded-sm border border-neutral-300 outline-none dark:border-neutral-850 dark:bg-neutral-700'
+      className={`flex ${disabled ? 'cursor-not-allowed' : ''} h-4 w-4 appearance-none items-center justify-center rounded-sm border border-neutral-300 outline-none dark:border-neutral-850 dark:bg-neutral-400`}
       id={id}
+      disabled={disabled}
+      checked={checked}
+      onCheckedChange={onChange}
     >
-      <Checkbox.Indicator className='text-brand'>
-        <CheckIcon />
+      <Checkbox.Indicator className={`${disabled ? 'cursor-not-allowed' : ''}`}>
+        <CheckIcon className='stroke-brand' />
       </Checkbox.Indicator>
     </Checkbox.Root>
     <label
       htmlFor={id}
-      className='cursor-pointer whitespace-nowrap text-sm capitalize font-medium text-neutral-950 dark:text-white'
+      className={`whitespace-nowrap text-sm font-medium capitalize text-neutral-950 dark:text-white ${disabled ? 'cursor-not-allowed' : 'cursor-pointer '}`}
     >
       {label}
     </label>
   </div>
-)
+);
 
-const RadioOption = ({ id, label }: OptionProps) => (
+const RadioOption = ({ id, label, name, checked, onChange }: OptionProps & { name: string; checked: boolean; onChange: () => void }) => (
   <div className='flex items-center gap-2'>
     <input
       type='radio'
       id={id}
+      name={name}
       className='border-1 h-4 w-4 cursor-pointer appearance-none rounded-full border border-[#D1D5DB] ring-0 checked:border-[5px] checked:border-brand dark:border-neutral-850 dark:bg-neutral-300'
+      onChange={onChange}
+      checked={checked}
     />
     <label htmlFor={id} className='cursor-pointer text-sm font-medium capitalize text-neutral-950 dark:text-white'>
       {label}
     </label>
   </div>
-)
+);
 
 export default function SearchInProject() {
-  return (
+  const [selectedScope, setSelectedScope] = useState('whole project');
+  const [checkedOptions, setCheckedOptions] = useState<{ [key: string]: boolean }>({});
+  const [sensitiveCase, setSensitiveCase] = useState(false);
+  const [regularExpression, setRegularExpression] = useState(false);
 
-        <div className='flex h-full w-full flex-col gap-8'>
-          <div className='flex h-[57px] w-full gap-6'>
-            <div className='flex w-full flex-col justify-between'>
-              <p className='text-cp-base font-medium text-neutral-950 dark:text-white'>Pattern to Search</p>
-              <InputWithRef className='h-[30px] w-full rounded-lg border border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-100' />
-            </div>
-            <div className='flex flex-col justify-between'>
-              <CheckboxOption id='sensitive-case' label='Sensitive case' />
-              <CheckboxOption id='regular-expression' label='Regular Expression' />
-            </div>
+  useEffect(() => {
+    if (selectedScope === 'whole project') {
+      const newCheckedOptions = scopeElementsOptions.reduce(
+        (acc, option) => {
+          acc[option.value] = false;
+          return acc;
+        },
+        {} as { [key: string]: boolean },
+      );
+      setCheckedOptions(newCheckedOptions);
+    } else {
+      const newCheckedOptions = scopeElementsOptions.reduce(
+        (acc, option) => {
+          acc[option.value] = false;
+          return acc;
+        },
+        {} as { [key: string]: boolean },
+      );
+      setCheckedOptions(newCheckedOptions);
+    }
+  }, [selectedScope]);
+
+  useEffect(() => {
+    if (selectedScope === 'only elements') {
+      const allSelected = scopeElementsOptions.every(option => checkedOptions[option.value]);
+      if (allSelected) {
+        setSelectedScope('whole project');
+      }
+    }
+  }, [checkedOptions]);
+
+  const handleCheckboxChange = (option: string) => {
+    setCheckedOptions((prev) => {
+      const newCheckedOptions = { ...prev, [option]: !prev[option] };
+      return newCheckedOptions;
+    });
+  };
+
+  const handleScopeChange = (scope: string) => {
+    if (scope === 'whole project') {
+      const newCheckedOptions = scopeElementsOptions.reduce(
+        (acc, option) => {
+          acc[option.value] = false;
+          return acc;
+        },
+        {} as { [key: string]: boolean },
+      );
+      setCheckedOptions(newCheckedOptions);
+    } else {
+      const newCheckedOptions = scopeElementsOptions.reduce(
+        (acc, option) => {
+          acc[option.value] = false;
+          return acc;
+        },
+        {} as { [key: string]: boolean },
+      );
+      setCheckedOptions(newCheckedOptions);
+    }
+    setSelectedScope(scope);
+  };
+
+  return (
+    <div className='flex h-full w-full flex-col gap-8'>
+      <div className='flex h-[57px] w-full gap-6'>
+        <div className='flex w-full flex-col justify-between'>
+          <p className='text-cp-base font-medium text-neutral-950 dark:text-white'>Pattern to Search</p>
+          <InputWithRef className='h-[30px] w-full rounded-lg border border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-100' />
+        </div>
+        <div className='flex flex-col justify-between'>
+          <CheckboxOption
+            id='sensitive-case'
+            label='Sensitive case'
+            checked={sensitiveCase}
+            onChange={() => setSensitiveCase(!sensitiveCase)}
+          />
+          <CheckboxOption
+            id='regular-expression'
+            label='Regular Expression'
+            checked={regularExpression}
+            onChange={() => setRegularExpression(!regularExpression)}
+          />
+        </div>
+      </div>
+      <div className='h-[183px] w-full px-2 py-4'>
+        <div className='flex h-full w-full gap-4'>
+          <div className='flex flex-col gap-4'>
+            <span className='text-base font-medium text-neutral-950 dark:text-white'>Scope:</span>
+            {scopeElements.map((element) => (
+              <RadioOption
+                key={element.value}
+                id={element.value}
+                name='scope'
+                label={element.value}
+                checked={selectedScope === element.value}
+                onChange={() => handleScopeChange(element.value)}
+              />
+            ))}
           </div>
-          <div className='h-[183px] w-full px-2 py-4'>
-            <div className='flex h-full w-full gap-4'>
-              <div className='flex flex-col gap-4'>
-                <span className='text-base font-medium text-neutral-950 dark:text-white'>Scope:</span>
-                {scopeElements.map((element) => (
-                  <RadioOption key={element.value} id={element.value} label={element.value} />
-                ))}
-              </div>
-              <div className='flex h-[153px] flex-1 items-center rounded-md border-2 border-brand-dark p-2 dark:border-neutral-850'>
-                <div className='flex w-full flex-col gap-[7px]'>
-                  {scopeElementsOptions.map((element) => (
-                    <CheckboxOption key={element.value} id={element.value} label={element.value} />
-                  ))}
-                </div>
-              </div>
+          <div
+            className={`flex h-[153px] flex-1 items-center rounded-md border-2 border-brand-dark p-2 dark:border-neutral-850 ${selectedScope === 'whole project' ? 'opacity-50' : ''}`}
+          >
+            <div className='flex w-full flex-col gap-[7px]'>
+              {scopeElementsOptions.map((element) => (
+                <CheckboxOption
+                  key={element.value}
+                  id={element.value}
+                  label={element.value}
+                  disabled={selectedScope === 'whole project'}
+                  checked={checkedOptions[element.value]}
+                  onChange={() => handleCheckboxChange(element.value)}
+                />
+              ))}
             </div>
-          </div>
-          <div className='flex !h-8 w-full gap-6'>
-            <button className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'>
-              Locate
-            </button>
-            <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
-              Close
-            </button>
           </div>
         </div>
-
-  )
+      </div>
+      <div className='flex !h-8 w-full gap-6'>
+        <button className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'>
+          Locate
+        </button>
+        <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
+          Close
+        </button>
+      </div>
+    </div>
+  );
 }
