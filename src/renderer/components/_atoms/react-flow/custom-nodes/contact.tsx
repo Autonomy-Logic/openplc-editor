@@ -36,7 +36,7 @@ const CONTACT_TYPES: ContactType = {
       <DefaultContact
         width={CONTACT_BLOCK_WIDTH}
         height={CONTACT_BLOCK_HEIGHT}
-        className='stroke-neutral-900 dark:stroke-neutral-500'
+        strokeClassName='stroke-neutral-1000 dark:stroke-neutral-100'
       />
     ),
   },
@@ -45,7 +45,7 @@ const CONTACT_TYPES: ContactType = {
       <NegatedContact
         width={CONTACT_BLOCK_WIDTH}
         height={CONTACT_BLOCK_HEIGHT}
-        className='stroke-neutral-900 dark:stroke-neutral-500'
+        strokeClassName='stroke-neutral-1000 dark:stroke-neutral-100'
       />
     ),
   },
@@ -54,7 +54,7 @@ const CONTACT_TYPES: ContactType = {
       <RisingEdgeContact
         width={CONTACT_BLOCK_WIDTH}
         height={CONTACT_BLOCK_HEIGHT}
-        className='stroke-neutral-900 dark:stroke-neutral-500'
+        strokeClassName='stroke-neutral-1000 dark:stroke-neutral-100'
       />
     ),
   },
@@ -63,7 +63,7 @@ const CONTACT_TYPES: ContactType = {
       <FallingEdgeContact
         width={CONTACT_BLOCK_WIDTH}
         height={CONTACT_BLOCK_HEIGHT}
-        className='stroke-neutral-900 dark:stroke-neutral-500'
+        strokeClassName='stroke-neutral-1000 dark:stroke-neutral-100'
       />
     ),
   },
