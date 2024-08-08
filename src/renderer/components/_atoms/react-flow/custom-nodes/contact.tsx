@@ -7,7 +7,9 @@ import {
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
+import { useState } from 'react'
 
+import { InputWithRef } from '../../input'
 import type { CustomHandleProps } from './handle'
 import { buildHandle, CustomHandle } from './handle'
 
@@ -17,8 +19,8 @@ type ContactNode = Node<
 >
 type ContactProps = NodeProps<ContactNode>
 
-export const CONTACT_BLOCK_WIDTH = 50
-export const CONTACT_BLOCK_HEIGHT = 50
+export const CONTACT_BLOCK_WIDTH = 28
+export const CONTACT_BLOCK_HEIGHT = 28
 
 export const CONTACT_CONNECTOR_X = CONTACT_BLOCK_WIDTH
 export const CONTACT_CONNECTOR_Y = CONTACT_BLOCK_HEIGHT / 2
@@ -30,29 +32,61 @@ type ContactType = {
 }
 const CONTACT_TYPES: ContactType = {
   default: {
-    svg: <DefaultContact width={CONTACT_BLOCK_WIDTH} height={CONTACT_BLOCK_HEIGHT} />,
+    svg: (
+      <DefaultContact
+        width={CONTACT_BLOCK_WIDTH}
+        height={CONTACT_BLOCK_HEIGHT}
+        className='stroke-neutral-900 dark:stroke-neutral-500'
+      />
+    ),
   },
   negated: {
-    svg: <NegatedContact width={CONTACT_BLOCK_WIDTH} height={CONTACT_BLOCK_HEIGHT} />,
+    svg: (
+      <NegatedContact
+        width={CONTACT_BLOCK_WIDTH}
+        height={CONTACT_BLOCK_HEIGHT}
+        className='stroke-neutral-900 dark:stroke-neutral-500'
+      />
+    ),
   },
   risingEdge: {
-    svg: <RisingEdgeContact width={CONTACT_BLOCK_WIDTH} height={CONTACT_BLOCK_HEIGHT} />,
+    svg: (
+      <RisingEdgeContact
+        width={CONTACT_BLOCK_WIDTH}
+        height={CONTACT_BLOCK_HEIGHT}
+        className='stroke-neutral-900 dark:stroke-neutral-500'
+      />
+    ),
   },
   fallingEdge: {
-    svg: <FallingEdgeContact width={CONTACT_BLOCK_WIDTH} height={CONTACT_BLOCK_HEIGHT} />,
+    svg: (
+      <FallingEdgeContact
+        width={CONTACT_BLOCK_WIDTH}
+        height={CONTACT_BLOCK_HEIGHT}
+        className='stroke-neutral-900 dark:stroke-neutral-500'
+      />
+    ),
   },
 }
 
 export const Contact = ({ data }: ContactProps) => {
+  const [contactLabelValue, setContactLabelValue] = useState<string>('???')
   const contact = CONTACT_TYPES[data.variation]
 
   return (
-    <>
+    <div className='relative'>
       <div style={{ width: CONTACT_BLOCK_WIDTH, height: CONTACT_BLOCK_HEIGHT }}>{contact.svg}</div>
+      <div className='absolute -left-[34px] -top-7 w-24'>
+        <InputWithRef
+          value={contactLabelValue}
+          onChange={(e) => setContactLabelValue(e.target.value)}
+          className='w-full bg-transparent text-center text-sm outline-none'
+        />
+      </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}
-    </>
+    </div>
   )
 }
 
@@ -79,6 +113,7 @@ export const buildContactNode = ({
     glbY: handleY,
     relX: 0,
     relY: CONTACT_CONNECTOR_Y,
+    style: { left: -3 },
   })
   const outputHandle = buildHandle({
     id: 'output',
@@ -88,6 +123,7 @@ export const buildContactNode = ({
     glbY: handleY,
     relX: CONTACT_BLOCK_WIDTH,
     relY: CONTACT_CONNECTOR_Y,
+    style: { right: -3 },
   })
   const handles = [inputHandle, outputHandle]
 
@@ -99,5 +135,6 @@ export const buildContactNode = ({
       handles,
       variation,
     },
+    draggable: false,
   }
 }

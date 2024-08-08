@@ -36,7 +36,7 @@ export const customNodesStyles: CustomNodeTypes = {
   contact: {
     width: contactNode.CONTACT_BLOCK_WIDTH,
     height: contactNode.CONTACT_BLOCK_HEIGHT,
-    gapBetweenNodes: 50,
+    gapBetweenNodes: 55,
     handle: {
       x: contactNode.CONTACT_CONNECTOR_X,
       y: contactNode.CONTACT_CONNECTOR_Y,
