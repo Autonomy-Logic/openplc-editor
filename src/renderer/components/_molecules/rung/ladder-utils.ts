@@ -58,8 +58,6 @@ export const disconnectNodes = (rung: FlowState, sourceNodeId: string, targetNod
   return newEdges
 }
 
-
-
 /**
  * NODES
  */
@@ -133,6 +131,7 @@ export const nodeBuild = ({
         posY,
         handleX,
         handleY,
+        variant: 'TON',
       })
     default:
       // mock block

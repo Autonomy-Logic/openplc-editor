@@ -5,15 +5,15 @@ import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { buildHandle, CustomHandle, CustomHandleProps } from './handle'
 
-type BlockNode = Node<{ handles: CustomHandleProps[]; blockType: 'template' }, 'text'>
+type BlockNode = Node<{ handles: CustomHandleProps[]; variant: 'template' | 'TON' }, 'text'>
 type BlockProps = NodeProps<BlockNode>
 
-export const BLOCK_WIDTH = 130
-export const BLOCK_HEIGHT = 150
+export const BLOCK_WIDTH = 96
+export const BLOCK_HEIGHT = 128
 
 export const BLOCK_CONNECTOR_X = BLOCK_WIDTH
-export const BLOCK_CONNECTOR_Y = 50
-export const BLOCK_CONNECTOR_Y_OFFSET = 40
+export const BLOCK_CONNECTOR_Y = 40
+export const BLOCK_CONNECTOR_Y_OFFSET = 32
 
 export const BLOCK_TOP_LABEL_Y = 28
 
@@ -39,11 +39,17 @@ const BLOCK_TYPES: BlockTypes = {
             fermentum odio. Nullam et mauris leo. Aenean magna ex, sollicitudin at consequat non, cursus nec elit. Morbi
             sodales porta elementum.`,
   },
+  TON: {
+    name: 'TON',
+    leftConnectors: ['EN', 'IN', "PT"],
+    rightConnectors: ['EN0', 'Q', 'ET'],
+    tooltipContent: `The TON block is a timer block that can be used to trigger an event after a certain amount of time has passed.`,
+  },
 }
 
 export const Block = ({ data }: BlockProps) => {
   const [blockLabelValue, setBlockLabelValue] = useState<string>('???')
-  const { name, leftConnectors, rightConnectors, tooltipContent } = BLOCK_TYPES[data.blockType]
+  const { name, leftConnectors, rightConnectors, tooltipContent } = BLOCK_TYPES[data.variant]
 
   return (
     <div className='relative'>
@@ -117,16 +123,16 @@ export const buildBlockNode = ({
   posY,
   handleX,
   handleY,
-  blockType = 'template',
+  variant = 'template',
 }: {
   id: string
   posX: number
   posY: number
   handleX: number
   handleY: number
-  blockType?: 'template'
+  variant?: 'template' | 'TON'
 }) => {
-  const type = BLOCK_TYPES[blockType]
+  const type = BLOCK_TYPES[variant]
   const leftConnectors = type.leftConnectors
   const rightConnectors = type.rightConnectors
 
@@ -171,7 +177,7 @@ export const buildBlockNode = ({
     type: 'block',
     position: { x: posX, y: posY },
     data: {
-      blockType,
+      variant,
       handles,
     },
     width: BLOCK_WIDTH,
