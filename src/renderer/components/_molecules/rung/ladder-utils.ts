@@ -133,6 +133,22 @@ export const nodeBuild = ({
         handleY,
         variant: 'TON',
       })
+    case 'coil':
+      return nodesBuilder.coil({
+        id,
+        posX,
+        posY,
+        handleX,
+        handleY,
+      })
+    case 'contact':
+      return nodesBuilder.contact({
+        id,
+        posX,
+        posY,
+        handleX,
+        handleY,
+      })
     default:
       // mock block
       return nodesBuilder.mockNode({

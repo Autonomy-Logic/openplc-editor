@@ -15,8 +15,6 @@ export const BLOCK_CONNECTOR_X = BLOCK_WIDTH
 export const BLOCK_CONNECTOR_Y = 40
 export const BLOCK_CONNECTOR_Y_OFFSET = 32
 
-export const BLOCK_TOP_LABEL_Y = 28
-
 type BlockTypes = {
   [key: string]: {
     name: string
@@ -88,16 +86,15 @@ export const Block = ({ data }: BlockProps) => {
         </Tooltip>
       </TooltipProvider>
       <div
-        className='absolute flex justify-center'
+        className='absolute -top-7'
         style={{
-          top: -BLOCK_TOP_LABEL_Y,
           width: BLOCK_WIDTH,
         }}
       >
         <InputWithRef
           value={blockLabelValue}
           onChange={(e) => setBlockLabelValue(e.target.value)}
-          className='w-full bg-transparent text-center outline-none'
+          className='w-full bg-transparent text-center text-sm outline-none'
         />
       </div>
       {data.handles.map((handle, index) => (
