@@ -1,10 +1,12 @@
 import * as blockNode from './block'
+import * as coilNode from './coil'
 import * as contactNode from './contact'
 import * as mockNode from './mock-node'
 import * as powerRailNode from './power-rail'
 
 export const customNodeTypes = {
   block: blockNode.Block,
+  coil: coilNode.Coil,
   contact: contactNode.Contact,
   powerRail: powerRailNode.PowerRail,
   mockNode: mockNode.MockNode,
@@ -31,6 +33,16 @@ export const customNodesStyles: CustomNodeTypes = {
       x: blockNode.BLOCK_CONNECTOR_X,
       y: blockNode.BLOCK_CONNECTOR_Y,
       offsetY: blockNode.BLOCK_CONNECTOR_Y_OFFSET,
+    },
+  },
+  coil: {
+    width: coilNode.COIL_BLOCK_WIDTH,
+    height: coilNode.COIL_BLOCK_HEIGHT,
+    gapBetweenNodes: 55,
+    handle: {
+      x: coilNode.COIL_CONNECTOR_X,
+      y: coilNode.COIL_CONNECTOR_Y,
+      offsetY: 0,
     },
   },
   contact: {
@@ -67,6 +79,7 @@ export const customNodesStyles: CustomNodeTypes = {
 
 export const nodesBuilder = {
   block: blockNode.buildBlockNode,
+  coil: coilNode.buildCoilNode,
   contact: contactNode.buildContactNode,
   powerRail: powerRailNode.buildPowerRailNode,
   mockNode: mockNode.buildMockNode,
