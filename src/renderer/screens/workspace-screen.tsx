@@ -113,20 +113,37 @@ const WorkspaceScreen = () => {
   }, [editor])
 
   const ldActivityIcons = () => {
+    const handleDragStart = (event: React.DragEvent<HTMLDivElement>, iconType: string) => {
+      event.dataTransfer.setData('iconType', iconType)
+    }
+
+    const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+      const iconType = event.dataTransfer.getData('iconType')
+      console.log(`Icon dropped: ${iconType}`)
+    }
+
     if (isLadderEditor) {
       return (
         <>
           <ActivityBarButton aria-label='Contact'>
-            <ContactIcon size='sm' />
+            <div draggable onDragStart={(event) => handleDragStart(event, 'Contact')} onDrop={handleDrop}>
+              <ContactIcon size='sm' />
+            </div>
           </ActivityBarButton>
           <ActivityBarButton aria-label='Coil'>
-            <CoilIcon />
+            <div draggable onDragStart={(event) => handleDragStart(event, 'Coil')} onDrop={handleDrop}>
+              <CoilIcon />
+            </div>
           </ActivityBarButton>
           <ActivityBarButton aria-label='Loop'>
-            <LoopIcon />
+            <div draggable onDragStart={(event) => handleDragStart(event, 'Loop')} onDrop={handleDrop}>
+              <LoopIcon />
+            </div>
           </ActivityBarButton>
           <ActivityBarButton aria-label='Block'>
-            <BlockIcon />
+            <div draggable onDragStart={(event) => handleDragStart(event, 'Block')} onDrop={handleDrop}>
+              <BlockIcon />
+            </div>
           </ActivityBarButton>
         </>
       )
