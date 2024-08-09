@@ -136,6 +136,14 @@ export const nodeBuild = ({
       })
     case 'coil':
       return nodesBuilder.coil({
+          id,
+        posX,
+        posY,
+        handleX,
+        handleY,
+      })
+    case 'contact':
+      return nodesBuilder.contact({
         id,
         posX,
         posY,
