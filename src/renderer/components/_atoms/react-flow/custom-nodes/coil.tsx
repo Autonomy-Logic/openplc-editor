@@ -96,7 +96,7 @@ export const Coil = ({ data }: CoilProps) => {
   return (
     <div className='relative'>
       <div style={{ width: COIL_BLOCK_WIDTH, height: COIL_BLOCK_HEIGHT }}>{coil.svg}</div>
-      <div className='absolute -left-[34px] -top-7 w-24'>
+      <div className='absolute -left-[31px] -top-7 w-24'>
         <InputWithRef
           value={coilLabelValue}
           onChange={(e) => setCoilLabelValue(e.target.value)}
