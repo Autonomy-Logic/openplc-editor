@@ -134,6 +134,14 @@ export const nodeBuild = ({
         handleX,
         handleY,
       })
+    case 'contact':
+      return nodesBuilder.contact({
+        id,
+        posX,
+        posY,
+        handleX,
+        handleY,
+      })
     default:
       // mock block
       return nodesBuilder.mockNode({
