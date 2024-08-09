@@ -1,31 +1,116 @@
 import { languages } from 'monaco-editor'
 
-export const conf: languages.LanguageConfiguration = {}
+export const conf: languages.LanguageConfiguration = {
+  /**
+   * This defines the block that will be auto closed
+   */
+  autoClosingPairs: [
+    { open: '(', close: ')' },
+    { open: '[', close: ']' },
+    { open: '{', close: '}' },
+    { open: '"', close: '"' },
+    { open: "'", close: "'" },
+  ],
+  /**
+   * This defines the block that will be colorized
+   */
+  colorizedBracketPairs: [
+    ['(', ')'],
+    ['[', ']'],
+    ['{', '}'],
+  ],
+  /**
+   * This defines the comment setting
+   */
+  comments: {
+    lineComment: '//',
+    blockComment: ['(*', '*)'],
+  },
+  /**
+   * This defines the folding setting
+   */
+  folding: {
+    markers: {
+      start: /^\s*#region\b/,
+      end: /^\s*#endregion\b/,
+    },
+  },
+  brackets: [
+    ['{', '}'],
+    ['[', ']'],
+    ['(', ')'],
+  ],
+}
 
 export const language: languages.IMonarchLanguage = {
   tokenizer: {
     root: [
+      [/LABEL:/, 'label'],
       [
         /[a-zA-Z_]\w*/,
         {
           cases: {
             '@keywords': 'keyword',
-            '@operators': 'operators',
             '@typeKeywords': 'type',
+            '@operators': 'operator',
+            '@default': 'identifier',
           },
         },
       ],
-      [
-        /\/\/.*/,
-        'comment', // Tokenize comment of line
-      ],
-      [
-        /\(\*[\s\S]*?\*\)/,
-        'block-comment', // Tokenize block of comment
-      ],
+      { include: '@whitespace' },
+      // Delimiters and operators
+      [/[{}()[\]]/, '@brackets'], // Tokenize brackets
+      [/[<>](?![=><!~?:&|+\-*/^%])/, '@brackets'],
+      [/[=><!~?:&|+\-*/^%]/, 'operator'],
+      // Numbers
+      [/\d+\.\d*\([eE][-+]?\d+\)?/, 'number.float'], //Tokenize float number
+      [/\d+/, 'number'],
+      // Comments
+      [/\/\/.*/, 'comment'],
+      [/\(\*[\s\S]*?\*\)/, 'comment'],
+      // Strings
+      [/"([^"\\]|\\.)*$/, 'string.invalid'], // non-terminated string
+      [/"/, 'string', '@string'],
+    ],
+    string: [
+      [/[^"\\]+/, 'string'],
+      [/\\./, 'string.escape'],
+      [/"/, 'string', '@pop'],
+    ],
+    whitespace: [
+      [/[ \t\r\n]+/, 'white'], // Tokenize whitespace (spaces, tabs, line breaks)
     ],
   },
-  keywords: ['VAR', 'END_VAR', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT', 'VAR_TEMP', 'VAR_GLOBAL', 'VAR_EXTERNAL'],
+  keywords: [
+    'PROGRAM',
+    'END_PROGRAM',
+    'FUNCTION',
+    'END_FUNCTION',
+    'FUNCTION_BLOCK',
+    'END_FUNCTION_BLOCK',
+    'VAR',
+    'END_VAR',
+    'VAR_INPUT',
+    'VAR_OUTPUT',
+    'VAR_IN_OUT',
+    'VAR_TEMP',
+    'VAR_GLOBAL',
+    'VAR_EXTERNAL',
+    'IF',
+    'THEN',
+    'ELSE',
+    'END_IF',
+    'FOR',
+    'TO',
+    'DO',
+    'END_FOR',
+    'WHILE',
+    'END_WHILE',
+    'REPEAT',
+    'UNTIL',
+    'END_REPEAT',
+    'RETURN',
+  ],
   typeKeywords: [
     'BOOL',
     'SINT',
@@ -74,6 +159,5 @@ export const language: languages.IMonarchLanguage = {
     'JMP',
     'CAL',
     'RET',
-    ')',
   ],
 }

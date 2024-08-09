@@ -1,54 +1,51 @@
-import { registerLanguage } from '../_.register'
-import { conf as languageConfiguration, language as monarchLanguage } from './il'
-import { conf, language } from './il'
+import { registerLanguage } from '../_.register';
+import { conf as languageConfiguration, language as monarchLanguage } from './il';
 
-// Mock the 'registerLanguage' function using Jest's mock functionality.
+// Mock the 'registerLanguage' function using Jest.
 jest.mock('../_.register', () => ({
   registerLanguage: jest.fn(),
-}))
+}));
 
-// Test suite for IL language-related functionality.
-describe('IL language tests', () => {
-  // Test case: It should register IL language.
-  it('should register IL language', () => {
-    // Call the function you want to test.
-    registerILLanguage()
-
-    // Verify if the 'registerLanguage' function was called with the expected arguments.
-    expect(registerLanguage).toHaveBeenCalledWith({
-      def: {
-        id: 'il',
-        extensions: ['.il'],
-        aliases: ['il'],
-        mimetypes: ['text/instruction-list'],
-      },
-      conf,
-      language,
-    })
-  })
-  test('IL language configuration is valid', () => {
-    // Validate the IL language configuration
-    const isValidLanguageConfiguration = languageConfiguration
-    expect(isValidLanguageConfiguration).toBeTruthy()
-  })
-
-  test('IL monarch language is valid', () => {
-    // Validate the IL monarch language
-    const isValidMonarchLanguage = monarchLanguage
-    expect(isValidMonarchLanguage).toBeTruthy()
-  })
-})
-
-// Function to be tested: It calls 'registerLanguage' with specific IL language configuration.
+// Function to register the IL language
 function registerILLanguage() {
   registerLanguage({
     def: {
       id: 'il',
       extensions: ['.il'],
-      aliases: ['il'],
+      aliases: ['IL', 'Instruction List'],
       mimetypes: ['text/instruction-list'],
     },
-    conf,
-    language,
-  })
+    conf: languageConfiguration,
+    language: monarchLanguage,
+  });
 }
+
+// Tests for IL language-related functionalities
+describe('IL language tests', () => {
+  it('should register IL language', () => {
+    // Call the function that registers the IL language
+    registerILLanguage();
+
+    // Verify if the 'registerLanguage' function was called with the expected arguments
+    expect(registerLanguage).toHaveBeenCalledWith({
+      def: {
+        id: 'il',
+        extensions: ['.il'],
+        aliases: ['IL', 'Instruction List'],
+        mimetypes: ['text/instruction-list'],
+      },
+      conf: languageConfiguration,
+      language: monarchLanguage,
+    });
+  });
+
+  test('IL language configuration is valid', () => {
+    // Validate the IL language configuration
+    expect(languageConfiguration).toBeTruthy();
+  });
+
+  test('IL monarch language is valid', () => {
+    // Validate the IL monarch language
+    expect(monarchLanguage).toBeTruthy();
+  });
+});
