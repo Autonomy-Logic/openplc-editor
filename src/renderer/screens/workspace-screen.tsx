@@ -16,6 +16,10 @@ import {
   TransferIcon,
   ZoomInOut,
 } from '../assets'
+import BlockIcon from '../assets/icons/project/Block'
+import CoilIcon from '../assets/icons/project/Coil'
+import ContactIcon from '../assets/icons/project/Contact'
+import LoopIcon from '../assets/icons/project/Loop'
 import { ActivityBarButton } from '../components/_atoms/buttons'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
@@ -73,8 +77,6 @@ const WorkspaceScreen = () => {
     })
   })
 
-  const [graphList, setGraphList] = useState<string[]>([])
-
   const variables = [
     { name: 'a', type: 'false' },
     { name: 'b', type: 'false' },
@@ -82,6 +84,7 @@ const WorkspaceScreen = () => {
     { name: 'd', type: 'false' },
   ]
 
+  const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
   const [collapseAll, setCollapseAll] = useState(false)
   const panelRef = useRef(null)
@@ -101,6 +104,52 @@ const WorkspaceScreen = () => {
       if (ref.current) ref.current[action]()
     })
   }, [collapseAll])
+
+  const isLadderEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'ld'
+  useEffect(() => {
+    if (isLadderEditor) {
+      console.log('O editor atual é LD')
+    }
+  }, [editor])
+
+  const ldActivityIcons = () => {
+    const handleDragStart = (event: React.DragEvent<HTMLDivElement>, iconType: string) => {
+      event.dataTransfer.setData('iconType', iconType)
+    }
+
+    const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+      const iconType = event.dataTransfer.getData('iconType')
+      console.log(`Icon dropped: ${iconType}`)
+    }
+
+    if (isLadderEditor) {
+      return (
+        <>
+          <ActivityBarButton aria-label='Contact'>
+            <div draggable onDragStart={(event) => handleDragStart(event, 'Contact')} onDrop={handleDrop}>
+              <ContactIcon size='sm' />
+            </div>
+          </ActivityBarButton>
+          <ActivityBarButton aria-label='Coil'>
+            <div draggable onDragStart={(event) => handleDragStart(event, 'Coil')} onDrop={handleDrop}>
+              <CoilIcon />
+            </div>
+          </ActivityBarButton>
+          <ActivityBarButton aria-label='Loop'>
+            <div draggable onDragStart={(event) => handleDragStart(event, 'Loop')} onDrop={handleDrop}>
+              <LoopIcon />
+            </div>
+          </ActivityBarButton>
+          <ActivityBarButton aria-label='Block'>
+            <div draggable onDragStart={(event) => handleDragStart(event, 'Block')} onDrop={handleDrop}>
+              <BlockIcon />
+            </div>
+          </ActivityBarButton>
+        </>
+      )
+    }
+  }
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -121,6 +170,8 @@ const WorkspaceScreen = () => {
           <ActivityBarButton onClick={() => setCollapseAll(!collapseAll)} aria-label='Zoom'>
             <ZoomInOut />
           </ActivityBarButton>
+          {/* redner the ld icons only if the editor is a ladder editor */}
+          {ldActivityIcons()}
           <ActivityBarButton aria-label='Download'>
             <DownloadIcon />
           </ActivityBarButton>
