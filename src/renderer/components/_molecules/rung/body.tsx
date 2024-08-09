@@ -152,13 +152,10 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               preventScrolling: false,
             }}
           >
-            <Panel position='top-left'>
-              <button onClick={() => handleAddNode('coil')}>Add Coil Node</button>
-            </Panel>
-            <Panel position='bottom-left'>
+            <Panel position='bottom-left' className='flex flex-row gap-6'>
               <button onClick={() => handleAddNode('block')}>Add Block Node</button>
-            </Panel>
-            <Panel position='bottom-right'>
+              <button onClick={() => handleAddNode('coil')}>Add Coil Node</button>
+              <button onClick={() => handleAddNode('contact')}>Add Contact Node</button>
               <button onClick={handleRemoveNode}>Remove Node</button>
             </Panel>
           </FlowPanel>
