@@ -2,130 +2,58 @@ import { languages } from 'monaco-editor'
 
 export const conf: languages.LanguageConfiguration = {
   /**
-   * This defines the block that will be auto closed
+   * Define the block comments settings
    */
-  autoClosingPairs: [
-    { open: '(', close: ')' },
-    { open: '[', close: ']' },
-    { open: '{', close: '}' },
-    { open: '"', close: '"' },
-    { open: "'", close: "'" },
-  ],
-  /**
-   * This defines the block that will be colorized
-   */
-  colorizedBracketPairs: [
-    ['(', ')'],
-    ['[', ']'],
-    ['{', '}'],
-  ],
-  /**
-   * This defines the comment setting
-   */
+  autoClosingPairs: [{ open: '(*', close: '*)' }],
   comments: {
-    lineComment: '//',
     blockComment: ['(*', '*)'],
   },
-  /**
-   * This defines the folding setting
-   */
-  folding: {
-    markers: {
-      start: /^\s*#region\b/,
-      end: /^\s*#endregion\b/,
-    },
-  },
-  brackets: [
-    ['{', '}'],
-    ['[', ']'],
-    ['(', ')'],
-  ],
+  brackets: [], // Remove support for brackets
 }
 
 export const language: languages.IMonarchLanguage = {
+  ignoreCase: true, // Remove case sensitivity
   tokenizer: {
     root: [
-      [/\bLABEL:\b/, 'label'],
+      // Highlight labels: words in uppercase followed by a colon
+      [/[A-Z][A-Z0-9_]*:/, 'label'], // Match words in uppercase followed by a colon
+
+      // Match keywords or identifiers
       [
         /[a-zA-Z_]\w*/,
         {
           cases: {
             '@keywords': 'keyword',
-            '@typeKeywords': 'type',
             '@default': 'identifier',
           },
         },
       ],
       { include: '@whitespace' },
-      [/[{}()[\]]/, '@brackets'], // Tokenize brackets
-      [/[<>](?![=><!~?:&|+\-*/^%])/, '@brackets'],
+
+      // Operators
       [/[=><!~?:&|+\-*/^%]/, 'operator'],
+
       // Numbers
-      [/\d+\.\d*\([eE][-+]?\d+\)?/, 'number.float'], //Tokenize float number
-      [/\d+/, 'number'],
+      // Adjusted regex to support both comma and dot as decimal separators
+      [/\d+([.,]\d+)?([eE][-+]?\d+)?/, 'number'], // Tokenize integer and floating-point numbers with comma or dot
+
       // Comments
-      [/\/\/.*/, 'comment'],
-      [/\(\*[\s\S]*?\*\)/, 'comment'],
-      // Strings
-      [/"([^"\\]|\\.)*$/, 'string.invalid'], // non-terminated string
-      [/"/, 'string', '@string'],
-    ],
-    string: [
-      [/[^"\\]+/, 'string'],
-      [/\\./, 'string.escape'],
-      [/"/, 'string', '@pop'],
+      [/\(\*[\s\S]*?\*\)/, 'comment'], // Tokenize block comments
+
+      // Remove strings
+      // Removing support for quotes (strings or characters)
+      [/"/, 'invalid'], // Treat anything inside quotes as invalid
+      [/'/, 'invalid'],
     ],
     whitespace: [
       [/[ \t\r\n]+/, 'white'], // Tokenize whitespace (spaces, tabs, line breaks)
     ],
   },
   keywords: [
-    'LD',
-    'ST',
-    'S',
-    'R',
-    'AND',
-    '&',
-    'OR',
-    'XOR',
-    'NOT',
-    'ADD',
-    'SUB',
-    'MUL',
-    'DIV',
-    'MOD',
-    'GT',
-    'GE',
-    'EQ',
-    'NE',
-    'LE',
-    'LT',
-    'JMP',
-    'CAL',
-    'RET',
+    'LD', 'LDN', 'ST', 'STN', 'S', 'R', 'AND', 'ANDN', '&', '&N', 'OR', 'ORN',
+    'XOR', 'XORN', 'NOT', 'ADD', 'SUB', 'MUL', 'DIV', 'MOD', 'GT', 'GE', 'EQ',
+    'NE', 'LE', 'LT', 'JMP', 'JMPC', 'JMPN', 'CAL', 'CALC', 'CALN', 'RET',
+    'RETC', 'RETN',
   ],
-  typeKeywords: [
-    'BOOL',
-    'SINT',
-    'INT',
-    'DINT',
-    'LINT',
-    'USINT',
-    'UDINT',
-    'ULINT',
-    'REAL',
-    'LREAL',
-    'TIME',
-    'DATE',
-    'TIME_OF_DAY',
-    'TOD',
-    'DATE_AND_TIME',
-    'DT',
-    'STRING',
-    'BYTE',
-    'WORD',
-    'DWORD',
-    'LWORD',
-    'WSTRING',
-  ],
+  brackets: [], // Ensure brackets are not recognized
 }
