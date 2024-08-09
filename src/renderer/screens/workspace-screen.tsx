@@ -170,6 +170,7 @@ const WorkspaceScreen = () => {
           <ActivityBarButton onClick={() => setCollapseAll(!collapseAll)} aria-label='Zoom'>
             <ZoomInOut />
           </ActivityBarButton>
+          {/* redner the ld icons only if the editor is a ladder editor */}
           {ldActivityIcons()}
           <ActivityBarButton aria-label='Download'>
             <DownloadIcon />
