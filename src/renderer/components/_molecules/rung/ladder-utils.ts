@@ -58,8 +58,6 @@ export const disconnectNodes = (rung: FlowState, sourceNodeId: string, targetNod
   return newEdges
 }
 
-
-
 /**
  * NODES
  */
@@ -128,6 +126,14 @@ export const nodeBuild = ({
   switch (nodeType) {
     case 'block':
       return nodesBuilder.block({
+        id,
+        posX,
+        posY,
+        handleX,
+        handleY,
+      })
+    case 'coil':
+      return nodesBuilder.coil({
         id,
         posX,
         posY,
