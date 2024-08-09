@@ -28,7 +28,7 @@ export const customNodesStyles: CustomNodeTypes = {
   block: {
     width: blockNode.BLOCK_WIDTH,
     height: blockNode.BLOCK_HEIGHT,
-    gapBetweenNodes: 100,
+    gapBetweenNodes: 80,
     handle: {
       x: blockNode.BLOCK_CONNECTOR_X,
       y: blockNode.BLOCK_CONNECTOR_Y,
