@@ -1,30 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import * as Tabs from '@radix-ui/react-tabs'
-import { Modal, ModalContent, ModalTitle, ModalTrigger } from '@root/renderer/components/_molecules'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 
-import {
-  DebuggerIcon,
-  DownloadIcon,
-  ExitIcon,
-  PlayIcon,
-  SearchIcon,
-  StickArrowIcon,
-  TransferIcon,
-  ZoomInOut,
-} from '../assets'
-import BlockIcon from '../assets/icons/project/Block'
-import CoilIcon from '../assets/icons/project/Coil'
-import ContactIcon from '../assets/icons/project/Contact'
-import LoopIcon from '../assets/icons/project/Loop'
-import { ActivityBarButton } from '../components/_atoms/buttons'
+import { ExitIcon } from '../assets'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
-import SearchInProject from '../components/_features/[workspace]/editor/search-in-project'
 import { Console } from '../components/_molecules/console'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Debugger } from '../components/_organisms/debugger'
@@ -32,11 +15,11 @@ import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/_organisms/panel'
 import { VariablesEditor } from '../components/_organisms/variables-editor'
+import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
 
 const WorkspaceScreen = () => {
-  const navigate = useNavigate()
   const {
     tabs,
     workspace: { projectData, projectPath, editingState },
@@ -105,90 +88,16 @@ const WorkspaceScreen = () => {
     })
   }, [collapseAll])
 
-  const isLadderEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'ld'
-  useEffect(() => {
-    if (isLadderEditor) {
-      console.log('O editor atual é LD')
-    }
-  }, [editor])
-
-  /**
-   * This needs to be refactored
-   */
-  const ldActivityIcons = () => {
-    const handleDragStart = (event: React.DragEvent<HTMLDivElement>, iconType: string) => {
-      event.dataTransfer.setData('application/reactflow', iconType)
-      event.dataTransfer.effectAllowed = 'move'
-    }
-
-    if (isLadderEditor) {
-      return (
-        <>
-          <ActivityBarButton aria-label='Contact'>
-            <div draggable onDragStart={(event) => handleDragStart(event, 'contact')}>
-              <ContactIcon size='sm' />
-            </div>
-          </ActivityBarButton>
-          <ActivityBarButton aria-label='Coil'>
-            <div draggable onDragStart={(event) => handleDragStart(event, 'coil')}>
-              <CoilIcon />
-            </div>
-          </ActivityBarButton>
-          <ActivityBarButton aria-label='Loop'>
-            <div draggable onDragStart={(event) => handleDragStart(event, 'loop')}>
-              <LoopIcon />
-            </div>
-          </ActivityBarButton>
-          <ActivityBarButton aria-label='Block'>
-            <div draggable onDragStart={(event) => handleDragStart(event, 'block')}>
-              <BlockIcon />
-            </div>
-          </ActivityBarButton>
-        </>
-      )
-    }
-  }
-
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
-        <div className='my-5 flex h-fit w-full flex-col gap-10'>
-          <Modal>
-            <ModalTrigger>
-              <ActivityBarButton aria-label='Search'>
-                <SearchIcon />
-              </ActivityBarButton>
-            </ModalTrigger>
-            <ModalContent className='h-[424px] w-[668px] select-none flex-col justify-between px-8 py-4'>
-              <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>
-                Search in Project
-              </ModalTitle>
-              <SearchInProject />
-            </ModalContent>
-          </Modal>
-          <ActivityBarButton onClick={() => setCollapseAll(!collapseAll)} aria-label='Zoom'>
-            <ZoomInOut />
-          </ActivityBarButton>
-          {/* render the ld icons only if the editor is a ladder editor */}
-          {ldActivityIcons()}
-          <ActivityBarButton aria-label='Download'>
-            <DownloadIcon />
-          </ActivityBarButton>
-          <ActivityBarButton aria-label='Transfer'>
-            <TransferIcon />
-          </ActivityBarButton>
-          <ActivityBarButton aria-label='Debugger'>
-            <DebuggerIcon variant='muted' />
-          </ActivityBarButton>
-          <ActivityBarButton aria-label='Play'>
-            <PlayIcon />
-          </ActivityBarButton>
-        </div>
-        <div className='flex h-7 w-full flex-col gap-6'>
-          <ActivityBarButton aria-label='Exit' onClick={() => navigate('/')}>
-            <StickArrowIcon direction='left' className='stroke-[#B4D0FE]' />
-          </ActivityBarButton>
-        </div>
+        <WorkspaceActivityBar
+          defaultActivityBar={{
+            zoom: {
+              onClick: () => setCollapseAll(!collapseAll),
+            },
+          }}
+        />
       </WorkspaceSideContent>
       <WorkspaceMainContent>
         <ResizablePanelGroup
