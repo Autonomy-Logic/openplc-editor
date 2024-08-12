@@ -118,7 +118,7 @@ const WorkspaceScreen = () => {
   const ldActivityIcons = () => {
     const handleDragStart = (event: React.DragEvent<HTMLDivElement>, iconType: string) => {
       event.dataTransfer.setData('application/reactflow', iconType)
-      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.effectAllowed = 'move'
     }
 
     if (isLadderEditor) {

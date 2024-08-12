@@ -124,7 +124,7 @@ export const addNewNode = ({
   const sourceLastNodeHandle = lastNodeHandles.find((handle) => handle.type === 'source')
 
   const lastNodeStyle = getNodeStyle({ node: lastNode })
-  const newNodeStyle = getNodeStyle({ nodeType: newNodeType })
+  const newNodeStyle = getNodeStyle({ nodeType: newNodeType }) ?? getNodeStyle({ nodeType: 'mockNode' })
   const gapBetweenNodes = lastNodeStyle.gapBetweenNodes + newNodeStyle.gapBetweenNodes
   const offsetY = newNodeStyle.handle.y
 
