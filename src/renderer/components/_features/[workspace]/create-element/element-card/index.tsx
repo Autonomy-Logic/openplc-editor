@@ -66,10 +66,13 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
+  const handleMouseEnter = () => {
+    setIsOpen(true)
+  }
 
   return (
     <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
-      <Popover.Trigger id={`create-${target}-trigger`} asChild>
+      <Popover.Trigger onMouseEnter={handleMouseEnter} id={`create-${target}-trigger`} asChild>
         <div
           id={`create-${target}-trigger-container`}
           className='relative flex h-7 w-full cursor-pointer select-none items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 dark:data-[state=open]:bg-neutral-900'
