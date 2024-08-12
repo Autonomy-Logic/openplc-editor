@@ -19,7 +19,10 @@ const lightThemeData: monaco.editor.IStandaloneThemeData = {
 const darkThemeData: monaco.editor.IStandaloneThemeData = {
   base: 'vs-dark',
   inherit: true,
-  rules: [],
+  /**
+   * Review this!!!
+   */
+  rules: [{ token: 'label.il', foreground: '#023C97' }],
   colors: {
     'editor.background': '#121316', // Editor background color.
     'editor.foreground': '#FFFFFF', // Editor foreground color <! The text that appears in the editor !>.

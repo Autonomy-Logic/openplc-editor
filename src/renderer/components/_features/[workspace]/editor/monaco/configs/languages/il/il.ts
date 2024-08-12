@@ -15,8 +15,10 @@ export const language: languages.IMonarchLanguage = {
   ignoreCase: true, // Remove case sensitivity
   tokenizer: {
     root: [
-      // Highlight labels: words in uppercase followed by a colon
-      [/[A-Z][A-Z0-9_]*:/, 'label'], // Match words in uppercase followed by a colon
+      /**
+       * Review this!!!
+       */
+      [/[a-zA-Z]{3,}: /, 'label'], // Match any sequence of 3 or more non-digit characters followed by a colon followed by a whitespace and a non interrupt sequence of characters
 
       // Match keywords or identifiers
       [
