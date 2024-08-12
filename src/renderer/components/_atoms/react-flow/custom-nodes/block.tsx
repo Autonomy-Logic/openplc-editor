@@ -1,3 +1,4 @@
+import { cn } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useState } from 'react'
 
@@ -39,13 +40,13 @@ const BLOCK_TYPES: BlockTypes = {
   },
   TON: {
     name: 'TON',
-    leftConnectors: ['EN', 'IN', "PT"],
+    leftConnectors: ['EN', 'IN', 'PT'],
     rightConnectors: ['EN0', 'Q', 'ET'],
     tooltipContent: `The TON block is a timer block that can be used to trigger an event after a certain amount of time has passed.`,
   },
 }
 
-export const Block = ({ data }: BlockProps) => {
+export const Block = ({ selected, data }: BlockProps) => {
   const [blockLabelValue, setBlockLabelValue] = useState<string>('???')
   const { name, leftConnectors, rightConnectors, tooltipContent } = BLOCK_TYPES[data.variant]
 
@@ -55,7 +56,12 @@ export const Block = ({ data }: BlockProps) => {
         <Tooltip>
           <TooltipTrigger>
             <div
-              className='relative flex flex-col rounded-md border border-neutral-850 bg-white hover:border-transparent hover:ring-2 hover:ring-brand dark:bg-neutral-900'
+              className={cn(
+                'relative flex flex-col rounded-md border border-neutral-850 bg-white hover:border-transparent hover:ring-2 hover:ring-brand dark:bg-neutral-900',
+                {
+                  'ring-2 ring-brand': selected,
+                },
+              )}
               style={{
                 width: BLOCK_WIDTH,
                 height: BLOCK_HEIGHT,

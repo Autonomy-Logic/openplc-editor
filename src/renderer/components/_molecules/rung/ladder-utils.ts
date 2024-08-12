@@ -216,35 +216,58 @@ export const addNewNode = ({
   }
 }
 
-export const removeNode = ({
+const removeNode = ({
   rungLocal,
   defaultBounds,
+  node,
 }: {
   rungLocal: FlowState
   defaultBounds: [number, number]
+  node: Node
 }): { nodes: Node[]; edges: Edge[] } => {
+  if (!node) return { nodes: rungLocal.nodes, edges: rungLocal.edges }
+
   const leftPowerRailNode = rungLocal.nodes.find((node) => node.id === 'left-rail') as Node
   let rightPowerRailNode = rungLocal.nodes.find((node) => node.id === 'right-rail') as Node
   const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
 
-  const removedNode = nodes[nodes.length - 1]
-  if (!removedNode) return { nodes: rungLocal.nodes, edges: rungLocal.edges }
-
-  const removedNoveStyle = getNodeStyle({ node: removedNode })
+  const newNodes = nodes.filter((n) => n.id !== node.id)
+  const removedNoveStyle = getNodeStyle({ node: node })
 
   const newRightPowerRail = changePowerRailBounds({
     rung: rungLocal,
-    nodes: [leftPowerRailNode, ...nodes.slice(0, -1)],
+    nodes: [leftPowerRailNode, ...newNodes],
     gapNodes: removedNoveStyle.gapBetweenNodes,
     defaultBounds: defaultBounds,
   })
   if (newRightPowerRail) rightPowerRailNode = newRightPowerRail
 
-  const edge = rungLocal.edges.find((edge) => edge.source === removedNode.id)
+  const edge = rungLocal.edges.find((edge) => edge.source === node.id)
   const newEdges = disconnectNodes(rungLocal, edge?.source ?? '', edge?.target ?? '')
 
   return {
-    nodes: [leftPowerRailNode, ...nodes.slice(0, -1), rightPowerRailNode],
+    nodes: [leftPowerRailNode, ...newNodes, rightPowerRailNode],
     edges: newEdges,
   }
+}
+
+export const removeNodes = ({
+  rungLocal,
+  defaultBounds,
+  nodes,
+}: {
+  rungLocal: FlowState
+  defaultBounds: [number, number]
+  nodes: Node[]
+}): { nodes: Node[]; edges: Edge[] } => {
+  if (!nodes) return { nodes: rungLocal.nodes, edges: rungLocal.edges }
+  const rungState = rungLocal
+
+  for (const node of nodes) {
+    const { nodes: newNodes, edges: newEdges } = removeNode({ rungLocal: rungState, defaultBounds, node })
+    rungState.nodes = newNodes
+    rungState.edges = newEdges
+  }
+
+  return { nodes: rungState.nodes, edges: rungState.edges }
 }
