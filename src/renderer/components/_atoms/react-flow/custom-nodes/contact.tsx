@@ -108,6 +108,7 @@ export const buildContactNode = ({
   const inputHandle = buildHandle({
     id: 'input',
     position: Position.Left,
+    isConnectable: false,
     type: 'target',
     glbX: handleX,
     glbY: handleY,
@@ -118,6 +119,7 @@ export const buildContactNode = ({
   const outputHandle = buildHandle({
     id: 'output',
     position: Position.Right,
+    isConnectable: false,
     type: 'source',
     glbX: handleX,
     glbY: handleY,

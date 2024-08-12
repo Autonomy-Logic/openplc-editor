@@ -128,6 +128,7 @@ export const buildCoilNode = ({
   const inputHandle = buildHandle({
     id: 'input',
     position: Position.Left,
+    isConnectable: false,
     type: 'target',
     glbX: handleX,
     glbY: handleY,
@@ -138,6 +139,7 @@ export const buildCoilNode = ({
   const outputHandle = buildHandle({
     id: 'output',
     position: Position.Right,
+    isConnectable: false,
     type: 'source',
     glbX: handleX,
     glbY: handleY,
