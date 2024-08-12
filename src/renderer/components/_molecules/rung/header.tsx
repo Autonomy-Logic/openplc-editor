@@ -25,16 +25,16 @@ export const RungHeader = ({ isOpen, onClick }: RungHeaderProps) => {
     <div
       aria-label='Rung header'
       className={cn(
-        'flex w-full flex-row gap-2 rounded-lg border bg-neutral-50 p-2 dark:border-neutral-800 dark:bg-neutral-900',
+        'flex w-full flex-row gap-2 rounded-lg border bg-neutral-50 p-1 dark:border-neutral-800 dark:bg-neutral-900',
         {
           'rounded-b-none border-b-0': isOpen,
         },
       )}
     >
-      <div className='flex w-full items-center rounded-lg border border-transparent p-2 focus-within:border-neutral-200 focus-within:dark:border-neutral-800'>
+      <div className='flex w-full items-center rounded-lg px-1 border border-transparent'>
         <textarea
           aria-label='Rung name and description'
-          className='w-full resize-none overflow-hidden bg-transparent text-sm opacity-50 outline-none focus:opacity-100'
+          className='w-full resize-none overflow-hidden bg-transparent text-xs opacity-50 outline-none focus:opacity-100'
           placeholder='Start typing to add a comment to this rung'
           ref={textAreaRef}
           rows={1}
@@ -42,7 +42,7 @@ export const RungHeader = ({ isOpen, onClick }: RungHeaderProps) => {
           value={textAreaValue}
         />
       </div>
-      <div className='p-1'>
+      <div>
         <button
           aria-label='Expand body button'
           onClick={onClick}

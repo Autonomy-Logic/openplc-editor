@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
-import { addNewNode, removeNode } from './ladder-utils'
+import { addNewNode, removeNodes } from './ladder-utils/nodes'
 
 /**
  * Default flow panel extent:
@@ -79,12 +79,13 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
 
-  const handleRemoveNode = () => {
-    const { nodes, edges } = removeNode({
+  const handleRemoveNode = (nodes: Node[]) => {
+    const { nodes: newNodes, edges: newEdges } = removeNodes({
       rungLocal,
       defaultBounds: rung?.flowViewport ?? [1530, 200],
+      nodes,
     })
-    setRungLocal((rung) => ({ ...rung, nodes, edges }))
+    setRungLocal((rung) => ({ ...rung, nodes: newNodes, edges: newEdges }))
   }
 
   const onNodesChange: OnNodesChange<Node> = useCallback(
@@ -130,12 +131,20 @@ export const RungBody = ({ rung }: RungBodyProps) => {
           <FlowPanel
             viewportConfig={{
               nodeTypes: nodeTypes,
+              defaultEdgeOptions: {
+                deletable: false,
+                selectable: false,
+                type: 'step',
+              },
 
               nodes: rungLocal.nodes,
               edges: rungLocal.edges,
               onInit: setReactFlowInstance,
               onNodesChange: onNodesChange,
               onNodeDragStop: updateFlowStore,
+              onNodesDelete: (nodes) => {
+                handleRemoveNode(nodes)
+              },
               onEdgesChange: onEdgesChange,
               onConnect: onConnect,
               onConnectEnd: updateFlowStore,
@@ -158,7 +167,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         <button onClick={() => handleAddNode('block')}>Add Block Node</button>
         <button onClick={() => handleAddNode('coil')}>Add Coil Node</button>
         <button onClick={() => handleAddNode('contact')}>Add Contact Node</button>
-        <button onClick={handleRemoveNode}>Remove Node</button>
       </div>
     </div>
   )

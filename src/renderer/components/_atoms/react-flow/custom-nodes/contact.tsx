@@ -4,6 +4,7 @@ import {
   NegatedContact,
   RisingEdgeContact,
 } from '@root/renderer/assets/icons/flow/Contact'
+import { cn } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
@@ -69,13 +70,23 @@ const CONTACT_TYPES: ContactType = {
   },
 }
 
-export const Contact = ({ data }: ContactProps) => {
+export const Contact = ({ selected, data }: ContactProps) => {
   const [contactLabelValue, setContactLabelValue] = useState<string>('???')
   const contact = CONTACT_TYPES[data.variation]
 
   return (
     <div className='relative'>
-      <div style={{ width: CONTACT_BLOCK_WIDTH, height: CONTACT_BLOCK_HEIGHT }}>{contact.svg}</div>
+      <div
+        className={cn(
+          'rounded-[1px] border border-transparent hover:outline hover:outline-2 hover:outline-offset-[5px] hover:outline-brand',
+          {
+            'outline outline-2 outline-offset-[5px] outline-brand': selected,
+          },
+        )}
+        style={{ width: CONTACT_BLOCK_WIDTH, height: CONTACT_BLOCK_HEIGHT }}
+      >
+        {contact.svg}
+      </div>
       <div className='absolute -left-[34px] -top-7 w-24'>
         <InputWithRef
           value={contactLabelValue}
@@ -108,6 +119,7 @@ export const buildContactNode = ({
   const inputHandle = buildHandle({
     id: 'input',
     position: Position.Left,
+    isConnectable: false,
     type: 'target',
     glbX: handleX,
     glbY: handleY,
@@ -118,6 +130,7 @@ export const buildContactNode = ({
   const outputHandle = buildHandle({
     id: 'output',
     position: Position.Right,
+    isConnectable: false,
     type: 'source',
     glbX: handleX,
     glbY: handleY,
@@ -135,6 +148,8 @@ export const buildContactNode = ({
       handles,
       variation,
     },
+    width: CONTACT_BLOCK_WIDTH,
+    height: CONTACT_BLOCK_HEIGHT,
     draggable: false,
   }
 }
