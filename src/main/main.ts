@@ -160,7 +160,6 @@ const createMainWindow = async () => {
     isMaximizedWindow()
   })
 
-
   // Maximize the window if bounds are not set
   if (!bounds) {
     mainWindow.maximize()

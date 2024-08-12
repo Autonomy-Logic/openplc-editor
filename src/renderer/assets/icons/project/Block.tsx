@@ -32,12 +32,12 @@ export default function BlockIcon(props: IBlockIconProps) {
         height='10.2273'
         rx='0.863636'
         stroke='#B4D0FE'
-        stroke-width='1.22727'
+        strokeWidth='1.22727'
       />
       <path
         d='M8.72727 8.25C8.72727 8.11193 8.8392 8 8.97727 8H15.9783C16.1164 8 16.2283 8.11193 16.2283 8.25V10.4545H8.72727V8.25Z'
         fill='#B4D0FE'
-        fill-opacity='0.5'
+        fillOpacity='0.5'
       />
       <line
         x1='3'
@@ -45,8 +45,8 @@ export default function BlockIcon(props: IBlockIconProps) {
         x2='7.90909'
         y2='12.2955'
         stroke='#B4D0FE'
-        stroke-opacity='0.5'
-        stroke-width='1.22727'
+        strokeOpacity='0.5'
+        strokeWidth='1.22727'
       />
       <line
         x1='3'
@@ -54,8 +54,8 @@ export default function BlockIcon(props: IBlockIconProps) {
         x2='7.90909'
         y2='15.5682'
         stroke='#B4D0FE'
-        stroke-opacity='0.5'
-        stroke-width='1.22727'
+        strokeOpacity='0.5'
+        strokeWidth='1.22727'
       />
       <line
         x1='16.9091'
@@ -63,8 +63,8 @@ export default function BlockIcon(props: IBlockIconProps) {
         x2='21.8182'
         y2='13.9318'
         stroke='#B4D0FE'
-        stroke-opacity='0.5'
-        stroke-width='1.22727'
+        strokeOpacity='0.5'
+        strokeWidth='1.22727'
       />
     </svg>
   )

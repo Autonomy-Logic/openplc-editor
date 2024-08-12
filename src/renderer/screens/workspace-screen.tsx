@@ -112,6 +112,9 @@ const WorkspaceScreen = () => {
     }
   }, [editor])
 
+  /**
+   * This needs to be refactored
+   */
   const ldActivityIcons = () => {
     const handleDragStart = (event: React.DragEvent<HTMLDivElement>, iconType: string) => {
       event.dataTransfer.setData('iconType', iconType)
@@ -170,7 +173,7 @@ const WorkspaceScreen = () => {
           <ActivityBarButton onClick={() => setCollapseAll(!collapseAll)} aria-label='Zoom'>
             <ZoomInOut />
           </ActivityBarButton>
-          {/* redner the ld icons only if the editor is a ladder editor */}
+          {/* render the ld icons only if the editor is a ladder editor */}
           {ldActivityIcons()}
           <ActivityBarButton aria-label='Download'>
             <DownloadIcon />
@@ -353,7 +356,7 @@ const WorkspaceScreen = () => {
                       value='debug'
                       className='debug-panel flex  h-full w-full overflow-hidden  data-[state=inactive]:hidden'
                     >
-                      <ResizablePanelGroup direction='horizontal' className='flex h-full  w-full '>
+                      <ResizablePanelGroup direction='horizontal' className='flex h-full w-full '>
                         <ResizablePanel minSize={20} defaultSize={100} className='h-full w-full'>
                           <Debugger graphList={graphList} />
                         </ResizablePanel>

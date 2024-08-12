@@ -52,7 +52,7 @@ export const NegatedCoil = ({ width, height, parenthesesClassName }: CoilSVGProp
         y2='-1'
         transform='matrix(0.707107 -0.707107 0.763407 0.645917 11 21.1426)'
         stroke='#0464FB'
-        stroke-width='2'
+        strokeWidth='2'
       />
     </svg>
   )
