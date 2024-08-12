@@ -117,34 +117,30 @@ const WorkspaceScreen = () => {
    */
   const ldActivityIcons = () => {
     const handleDragStart = (event: React.DragEvent<HTMLDivElement>, iconType: string) => {
-      event.dataTransfer.setData('iconType', iconType)
-    }
-
-    const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-      const iconType = event.dataTransfer.getData('iconType')
-      console.log(`Icon dropped: ${iconType}`)
+      event.dataTransfer.setData('application/reactflow', iconType)
+      event.dataTransfer.effectAllowed = 'move';
     }
 
     if (isLadderEditor) {
       return (
         <>
           <ActivityBarButton aria-label='Contact'>
-            <div draggable onDragStart={(event) => handleDragStart(event, 'Contact')} onDrop={handleDrop}>
+            <div draggable onDragStart={(event) => handleDragStart(event, 'contact')}>
               <ContactIcon size='sm' />
             </div>
           </ActivityBarButton>
           <ActivityBarButton aria-label='Coil'>
-            <div draggable onDragStart={(event) => handleDragStart(event, 'Coil')} onDrop={handleDrop}>
+            <div draggable onDragStart={(event) => handleDragStart(event, 'coil')}>
               <CoilIcon />
             </div>
           </ActivityBarButton>
           <ActivityBarButton aria-label='Loop'>
-            <div draggable onDragStart={(event) => handleDragStart(event, 'Loop')} onDrop={handleDrop}>
+            <div draggable onDragStart={(event) => handleDragStart(event, 'loop')}>
               <LoopIcon />
             </div>
           </ActivityBarButton>
           <ActivityBarButton aria-label='Block'>
-            <div draggable onDragStart={(event) => handleDragStart(event, 'Block')} onDrop={handleDrop}>
+            <div draggable onDragStart={(event) => handleDragStart(event, 'block')}>
               <BlockIcon />
             </div>
           </ActivityBarButton>

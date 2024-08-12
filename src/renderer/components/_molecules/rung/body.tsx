@@ -2,7 +2,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowState } from '@root/renderer/store/slices'
 import type { CoordinateExtent, Node, OnConnect, OnEdgesChange, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { addEdge, applyEdgeChanges, applyNodeChanges, getNodesBounds } from '@xyflow/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { DragEventHandler, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
@@ -119,6 +119,20 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     [setRungLocal],
   )
 
+  const onDragOver = useCallback<DragEventHandler>((event) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }, [])
+
+  const onDrop = useCallback<DragEventHandler>(
+    (event) => {
+      event.preventDefault()
+      const type = event.dataTransfer.getData('application/reactflow')
+      handleAddNode(type)
+    },
+    [handleAddNode],
+  )
+
   return (
     <div className='relative h-fit w-full rounded-b-lg border border-t-0 p-1 dark:border-neutral-800'>
       <div aria-label='Rung body' className='h-full w-full overflow-x-auto'>
@@ -148,6 +162,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               onEdgesChange: onEdgesChange,
               onConnect: onConnect,
               onConnectEnd: updateFlowStore,
+              onDragOver: onDragOver,
+              onDrop: onDrop,
 
               nodeExtent: flowPanelExtent,
               translateExtent: flowPanelExtent,
@@ -159,15 +175,19 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               zoomOnPinch: false,
               zoomOnScroll: false,
               preventScrolling: false,
+
+              proOptions: {
+                hideAttribution: true,
+              },
             }}
           />
         </div>
       </div>
-      <div className='absolute bottom-3 left-3 flex flex-row gap-6'>
+      {/* <div className='absolute bottom-3 left-3 flex flex-row gap-6'>
         <button onClick={() => handleAddNode('block')}>Add Block Node</button>
         <button onClick={() => handleAddNode('coil')}>Add Coil Node</button>
         <button onClick={() => handleAddNode('contact')}>Add Contact Node</button>
-      </div>
+      </div> */}
     </div>
   )
 }

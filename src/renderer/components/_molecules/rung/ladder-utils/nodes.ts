@@ -10,7 +10,7 @@ export const getNodeStyle = ({ node, nodeType }: { node?: Node; nodeType?: strin
   return customNodesStyles[node?.type ?? nodeType ?? 'mockNode']
 }
 
-export const nodeBuild = ({
+export const buildGenericNode = ({
   nodeType,
   id,
   posX,
@@ -134,7 +134,7 @@ export const addNewNode = ({
   const handleX = lastNode.position.x + (lastNode.width ?? 0) + gapBetweenNodes
   const handleY = sourceLastNodeHandle?.glbPosition.y ?? 0
 
-  const newNode = nodeBuild({
+  const newNode = buildGenericNode({
     nodeType: newNodeType,
     id: `${newNodeType}_${posX}_${posY}`,
     posX,
