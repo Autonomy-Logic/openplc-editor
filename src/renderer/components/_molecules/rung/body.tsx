@@ -59,7 +59,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
-    console.log('rungLocal.nodes', rungLocal.nodes)
     updateFlowStore()
   }, [rungLocal.nodes.length])
 
@@ -134,6 +133,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               nodeTypes: nodeTypes,
               defaultEdgeOptions: {
                 deletable: false,
+                selectable: false,
                 type: 'step',
               },
 
