@@ -1,4 +1,4 @@
-import { languages } from 'monaco-editor'
+import { languages } from 'monaco-editor';
 
 export const conf: languages.LanguageConfiguration = {
   /**
@@ -9,7 +9,7 @@ export const conf: languages.LanguageConfiguration = {
     blockComment: ['(*', '*)'],
   },
   brackets: [], // Remove support for brackets
-}
+};
 
 export const language: languages.IMonarchLanguage = {
   ignoreCase: true, // Remove case sensitivity
@@ -19,6 +19,9 @@ export const language: languages.IMonarchLanguage = {
        * Review this!!!
        */
       [/[a-zA-Z]{3,}: /, 'label'], // Match any sequence of 3 or more non-digit characters followed by a colon followed by a whitespace and a non interrupt sequence of characters
+
+      // Recognize the & symbol as a keyword or special character
+      [/&/, 'keyword'], // Match & symbol as a keyword
 
       // Match keywords or identifiers
       [
@@ -32,8 +35,8 @@ export const language: languages.IMonarchLanguage = {
       ],
       { include: '@whitespace' },
 
-      // Operators
-      [/[=><!~?:&|+\-*/^%]/, 'operator'],
+      // Operators (excluding & symbol)
+      [/[=><!~?:|+\-*/^%]/, 'operator'], // Removed '&' from operators
 
       // Numbers
       // Adjusted regex to support both comma and dot as decimal separators
@@ -58,4 +61,4 @@ export const language: languages.IMonarchLanguage = {
     'RETC', 'RETN',
   ],
   brackets: [], // Ensure brackets are not recognized
-}
+};
