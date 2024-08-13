@@ -16,11 +16,14 @@ export const language: languages.IMonarchLanguage = {
   tokenizer: {
     root: [
       /**
-       * Review this!!!
+       * Tokenize the label (sequence of characters followed by ': ')
+       * and the value (sequence of characters after the label)
        */
-      [/[a-zA-Z]{3,}: /, 'label'], // Match any sequence of 3 or more non-digit characters followed by a colon followed by a whitespace and a non interrupt sequence of characters
+      [/[^\s]+:/, 'label'], // Match the label part ending with ':'
+      [/(\s+)([^\s]+)/, ['white', 'labelValue']], // Match the space and the value part after ': ' as labelValue
 
-      // Recognize the & symbol as a keyword or special character
+      // Recognize the & and &N symbols as keywords or special characters
+      [/&N/, 'keyword'], // Match &N symbol as a keyword
       [/&/, 'keyword'], // Match & symbol as a keyword
 
       // Match keywords or identifiers
@@ -35,8 +38,8 @@ export const language: languages.IMonarchLanguage = {
       ],
       { include: '@whitespace' },
 
-      // Operators (excluding & symbol)
-      [/[=><!~?:|+\-*/^%]/, 'operator'], // Removed '&' from operators
+      // Operators (excluding & and &N symbols)
+      [/[=><!~?:|+\-*/^%]/, 'operator'], // Removed '&' and '&N' from operators
 
       // Numbers
       // Adjusted regex to support both comma and dot as decimal separators
