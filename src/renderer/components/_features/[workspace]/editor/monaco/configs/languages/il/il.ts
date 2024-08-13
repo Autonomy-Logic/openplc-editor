@@ -16,11 +16,9 @@ export const language: languages.IMonarchLanguage = {
   tokenizer: {
     root: [
       /**
-       * Tokenize the label (sequence of characters followed by ': ')
-       * and the value (sequence of characters after the label)
+       * Tokenize the label (sequence of characters followed by ':')
        */
-      [/[^\s]+:/, 'label'], // Match the label part ending with ':'
-      [/(\s+)([^\s]+)/, ['white', 'labelValue']], // Match the space and the value part after ': ' as labelValue
+      [/[^\s]+:/, { token: 'label', next: '@afterLabel' }], // Match any label ending with ':'
 
       // Recognize the & and &N symbols as keywords or special characters
       [/&N/, 'keyword'], // Match &N symbol as a keyword
@@ -53,6 +51,13 @@ export const language: languages.IMonarchLanguage = {
       [/"/, 'invalid'], // Treat anything inside quotes as invalid
       [/'/, 'invalid'],
     ],
+
+    // Define the state after matching a label
+    afterLabel: [
+      [/[^\s]+/, { token: 'labelValue', next: '@pop' }], // Match the first sequence of non-whitespace characters and color it as labelValue
+      [/\s+/, { token: 'white' }], // Ignore any whitespaces after the label
+    ],
+
     whitespace: [
       [/[ \t\r\n]+/, 'white'], // Tokenize whitespace (spaces, tabs, line breaks)
     ],
