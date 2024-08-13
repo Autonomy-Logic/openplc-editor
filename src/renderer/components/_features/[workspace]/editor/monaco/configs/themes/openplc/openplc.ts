@@ -27,10 +27,10 @@ const darkThemeData: monaco.editor.IStandaloneThemeData = {
   inherit: true,
   rules: [
     { token: 'literalCode', foreground: '#0350C9' }, // Color for literal code in dark theme
-    { token: 'keyword', foreground: '#023C97' }, // Color for keywords in dark theme
+    { token: 'keyword', foreground: '#8AB4F8' }, // Color for keywords in dark theme
     { token: 'typeKeyword', foreground: '#0464FB' }, // Color for type keywords in dark theme
-    { token: 'label.il', foreground: '#B4D0FE' }, // Color for label (identifier) in dark theme
-    { token: 'labelValue', foreground: '#0350C9' } // Color for label (value) in dark theme
+    { token: 'label.il', foreground: '#7F9CF5' }, // Color for label (identifier) in dark theme
+    { token: 'labelValue', foreground: '#4D8BF5' } // Color for label (value) in dark theme
   ],
   colors: {
     'editor.background': '#121316', // Editor background color in dark theme
