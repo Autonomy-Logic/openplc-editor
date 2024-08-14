@@ -39,7 +39,7 @@ export const PowerRail = ({ data }: PowerRailProps) => {
 export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY }: PowerRailBuilderProps) => {
   const handles = [
     buildHandle({
-      id: `${connector}-rail`,
+      id: `${connector === 'left' ? 'right' : 'left'}-rail`,
       position: connector === 'left' ? Position.Left : Position.Right,
       type: connector === 'left' ? 'target' : 'source',
       isConnectable: false,

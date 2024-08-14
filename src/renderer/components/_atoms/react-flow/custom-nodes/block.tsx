@@ -7,9 +7,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../
 import { buildHandle, CustomHandle } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-type BlockNode = Node<BasicNodeData & { variant: 'template' | 'TON' }>
+type BlockNode = Node<BasicNodeData & { variant: 'default' | 'TON' }>
 type BlockProps = NodeProps<BlockNode>
-type BlockBuilderProps = BuilderBasicProps & { variant: 'template' | 'TON' }
+type BlockBuilderProps = BuilderBasicProps & { variant: 'default' | 'TON' }
 
 export const BLOCK_WIDTH = 96
 export const BLOCK_HEIGHT = 128
@@ -27,7 +27,7 @@ type BlockTypes = {
   }
 }
 const BLOCK_TYPES: BlockTypes = {
-  template: {
+  default: {
     name: '???',
     leftConnectors: ['???', '???'],
     rightConnectors: ['???'],
@@ -122,7 +122,7 @@ export const Block = ({ selected, data }: BlockProps) => {
  * @param blockType: 'template' - The type of the block node
  * @returns BlockNode
  */
-export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant = 'template' }: BlockBuilderProps) => {
+export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: BlockBuilderProps) => {
   const type = BLOCK_TYPES[variant]
   const leftConnectors = type.leftConnectors
   const rightConnectors = type.rightConnectors
@@ -170,8 +170,8 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant = 'te
     data: {
       variant,
       handles,
-      nodeInputHandler: leftHandles[0],
-      nodeOutputHandler: rightHandles[0],
+      inputConnector: leftHandles[0],
+      outputConnector: rightHandles[0],
     },
     width: BLOCK_WIDTH,
     height: BLOCK_HEIGHT,

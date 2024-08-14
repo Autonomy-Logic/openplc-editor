@@ -40,6 +40,8 @@ export default function LadderEditor() {
           id: 'e_left-rail_right-rail',
           source: 'left-rail',
           target: 'right-rail',
+          sourceHandle: 'left-rail',
+          targetHandle: 'right-rail',
           type: 'step',
         },
       ],

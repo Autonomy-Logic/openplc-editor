@@ -1,3 +1,4 @@
+import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 import type { FlowState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 import { getNodesBounds } from '@xyflow/react'
@@ -33,6 +34,7 @@ export const buildGenericNode = ({
         posY,
         handleX,
         handleY,
+        variant: 'default',
       })
     case 'coil':
       return nodesBuilder.coil({
@@ -41,6 +43,7 @@ export const buildGenericNode = ({
         posY,
         handleX,
         handleY,
+        variant: 'default',
       })
     case 'contact':
       return nodesBuilder.contact({
@@ -49,6 +52,7 @@ export const buildGenericNode = ({
         posY,
         handleX,
         handleY,
+        variant: 'default',
       })
     default:
       // mock block
@@ -120,8 +124,8 @@ export const addNewNode = ({
   const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
 
   const lastNode = nodes[nodes.length - 1] ?? leftPowerRailNode
-  const lastNodeHandles = lastNode.data.handles as CustomHandleProps[]
-  const sourceLastNodeHandle = lastNodeHandles.find((handle) => handle.type === 'source')
+  const lastNodeData = lastNode.data as BasicNodeData
+  const sourceLastNodeHandle = lastNodeData.handles.find((handle) => handle.type === 'source')
 
   const lastNodeStyle = getNodeStyle({ node: lastNode })
   const newNodeStyle = getNodeStyle({ nodeType: newNodeType }) ?? getNodeStyle({ nodeType: 'mockNode' })
@@ -142,6 +146,7 @@ export const addNewNode = ({
     handleX,
     handleY,
   })
+  const newNodeData = newNode.data as BasicNodeData
 
   const newRightPowerRail = changePowerRailBounds({
     rung: rungLocal,
@@ -152,7 +157,16 @@ export const addNewNode = ({
   if (newRightPowerRail) rightPowerRailNode = newRightPowerRail
 
   let newEdge = rungLocal.edges
-  newEdge = connectNodes(rungLocal, lastNode.id, newNode.id)
+  newEdge = connectNodes(
+    {
+      ...rungLocal,
+      nodes: [leftPowerRailNode, ...nodes, newNode, rightPowerRailNode],
+      edges: newEdge,
+    },
+    lastNode.id,
+    newNode.id,
+    { sourceHandle: sourceLastNodeHandle?.id, targetHandle: newNodeData.inputConnector?.id },
+  )
 
   return {
     nodes: [leftPowerRailNode, ...nodes, newNode, rightPowerRailNode],

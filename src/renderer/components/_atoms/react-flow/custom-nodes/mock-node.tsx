@@ -78,7 +78,7 @@ export const buildMockNode = ({
         },
       },
     ],
-    nodeInputHandle: {
+    inputConnector: {
       id: 'left',
       position: 'left',
       type: 'target',
@@ -92,7 +92,7 @@ export const buildMockNode = ({
         y: 20,
       },
     },
-    nodeOutputHandle: {
+    outputConnector: {
       id: 'right',
       position: 'right',
       type: 'source',

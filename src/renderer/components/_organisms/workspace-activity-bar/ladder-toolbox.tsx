@@ -11,7 +11,7 @@ export const LadderToolbox = () => {
       <BlockButton onDragStart={(event) => handleDragStart(event, 'block')} />
       <CoilButton onDragStart={(event) => handleDragStart(event, 'coil')} />
       <ContactButton onDragStart={(event) => handleDragStart(event, 'contact')} />
-      <LoopButton onDragStart={(event) => handleDragStart(event, 'loop')} />
+      <LoopButton onDragStart={(event) => handleDragStart(event, 'parallel')} />
     </>
   )
 }
