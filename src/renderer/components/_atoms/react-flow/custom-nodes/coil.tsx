@@ -13,14 +13,18 @@ import type { ReactNode } from 'react'
 import { useState } from 'react'
 
 import { InputWithRef } from '../../input'
-import type { CustomHandleProps } from './handle'
 import { buildHandle, CustomHandle } from './handle'
+import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
 type CoilNode = Node<
-  { handles: CustomHandleProps[]; variation: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset' },
-  'text'
+  BasicNodeData & {
+    variation: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset'
+  }
 >
 type CoilProps = NodeProps<CoilNode>
+type CoilBuilderProps = BuilderBasicProps & {
+  variation: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset'
+}
 
 export const COIL_BLOCK_WIDTH = 34
 export const COIL_BLOCK_HEIGHT = 28
@@ -121,21 +125,7 @@ export const Coil = ({ selected, data }: CoilProps) => {
   )
 }
 
-export const buildCoilNode = ({
-  id,
-  posX,
-  posY,
-  handleX,
-  handleY,
-  variation = 'default',
-}: {
-  id: string
-  posX: number
-  posY: number
-  handleX: number
-  handleY: number
-  variation?: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset'
-}) => {
+export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variation = 'default' }: CoilBuilderProps) => {
   const inputHandle = buildHandle({
     id: 'input',
     position: Position.Left,
@@ -167,6 +157,8 @@ export const buildCoilNode = ({
     data: {
       handles,
       variation,
+      nodeInputHandle: inputHandle,
+      nodeOutputHandle: outputHandle,
     },
     width: COIL_BLOCK_WIDTH,
     height: COIL_BLOCK_HEIGHT,

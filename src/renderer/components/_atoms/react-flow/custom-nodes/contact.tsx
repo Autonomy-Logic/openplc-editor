@@ -11,14 +11,12 @@ import type { ReactNode } from 'react'
 import { useState } from 'react'
 
 import { InputWithRef } from '../../input'
-import type { CustomHandleProps } from './handle'
 import { buildHandle, CustomHandle } from './handle'
+import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-type ContactNode = Node<
-  { handles: CustomHandleProps[]; variation: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' },
-  'text'
->
+type ContactNode = Node<BasicNodeData & { variation: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }>
 type ContactProps = NodeProps<ContactNode>
+type ContactBuilderProps = BuilderBasicProps & { variation: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }
 
 export const CONTACT_BLOCK_WIDTH = 28
 export const CONTACT_BLOCK_HEIGHT = 28
@@ -101,21 +99,7 @@ export const Contact = ({ selected, data }: ContactProps) => {
   )
 }
 
-export const buildContactNode = ({
-  id,
-  posX,
-  posY,
-  handleX,
-  handleY,
-  variation = 'default',
-}: {
-  id: string
-  posX: number
-  posY: number
-  handleX: number
-  handleY: number
-  variation?: 'default' | 'negated' | 'risingEdge' | 'fallingEdge'
-}) => {
+export const buildContactNode = ({ id, posX, posY, handleX, handleY, variation = 'default' }: ContactBuilderProps) => {
   const inputHandle = buildHandle({
     id: 'input',
     position: Position.Left,
@@ -147,6 +131,8 @@ export const buildContactNode = ({
     data: {
       handles,
       variation,
+      nodeInputHandle: inputHandle,
+      nodeOutputHandle: outputHandle,
     },
     width: CONTACT_BLOCK_WIDTH,
     height: CONTACT_BLOCK_HEIGHT,
