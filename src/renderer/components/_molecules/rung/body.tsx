@@ -6,7 +6,7 @@ import { DragEventHandler, useCallback, useEffect, useMemo, useState } from 'rea
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
-import { addNewNode, removeNodes } from './ladder-utils/nodes'
+import { addNewNode, removeNodes } from './ladder-utils/elements'
 
 /**
  * Default flow panel extent:
