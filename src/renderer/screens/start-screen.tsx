@@ -140,7 +140,7 @@ const StartScreen = () => {
           <MenuDivider />
           <MenuSection id='2'>
             <MenuItem  ghosted>
-              <StickArrowIcon className='rotate-180' /> Quit
+              <StickArrowIcon className='rotate-180 stroke-brand' /> Quit
             </MenuItem>
           </MenuSection>
         </MenuRoot>
