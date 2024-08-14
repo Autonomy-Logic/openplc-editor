@@ -5,8 +5,8 @@ const lightThemeData: monaco.editor.IStandaloneThemeData = {
   inherit: true,
   rules: [
     { token: 'literalCode', foreground: '#B4D0FE' }, // Color for literal code in light theme
-    { token: 'keyword', foreground: '#0464FB' }, // Color for keywords in light theme
-    { token: 'typeKeyword', foreground: '#800080' }, // Color for type keywords in light theme
+    { token: 'keyword', foreground: '#800080' }, // Color for keywords in light theme
+    { token: 'typeKeyword', foreground: '#0464FB' }, // Color for type keywords in light theme
     { token: 'label.il', foreground: '#0464FB' }, // Color for label (identifier) in light theme
     { token: 'labelValue', foreground: '#023C97' } // Color for label (value) in light theme
   ],
