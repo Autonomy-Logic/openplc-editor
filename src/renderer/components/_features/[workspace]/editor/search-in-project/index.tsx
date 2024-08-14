@@ -72,7 +72,7 @@ export default function SearchInProject() {
     if (selectedScope === 'whole project') {
       const newCheckedOptions = scopeElementsOptions.reduce(
         (acc, option) => {
-          acc[option.value] = false; 
+          acc[option.value] = false;
           return acc;
         },
         {} as { [key: string]: boolean },
@@ -81,7 +81,7 @@ export default function SearchInProject() {
     } else {
       const newCheckedOptions = scopeElementsOptions.reduce(
         (acc, option) => {
-          acc[option.value] = false; 
+          acc[option.value] = false;
           return acc;
         },
         {} as { [key: string]: boolean },
@@ -110,7 +110,7 @@ export default function SearchInProject() {
     if (scope === 'whole project') {
       const newCheckedOptions = scopeElementsOptions.reduce(
         (acc, option) => {
-          acc[option.value] = false; 
+          acc[option.value] = false;
           return acc;
         },
         {} as { [key: string]: boolean },
@@ -119,7 +119,7 @@ export default function SearchInProject() {
     } else {
       const newCheckedOptions = scopeElementsOptions.reduce(
         (acc, option) => {
-          acc[option.value] = false; 
+          acc[option.value] = false;
           return acc;
         },
         {} as { [key: string]: boolean },
