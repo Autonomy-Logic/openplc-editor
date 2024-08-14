@@ -75,7 +75,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       <Popover.Trigger
         onMouseEnter={handleMouseEnter}
         id={`create-${target}-trigger`}
-        className='focus:ring-brand focus:ring-2 rounded'
+        className='focus:bg-neutral-100 dark:focus:bg-neutral-900 rounded-md'
       >
         <div
           id={`create-${target}-trigger-container`}
@@ -179,7 +179,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                   return (
                                     <SelectItem
                                       key={lang.value}
-                                      className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                                      className='flex w-full focus:bg-neutral-100 dark:focus:bg-neutral-900 cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                                       value={ConvertToLangShortenedFormat(lang.value)}
                                     >
                                       <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
