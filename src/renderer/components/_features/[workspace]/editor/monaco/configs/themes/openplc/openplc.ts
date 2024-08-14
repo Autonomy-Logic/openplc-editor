@@ -6,9 +6,9 @@ const lightThemeData: monaco.editor.IStandaloneThemeData = {
   rules: [
     { token: 'literalCode', foreground: '#B4D0FE' }, // Color for literal code in light theme
     { token: 'keyword', foreground: '#0464FB' }, // Color for keywords in light theme
-    { token: 'typeKeyword', foreground: '#0350C9' }, // Color for type keywords in light theme
-    { token: 'label.il', foreground: '#023C97' }, // Color for label (identifier) in light theme
-    { token: 'labelValue', foreground: '#0464FB' } // Color for label (value) in light theme
+    { token: 'typeKeyword', foreground: '#800080' }, // Color for type keywords in light theme
+    { token: 'label.il', foreground: '#0464FB' }, // Color for label (identifier) in light theme
+    { token: 'labelValue', foreground: '#023C97' } // Color for label (value) in light theme
   ],
   colors: {
     'editor.background': '#FFFFFF', // Editor background color in light theme
@@ -27,10 +27,10 @@ const darkThemeData: monaco.editor.IStandaloneThemeData = {
   inherit: true,
   rules: [
     { token: 'literalCode', foreground: '#0350C9' }, // Color for literal code in dark theme
-    { token: 'keyword', foreground: '#8AB4F8' }, // Color for keywords in dark theme
+    { token: 'keyword', foreground: '#800080' }, // Color for keywords in dark theme
     { token: 'typeKeyword', foreground: '#0464FB' }, // Color for type keywords in dark theme
     { token: 'label.il', foreground: '#4D8BF5' }, // Color for label (identifier) in dark theme
-    { token: 'labelValue', foreground: '#7F9CF5' } // Color for label (value) in dark theme
+    { token: 'labelValue', foreground: '#0464FB' } // Color for label (value) in dark theme
   ],
   colors: {
     'editor.background': '#121316', // Editor background color in dark theme
