@@ -16,6 +16,7 @@ export default function LadderEditor() {
 
     flowActions.addRung({
       id: rungs.length.toString(),
+      defaultBounds: defaultViewport,
       flowViewport: defaultViewport,
       nodes: [
         nodesBuilder.powerRail({

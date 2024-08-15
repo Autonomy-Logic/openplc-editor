@@ -2,6 +2,7 @@ import { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 
 type FlowState = {
   id: string
+  defaultBounds: [number, number]
   flowViewport?: [number, number]
   nodes: Node[]
   edges: Edge[]

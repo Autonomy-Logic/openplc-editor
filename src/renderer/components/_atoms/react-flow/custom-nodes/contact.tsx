@@ -133,7 +133,6 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
       variant,
       inputConnector: inputHandle,
       outputConnector: outputHandle,
-      parallelId: undefined,
     },
     width: CONTACT_BLOCK_WIDTH,
     height: CONTACT_BLOCK_HEIGHT,

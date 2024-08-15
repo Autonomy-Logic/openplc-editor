@@ -72,7 +72,12 @@ export const disconnectNodes = (rung: FlowState, sourceNodeId: string, targetNod
 
   if (targetEdge) {
     newEdges = removeEdge(newEdges, targetEdge.id)
-    newEdges.push(buildEdge(sourceEdge.source, targetEdge.target))
+    newEdges.push(
+      buildEdge(sourceEdge.source, targetEdge.target, {
+        sourceHandle: sourceEdge.sourceHandle ?? undefined,
+        targetHandle: targetEdge.targetHandle ?? undefined,
+      }),
+    )
   }
 
   return newEdges

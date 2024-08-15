@@ -7,162 +7,113 @@ import type { CustomHandleProps } from '../../../_atoms/react-flow/custom-nodes/
 import { connectNodes, disconnectNodes } from './edges'
 import { buildGenericNode, getNodeStyle } from './nodes'
 
-export const changePowerRailBounds = ({
-  rung,
-  nodes,
-  gapNodes,
-  defaultBounds,
-}: {
-  rung: FlowState
-  nodes: Node[]
-  gapNodes: number
-  defaultBounds: [number, number]
-}): Node | undefined => {
-  const rightPowerRailNode = rung.nodes.find((node) => node.id === 'right-rail') as Node
-  if (!rightPowerRailNode) return undefined
+const getPreviousElement = (nodes: Node[]) => {
+  return nodes[nodes.length - 1]
+}
 
-  const handles = rightPowerRailNode.data.handles as CustomHandleProps[]
+const getPoisitionToNewElement = (prevEl: Node, newElType: string) => {
+  const prevElOutputHandle = prevEl.data.outputConnector as CustomHandleProps
+  const prevElStyle = getNodeStyle({ node: prevEl })
+  const newNodeStyle = getNodeStyle({ nodeType: newElType })
+
+  const gap = prevElStyle.gap + newNodeStyle.gap
+  const offsetY = newNodeStyle.handle.y
+
+  const position = {
+    posX: prevEl.position.x + prevElStyle.width + gap,
+    posY: prevEl.type === newElType ? prevEl.position.y : prevElOutputHandle.glbPosition.y - offsetY,
+    handleX: prevEl.position.x + prevElStyle.width + gap,
+    handleY: prevElOutputHandle.glbPosition.y,
+  }
+
+  return position
+}
+
+export const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: [number, number]) => {
+  const handles = rightRail.data.handles as CustomHandleProps[]
+  const railStyle = getNodeStyle({ node: rightRail })
+  const lastNodeStyle = getNodeStyle({ node: nodes[nodes.length - 1] })
+
   const nodeBounds = getNodesBounds(nodes)
 
-  // If the width of the nodes is greater than the default bounds, update the right power rail node
-  if (nodeBounds.width + gapNodes > defaultBounds[0]) {
+  if (nodeBounds.width > defaultBounds[0]) {
     const newRail = {
-      ...rightPowerRailNode,
-      position: { x: nodeBounds.width + gapNodes, y: rightPowerRailNode.position.y },
+      ...rightRail,
+      position: { x: nodeBounds.width + lastNodeStyle.gap, y: rightRail.position.y },
       data: {
-        ...rightPowerRailNode.data,
-        handles: handles.map((handle) => ({ ...handle, x: nodeBounds.width + gapNodes })),
+        ...rightRail.data,
+        handles: handles.map((handle) => ({ ...handle, x: nodeBounds.width + lastNodeStyle.gap })),
       },
     }
     return newRail
   }
 
-  // If the width of the nodes is less than the default bounds, update the right power rail node to the default bounds
   const newRail = {
-    ...rightPowerRailNode,
-    position: { x: defaultBounds[0] - (rightPowerRailNode.width ?? 0), y: rightPowerRailNode.position.y },
+    ...rightRail,
+    position: { x: defaultBounds[0] - railStyle.width, y: rightRail.position.y },
     data: {
-      ...rightPowerRailNode.data,
-      handles: handles.map((handle) => ({ ...handle, x: defaultBounds[0] - (rightPowerRailNode.width ?? 0) })),
+      ...rightRail.data,
+      handles: handles.map((handle) => ({ ...handle, x: defaultBounds[0] - railStyle.width })),
     },
   }
-
   return newRail
 }
 
-export const addNewNode = ({
-  rungLocal,
-  newNodeType,
-  defaultBounds,
-}: {
-  rungLocal: FlowState
-  newNodeType: string
-  defaultBounds: [number, number]
-}): { nodes: Node[]; edges: Edge[] } => {
-  const leftPowerRailNode = rungLocal.nodes.find((node) => node.id === 'left-rail') as Node
-  let rightPowerRailNode = rungLocal.nodes.find((node) => node.id === 'right-rail') as Node
-  const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
+export const addNewElement = (
+  rung: FlowState,
+  newElementType: string,
+  defaultViewportBounds: [number, number],
+): { nodes: Node[]; edges: Edge[] } => {
+  const rails = rung.nodes.filter((node) => node.type === 'powerRail')
+  const nodes = rung.nodes.filter((node) => node.type !== 'powerRail')
 
-  const lastNode = nodes[nodes.length - 1] ?? leftPowerRailNode
-  const lastNodeData = lastNode.data as BasicNodeData
-  const sourceLastNodeHandle = lastNodeData.handles.find((handle) => handle.type === 'source')
-
-  const lastNodeStyle = getNodeStyle({ node: lastNode })
-  const newNodeStyle = getNodeStyle({ nodeType: newNodeType }) ?? getNodeStyle({ nodeType: 'mockNode' })
-  const gap = lastNodeStyle.gap + newNodeStyle.gap
-  const offsetY = newNodeStyle.handle.y
-
-  const posX = lastNode.position.x + (lastNode.width ?? 0) + gap
-  const posY =
-    lastNode.type === newNodeType ? lastNode.position.y : (sourceLastNodeHandle?.glbPosition.y ?? offsetY) - offsetY
-  const handleX = lastNode.position.x + (lastNode.width ?? 0) + gap
-  const handleY = sourceLastNodeHandle?.glbPosition.y ?? 0
-
-  const newNode = buildGenericNode({
-    nodeType: newNodeType,
-    id: `${newNodeType}_${posX}_${posY}`,
-    posX,
-    posY,
-    handleX,
-    handleY,
+  const prevElement = getPreviousElement([rails[0], ...nodes])
+  const newElPosition = getPoisitionToNewElement(prevElement, newElementType)
+  const newEl = buildGenericNode({
+    nodeType: newElementType,
+    id: `${newElementType}_${newElPosition.posX}_${newElPosition.posY}`,
+    ...newElPosition,
   })
-  const newNodeData = newNode.data as BasicNodeData
 
-  const newRightPowerRail = changePowerRailBounds({
-    rung: rungLocal,
-    nodes: [leftPowerRailNode, ...nodes, newNode],
-    gapNodes: newNodeStyle.gap,
-    defaultBounds: defaultBounds,
+  rails[1] = changeRailBounds(rails[1], [rails[0], ...nodes, newEl], defaultViewportBounds)
+
+  const prevElementData = prevElement.data as BasicNodeData
+  const newEdges = connectNodes({ ...rung, nodes: [rails[0], ...nodes, newEl, rails[1]] }, prevElement.id, newEl.id, {
+    sourceHandle: prevElementData.outputConnector?.id,
   })
-  if (newRightPowerRail) rightPowerRailNode = newRightPowerRail
-
-  let newEdge = rungLocal.edges
-  newEdge = connectNodes(
-    {
-      ...rungLocal,
-      nodes: [leftPowerRailNode, ...nodes, newNode, rightPowerRailNode],
-      edges: newEdge,
-    },
-    lastNode.id,
-    newNode.id,
-    { sourceHandle: sourceLastNodeHandle?.id, targetHandle: newNodeData.inputConnector?.id },
-  )
 
   return {
-    nodes: [leftPowerRailNode, ...nodes, newNode, rightPowerRailNode],
-    edges: newEdge,
-  }
-}
-
-const removeNode = ({
-  rungLocal,
-  defaultBounds,
-  node,
-}: {
-  rungLocal: FlowState
-  defaultBounds: [number, number]
-  node: Node
-}): { nodes: Node[]; edges: Edge[] } => {
-  if (!node) return { nodes: rungLocal.nodes, edges: rungLocal.edges }
-
-  const leftPowerRailNode = rungLocal.nodes.find((node) => node.id === 'left-rail') as Node
-  let rightPowerRailNode = rungLocal.nodes.find((node) => node.id === 'right-rail') as Node
-  const nodes = rungLocal.nodes.filter((node) => node.id !== 'left-rail' && node.id !== 'right-rail')
-
-  const newNodes = nodes.filter((n) => n.id !== node.id)
-  const removedNoveStyle = getNodeStyle({ node: node })
-
-  const newRightPowerRail = changePowerRailBounds({
-    rung: rungLocal,
-    nodes: [leftPowerRailNode, ...newNodes],
-    gapNodes: removedNoveStyle.gap,
-    defaultBounds: defaultBounds,
-  })
-  if (newRightPowerRail) rightPowerRailNode = newRightPowerRail
-
-  const edge = rungLocal.edges.find((edge) => edge.source === node.id)
-  const newEdges = disconnectNodes(rungLocal, edge?.source ?? '', edge?.target ?? '')
-
-  return {
-    nodes: [leftPowerRailNode, ...newNodes, rightPowerRailNode],
+    nodes: [rails[0], ...nodes, newEl, rails[1]],
     edges: newEdges,
   }
 }
 
-export const removeNodes = ({
-  rungLocal,
-  defaultBounds,
-  nodes,
-}: {
-  rungLocal: FlowState
-  defaultBounds: [number, number]
-  nodes: Node[]
-}): { nodes: Node[]; edges: Edge[] } => {
+export const removeElement = (rung: FlowState, element: Node, defaultViewportBounds: [number, number]) => {
+  const rails = rung.nodes.filter((node) => node.type === 'powerRail')
+  const nodes = rung.nodes.filter((node) => node.type !== 'powerRail')
+
+  const newNodes = nodes.filter((n) => n.id !== element.id)
+  const newRails = changeRailBounds(rails[1], [rails[0], ...newNodes], defaultViewportBounds)
+
+  const edge = rung.edges.find((edge) => edge.source === element.id)
+  if (!edge) return { nodes: [rails[0], ...newNodes, newRails], edges: rung.edges }
+  const newEdges = disconnectNodes(rung, edge.source, edge.target)
+
+  return {
+    nodes: [rails[0], ...newNodes, newRails],
+    edges: newEdges,
+  }
+}
+export const removeElements = (
+  rungLocal: FlowState,
+  nodes: Node[],
+  defaultBounds: [number, number],
+): { nodes: Node[]; edges: Edge[] } => {
   if (!nodes) return { nodes: rungLocal.nodes, edges: rungLocal.edges }
   const rungState = rungLocal
 
   for (const node of nodes) {
-    const { nodes: newNodes, edges: newEdges } = removeNode({ rungLocal: rungState, defaultBounds, node })
+    const { nodes: newNodes, edges: newEdges } = removeElement(rungState, node, defaultBounds)
     rungState.nodes = newNodes
     rungState.edges = newEdges
   }

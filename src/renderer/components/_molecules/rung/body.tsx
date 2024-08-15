@@ -6,7 +6,7 @@ import { DragEventHandler, useCallback, useEffect, useMemo, useState } from 'rea
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
-import { addNewNode, removeNodes } from './ladder-utils/elements'
+import { addNewElement, removeElements } from './ladder-utils/elements'
 
 /**
  * Default flow panel extent:
@@ -75,20 +75,12 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }
 
   const handleAddNode = (newNodeType: string = 'mockNode') => {
-    const { nodes, edges } = addNewNode({
-      rungLocal,
-      newNodeType,
-      defaultBounds: rung?.flowViewport ?? [1530, 200],
-    })
+    const { nodes, edges } = addNewElement(rungLocal, newNodeType, rung.defaultBounds)
     setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
 
   const handleRemoveNode = (nodes: Node[]) => {
-    const { nodes: newNodes, edges: newEdges } = removeNodes({
-      rungLocal,
-      defaultBounds: rung?.flowViewport ?? [1530, 200],
-      nodes,
-    })
+    const { nodes: newNodes, edges: newEdges } = removeElements(rungLocal, nodes, rung.defaultBounds)
     setRungLocal((rung) => ({ ...rung, nodes: newNodes, edges: newEdges }))
   }
 
