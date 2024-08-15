@@ -106,6 +106,7 @@ export const buildMockNode = ({
         y: 20,
       },
     },
+    parallelId: undefined,
   },
   width: 150,
   height: 40,

@@ -131,7 +131,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               defaultEdgeOptions: {
                 deletable: false,
                 selectable: false,
-                type: 'step',
+                type: 'smoothstep',
               },
 
               nodes: rungLocal.nodes,

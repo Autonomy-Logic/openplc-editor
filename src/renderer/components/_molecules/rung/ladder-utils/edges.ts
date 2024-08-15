@@ -14,7 +14,6 @@ const buildEdge = (sourceNodeId: string, targetNodeId: string, options?: Connect
     target: targetNodeId,
     sourceHandle: options?.sourceHandle,
     targetHandle: options?.targetHandle,
-    type: 'step',
   }
 }
 

@@ -172,6 +172,7 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: Bl
       handles,
       inputConnector: leftHandles[0],
       outputConnector: rightHandles[0],
+      parallelId: undefined,
     },
     width: BLOCK_WIDTH,
     height: BLOCK_HEIGHT,

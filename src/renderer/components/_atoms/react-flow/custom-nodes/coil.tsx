@@ -159,6 +159,7 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
       variant,
       inputConnector: inputHandle,
       outputConnector: outputHandle,
+      parallelId: undefined,
     },
     width: COIL_BLOCK_WIDTH,
     height: COIL_BLOCK_HEIGHT,

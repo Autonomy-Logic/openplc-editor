@@ -1,4 +1,4 @@
-import { CustomHandleProps } from "../handle"
+import { CustomHandleProps } from '../handle'
 
 export type BuilderBasicProps = {
   id: string

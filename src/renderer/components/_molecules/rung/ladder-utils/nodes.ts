@@ -14,6 +14,10 @@ export const removeNode = (rung: FlowState, nodeId: string): Node[] => {
   return rung.nodes.filter((node) => node.id !== nodeId)
 }
 
+export const isNodeOfType = (node: Node, nodeType: string): boolean => {
+  return node.type === nodeType
+}
+
 export const getNodeStyle = ({ node, nodeType }: { node?: Node; nodeType?: string }) => {
   return customNodesStyles[node?.type ?? nodeType ?? 'mockNode']
 }
@@ -56,8 +60,16 @@ export const buildGenericNode = ({
         handleY,
         variant: 'default',
       })
+    case 'parallel':
+      return nodesBuilder.parallel({
+        id,
+        posX,
+        posY,
+        handleX,
+        handleY,
+        type: 'open',
+      })
     default:
-      // mock block
       return nodesBuilder.mockNode({
         id,
         label: id,

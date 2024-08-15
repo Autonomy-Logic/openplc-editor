@@ -69,13 +69,13 @@ export const addNewNode = ({
 
   const lastNodeStyle = getNodeStyle({ node: lastNode })
   const newNodeStyle = getNodeStyle({ nodeType: newNodeType }) ?? getNodeStyle({ nodeType: 'mockNode' })
-  const gapBetweenNodes = lastNodeStyle.gapBetweenNodes + newNodeStyle.gapBetweenNodes
+  const gap = lastNodeStyle.gap + newNodeStyle.gap
   const offsetY = newNodeStyle.handle.y
 
-  const posX = lastNode.position.x + (lastNode.width ?? 0) + gapBetweenNodes
+  const posX = lastNode.position.x + (lastNode.width ?? 0) + gap
   const posY =
     lastNode.type === newNodeType ? lastNode.position.y : (sourceLastNodeHandle?.glbPosition.y ?? offsetY) - offsetY
-  const handleX = lastNode.position.x + (lastNode.width ?? 0) + gapBetweenNodes
+  const handleX = lastNode.position.x + (lastNode.width ?? 0) + gap
   const handleY = sourceLastNodeHandle?.glbPosition.y ?? 0
 
   const newNode = buildGenericNode({
@@ -91,7 +91,7 @@ export const addNewNode = ({
   const newRightPowerRail = changePowerRailBounds({
     rung: rungLocal,
     nodes: [leftPowerRailNode, ...nodes, newNode],
-    gapNodes: newNodeStyle.gapBetweenNodes,
+    gapNodes: newNodeStyle.gap,
     defaultBounds: defaultBounds,
   })
   if (newRightPowerRail) rightPowerRailNode = newRightPowerRail
@@ -135,7 +135,7 @@ const removeNode = ({
   const newRightPowerRail = changePowerRailBounds({
     rung: rungLocal,
     nodes: [leftPowerRailNode, ...newNodes],
-    gapNodes: removedNoveStyle.gapBetweenNodes,
+    gapNodes: removedNoveStyle.gap,
     defaultBounds: defaultBounds,
   })
   if (newRightPowerRail) rightPowerRailNode = newRightPowerRail
