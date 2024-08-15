@@ -2,12 +2,16 @@ import { app } from 'electron'
 import { mkdir, open } from 'fs'
 import { join } from 'path'
 
+import { CreateJSONFile } from '../project-service/utils/json-creator'
+import { BaseTypes } from './data'
+
 // import { CreateJSONFile } from '../project-service/utils/json-creator'
 
 class EditorService {
   private editorDataPath!: string
   constructor() {
     this.createEditorFolder()
+    this.setBaseData()
   }
   private createEditorFolder() {
     const editorFolderPath = join(app.getPath('userData'), 'editor')
@@ -35,8 +39,19 @@ class EditorService {
       if (err) console.log('Error', err)
     })
   }
-  private createBaseTypes() {
+  private setBaseData() {
     // TODO: Implement this method to create base types JSON file.
+    open(this.editorDataPath, 'w+', (error, fd) => {
+      if (error) console.log('Can not open the requested file', error)
+      else {
+        CreateJSONFile({
+          path: this.editorDataPath,
+          data: JSON.stringify(BaseTypes, null, 2),
+          fileName: 'base-types',
+        })
+        console.log('Base types JSON file created successfully', fd)
+      }
+    })
   }
   // if (!editorFolderExists) {
   //   mkdir(join(app.getPath('userData'), 'editor'), { recursive: true }, (err, createdPath) => {
