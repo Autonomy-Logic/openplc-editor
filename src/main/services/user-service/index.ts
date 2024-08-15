@@ -1,29 +1,36 @@
 import { app } from 'electron'
-import { existsSync, mkdir } from 'fs'
+import { mkdir, open } from 'fs'
 import { join } from 'path'
 
 import { CreateJSONFile } from '../project-service/utils/json-creator'
 
-class UserService {
-  private userDataPath!: string
-  private createUserDataFolder() {
-    const pathToUserData = join(app.getPath('userData'), 'user')
-    const userDataPathExists = existsSync(pathToUserData)
-    if (!userDataPathExists) {
-      mkdir(pathToUserData, { recursive: true }, (err, path) => {
-        if (!err && path) {
-          this.userDataPath = path
-        } else {
-          throw err
-        }
-      })
-    } else {
-      this.userDataPath = pathToUserData
-    }
-  }
-  
-
-  private createUserSettings() {
+const UserService = {
+  createUserDataFolder: () => {
+    // Construct the user folder path
+    const userFolderPath = join(app.getPath('userData'), 'user')
+    // Asynchronously check if user folder exists, and create it if not.
+    open(userFolderPath, 'r', (err, fd) => {
+      // If the user folder exists already terminate the process.
+      if (err === null) {
+        console.log('User folder already exist!', fd) // TODO: Remove log
+        return
+      } else if (err.code === 'ENOENT') {
+        // If the user folder does not exist, create it.
+        mkdir(userFolderPath, { recursive: true }, (err, createdPath) => {
+          if (createdPath) {
+            console.log('Created user folder at', createdPath)
+          }
+          if (err) {
+            console.log('Error creating user folder', err)
+          }
+          return
+        })
+      }
+      // If an error occurred while creating the user folder print the error message.
+      if (err) console.log('Something went wrong. Error:', err)
+    })
+  },
+  setUserData: () => {
     const settingsFile = {
       'theme-preference': 'light',
       window: {
@@ -35,57 +42,16 @@ class UserService {
         },
       },
     }
-
-    CreateJSONFile({
-      path: this.userDataPath,
-      data: JSON.stringify(settingsFile, null, 2),
-      fileName: 'settings',
+    // Construct the user folder path
+    const userFolderPath = join(app.getPath('userData'), 'user')
+    open(join(userFolderPath, 'settings.json'), 'w+', (error, _fd) => {
+      if (error) console.log('Can not open the requested file', error)
+      else {
+        CreateJSONFile(userFolderPath, JSON.stringify(settingsFile, null, 2), 'settings')
+        console.log('Created base-types.json')
+      }
     })
-  }
-
-  constructor() {
-    this.createUserDataFolder()
-    this.createUserSettings()
-    this.createUserHistory()
-  }
-  
-  // async getSetting(key: 'theme-preference' | 'window') {
-  //   type IUserSettings = {
-  //     'theme-preference': string
-  //     window: {
-  //       bounds: {
-  //         width: number
-  //         height: number
-  //         x: number
-  //         y: number
-  //       }
-  //     }
-  //   }
-  //   const setting = await new Promise<IUserSettings>((resolve, reject) => {
-  //     let settingValue: IUserSettings // specify the type of baseLibrary
-  //     const filePath = join(this.userDataPath, 'config.json')
-  //     readFile(filePath, 'utf-8', (error, data) => {
-  //       if (!error && data) {
-  //         settingValue = JSON.parse(data) as IUserSettings
-  //         resolve(settingValue) // resolve the promise with the parsed data
-  //       } else {
-  //         reject(error) // reject the promise if there's an error
-  //       }
-  //     })
-  //   })
-
-  //   return setting[key]
-  // }
-
-  private createUserHistory() {
-    CreateJSONFile({
-      path: this.userDataPath,
-      data: '[]',
-      fileName: 'history',
-    })
-  }
-
-  getUserHistory() {}
+  },
 }
 
 export { UserService }

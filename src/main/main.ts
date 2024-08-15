@@ -20,9 +20,8 @@ import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
 import { EditorService, ProjectService, UserService } from './services'
+// import {Service}
 
-const _editorService = new EditorService()
-const _userService = new UserService()
 class AppUpdater {
   constructor() {
     log.transports.file.level = 'info'
@@ -42,6 +41,14 @@ if (process.env.NODE_ENV === 'production') {
 
   void loadSourceMapSupport()
 }
+
+EditorService.createEditorFolder()
+
+EditorService.setBaseData()
+
+UserService.createUserDataFolder()
+
+UserService.setUserData()
 
 // Retrieves the system information
 const systemInfo = platform()
