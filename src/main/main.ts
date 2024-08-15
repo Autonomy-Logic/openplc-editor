@@ -198,7 +198,7 @@ const createMainWindow = async () => {
    * Add event listeners...
    */
 
-  mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
+  // mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
 
   // Handles the creation of the menu
   const menuBuilder = new MenuBuilder(mainWindow)
@@ -229,6 +229,8 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
   process.exit(0)
 }
+
+// console.log(userService.getSetting('window'))
 
 // Quit the app when all windows are closed;
 app.on('window-all-closed', () => {

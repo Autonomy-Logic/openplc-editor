@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { existsSync, mkdir, readFile } from 'fs'
+import { existsSync, mkdir } from 'fs'
 import { join } from 'path'
 
 import { CreateJSONFile } from '../project-service/utils/json-creator'
@@ -21,11 +21,7 @@ class UserService {
       this.userDataPath = pathToUserData
     }
   }
-  constructor() {
-    this.createUserDataFolder()
-    this.createUserSettings()
-    this.createUserHistory()
-  }
+  
 
   private createUserSettings() {
     const settingsFile = {
@@ -47,33 +43,39 @@ class UserService {
     })
   }
 
-  async getSetting(key: 'theme-preference' | 'window') {
-    type IUserSettings = {
-      'theme-preference': string
-      window: {
-        bounds: {
-          width: number
-          height: number
-          x: number
-          y: number
-        }
-      }
-    }
-    const setting = await new Promise<IUserSettings>((resolve, reject) => {
-      let settingValue: IUserSettings // specify the type of baseLibrary
-      const filePath = join(this.userDataPath, 'config.json')
-      readFile(filePath, 'utf-8', (error, data) => {
-        if (!error && data) {
-          settingValue = JSON.parse(data) as IUserSettings
-          resolve(settingValue) // resolve the promise with the parsed data
-        } else {
-          reject(error) // reject the promise if there's an error
-        }
-      })
-    })
-
-    return setting[key]
+  constructor() {
+    this.createUserDataFolder()
+    this.createUserSettings()
+    this.createUserHistory()
   }
+  
+  // async getSetting(key: 'theme-preference' | 'window') {
+  //   type IUserSettings = {
+  //     'theme-preference': string
+  //     window: {
+  //       bounds: {
+  //         width: number
+  //         height: number
+  //         x: number
+  //         y: number
+  //       }
+  //     }
+  //   }
+  //   const setting = await new Promise<IUserSettings>((resolve, reject) => {
+  //     let settingValue: IUserSettings // specify the type of baseLibrary
+  //     const filePath = join(this.userDataPath, 'config.json')
+  //     readFile(filePath, 'utf-8', (error, data) => {
+  //       if (!error && data) {
+  //         settingValue = JSON.parse(data) as IUserSettings
+  //         resolve(settingValue) // resolve the promise with the parsed data
+  //       } else {
+  //         reject(error) // reject the promise if there's an error
+  //       }
+  //     })
+  //   })
+
+  //   return setting[key]
+  // }
 
   private createUserHistory() {
     CreateJSONFile({
