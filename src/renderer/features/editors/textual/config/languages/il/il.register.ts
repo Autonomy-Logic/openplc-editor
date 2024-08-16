@@ -11,3 +11,4 @@ registerLanguage({
   conf,
   language,
 })
+

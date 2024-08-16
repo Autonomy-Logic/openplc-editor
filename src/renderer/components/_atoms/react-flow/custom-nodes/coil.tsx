@@ -6,6 +6,7 @@ import {
   RisingEdgeCoil,
   SetCoil,
 } from '@root/renderer/assets/icons/flow/Coil'
+import { cn } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
@@ -89,13 +90,23 @@ const COIL_TYPES: CoilType = {
   },
 }
 
-export const Coil = ({ data }: CoilProps) => {
+export const Coil = ({ selected, data }: CoilProps) => {
   const [coilLabelValue, setCoilLabelValue] = useState<string>('???')
   const coil = COIL_TYPES[data.variation]
 
   return (
     <div className='relative'>
-      <div style={{ width: COIL_BLOCK_WIDTH, height: COIL_BLOCK_HEIGHT }}>{coil.svg}</div>
+      <div
+        className={cn(
+          'rounded-[1px] border border-transparent hover:outline hover:outline-2 hover:outline-offset-[5px] hover:outline-brand',
+          {
+            'outline outline-2 outline-offset-[5px] outline-brand': selected,
+          },
+        )}
+        style={{ width: COIL_BLOCK_WIDTH, height: COIL_BLOCK_HEIGHT }}
+      >
+        {coil.svg}
+      </div>
       <div className='absolute -left-[31px] -top-7 w-24'>
         <InputWithRef
           value={coilLabelValue}
@@ -128,6 +139,7 @@ export const buildCoilNode = ({
   const inputHandle = buildHandle({
     id: 'input',
     position: Position.Left,
+    isConnectable: false,
     type: 'target',
     glbX: handleX,
     glbY: handleY,
@@ -138,6 +150,7 @@ export const buildCoilNode = ({
   const outputHandle = buildHandle({
     id: 'output',
     position: Position.Right,
+    isConnectable: false,
     type: 'source',
     glbX: handleX,
     glbY: handleY,
@@ -155,6 +168,8 @@ export const buildCoilNode = ({
       handles,
       variation,
     },
+    width: COIL_BLOCK_WIDTH,
+    height: COIL_BLOCK_HEIGHT,
     draggable: false,
   }
 }

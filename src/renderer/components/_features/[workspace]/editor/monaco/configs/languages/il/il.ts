@@ -1,79 +1,72 @@
-import { languages } from 'monaco-editor'
+import { languages } from 'monaco-editor';
 
-export const conf: languages.LanguageConfiguration = {}
+export const conf: languages.LanguageConfiguration = {
+  /**
+   * Define the block comments settings
+   */
+  autoClosingPairs: [{ open: '(*', close: '*)' }],
+  comments: {
+    blockComment: ['(*', '*)'],
+  },
+  brackets: [], // Remove support for brackets
+};
 
 export const language: languages.IMonarchLanguage = {
+  ignoreCase: true, // Remove case sensitivity
   tokenizer: {
     root: [
+      /**
+       * Tokenize the label (sequence of characters followed by ':')
+       */
+      [/[^\s]+:/, { token: 'label', next: '@afterLabel' }], // Match any label ending with ':'
+
+      // Recognize the & and &N symbols as keywords or special characters
+      [/&N/, 'keyword'], // Match &N symbol as a keyword
+      [/&/, 'keyword'], // Match & symbol as a keyword
+
+      // Match keywords or identifiers
       [
         /[a-zA-Z_]\w*/,
         {
           cases: {
             '@keywords': 'keyword',
-            '@operators': 'operators',
-            '@typeKeywords': 'type',
+            '@default': 'identifier',
           },
         },
       ],
-      [
-        /\/\/.*/,
-        'comment', // Tokenize comment of line
-      ],
-      [
-        /\(\*[\s\S]*?\*\)/,
-        'block-comment', // Tokenize block of comment
-      ],
+      { include: '@whitespace' },
+
+      // Operators (excluding & and &N symbols)
+      [/[=><!~?:|+\-*/^%]/, 'operator'], // Removed '&' and '&N' from operators
+
+      // Numbers
+      // Adjusted regex to support both comma and dot as decimal separators
+      [/\d+([.,]\d+)?([eE][-+]?\d+)?/, 'number'], // Tokenize integer and floating-point numbers with comma or dot
+
+      // Comments
+      [/\(\*[\s\S]*?\*\)/, 'comment'], // Tokenize block comments
+
+      // Remove strings
+      // Removing support for quotes (strings or characters)
+      [/"/, 'invalid'], // Treat anything inside quotes as invalid
+      [/'/, 'invalid'],
+    ],
+
+    // Define the state after matching a label
+    afterLabel: [
+      [/[^\s]+/, { token: 'labelValue', next: '@pop' }], // Match the first sequence of non-whitespace characters and color it as labelValue
+      [/\s+/, { token: 'white' }], // Ignore any whitespaces after the label
+    ],
+
+    whitespace: [
+      [/[ \t\r\n]+/, 'white'], // Tokenize whitespace (spaces, tabs, line breaks)
     ],
   },
-  keywords: ['VAR', 'END_VAR', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT', 'VAR_TEMP', 'VAR_GLOBAL', 'VAR_EXTERNAL'],
-  typeKeywords: [
-    'BOOL',
-    'SINT',
-    'INT',
-    'DINT',
-    'LINT',
-    'USINT',
-    'UDINT',
-    'ULINT',
-    'REAL',
-    'LREAL',
-    'TIME',
-    'DATE',
-    'TIME_OF_DAY',
-    'TOD',
-    'DATE_AND_TIME',
-    'DT',
-    'STRING',
-    'BYTE',
-    'WORD',
-    'DWORD',
-    'LWORD',
-    'WSTRING',
+  keywords: [
+    'LD', 'LDN', 'ST', 'STN', 'S', 'R', 'AND', 'ANDN', '&', '&N', 'OR', 'ORN',
+    'XOR', 'XORN', 'NOT', 'ADD', 'SUB', 'MUL', 'DIV', 'MOD', 'GT', 'GE', 'EQ',
+    'NE', 'LE', 'LT', 'JMP', 'JMPC', 'JMPN', 'CAL', 'CALC', 'CALN', 'RET',
+    'RETC', 'RETN',
   ],
-  operators: [
-    'LD',
-    'ST',
-    'S',
-    'R',
-    'AND',
-    '&',
-    'OR',
-    'XOR',
-    'NOT',
-    'ADD',
-    'SUB',
-    'MUL',
-    'DIV',
-    'MOD',
-    'GT',
-    'GE',
-    'EQ',
-    'NE',
-    'LE',
-    'LT',
-    'JMP',
-    'CAL',
-    'RET',
-    ')',
-  ],
-}
+  brackets: [], // Ensure brackets are not recognized
+};

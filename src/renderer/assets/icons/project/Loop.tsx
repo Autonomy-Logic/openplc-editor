@@ -28,8 +28,8 @@ export default function LoopIcon(props: ILoopIconProps) {
       <path
         d='M3.55078 7H8.44678V15.7273C8.44678 16.4302 9.0166 17 9.71951 17H11.8468H14.5181C15.221 17 15.7908 16.4302 15.7908 15.7273V7H20.5508'
         stroke='#B4D0FE'
-        stroke-width='1.5'
-        stroke-linejoin='round'
+        strokeWidth='1.5'
+        strokeLinejoin='round'
       />
     </svg>
   )
