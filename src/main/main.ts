@@ -112,6 +112,21 @@ const createMainWindow = async () => {
    */
   const { bounds } = store.get('window')
 
+  splash = new BrowserWindow({
+    width: 580,
+    height: 366,
+    resizable: false,
+    frame: false,
+    webPreferences: {
+      sandbox: false,
+    },
+  })
+
+  splash
+    .loadURL(`file://${path.join(__dirname, './modules/preload/scripts/loading/splash.html')}`)
+    .then(() => console.log('Splash screen loaded successfully'))
+    .catch((error) => console.error('Error loading splash screen:', error))
+  splash.setIgnoreMouseEvents(false)
   // Create the main window instance.
   mainWindow = new BrowserWindow({
     minWidth: 1124,
@@ -128,20 +143,15 @@ const createMainWindow = async () => {
     },
   })
 
-  splash = new BrowserWindow({
-    parent: mainWindow,
-    width: 580,
-    height: 366,
-    resizable: false,
-    frame: false,
-    alwaysOnTop: true,
-    webPreferences: {
-      sandbox: true,
-    },
-  })
+  // Send a message to the renderer process when the content finishes loading;
 
-  void splash.loadURL(`file://${path.join(__dirname, './modules/preload/scripts/loading/splash.html')}`)
-  splash.show()
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (splash) {
+      splash?.destroy()
+    }
+    mainWindow?.show()
+    mainWindow?.webContents.send('main-process-message', new Date().toLocaleString())
+  })
   // Save window bounds on resize, close, and move events
   const saveBounds = () => {
     store.set('window.bounds', mainWindow?.getBounds())

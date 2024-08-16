@@ -30,7 +30,7 @@ const columns = [
   columnHelper.accessor('name', {
     header: 'Name',
     enableResizing: true,
-    size: 150,
+    size: 300,
     minSize: 150,
     maxSize: 300,
     cell: EditableNameCell,
@@ -43,7 +43,7 @@ const columns = [
   columnHelper.accessor('type', {
     header: 'Type',
     enableResizing: true,
-    size: 128,
+    size: 300,
     minSize: 80,
     maxSize: 300,
     cell: SelectableTypeCell,
@@ -56,7 +56,7 @@ const columns = [
   columnHelper.accessor('documentation', {
     header: 'Documentation',
     enableResizing: true,
-    size: 198,
+    size: 568,
     minSize: 198,
     maxSize: 568,
     cell: EditableDocumentationCell,
