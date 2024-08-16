@@ -129,16 +129,14 @@ const createMainWindow = async () => {
   splash.setIgnoreMouseEvents(false)
   // Create the main window instance.
   mainWindow = new BrowserWindow({
-    minWidth: 1440,
-    minHeight: 768,
+    minWidth: 1124,
+    minHeight: 628,
     ...bounds,
     show: false,
     icon: getAssetPath('icon.png'),
     ...titlebarStyles,
-    titleBarOverlay: false,
-    frame: false,
     webPreferences: {
-      sandbox: false,
+      sandbox: true,
       preload: app.isPackaged
         ? path.join(__dirname, 'preload.js')
         : path.join(__dirname, '../../configs/dll/preload.js'),
