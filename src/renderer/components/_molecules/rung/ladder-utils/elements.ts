@@ -6,7 +6,7 @@ import type { Edge, Node } from '@xyflow/react'
 import { getNodesBounds } from '@xyflow/react'
 
 import type { CustomHandleProps } from '../../../_atoms/react-flow/custom-nodes/handle'
-import { buildEdge, connectNodes, disconnectNodes } from './edges'
+import { buildEdge, connectNodes, disconnectNodes, disconnectParallel } from './edges'
 import { buildGenericNode, getNodeStyle } from './nodes'
 
 const getPreviousElement = (nodes: Node[]) => {
@@ -90,6 +90,8 @@ export const addNewElement = (
       ...closeParallelPosition,
       type: 'close',
     })
+    openParallel.data.parallelCloseReference = closeParallel.id
+    closeParallel.data.parallelOpenReference = openParallel.id
     newNodes.push(closeParallel)
     newEdges = connectNodes(
       { ...rung, edges: newEdges, nodes: [rails[0], ...newNodes, rails[1]] },
@@ -116,6 +118,11 @@ export const addNewElement = (
 export const removeElement = (rung: FlowState, element: Node, defaultViewportBounds: [number, number]) => {
   const rails = rung.nodes.filter((node) => node.type === 'powerRail')
   const nodes = rung.nodes.filter((node) => node.type !== 'powerRail')
+
+  if (element.type === 'parallel') {
+    const { nodes: newNodes, edges: newEdges } = disconnectParallel(rung, element.id)
+    return { nodes: newNodes, edges: newEdges }
+  }
 
   const newNodes = nodes.filter((n) => n.id !== element.id)
   const newRails = changeRailBounds(rails[1], [rails[0], ...newNodes], defaultViewportBounds)

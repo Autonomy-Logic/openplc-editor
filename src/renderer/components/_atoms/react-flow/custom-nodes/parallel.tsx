@@ -1,3 +1,4 @@
+import { cn } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 
@@ -8,6 +9,8 @@ export type ParallelNode = Node<
   BasicNodeData & {
     parallelInputConnector: CustomHandleProps | undefined
     parallelOutputConnector: CustomHandleProps | undefined
+    parallelOpenReference: string | undefined
+    parallelCloseReference: string | undefined
     type: 'open' | 'close'
   }
 >
@@ -21,22 +24,32 @@ export const GAP = 50
 
 export const PARALLEL_CONNECTOR_Y = PARALLEL_HEIGHT / 2
 
-export const Parallel = ({ data }: ParallelProps) => {
+export const Parallel = ({ selected, data }: ParallelProps) => {
   return (
     <>
-      <svg
+      <div
+        className={cn('hover:ring-2 hover:ring-brand', {
+          'ring-2 ring-brand': selected,
+        })}
         style={{
           width: PARALLEL_WIDTH,
           height: PARALLEL_HEIGHT,
         }}
       >
-        <rect
-          width={PARALLEL_WIDTH}
-          height={PARALLEL_HEIGHT}
-          className='stroke-[--xy-edge-stroke-default]'
-          fill='none'
-        />
-      </svg>
+        <svg
+          style={{
+            width: PARALLEL_WIDTH,
+            height: PARALLEL_HEIGHT,
+          }}
+        >
+          <rect
+            width={PARALLEL_WIDTH}
+            height={PARALLEL_HEIGHT}
+            className='stroke-[--xy-edge-stroke-default]'
+            fill='none'
+          />
+        </svg>
+      </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}
@@ -44,7 +57,7 @@ export const Parallel = ({ data }: ParallelProps) => {
   )
 }
 
-export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: ParallelBuilderProps) => {
+export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: ParallelBuilderProps): ParallelNode => {
   const handles = [
     buildHandle({
       id: 'input',
@@ -99,11 +112,12 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       outputConnector: handles[1],
       parallelInputConnector: type === 'close' ? handles[2] : undefined,
       parallelOutputConnector: type === 'open' ? handles[2] : undefined,
+      parallelOpenReference: undefined,
+      parallelCloseReference: undefined,
       type,
     },
     width: PARALLEL_WIDTH,
     height: PARALLEL_HEIGHT,
     draggable: false,
-    selectable: false,
   }
 }
