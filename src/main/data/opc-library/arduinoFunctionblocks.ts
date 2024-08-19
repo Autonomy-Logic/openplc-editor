@@ -10,6 +10,7 @@ interface BaseInterface {
     localVars?: Variable[];
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface InterfaceWithInputOutputVars extends BaseInterface {
     inputVars: Variable[];
     outputVars: Variable[];
@@ -22,7 +23,7 @@ interface InterfaceWithInputOutputVars extends BaseInterface {
     body: string;
     documentation?: string;
   }
-
+  //importar types do do TYPEX/PLC/TYPES
   interface FunctionBlocks {
     fileHeader: {
       companyName: string;
@@ -38,8 +39,8 @@ interface InterfaceWithInputOutputVars extends BaseInterface {
     pous: POU[];
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const arduino_Function_Blocks: FunctionBlocks = {
+
+  const _arduinoFunctionBlocks: FunctionBlocks = {
     fileHeader: {
       companyName: "OpenPLC",
       productName: "Arduino Function Blocks Library",
