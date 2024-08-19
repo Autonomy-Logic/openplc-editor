@@ -1,17 +1,19 @@
-import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
+// import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
+import { nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
+import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
 import type { FlowState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 import { getNodesBounds } from '@xyflow/react'
 
 import type { CustomHandleProps } from '../../../_atoms/react-flow/custom-nodes/handle'
-import { connectNodes, disconnectNodes } from './edges'
+import { buildEdge, connectNodes, disconnectNodes } from './edges'
 import { buildGenericNode, getNodeStyle } from './nodes'
 
 const getPreviousElement = (nodes: Node[]) => {
   return nodes[nodes.length - 1]
 }
 
-const getPoisitionToNewElement = (prevEl: Node, newElType: string) => {
+const getPoisitionToNewElement = (prevEl: Node, newElType: string, type: 'serial' | 'parallel' = 'serial') => {
   const prevElOutputHandle = prevEl.data.outputConnector as CustomHandleProps
   const prevElStyle = getNodeStyle({ node: prevEl })
   const newNodeStyle = getNodeStyle({ nodeType: newElType })
@@ -19,11 +21,13 @@ const getPoisitionToNewElement = (prevEl: Node, newElType: string) => {
   const gap = prevElStyle.gap + newNodeStyle.gap
   const offsetY = newNodeStyle.handle.y
 
+  const verticalGap = type === 'serial' ? 0 : newNodeStyle.gap
+
   const position = {
     posX: prevEl.position.x + prevElStyle.width + gap,
-    posY: prevEl.type === newElType ? prevEl.position.y : prevElOutputHandle.glbPosition.y - offsetY,
+    posY: prevEl.type === newElType ? prevEl.position.y : prevElOutputHandle.glbPosition.y - offsetY + verticalGap,
     handleX: prevEl.position.x + prevElStyle.width + gap,
-    handleY: prevElOutputHandle.glbPosition.y,
+    handleY: prevElOutputHandle.glbPosition.y + verticalGap,
   }
 
   return position
@@ -75,15 +79,36 @@ export const addNewElement = (
     ...newElPosition,
   })
 
-  rails[1] = changeRailBounds(rails[1], [rails[0], ...nodes, newEl], defaultViewportBounds)
+  const newNodes = [...nodes, newEl]
+  let newEdges = connectNodes({ ...rung, nodes: [rails[0], ...newNodes, rails[1]] }, prevElement.id, newEl.id)
 
-  const prevElementData = prevElement.data as BasicNodeData
-  const newEdges = connectNodes({ ...rung, nodes: [rails[0], ...nodes, newEl, rails[1]] }, prevElement.id, newEl.id, {
-    sourceHandle: prevElementData.outputConnector?.id,
-  })
+  if (newElementType === 'parallel') {
+    const openParallel = newEl as ParallelNode
+    const closeParallelPosition = getPoisitionToNewElement(newEl, newElementType)
+    const closeParallel = nodesBuilder.parallel({
+      id: `${newElementType}_${closeParallelPosition.posX}_${closeParallelPosition.posY}`,
+      ...closeParallelPosition,
+      type: 'close',
+    })
+    newNodes.push(closeParallel)
+    newEdges = connectNodes(
+      { ...rung, edges: newEdges, nodes: [rails[0], ...newNodes, rails[1]] },
+      newEl.id,
+      closeParallel.id,
+    )
+    newEdges = [
+      ...newEdges,
+      buildEdge(newEl.id, closeParallel.id, {
+        sourceHandle: openParallel.data.parallelOutputConnector?.id,
+        targetHandle: closeParallel.data.parallelInputConnector?.id,
+      }),
+    ]
+  }
+
+  rails[1] = changeRailBounds(rails[1], [rails[0], ...newNodes], defaultViewportBounds)
 
   return {
-    nodes: [rails[0], ...nodes, newEl, rails[1]],
+    nodes: [rails[0], ...newNodes, rails[1]],
     edges: newEdges,
   }
 }
@@ -104,6 +129,7 @@ export const removeElement = (rung: FlowState, element: Node, defaultViewportBou
     edges: newEdges,
   }
 }
+
 export const removeElements = (
   rungLocal: FlowState,
   nodes: Node[],

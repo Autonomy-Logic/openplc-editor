@@ -7,9 +7,9 @@ type ConnectionOptions = {
   targetHandle?: string
 }
 
-const buildEdge = (sourceNodeId: string, targetNodeId: string, options?: ConnectionOptions): Edge => {
+export const buildEdge = (sourceNodeId: string, targetNodeId: string, options?: ConnectionOptions): Edge => {
   return {
-    id: `e_${sourceNodeId}_${targetNodeId}`,
+    id: `e_${sourceNodeId}_${targetNodeId}_${options?.sourceHandle ?? 's'}_${options?.targetHandle ?? 't'}`,
     source: sourceNodeId,
     target: targetNodeId,
     sourceHandle: options?.sourceHandle,
@@ -28,12 +28,17 @@ export const connectNodes = (
   options?: ConnectionOptions,
 ): Edge[] => {
   // Find the source edge
-  const sourceEdge = rung.edges.find(
-    (edge) => edge.source === sourceNodeId && edge.sourceHandle === options?.sourceHandle,
-  )
+  const sourceEdge = rung.edges.find((edge) => edge.source === sourceNodeId)
 
   const targetNode = rung.nodes.find((node) => node.id === targetNodeId)
   const targetNodeData = targetNode?.data as BasicNodeData
+
+  /**
+   * targetHandle: where the the sourceEdge connects to targetNode
+   * sourceHandle: where the targetNode connects to the previous sourceEdge target
+   */
+  const targetHandle = !options ? targetNodeData.inputConnector?.id : options.targetHandle
+  const sourceHandle = !options ? targetNodeData.outputConnector?.id : options.sourceHandle
 
   // If the source edge is found, update the target
   if (sourceEdge) {
@@ -42,14 +47,14 @@ export const connectNodes = (
     // Update the target of the source edge
     edges.push(
       buildEdge(sourceNodeId, targetNodeId, {
-        sourceHandle: options?.sourceHandle,
-        targetHandle: targetNodeData.inputConnector?.id ?? undefined,
+        sourceHandle: sourceEdge.sourceHandle ?? undefined,
+        targetHandle: targetHandle,
       }),
     )
     // Update the target of the target edge
     edges.push(
       buildEdge(targetNodeId, sourceEdge.target, {
-        sourceHandle: targetNodeData.outputConnector?.id ?? undefined,
+        sourceHandle: sourceHandle,
         targetHandle: sourceEdge.targetHandle ?? undefined,
       }),
     )

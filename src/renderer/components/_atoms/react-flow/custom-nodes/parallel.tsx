@@ -1,13 +1,13 @@
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 
-import { buildHandle, CustomHandle } from './handle'
+import { buildHandle, CustomHandle, CustomHandleProps } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-type ParallelNode = Node<
+export type ParallelNode = Node<
   BasicNodeData & {
-    parallelInputConnector: string | undefined
-    parallelOutputConnector: string | undefined
+    parallelInputConnector: CustomHandleProps | undefined
+    parallelOutputConnector: CustomHandleProps | undefined
     type: 'open' | 'close'
   }
 >
@@ -19,7 +19,7 @@ export const PARALLEL_HEIGHT = 2
 
 export const GAP = 50
 
-export const PARALLEL_CONNECTOR_Y = PARALLEL_HEIGHT/2
+export const PARALLEL_CONNECTOR_Y = PARALLEL_HEIGHT / 2
 
 export const Parallel = ({ data }: ParallelProps) => {
   return (
@@ -55,6 +55,10 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       glbY: handleY,
       relX: 0,
       relY: PARALLEL_CONNECTOR_Y,
+      style: {
+        visibility: 'hidden',
+        left: 3,
+      },
     }),
     buildHandle({
       id: 'output-up',
@@ -65,6 +69,10 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       glbY: handleY,
       relX: PARALLEL_WIDTH,
       relY: PARALLEL_CONNECTOR_Y,
+      style: {
+        visibility: 'hidden',
+        right: 3,
+      },
     }),
     buildHandle({
       id: `${type === 'open' ? 'output' : 'input'}-down`,
@@ -76,6 +84,7 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       relX: PARALLEL_WIDTH / 2,
       relY: PARALLEL_CONNECTOR_Y,
       style: {
+        // visibility: 'hidden',
         bottom: PARALLEL_CONNECTOR_Y,
       },
     }),
@@ -94,7 +103,7 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
     },
     width: PARALLEL_WIDTH,
     height: PARALLEL_HEIGHT,
-    // draggable: false,
+    draggable: false,
     selectable: false,
   }
 }
