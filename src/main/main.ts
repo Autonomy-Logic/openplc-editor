@@ -19,7 +19,8 @@ import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { EditorService, ProjectService, UserService } from './services'
+import { UserSettings } from './rw-utility'
+import { EditorService, ProjectService } from './services'
 // import {Service}
 
 class AppUpdater {
@@ -46,9 +47,7 @@ EditorService.createEditorFolder()
 
 EditorService.setBaseData()
 
-UserService.createUserDataFolder()
-
-UserService.setUserData()
+void UserSettings.checkIfUserBaseSettingsExists()
 
 // Retrieves the system information
 const systemInfo = platform()

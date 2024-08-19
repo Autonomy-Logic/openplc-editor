@@ -5,8 +5,6 @@ import { join } from 'path'
 import { CreateJSONFile } from '../project-service/utils/json-creator'
 import { BaseTypes } from './data'
 
-// import { CreateJSONFile } from '../project-service/utils/json-creator'
-
 const EditorService = {
   /**
    * Function to create a folder in app directory containing config files.
