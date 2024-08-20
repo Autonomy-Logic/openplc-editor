@@ -1,4 +1,4 @@
-import { BlockButton, CoilButton, ContactButton, LoopButton } from '../../_molecules/workspace-activity-bar/ladder'
+import { BlockButton, CoilButton, ContactButton, ParallelButton } from '../../_molecules/workspace-activity-bar/ladder'
 
 export const LadderToolbox = () => {
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>, iconType: string) => {
@@ -11,7 +11,7 @@ export const LadderToolbox = () => {
       <BlockButton onDragStart={(event) => handleDragStart(event, 'block')} />
       <CoilButton onDragStart={(event) => handleDragStart(event, 'coil')} />
       <ContactButton onDragStart={(event) => handleDragStart(event, 'contact')} />
-      <LoopButton onDragStart={(event) => handleDragStart(event, 'parallel')} />
+      <ParallelButton onDragStart={(event) => handleDragStart(event, 'parallel')} />
     </>
   )
 }
