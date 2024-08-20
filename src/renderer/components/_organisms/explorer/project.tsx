@@ -106,6 +106,7 @@ const Project = () => {
               />
             ))}
         </ProjectTreeBranch>
+
         <ProjectTreeBranch branchTarget='program'>
           {pous
             ?.filter(({ type }) => type === 'program')
@@ -125,6 +126,11 @@ const Project = () => {
               />
             ))}
         </ProjectTreeBranch>
+
+        
+        <ProjectTreeBranch branchTarget='resources' />
+
+
         <ProjectTreeBranch branchTarget='data-type'>
           {dataTypes
             ?.filter(({ derivation }) => derivation.type === 'array')
@@ -185,7 +191,6 @@ const Project = () => {
         </ProjectTreeBranch>
         <ProjectTreeBranch branchTarget='device'>{/** Will be filled with device */}</ProjectTreeBranch>
         {/** Maybe a divider component */}
-        {/* <ProjectTreeBranch branchTarget='' label='Resources' /> */}
       </ProjectTreeRoot>
     </div>
   )

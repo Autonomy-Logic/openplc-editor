@@ -140,6 +140,12 @@ const WorkspaceScreen = () => {
                           <DataTypeEditor derivation={editor['meta']['derivation']} />{' '}
                         </div>
                       )}
+                       {editor['type'] === 'plc-datatype' && (
+                         <div className='flex h-full w-full flex-1'>
+                          RESOURCE EDITOR
+                         </div>
+                       )
+                      }
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
                         <ResizablePanelGroup
                           id='editorContentPanelGroup'
