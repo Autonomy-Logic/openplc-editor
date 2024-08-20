@@ -165,7 +165,27 @@ const PLCProjectDataSchema = z.object({
       }),
     ]),
   ),
-  globalVariables: z.array(PLCVariableSchema),
+  configuration: z.object({
+    resource: z.object({
+      id: z.string(), // TODO: This should be homologated. Concept: An unique identifier for the resources property.
+      tasks: z.array(
+        z.object({
+          id: z.string(), // TODO: This should be homologated. Concept: An unique identifier for the task object.
+          triggering: z.enum(['Cyclic', 'Interrupt']),
+          interval: z.string(), // TODO: Must have a regex validation for this. Probably a new modal must be created to handle this.
+          priority: z.number(), // TODO: This should be homologated.
+        }),
+      ),
+      instances: z.array(
+        z.object({
+          id: z.string(), // TODO: This should be homologated. Concept: An unique identifier for the instance object.
+          type: z.string(), // TODO: Implement this validation. This type must be one of the user's defined pous.
+          task: z.string(), // TODO: Implement this validation. This task must be one of the objects in the "tasks" array defined right above.
+        }),
+      ),
+    }),
+    globalVariables: z.array(PLCVariableSchema),
+  }),
 })
 
 type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
@@ -182,4 +202,13 @@ export {
   PLCVariableSchema,
 }
 
-export type { BaseType, PLCDataType, PLCDataTypeStructureElement,PLCFunction, PLCFunctionBlock, PLCProgram, PLCProjectData, PLCVariable }
+export type {
+  BaseType,
+  PLCDataType,
+  PLCDataTypeStructureElement,
+  PLCFunction,
+  PLCFunctionBlock,
+  PLCProgram,
+  PLCProjectData,
+  PLCVariable,
+}
