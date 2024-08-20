@@ -106,7 +106,7 @@ const Project = () => {
               />
             ))}
         </ProjectTreeBranch>
-
+        <ProjectTreeBranch branchTarget='resources' />
         <ProjectTreeBranch branchTarget='program'>
           {pous
             ?.filter(({ type }) => type === 'program')
@@ -126,11 +126,6 @@ const Project = () => {
               />
             ))}
         </ProjectTreeBranch>
-
-        
-        <ProjectTreeBranch branchTarget='resources' />
-
-
         <ProjectTreeBranch branchTarget='data-type'>
           {dataTypes
             ?.filter(({ derivation }) => derivation.type === 'array')

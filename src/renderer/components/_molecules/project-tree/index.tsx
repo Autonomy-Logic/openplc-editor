@@ -67,7 +67,6 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
 type IProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
   branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'resources' | 'device'
   children?: ReactNode
-  onClick?: () => void
 }
 
 const BranchSources = {
@@ -78,7 +77,7 @@ const BranchSources = {
   resources: { BranchIcon: ResourceIcon, label: 'Resources' },
   device: { BranchIcon: DeviceIcon, label: 'Device' },
 }
-const ProjectTreeBranch = ({ branchTarget, children, onClick, ...res }: IProjectTreeBranchProps) => {
+const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranchProps) => {
   const {
     workspace: {
       projectData: { pous, dataTypes },
@@ -86,14 +85,7 @@ const ProjectTreeBranch = ({ branchTarget, children, onClick, ...res }: IProject
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState(false)
   const { BranchIcon, label } = BranchSources[branchTarget]
-  const handleBranchVisibility = useCallback(() => {
-    if (onClick) {
-      onClick()
-    } else {
-      setBranchIsOpen(!branchIsOpen)
-    }
-  }, [branchIsOpen, onClick])
-
+  const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
   const hasAssociatedPou =
     pous.some((pou) => pou.type === branchTarget) || (branchTarget === 'data-type' && dataTypes.length > 0)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
@@ -102,7 +94,7 @@ const ProjectTreeBranch = ({ branchTarget, children, onClick, ...res }: IProject
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
       <div
         className='flex w-full cursor-pointer flex-row items-center py-1 pl-[20px] hover:bg-slate-50 dark:hover:bg-neutral-900'
-        onClick={handleBranchVisibility}
+        onClick={hasAssociatedPou ? handleBranchVisibility : undefined}
       >
         {hasAssociatedPou ? (
           <ArrowIcon

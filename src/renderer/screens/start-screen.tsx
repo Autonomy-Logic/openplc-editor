@@ -19,6 +19,7 @@ const StartScreen = () => {
 
   const handleCreateProject = async () => {
     const { success, data, error } = await window.bridge.createProject()
+    console.log(success, data, error)
     if (success && data) {
       setUserWorkspace({
         editingState: 'unsaved',
@@ -43,7 +44,7 @@ const StartScreen = () => {
 
   const handleOpenProject = async () => {
     const { success, data, error } = await window.bridge.openProject()
-    // console.log(success, data, error)
+    console.log(success, data, error)
     if (success && data) {
       setUserWorkspace({
         editingState: 'unsaved',
