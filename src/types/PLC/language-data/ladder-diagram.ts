@@ -7,28 +7,33 @@
 
 import { z } from 'zod'
 
-const _powerRails = z.object({
-  left: z.array(
+const powerRailSchema = z.object({
+  direction: z.enum(['left', 'right']),
+  'local-id': z.string(),
+  width: z.number(),
+  height: z.number(),
+  'global-position': z.object({
+    x: z.number(),
+    y: z.number(),
+  }),
+  // This is our handles.
+  'conection-points': z.array(
     z.object({
-      x: z.number(),
-      y: z.number(),
-      width: z.number(),
-      height: z.number(),
-      label: z.string(),
-      data: z.object({
-        handles: z.array(
-          z.object({
-            x: z.number(),
-            y: z.number(),
-            type: z.enum(['left', 'right']),
-          }),
-        ),
+      'relative-position': z.object({
+        x: z.number(),
+        y: z.number(),
       }),
-    }),
-  ),
-  right: z.array(
-    z.object({
-      // Same structure as left power rails
+      conection: z.object({
+        'local-id': z.string(),
+        'global-position-top': z.object({
+          x: z.number(),
+          y: z.number(),
+        }),
+        'global-position-bottom': z.object({
+          x: z.number(),
+          y: z.number(),
+        }),
+      }),
     }),
   ),
 })
