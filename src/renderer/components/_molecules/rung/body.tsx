@@ -1,12 +1,12 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowState } from '@root/renderer/store/slices'
-import type { CoordinateExtent, Node, OnConnect, OnEdgesChange, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
-import { addEdge, applyEdgeChanges, applyNodeChanges, getNodesBounds } from '@xyflow/react'
+import type { CoordinateExtent, Node, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
+import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
 import { DragEventHandler, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
-import { addNewNode, removeNodes } from './ladder-utils/nodes'
+import { addNewElement, removeElements } from './ladder-utils/elements'
 
 /**
  * Default flow panel extent:
@@ -62,6 +62,10 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     updateFlowStore()
   }, [rungLocal.nodes.length])
 
+  useEffect(() => {
+    console.log('Rung body updated:', rungLocal)
+  }, [rungLocal])
+
   const updateFlowStore = () => {
     if (reactFlowInstance) {
       const flow = reactFlowInstance.toObject()
@@ -71,20 +75,12 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }
 
   const handleAddNode = (newNodeType: string = 'mockNode') => {
-    const { nodes, edges } = addNewNode({
-      rungLocal,
-      newNodeType,
-      defaultBounds: rung?.flowViewport ?? [1530, 200],
-    })
+    const { nodes, edges } = addNewElement(rungLocal, newNodeType, rung.defaultBounds)
     setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
 
   const handleRemoveNode = (nodes: Node[]) => {
-    const { nodes: newNodes, edges: newEdges } = removeNodes({
-      rungLocal,
-      defaultBounds: rung?.flowViewport ?? [1530, 200],
-      nodes,
-    })
+    const { nodes: newNodes, edges: newEdges } = removeElements(rungLocal, nodes, rung.defaultBounds)
     setRungLocal((rung) => ({ ...rung, nodes: newNodes, edges: newEdges }))
   }
 
@@ -93,27 +89,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       setRungLocal((rung) => ({
         ...rung,
         nodes: applyNodeChanges(changes, rung.nodes),
-      }))
-    },
-    [setRungLocal],
-  )
-
-  const onEdgesChange: OnEdgesChange = useCallback(
-    (changes) => {
-      setRungLocal((rung) => ({
-        ...rung,
-        edges: applyEdgeChanges(changes, rung.edges),
-      }))
-      flowActions.onEdgesChange({ rungId: rungLocal.id, changes })
-    },
-    [setRungLocal],
-  )
-
-  const onConnect: OnConnect = useCallback(
-    (connection) => {
-      setRungLocal((rung) => ({
-        ...rung,
-        edges: addEdge(connection, rung.edges),
       }))
     },
     [setRungLocal],
@@ -148,7 +123,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               defaultEdgeOptions: {
                 deletable: false,
                 selectable: false,
-                type: 'step',
+                type: 'smoothstep',
               },
 
               nodes: rungLocal.nodes,
@@ -159,8 +134,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               onNodesDelete: (nodes) => {
                 handleRemoveNode(nodes)
               },
-              onEdgesChange: onEdgesChange,
-              onConnect: onConnect,
               onConnectEnd: updateFlowStore,
               onDragOver: onDragOver,
               onDrop: onDrop,

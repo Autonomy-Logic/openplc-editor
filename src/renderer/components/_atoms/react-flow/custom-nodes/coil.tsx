@@ -13,14 +13,18 @@ import type { ReactNode } from 'react'
 import { useState } from 'react'
 
 import { InputWithRef } from '../../input'
-import type { CustomHandleProps } from './handle'
 import { buildHandle, CustomHandle } from './handle'
+import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
 type CoilNode = Node<
-  { handles: CustomHandleProps[]; variation: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset' },
-  'text'
+  BasicNodeData & {
+    variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset'
+  }
 >
 type CoilProps = NodeProps<CoilNode>
+type CoilBuilderProps = BuilderBasicProps & {
+  variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset'
+}
 
 export const COIL_BLOCK_WIDTH = 34
 export const COIL_BLOCK_HEIGHT = 28
@@ -29,7 +33,7 @@ export const COIL_CONNECTOR_X = COIL_BLOCK_WIDTH
 export const COIL_CONNECTOR_Y = COIL_BLOCK_HEIGHT / 2
 
 type CoilType = {
-  [key in CoilNode['data']['variation']]: {
+  [key in CoilNode['data']['variant']]: {
     svg: ReactNode
   }
 }
@@ -92,7 +96,7 @@ const COIL_TYPES: CoilType = {
 
 export const Coil = ({ selected, data }: CoilProps) => {
   const [coilLabelValue, setCoilLabelValue] = useState<string>('???')
-  const coil = COIL_TYPES[data.variation]
+  const coil = COIL_TYPES[data.variant]
 
   return (
     <div className='relative'>
@@ -121,21 +125,7 @@ export const Coil = ({ selected, data }: CoilProps) => {
   )
 }
 
-export const buildCoilNode = ({
-  id,
-  posX,
-  posY,
-  handleX,
-  handleY,
-  variation = 'default',
-}: {
-  id: string
-  posX: number
-  posY: number
-  handleX: number
-  handleY: number
-  variation?: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset'
-}) => {
+export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: CoilBuilderProps) => {
   const inputHandle = buildHandle({
     id: 'input',
     position: Position.Left,
@@ -166,7 +156,9 @@ export const buildCoilNode = ({
     position: { x: posX, y: posY },
     data: {
       handles,
-      variation,
+      variant,
+      inputConnector: inputHandle,
+      outputConnector: outputHandle,
     },
     width: COIL_BLOCK_WIDTH,
     height: COIL_BLOCK_HEIGHT,
