@@ -13,6 +13,15 @@ type RungsState = {
 }
 
 type FlowActions = {
+  startLadderRung: ({
+    rungId,
+    defaultBounds,
+    flowViewport,
+  }: {
+    rungId: string
+    defaultBounds: [number, number]
+    flowViewport?: [number, number]
+  }) => void
   addRung: (rung: FlowState) => void
   removeRung: (rungId: string) => void
 
