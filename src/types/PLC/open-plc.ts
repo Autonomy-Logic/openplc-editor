@@ -184,8 +184,8 @@ const PLCProjectDataSchema = z.object({
         }),
       ),
     }),
-    globalVariables: z.array(PLCVariableSchema),
   }),
+  globalVariables: z.array(PLCVariableSchema), // TODO: Confirm if it goes inside the 'resource' property.
 })
 
 type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
