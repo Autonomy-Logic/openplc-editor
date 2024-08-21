@@ -63,8 +63,6 @@ export const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: 
   return newRail
 }
 
-
-
 export const addNewElement = (
   rung: FlowState,
   newElementType: string,
@@ -156,15 +154,10 @@ export const removeElements = (
   return { nodes: rungState.nodes, edges: rungState.edges }
 }
 
-
-
 export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
-  console.log('ADD PLACEHOLDER NODES')
-  console.log('Nodes:', nodes)
   const placeholderNodes: Node[] = []
   nodes.forEach((node) => {
     placeholderNodes.push(node)
-
     if (node.id === 'right-rail' || node.type === 'placeholder') return
     const placeholderPosition = getPoisitionToNewElement(node, 'placeholder')
     const placeholder = buildGenericNode({
@@ -175,15 +168,10 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
     placeholderNodes.push(placeholder)
   })
 
-  console.log('Placeholder nodes:', placeholderNodes)
-
   return placeholderNodes
 }
 
 export const removePlaceholderNodes = (nodes: Node[]): Node[] => {
-  console.log('REMOVE PLACEHOLDER NODES')
-  console.log('Nodes:', nodes)
   const nodesNoPlaceholder = nodes.filter((node) => node.type !== 'placeholder')
-  console.log('nodesNoPlaceholder:', nodesNoPlaceholder)
   return nodesNoPlaceholder
 }

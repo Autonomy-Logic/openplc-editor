@@ -84,7 +84,7 @@ export const customNodesStyles: CustomNodeTypes = {
   powerRail: {
     width: powerRailNode.POWER_RAIL_WIDTH,
     height: powerRailNode.POWER_RAIL_HEIGHT,
-    gap: 10,
+    gap: 20,
     handle: {
       x: powerRailNode.POWER_RAIL_CONNECTOR_X,
       y: powerRailNode.POWER_RAIL_CONNECTOR_Y,

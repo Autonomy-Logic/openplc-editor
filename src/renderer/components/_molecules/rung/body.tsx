@@ -85,7 +85,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       newNodeType,
       rung.defaultBounds,
     )
-    console.log('New nodes:', nodes)
     setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
 
@@ -117,20 +116,50 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onDragLeaveViewport = useCallback<DragEventHandler>(
     (event) => {
-      if (!flowRef.current) return
       const { relatedTarget } = event
-      if (!relatedTarget || !flowRef.current.contains(relatedTarget as Node)) {
-        const nodes = removePlaceholderNodes(rungLocal.nodes)
-        setRungLocal((rung) => ({ ...rung, nodes }))
-      }
+      if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
+      const nodes = removePlaceholderNodes(rungLocal.nodes)
+      setRungLocal((rung) => ({ ...rung, nodes }))
     },
     [rungLocal],
   )
 
-  const onDragOver = useCallback<DragEventHandler>((event) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-  }, [])
+  const onDragOver = useCallback<DragEventHandler>(
+    (event) => {
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+
+      const placeholderNodes = rungLocal.nodes.filter((node) => node.type === 'placeholder')
+      if (placeholderNodes.length === 0) return
+
+      const mousePosition = reactFlowInstance?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      if (!mousePosition) return
+
+      const closestNode = placeholderNodes.reduce((prev, curr) => {
+        const prevDistance = Math.hypot(prev.position.x - mousePosition.x, prev.position.y - mousePosition.y)
+        const currDistance = Math.hypot(curr.position.x - mousePosition.x, curr.position.y - mousePosition.y)
+        return prevDistance < currDistance ? prev : curr
+      })
+      if (!closestNode) return
+
+      setRungLocal((rung) => ({
+        ...rung,
+        nodes: rung.nodes.map((node) => {
+          if (node.id === closestNode.id) {
+            return {
+              ...node,
+              selected: true,
+            }
+          }
+          return {
+            ...node,
+            selected: false,
+          }
+        }),
+      }))
+    },
+    [rungLocal],
+  )
 
   const onDrop = useCallback<DragEventHandler>(
     (event) => {

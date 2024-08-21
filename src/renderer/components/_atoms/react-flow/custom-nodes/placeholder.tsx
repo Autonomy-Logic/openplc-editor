@@ -1,4 +1,5 @@
 import { PlaceholderNode, PlaceholderNodeFilled } from '@root/renderer/assets/icons/flow/Placeholder'
+import { cn } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 
 import { buildHandle, CustomHandle } from './handle'
@@ -13,10 +14,10 @@ export const PLACEHOLDER_HEIGHT = 16
 
 export const PLACEHOLDER_CONNECTOR_Y = PLACEHOLDER_HEIGHT / 2
 
-export const Placeholder = ({ data }: PlaceholderProps) => {
+export const Placeholder = ({ selected, data }: PlaceholderProps) => {
   return (
     <>
-      <PlaceholderNodeFilled pathClassName='hover:fill-red-600' />
+      <PlaceholderNodeFilled className={cn({ 'fill-brand': selected })} />
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}
