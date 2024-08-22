@@ -28,26 +28,27 @@ const Project = () => {
   //   structure: 'plc-datatype',
   // } as const
 
-  const handleCreateTab = ({ elementType, name, path, configuration }: TabsProps) => {
-    const tabToBeCreated = {
-      name,
-      path,
-      elementType,
-      configuration: configuration,
-    }
-    console.log('Tab to be created:', tabToBeCreated)
-
-    updateTabs(tabToBeCreated)
-    const editor = getEditorFromEditors(tabToBeCreated.name)
-    if (!editor) {
-      const model = CreateEditorObjectFromTab(tabToBeCreated)
-      addModel(model)
-      setEditor(model)
-      return
-    }
-    addModel(editor)
-    setEditor(editor)
+const handleCreateTab = ({ elementType, name, path, configuration }: TabsProps) => {
+  const tabToBeCreated = {
+    name,
+    path,
+    elementType,
+    configuration,
   }
+  console.log('Tab to be created:', tabToBeCreated)
+
+  updateTabs(tabToBeCreated)
+
+  const editor = getEditorFromEditors(tabToBeCreated.name)
+  if (!editor) {
+    const model = CreateEditorObjectFromTab(tabToBeCreated)
+    addModel(model)
+    setEditor(model)
+    return
+  }
+  addModel(editor)
+  setEditor(editor)
+}
 
   return (
     <div className='w-full'>
@@ -119,6 +120,7 @@ const Project = () => {
             })
           }
         />
+
         <ProjectTreeBranch branchTarget='program'>
           {pous
             ?.filter(({ type }) => type === 'program')
