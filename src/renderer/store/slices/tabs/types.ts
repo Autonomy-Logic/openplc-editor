@@ -21,7 +21,11 @@ const tabsPropsSchema = z.object({
       type: z.literal('data-type'),
       derivation: z.enum(['enumerated', 'structure', 'array']),
     }),
+    z.object({
+      type: z.literal('resources'),
+    }),
   ]),
+  configuration: z.object({}).optional(),
 })
 
 type TabsProps = z.infer<typeof tabsPropsSchema>

@@ -13,6 +13,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       dataTypes: [],
       pous: [],
       globalVariables: [],
+      configuration: {
+        resource: {
+          id: 'res0',
+          tasks: [],
+          instances: [],
+        },
+      },
     },
     systemConfigs: {
       OS: '',

@@ -78,6 +78,15 @@ const CreateEditorModelObject = (
   }
 }
 
+const CreateResourceEditor = (name: string): EditorModel => {
+  const editor = CreateEditorObject({
+    type: 'plc-resource',
+    meta: {
+      name,
+    },
+  })
+  return editor
+}
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
   switch (elementType.type) {
@@ -89,6 +98,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateEditorModelObject(name, elementType.language, 'function-block')
     case 'data-type':
       return CreateEditorModelObject(name, null, null, elementType.derivation)
+    case 'resources':
+      return CreateResourceEditor(name)
   }
 }
 

@@ -10,7 +10,7 @@ import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 const Project = () => {
   const {
     workspace: {
-      projectData: { pous, dataTypes },
+      projectData: { pous, dataTypes, configuration },
     },
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
@@ -28,12 +28,15 @@ const Project = () => {
   //   structure: 'plc-datatype',
   // } as const
 
-  const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
+  const handleCreateTab = ({ elementType, name, path, configuration }: TabsProps) => {
     const tabToBeCreated = {
       name,
       path,
       elementType,
+      configuration: configuration,
     }
+    console.log('Tab to be created:', tabToBeCreated)
+
     updateTabs(tabToBeCreated)
     const editor = getEditorFromEditors(tabToBeCreated.name)
     if (!editor) {
@@ -106,7 +109,16 @@ const Project = () => {
               />
             ))}
         </ProjectTreeBranch>
-        <ProjectTreeBranch branchTarget='resources' />
+        <ProjectTreeBranch
+          branchTarget='resources'
+          onClick={() =>
+            handleCreateTab({
+              configuration: configuration,
+              name: configuration.resource.id,
+              elementType: { type: 'resources' },
+            })
+          }
+        />
         <ProjectTreeBranch branchTarget='program'>
           {pous
             ?.filter(({ type }) => type === 'program')

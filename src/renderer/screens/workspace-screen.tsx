@@ -87,7 +87,7 @@ const WorkspaceScreen = () => {
       if (ref.current) ref.current[action]()
     })
   }, [collapseAll])
-
+  console.log("editor", editor)
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -135,6 +135,7 @@ const WorkspaceScreen = () => {
                    */}
                   {tabs.length > 0 ? (
                     <>
+                      {editor['type'] === 'plc-resource' && <div> Ola</div>}
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
                           <DataTypeEditor derivation={editor['meta']['derivation']} />{' '}
