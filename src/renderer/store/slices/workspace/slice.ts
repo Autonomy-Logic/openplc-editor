@@ -11,7 +11,179 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     projectPath: '',
     projectData: {
       dataTypes: [],
-      pous: [],
+      pous: [
+        {
+          type: 'function',
+          data: {
+            language: 'st',
+            name: 'aaa',
+            returnType: 'BOOL',
+            variables: [
+              {
+                name: 'LocalVar',
+                class: 'local',
+                type: {
+                  definition: 'array',
+                  value: 'ARRAY [1..2] OF DINT',
+                  data: {
+                    baseType: 'dint',
+                    dimensions: ['1..2'],
+                  },
+                },
+                location: '123',
+                documentation: 'asd',
+                debug: false,
+              },
+              {
+                name: 'LocalVar_1',
+                class: 'local',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '123',
+                documentation: 'asd',
+                debug: false,
+              },
+              {
+                name: 'LocalVar_4',
+                class: 'local',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '123',
+                documentation: 'asd',
+                debug: false,
+              },
+              {
+                name: 'LocalVar_5',
+                class: 'local',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '123',
+                documentation: 'asd',
+                debug: false,
+              },
+            ],
+            body: 'This is the body of aaa\r\n\r\n\r\nst\r\n\r\nsd\r\n\r\nas\r\ndasd\r\nsa\r\ndasd',
+            documentation: 'Doc for function',
+          },
+        },
+        {
+          type: 'function',
+          data: {
+            language: 'st',
+            name: 'bbb',
+            returnType: 'BOOL',
+            variables: [
+              {
+                name: 'LocalVar',
+                class: 'input',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '',
+                documentation: '',
+                debug: false,
+              },
+              {
+                name: 'LocalVar_1',
+                class: 'input',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '',
+                documentation: '',
+                debug: false,
+              },
+              {
+                name: 'LocalVar_2',
+                class: 'input',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '',
+                documentation: '',
+                debug: false,
+              },
+              {
+                name: 'LocalVar_3',
+                class: 'input',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '',
+                documentation: '',
+                debug: false,
+              },
+              {
+                name: 'LocalVar_4',
+                class: 'input',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '',
+                documentation: '',
+                debug: false,
+              },
+              {
+                name: 'LocalVar_5',
+                class: 'input',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '',
+                documentation: '',
+                debug: false,
+              },
+              {
+                name: 'LocalVar_6',
+                class: 'input',
+                type: {
+                  definition: 'base-type',
+                  value: 'dint',
+                },
+                location: '',
+                documentation: '',
+                debug: false,
+              },
+            ],
+            body: 'This is the body of bbb',
+            documentation: 'Doc for function',
+          },
+        },
+        {
+          type: 'function',
+          data: {
+            language: 'ld',
+            name: 'ccc',
+            returnType: 'BOOL',
+            variables: [],
+            body: 'This is the body of ccc',
+            documentation: 'Doc for function',
+          },
+        },
+        {
+          type: 'function',
+          data: {
+            language: 'il',
+            name: 'ddd',
+            returnType: 'BOOL',
+            variables: [],
+            body: 'CALL MyFB // Call the function block MyFB\r\nIN := InputValue1 // Assign input value to the input parameter\r\nIN2 := InputValue2\r\nOUT => OutputValue // Assign the output value to a variable\r\nLD MyStructure.Element1 // Load the value of element1 from the structure\r\nADD MyStructure.Element2 // Add the value of element2\r\nST Result // Store the result\r\nLD Value1 // Load the first value\r\nADD Value2 // Add the second value\r\nMUL Value3 // Multiply the result by the third value\r\nDIV Value4 // Divide the result by the fourth value\r\nST Result // Store the final result\r\nLD I_Temperature // Load the current temperature\r\nLESS THAN Setpoint // Compare with the setpoint\r\nST Heater_Output // Turn on the heater if temperature is less than setpoint\r\nLABEL START\r\nLD Counter // Load the current counter value\r\nLESS THAN Max_Count // Check if counter is less than maximum\r\nJMP END // If counter is not less than maximum, jump to END\r\nADD 1 // Increment the counter\r\nST Counter // Store the incremented value\r\nJMP START // Jump back to the beginning\r\nLABEL END\r\nST Reset_Output // Reset output when counter reaches maximum\r\n\r\nLD\r\nLDN\r\nST\r\nSTN\r\nS\r\nR\r\nAND\r\nANDN\r\n&\r\n&N\r\nOR\r\nORN\r\nXOR\r\nXORN\r\nNOT\r\nADD\r\nSUB\r\nMUL\r\nDIV\r\nMOD\r\nGT\r\nGE\r\nEQ\r\nNE\r\nLE\r\nLT\r\nJMP\r\nJMPC\r\nJMPN\r\nCAL\r\nCALC\r\nCALN\r\nRET\r\nRETC\r\nRETN',
+            documentation: 'Doc for function',
+          },
+        },
+      ],
       globalVariables: [],
     },
     systemConfigs: {

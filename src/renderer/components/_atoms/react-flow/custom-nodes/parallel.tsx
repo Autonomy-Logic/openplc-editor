@@ -78,7 +78,7 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       position: Position.Right,
       type: 'source',
       isConnectable: false,
-      glbX: handleX,
+      glbX: handleX + PARALLEL_WIDTH,
       glbY: handleY,
       relX: PARALLEL_WIDTH,
       relY: PARALLEL_CONNECTOR_Y,

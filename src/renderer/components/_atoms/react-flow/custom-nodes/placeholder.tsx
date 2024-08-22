@@ -26,7 +26,7 @@ export const Placeholder = ({ selected, data }: PlaceholderProps) => {
 }
 
 export const builderPlaceholderNode = ({ id, posX, posY, handleX, handleY }: ParallelBuilderProps): PlaceholderNode => {
-  const _handles = [
+  const handles = [
     buildHandle({
       id: 'input',
       position: Position.Left,
@@ -37,6 +37,7 @@ export const builderPlaceholderNode = ({ id, posX, posY, handleX, handleY }: Par
       relX: 0,
       relY: PLACEHOLDER_CONNECTOR_Y,
       style: {
+        visibility: 'hidden',
         top: PLACEHOLDER_CONNECTOR_Y,
         left: 0,
       },
@@ -51,6 +52,7 @@ export const builderPlaceholderNode = ({ id, posX, posY, handleX, handleY }: Par
       relX: PLACEHOLDER_WIDTH,
       relY: PLACEHOLDER_CONNECTOR_Y,
       style: {
+        visibility: 'hidden',
         top: PLACEHOLDER_CONNECTOR_Y,
         right: 0,
       },
@@ -61,7 +63,7 @@ export const builderPlaceholderNode = ({ id, posX, posY, handleX, handleY }: Par
     id,
     type: 'placeholder',
     data: {
-      handles: [],
+      handles: handles,
       inputConnector: undefined,
       outputConnector: undefined,
     },

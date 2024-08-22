@@ -6,7 +6,13 @@ import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } f
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
-import { addNewElement, removeElements, removePlaceholderNodes, renderPlaceholderNodes } from './ladder-utils/elements'
+import {
+  _addNewElement,
+  addNewElement,
+  removeElements,
+  removePlaceholderNodes,
+  renderPlaceholderNodes,
+} from './ladder-utils/elements'
 
 /**
  * Default flow panel extent:
@@ -72,12 +78,14 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       const flow = reactFlowInstance.toObject()
       flowActions.setNodes({ rungId: rungLocal.id, nodes: flow.nodes })
       flowActions.setEdges({ rungId: rungLocal.id, edges: flow.edges })
+      flowActions.updateFlowViewport({ rungId: rungLocal.id, flowViewport: flowPanelExtent[1] })
     }
   }
 
   const handleAddNode = (newNodeType: string = 'mockNode') => {
+    const { nodes, edges } = _addNewElement(rungLocal, newNodeType, rung.defaultBounds)
     const nodesWithNoPlaceholder = removePlaceholderNodes(rungLocal.nodes)
-    const { nodes, edges } = addNewElement(
+    const { nodes: _nodes, edges: _edges } = addNewElement(
       {
         ...rungLocal,
         nodes: nodesWithNoPlaceholder,

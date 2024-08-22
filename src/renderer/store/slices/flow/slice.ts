@@ -134,5 +134,15 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         }),
       )
     },
+
+    updateFlowViewport({ flowViewport, rungId }) {
+      setState(
+        produce((state: RungsState) => {
+          const rung = state.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+          rung.flowViewport = flowViewport
+        }),
+      )
+    },
   },
 })

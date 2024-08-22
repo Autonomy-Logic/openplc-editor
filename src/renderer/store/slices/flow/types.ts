@@ -34,6 +34,8 @@ type FlowActions = {
 
   setEdges: ({ edges, rungId }: { edges: Edge[]; rungId: string }) => void
   updateEdge: ({ edge, rungId }: { edge: Edge; rungId: string }) => void
+
+  updateFlowViewport: ({ flowViewport, rungId }: { flowViewport: [number, number]; rungId: string }) => void
 }
 
 /** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */
