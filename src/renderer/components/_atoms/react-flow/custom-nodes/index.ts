@@ -13,6 +13,7 @@ export const customNodeTypes = {
   coil: coilNode.Coil,
   contact: contactNode.Contact,
   parallel: parallelNode.Parallel,
+  parallelPlaceholder: placeholderNode.Placeholder,
   placeholder: placeholderNode.Placeholder,
   powerRail: powerRailNode.PowerRail,
   mockNode: mockNode.MockNode,
@@ -71,6 +72,16 @@ export const customNodesStyles: CustomNodeTypes = {
       offsetY: parallelNode.PARALLEL_CONNECTOR_Y,
     },
   },
+  parallelPlaceholder: {
+    width: placeholderNode.PLACEHOLDER_WIDTH,
+    height: placeholderNode.PLACEHOLDER_HEIGHT,
+    gap: 0,
+    handle: {
+      x: 0,
+      y: placeholderNode.PLACEHOLDER_CONNECTOR_Y,
+      offsetY: 0,
+    },
+  },
   placeholder: {
     width: placeholderNode.PLACEHOLDER_WIDTH,
     height: placeholderNode.PLACEHOLDER_HEIGHT,
@@ -108,6 +119,7 @@ export const nodesBuilder = {
   coil: coilNode.buildCoilNode,
   contact: contactNode.buildContactNode,
   parallel: parallelNode.buildParallel,
+  parallelPlaceholder: placeholderNode.builderParallelPlaceholderNode,
   placeholder: placeholderNode.builderPlaceholderNode,
   powerRail: powerRailNode.buildPowerRailNode,
   mockNode: mockNode.buildMockNode,

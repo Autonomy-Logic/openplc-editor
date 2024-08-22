@@ -7,7 +7,6 @@ import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } f
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
 import {
-  _addNewElement,
   addNewElement,
   removeElements,
   removePlaceholderNodes,
@@ -83,16 +82,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }
 
   const handleAddNode = (newNodeType: string = 'mockNode') => {
-    const { nodes, edges } = _addNewElement(rungLocal, newNodeType, rung.defaultBounds)
-    const nodesWithNoPlaceholder = removePlaceholderNodes(rungLocal.nodes)
-    const { nodes: _nodes, edges: _edges } = addNewElement(
-      {
-        ...rungLocal,
-        nodes: nodesWithNoPlaceholder,
-      },
-      newNodeType,
-      rung.defaultBounds,
-    )
+    const { nodes, edges } = addNewElement(rungLocal, newNodeType, rung.defaultBounds)
     setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
 
@@ -137,7 +127,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       event.preventDefault()
       event.dataTransfer.dropEffect = 'move'
 
-      const placeholderNodes = rungLocal.nodes.filter((node) => node.type === 'placeholder')
+      const placeholderNodes = rungLocal.nodes.filter((node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder')
       if (placeholderNodes.length === 0) return
 
       const mousePosition = reactFlowInstance?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
