@@ -199,8 +199,6 @@ export const addNewElement = (
   newNodes = removePlaceholderNodes(newNodes)
   newNodes = rearrangeNodes(newNodes, defaultViewportBounds)
 
-  console.log('newEdges', newEdges)
-
   return { nodes: newNodes, edges: newEdges }
 }
 
