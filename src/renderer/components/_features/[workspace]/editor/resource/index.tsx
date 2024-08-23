@@ -1,9 +1,13 @@
-
+import GlobalVariables from './global-variables'
+import InstancesTable from './instances'
+import TasksTable from './tasks'
 
 export default function ResourcesEditor() {
   return (
     <div>
-      <h1>Resources Editor</h1>
+      <GlobalVariables tableData={[]} filterValue="" columnFilters={{}} />
+      <InstancesTable />
+      <TasksTable />
     </div>
   )
 }

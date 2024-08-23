@@ -116,6 +116,7 @@ const handleCreateTab = ({ elementType, name, path, configuration }: TabsProps) 
             handleCreateTab({
               configuration: configuration,
               name: configuration.resource.id,
+              path: `/data/configuration/resources/${configuration.resource.id}`,
               elementType: { type: 'resources' },
             })
           }
