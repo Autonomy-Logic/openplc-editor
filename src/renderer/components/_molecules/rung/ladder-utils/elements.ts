@@ -105,6 +105,9 @@ export const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: 
 }
 
 const rearrangeNodes = (nodes: Node[], _defaultBounds: [number, number]) => {
+  /**
+   * TODO: implement the rearrange of parallel nodes
+   */
   const newNodes: Node[] = []
   nodes.forEach((node, index) => {
     if (node.type === 'powerRail') {
