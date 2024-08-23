@@ -6,13 +6,14 @@ import type { FlowState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 import { toInteger } from 'lodash'
+import { v4 as uuidv4 } from 'uuid'
 
 import type { CustomHandleProps } from '../../../_atoms/react-flow/custom-nodes/handle'
-import { disconnectNodes, disconnectParallel } from './edges'
-import { buildGenericNode, getNodeStyle } from './nodes'
+import { buildEdge, connectNodes, disconnectNodes, disconnectParallel } from './edges'
+import { buildGenericNode, getNodeStyle, isNodeOfType } from './nodes'
 
-const getPreviousElement = (nodes: Node[], newNodeIndex?: number) => {
-  return nodes[(newNodeIndex ?? nodes.length - 1) - 1]
+export const getPreviousElement = (nodes: Node[], nodeIndex?: number) => {
+  return nodes[(nodeIndex ?? nodes.length - 1) - 1]
 }
 
 const getPoisitionBasedOnPreviousNode = (prevEl: Node, newEl: string | Node) => {
@@ -124,7 +125,6 @@ const rearrangeNodes = (nodes: Node[], _defaultBounds: [number, number]) => {
     })
     newNodes.push({
       ...node,
-      id: `${node.type}_${newNodePosition.posX}_${newNodePosition.posY}`,
       position: { x: newNodePosition.posX, y: newNodePosition.posY },
       data: {
         ...nodeData,
@@ -140,91 +140,69 @@ const rearrangeNodes = (nodes: Node[], _defaultBounds: [number, number]) => {
 export const addNewElement = (
   rung: FlowState,
   newElementType: string,
-  _defaultViewportBounds: [number, number],
+  defaultViewportBounds: [number, number],
 ): { nodes: Node[]; edges: Edge[] } => {
   const [selectedPlaceholderIndex, selectedPlaceholder] =
-    Object.entries(rung.nodes).find((node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected) ?? []
+    Object.entries(rung.nodes).find(
+      (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
+    ) ?? []
   if (!selectedPlaceholder || !selectedPlaceholderIndex) return { nodes: rung.nodes, edges: rung.edges }
 
   const newElPosition = getPositionBasenOnPlaceholderNode(selectedPlaceholder, newElementType)
   const newEl = buildGenericNode({
     nodeType: newElementType,
-    id: `${newElementType}_${newElPosition.posX}_${newElPosition.posY}`,
+    id: `${newElementType.toUpperCase()}_${uuidv4()}`,
     ...newElPosition,
   })
 
   let newNodes = [...rung.nodes]
-  if (newEl.type !== 'parallel') {
-    newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newEl)
-  } else {
+  newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newEl)
+
+  let newEdges = connectNodes(
+    { ...rung, nodes: newNodes },
+    getPreviousElement(
+      newNodes,
+      newNodes.findIndex((node) => node.id === newEl.id),
+    ).id,
+    newEl.id,
+    'serial',
+  )
+
+  if (isNodeOfType(newEl, 'parallel')) {
     const openParallel = newEl as ParallelNode
     const closeParallelPosition = getPositionBasenOnPlaceholderNode(selectedPlaceholder, newElementType)
     const closeParallel = nodesBuilder.parallel({
-      id: `${newElementType}_${closeParallelPosition.posX}_${closeParallelPosition.posY}`,
+      id: `${newElementType.toUpperCase()}_close_${uuidv4()}`,
       ...closeParallelPosition,
       type: 'close',
     })
     openParallel.data.parallelCloseReference = closeParallel.id
     closeParallel.data.parallelOpenReference = openParallel.id
-    newNodes.splice(toInteger(selectedPlaceholderIndex), 1, openParallel, closeParallel)
+    newNodes.splice(toInteger(selectedPlaceholderIndex) + 1, 0, closeParallel)
+    newEdges = connectNodes(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      getPreviousElement(
+        newNodes,
+        newNodes.findIndex((node) => node.id === closeParallel.id),
+      ).id,
+      closeParallel.id,
+      'serial',
+    )
+    newEdges.push(
+      buildEdge(openParallel.id, closeParallel.id, {
+        sourceHandle: openParallel.data.parallelOutputConnector?.id,
+        targetHandle: closeParallel.data.parallelInputConnector?.id,
+      }),
+    )
   }
+
   newNodes = removePlaceholderNodes(newNodes)
-  newNodes = rearrangeNodes(newNodes, _defaultViewportBounds)
+  newNodes = rearrangeNodes(newNodes, defaultViewportBounds)
 
-  return { nodes: newNodes, edges: rung.edges }
+  console.log('newEdges', newEdges)
+
+  return { nodes: newNodes, edges: newEdges }
 }
-
-// export const addNewElement = (
-//   rung: FlowState,
-//   newElementType: string,
-//   defaultViewportBounds: [number, number],
-// ): { nodes: Node[]; edges: Edge[] } => {
-//   const rails = rung.nodes.filter((node) => node.type === 'powerRail')
-//   const nodes = rung.nodes.filter((node) => node.type !== 'powerRail')
-
-//   const prevElement = getPreviousElement([rails[0], ...nodes])
-//   const newElPosition = getPoisitionBasedOnPreviousNode(prevElement, newElementType)
-//   const newEl = buildGenericNode({
-//     nodeType: newElementType,
-//     id: `${newElementType}_${newElPosition.posX}_${newElPosition.posY}`,
-//     ...newElPosition,
-//   })
-
-//   const newNodes = [...nodes, newEl]
-//   let newEdges = connectNodes({ ...rung, nodes: [rails[0], ...newNodes, rails[1]] }, prevElement.id, newEl.id)
-
-//   if (newElementType === 'parallel') {
-//     const openParallel = newEl as ParallelNode
-//     const closeParallelPosition = getPoisitionBasedOnPreviousNode(newEl, newElementType)
-//     const closeParallel = nodesBuilder.parallel({
-//       id: `${newElementType}_${closeParallelPosition.posX}_${closeParallelPosition.posY}`,
-//       ...closeParallelPosition,
-//       type: 'close',
-//     })
-//     openParallel.data.parallelCloseReference = closeParallel.id
-//     closeParallel.data.parallelOpenReference = openParallel.id
-//     newNodes.push(closeParallel)
-//     newEdges = connectNodes(
-//       { ...rung, edges: newEdges, nodes: [rails[0], ...newNodes, rails[1]] },
-//       newEl.id,
-//       closeParallel.id,
-//     )
-//     newEdges = [
-//       ...newEdges,
-//       buildEdge(newEl.id, closeParallel.id, {
-//         sourceHandle: openParallel.data.parallelOutputConnector?.id,
-//         targetHandle: closeParallel.data.parallelInputConnector?.id,
-//       }),
-//     ]
-//   }
-
-//   rails[1] = changeRailBounds(rails[1], [rails[0], ...newNodes], defaultViewportBounds)
-
-//   return {
-//     nodes: [rails[0], ...newNodes, rails[1]],
-//     edges: newEdges,
-//   }
-// }
 
 export const removeElement = (rung: FlowState, element: Node, defaultViewportBounds: [number, number]) => {
   const rails = rung.nodes.filter((node) => node.type === 'powerRail')

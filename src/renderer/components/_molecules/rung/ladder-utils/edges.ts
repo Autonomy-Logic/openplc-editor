@@ -3,6 +3,9 @@ import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custo
 import type { FlowState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
+import { getPreviousElement } from './elements'
+import { isNodeOfType } from './nodes'
+
 type ConnectionOptions = {
   sourceHandle?: string
   targetHandle?: string
@@ -10,7 +13,7 @@ type ConnectionOptions = {
 
 export const buildEdge = (sourceNodeId: string, targetNodeId: string, options?: ConnectionOptions): Edge => {
   return {
-    id: `e_${sourceNodeId}_${targetNodeId}__${options?.sourceHandle ?? 's'}_${options?.targetHandle ?? 't'}`,
+    id: `e_${sourceNodeId}_${targetNodeId}__${options?.sourceHandle}_${options?.targetHandle}`,
     source: sourceNodeId,
     target: targetNodeId,
     sourceHandle: options?.sourceHandle,
@@ -26,10 +29,23 @@ export const connectNodes = (
   rung: FlowState,
   sourceNodeId: string,
   targetNodeId: string,
+  type: 'serial' | 'parallel',
   options?: ConnectionOptions,
 ): Edge[] => {
+  console.log('sourceNodeId', sourceNodeId)
+  console.log('targetNodeId', targetNodeId)
+
   // Find the source edge
-  const sourceEdge = rung.edges.find((edge) => edge.source === sourceNodeId)
+  const sourceNode = rung.nodes.find((node) => node.id === sourceNodeId) as Node
+  const sourceEdge = rung.edges.find(
+    (edge) =>
+      edge.source === sourceNodeId &&
+      (type === 'parallel' && isNodeOfType(sourceNode, 'parallel')
+        ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id
+        : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id),
+  )
+
+  console.log('sourceEdge', sourceEdge)
 
   const targetNode = rung.nodes.find((node) => node.id === targetNodeId)
   const targetNodeData = targetNode?.data as BasicNodeData
@@ -40,6 +56,9 @@ export const connectNodes = (
    */
   const targetHandle = !options ? targetNodeData.inputConnector?.id : options.targetHandle
   const sourceHandle = !options ? targetNodeData.outputConnector?.id : options.sourceHandle
+
+  console.log('targetHandle', targetHandle)
+  console.log('sourceHandle', sourceHandle)
 
   // If the source edge is found, update the target
   if (sourceEdge) {
@@ -63,7 +82,7 @@ export const connectNodes = (
   }
 
   const edges = rung.edges
-  return [...edges, buildEdge(sourceNodeId, targetNodeId, options)]
+  return [...edges, buildEdge(sourceNodeId, targetNodeId, { sourceHandle, targetHandle })]
 }
 
 export const disconnectNodes = (rung: FlowState, sourceNodeId: string, targetNodeId: string): Edge[] => {
@@ -158,6 +177,7 @@ export const disconnectParallel = (rung: FlowState, parallelNodeId: string): { n
     },
     openTargetConnection?.source ?? '',
     closeSourceConnection?.target ?? '',
+    'serial',
     {
       sourceHandle: openTargetConnection?.sourceHandle ?? undefined,
       targetHandle: closeSourceConnection?.targetHandle ?? undefined,
@@ -165,4 +185,21 @@ export const disconnectParallel = (rung: FlowState, parallelNodeId: string): { n
   )
 
   return { nodes: newNodes, edges: newEdges }
+}
+
+export const rearrangeConnections = (rung: FlowState): Edge[] => {
+  const { nodes } = rung
+
+  const newEdges: Edge[] = []
+
+  nodes.forEach((node, index) => {
+    if (node.id === 'left-rail') return
+
+    const prevNode = getPreviousElement(nodes, index)
+    const edge = buildEdge(prevNode.id, node.id)
+
+    newEdges.push(edge)
+  })
+
+  return newEdges
 }
