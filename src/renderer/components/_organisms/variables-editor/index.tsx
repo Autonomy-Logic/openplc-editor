@@ -99,7 +99,7 @@ const VariablesEditor = () => {
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
 
-    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables 
+    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     const selectedRow = parseInt(editorVariables.selectedRow)
 
     if (variables.length === 0) {

@@ -1,13 +1,11 @@
 import { GlobalVariablesEditor } from './global-variables'
-import InstancesTable from './instances'
-import TasksTable from './tasks'
+// import InstancesTable from './instances'
+// import TasksTable from './tasks'
 
 export default function ResourcesEditor() {
   return (
-    <div>
+    <div className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
       <GlobalVariablesEditor />
-      <InstancesTable />
-      <TasksTable />
     </div>
   )
 }

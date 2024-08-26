@@ -35,7 +35,7 @@ const GlobalVariablesEditor = () => {
    * Editor name state to keep track of the editor name
    * Other states to keep track of the editor's variables and display at the screen
    */
-  // const FilterOptions = ['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp'] as const
+  // const FilterOptions = ['All', 'global', 'Input', 'Output', 'InOut', 'External', 'Temp'] as const
   // type FilterOptionsType = (typeof FilterOptions)[number]
   const [editorVariables, setEditorVariables] = useState<VariablesTableType>({
     display: 'table',
@@ -48,10 +48,10 @@ const GlobalVariablesEditor = () => {
    * Update the table data and the editor's variables when the editor or the pous change
    */
   useEffect(() => {
-    const variablesToTable = globalVariables.filter((variable) => variable.type.value === 'int')
+    const variablesToTable = globalVariables.filter((variable) => variable.name !== 'global')
     setTableData(variablesToTable)
+    console.log(' globalVariables', globalVariables)
   }, [editor, globalVariables])
-
   /**
    * If the editor name is not the same as the current editor name
    * set the editor name and the editor's variables to the states
@@ -86,7 +86,7 @@ const GlobalVariablesEditor = () => {
   const handleRearrangeVariables = (index: number, row?: number) => {
     if (editorVariables.display === 'code') return
     rearrangeVariables({
-      scope: 'local',
+      scope: 'global',
       associatedPou: editor.meta.name,
       rowId: row ?? parseInt(editorVariables.selectedRow),
       newIndex: (row ?? parseInt(editorVariables.selectedRow)) + index,
@@ -100,16 +100,15 @@ const GlobalVariablesEditor = () => {
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
 
-    const variables = globalVariables.filter((variable) => variable.type.value === 'int') // em vez de pous, globalvariables no store
+    const variables = globalVariables.filter((variable) => variable.name !== 'global') // em vez de pous, globalvariables no store
     const selectedRow = parseInt(editorVariables.selectedRow)
 
     if (variables.length === 0) {
       createVariable({
-        scope: 'local',
-        associatedPou: editor.meta.name,
+        scope: 'global',
         data: {
-          name: 'LocalVar',
-          class: 'local',
+          name: 'GlobalVar',
+          class: 'global',
           type: { definition: 'base-type', value: 'dint' },
           location: '',
           documentation: '',
@@ -127,7 +126,7 @@ const GlobalVariablesEditor = () => {
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createVariable({ scope: 'local', associatedPou: editor.meta.name, data: { ...variable } })
+      createVariable({ scope: 'global', associatedPou: editor.meta.name, data: { ...variable } })
       updateModelVariables({
         display: 'table',
         selectedRow: variables.length,
@@ -135,7 +134,7 @@ const GlobalVariablesEditor = () => {
       return
     }
     createVariable({
-      scope: 'local',
+      scope: 'global',
       associatedPou: editor.meta.name,
       data: { ...variable },
       rowToInsert: selectedRow + 1,
@@ -150,9 +149,9 @@ const GlobalVariablesEditor = () => {
     if (editorVariables.display === 'code') return
 
     const selectedRow = parseInt(editorVariables.selectedRow)
-    deleteVariable({ scope: 'local', associatedPou: editor.meta.name, rowId: selectedRow })
+    deleteVariable({ scope: 'global', associatedPou: editor.meta.name, rowId: selectedRow })
 
-    const variables = globalVariables.filter((variable) => variable.type.value === 'int')
+    const variables = globalVariables.filter((variable) => variable.name !== 'global')
     if (selectedRow === variables.length - 1) {
       updateModelVariables({
         display: 'table',
