@@ -95,7 +95,7 @@ const COIL_TYPES: CoilType = {
 }
 
 export const Coil = ({ selected, data }: CoilProps) => {
-  const [coilLabelValue, setCoilLabelValue] = useState<string>('???')
+  const [coilLabelValue, setCoilLabelValue] = useState<string>('')
   const coil = COIL_TYPES[data.variant]
 
   return (
@@ -115,6 +115,7 @@ export const Coil = ({ selected, data }: CoilProps) => {
         <InputWithRef
           value={coilLabelValue}
           onChange={(e) => setCoilLabelValue(e.target.value)}
+          placeholder='???'
           className='w-full bg-transparent text-center text-sm outline-none'
         />
       </div>
