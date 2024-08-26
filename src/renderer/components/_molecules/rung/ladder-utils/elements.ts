@@ -16,22 +16,22 @@ export const getPreviousElement = (nodes: Node[], nodeIndex?: number) => {
   return nodes[(nodeIndex ?? nodes.length - 1) - 1]
 }
 
-const getPoisitionBasedOnPreviousNode = (prevEl: Node, newEl: string | Node) => {
-  const prevElOutputHandle = prevEl.data.outputConnector as CustomHandleProps
-  const prevElStyle = getNodeStyle({ node: prevEl })
-  const newNodeStyle = getNodeStyle(typeof newEl === 'string' ? { nodeType: newEl } : { node: newEl })
+const getPoisitionBasedOnPreviousNode = (previousElement: Node, newElement: string | Node) => {
+  const previousElementOutputHandle = previousElement.data.outputConnector as CustomHandleProps
+  const previousElementStyle = getNodeStyle({ node: previousElement })
+  const newNodeStyle = getNodeStyle(typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement })
 
-  const gap = prevElStyle.gap + newNodeStyle.gap
+  const gap = previousElementStyle.gap + newNodeStyle.gap
   const offsetY = newNodeStyle.handle.y
 
   const position = {
-    posX: prevEl.position.x + prevElStyle.width + gap,
+    posX: previousElement.position.x + previousElementStyle.width + gap,
     posY:
-      prevEl.type === (typeof newEl === 'string' ? newEl : newEl.type)
-        ? prevEl.position.y
-        : prevElOutputHandle.glbPosition.y - offsetY,
-    handleX: prevEl.position.x + prevElStyle.width + gap,
-    handleY: prevElOutputHandle.glbPosition.y,
+    previousElement.type === (typeof newElement === 'string' ? newElement : newElement.type)
+        ? previousElement.position.y
+        : previousElementOutputHandle.glbPosition.y - offsetY,
+    handleX: previousElement.position.x + previousElementStyle.width + gap,
+    handleY: previousElementOutputHandle.glbPosition.y,
   }
 
   return position
