@@ -36,7 +36,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    * minX: 0    | minY: 0
    * maxX: 1530 | maxY: 200
    */
-  const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([[0, 0], rung?.defaultBounds ?? [1530, 200]])
+  const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([[0, 0], rung?.flowViewport ?? [1530, 200]])
 
   /**
    * Update flow panel extent based on the bounds of the nodes
@@ -52,7 +52,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       height: 40,
     }
     const bounds = getNodesBounds([zeroPositionNode, ...rungLocal.nodes])
-    const [defaultWidth, defaultHeight] = rung?.flowViewport ?? [1530, 200]
+    const [defaultWidth, defaultHeight] = rung?.defaultBounds ?? [1530, 200]
 
     // If the bounds are less than the default extent, set the panel extent to the default extent
     if (bounds.width < defaultWidth) bounds.width = defaultWidth
@@ -62,22 +62,18 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       [0, 0],
       [bounds.width, bounds.height],
     ])
+    flowActions.updateFlowViewport({ rungId: rungLocal.id, flowViewport: [bounds.width, bounds.height] })
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
     updateFlowStore()
   }, [rungLocal.nodes.length])
 
-  useEffect(() => {
-    console.log('Rung body updated:', rungLocal)
-  }, [rungLocal])
-
   const updateFlowStore = () => {
     if (reactFlowInstance) {
       const flow = reactFlowInstance.toObject()
       flowActions.setNodes({ rungId: rungLocal.id, nodes: flow.nodes })
       flowActions.setEdges({ rungId: rungLocal.id, edges: flow.edges })
-      flowActions.updateFlowViewport({ rungId: rungLocal.id, flowViewport: flowPanelExtent[1] })
     }
   }
 

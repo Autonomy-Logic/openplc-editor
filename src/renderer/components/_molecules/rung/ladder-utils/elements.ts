@@ -152,27 +152,27 @@ export const addNewElement = (
   if (!selectedPlaceholder || !selectedPlaceholderIndex) return { nodes: rung.nodes, edges: rung.edges }
 
   const newElPosition = getPositionBasenOnPlaceholderNode(selectedPlaceholder, newElementType)
-  const newEl = buildGenericNode({
+  const newElement = buildGenericNode({
     nodeType: newElementType,
     id: `${newElementType.toUpperCase()}_${uuidv4()}`,
     ...newElPosition,
   })
 
   let newNodes = [...rung.nodes]
-  newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newEl)
+  newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newElement)
 
   let newEdges = connectNodes(
     { ...rung, nodes: newNodes },
     getPreviousElement(
       newNodes,
-      newNodes.findIndex((node) => node.id === newEl.id),
+      newNodes.findIndex((node) => node.id === newElement.id),
     ).id,
-    newEl.id,
+    newElement.id,
     'serial',
   )
 
-  if (isNodeOfType(newEl, 'parallel')) {
-    const openParallel = newEl as ParallelNode
+  if (isNodeOfType(newElement, 'parallel')) {
+    const openParallel = newElement as ParallelNode
     const closeParallelPosition = getPositionBasenOnPlaceholderNode(selectedPlaceholder, newElementType)
     const closeParallel = nodesBuilder.parallel({
       id: `${newElementType.toUpperCase()}_close_${uuidv4()}`,
