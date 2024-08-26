@@ -49,7 +49,7 @@ const BLOCK_TYPES: BlockTypes = {
 }
 
 export const Block = ({ selected, data }: BlockProps) => {
-  const [blockLabelValue, setBlockLabelValue] = useState<string>('???')
+  const [blockLabelValue, setBlockLabelValue] = useState<string>('')
   const { name, leftConnectors, rightConnectors, tooltipContent } = BLOCK_TYPES[data.variant]
 
   return (
@@ -102,6 +102,7 @@ export const Block = ({ selected, data }: BlockProps) => {
         <InputWithRef
           value={blockLabelValue}
           onChange={(e) => setBlockLabelValue(e.target.value)}
+          placeholder='???'
           className='w-full bg-transparent text-center text-sm outline-none'
         />
       </div>

@@ -3,6 +3,7 @@ import * as coilNode from './coil'
 import * as contactNode from './contact'
 import * as mockNode from './mock-node'
 import * as parallelNode from './parallel'
+import * as placeholderNode from './placeholder'
 import * as powerRailNode from './power-rail'
 
 export const DEFAULT_NODES_GAP = 50
@@ -12,6 +13,8 @@ export const customNodeTypes = {
   coil: coilNode.Coil,
   contact: contactNode.Contact,
   parallel: parallelNode.Parallel,
+  parallelPlaceholder: placeholderNode.Placeholder,
+  placeholder: placeholderNode.Placeholder,
   powerRail: powerRailNode.PowerRail,
   mockNode: mockNode.MockNode,
 }
@@ -69,10 +72,30 @@ export const customNodesStyles: CustomNodeTypes = {
       offsetY: parallelNode.PARALLEL_CONNECTOR_Y,
     },
   },
+  parallelPlaceholder: {
+    width: placeholderNode.PLACEHOLDER_WIDTH,
+    height: placeholderNode.PLACEHOLDER_HEIGHT,
+    gap: 0,
+    handle: {
+      x: 0,
+      y: placeholderNode.PLACEHOLDER_CONNECTOR_Y,
+      offsetY: 0,
+    },
+  },
+  placeholder: {
+    width: placeholderNode.PLACEHOLDER_WIDTH,
+    height: placeholderNode.PLACEHOLDER_HEIGHT,
+    gap: 0,
+    handle: {
+      x: 0,
+      y: placeholderNode.PLACEHOLDER_CONNECTOR_Y,
+      offsetY: 0,
+    },
+  },
   powerRail: {
     width: powerRailNode.POWER_RAIL_WIDTH,
     height: powerRailNode.POWER_RAIL_HEIGHT,
-    gap: 0,
+    gap: 20,
     handle: {
       x: powerRailNode.POWER_RAIL_CONNECTOR_X,
       y: powerRailNode.POWER_RAIL_CONNECTOR_Y,
@@ -96,6 +119,8 @@ export const nodesBuilder = {
   coil: coilNode.buildCoilNode,
   contact: contactNode.buildContactNode,
   parallel: parallelNode.buildParallel,
+  parallelPlaceholder: placeholderNode.builderParallelPlaceholderNode,
+  placeholder: placeholderNode.builderPlaceholderNode,
   powerRail: powerRailNode.buildPowerRailNode,
   mockNode: mockNode.buildMockNode,
 }

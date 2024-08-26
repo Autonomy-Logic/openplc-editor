@@ -3,6 +3,8 @@ import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custo
 import type { FlowState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
+import { isNodeOfType } from './nodes'
+
 type ConnectionOptions = {
   sourceHandle?: string
   targetHandle?: string
@@ -10,7 +12,7 @@ type ConnectionOptions = {
 
 export const buildEdge = (sourceNodeId: string, targetNodeId: string, options?: ConnectionOptions): Edge => {
   return {
-    id: `e_${sourceNodeId}_${targetNodeId}__${options?.sourceHandle ?? 's'}_${options?.targetHandle ?? 't'}`,
+    id: `e_${sourceNodeId}_${targetNodeId}__${options?.sourceHandle}_${options?.targetHandle}`,
     source: sourceNodeId,
     target: targetNodeId,
     sourceHandle: options?.sourceHandle,
@@ -26,10 +28,18 @@ export const connectNodes = (
   rung: FlowState,
   sourceNodeId: string,
   targetNodeId: string,
+  type: 'serial' | 'parallel',
   options?: ConnectionOptions,
 ): Edge[] => {
   // Find the source edge
-  const sourceEdge = rung.edges.find((edge) => edge.source === sourceNodeId)
+  const sourceNode = rung.nodes.find((node) => node.id === sourceNodeId) as Node
+  const sourceEdge = rung.edges.find(
+    (edge) =>
+      edge.source === sourceNodeId &&
+      (type === 'parallel' && isNodeOfType(sourceNode, 'parallel')
+        ? edge.sourceHandle === (sourceNode as ParallelNode).data.parallelOutputConnector?.id
+        : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id),
+  )
 
   const targetNode = rung.nodes.find((node) => node.id === targetNodeId)
   const targetNodeData = targetNode?.data as BasicNodeData
@@ -63,7 +73,7 @@ export const connectNodes = (
   }
 
   const edges = rung.edges
-  return [...edges, buildEdge(sourceNodeId, targetNodeId, options)]
+  return [...edges, buildEdge(sourceNodeId, targetNodeId, { sourceHandle, targetHandle })]
 }
 
 export const disconnectNodes = (rung: FlowState, sourceNodeId: string, targetNodeId: string): Edge[] => {
@@ -158,6 +168,7 @@ export const disconnectParallel = (rung: FlowState, parallelNodeId: string): { n
     },
     openTargetConnection?.source ?? '',
     closeSourceConnection?.target ?? '',
+    'serial',
     {
       sourceHandle: openTargetConnection?.sourceHandle ?? undefined,
       targetHandle: closeSourceConnection?.targetHandle ?? undefined,

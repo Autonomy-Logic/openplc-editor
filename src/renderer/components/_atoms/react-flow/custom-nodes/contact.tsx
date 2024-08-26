@@ -69,7 +69,7 @@ const CONTACT_TYPES: ContactType = {
 }
 
 export const Contact = ({ selected, data }: ContactProps) => {
-  const [contactLabelValue, setContactLabelValue] = useState<string>('???')
+  const [contactLabelValue, setContactLabelValue] = useState<string>('')
   const contact = CONTACT_TYPES[data.variant]
 
   return (
@@ -89,6 +89,7 @@ export const Contact = ({ selected, data }: ContactProps) => {
         <InputWithRef
           value={contactLabelValue}
           onChange={(e) => setContactLabelValue(e.target.value)}
+          placeholder='???'
           className='w-full bg-transparent text-center text-sm outline-none'
         />
       </div>

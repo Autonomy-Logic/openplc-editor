@@ -1,12 +1,17 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowState } from '@root/renderer/store/slices'
-import type { CoordinateExtent, Node, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
+import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
-import { DragEventHandler, useCallback, useEffect, useMemo, useState } from 'react'
+import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
-import { addNewElement, removeElements } from './ladder-utils/elements'
+import {
+  addNewElement,
+  removeElements,
+  removePlaceholderNodes,
+  renderPlaceholderNodes,
+} from './ladder-utils/elements'
 
 /**
  * Default flow panel extent:
@@ -24,6 +29,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const [rungLocal, setRungLocal] = useState<FlowState>(rung)
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
+  const flowRef = useRef<HTMLDivElement>(null)
 
   /**
    * -- Which means, by default, the flow panel extent is:
@@ -38,7 +44,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    * This useEffect will run every time the nodes array changes (i.e. when a node is added or removed)
    */
   useEffect(() => {
-    const zeroPositionNode: Node = {
+    const zeroPositionNode: FlowNode = {
       id: '-1',
       position: { x: 0, y: 0 },
       data: { label: 'Node 0' },
@@ -46,7 +52,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       height: 40,
     }
     const bounds = getNodesBounds([zeroPositionNode, ...rungLocal.nodes])
-    const [defaultWidth, defaultHeight] = rung?.flowViewport ?? [1530, 200]
+    const [defaultWidth, defaultHeight] = rung?.defaultBounds ?? [1530, 200]
 
     // If the bounds are less than the default extent, set the panel extent to the default extent
     if (bounds.width < defaultWidth) bounds.width = defaultWidth
@@ -56,15 +62,12 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       [0, 0],
       [bounds.width, bounds.height],
     ])
+    flowActions.updateFlowViewport({ rungId: rungLocal.id, flowViewport: [bounds.width, bounds.height] })
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
     updateFlowStore()
   }, [rungLocal.nodes.length])
-
-  useEffect(() => {
-    console.log('Rung body updated:', rungLocal)
-  }, [rungLocal])
 
   const updateFlowStore = () => {
     if (reactFlowInstance) {
@@ -79,25 +82,78 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
 
-  const handleRemoveNode = (nodes: Node[]) => {
+  const handleRemoveNode = (nodes: FlowNode[]) => {
     const { nodes: newNodes, edges: newEdges } = removeElements(rungLocal, nodes, rung.defaultBounds)
     setRungLocal((rung) => ({ ...rung, nodes: newNodes, edges: newEdges }))
   }
 
-  const onNodesChange: OnNodesChange<Node> = useCallback(
+  const onNodesChange: OnNodesChange<FlowNode> = useCallback(
     (changes) => {
       setRungLocal((rung) => ({
         ...rung,
         nodes: applyNodeChanges(changes, rung.nodes),
       }))
     },
-    [setRungLocal],
+    [rungLocal],
   )
 
-  const onDragOver = useCallback<DragEventHandler>((event) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-  }, [])
+  const onDragEnterViewport = useCallback<DragEventHandler>(
+    (event) => {
+      event.preventDefault()
+      const { relatedTarget } = event
+      if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
+      const nodes = renderPlaceholderNodes(rungLocal.nodes)
+      setRungLocal((rung) => ({ ...rung, nodes }))
+    },
+    [rungLocal],
+  )
+
+  const onDragLeaveViewport = useCallback<DragEventHandler>(
+    (event) => {
+      const { relatedTarget } = event
+      if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
+      const nodes = removePlaceholderNodes(rungLocal.nodes)
+      setRungLocal((rung) => ({ ...rung, nodes }))
+    },
+    [rungLocal],
+  )
+
+  const onDragOver = useCallback<DragEventHandler>(
+    (event) => {
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+
+      const placeholderNodes = rungLocal.nodes.filter((node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder')
+      if (placeholderNodes.length === 0) return
+
+      const mousePosition = reactFlowInstance?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      if (!mousePosition) return
+
+      const closestNode = placeholderNodes.reduce((prev, curr) => {
+        const prevDistance = Math.hypot(prev.position.x - mousePosition.x, prev.position.y - mousePosition.y)
+        const currDistance = Math.hypot(curr.position.x - mousePosition.x, curr.position.y - mousePosition.y)
+        return prevDistance < currDistance ? prev : curr
+      })
+      if (!closestNode) return
+
+      setRungLocal((rung) => ({
+        ...rung,
+        nodes: rung.nodes.map((node) => {
+          if (node.id === closestNode.id) {
+            return {
+              ...node,
+              selected: true,
+            }
+          }
+          return {
+            ...node,
+            selected: false,
+          }
+        }),
+      }))
+    },
+    [rungLocal],
+  )
 
   const onDrop = useCallback<DragEventHandler>(
     (event) => {
@@ -105,7 +161,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       const type = event.dataTransfer.getData('application/reactflow')
       handleAddNode(type)
     },
-    [handleAddNode],
+    [rungLocal],
   )
 
   return (
@@ -116,6 +172,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
             height: flowPanelExtent[1][1] + 8,
             width: flowPanelExtent[1][0],
           }}
+          ref={flowRef}
         >
           <FlowPanel
             viewportConfig={{
@@ -135,6 +192,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
                 handleRemoveNode(nodes)
               },
               onConnectEnd: updateFlowStore,
+              onDragEnter: onDragEnterViewport,
+              onDragLeave: onDragLeaveViewport,
               onDragOver: onDragOver,
               onDrop: onDrop,
 
@@ -157,9 +216,9 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         </div>
       </div>
       {/* <div className='absolute bottom-3 left-3 flex flex-row gap-6'>
-        <button onClick={() => handleAddNode('block')}>Add Block Node</button>
-        <button onClick={() => handleAddNode('coil')}>Add Coil Node</button>
-        <button onClick={() => handleAddNode('contact')}>Add Contact Node</button>
+        <button onClick={() => handleAddNode('block')}>Add Block FlowNode</button>
+        <button onClick={() => handleAddNode('coil')}>Add Coil FlowNode</button>
+        <button onClick={() => handleAddNode('contact')}>Add Contact FlowNode</button>
       </div> */}
     </div>
   )

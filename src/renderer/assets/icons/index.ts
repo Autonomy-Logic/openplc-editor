@@ -2,6 +2,7 @@
 export * from './library/CloseFolder'
 export * from './library/File'
 export * from './library/OpenFolder'
+
 /** Reexport all icons from project folder */
 export * from './project/Array'
 export * from './project/Block'
@@ -51,3 +52,7 @@ export * from './interface/View'
 export * from './interface/Zap'
 export * from './interface/ZoomInOut'
 
+/** Reexport all icons from flow folder */
+export * from './flow/Coil'
+export * from './flow/Contact'
+export * from './flow/Placeholder'
