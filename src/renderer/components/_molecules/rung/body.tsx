@@ -13,11 +13,6 @@ import {
   renderPlaceholderNodes,
 } from './ladder-utils/elements'
 
-/**
- * Default flow panel extent:
- * width: 1530
- * height: 208
- */
 type RungBodyProps = {
   rung: FlowState
 }
@@ -215,11 +210,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
           />
         </div>
       </div>
-      {/* <div className='absolute bottom-3 left-3 flex flex-row gap-6'>
-        <button onClick={() => handleAddNode('block')}>Add Block FlowNode</button>
-        <button onClick={() => handleAddNode('coil')}>Add Coil FlowNode</button>
-        <button onClick={() => handleAddNode('contact')}>Add Contact FlowNode</button>
-      </div> */}
     </div>
   )
 }

@@ -16,7 +16,7 @@ export const getPreviousElement = (nodes: Node[], nodeIndex?: number) => {
   return nodes[(nodeIndex ?? nodes.length - 1) - 1]
 }
 
-const getPoisitionBasedOnPreviousNode = (previousElement: Node, newElement: string | Node) => {
+const getPositionBasedOnPreviousNode = (previousElement: Node, newElement: string | Node) => {
   const previousElementOutputHandle = previousElement.data.outputConnector as CustomHandleProps
   const previousElementStyle = getNodeStyle({ node: previousElement })
   const newNodeStyle = getNodeStyle(typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement })
@@ -37,7 +37,7 @@ const getPoisitionBasedOnPreviousNode = (previousElement: Node, newElement: stri
   return position
 }
 
-const getPositionBasenOnPlaceholderNode = (
+const getPositionBasedOnPlaceholderNode = (
   placeholderNode: Node,
   newElType: string,
   type: 'serial' | 'parallel' = 'serial',
@@ -115,7 +115,7 @@ const rearrangeNodes = (nodes: Node[], _defaultBounds: [number, number]) => {
       return
     }
     const prevNode = getPreviousElement(newNodes, index)
-    const newNodePosition = getPoisitionBasedOnPreviousNode(prevNode, node)
+    const newNodePosition = getPositionBasedOnPreviousNode(prevNode, node)
     const nodeData = node.data as BasicNodeData
     const newNodeHandlesPosition = nodeData.handles.map((handle) => {
       return {
@@ -151,7 +151,7 @@ export const addNewElement = (
     ) ?? []
   if (!selectedPlaceholder || !selectedPlaceholderIndex) return { nodes: rung.nodes, edges: rung.edges }
 
-  const newElPosition = getPositionBasenOnPlaceholderNode(selectedPlaceholder, newElementType)
+  const newElPosition = getPositionBasedOnPlaceholderNode(selectedPlaceholder, newElementType)
   const newElement = buildGenericNode({
     nodeType: newElementType,
     id: `${newElementType.toUpperCase()}_${uuidv4()}`,
@@ -173,7 +173,7 @@ export const addNewElement = (
 
   if (isNodeOfType(newElement, 'parallel')) {
     const openParallel = newElement as ParallelNode
-    const closeParallelPosition = getPositionBasenOnPlaceholderNode(selectedPlaceholder, newElementType)
+    const closeParallelPosition = getPositionBasedOnPlaceholderNode(selectedPlaceholder, newElementType)
     const closeParallel = nodesBuilder.parallel({
       id: `${newElementType.toUpperCase()}_close_${uuidv4()}`,
       ...closeParallelPosition,
@@ -249,7 +249,7 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
   nodes.forEach((node) => {
     placeholderNodes.push(node)
     if (node.id === 'right-rail' || node.type === 'placeholder') return
-    const placeholderPosition = getPoisitionBasedOnPreviousNode(node, 'placeholder')
+    const placeholderPosition = getPositionBasedOnPreviousNode(node, 'placeholder')
     const placeholderStyle = getNodeStyle({ nodeType: 'placeholder' })
     const placeholder = buildGenericNode({
       nodeType: 'placeholder',
