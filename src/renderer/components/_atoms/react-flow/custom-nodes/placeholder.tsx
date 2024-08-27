@@ -7,7 +7,7 @@ import { BasicNodeData, BuilderBasicProps } from './utils/types'
 
 export type PlaceholderNode = Node<BasicNodeData>
 type PlaceholderProps = NodeProps<PlaceholderNode>
-type ParallelBuilderProps = BuilderBasicProps
+type ParallelBuilderProps = BuilderBasicProps & { type: 'parallel' | 'default' }
 
 export const PLACEHOLDER_WIDTH = 16
 export const PLACEHOLDER_HEIGHT = 16
@@ -25,66 +25,13 @@ export const Placeholder = ({ selected, data }: PlaceholderProps) => {
   )
 }
 
-export const builderPlaceholderNode = ({ id, posX, posY, handleX, handleY }: ParallelBuilderProps): PlaceholderNode => {
-  const handles = [
-    buildHandle({
-      id: 'input',
-      position: Position.Left,
-      type: 'target',
-      isConnectable: false,
-      glbX: handleX,
-      glbY: handleY,
-      relX: 0,
-      relY: PLACEHOLDER_CONNECTOR_Y,
-      style: {
-        visibility: 'hidden',
-        top: PLACEHOLDER_CONNECTOR_Y,
-        left: 0,
-      },
-    }),
-    buildHandle({
-      id: 'output',
-      position: Position.Right,
-      type: 'source',
-      isConnectable: false,
-      glbX: handleX + PLACEHOLDER_WIDTH,
-      glbY: handleY,
-      relX: PLACEHOLDER_WIDTH,
-      relY: PLACEHOLDER_CONNECTOR_Y,
-      style: {
-        visibility: 'hidden',
-        top: PLACEHOLDER_CONNECTOR_Y,
-        right: 0,
-      },
-    }),
-  ]
-
-  return {
-    id,
-    type: 'placeholder',
-    data: {
-      handles: handles,
-      inputConnector: handles[0],
-      outputConnector: handles[1],
-    },
-    position: {
-      x: posX,
-      y: posY,
-    },
-    style: {
-      width: PLACEHOLDER_WIDTH,
-      height: PLACEHOLDER_HEIGHT,
-    },
-    draggable: false,
-  }
-}
-
-export const builderParallelPlaceholderNode = ({
+export const builderPlaceholderNode = ({
   id,
   posX,
   posY,
   handleX,
   handleY,
+  type,
 }: ParallelBuilderProps): PlaceholderNode => {
   const handles = [
     buildHandle({
@@ -97,7 +44,7 @@ export const builderParallelPlaceholderNode = ({
       relX: 0,
       relY: PLACEHOLDER_CONNECTOR_Y,
       style: {
-        visibility: 'hidden',
+        visibility: type === 'default' ? 'hidden' : 'visible',
         top: PLACEHOLDER_CONNECTOR_Y,
         left: 0,
       },
@@ -112,7 +59,7 @@ export const builderParallelPlaceholderNode = ({
       relX: PLACEHOLDER_WIDTH,
       relY: PLACEHOLDER_CONNECTOR_Y,
       style: {
-        visibility: 'hidden',
+        visibility: type === 'default' ? 'hidden' : 'visible',
         top: PLACEHOLDER_CONNECTOR_Y,
         right: 0,
       },
@@ -121,7 +68,7 @@ export const builderParallelPlaceholderNode = ({
 
   return {
     id,
-    type: 'parallelPlaceholder',
+    type: type === 'default' ? 'placeholder' : 'parallelPlaceholder',
     data: {
       handles: handles,
       inputConnector: handles[0],

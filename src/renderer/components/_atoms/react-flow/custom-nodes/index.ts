@@ -69,7 +69,7 @@ export const customNodesStyles: CustomNodeTypes = {
     handle: {
       x: 0,
       y: parallelNode.PARALLEL_CONNECTOR_Y,
-      offsetY: parallelNode.PARALLEL_CONNECTOR_Y,
+      offsetY: 0,
     },
   },
   parallelPlaceholder: {
@@ -119,7 +119,7 @@ export const nodesBuilder = {
   coil: coilNode.buildCoilNode,
   contact: contactNode.buildContactNode,
   parallel: parallelNode.buildParallel,
-  parallelPlaceholder: placeholderNode.builderParallelPlaceholderNode,
+  parallelPlaceholder: placeholderNode.builderPlaceholderNode,
   placeholder: placeholderNode.builderPlaceholderNode,
   powerRail: powerRailNode.buildPowerRailNode,
   mockNode: mockNode.buildMockNode,

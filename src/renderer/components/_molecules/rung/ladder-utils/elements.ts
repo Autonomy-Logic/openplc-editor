@@ -1,6 +1,6 @@
-// import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 import { nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
 import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
+import { PlaceholderNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/placeholder'
 import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 import type { FlowState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
@@ -9,14 +9,18 @@ import { toInteger } from 'lodash'
 import { v4 as uuidv4 } from 'uuid'
 
 import type { CustomHandleProps } from '../../../_atoms/react-flow/custom-nodes/handle'
-import { buildEdge, connectNodes, disconnectNodes, disconnectParallel } from './edges'
+import { connectNodes, disconnectNodes, disconnectParallel, removeEdge } from './edges'
 import { buildGenericNode, getNodeStyle, isNodeOfType } from './nodes'
 
 export const getPreviousElement = (nodes: Node[], nodeIndex?: number) => {
   return nodes[(nodeIndex ?? nodes.length - 1) - 1]
 }
 
-const getPositionBasedOnPreviousNode = (previousElement: Node, newElement: string | Node) => {
+const getPositionBasedOnPreviousNode = (
+  previousElement: Node,
+  newElement: string | Node,
+  type: 'serial' | 'parallel',
+) => {
   const previousElementOutputHandle = previousElement.data.outputConnector as CustomHandleProps
   const previousElementStyle = getNodeStyle({ node: previousElement })
   const newNodeStyle = getNodeStyle(typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement })
@@ -24,14 +28,16 @@ const getPositionBasedOnPreviousNode = (previousElement: Node, newElement: strin
   const gap = previousElementStyle.gap + newNodeStyle.gap
   const offsetY = newNodeStyle.handle.y
 
+  const verticalPadding = type === 'parallel' ? 50 : 0
+
   const position = {
     posX: previousElement.position.x + previousElementStyle.width + gap,
     posY:
-    previousElement.type === (typeof newElement === 'string' ? newElement : newElement.type)
+      previousElement.type === (typeof newElement === 'string' ? newElement : newElement.type)
         ? previousElement.position.y
-        : previousElementOutputHandle.glbPosition.y - offsetY,
+        : previousElementOutputHandle.glbPosition.y - offsetY + verticalPadding,
     handleX: previousElement.position.x + previousElementStyle.width + gap,
-    handleY: previousElementOutputHandle.glbPosition.y,
+    handleY: previousElementOutputHandle.glbPosition.y + verticalPadding,
   }
 
   return position
@@ -104,7 +110,7 @@ export const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: 
   return newRail
 }
 
-const rearrangeNodes = (nodes: Node[], _defaultBounds: [number, number]) => {
+const _rearrangeNodes = (nodes: Node[], _defaultBounds: [number, number]) => {
   /**
    * TODO: implement the rearrange of parallel nodes
    */
@@ -115,7 +121,7 @@ const rearrangeNodes = (nodes: Node[], _defaultBounds: [number, number]) => {
       return
     }
     const prevNode = getPreviousElement(newNodes, index)
-    const newNodePosition = getPositionBasedOnPreviousNode(prevNode, node)
+    const newNodePosition = getPositionBasedOnPreviousNode(prevNode, node, 'serial')
     const nodeData = node.data as BasicNodeData
     const newNodeHandlesPosition = nodeData.handles.map((handle) => {
       return {
@@ -143,7 +149,7 @@ const rearrangeNodes = (nodes: Node[], _defaultBounds: [number, number]) => {
 export const addNewElement = (
   rung: FlowState,
   newElementType: string,
-  defaultViewportBounds: [number, number],
+  _defaultViewportBounds: [number, number],
 ): { nodes: Node[]; edges: Edge[] } => {
   const [selectedPlaceholderIndex, selectedPlaceholder] =
     Object.entries(rung.nodes).find(
@@ -161,46 +167,89 @@ export const addNewElement = (
   let newNodes = [...rung.nodes]
   newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newElement)
 
-  let newEdges = connectNodes(
-    { ...rung, nodes: newNodes },
-    getPreviousElement(
-      newNodes,
-      newNodes.findIndex((node) => node.id === newElement.id),
-    ).id,
-    newElement.id,
-    'serial',
-  )
+  let newEdges = [...rung.edges]
+  if (selectedPlaceholder.type === 'parallelPlaceholder') {
+    const parallelPlaceholder = selectedPlaceholder as PlaceholderNode
+    const sourceEdge = newEdges.find((edge) => edge.source === parallelPlaceholder.id)
+    const targetEdge = newEdges.find((edge) => edge.target === parallelPlaceholder.id)
+    if (!sourceEdge || !targetEdge) return { nodes: rung.nodes, edges: rung.edges }
+    newEdges = removeEdge(newEdges, newEdges.find((edge) => edge.id === sourceEdge.id)?.id  ?? '')
+    newEdges = removeEdge(newEdges, newEdges.find((edge) => edge.id === targetEdge.id)?.id ?? '')
+    newEdges = connectNodes(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      targetEdge.source,
+      sourceEdge.target,
+      'parallel',
+      {
+        sourceHandle: targetEdge.sourceHandle ?? '',
+        targetHandle: sourceEdge.targetHandle ?? '',
+      },
+    )
+    newEdges = connectNodes(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      targetEdge.source,
+      newElement.id,
+      'parallel',
+    )
+  } else {
+    newEdges = connectNodes(
+      { ...rung, nodes: newNodes },
+      getPreviousElement(
+        newNodes,
+        newNodes.findIndex((node) => node.id === newElement.id),
+      ).id,
+      newElement.id,
+      'serial',
+    )
+  }
 
   if (isNodeOfType(newElement, 'parallel')) {
     const openParallel = newElement as ParallelNode
-    const closeParallelPosition = getPositionBasedOnPlaceholderNode(selectedPlaceholder, newElementType)
+
+    const parallelPlaceholderPosition = getPositionBasedOnPreviousNode(openParallel, 'parallelPlaceholder', 'parallel')
+    const parallelPlaceholder = buildGenericNode({
+      nodeType: 'parallelPlaceholder',
+      id: `parallelPlaceholder_${parallelPlaceholderPosition.posX}_${parallelPlaceholderPosition.posY}`,
+      ...parallelPlaceholderPosition,
+    })
+
+    const closeParallelPosition = getPositionBasedOnPreviousNode(openParallel, 'parallel', 'serial')
+    const { posX: closePositionX } = getPositionBasedOnPreviousNode(parallelPlaceholder, 'parallel', 'serial')
     const closeParallel = nodesBuilder.parallel({
       id: `${newElementType.toUpperCase()}_close_${uuidv4()}`,
       ...closeParallelPosition,
       type: 'close',
+      posX: closePositionX,
+      handleX: closePositionX,
     })
     openParallel.data.parallelCloseReference = closeParallel.id
     closeParallel.data.parallelOpenReference = openParallel.id
-    newNodes.splice(toInteger(selectedPlaceholderIndex) + 1, 0, closeParallel)
+
+    newNodes.splice(toInteger(selectedPlaceholderIndex) + 1, 0, parallelPlaceholder, closeParallel)
+    newEdges = connectNodes({ ...rung, nodes: newNodes, edges: newEdges }, openParallel.id, closeParallel.id, 'serial')
     newEdges = connectNodes(
       { ...rung, nodes: newNodes, edges: newEdges },
-      getPreviousElement(
-        newNodes,
-        newNodes.findIndex((node) => node.id === closeParallel.id),
-      ).id,
+      openParallel.id,
       closeParallel.id,
-      'serial',
-    )
-    newEdges.push(
-      buildEdge(openParallel.id, closeParallel.id, {
+      'parallel',
+      {
         sourceHandle: openParallel.data.parallelOutputConnector?.id,
         targetHandle: closeParallel.data.parallelInputConnector?.id,
-      }),
+      },
+    )
+    newEdges = connectNodes(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      openParallel.id,
+      parallelPlaceholder.id,
+      'parallel',
     )
   }
 
   newNodes = removePlaceholderNodes(newNodes)
-  newNodes = rearrangeNodes(newNodes, defaultViewportBounds)
+  // newNodes = rearrangeNodes(newNodes, defaultViewportBounds)
+
+  console.log('newNodes', newNodes)
+  console.log('newEdges', newEdges)
 
   return { nodes: newNodes, edges: newEdges }
 }
@@ -248,8 +297,8 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
   const placeholderNodes: Node[] = []
   nodes.forEach((node) => {
     placeholderNodes.push(node)
-    if (node.id === 'right-rail' || node.type === 'placeholder') return
-    const placeholderPosition = getPositionBasedOnPreviousNode(node, 'placeholder')
+    if (node.id === 'right-rail' || node.type === 'parallelPlaceholder') return
+    const placeholderPosition = getPositionBasedOnPreviousNode(node, 'placeholder', 'serial')
     const placeholderStyle = getNodeStyle({ nodeType: 'placeholder' })
     const placeholder = buildGenericNode({
       nodeType: 'placeholder',

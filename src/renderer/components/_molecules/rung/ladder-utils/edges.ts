@@ -20,7 +20,7 @@ export const buildEdge = (sourceNodeId: string, targetNodeId: string, options?: 
   }
 }
 
-const removeEdge = (edges: Edge[], edgeId: string): Edge[] => {
+export const removeEdge = (edges: Edge[], edgeId: string): Edge[] => {
   return edges.filter((edge) => edge.id !== edgeId)
 }
 
