@@ -33,7 +33,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       setState(
         produce((state: EditorState) => {
           const { editor } = state
-          if (!editor || !(editor.type === 'plc-textual' || editor.type === 'plc-graphical')) return
+          if (!editor || !(editor.type === 'plc-textual' || editor.type === 'plc-graphical' || editor.type === 'plc-resource')) return
 
           if (variables.display === 'table')
             if (editor.variable.display === 'table')
