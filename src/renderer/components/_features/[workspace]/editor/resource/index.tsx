@@ -3,9 +3,5 @@ import { GlobalVariablesEditor } from './global-variables'
 // import TasksTable from './tasks'
 
 export default function ResourcesEditor() {
-  return (
-    <div className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
-      <GlobalVariablesEditor />
-    </div>
-  )
+  return <GlobalVariablesEditor />
 }

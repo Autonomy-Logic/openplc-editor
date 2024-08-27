@@ -34,6 +34,7 @@ const handleCreateTab = ({ elementType, name, path, configuration }: TabsProps) 
     path,
     elementType,
     configuration,
+  
   }
   console.log('Tab to be created:', tabToBeCreated)
 
@@ -118,6 +119,7 @@ const handleCreateTab = ({ elementType, name, path, configuration }: TabsProps) 
               name: configuration.resource.id,
               path: `/data/configuration/resources/${configuration.resource.id}`,
               elementType: { type: 'resources' },
+              
             })
           }
         />

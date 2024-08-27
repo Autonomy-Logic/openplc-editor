@@ -48,7 +48,7 @@ const GlobalVariablesEditor = () => {
    * Update the table data and the editor's variables when the editor or the pous change
    */
   useEffect(() => {
-    const variablesToTable = globalVariables.filter((variable) => variable.name !== 'global')
+    const variablesToTable = globalVariables.filter((variable) => variable.class === 'global')
     setTableData(variablesToTable)
     console.log(' globalVariables', globalVariables)
   }, [editor, globalVariables])
@@ -57,7 +57,7 @@ const GlobalVariablesEditor = () => {
    * set the editor name and the editor's variables to the states
    */
   useEffect(() => {
-    if (editor.type === 'plc-textual' || editor.type === 'plc-graphical')
+    if (editor.type === 'plc-resource')
       if (editor.variable.display === 'table') {
         const { classFilter, description, display, selectedRow } = editor.variable
         setEditorVariables({
@@ -87,7 +87,6 @@ const GlobalVariablesEditor = () => {
     if (editorVariables.display === 'code') return
     rearrangeVariables({
       scope: 'global',
-      associatedPou: editor.meta.name,
       rowId: row ?? parseInt(editorVariables.selectedRow),
       newIndex: (row ?? parseInt(editorVariables.selectedRow)) + index,
     })
@@ -100,7 +99,8 @@ const GlobalVariablesEditor = () => {
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
 
-    const variables = globalVariables.filter((variable) => variable.name !== 'global') // em vez de pous, globalvariables no store
+    const variables = globalVariables.filter((variable) => variable.class === 'global')
+
     const selectedRow = parseInt(editorVariables.selectedRow)
 
     if (variables.length === 0) {
@@ -126,7 +126,7 @@ const GlobalVariablesEditor = () => {
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createVariable({ scope: 'global', associatedPou: editor.meta.name, data: { ...variable } })
+      createVariable({ scope: 'global', data: { ...variable } })
       updateModelVariables({
         display: 'table',
         selectedRow: variables.length,
@@ -151,7 +151,7 @@ const GlobalVariablesEditor = () => {
     const selectedRow = parseInt(editorVariables.selectedRow)
     deleteVariable({ scope: 'global', associatedPou: editor.meta.name, rowId: selectedRow })
 
-    const variables = globalVariables.filter((variable) => variable.name !== 'global')
+    const variables = globalVariables.filter((variable) => variable.class === 'global')
     if (selectedRow === variables.length - 1) {
       updateModelVariables({
         display: 'table',

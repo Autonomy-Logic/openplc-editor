@@ -59,7 +59,9 @@ const editorModelSchema = z.discriminatedUnion('type', [
     type: z.literal('plc-resource'),
     meta: z.object({
       name: z.string(),
+      path: z.string(),
     }),
+    variable: editorVariablesSchema,
   }),
 ])
 
@@ -79,12 +81,17 @@ const editorStateSchema = z.object({
 const editorActionsSchema = z.object({
   addModel: z.function().args(editorModelSchema).returns(z.void()),
   removeModel: z.function().args(z.string()).returns(z.void()),
-  updateModelVariables: z.function().args(z.object({
-    display: z.enum(['code', 'table']),
-    selectedRow: z.number().optional(),
-    classFilter: z.enum(['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']).optional(),
-    description: z.string().optional(),
-  })).returns(z.void()),
+  updateModelVariables: z
+    .function()
+    .args(
+      z.object({
+        display: z.enum(['code', 'table']),
+        selectedRow: z.number().optional(),
+        classFilter: z.enum(['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']).optional(),
+        description: z.string().optional(),
+      }),
+    )
+    .returns(z.void()),
   setEditor: z.function().args(editorModelSchema).returns(z.void()),
   clearEditor: z.function().returns(z.void()),
   getEditorFromEditors: z.function().args(z.string()).returns(editorModelSchema.or(z.null())),

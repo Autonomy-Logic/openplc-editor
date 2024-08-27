@@ -79,10 +79,18 @@ const CreateEditorModelObject = (
 }
 
 const CreateResourceEditor = (name: string): EditorModel => {
+  console.log('Creating resource editor for: ' + name)
   const editor = CreateEditorObject({
     type: 'plc-resource',
     meta: {
       name,
+      path: `/data/pous/configuration/resources/${name}`,
+    },
+    variable: {
+      display: 'table',
+      description: '',
+      classFilter: 'All',
+      selectedRow: '-1',
     },
   })
   return editor
