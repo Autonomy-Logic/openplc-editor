@@ -50,31 +50,37 @@ const GlobalVariablesEditor = () => {
   useEffect(() => {
     const variablesToTable = globalVariables.filter((variable) => variable.class === 'global')
     setTableData(variablesToTable)
-    console.log(' globalVariables', globalVariables)
   }, [editor, globalVariables])
+  console.log(' globalVariables', globalVariables)
+  console.log(' variablesToTable', tableData)
   /**
    * If the editor name is not the same as the current editor name
    * set the editor name and the editor's variables to the states
    */
+  
   useEffect(() => {
-    if (editor.type === 'plc-resource')
-      if (editor.variable.display === 'table') {
-        const { classFilter, description, display, selectedRow } = editor.variable
-        setEditorVariables({
-          display: display,
-          selectedRow: selectedRow,
-          classFilter: classFilter,
-          description: description,
-        })
-        setColumnFilters((prev) =>
-          classFilter !== 'All'
-            ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: classFilter.toLowerCase() })
-            : prev.filter((filter) => filter.id !== 'class'),
-        )
-      } else
-        setEditorVariables({
-          display: editor.variable.display,
-        })
+    if (editor && editor.variable ) {
+      if (editor.type === 'plc-resource') {
+        if (editor.variable.display === 'table') {
+          const { classFilter, description, display, selectedRow } = editor.variable;
+          setEditorVariables({
+            display: display,
+            selectedRow: selectedRow,
+            classFilter: classFilter,
+            description: description,
+          });
+          setColumnFilters((prev) =>
+            classFilter !== 'All'
+              ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: classFilter.toLowerCase() })
+              : prev.filter((filter) => filter.id !== 'class')
+          );
+        } else {
+          setEditorVariables({
+            display: editor.variable.display,
+          });
+        }
+      }
+    }
   }, [editor])
 
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {
