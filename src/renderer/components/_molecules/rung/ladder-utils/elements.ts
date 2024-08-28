@@ -16,6 +16,17 @@ export const getPreviousElement = (nodes: Node[], nodeIndex?: number) => {
   return nodes[(nodeIndex ?? nodes.length - 1) - 1]
 }
 
+export const getPreviousElementsByEdges = (
+  rung: FlowState,
+  node: Node,
+): { nodes: Node[] | undefined; edges: Edge[] | undefined } => {
+  const edges = rung.edges.filter((edge) => edge.target === node.id)
+  if (!edges) return { nodes: undefined, edges: undefined }
+  const previousNodes = rung.nodes.filter((n) => edges.map((edge) => edge.source).includes(n.id))
+  if (!previousNodes) return { nodes: undefined, edges: edges }
+  return { nodes: previousNodes, edges: edges }
+}
+
 const getPositionBasedOnPreviousNode = (
   previousElement: Node,
   newElement: string | Node,
@@ -28,13 +39,15 @@ const getPositionBasedOnPreviousNode = (
   const gap = previousElementStyle.gap + newNodeStyle.gap
   const offsetY = newNodeStyle.handle.y
 
-  const verticalPadding = type === 'parallel' ? 50 : 0
+  const verticalPadding = type === 'parallel' ? 100 : 0
 
   const position = {
     posX: previousElement.position.x + previousElementStyle.width + gap,
     posY:
       previousElement.type === (typeof newElement === 'string' ? newElement : newElement.type)
-        ? previousElement.position.y
+        ? type === 'serial'
+          ? previousElement.position.y
+          : previousElement.position.y + verticalPadding
         : previousElementOutputHandle.glbPosition.y - offsetY + verticalPadding,
     handleX: previousElement.position.x + previousElementStyle.width + gap,
     handleY: previousElementOutputHandle.glbPosition.y + verticalPadding,
@@ -53,7 +66,7 @@ const getPositionBasedOnPlaceholderNode = (
   const placeholderHandles = placeholderNode.data.handles as CustomHandleProps[]
   const placeholderHandle = placeholderHandles[0]
 
-  const verticalPadding = type === 'parallel' ? 50 : 0
+  const verticalPadding = type === 'parallel' ? 100 : 0
 
   const position = {
     posX: placeholderHandle.glbPosition.x + newNodeStyle.gap,
@@ -110,18 +123,70 @@ export const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: 
   return newRail
 }
 
-const _rearrangeNodes = (nodes: Node[], _defaultBounds: [number, number]) => {
-  /**
-   * TODO: implement the rearrange of parallel nodes
-   */
+const rearrangeNodes = (rung: FlowState, _defaultBounds: [number, number]) => {
+  const { nodes } = rung
   const newNodes: Node[] = []
-  nodes.forEach((node, index) => {
+
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i]
     if (node.type === 'powerRail') {
       newNodes.push(node)
-      return
+      continue
     }
-    const prevNode = getPreviousElement(newNodes, index)
-    const newNodePosition = getPositionBasedOnPreviousNode(prevNode, node, 'serial')
+
+    const { nodes: previousNodes, edges: previousEdges } = getPreviousElementsByEdges(
+      { ...rung, nodes: newNodes },
+      node,
+    )
+    if (!previousNodes || !previousEdges) return nodes
+
+    let newNodePosition: { posX: number; posY: number; handleX: number; handleY: number } = {
+      posX: 0,
+      posY: 0,
+      handleX: 0,
+      handleY: 0,
+    }
+
+    if (previousNodes.length === 1) {
+      /**
+       * Nodes that only have one edge connecting to them
+       */
+      const previousNode = previousNodes[0]
+      if (
+        isNodeOfType(previousNode, 'parallel') &&
+        (previousNode as ParallelNode).data.type === 'open' &&
+        previousEdges[0].sourceHandle === (previousNode as ParallelNode).data.parallelOutputConnector?.id
+      ) {
+        newNodePosition = getPositionBasedOnPreviousNode(previousNode, node, 'parallel')
+      } else {
+        newNodePosition = getPositionBasedOnPreviousNode(previousNode, node, 'serial')
+      }
+    } else {
+      /**
+       * Nodes that have multiple edges connecting to them
+       */
+      const openParallel = newNodes.find((n) => n.id === (node as ParallelNode).data.parallelOpenReference) as Node
+      const openParallelPosition = getPositionBasedOnPreviousNode(openParallel, node, 'serial')
+
+      let acc = newNodePosition
+      for (let j = 0; j < previousNodes.length; j++) {
+        const previousNode = previousNodes[j]
+        const position = getPositionBasedOnPreviousNode(previousNode, node, 'serial')
+        acc = {
+          posX: Math.max(acc.posX, position.posX),
+          posY: Math.max(acc.posY, position.posY),
+          handleX: Math.max(acc.handleX, position.handleX),
+          handleY: Math.max(acc.handleY, position.handleY),
+        }
+      }
+      newNodePosition = {
+        posX: acc.posX,
+        posY: openParallelPosition.posY,
+        handleX: acc.handleX,
+        handleY: openParallelPosition.handleY,
+      }
+    }
+
     const nodeData = node.data as BasicNodeData
     const newNodeHandlesPosition = nodeData.handles.map((handle) => {
       return {
@@ -140,16 +205,18 @@ const _rearrangeNodes = (nodes: Node[], _defaultBounds: [number, number]) => {
         handles: newNodeHandlesPosition,
       },
     })
-  })
+  }
 
   newNodes[newNodes.length - 1] = changeRailBounds(newNodes[newNodes.length - 1], newNodes, _defaultBounds)
+
+  console.log('\n\n')
   return newNodes
 }
 
 export const addNewElement = (
   rung: FlowState,
   newElementType: string,
-  _defaultViewportBounds: [number, number],
+  defaultViewportBounds: [number, number],
 ): { nodes: Node[]; edges: Edge[] } => {
   const [selectedPlaceholderIndex, selectedPlaceholder] =
     Object.entries(rung.nodes).find(
@@ -173,7 +240,7 @@ export const addNewElement = (
     const sourceEdge = newEdges.find((edge) => edge.source === parallelPlaceholder.id)
     const targetEdge = newEdges.find((edge) => edge.target === parallelPlaceholder.id)
     if (!sourceEdge || !targetEdge) return { nodes: rung.nodes, edges: rung.edges }
-    newEdges = removeEdge(newEdges, newEdges.find((edge) => edge.id === sourceEdge.id)?.id  ?? '')
+    newEdges = removeEdge(newEdges, newEdges.find((edge) => edge.id === sourceEdge.id)?.id ?? '')
     newEdges = removeEdge(newEdges, newEdges.find((edge) => edge.id === targetEdge.id)?.id ?? '')
     newEdges = connectNodes(
       { ...rung, nodes: newNodes, edges: newEdges },
@@ -185,12 +252,7 @@ export const addNewElement = (
         targetHandle: sourceEdge.targetHandle ?? '',
       },
     )
-    newEdges = connectNodes(
-      { ...rung, nodes: newNodes, edges: newEdges },
-      targetEdge.source,
-      newElement.id,
-      'parallel',
-    )
+    newEdges = connectNodes({ ...rung, nodes: newNodes, edges: newEdges }, targetEdge.source, newElement.id, 'parallel')
   } else {
     newEdges = connectNodes(
       { ...rung, nodes: newNodes },
@@ -246,7 +308,7 @@ export const addNewElement = (
   }
 
   newNodes = removePlaceholderNodes(newNodes)
-  // newNodes = rearrangeNodes(newNodes, defaultViewportBounds)
+  newNodes = rearrangeNodes({ ...rung, nodes: newNodes, edges: newEdges }, defaultViewportBounds)
 
   console.log('newNodes', newNodes)
   console.log('newEdges', newEdges)
@@ -289,6 +351,8 @@ export const removeElements = (
     rungState.nodes = newNodes
     rungState.edges = newEdges
   }
+
+  rungState.nodes = rearrangeNodes(rungState, defaultBounds)
 
   return { nodes: rungState.nodes, edges: rungState.edges }
 }
