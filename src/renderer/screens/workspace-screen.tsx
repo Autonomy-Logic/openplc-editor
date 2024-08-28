@@ -8,7 +8,7 @@ import { ExitIcon } from '../assets'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
-import ResourcesEditor from '../components/_features/[workspace]/editor/resource'
+import ResourcesEditor from '../components/_features/[workspace]/editor/resource-editor'
 import { Console } from '../components/_molecules/console'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Debugger } from '../components/_organisms/debugger'
@@ -19,7 +19,6 @@ import { VariablesEditor } from '../components/_organisms/variables-editor'
 import { WorkspaceActivityBar } from '../components/_organisms/workspace-activity-bar'
 import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
-
 
 const WorkspaceScreen = () => {
   const {
@@ -89,7 +88,7 @@ const WorkspaceScreen = () => {
       if (ref.current) ref.current[action]()
     })
   }, [collapseAll])
-  console.log("editor", editor)
+  console.log('editor', editor)
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>

@@ -11,8 +11,6 @@ import { cn } from '@root/utils'
 import { ColumnFiltersState } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
-
-
 const GlobalVariablesEditor = () => {
   const ROWS_NOT_SELECTED = -1
   const {
