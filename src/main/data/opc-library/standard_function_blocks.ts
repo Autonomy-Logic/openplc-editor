@@ -1,6 +1,6 @@
 import { PLCFunctionBlock } from '@root/types/PLC/open-plc'
 
-const _StandardFunctionBlocks: PLCFunctionBlock[] = [
+const _standardFunctionBlocks: PLCFunctionBlock[] = [
   {
     name: 'SR',
     language: 'st',
