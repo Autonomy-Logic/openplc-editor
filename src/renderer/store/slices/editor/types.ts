@@ -14,6 +14,15 @@ const editorVariablesSchema = z.discriminatedUnion('display', [
   z.object({ display: z.literal('code') }),
 ])
 
+const editorGlobalVariablesSchema = z.discriminatedUnion('display', [
+  z.object({
+    display: z.literal('table'),
+    description: z.string(),
+    classFilter: z.enum(['All', 'Global', 'Input', 'Output', 'InOut', 'External', 'Temp']),
+    selectedRow: z.string(),
+  }),
+  z.object({ display: z.literal('code') }),
+])
 /** This is a zod schema for the model.
  * It is used to validate the model if needed,
  * in most cases you can use the type inferred from it.
@@ -99,6 +108,7 @@ const editorActionsSchema = z.object({
 
 /** The variables, the data that we display in the app. */
 type VariablesTable = z.infer<typeof editorVariablesSchema>
+type GlobalVariablesTableType = z.infer<typeof editorGlobalVariablesSchema>
 /** The model, the data that we display in the app. */
 type EditorModel = z.infer<typeof editorModelSchema>
 /** The state, the source of truth that drives our app. - Concept based on Redux */
@@ -109,6 +119,6 @@ type EditorSlice = EditorState & {
   editorActions: EditorActions
 }
 
-export { editorModelSchema, editorStateSchema }
+export { editorModelSchema, editorStateSchema, }
 
-export type { EditorActions, EditorModel, EditorSlice, EditorState, VariablesTable }
+export type { EditorActions, EditorModel, EditorSlice, EditorState, GlobalVariablesTableType,VariablesTable }

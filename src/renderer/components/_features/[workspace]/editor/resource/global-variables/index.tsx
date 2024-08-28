@@ -1,18 +1,17 @@
-// import * as PrimitiveSwitch from '@radix-ui/react-switch'
-// import { SelectContent, SelectItem, SelectTrigger } from '@radix-ui/react-select'
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
-import { InputWithRef } from '@root/renderer/components/_atoms'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { VariablesTable } from '@root/renderer/components/_molecules'
-// import Select from '@root/renderer/components/elements/dropdown/select'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { VariablesTable as VariablesTableType } from '@root/renderer/store/slices'
+import { VariablesTable as GlobalVariablesTableType } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { ColumnFiltersState } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
+
+
 
 const GlobalVariablesEditor = () => {
   const ROWS_NOT_SELECTED = -1
@@ -35,9 +34,9 @@ const GlobalVariablesEditor = () => {
    * Editor name state to keep track of the editor name
    * Other states to keep track of the editor's variables and display at the screen
    */
-  // const FilterOptions = ['All', 'global', 'Input', 'Output', 'InOut', 'External', 'Temp'] as const
-  // type FilterOptionsType = (typeof FilterOptions)[number]
-  const [editorVariables, setEditorVariables] = useState<VariablesTableType>({
+  const FilterOptions = ['All', 'Input', 'Output', 'InOut', 'External', 'Temp'] as const
+  type FilterOptionsType = (typeof FilterOptions)[number]
+  const [editorVariables, setEditorVariables] = useState<GlobalVariablesTableType>({
     display: 'table',
     selectedRow: ROWS_NOT_SELECTED.toString(),
     classFilter: 'All',
@@ -51,8 +50,7 @@ const GlobalVariablesEditor = () => {
     const variablesToTable = globalVariables.filter((variable) => variable.class === 'global')
     setTableData(variablesToTable)
   }, [editor, globalVariables])
-  // console.log(' globalVariables', globalVariables)
-  // console.log(' variablesToTable', tableData)
+
   /**
    * If the editor name is not the same as the current editor name
    * set the editor name and the editor's variables to the states
@@ -164,17 +162,17 @@ const GlobalVariablesEditor = () => {
     }
   }
 
-  // const handleFilterChange = (value: FilterOptionsType) => {
-  //   setColumnFilters((prev) =>
-  //     value !== 'All'
-  //       ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: value.toLowerCase() })
-  //       : prev.filter((filter) => filter.id !== 'class'),
-  //   )
-  //   updateModelVariables({
-  //     display: 'table',
-  //     classFilter: value,
-  //   })
-  // }
+  const handleFilterChange = (value: FilterOptionsType) => {
+    setColumnFilters((prev) =>
+      value !== 'All'
+        ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: value.toLowerCase() })
+        : prev.filter((filter) => filter.id !== 'class'),
+    )
+    updateModelVariables({
+      display: 'table',
+      classFilter: value,
+    })
+  }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
     updateModelVariables({
@@ -189,21 +187,6 @@ const GlobalVariablesEditor = () => {
         {editorVariables.display === 'table' ? (
           <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
             <div
-              aria-label='Variables editor table description container'
-              className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
-            >
-              <label
-                htmlFor='description'
-                className='w-fit text-base font-medium text-neutral-1000 dark:text-neutral-300'
-              >
-                Description :
-              </label>
-              <InputWithRef
-                id='description'
-                className='h-full w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
-              />
-            </div>
-            <div
               aria-label='Variables editor table class filter container'
               className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
             >
@@ -213,7 +196,7 @@ const GlobalVariablesEditor = () => {
               >
                 Class Filter :
               </label>
-              {/* <Select value={editorVariables.classFilter} onValueChange={handleFilterChange}>
+              <Select value={editorVariables.classFilter} onValueChange={handleFilterChange}>
                 <SelectTrigger
                   id='class-filter'
                   placeholder={editorVariables.classFilter}
@@ -238,7 +221,7 @@ const GlobalVariablesEditor = () => {
                     </SelectItem>
                   ))}
                 </SelectContent>
-              </Select> */}
+              </Select>
             </div>
             <div
               aria-label='Variables editor table actions container'
