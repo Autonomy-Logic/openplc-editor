@@ -1,80 +1,67 @@
-interface FileHeader {
-  companyName: string;
-  productName: string;
-  productVersion: string;
-  creationDateTime: string;
-}
-
-interface CoordinateScaling {
-  x: number;
-  y: number;
-}
-
-interface CoordinateInfo {
-  fbd: {
-    scaling: CoordinateScaling;
+interface MQTTProject {
+  fileHeader: {
+    companyName: string;
+    productName: string;
+    productVersion: string;
+    creationDateTime: string;
   };
-  ld: {
-    scaling: CoordinateScaling;
-  };
-  sfc: {
-    scaling: CoordinateScaling;
-  };
-}
-
-interface Variable {
-  name: string;
-  type: 'BOOL' | 'string' | 'UINT'; // Definindo os tipos possíveis
-  documentation?: string; // 'documentation' é opcional
-}
-
-interface Interface {
-  inputVars: Variable[];
-  localVars?: Variable[];
-  outputVars: Variable[];
-}
-
-interface Body {
-  ST: {
-    xhtml: {
-      p: string;
+  contentHeader: {
+    name: string;
+    author: string;
+    modificationDateTime: string;
+    coordinateInfo: {
+      fbd: {
+        scaling: {
+          x: number;
+          y: number;
+        };
+      };
+      ld: {
+        scaling: {
+          x: number;
+          y: number;
+        };
+      };
+      sfc: {
+        scaling: {
+          x: number;
+          y: number;
+        };
+      };
     };
   };
+  types: {
+    dataTypes: object;
+    pous: Array<{
+      name: string;
+      pouType: string;
+      interface: {
+        inputVars: Array<{
+          name: string;
+          type: string;
+          documentation: string;
+        }>;
+        outputVars: Array<{
+          name: string;
+          type: string;
+          documentation: string;
+        }>;
+      };
+      body: {
+        ST: {
+          xhtml: {
+            p: string;
+          };
+        };
+      };
+      documentation: string;
+    }>;
+  };
+  instances: {
+    configurations: object;
+  };
 }
-
-interface Pou {
-  name: string;
-  pouType: string;
-  interface: Interface;
-  body: Body;
-  documentation?: string; // 'documentation' é opcional
-}
-
-interface Types {
-  dataTypes: object; // Especificar tipos se disponíveis
-  pous: Pou[];
-}
-
-interface Instances {
-  configurations: object; // Especificar configurações se disponíveis
-}
-
-interface ContentHeader {
-  name: string;
-  author: string;
-  modificationDateTime: string;
-  coordinateInfo: CoordinateInfo;
-}
-
-interface MqttProject {
-  fileHeader: FileHeader;
-  contentHeader: ContentHeader;
-  types: Types;
-  instances: Instances;
-}
-
-// Exemplo de uso com base no XML fornecido
-const mqttProject: MqttProject = {
+const _MQTTProject: MQTTProject = {
   fileHeader: {
     companyName: "OpenPLC",
     productName: "MQTT",

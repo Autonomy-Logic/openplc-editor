@@ -1,5 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const Additional_Function_Blocks = {
+const _additional_Function_Blocks = {
     fileHeader: {
       companyName: "Beremiz",
       productName: "Additional Function Blocks Library",

@@ -71,12 +71,12 @@ interface FileHeader {
   }
 
   interface Types {
-    dataTypes: object; // If you have specific types for dataTypes, replace this with a proper type
+    dataTypes: object;
     pous: Pou[];
   }
 
   interface Instances {
-    configurations: object; // If you have specific types for configurations, replace this with a proper type
+    configurations: object;
   }
 
   interface JaguarProject {

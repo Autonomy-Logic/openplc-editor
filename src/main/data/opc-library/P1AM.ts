@@ -1,5 +1,5 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const P1AM = {
+
+const _P1AM = {
   fileHeader: {
     companyName: 'OpenPLC',
     productName: 'P1AM Function Blocks Library',
