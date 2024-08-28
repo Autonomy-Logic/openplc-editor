@@ -9,8 +9,8 @@ import { toInteger } from 'lodash'
 import { v4 as uuidv4 } from 'uuid'
 
 import type { CustomHandleProps } from '../../../_atoms/react-flow/custom-nodes/handle'
-import { connectNodes, disconnectNodes, disconnectParallel, removeEdge } from './edges'
-import { buildGenericNode, getNodeStyle, isNodeOfType } from './nodes'
+import { buildEdge, connectNodes, disconnectNodes, removeEdge } from './edges'
+import { buildGenericNode, getNodeStyle, isNodeOfType, removeNode } from './nodes'
 
 export const getPreviousElement = (nodes: Node[], nodeIndex?: number) => {
   return nodes[(nodeIndex ?? nodes.length - 1) - 1]
@@ -123,6 +123,77 @@ export const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: 
   return newRail
 }
 
+const removeEmptyParallelConnections = (rung: FlowState) => {
+  const { nodes, edges } = rung
+
+  let newNodes = [...nodes]
+  let newEdges = [...edges]
+  nodes.forEach((node) => {
+    if (node.type === 'parallel') {
+      const parallelNode = node as ParallelNode
+      // check if it is an open parallel
+      if (parallelNode.data.type === 'close') {
+        const closeParallel = parallelNode
+        const openParallel = newNodes.find((n) => n.id === closeParallel.data.parallelOpenReference) as ParallelNode
+
+        const parallelEdge = newEdges.find(
+          (edge) =>
+            edge.source === openParallel.id && edge.sourceHandle === openParallel.data.parallelOutputConnector?.id,
+        )
+        if (parallelEdge && parallelEdge.source === openParallel.id && parallelEdge.target === closeParallel.id) {
+          newEdges = removeEdge(newEdges, parallelEdge.id)
+
+          const openParallelTarget = newEdges.find((edge) => edge.target === openParallel.id)
+          const openParallelSource = newEdges.find((edge) => edge.source === openParallel.id)
+          const closeParallelTarget = newEdges.find((edge) => edge.target === closeParallel.id)
+          const closeParallelSource = newEdges.find((edge) => edge.source === closeParallel.id)
+
+          if (!openParallelTarget || !openParallelSource || !closeParallelSource || !closeParallelTarget) return
+
+          /**
+           * Serial connection between the openParallel and closeParallel
+           */
+          if (openParallelSource.id === closeParallelTarget.id) {
+            newEdges = removeEdge(newEdges, openParallelSource.id)
+            newEdges.push(
+              buildEdge(openParallelTarget.source, closeParallelSource.target, {
+                sourceHandle: openParallelTarget.sourceHandle ?? undefined,
+                targetHandle: closeParallelSource.targetHandle ?? undefined,
+              }),
+            )
+          }
+          /**
+           * If have other nodes inside the serial connection
+           */
+          if (openParallelSource.id !== closeParallelTarget.id) {
+            newEdges = removeEdge(newEdges, openParallelSource.id)
+            newEdges = removeEdge(newEdges, closeParallelTarget.id)
+            newEdges.push(
+              buildEdge(openParallelTarget.source, openParallelSource.target, {
+                sourceHandle: openParallelTarget.sourceHandle ?? undefined,
+                targetHandle: openParallelSource.targetHandle ?? undefined,
+              }),
+            )
+            newEdges.push(
+              buildEdge(closeParallelTarget.source, closeParallelSource.target, {
+                sourceHandle: closeParallelTarget.sourceHandle ?? undefined,
+                targetHandle: closeParallelSource.targetHandle ?? undefined,
+              }),
+            )
+          }
+
+          newEdges = removeEdge(newEdges, openParallelTarget.id)
+          newEdges = removeEdge(newEdges, closeParallelSource.id)
+
+          newNodes = removeNode({ ...rung, nodes: newNodes }, closeParallel.id)
+          newNodes = removeNode({ ...rung, nodes: newNodes }, openParallel.id)
+        }
+      }
+    }
+  })
+  return { nodes: newNodes, edges: newEdges }
+}
+
 const rearrangeNodes = (rung: FlowState, _defaultBounds: [number, number]) => {
   const { nodes } = rung
   const newNodes: Node[] = []
@@ -208,8 +279,6 @@ const rearrangeNodes = (rung: FlowState, _defaultBounds: [number, number]) => {
   }
 
   newNodes[newNodes.length - 1] = changeRailBounds(newNodes[newNodes.length - 1], newNodes, _defaultBounds)
-
-  console.log('\n\n')
   return newNodes
 }
 
@@ -320,11 +389,6 @@ export const removeElement = (rung: FlowState, element: Node, defaultViewportBou
   const rails = rung.nodes.filter((node) => node.type === 'powerRail')
   const nodes = rung.nodes.filter((node) => node.type !== 'powerRail')
 
-  if (element.type === 'parallel') {
-    const { nodes: newNodes, edges: newEdges } = disconnectParallel(rung, element.id)
-    return { nodes: newNodes, edges: newEdges }
-  }
-
   const newNodes = nodes.filter((n) => n.id !== element.id)
   const newRails = changeRailBounds(rails[1], [rails[0], ...newNodes], defaultViewportBounds)
 
@@ -351,6 +415,10 @@ export const removeElements = (
     rungState.nodes = newNodes
     rungState.edges = newEdges
   }
+
+  const { nodes: newNodes, edges: newEdges } = removeEmptyParallelConnections(rungState)
+  rungState.nodes = newNodes
+  rungState.edges = newEdges
 
   rungState.nodes = rearrangeNodes(rungState, defaultBounds)
 
