@@ -1,7 +1,6 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { VariablesTable } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -32,8 +31,6 @@ const GlobalVariablesEditor = () => {
    * Editor name state to keep track of the editor name
    * Other states to keep track of the editor's variables and display at the screen
    */
-  const FilterOptions = ['All', 'Input', 'Output', 'InOut', 'External', 'Temp'] as const
-  type FilterOptionsType = (typeof FilterOptions)[number]
   const [editorVariables, setEditorVariables] = useState<GlobalVariablesTableType>({
     display: 'table',
     selectedRow: ROWS_NOT_SELECTED.toString(),
@@ -160,18 +157,6 @@ const GlobalVariablesEditor = () => {
     }
   }
 
-  const handleFilterChange = (value: FilterOptionsType) => {
-    setColumnFilters((prev) =>
-      value !== 'All'
-        ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: value.toLowerCase() })
-        : prev.filter((filter) => filter.id !== 'class'),
-    )
-    updateModelVariables({
-      display: 'table',
-      classFilter: value,
-    })
-  }
-
   const handleRowClick = (row: HTMLTableRowElement) => {
     updateModelVariables({
       display: 'table',
@@ -183,47 +168,10 @@ const GlobalVariablesEditor = () => {
     <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
       <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
         {editorVariables.display === 'table' ? (
-          <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
-            <div
-              aria-label='Variables editor table class filter container'
-              className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
-            >
-              <label
-                htmlFor='class-filter'
-                className='w-fit text-base font-medium text-neutral-1000 dark:text-neutral-300'
-              >
-                Class Filter :
-              </label>
-              <Select value={editorVariables.classFilter} onValueChange={handleFilterChange}>
-                <SelectTrigger
-                  id='class-filter'
-                  placeholder={editorVariables.classFilter}
-                  withIndicator
-                  className='group flex h-full w-44 items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
-                />
-                <SelectContent
-                  position='popper'
-                  sideOffset={3}
-                  align='center'
-                  className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
-                >
-                  {FilterOptions.map((filter) => (
-                    <SelectItem
-                      key={filter}
-                      value={filter}
-                      className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                    >
-                      <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                        {filter}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div aria-label='Variables editor table actions container' className='flex h-full w-full relative '>
             <div
               aria-label='Variables editor table actions container'
-              className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
+              className=' absolute right-0 flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
             >
               {/** This can be reviewed */}
               <TableActionButton aria-label='Add table row button' onClick={handleCreateVariable}>
