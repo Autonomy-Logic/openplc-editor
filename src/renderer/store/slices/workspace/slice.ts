@@ -15,7 +15,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       globalVariables: [],
       configuration: {
         resource: {
-          id: 'res0',
+          id: 'resource',
           tasks: [],
           instances: [],
         },
