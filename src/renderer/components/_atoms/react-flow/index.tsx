@@ -9,7 +9,7 @@ type FlowPanelProps = PropsWithChildren & {
   backgroundConfig?: BackgroundProps
   controls?: boolean
   controlsConfig?: ControlProps
-  constrolsStyle?: string
+  controlsStyle?: string
   viewportConfig?: ReactFlowProps
 }
 
@@ -19,13 +19,13 @@ export const FlowPanel = ({
   backgroundConfig,
   controls = false,
   controlsConfig,
-  constrolsStyle,
+  controlsStyle,
   viewportConfig,
 }: FlowPanelProps) => {
   return (
     <ReactFlow {...viewportConfig}>
       {background && <Background {...backgroundConfig} />}
-      {controls && <Controls {...controlsConfig} className={constrolsStyle} />}
+      {controls && <Controls {...controlsConfig} className={controlsStyle} />}
       {children}
     </ReactFlow>
   )

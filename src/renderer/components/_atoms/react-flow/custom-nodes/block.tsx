@@ -4,10 +4,12 @@ import { useState } from 'react'
 
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
-import { buildHandle, CustomHandle, CustomHandleProps } from './handle'
+import { buildHandle, CustomHandle } from './handle'
+import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-type BlockNode = Node<{ handles: CustomHandleProps[]; variant: 'template' | 'TON' }, 'text'>
+type BlockNode = Node<BasicNodeData & { variant: 'default' | 'TON' }>
 type BlockProps = NodeProps<BlockNode>
+type BlockBuilderProps = BuilderBasicProps & { variant: 'default' | 'TON' }
 
 export const BLOCK_WIDTH = 96
 export const BLOCK_HEIGHT = 128
@@ -25,7 +27,7 @@ type BlockTypes = {
   }
 }
 const BLOCK_TYPES: BlockTypes = {
-  template: {
+  default: {
     name: '???',
     leftConnectors: ['???', '???'],
     rightConnectors: ['???'],
@@ -47,7 +49,7 @@ const BLOCK_TYPES: BlockTypes = {
 }
 
 export const Block = ({ selected, data }: BlockProps) => {
-  const [blockLabelValue, setBlockLabelValue] = useState<string>('???')
+  const [blockLabelValue, setBlockLabelValue] = useState<string>('')
   const { name, leftConnectors, rightConnectors, tooltipContent } = BLOCK_TYPES[data.variant]
 
   return (
@@ -100,6 +102,7 @@ export const Block = ({ selected, data }: BlockProps) => {
         <InputWithRef
           value={blockLabelValue}
           onChange={(e) => setBlockLabelValue(e.target.value)}
+          placeholder='???'
           className='w-full bg-transparent text-center text-sm outline-none'
         />
       </div>
@@ -120,21 +123,7 @@ export const Block = ({ selected, data }: BlockProps) => {
  * @param blockType: 'template' - The type of the block node
  * @returns BlockNode
  */
-export const buildBlockNode = ({
-  id,
-  posX,
-  posY,
-  handleX,
-  handleY,
-  variant = 'template',
-}: {
-  id: string
-  posX: number
-  posY: number
-  handleX: number
-  handleY: number
-  variant?: 'template' | 'TON'
-}) => {
+export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: BlockBuilderProps) => {
   const type = BLOCK_TYPES[variant]
   const leftConnectors = type.leftConnectors
   const rightConnectors = type.rightConnectors
@@ -182,6 +171,8 @@ export const buildBlockNode = ({
     data: {
       variant,
       handles,
+      inputConnector: leftHandles[0],
+      outputConnector: rightHandles[0],
     },
     width: BLOCK_WIDTH,
     height: BLOCK_HEIGHT,

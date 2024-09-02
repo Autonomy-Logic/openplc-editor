@@ -2,6 +2,7 @@ import { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 
 type FlowState = {
   id: string
+  defaultBounds: [number, number]
   flowViewport?: [number, number]
   nodes: Node[]
   edges: Edge[]
@@ -12,6 +13,15 @@ type RungsState = {
 }
 
 type FlowActions = {
+  startLadderRung: ({
+    rungId,
+    defaultBounds,
+    flowViewport,
+  }: {
+    rungId: string
+    defaultBounds: [number, number]
+    flowViewport?: [number, number]
+  }) => void
   addRung: (rung: FlowState) => void
   removeRung: (rungId: string) => void
 
@@ -24,6 +34,8 @@ type FlowActions = {
 
   setEdges: ({ edges, rungId }: { edges: Edge[]; rungId: string }) => void
   updateEdge: ({ edge, rungId }: { edge: Edge; rungId: string }) => void
+
+  updateFlowViewport: ({ flowViewport, rungId }: { flowViewport: [number, number]; rungId: string }) => void
 }
 
 /** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */

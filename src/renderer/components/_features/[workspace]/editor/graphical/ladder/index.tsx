@@ -1,4 +1,3 @@
-import { customNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
 import { CreateRung } from '@root/renderer/components/_molecules/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -12,37 +11,11 @@ export default function LadderEditor() {
 
   const handleAddNewRung = () => {
     const defaultViewport: [number, number] = [1530, 250]
-    const { powerRail } = customNodesStyles
 
-    flowActions.addRung({
-      id: rungs.length.toString(),
+    flowActions.startLadderRung({
+      rungId: rungs.length.toString(),
+      defaultBounds: defaultViewport,
       flowViewport: defaultViewport,
-      nodes: [
-        nodesBuilder.powerRail({
-          id: 'left-rail',
-          posX: 0,
-          posY: 0,
-          connector: 'right',
-          handleX: powerRail.width,
-          handleY: powerRail.height / 2,
-        }),
-        nodesBuilder.powerRail({
-          id: 'right-rail',
-          posX: 1530 - powerRail.width,
-          posY: 0,
-          connector: 'left',
-          handleX: defaultViewport[0] - powerRail.width,
-          handleY: powerRail.height / 2,
-        }),
-      ],
-      edges: [
-        {
-          id: 'e_left-rail_right-rail',
-          source: 'left-rail',
-          target: 'right-rail',
-          type: 'step',
-        },
-      ],
     })
   }
 
