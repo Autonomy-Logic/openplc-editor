@@ -1,6 +1,5 @@
 import { nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
 import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
-import { PlaceholderNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/placeholder'
 import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 import type { FlowState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
@@ -32,7 +31,11 @@ const getPositionBasedOnPreviousNode = (
   newElement: string | Node,
   type: 'serial' | 'parallel',
 ) => {
-  const previousElementOutputHandle = previousElement.data.outputConnector as CustomHandleProps
+  const previousElementOutputHandle = (
+    type === 'parallel'
+      ? (previousElement as ParallelNode).data.parallelOutputConnector
+      : previousElement.data.outputConnector
+  ) as CustomHandleProps
   const previousElementStyle = getNodeStyle({ node: previousElement })
   const newNodeStyle = getNodeStyle(typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement })
 
@@ -76,6 +79,50 @@ const getPositionBasedOnPlaceholderNode = (
   }
 
   return position
+}
+
+const getPlaceholderPositionBasedOnNode = (node: Node, side: 'left' | 'bottom' | 'right') => {
+  switch (side) {
+    case 'left':
+      return {
+        posX:
+          node.position.x -
+          getNodeStyle({ nodeType: 'placeholder' }).gap -
+          getNodeStyle({ nodeType: 'placeholder' }).width,
+        posY:
+          ((node.data.inputConnector ?? node.data.outputConnector) as CustomHandleProps)?.glbPosition.y -
+          getNodeStyle({ nodeType: 'placeholder' }).handle.y,
+        handleX:
+          node.position.x -
+          getNodeStyle({ nodeType: 'placeholder' }).gap -
+          getNodeStyle({ nodeType: 'placeholder' }).width,
+        handleY: ((node.data.inputConnector ?? node.data.outputConnector) as CustomHandleProps)?.glbPosition.y,
+      }
+    case 'right':
+      return {
+        posX: node.position.x + getNodeStyle({ node }).width + getNodeStyle({ nodeType: 'placeholder' }).gap,
+        posY:
+          ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y -
+          getNodeStyle({ nodeType: 'placeholder' }).handle.y,
+        handleX: node.position.x + getNodeStyle({ node }).width + getNodeStyle({ nodeType: 'placeholder' }).gap,
+        handleY: ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y,
+      }
+    case 'bottom':
+      return {
+        posX: node.position.x + getNodeStyle({ node }).width / 2 - getNodeStyle({ nodeType: 'placeholder' }).width / 2,
+        posY:
+          ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y -
+          getNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
+          getNodeStyle({ nodeType: 'parallelPlaceholder' }).gap +
+          (node?.height ?? 0),
+        handleX:
+          node.position.x + getNodeStyle({ node }).width / 2 - getNodeStyle({ nodeType: 'placeholder' }).width / 2,
+        handleY:
+          ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y +
+          getNodeStyle({ nodeType: 'parallelPlaceholder' }).gap +
+          (node?.height ?? 0),
+      }
+  }
 }
 
 export const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: [number, number]) => {
@@ -287,42 +334,172 @@ export const addNewElement = (
   newElementType: string,
   defaultViewportBounds: [number, number],
 ): { nodes: Node[]; edges: Edge[] } => {
+  console.log('\n\nSTART ADD NODE')
+
   const [selectedPlaceholderIndex, selectedPlaceholder] =
     Object.entries(rung.nodes).find(
       (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
     ) ?? []
   if (!selectedPlaceholder || !selectedPlaceholderIndex) return { nodes: rung.nodes, edges: rung.edges }
 
-  const newElPosition = getPositionBasedOnPlaceholderNode(selectedPlaceholder, newElementType)
-  const newElement = buildGenericNode({
-    nodeType: newElementType,
-    id: `${newElementType.toUpperCase()}_${uuidv4()}`,
-    ...newElPosition,
-  })
-
   let newNodes = [...rung.nodes]
-  newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newElement)
-
   let newEdges = [...rung.edges]
-  if (selectedPlaceholder.type === 'parallelPlaceholder') {
-    const parallelPlaceholder = selectedPlaceholder as PlaceholderNode
-    const sourceEdge = newEdges.find((edge) => edge.source === parallelPlaceholder.id)
-    const targetEdge = newEdges.find((edge) => edge.target === parallelPlaceholder.id)
-    if (!sourceEdge || !targetEdge) return { nodes: rung.nodes, edges: rung.edges }
-    newEdges = removeEdge(newEdges, newEdges.find((edge) => edge.id === sourceEdge.id)?.id ?? '')
-    newEdges = removeEdge(newEdges, newEdges.find((edge) => edge.id === targetEdge.id)?.id ?? '')
+
+  /**
+   * TODO: SOLVE BUG WHEN ADD A PARALLEL NODE TO THE FIRST NODE INSIDE THE PARALLEL
+   */
+  if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
+    // Get the node above the selected placeholder
+    const aboveNode = rung.nodes.find(
+      (node) => node.id === getPreviousElement(rung.nodes, toInteger(selectedPlaceholderIndex)).id,
+    )
+    if (!aboveNode) return { nodes: newNodes, edges: newEdges }
+    // Get the edges of the above node
+    const aboveNodeTargetEdge = newEdges.filter((edge) => edge.target === aboveNode.id)
+    const aboveNodeSourceEdge = newEdges.filter((edge) => edge.source === aboveNode.id)
+
+    // Build parallel open node based on the node that antecede the above node or the above node itself
+    const openParallelPosition = getPositionBasedOnPreviousNode(
+      newNodes.find((node) => node.id === aboveNodeTargetEdge[0].source) ?? aboveNode,
+      'parallel',
+      'serial',
+    )
+    const openParallelNode = buildGenericNode({
+      nodeType: 'parallel',
+      id: `PARALLEL_OPEN_${uuidv4()}`,
+      ...openParallelPosition,
+    }) as ParallelNode
+
+    // Build new element node
+    const newElementPosition = getPositionBasedOnPreviousNode(openParallelNode, newElementType, 'parallel')
+    const newElement = buildGenericNode({
+      nodeType: newElementType,
+      id: `${newElementType.toUpperCase()}_${uuidv4()}`,
+      ...newElementPosition,
+    })
+
+    // Build new above node
+    const newAboveNodePosition = getPositionBasedOnPreviousNode(openParallelNode, aboveNode, 'serial')
+    const newAboveNode = buildGenericNode({
+      nodeType: aboveNode.type ?? '',
+      id: `${aboveNode.type?.toUpperCase()}_${uuidv4()}`,
+      ...newAboveNodePosition,
+    })
+
+    // Build parallel close node
+    const closeParallelPositionSerial = getPositionBasedOnPreviousNode(newAboveNode, 'parallel', 'serial')
+    const closeParallelPositionParallel = getPositionBasedOnPreviousNode(selectedPlaceholder, 'parallel', 'serial')
+    const closeParallelNode = nodesBuilder.parallel({
+      id: `PARALLEL_CLOSE_${uuidv4()}`,
+      type: 'close',
+      posX:
+        closeParallelPositionSerial.posX > closeParallelPositionParallel.posX
+          ? closeParallelPositionSerial.posX
+          : closeParallelPositionParallel.posX,
+      posY: closeParallelPositionSerial.posY,
+      handleX:
+        closeParallelPositionSerial.handleX > closeParallelPositionParallel.handleX
+          ? closeParallelPositionSerial.handleX
+          : closeParallelPositionParallel.handleX,
+      handleY: closeParallelPositionSerial.handleY,
+    })
+
+    // Add reference to the open parallel node
+    openParallelNode.data.parallelCloseReference = closeParallelNode.id
+    closeParallelNode.data.parallelOpenReference = openParallelNode.id
+
+    // Insert the new nodes
+    // first insert the new nodes
+    newNodes.splice(
+      toInteger(selectedPlaceholderIndex),
+      1,
+      openParallelNode,
+      newAboveNode,
+      newElement,
+      closeParallelNode,
+    )
+    // then remove the old above node
+    newNodes = newNodes.filter((node) => node.id !== aboveNode.id)
+    // finally remove the placeholder nodes
+    newNodes = removePlaceholderNodes(newNodes)
+
+    // Create the new edges
+    // clear old edges of the above node
+    newEdges = newEdges.filter((edge) => edge.source !== aboveNode.id && edge.target !== aboveNode.id)
+
+    // serial connections
     newEdges = connectNodes(
       { ...rung, nodes: newNodes, edges: newEdges },
-      targetEdge.source,
-      sourceEdge.target,
-      'parallel',
+      aboveNodeTargetEdge[0].source,
+      openParallelNode.id,
+      'serial',
       {
-        sourceHandle: targetEdge.sourceHandle ?? '',
-        targetHandle: sourceEdge.targetHandle ?? '',
+        sourceHandle: aboveNodeTargetEdge[0].sourceHandle ?? undefined,
+        targetHandle: openParallelNode.data.inputConnector?.id,
       },
     )
-    newEdges = connectNodes({ ...rung, nodes: newNodes, edges: newEdges }, targetEdge.source, newElement.id, 'parallel')
+    newEdges = connectNodes(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      openParallelNode.id,
+      newAboveNode.id,
+      'serial',
+      {
+        sourceHandle: openParallelNode.data.outputConnector?.id,
+        targetHandle: newAboveNode.data.inputConnector?.id,
+      },
+    )
+    newEdges = connectNodes(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      newAboveNode.id,
+      closeParallelNode.id,
+      'serial',
+      {
+        sourceHandle: newAboveNode.data.outputConnector?.id,
+        targetHandle: closeParallelNode.data.inputConnector?.id,
+      },
+    )
+    newEdges = connectNodes(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      closeParallelNode.id,
+      aboveNodeSourceEdge[0].target,
+      'serial',
+      {
+        sourceHandle: closeParallelNode.data.outputConnector?.id,
+        targetHandle: aboveNodeSourceEdge[0].targetHandle ?? undefined,
+      },
+    )
+
+    // parallel connections
+    newEdges = connectNodes(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      openParallelNode.id,
+      newElement.id,
+      'parallel',
+      {
+        sourceHandle: openParallelNode.data.parallelOutputConnector?.id,
+        targetHandle: newElement.data.inputConnector?.id,
+      },
+    )
+    newEdges = connectNodes(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      newElement.id,
+      closeParallelNode.id,
+      'parallel',
+      {
+        sourceHandle: newElement.data.outputConnector?.id,
+        targetHandle: closeParallelNode.data.parallelInputConnector?.id,
+      },
+    )
   } else {
+    const newElPosition = getPositionBasedOnPlaceholderNode(selectedPlaceholder, newElementType)
+    const newElement = buildGenericNode({
+      nodeType: newElementType,
+      id: `${newElementType.toUpperCase()}_${uuidv4()}`,
+      ...newElPosition,
+    })
+
+    newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newElement)
+    newNodes = removePlaceholderNodes(newNodes)
     newEdges = connectNodes(
       { ...rung, nodes: newNodes },
       getPreviousElement(
@@ -334,53 +511,11 @@ export const addNewElement = (
     )
   }
 
-  if (isNodeOfType(newElement, 'parallel')) {
-    const openParallel = newElement as ParallelNode
-
-    const parallelPlaceholderPosition = getPositionBasedOnPreviousNode(openParallel, 'parallelPlaceholder', 'parallel')
-    const parallelPlaceholder = buildGenericNode({
-      nodeType: 'parallelPlaceholder',
-      id: `parallelPlaceholder_${parallelPlaceholderPosition.posX}_${parallelPlaceholderPosition.posY}`,
-      ...parallelPlaceholderPosition,
-    })
-
-    const closeParallelPosition = getPositionBasedOnPreviousNode(openParallel, 'parallel', 'serial')
-    const { posX: closePositionX } = getPositionBasedOnPreviousNode(parallelPlaceholder, 'parallel', 'serial')
-    const closeParallel = nodesBuilder.parallel({
-      id: `${newElementType.toUpperCase()}_close_${uuidv4()}`,
-      ...closeParallelPosition,
-      type: 'close',
-      posX: closePositionX,
-      handleX: closePositionX,
-    })
-    openParallel.data.parallelCloseReference = closeParallel.id
-    closeParallel.data.parallelOpenReference = openParallel.id
-
-    newNodes.splice(toInteger(selectedPlaceholderIndex) + 1, 0, parallelPlaceholder, closeParallel)
-    newEdges = connectNodes({ ...rung, nodes: newNodes, edges: newEdges }, openParallel.id, closeParallel.id, 'serial')
-    newEdges = connectNodes(
-      { ...rung, nodes: newNodes, edges: newEdges },
-      openParallel.id,
-      closeParallel.id,
-      'parallel',
-      {
-        sourceHandle: openParallel.data.parallelOutputConnector?.id,
-        targetHandle: closeParallel.data.parallelInputConnector?.id,
-      },
-    )
-    newEdges = connectNodes(
-      { ...rung, nodes: newNodes, edges: newEdges },
-      openParallel.id,
-      parallelPlaceholder.id,
-      'parallel',
-    )
-  }
-
-  newNodes = removePlaceholderNodes(newNodes)
-  newNodes = rearrangeNodes({ ...rung, nodes: newNodes, edges: newEdges }, defaultViewportBounds)
-
   console.log('newNodes', newNodes)
   console.log('newEdges', newEdges)
+  console.log('FINISH ADD NODES\n\n')
+
+  newNodes = rearrangeNodes({ ...rung, nodes: newNodes, edges: newEdges }, defaultViewportBounds)
 
   return { nodes: newNodes, edges: newEdges }
 }
@@ -428,23 +563,73 @@ export const removeElements = (
 export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
   const placeholderNodes: Node[] = []
   nodes.forEach((node) => {
-    placeholderNodes.push(node)
-    if (node.id === 'right-rail' || node.type === 'parallelPlaceholder') return
-    const placeholderPosition = getPositionBasedOnPreviousNode(node, 'placeholder', 'serial')
-    const placeholderStyle = getNodeStyle({ nodeType: 'placeholder' })
-    const placeholder = buildGenericNode({
-      nodeType: 'placeholder',
-      id: `placeholder_${placeholderPosition.posX}_${placeholderPosition.posY}`,
-      ...placeholderPosition,
-      posX: placeholderPosition.posX - placeholderStyle.width / 2,
-    })
-    placeholderNodes.push(placeholder)
+    let placeholders: Node[] = []
+    if (node.type === 'placeholder' || node.type === 'parallelPlaceholder') {
+      return
+    } else if (node.id === 'left-rail') {
+      placeholders = [
+        buildGenericNode({
+          nodeType: 'placeholder',
+          id: `placeholder_${node.id}_${uuidv4()}`,
+          ...getPlaceholderPositionBasedOnNode(node, 'right'),
+        }),
+      ]
+      console.log('placeholders', placeholders)
+      placeholderNodes.push(node, placeholders[0])
+    } else if (node.id === 'right-rail') {
+      placeholders = [
+        buildGenericNode({
+          nodeType: 'placeholder',
+          id: `placeholder_${node.id}_${uuidv4()}`,
+          ...getPlaceholderPositionBasedOnNode(node, 'left'),
+        }),
+      ]
+      placeholderNodes.push(placeholders[0], node)
+    } else if (node.type === 'parallel') {
+      if (node.data.type === 'open') {
+        placeholders = [
+          buildGenericNode({
+            nodeType: 'placeholder',
+            id: `placeholder_${node.id}_${uuidv4()}`,
+            ...getPlaceholderPositionBasedOnNode(node, 'left'),
+          }),
+        ]
+        placeholderNodes.push(placeholders[0], node)
+      } else {
+        placeholders = [
+          buildGenericNode({
+            nodeType: 'placeholder',
+            id: `placeholder_${node.id}_${uuidv4()}`,
+            ...getPlaceholderPositionBasedOnNode(node, 'right'),
+          }),
+        ]
+        placeholderNodes.push(node, placeholders[0])
+      }
+    } else {
+      placeholders = [
+        buildGenericNode({
+          nodeType: 'placeholder',
+          id: `placeholder_${node.id}_${uuidv4()}`,
+          ...getPlaceholderPositionBasedOnNode(node, 'left'),
+        }),
+        buildGenericNode({
+          nodeType: 'placeholder',
+          id: `placeholder_${node.id}_${uuidv4()}`,
+          ...getPlaceholderPositionBasedOnNode(node, 'right'),
+        }),
+        buildGenericNode({
+          nodeType: 'parallelPlaceholder',
+          id: `parallelPlaceholder_${node.id}_${uuidv4()}`,
+          ...getPlaceholderPositionBasedOnNode(node, 'bottom'),
+        }),
+      ]
+      placeholderNodes.push(placeholders[0], node, placeholders[2], placeholders[1])
+    }
   })
-
   return placeholderNodes
 }
 
 export const removePlaceholderNodes = (nodes: Node[]): Node[] => {
-  const nodesNoPlaceholder = nodes.filter((node) => node.type !== 'placeholder')
+  const nodesNoPlaceholder = nodes.filter((node) => node.type !== 'placeholder' && node.type !== 'parallelPlaceholder')
   return nodesNoPlaceholder
 }

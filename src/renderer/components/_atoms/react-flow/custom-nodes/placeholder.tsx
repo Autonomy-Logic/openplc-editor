@@ -11,13 +11,18 @@ type ParallelBuilderProps = BuilderBasicProps & { type: 'parallel' | 'default' }
 
 export const PLACEHOLDER_WIDTH = 16
 export const PLACEHOLDER_HEIGHT = 16
+export const PLACEHOLDER_GAP = 20
 
 export const PLACEHOLDER_CONNECTOR_Y = PLACEHOLDER_HEIGHT / 2
 
 export const Placeholder = ({ selected, data }: PlaceholderProps) => {
   return (
     <>
-      <PlaceholderNodeFilled className={cn({ 'fill-brand': selected })} />
+      <PlaceholderNodeFilled
+        className={cn({ 'fill-brand': selected })}
+        width={PLACEHOLDER_WIDTH}
+        height={PLACEHOLDER_HEIGHT}
+      />
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}
@@ -44,7 +49,7 @@ export const builderPlaceholderNode = ({
       relX: 0,
       relY: PLACEHOLDER_CONNECTOR_Y,
       style: {
-        visibility: type === 'default' ? 'hidden' : 'visible',
+        visibility: 'hidden',
         top: PLACEHOLDER_CONNECTOR_Y,
         left: 0,
       },
@@ -59,7 +64,7 @@ export const builderPlaceholderNode = ({
       relX: PLACEHOLDER_WIDTH,
       relY: PLACEHOLDER_CONNECTOR_Y,
       style: {
-        visibility: type === 'default' ? 'hidden' : 'visible',
+        visibility: 'hidden',
         top: PLACEHOLDER_CONNECTOR_Y,
         right: 0,
       },

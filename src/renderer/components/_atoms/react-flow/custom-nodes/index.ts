@@ -75,7 +75,7 @@ export const customNodesStyles: CustomNodeTypes = {
   parallelPlaceholder: {
     width: placeholderNode.PLACEHOLDER_WIDTH,
     height: placeholderNode.PLACEHOLDER_HEIGHT,
-    gap: 0,
+    gap: placeholderNode.PLACEHOLDER_GAP,
     handle: {
       x: 0,
       y: placeholderNode.PLACEHOLDER_CONNECTOR_Y,
@@ -85,7 +85,7 @@ export const customNodesStyles: CustomNodeTypes = {
   placeholder: {
     width: placeholderNode.PLACEHOLDER_WIDTH,
     height: placeholderNode.PLACEHOLDER_HEIGHT,
-    gap: 0,
+    gap: placeholderNode.PLACEHOLDER_GAP,
     handle: {
       x: 0,
       y: placeholderNode.PLACEHOLDER_CONNECTOR_Y,
