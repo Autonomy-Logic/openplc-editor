@@ -242,7 +242,7 @@ const removeEmptyParallelConnections = (rung: FlowState) => {
   return { nodes: newNodes, edges: newEdges }
 }
 
-const rearrangeNodes = (rung: FlowState, _defaultBounds: [number, number]) => {
+const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
   const { nodes } = rung
   const newNodes: Node[] = []
 
@@ -305,28 +305,55 @@ const rearrangeNodes = (rung: FlowState, _defaultBounds: [number, number]) => {
         handleY: openParallelPosition.handleY,
       }
     }
-
     const nodeData = node.data as BasicNodeData
     const newNodeHandlesPosition = nodeData.handles.map((handle) => {
       return {
         ...handle,
         glbPosition: {
           x: handle.position === Position.Left ? newNodePosition.handleX : newNodePosition.handleX + (node.width ?? 0),
-          y: handle.glbPosition.y,
+          y: newNodePosition.handleY,
         },
       }
     })
-    newNodes.push({
-      ...node,
-      position: { x: newNodePosition.posX, y: newNodePosition.posY },
-      data: {
-        ...nodeData,
-        handles: newNodeHandlesPosition,
-      },
-    })
+    if (!isNodeOfType(node, 'parallel')) {
+      const newNode: Node<BasicNodeData> = {
+        ...node,
+        position: { x: newNodePosition.posX, y: newNodePosition.posY },
+        data: {
+          ...nodeData,
+          handles: newNodeHandlesPosition,
+          inputConnector: newNodeHandlesPosition.find(
+            (handle) => handle.id === (node.data as BasicNodeData).inputConnector?.id,
+          ),
+          outputConnector: newNodeHandlesPosition.find(
+            (handle) => handle.id === (node.data as BasicNodeData).outputConnector?.id,
+          ),
+        },
+      }
+      newNodes.push(newNode)
+    } else {
+      const parallelNode = node as ParallelNode
+      const newParallelNode: ParallelNode = {
+        ...parallelNode,
+        position: { x: newNodePosition.posX, y: newNodePosition.posY },
+        data: {
+          ...parallelNode.data,
+          handles: newNodeHandlesPosition,
+          inputConnector: newNodeHandlesPosition.find((handle) => handle.id === parallelNode.data.inputConnector?.id),
+          outputConnector: newNodeHandlesPosition.find((handle) => handle.id === parallelNode.data.outputConnector?.id),
+          parallelInputConnector: newNodeHandlesPosition.find(
+            (handle) => handle.id === parallelNode.data.parallelInputConnector?.id,
+          ),
+          parallelOutputConnector: newNodeHandlesPosition.find(
+            (handle) => handle.id === parallelNode.data.parallelOutputConnector?.id,
+          ),
+        },
+      }
+      newNodes.push(newParallelNode)
+    }
   }
 
-  newNodes[newNodes.length - 1] = changeRailBounds(newNodes[newNodes.length - 1], newNodes, _defaultBounds)
+  newNodes[newNodes.length - 1] = changeRailBounds(newNodes[newNodes.length - 1], newNodes, defaultBounds)
   return newNodes
 }
 
@@ -335,8 +362,6 @@ export const addNewElement = (
   newElementType: string,
   defaultViewportBounds: [number, number],
 ): { nodes: Node[]; edges: Edge[] } => {
-  console.log('\n\nSTART ADD NODE')
-
   const [selectedPlaceholderIndex, selectedPlaceholder] =
     Object.entries(rung.nodes).find(
       (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
@@ -346,9 +371,6 @@ export const addNewElement = (
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
-  /**
-   * TODO: SOLVE BUG WHEN ADD A PARALLEL NODE TO THE FIRST NODE INSIDE THE PARALLEL
-   */
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
     // Get the node above the selected placeholder
     const aboveNode = rung.nodes.find(
@@ -409,6 +431,14 @@ export const addNewElement = (
     openParallelNode.data.parallelCloseReference = closeParallelNode.id
     closeParallelNode.data.parallelOpenReference = openParallelNode.id
 
+    // get the related node
+    const relatedNode = (selectedPlaceholder as PlaceholderNode).data.relatedNode as Node
+    const { nodes: relatedNodePreviousNodes, edges: relatedNodePreviousEdges } = getPreviousElementsByEdges(
+      { ...rung, nodes: newNodes },
+      relatedNode,
+    )
+    if (!relatedNodePreviousNodes || !relatedNodePreviousEdges) return { nodes: newNodes, edges: newEdges }
+
     // Insert the new nodes
     // first insert the new nodes
     newNodes.splice(
@@ -433,7 +463,13 @@ export const addNewElement = (
       { ...rung, nodes: newNodes, edges: newEdges },
       aboveNodeTargetEdge[0].source,
       openParallelNode.id,
-      'serial',
+      relatedNodePreviousNodes.length > 0 &&
+        isNodeOfType(relatedNodePreviousNodes[0], 'parallel') &&
+        (relatedNodePreviousNodes[0] as ParallelNode).data.type === 'open' &&
+        relatedNodePreviousEdges[0].sourceHandle ===
+          (relatedNodePreviousNodes[0] as ParallelNode).data.parallelOutputConnector?.id
+        ? 'parallel'
+        : 'serial',
       {
         sourceHandle: aboveNodeTargetEdge[0].sourceHandle ?? undefined,
         targetHandle: openParallelNode.data.inputConnector?.id,
@@ -507,9 +543,6 @@ export const addNewElement = (
       { ...rung, nodes: newNodes },
       relatedNode,
     )
-    console.log('relatedNode', relatedNode)
-    console.log('relatedNodePreviousNodes', relatedNodePreviousNodes)
-    console.log('relatedNodePreviousEdges', relatedNodePreviousEdges)
     if (!relatedNodePreviousNodes || !relatedNodePreviousEdges) return { nodes: newNodes, edges: newEdges }
 
     // find the previous node
@@ -525,26 +558,11 @@ export const addNewElement = (
       selectedPlaceholder.data.position === 'left'
     ) {
       previousNode = relatedNodePreviousNodes[0]
-      newEdges = connectNodes(
-        { ...rung, nodes: newNodes },
-        previousNode.id,
-        newElement.id,
-        'parallel',
-      )
+      newEdges = connectNodes({ ...rung, nodes: newNodes }, previousNode.id, newElement.id, 'parallel')
     } else {
-      newEdges = connectNodes(
-        { ...rung, nodes: newNodes },
-        previousNode.id,
-        newElement.id,
-        'serial',
-      )
+      newEdges = connectNodes({ ...rung, nodes: newNodes }, previousNode.id, newElement.id, 'serial')
     }
-
   }
-
-  console.log('newNodes', newNodes)
-  console.log('newEdges', newEdges)
-  console.log('FINISH ADD NODES\n\n')
 
   newNodes = rearrangeNodes({ ...rung, nodes: newNodes, edges: newEdges }, defaultViewportBounds)
 
