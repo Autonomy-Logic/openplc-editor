@@ -12,12 +12,11 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     projectData: {
       dataTypes: [],
       pous: [],
-      globalVariables: [],
       configuration: {
         resource: {
-          id: 'resource',
           tasks: [],
           instances: [],
+          globalVariables: []
         },
       },
     },
