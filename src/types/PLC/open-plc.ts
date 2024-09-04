@@ -148,6 +148,7 @@ const PLCFunctionBlockSchema = z.object({
 type PLCFunctionBlock = z.infer<typeof PLCFunctionBlockSchema>
 
 const PLCProjectDataSchema = z.object({
+  projectName: z.string(),
   dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(
     z.discriminatedUnion('type', [
@@ -166,7 +167,8 @@ const PLCProjectDataSchema = z.object({
     ]),
   ),
   globalVariables: z.array(PLCVariableSchema),
-})
+});
+
 
 type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
