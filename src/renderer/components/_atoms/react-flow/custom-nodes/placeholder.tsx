@@ -15,9 +15,9 @@ type ParallelBuilderProps = BuilderBasicProps & {
   position: 'left' | 'right' | 'bottom'
 }
 
-export const PLACEHOLDER_WIDTH = 16
-export const PLACEHOLDER_HEIGHT = 16
-export const PLACEHOLDER_GAP = 20
+export const PLACEHOLDER_WIDTH = 10
+export const PLACEHOLDER_HEIGHT = 10
+export const PLACEHOLDER_GAP = 15
 
 export const PLACEHOLDER_CONNECTOR_Y = PLACEHOLDER_HEIGHT / 2
 

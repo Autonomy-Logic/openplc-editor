@@ -12,6 +12,9 @@ import type { CustomHandleProps } from '../../../_atoms/react-flow/custom-nodes/
 import { buildEdge, connectNodes, disconnectNodes, removeEdge } from './edges'
 import { buildGenericNode, getNodeStyle, isNodeOfType, removeNode } from './nodes'
 
+/**
+ * Local utilitaries functions
+ */
 const getPreviousElement = (nodes: Node[], nodeIndex?: number) => {
   return nodes[(nodeIndex ?? nodes.length - 1) - 1]
 }
@@ -113,39 +116,48 @@ const getPlaceholderPositionBasedOnNode = (node: Node, side: 'left' | 'bottom' |
         posX:
           node.position.x -
           getNodeStyle({ nodeType: 'placeholder' }).gap -
-          getNodeStyle({ nodeType: 'placeholder' }).width,
+          getNodeStyle({ nodeType: 'placeholder' }).width / 2,
         posY:
           ((node.data.inputConnector ?? node.data.outputConnector) as CustomHandleProps)?.glbPosition.y -
           getNodeStyle({ nodeType: 'placeholder' }).handle.y,
         handleX:
           node.position.x -
           getNodeStyle({ nodeType: 'placeholder' }).gap -
-          getNodeStyle({ nodeType: 'placeholder' }).width,
+          getNodeStyle({ nodeType: 'placeholder' }).width / 2,
         handleY: ((node.data.inputConnector ?? node.data.outputConnector) as CustomHandleProps)?.glbPosition.y,
       }
     case 'right':
       return {
-        posX: node.position.x + getNodeStyle({ node }).width + getNodeStyle({ nodeType: 'placeholder' }).gap,
+        posX:
+          node.position.x +
+          getNodeStyle({ node }).width +
+          getNodeStyle({ nodeType: 'placeholder' }).gap -
+          getNodeStyle({ nodeType: 'placeholder' }).width / 2,
         posY:
           ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y -
           getNodeStyle({ nodeType: 'placeholder' }).handle.y,
-        handleX: node.position.x + getNodeStyle({ node }).width + getNodeStyle({ nodeType: 'placeholder' }).gap,
+        handleX:
+          node.position.x +
+          getNodeStyle({ node }).width +
+          getNodeStyle({ nodeType: 'placeholder' }).gap -
+          getNodeStyle({ nodeType: 'placeholder' }).width,
         handleY: ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y,
       }
     case 'bottom':
       return {
         posX: node.position.x + getNodeStyle({ node }).width / 2 - getNodeStyle({ nodeType: 'placeholder' }).width / 2,
         posY:
-          ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y -
+          node.position.y +
+          (node?.height ?? 0) -
           getNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
-          getNodeStyle({ nodeType: 'parallelPlaceholder' }).gap +
-          (node?.height ?? 0),
+          getNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
         handleX:
           node.position.x + getNodeStyle({ node }).width / 2 - getNodeStyle({ nodeType: 'placeholder' }).width / 2,
         handleY:
-          ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y +
-          getNodeStyle({ nodeType: 'parallelPlaceholder' }).gap +
-          (node?.height ?? 0),
+          node.position.y +
+          (node?.height ?? 0) -
+          getNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
+          getNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
       }
   }
 }
@@ -280,7 +292,7 @@ const removeEmptyParallelConnections = (rung: FlowState) => {
   return { nodes: newNodes, edges: newEdges }
 }
 
-export const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: [number, number]) => {
+const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: [number, number]) => {
   const handles = rightRail.data.handles as CustomHandleProps[]
   const railStyle = getNodeStyle({ node: rightRail })
   const nodesWithNoRail = nodes.filter((node) => node.id !== 'right-rail')
@@ -440,6 +452,9 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
   return newNodes
 }
 
+/**
+ * Exported functions to control the rung elements
+ */
 export const addNewElement = (
   rung: FlowState,
   newElementType: string,
@@ -454,6 +469,9 @@ export const addNewElement = (
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
+  /**
+   * TODO: BUG WHEN ADD SERIAL COMPONENT BEFORE THE EXISTING SERIAL COMPONENT --> HAPPENS AFTER THE OPEN PARALLEL
+   */
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
     // Get the node above the selected placeholder
     const aboveNode = rung.nodes.find(
