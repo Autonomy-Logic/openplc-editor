@@ -1,5 +1,6 @@
 import { nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
 import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
+import { PlaceholderNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/placeholder'
 import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 import type { FlowState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
@@ -491,24 +492,54 @@ export const addNewElement = (
       },
     )
   } else {
-    const newElPosition = getPositionBasedOnPlaceholderNode(selectedPlaceholder, newElementType)
+    const newElelementPosition = getPositionBasedOnPlaceholderNode(selectedPlaceholder, newElementType)
     const newElement = buildGenericNode({
       nodeType: newElementType,
       id: `${newElementType.toUpperCase()}_${uuidv4()}`,
-      ...newElPosition,
+      ...newElelementPosition,
     })
-
     newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newElement)
     newNodes = removePlaceholderNodes(newNodes)
-    newEdges = connectNodes(
+
+    // get the related node
+    const relatedNode = (selectedPlaceholder as PlaceholderNode).data.relatedNode as Node
+    const { nodes: relatedNodePreviousNodes, edges: relatedNodePreviousEdges } = getPreviousElementsByEdges(
       { ...rung, nodes: newNodes },
-      getPreviousElement(
-        newNodes,
-        newNodes.findIndex((node) => node.id === newElement.id),
-      ).id,
-      newElement.id,
-      'serial',
+      relatedNode,
     )
+    console.log('relatedNode', relatedNode)
+    console.log('relatedNodePreviousNodes', relatedNodePreviousNodes)
+    console.log('relatedNodePreviousEdges', relatedNodePreviousEdges)
+    if (!relatedNodePreviousNodes || !relatedNodePreviousEdges) return { nodes: newNodes, edges: newEdges }
+
+    // find the previous node
+    let previousNode: Node = getPreviousElement(
+      newNodes,
+      newNodes.findIndex((n) => n.id === newElement.id),
+    )
+    // if the related node is a parallel, check if it is an open or close parallel
+    if (
+      relatedNodePreviousNodes.length > 0 &&
+      isNodeOfType(relatedNodePreviousNodes[0], 'parallel') &&
+      (relatedNodePreviousNodes[0] as ParallelNode).data.type === 'open' &&
+      selectedPlaceholder.data.position === 'left'
+    ) {
+      previousNode = relatedNodePreviousNodes[0]
+      newEdges = connectNodes(
+        { ...rung, nodes: newNodes },
+        previousNode.id,
+        newElement.id,
+        'parallel',
+      )
+    } else {
+      newEdges = connectNodes(
+        { ...rung, nodes: newNodes },
+        previousNode.id,
+        newElement.id,
+        'serial',
+      )
+    }
+
   }
 
   console.log('newNodes', newNodes)
@@ -568,9 +599,11 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
       return
     } else if (node.id === 'left-rail') {
       placeholders = [
-        buildGenericNode({
-          nodeType: 'placeholder',
+        nodesBuilder.placeholder({
           id: `placeholder_${node.id}_${uuidv4()}`,
+          type: 'default',
+          relatedNode: node,
+          position: 'right',
           ...getPlaceholderPositionBasedOnNode(node, 'right'),
         }),
       ]
@@ -578,9 +611,11 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
       placeholderNodes.push(node, placeholders[0])
     } else if (node.id === 'right-rail') {
       placeholders = [
-        buildGenericNode({
-          nodeType: 'placeholder',
+        nodesBuilder.placeholder({
           id: `placeholder_${node.id}_${uuidv4()}`,
+          type: 'default',
+          relatedNode: node,
+          position: 'left',
           ...getPlaceholderPositionBasedOnNode(node, 'left'),
         }),
       ]
@@ -588,18 +623,22 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
     } else if (node.type === 'parallel') {
       if (node.data.type === 'open') {
         placeholders = [
-          buildGenericNode({
-            nodeType: 'placeholder',
+          nodesBuilder.placeholder({
             id: `placeholder_${node.id}_${uuidv4()}`,
+            type: 'default',
+            relatedNode: node,
+            position: 'left',
             ...getPlaceholderPositionBasedOnNode(node, 'left'),
           }),
         ]
         placeholderNodes.push(placeholders[0], node)
       } else {
         placeholders = [
-          buildGenericNode({
-            nodeType: 'placeholder',
+          nodesBuilder.placeholder({
             id: `placeholder_${node.id}_${uuidv4()}`,
+            type: 'default',
+            relatedNode: node,
+            position: 'right',
             ...getPlaceholderPositionBasedOnNode(node, 'right'),
           }),
         ]
@@ -607,19 +646,25 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
       }
     } else {
       placeholders = [
-        buildGenericNode({
-          nodeType: 'placeholder',
+        nodesBuilder.placeholder({
           id: `placeholder_${node.id}_${uuidv4()}`,
+          type: 'default',
+          relatedNode: node,
+          position: 'left',
           ...getPlaceholderPositionBasedOnNode(node, 'left'),
         }),
-        buildGenericNode({
-          nodeType: 'placeholder',
+        nodesBuilder.placeholder({
           id: `placeholder_${node.id}_${uuidv4()}`,
+          type: 'default',
+          relatedNode: node,
+          position: 'right',
           ...getPlaceholderPositionBasedOnNode(node, 'right'),
         }),
-        buildGenericNode({
-          nodeType: 'parallelPlaceholder',
+        nodesBuilder.placeholder({
           id: `parallelPlaceholder_${node.id}_${uuidv4()}`,
+          type: 'parallel',
+          relatedNode: node,
+          position: 'bottom',
           ...getPlaceholderPositionBasedOnNode(node, 'bottom'),
         }),
       ]

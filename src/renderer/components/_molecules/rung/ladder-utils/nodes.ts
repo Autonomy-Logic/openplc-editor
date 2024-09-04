@@ -60,15 +60,6 @@ export const buildGenericNode = ({
         handleY,
         variant: 'default',
       })
-    case 'placeholder':
-      return nodesBuilder.placeholder({
-        id,
-        posX,
-        posY,
-        handleX,
-        handleY,
-        type: 'default',
-      })
     case 'parallel':
       return nodesBuilder.parallel({
         id,
@@ -77,15 +68,6 @@ export const buildGenericNode = ({
         handleX,
         handleY,
         type: 'open',
-      })
-    case 'parallelPlaceholder':
-      return nodesBuilder.placeholder({
-        id,
-        posX,
-        posY,
-        handleX,
-        handleY,
-        type: 'parallel'
       })
     default:
       return nodesBuilder.mockNode({

@@ -10,6 +10,15 @@ type ConnectionOptions = {
   targetHandle?: string
 }
 
+export const checkIfConnectedInParallel = (
+  rung: FlowState,
+  node: Node,
+): { parentNode: Node; connectedInParallel: boolean } => {
+  const connectedInParallel = rung.edges.filter((edge) => edge.target === node.id)
+  const sourceNode = rung.nodes.find((node) => node.id === connectedInParallel[0].source) as Node
+  return { parentNode: sourceNode, connectedInParallel: isNodeOfType(sourceNode, 'parallel') }
+}
+
 export const buildEdge = (sourceNodeId: string, targetNodeId: string, options?: ConnectionOptions): Edge => {
   return {
     id: `e_${sourceNodeId}_${targetNodeId}__${options?.sourceHandle}_${options?.targetHandle}`,
@@ -41,8 +50,13 @@ export const connectNodes = (
         : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id),
   )
 
+  console.log('sourceNode', sourceNode)
+  console.log('sourceEdge', sourceEdge)
+
   const targetNode = rung.nodes.find((node) => node.id === targetNodeId)
   const targetNodeData = targetNode?.data as BasicNodeData
+
+  console.log('targetNode', targetNode)
 
   /**
    * targetHandle: where the the sourceEdge connects to targetNode
@@ -51,10 +65,14 @@ export const connectNodes = (
   const targetHandle = !options ? targetNodeData.inputConnector?.id : options.targetHandle
   const sourceHandle = !options ? targetNodeData.outputConnector?.id : options.sourceHandle
 
+  console.log('target sourceHandle', sourceHandle)
+  console.log('target targetHandle', targetHandle)
+
   // If the source edge is found, update the target
   if (sourceEdge) {
     // Remove the source edge
     const edges = rung.edges.filter((edge) => edge.id !== sourceEdge.id)
+    console.log('edges after remove source edge', edges)
     // Update the target of the source edge
     edges.push(
       buildEdge(sourceNodeId, targetNodeId, {
@@ -62,6 +80,7 @@ export const connectNodes = (
         targetHandle: targetHandle,
       }),
     )
+    console.log('edges after update the target of the source edge', edges)
     // Update the target of the target edge
     edges.push(
       buildEdge(targetNodeId, sourceEdge.target, {
@@ -69,6 +88,7 @@ export const connectNodes = (
         targetHandle: sourceEdge.targetHandle ?? undefined,
       }),
     )
+    console.log('edges after update the target of the target edge', edges)
     return edges
   }
 
@@ -93,10 +113,12 @@ export const disconnectNodes = (
 
   if (targetEdge) {
     newEdges = removeEdge(newEdges, targetEdge.id)
-    newEdges.push(buildEdge(sourceEdge.source, targetEdge.target, {
-      sourceHandle: sourceEdge.sourceHandle ?? undefined,
-      targetHandle: targetEdge.targetHandle ?? undefined,
-    }))
+    newEdges.push(
+      buildEdge(sourceEdge.source, targetEdge.target, {
+        sourceHandle: sourceEdge.sourceHandle ?? undefined,
+        targetHandle: targetEdge.targetHandle ?? undefined,
+      }),
+    )
   }
 
   return newEdges

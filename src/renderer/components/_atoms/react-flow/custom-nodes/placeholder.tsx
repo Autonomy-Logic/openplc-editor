@@ -5,9 +5,15 @@ import { Node, NodeProps, Position } from '@xyflow/react'
 import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-export type PlaceholderNode = Node<BasicNodeData>
+export type PlaceholderNode = Node<
+  BasicNodeData & { relatedNode: Node | undefined; position: 'left' | 'right' | 'bottom' }
+>
 type PlaceholderProps = NodeProps<PlaceholderNode>
-type ParallelBuilderProps = BuilderBasicProps & { type: 'parallel' | 'default' }
+type ParallelBuilderProps = BuilderBasicProps & {
+  type: 'parallel' | 'default'
+  relatedNode: Node | undefined
+  position: 'left' | 'right' | 'bottom'
+}
 
 export const PLACEHOLDER_WIDTH = 16
 export const PLACEHOLDER_HEIGHT = 16
@@ -37,6 +43,8 @@ export const builderPlaceholderNode = ({
   handleX,
   handleY,
   type,
+  position,
+  relatedNode = undefined,
 }: ParallelBuilderProps): PlaceholderNode => {
   const handles = [
     buildHandle({
@@ -78,6 +86,8 @@ export const builderPlaceholderNode = ({
       handles: handles,
       inputConnector: handles[0],
       outputConnector: handles[1],
+      position,
+      relatedNode,
     },
     position: {
       x: posX,
