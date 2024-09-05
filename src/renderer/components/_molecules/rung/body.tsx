@@ -92,7 +92,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       event.preventDefault()
       const { relatedTarget } = event
       if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
-      const nodes = renderPlaceholderNodes(rungLocal.nodes)
+      const copyRungLocal = { ...rungLocal }
+      const nodes = renderPlaceholderNodes(copyRungLocal)
       setRungLocal((rung) => ({ ...rung, nodes }))
     },
     [rungLocal],

@@ -30,30 +30,6 @@ const getPreviousElementsByEdges = (
   return { nodes: previousNodes, edges: edges }
 }
 
-const getNodesInsideParallel = (rung: FlowState, closeParallelNode: Node) => {
-  const openParallelNode = rung.nodes.find(
-    (node) => node.id === closeParallelNode.data.parallelOpenReference,
-  ) as ParallelNode
-  const serial: Node[] = []
-  const parallel: Node[] = []
-
-  const openParallelEdges = rung.edges.filter((edge) => edge.source === openParallelNode.id)
-  for (const parallelEdge of openParallelEdges) {
-    let nextEdge = parallelEdge
-    while (nextEdge.target !== closeParallelNode.id) {
-      const node = rung.nodes.find((n) => n.id === nextEdge.target)
-      if (!node) continue
-      nextEdge = rung.edges.find((edge) => edge.source === nextEdge.target) as Edge
-      // Serial
-      if (parallelEdge.sourceHandle === openParallelNode.data.outputConnector?.id) serial.push(node)
-      // Parallel
-      else parallel.push(node)
-    }
-  }
-
-  return { serial, parallel }
-}
-
 const getNodePositionBasedOnPreviousNode = (
   previousElement: Node,
   newElement: string | Node,
@@ -160,136 +136,6 @@ const getPlaceholderPositionBasedOnNode = (node: Node, side: 'left' | 'bottom' |
           getNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
       }
   }
-}
-
-const removeEmptyParallelConnections = (rung: FlowState) => {
-  const { nodes, edges } = rung
-
-  let newNodes = [...nodes]
-  let newEdges = [...edges]
-  nodes.forEach((node) => {
-    if (node.type === 'parallel') {
-      const parallelNode = node as ParallelNode
-      // check if it is an open parallel
-      if (parallelNode.data.type === 'close') {
-        const closeParallel = parallelNode
-        const openParallel = newNodes.find((n) => n.id === closeParallel.data.parallelOpenReference) as ParallelNode
-
-        /**
-         * Get the nodes inside the parallel connection
-         */
-        const { serial: serialNodes, parallel: parallelNodes } = getNodesInsideParallel(
-          { ...rung, nodes: newNodes, edges: newEdges },
-          closeParallel,
-        )
-
-        /**
-         * Check if the serial connection is empty
-         */
-        if (serialNodes.length === 0) {
-          const serialEdge = newEdges.find(
-            (edge) => edge.source === openParallel.id && edge.sourceHandle === openParallel.data.outputConnector?.id,
-          )
-          if (!serialEdge) return { nodes: newNodes, edges: newEdges }
-          newEdges = removeEdge(newEdges, serialEdge.id)
-
-          const openParallelTarget = newEdges.find((edge) => edge.target === openParallel.id)
-          const openParallelSource = newEdges.find((edge) => edge.source === openParallel.id)
-          const closeParallelTarget = newEdges.find((edge) => edge.target === closeParallel.id)
-          const closeParallelSource = newEdges.find((edge) => edge.source === closeParallel.id)
-
-          if (!openParallelTarget || !openParallelSource || !closeParallelSource || !closeParallelTarget) return
-
-          /**
-           * Check if the parallel connection is not empty. If it is not, reconnect nodes turning the parallel connection into serial
-           * If it is empty, remove the parallel connection
-           */
-          if (parallelNodes.length > 0) {
-            newEdges = removeEdge(newEdges, openParallelSource.id)
-            newEdges = removeEdge(newEdges, closeParallelTarget.id)
-            newEdges.push(
-              buildEdge(openParallelTarget.source, openParallelSource.target, {
-                sourceHandle: openParallelTarget.sourceHandle ?? undefined,
-                targetHandle: openParallelSource.targetHandle ?? undefined,
-              }),
-            )
-            newEdges.push(
-              buildEdge(closeParallelTarget.source, closeParallelSource.target, {
-                sourceHandle: closeParallelTarget.sourceHandle ?? undefined,
-                targetHandle: closeParallelSource.targetHandle ?? undefined,
-              }),
-            )
-          }
-
-          newEdges = removeEdge(newEdges, openParallelTarget.id)
-          newEdges = removeEdge(newEdges, closeParallelSource.id)
-
-          newNodes = removeNode({ ...rung, nodes: newNodes }, closeParallel.id)
-          newNodes = removeNode({ ...rung, nodes: newNodes }, openParallel.id)
-
-          return { nodes: newNodes, edges: newEdges }
-        }
-
-        /**
-         * Check if the parallel connection is empty
-         */
-        if (parallelNodes.length === 0) {
-          const parallelEdge = newEdges.find(
-            (edge) =>
-              edge.source === openParallel.id && edge.sourceHandle === openParallel.data.parallelOutputConnector?.id,
-          )
-          if (!parallelEdge) return { nodes: newNodes, edges: newEdges }
-          newEdges = removeEdge(newEdges, parallelEdge.id)
-
-          const openParallelTarget = newEdges.find((edge) => edge.target === openParallel.id)
-          const openParallelSource = newEdges.find((edge) => edge.source === openParallel.id)
-          const closeParallelTarget = newEdges.find((edge) => edge.target === closeParallel.id)
-          const closeParallelSource = newEdges.find((edge) => edge.source === closeParallel.id)
-
-          if (!openParallelTarget || !openParallelSource || !closeParallelSource || !closeParallelTarget) return
-
-          /**
-           * Set serial connection between the openParallel and closeParallel
-           */
-          if (openParallelSource.id === closeParallelTarget.id) {
-            newEdges = removeEdge(newEdges, openParallelSource.id)
-            newEdges.push(
-              buildEdge(openParallelTarget.source, closeParallelSource.target, {
-                sourceHandle: openParallelTarget.sourceHandle ?? undefined,
-                targetHandle: closeParallelSource.targetHandle ?? undefined,
-              }),
-            )
-          }
-          /**
-           * If have other nodes inside the serial connection, reconnect nodes
-           */
-          if (openParallelSource.id !== closeParallelTarget.id) {
-            newEdges = removeEdge(newEdges, openParallelSource.id)
-            newEdges = removeEdge(newEdges, closeParallelTarget.id)
-            newEdges.push(
-              buildEdge(openParallelTarget.source, openParallelSource.target, {
-                sourceHandle: openParallelTarget.sourceHandle ?? undefined,
-                targetHandle: openParallelSource.targetHandle ?? undefined,
-              }),
-            )
-            newEdges.push(
-              buildEdge(closeParallelTarget.source, closeParallelSource.target, {
-                sourceHandle: closeParallelTarget.sourceHandle ?? undefined,
-                targetHandle: closeParallelSource.targetHandle ?? undefined,
-              }),
-            )
-          }
-
-          newEdges = removeEdge(newEdges, openParallelTarget.id)
-          newEdges = removeEdge(newEdges, closeParallelSource.id)
-
-          newNodes = removeNode({ ...rung, nodes: newNodes }, closeParallel.id)
-          newNodes = removeNode({ ...rung, nodes: newNodes }, openParallel.id)
-        }
-      }
-    }
-  })
-  return { nodes: newNodes, edges: newEdges }
 }
 
 const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: [number, number]) => {
@@ -451,6 +297,380 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
   newNodes[newNodes.length - 1] = changeRailBounds(newNodes[newNodes.length - 1], newNodes, defaultBounds)
   return newNodes
 }
+/**
+ * Parallel functions
+ */
+const getNodesInsideParallel = (rung: FlowState, closeParallelNode: Node) => {
+  const openParallelNode = rung.nodes.find(
+    (node) => node.id === closeParallelNode.data.parallelOpenReference,
+  ) as ParallelNode
+  const serial: Node[] = []
+  const parallel: Node[] = []
+
+  const openParallelEdges = rung.edges.filter((edge) => edge.source === openParallelNode.id)
+  for (const parallelEdge of openParallelEdges) {
+    let nextEdge = parallelEdge
+    while (nextEdge.target !== closeParallelNode.id) {
+      const node = rung.nodes.find((n) => n.id === nextEdge.target)
+      if (!node) continue
+      nextEdge = rung.edges.find((edge) => edge.source === nextEdge.target) as Edge
+      // Serial
+      if (parallelEdge.sourceHandle === openParallelNode.data.outputConnector?.id) serial.push(node)
+      // Parallel
+      else parallel.push(node)
+    }
+  }
+
+  return { serial, parallel }
+}
+
+const findParallelsInRung = (rung: FlowState) => {
+  const parallels: Node[] = []
+  let isAnotherParallel = true
+  let parallel: ParallelNode | undefined = undefined
+  rung.nodes.forEach((node) => {
+    if (isAnotherParallel && node.type === 'parallel' && (node as ParallelNode).data.type === 'open') {
+      parallels.push(node)
+      parallel = node as ParallelNode
+      isAnotherParallel = false
+    }
+    if (
+      !isAnotherParallel &&
+      node.type === 'parallel' &&
+      (node as ParallelNode).data.type === 'close' &&
+      parallel?.data.parallelCloseReference === node.id
+    ) {
+      isAnotherParallel = true
+    }
+  })
+  return parallels
+}
+
+const findDeepestParallelInsideParallel = (rung: FlowState, parallel: Node) => {
+  const parallelIndex = rung.nodes.findIndex((node) => node.id === parallel.id)
+  for (let i = parallelIndex; i < rung.nodes.length; i++) {
+    const node = rung.nodes[i]
+    if (node.type === 'parallel' && (node as ParallelNode).data.type === 'close') {
+      return node as ParallelNode
+    }
+  }
+  return parallel as ParallelNode
+}
+
+const deepestNodesInsideParallels = (rung: FlowState) => {
+  const parallels = findParallelsInRung(rung)
+  const nodes: Node[] = []
+  parallels.forEach((parallel) => {
+    const deepestParallel = findDeepestParallelInsideParallel(rung, parallel)
+    const { parallel: parallelNodes } = getNodesInsideParallel(rung, deepestParallel)
+    nodes.push(...parallelNodes)
+  })
+  return nodes
+}
+
+const nodesInsideAllParallels = (rung: FlowState) => {
+  const closeParallels = rung.nodes.filter(
+    (node) => node.type === 'parallel' && (node as ParallelNode).data.type === 'close',
+  )
+  const nodes: Node[] = []
+  closeParallels.forEach((closeParallel) => {
+    const { serial, parallel: parallelNodes } = getNodesInsideParallel(rung, closeParallel)
+    nodes.push(...serial, ...parallelNodes)
+  })
+  return nodes
+}
+
+const removeEmptyParallelConnections = (rung: FlowState) => {
+  const { nodes, edges } = rung
+
+  let newNodes = [...nodes]
+  let newEdges = [...edges]
+  nodes.forEach((node) => {
+    if (node.type === 'parallel') {
+      const parallelNode = node as ParallelNode
+      // check if it is an open parallel
+      if (parallelNode.data.type === 'close') {
+        const closeParallel = parallelNode
+        const openParallel = newNodes.find((n) => n.id === closeParallel.data.parallelOpenReference) as ParallelNode
+
+        /**
+         * Get the nodes inside the parallel connection
+         */
+        const { serial: serialNodes, parallel: parallelNodes } = getNodesInsideParallel(
+          { ...rung, nodes: newNodes, edges: newEdges },
+          closeParallel,
+        )
+
+        /**
+         * Check if the serial connection is empty
+         */
+        if (serialNodes.length === 0) {
+          const serialEdge = newEdges.find(
+            (edge) => edge.source === openParallel.id && edge.sourceHandle === openParallel.data.outputConnector?.id,
+          )
+          if (!serialEdge) return { nodes: newNodes, edges: newEdges }
+          newEdges = removeEdge(newEdges, serialEdge.id)
+
+          const openParallelTarget = newEdges.find((edge) => edge.target === openParallel.id)
+          const openParallelSource = newEdges.find((edge) => edge.source === openParallel.id)
+          const closeParallelTarget = newEdges.find((edge) => edge.target === closeParallel.id)
+          const closeParallelSource = newEdges.find((edge) => edge.source === closeParallel.id)
+
+          if (!openParallelTarget || !openParallelSource || !closeParallelSource || !closeParallelTarget) return
+
+          /**
+           * Check if the parallel connection is not empty. If it is not, reconnect nodes turning the parallel connection into serial
+           * If it is empty, remove the parallel connection
+           */
+          if (parallelNodes.length > 0) {
+            newEdges = removeEdge(newEdges, openParallelSource.id)
+            newEdges = removeEdge(newEdges, closeParallelTarget.id)
+            newEdges.push(
+              buildEdge(openParallelTarget.source, openParallelSource.target, {
+                sourceHandle: openParallelTarget.sourceHandle ?? undefined,
+                targetHandle: openParallelSource.targetHandle ?? undefined,
+              }),
+            )
+            newEdges.push(
+              buildEdge(closeParallelTarget.source, closeParallelSource.target, {
+                sourceHandle: closeParallelTarget.sourceHandle ?? undefined,
+                targetHandle: closeParallelSource.targetHandle ?? undefined,
+              }),
+            )
+          }
+
+          newEdges = removeEdge(newEdges, openParallelTarget.id)
+          newEdges = removeEdge(newEdges, closeParallelSource.id)
+
+          newNodes = removeNode({ ...rung, nodes: newNodes }, closeParallel.id)
+          newNodes = removeNode({ ...rung, nodes: newNodes }, openParallel.id)
+
+          return { nodes: newNodes, edges: newEdges }
+        }
+
+        /**
+         * Check if the parallel connection is empty
+         */
+        if (parallelNodes.length === 0) {
+          const parallelEdge = newEdges.find(
+            (edge) =>
+              edge.source === openParallel.id && edge.sourceHandle === openParallel.data.parallelOutputConnector?.id,
+          )
+          if (!parallelEdge) return { nodes: newNodes, edges: newEdges }
+          newEdges = removeEdge(newEdges, parallelEdge.id)
+
+          const openParallelTarget = newEdges.find((edge) => edge.target === openParallel.id)
+          const openParallelSource = newEdges.find((edge) => edge.source === openParallel.id)
+          const closeParallelTarget = newEdges.find((edge) => edge.target === closeParallel.id)
+          const closeParallelSource = newEdges.find((edge) => edge.source === closeParallel.id)
+
+          if (!openParallelTarget || !openParallelSource || !closeParallelSource || !closeParallelTarget) return
+
+          /**
+           * Set serial connection between the openParallel and closeParallel
+           */
+          if (openParallelSource.id === closeParallelTarget.id) {
+            newEdges = removeEdge(newEdges, openParallelSource.id)
+            newEdges.push(
+              buildEdge(openParallelTarget.source, closeParallelSource.target, {
+                sourceHandle: openParallelTarget.sourceHandle ?? undefined,
+                targetHandle: closeParallelSource.targetHandle ?? undefined,
+              }),
+            )
+          }
+          /**
+           * If have other nodes inside the serial connection, reconnect nodes
+           */
+          if (openParallelSource.id !== closeParallelTarget.id) {
+            newEdges = removeEdge(newEdges, openParallelSource.id)
+            newEdges = removeEdge(newEdges, closeParallelTarget.id)
+            newEdges.push(
+              buildEdge(openParallelTarget.source, openParallelSource.target, {
+                sourceHandle: openParallelTarget.sourceHandle ?? undefined,
+                targetHandle: openParallelSource.targetHandle ?? undefined,
+              }),
+            )
+            newEdges.push(
+              buildEdge(closeParallelTarget.source, closeParallelSource.target, {
+                sourceHandle: closeParallelTarget.sourceHandle ?? undefined,
+                targetHandle: closeParallelSource.targetHandle ?? undefined,
+              }),
+            )
+          }
+
+          newEdges = removeEdge(newEdges, openParallelTarget.id)
+          newEdges = removeEdge(newEdges, closeParallelSource.id)
+
+          newNodes = removeNode({ ...rung, nodes: newNodes }, closeParallel.id)
+          newNodes = removeNode({ ...rung, nodes: newNodes }, openParallel.id)
+        }
+      }
+    }
+  })
+  return { nodes: newNodes, edges: newEdges }
+}
+
+const startParallelConnection = (
+  rung: FlowState,
+  newElementType: string,
+  placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
+) => {
+  const { selectedPlaceholder, selectedPlaceholderIndex } = placeholder
+
+  let newNodes = [...rung.nodes]
+  let newEdges = [...rung.edges]
+
+  // Get the node above the selected placeholder
+  const aboveNode = rung.nodes.find(
+    (node) => node.id === getPreviousElement(rung.nodes, toInteger(selectedPlaceholderIndex)).id,
+  )
+  if (!aboveNode) return { nodes: newNodes, edges: newEdges }
+  // Get the edges of the above node
+  const aboveNodeTargetEdge = newEdges.filter((edge) => edge.target === aboveNode.id)
+  const aboveNodeSourceEdge = newEdges.filter((edge) => edge.source === aboveNode.id)
+
+  // Build parallel open node based on the node that antecede the above node or the above node itself
+  const openParallelPosition = getNodePositionBasedOnPreviousNode(
+    newNodes.find((node) => node.id === aboveNodeTargetEdge[0].source) ?? aboveNode,
+    'parallel',
+    'serial',
+  )
+  const openParallelNode = buildGenericNode({
+    nodeType: 'parallel',
+    id: `PARALLEL_OPEN_${uuidv4()}`,
+    ...openParallelPosition,
+  }) as ParallelNode
+
+  // Build new element node
+  const newElementPosition = getNodePositionBasedOnPreviousNode(openParallelNode, newElementType, 'parallel')
+  const newElement = buildGenericNode({
+    nodeType: newElementType,
+    id: `${newElementType.toUpperCase()}_${uuidv4()}`,
+    ...newElementPosition,
+  })
+
+  // Build new above node
+  const newAboveNodePosition = getNodePositionBasedOnPreviousNode(openParallelNode, aboveNode, 'serial')
+  const newAboveNode = buildGenericNode({
+    nodeType: aboveNode.type ?? '',
+    id: `${aboveNode.type?.toUpperCase()}_${uuidv4()}`,
+    ...newAboveNodePosition,
+  })
+
+  // Build parallel close node
+  const closeParallelPositionSerial = getNodePositionBasedOnPreviousNode(newAboveNode, 'parallel', 'serial')
+  const closeParallelPositionParallel = getNodePositionBasedOnPreviousNode(selectedPlaceholder, 'parallel', 'serial')
+  const closeParallelNode = nodesBuilder.parallel({
+    id: `PARALLEL_CLOSE_${uuidv4()}`,
+    type: 'close',
+    posX:
+      closeParallelPositionSerial.posX > closeParallelPositionParallel.posX
+        ? closeParallelPositionSerial.posX
+        : closeParallelPositionParallel.posX,
+    posY: closeParallelPositionSerial.posY,
+    handleX:
+      closeParallelPositionSerial.handleX > closeParallelPositionParallel.handleX
+        ? closeParallelPositionSerial.handleX
+        : closeParallelPositionParallel.handleX,
+    handleY: closeParallelPositionSerial.handleY,
+  })
+
+  // Add reference to the open parallel node
+  openParallelNode.data.parallelCloseReference = closeParallelNode.id
+  closeParallelNode.data.parallelOpenReference = openParallelNode.id
+
+  // get the related node
+  const relatedNode = (selectedPlaceholder as PlaceholderNode).data.relatedNode as Node
+  const { nodes: relatedNodePreviousNodes, edges: relatedNodePreviousEdges } = getPreviousElementsByEdges(
+    { ...rung, nodes: newNodes },
+    relatedNode,
+  )
+  if (!relatedNodePreviousNodes || !relatedNodePreviousEdges) return { nodes: newNodes, edges: newEdges }
+
+  // Insert the new nodes
+  // first insert the new nodes
+  newNodes.splice(toInteger(selectedPlaceholderIndex), 1, openParallelNode, newAboveNode, newElement, closeParallelNode)
+  // then remove the old above node
+  newNodes = newNodes.filter((node) => node.id !== aboveNode.id)
+  // finally remove the placeholder nodes
+  newNodes = removePlaceholderNodes(newNodes)
+
+  // Create the new edges
+  // clear old edges of the above node
+  newEdges = newEdges.filter((edge) => edge.source !== aboveNode.id && edge.target !== aboveNode.id)
+
+  // serial connections
+  newEdges = connectNodes(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    aboveNodeTargetEdge[0].source,
+    openParallelNode.id,
+    relatedNodePreviousNodes.length > 0 &&
+      isNodeOfType(relatedNodePreviousNodes[0], 'parallel') &&
+      (relatedNodePreviousNodes[0] as ParallelNode).data.type === 'open' &&
+      relatedNodePreviousEdges[0].sourceHandle ===
+        (relatedNodePreviousNodes[0] as ParallelNode).data.parallelOutputConnector?.id
+      ? 'parallel'
+      : 'serial',
+    {
+      sourceHandle: aboveNodeTargetEdge[0].sourceHandle ?? undefined,
+      targetHandle: openParallelNode.data.inputConnector?.id,
+    },
+  )
+  newEdges = connectNodes(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    openParallelNode.id,
+    newAboveNode.id,
+    'serial',
+    {
+      sourceHandle: openParallelNode.data.outputConnector?.id,
+      targetHandle: newAboveNode.data.inputConnector?.id,
+    },
+  )
+  newEdges = connectNodes(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    newAboveNode.id,
+    closeParallelNode.id,
+    'serial',
+    {
+      sourceHandle: newAboveNode.data.outputConnector?.id,
+      targetHandle: closeParallelNode.data.inputConnector?.id,
+    },
+  )
+  newEdges = connectNodes(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    closeParallelNode.id,
+    aboveNodeSourceEdge[0].target,
+    'serial',
+    {
+      sourceHandle: closeParallelNode.data.outputConnector?.id,
+      targetHandle: aboveNodeSourceEdge[0].targetHandle ?? undefined,
+    },
+  )
+
+  // parallel connections
+  newEdges = connectNodes(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    openParallelNode.id,
+    newElement.id,
+    'parallel',
+    {
+      sourceHandle: openParallelNode.data.parallelOutputConnector?.id,
+      targetHandle: newElement.data.inputConnector?.id,
+    },
+  )
+  newEdges = connectNodes(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    newElement.id,
+    closeParallelNode.id,
+    'parallel',
+    {
+      sourceHandle: newElement.data.outputConnector?.id,
+      targetHandle: closeParallelNode.data.parallelInputConnector?.id,
+    },
+  )
+
+  return { nodes: newNodes, edges: newEdges }
+}
 
 /**
  * Exported functions to control the rung elements
@@ -468,163 +688,13 @@ export const addNewElement = (
 
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
-
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
-    // Get the node above the selected placeholder
-    const aboveNode = rung.nodes.find(
-      (node) => node.id === getPreviousElement(rung.nodes, toInteger(selectedPlaceholderIndex)).id,
-    )
-    if (!aboveNode) return { nodes: newNodes, edges: newEdges }
-    // Get the edges of the above node
-    const aboveNodeTargetEdge = newEdges.filter((edge) => edge.target === aboveNode.id)
-    const aboveNodeSourceEdge = newEdges.filter((edge) => edge.source === aboveNode.id)
-
-    // Build parallel open node based on the node that antecede the above node or the above node itself
-    const openParallelPosition = getNodePositionBasedOnPreviousNode(
-      newNodes.find((node) => node.id === aboveNodeTargetEdge[0].source) ?? aboveNode,
-      'parallel',
-      'serial',
-    )
-    const openParallelNode = buildGenericNode({
-      nodeType: 'parallel',
-      id: `PARALLEL_OPEN_${uuidv4()}`,
-      ...openParallelPosition,
-    }) as ParallelNode
-
-    // Build new element node
-    const newElementPosition = getNodePositionBasedOnPreviousNode(openParallelNode, newElementType, 'parallel')
-    const newElement = buildGenericNode({
-      nodeType: newElementType,
-      id: `${newElementType.toUpperCase()}_${uuidv4()}`,
-      ...newElementPosition,
+    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnection(rung, newElementType, {
+      selectedPlaceholder,
+      selectedPlaceholderIndex,
     })
-
-    // Build new above node
-    const newAboveNodePosition = getNodePositionBasedOnPreviousNode(openParallelNode, aboveNode, 'serial')
-    const newAboveNode = buildGenericNode({
-      nodeType: aboveNode.type ?? '',
-      id: `${aboveNode.type?.toUpperCase()}_${uuidv4()}`,
-      ...newAboveNodePosition,
-    })
-
-    // Build parallel close node
-    const closeParallelPositionSerial = getNodePositionBasedOnPreviousNode(newAboveNode, 'parallel', 'serial')
-    const closeParallelPositionParallel = getNodePositionBasedOnPreviousNode(selectedPlaceholder, 'parallel', 'serial')
-    const closeParallelNode = nodesBuilder.parallel({
-      id: `PARALLEL_CLOSE_${uuidv4()}`,
-      type: 'close',
-      posX:
-        closeParallelPositionSerial.posX > closeParallelPositionParallel.posX
-          ? closeParallelPositionSerial.posX
-          : closeParallelPositionParallel.posX,
-      posY: closeParallelPositionSerial.posY,
-      handleX:
-        closeParallelPositionSerial.handleX > closeParallelPositionParallel.handleX
-          ? closeParallelPositionSerial.handleX
-          : closeParallelPositionParallel.handleX,
-      handleY: closeParallelPositionSerial.handleY,
-    })
-
-    // Add reference to the open parallel node
-    openParallelNode.data.parallelCloseReference = closeParallelNode.id
-    closeParallelNode.data.parallelOpenReference = openParallelNode.id
-
-    // get the related node
-    const relatedNode = (selectedPlaceholder as PlaceholderNode).data.relatedNode as Node
-    const { nodes: relatedNodePreviousNodes, edges: relatedNodePreviousEdges } = getPreviousElementsByEdges(
-      { ...rung, nodes: newNodes },
-      relatedNode,
-    )
-    if (!relatedNodePreviousNodes || !relatedNodePreviousEdges) return { nodes: newNodes, edges: newEdges }
-
-    // Insert the new nodes
-    // first insert the new nodes
-    newNodes.splice(
-      toInteger(selectedPlaceholderIndex),
-      1,
-      openParallelNode,
-      newAboveNode,
-      newElement,
-      closeParallelNode,
-    )
-    // then remove the old above node
-    newNodes = newNodes.filter((node) => node.id !== aboveNode.id)
-    // finally remove the placeholder nodes
-    newNodes = removePlaceholderNodes(newNodes)
-
-    // Create the new edges
-    // clear old edges of the above node
-    newEdges = newEdges.filter((edge) => edge.source !== aboveNode.id && edge.target !== aboveNode.id)
-
-    // serial connections
-    newEdges = connectNodes(
-      { ...rung, nodes: newNodes, edges: newEdges },
-      aboveNodeTargetEdge[0].source,
-      openParallelNode.id,
-      relatedNodePreviousNodes.length > 0 &&
-        isNodeOfType(relatedNodePreviousNodes[0], 'parallel') &&
-        (relatedNodePreviousNodes[0] as ParallelNode).data.type === 'open' &&
-        relatedNodePreviousEdges[0].sourceHandle ===
-          (relatedNodePreviousNodes[0] as ParallelNode).data.parallelOutputConnector?.id
-        ? 'parallel'
-        : 'serial',
-      {
-        sourceHandle: aboveNodeTargetEdge[0].sourceHandle ?? undefined,
-        targetHandle: openParallelNode.data.inputConnector?.id,
-      },
-    )
-    newEdges = connectNodes(
-      { ...rung, nodes: newNodes, edges: newEdges },
-      openParallelNode.id,
-      newAboveNode.id,
-      'serial',
-      {
-        sourceHandle: openParallelNode.data.outputConnector?.id,
-        targetHandle: newAboveNode.data.inputConnector?.id,
-      },
-    )
-    newEdges = connectNodes(
-      { ...rung, nodes: newNodes, edges: newEdges },
-      newAboveNode.id,
-      closeParallelNode.id,
-      'serial',
-      {
-        sourceHandle: newAboveNode.data.outputConnector?.id,
-        targetHandle: closeParallelNode.data.inputConnector?.id,
-      },
-    )
-    newEdges = connectNodes(
-      { ...rung, nodes: newNodes, edges: newEdges },
-      closeParallelNode.id,
-      aboveNodeSourceEdge[0].target,
-      'serial',
-      {
-        sourceHandle: closeParallelNode.data.outputConnector?.id,
-        targetHandle: aboveNodeSourceEdge[0].targetHandle ?? undefined,
-      },
-    )
-
-    // parallel connections
-    newEdges = connectNodes(
-      { ...rung, nodes: newNodes, edges: newEdges },
-      openParallelNode.id,
-      newElement.id,
-      'parallel',
-      {
-        sourceHandle: openParallelNode.data.parallelOutputConnector?.id,
-        targetHandle: newElement.data.inputConnector?.id,
-      },
-    )
-    newEdges = connectNodes(
-      { ...rung, nodes: newNodes, edges: newEdges },
-      newElement.id,
-      closeParallelNode.id,
-      'parallel',
-      {
-        sourceHandle: newElement.data.outputConnector?.id,
-        targetHandle: closeParallelNode.data.parallelInputConnector?.id,
-      },
-    )
+    newEdges = parallelEdges
+    newNodes = parallelNodes
   } else {
     const newElelementPosition = getNodePositionBasedOnPlaceholderNode(selectedPlaceholder, newElementType)
     const newElement = buildGenericNode({
@@ -712,13 +782,27 @@ export const removeElements = (
   return { nodes: rungState.nodes, edges: rungState.edges }
 }
 
-export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
+export const renderPlaceholderNodes = (rung: FlowState): Node[] => {
+  const { nodes } = rung
   const placeholderNodes: Node[] = []
+  const nodesInsideParallels = nodesInsideAllParallels(rung)
+  const deepestNodesParallels = deepestNodesInsideParallels(rung)
+
+  console.log('\n\n')
+  console.log('nodesInsideParallels', nodesInsideParallels)
+  console.log('deepestNodesParallels', deepestNodesParallels)
+  console.log(
+    'nodesInsideParallels contains deepestNodesParallels',
+    deepestNodesParallels.every((n) => nodesInsideParallels.includes(n)),
+  )
+
   nodes.forEach((node) => {
     let placeholders: Node[] = []
     if (node.type === 'placeholder' || node.type === 'parallelPlaceholder') {
       return
-    } else if (node.id === 'left-rail') {
+    }
+
+    if (node.id === 'left-rail') {
       placeholders = [
         nodesBuilder.placeholder({
           id: `placeholder_${node.id}_${uuidv4()}`,
@@ -729,7 +813,10 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
         }),
       ]
       placeholderNodes.push(node, placeholders[0])
-    } else if (node.id === 'right-rail') {
+      return
+    }
+
+    if (node.id === 'right-rail') {
       placeholders = [
         nodesBuilder.placeholder({
           id: `placeholder_${node.id}_${uuidv4()}`,
@@ -740,7 +827,10 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
         }),
       ]
       placeholderNodes.push(placeholders[0], node)
-    } else if (node.type === 'parallel') {
+      return
+    }
+
+    if (node.type === 'parallel') {
       if (node.data.type === 'open') {
         placeholders = [
           nodesBuilder.placeholder({
@@ -752,27 +842,9 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
           }),
         ]
         placeholderNodes.push(placeholders[0], node)
-      } else {
-        placeholders = [
-          nodesBuilder.placeholder({
-            id: `placeholder_${node.id}_${uuidv4()}`,
-            type: 'default',
-            relatedNode: node,
-            position: 'right',
-            ...getPlaceholderPositionBasedOnNode(node, 'right'),
-          }),
-        ]
-        placeholderNodes.push(node, placeholders[0])
+        return
       }
-    } else {
       placeholders = [
-        nodesBuilder.placeholder({
-          id: `placeholder_${node.id}_${uuidv4()}`,
-          type: 'default',
-          relatedNode: node,
-          position: 'left',
-          ...getPlaceholderPositionBasedOnNode(node, 'left'),
-        }),
         nodesBuilder.placeholder({
           id: `placeholder_${node.id}_${uuidv4()}`,
           type: 'default',
@@ -780,6 +852,31 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
           position: 'right',
           ...getPlaceholderPositionBasedOnNode(node, 'right'),
         }),
+      ]
+      placeholderNodes.push(node, placeholders[0])
+
+      return
+    }
+
+    placeholders = [
+      nodesBuilder.placeholder({
+        id: `placeholder_${node.id}_${uuidv4()}`,
+        type: 'default',
+        relatedNode: node,
+        position: 'left',
+        ...getPlaceholderPositionBasedOnNode(node, 'left'),
+      }),
+      nodesBuilder.placeholder({
+        id: `placeholder_${node.id}_${uuidv4()}`,
+        type: 'default',
+        relatedNode: node,
+        position: 'right',
+        ...getPlaceholderPositionBasedOnNode(node, 'right'),
+      }),
+    ]
+
+    if (!nodesInsideParallels.includes(node) || deepestNodesParallels.includes(node)) {
+      placeholders.push(
         nodesBuilder.placeholder({
           id: `parallelPlaceholder_${node.id}_${uuidv4()}`,
           type: 'parallel',
@@ -787,9 +884,12 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
           position: 'bottom',
           ...getPlaceholderPositionBasedOnNode(node, 'bottom'),
         }),
-      ]
+      )
       placeholderNodes.push(placeholders[0], node, placeholders[2], placeholders[1])
+      return placeholderNodes
     }
+
+    placeholderNodes.push(placeholders[0], node, placeholders[1])
   })
   return placeholderNodes
 }
