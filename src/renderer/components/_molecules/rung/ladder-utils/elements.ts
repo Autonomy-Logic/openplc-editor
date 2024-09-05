@@ -653,6 +653,7 @@ export const addNewElement = (
       relatedNodePreviousNodes.length > 0 &&
       isNodeOfType(relatedNodePreviousNodes[0], 'parallel') &&
       (relatedNodePreviousNodes[0] as ParallelNode).data.type === 'open' &&
+      selectedPlaceholder.data.position === 'left' &&
       relatedNodePreviousEdges[0].sourceHandle ===
         (relatedNodePreviousNodes[0] as ParallelNode).data.parallelOutputConnector?.id
     ) {
@@ -664,6 +665,9 @@ export const addNewElement = (
   }
 
   newNodes = rearrangeNodes({ ...rung, nodes: newNodes, edges: newEdges }, defaultViewportBounds)
+
+  console.log('newNodes', newNodes)
+  console.log('newEdges', newEdges)
 
   return { nodes: newNodes, edges: newEdges }
 }
@@ -724,7 +728,6 @@ export const renderPlaceholderNodes = (nodes: Node[]): Node[] => {
           ...getPlaceholderPositionBasedOnNode(node, 'right'),
         }),
       ]
-      console.log('placeholders', placeholders)
       placeholderNodes.push(node, placeholders[0])
     } else if (node.id === 'right-rail') {
       placeholders = [
