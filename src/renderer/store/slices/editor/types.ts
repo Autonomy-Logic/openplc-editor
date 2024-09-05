@@ -18,7 +18,6 @@ const editorGlobalVariablesSchema = z.discriminatedUnion('display', [
   z.object({
     display: z.literal('table'),
     description: z.string(),
-    classFilter: z.enum(['All', 'Global', 'Input', 'Output', 'InOut', 'External', 'Temp']),
     selectedRow: z.string(),
   }),
   z.object({ display: z.literal('code') }),
@@ -70,7 +69,7 @@ const editorModelSchema = z.discriminatedUnion('type', [
       name: z.string(),
       path: z.string(),
     }),
-    variable: editorVariablesSchema,
+    variable: editorGlobalVariablesSchema,
   }),
 ])
 

@@ -66,7 +66,7 @@ const columns = [
 
 type PLCVariablesTableProps = {
   tableData: PLCVariable[]
-  filterValue: string
+  filterValue?: string
   columnFilters?: ColumnFiltersState
   setColumnFilters?: OnChangeFn<ColumnFiltersState> | undefined
   selectedRow: number

@@ -1,4 +1,4 @@
-import { PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCGlobalVariable, PLCVariable } from '@root/types/PLC/open-plc'
 
 import { WorkspaceResponse } from '../types'
 
@@ -6,6 +6,9 @@ import { WorkspaceResponse } from '../types'
  * This is a validation to check if the variable name already exists.
  **/
 const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
+  return variables.some((variable) => variable.name === name)
+}
+const checkIfGlobalVariableExists = (variables: PLCGlobalVariable[], name: string) => {
   return variables.some((variable) => variable.name === name)
 }
 /**
@@ -87,6 +90,13 @@ const createVariableValidation = (variables: PLCVariable[], variableName: string
   return variableName
 }
 
+const createGlobalVariableValidation = (variables: PLCGlobalVariable[], variableName: string) => {
+  if (checkIfGlobalVariableExists(variables, variableName)) {
+    return `${variableName}_1`
+  }
+  return variableName
+}
+
 /**
  * This is a validation to check the name of the variable at update.
  * If the variable name is invalid, create a response.
@@ -131,4 +141,4 @@ const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Par
   return response
 }
 
-export { arrayValidation, createVariableValidation, updateVariableValidation }
+export { arrayValidation, createGlobalVariableValidation, createVariableValidation, updateVariableValidation }

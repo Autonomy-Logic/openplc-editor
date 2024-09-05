@@ -6,10 +6,9 @@ export const baseJsonStructure: PLCProjectData = {
   dataTypes: [],
   configuration: {
     resource: {
-      id: 'res0',
       tasks: [],
       instances: [],
+      globalVariables: [],
     },
   },
-  globalVariables: [],
 }

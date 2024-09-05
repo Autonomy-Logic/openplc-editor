@@ -2,7 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { WorkspaceResponse, WorkspaceSlice } from './types'
-import { createVariableValidation, updateVariableValidation } from './utils/variables'
+import { createGlobalVariableValidation, createVariableValidation, updateVariableValidation } from './utils/variables'
 
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   workspace: {
@@ -16,7 +16,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         resource: {
           tasks: [],
           instances: [],
-          globalVariables: []
+          globalVariables: [],
         },
       },
     },
@@ -126,19 +126,19 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           const { scope } = variableToBeCreated
           switch (scope) {
             case 'global': {
-              variableToBeCreated.data.name = createVariableValidation(
-                workspace.projectData.globalVariables,
+              variableToBeCreated.data.name = createGlobalVariableValidation(
+                workspace.projectData.configuration.resource.globalVariables,
                 variableToBeCreated.data.name,
               )
               if (variableToBeCreated.rowToInsert !== undefined) {
-                workspace.projectData.globalVariables.splice(
+                workspace.projectData.configuration.resource.globalVariables.splice(
                   variableToBeCreated.rowToInsert,
                   0,
                   variableToBeCreated.data,
                 )
                 break
               }
-              workspace.projectData.globalVariables.push(variableToBeCreated.data)
+              workspace.projectData.configuration.resource.globalVariables.push(variableToBeCreated.data)
               break
             }
             case 'local': {
@@ -183,7 +183,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           switch (scope) {
             case 'global': {
               const validationResponse = updateVariableValidation(
-                workspace.projectData.globalVariables,
+                workspace.projectData.configuration.resource.globalVariables,
                 dataToBeUpdated.data,
               )
               if (!validationResponse.ok) {
@@ -192,8 +192,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               }
               const index = dataToBeUpdated.rowId
               if (index === -1) response = { ok: false, title: 'Variable not found', message: 'Internal error' }
-              workspace.projectData.globalVariables[index] = {
-                ...workspace.projectData.globalVariables[index],
+              workspace.projectData.configuration.resource.globalVariables[index] = {
+                ...workspace.projectData.configuration.resource.globalVariables[index],
                 ...dataToBeUpdated.data,
               }
               break
@@ -239,7 +239,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
                 console.error('Variable not found')
                 break
               }
-              workspace.projectData.globalVariables.splice(variableToBeDeleted.rowId, 1)
+              workspace.projectData.configuration.resource.globalVariables.splice(variableToBeDeleted.rowId, 1)
               break
             }
             case 'local': {
@@ -272,8 +272,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           switch (scope) {
             case 'global': {
               const { rowId, newIndex } = variableToBeRearranged
-              const [removed] = workspace.projectData.globalVariables.splice(rowId, 1)
-              workspace.projectData.globalVariables.splice(newIndex, 0, removed)
+              const [removed] = workspace.projectData.configuration.resource.globalVariables.splice(rowId, 1)
+              workspace.projectData.configuration.resource.globalVariables.splice(newIndex, 0, removed)
               break
             }
             case 'local': {

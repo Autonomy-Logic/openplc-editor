@@ -33,27 +33,41 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       setState(
         produce((state: EditorState) => {
           const { editor } = state
-          if (!editor || !(editor.type === 'plc-textual' || editor.type === 'plc-graphical' || editor.type === 'plc-resource')) return
+          if (
+            !editor ||
+            !(editor.type === 'plc-textual' || editor.type === 'plc-graphical' || editor.type === 'plc-resource')
+          )
+            return
 
-          if (variables.display === 'table')
-            if (editor.variable.display === 'table')
-              editor.variable = {
-                display: 'table',
-                selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow,
-                classFilter: variables.classFilter ?? editor.variable.classFilter,
-                description: variables.description ?? editor.variable.description,
+          if (variables.display === 'table') {
+            if (editor.variable.display === 'table') {
+              if ('classFilter' in editor.variable) {
+                editor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow,
+                  classFilter: variables.classFilter ?? editor.variable.classFilter,
+                  description: variables.description ?? editor.variable.description,
+                }
+              } else {
+                editor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? '-1',
+                  description: variables.description ?? '',
+                }
               }
-            else
+            } else {
               editor.variable = {
                 display: 'table',
                 selectedRow: variables.selectedRow?.toString() ?? '-1',
                 classFilter: variables.classFilter ?? 'All',
                 description: variables.description ?? '',
               }
-          else
+            }
+          } else {
             editor.variable = {
               display: 'code',
             }
+          }
         }),
       ),
 

@@ -28,28 +28,27 @@ const Project = () => {
   //   structure: 'plc-datatype',
   // } as const
 
-const handleCreateTab = ({ elementType, name, path, configuration }: TabsProps) => {
-  const tabToBeCreated = {
-    name,
-    path,
-    elementType,
-    configuration,
-  
-  }
-  console.log('Tab to be created:', tabToBeCreated)
+  const handleCreateTab = ({ elementType, name, path, configuration }: TabsProps) => {
+    const tabToBeCreated = {
+      name,
+      path,
+      elementType,
+      configuration,
+    }
+    console.log('Tab to be created:', tabToBeCreated)
 
-  updateTabs(tabToBeCreated)
+    updateTabs(tabToBeCreated)
 
-  const editor = getEditorFromEditors(tabToBeCreated.name)
-  if (!editor) {
-    const model = CreateEditorObjectFromTab(tabToBeCreated)
-    addModel(model)
-    setEditor(model)
-    return
+    const editor = getEditorFromEditors(tabToBeCreated.name)
+    if (!editor) {
+      const model = CreateEditorObjectFromTab(tabToBeCreated)
+      addModel(model)
+      setEditor(model)
+      return
+    }
+    addModel(editor)
+    setEditor(editor)
   }
-  addModel(editor)
-  setEditor(editor)
-}
 
   return (
     <div className='w-full'>
@@ -116,10 +115,9 @@ const handleCreateTab = ({ elementType, name, path, configuration }: TabsProps) 
           onClick={() =>
             handleCreateTab({
               configuration: configuration,
-              name: configuration.resource.id,
-              path: `/data/configuration/resources/${configuration.resource.id}`,
+              name: 'resources',
+              path: `/data/configuration/resources`,
               elementType: { type: 'resources' },
-              
             })
           }
         />

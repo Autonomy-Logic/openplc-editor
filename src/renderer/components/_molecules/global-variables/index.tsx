@@ -4,8 +4,8 @@ import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { VariablesTable } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { VariablesTable as GlobalVariablesTableType } from '@root/renderer/store/slices'
-import { PLCVariable } from '@root/types/PLC/open-plc'
+import { GlobalVariablesTableType } from '@root/renderer/store/slices'
+import { PLCGlobalVariable, PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { ColumnFiltersState } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
@@ -15,7 +15,11 @@ const GlobalVariablesEditor = () => {
   const {
     editor,
     workspace: {
-      projectData: { globalVariables },
+      projectData: {
+        configuration: {
+          resource: { globalVariables },
+        },
+      },
     },
     editorActions: { updateModelVariables },
     workspaceActions: { createVariable, deleteVariable, rearrangeVariables },
@@ -34,7 +38,6 @@ const GlobalVariablesEditor = () => {
   const [editorVariables, setEditorVariables] = useState<GlobalVariablesTableType>({
     display: 'table',
     selectedRow: ROWS_NOT_SELECTED.toString(),
-    classFilter: 'All',
     description: '',
   })
 
@@ -42,7 +45,7 @@ const GlobalVariablesEditor = () => {
    * Update the table data and the editor's variables when the editor or the pous change
    */
   useEffect(() => {
-    const variablesToTable = globalVariables.filter((variable) => variable.class === 'global')
+    const variablesToTable = globalVariables.filter((variable) => variable)
     setTableData(variablesToTable)
   }, [editor, globalVariables])
 
@@ -54,18 +57,12 @@ const GlobalVariablesEditor = () => {
   useEffect(() => {
     if (editor.type === 'plc-resource') {
       if (editor.variable.display === 'table') {
-        const { classFilter, description, display, selectedRow } = editor.variable
+        const { description, display, selectedRow } = editor.variable
         setEditorVariables({
           display: display,
           selectedRow: selectedRow,
-          classFilter: classFilter,
           description: description,
         })
-        setColumnFilters((prev) =>
-          classFilter !== 'All'
-            ? prev.filter((filter) => filter.id !== 'class').concat({ id: 'class', value: classFilter.toLowerCase() })
-            : prev.filter((filter) => filter.id !== 'class'),
-        )
       } else {
         setEditorVariables({
           display: editor.variable.display,
@@ -96,7 +93,7 @@ const GlobalVariablesEditor = () => {
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
 
-    const variables = globalVariables.filter((variable) => variable.class === 'global')
+    const variables = globalVariables.filter((variable) => variable)
 
     const selectedRow = parseInt(editorVariables.selectedRow)
 
@@ -105,7 +102,6 @@ const GlobalVariablesEditor = () => {
         scope: 'global',
         data: {
           name: 'GlobalVar',
-          class: 'global',
           type: { definition: 'base-type', value: 'dint' },
           location: '',
           documentation: '',
@@ -119,7 +115,7 @@ const GlobalVariablesEditor = () => {
       return
     }
 
-    const variable: PLCVariable =
+    const variable: PLCGlobalVariable =
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
     if (selectedRow === ROWS_NOT_SELECTED) {
@@ -148,7 +144,7 @@ const GlobalVariablesEditor = () => {
     const selectedRow = parseInt(editorVariables.selectedRow)
     deleteVariable({ scope: 'global', rowId: selectedRow })
 
-    const variables = globalVariables.filter((variable) => variable.class === 'global')
+    const variables = globalVariables.filter((variable) => variable)
     if (selectedRow === variables.length - 1) {
       updateModelVariables({
         display: 'table',
@@ -168,7 +164,7 @@ const GlobalVariablesEditor = () => {
     <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
       <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
         {editorVariables.display === 'table' ? (
-          <div aria-label='Variables editor table actions container' className='flex h-full w-full relative '>
+          <div aria-label='Variables editor table actions container' className='relative flex h-full w-full '>
             <div
               aria-label='Variables editor table actions container'
               className=' absolute right-0 flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
@@ -246,7 +242,6 @@ const GlobalVariablesEditor = () => {
         >
           <VariablesTable
             tableData={tableData}
-            filterValue={editorVariables.classFilter.toLowerCase()}
             columnFilters={columnFilters}
             setColumnFilters={setColumnFilters}
             selectedRow={parseInt(editorVariables.selectedRow)}

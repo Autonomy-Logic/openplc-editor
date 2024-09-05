@@ -81,7 +81,7 @@ type PLCDataType = z.infer<typeof PLCDataTypeSchema>
 const PLCVariableSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
-  class: z.enum(['input', 'output', 'inOut', 'external', 'local', 'temp', 'global']),
+  class: z.enum(['input', 'output', 'inOut', 'external', 'local', 'temp', 'global']).optional(),
   type: z.discriminatedUnion('definition', [
     z.object({
       definition: z.literal('base-type'),
@@ -112,6 +112,8 @@ const PLCVariableSchema = z.object({
 })
 
 type PLCVariable = z.infer<typeof PLCVariableSchema>
+const PLCGlobalVariableSchema = PLCVariableSchema.omit({ class: true })
+type PLCGlobalVariable = z.infer<typeof PLCGlobalVariableSchema>
 
 const PLCFunctionSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
@@ -196,6 +198,7 @@ export {
   PLCDataTypeStructureElementSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
+  PLCGlobalVariableSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
   PLCVariableSchema,
@@ -207,6 +210,7 @@ export type {
   PLCDataTypeStructureElement,
   PLCFunction,
   PLCFunctionBlock,
+  PLCGlobalVariable,
   PLCProgram,
   PLCProjectData,
   PLCVariable,
