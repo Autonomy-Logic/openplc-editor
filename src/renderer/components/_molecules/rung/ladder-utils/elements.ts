@@ -469,9 +469,6 @@ export const addNewElement = (
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
-  /**
-   * TODO: BUG WHEN ADD SERIAL COMPONENT BEFORE THE EXISTING SERIAL COMPONENT --> HAPPENS AFTER THE OPEN PARALLEL
-   */
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
     // Get the node above the selected placeholder
     const aboveNode = rung.nodes.find(
@@ -656,7 +653,8 @@ export const addNewElement = (
       relatedNodePreviousNodes.length > 0 &&
       isNodeOfType(relatedNodePreviousNodes[0], 'parallel') &&
       (relatedNodePreviousNodes[0] as ParallelNode).data.type === 'open' &&
-      selectedPlaceholder.data.position === 'left'
+      relatedNodePreviousEdges[0].sourceHandle ===
+        (relatedNodePreviousNodes[0] as ParallelNode).data.parallelOutputConnector?.id
     ) {
       previousNode = relatedNodePreviousNodes[0]
       newEdges = connectNodes({ ...rung, nodes: newNodes }, previousNode.id, newElement.id, 'parallel')
