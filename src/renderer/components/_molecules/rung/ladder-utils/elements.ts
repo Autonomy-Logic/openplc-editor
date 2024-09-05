@@ -357,7 +357,7 @@ const findDeepestParallelInsideParallel = (rung: FlowState, parallel: Node) => {
   return parallel as ParallelNode
 }
 
-const deepestNodesInsideParallels = (rung: FlowState) => {
+const getDeepestNodesInsideParallels = (rung: FlowState) => {
   const parallels = findParallelsInRung(rung)
   const nodes: Node[] = []
   parallels.forEach((parallel) => {
@@ -368,7 +368,7 @@ const deepestNodesInsideParallels = (rung: FlowState) => {
   return nodes
 }
 
-const nodesInsideAllParallels = (rung: FlowState) => {
+const getNodesInsideAllParallels = (rung: FlowState) => {
   const closeParallels = rung.nodes.filter(
     (node) => node.type === 'parallel' && (node as ParallelNode).data.type === 'close',
   )
@@ -736,9 +736,6 @@ export const addNewElement = (
 
   newNodes = rearrangeNodes({ ...rung, nodes: newNodes, edges: newEdges }, defaultViewportBounds)
 
-  console.log('newNodes', newNodes)
-  console.log('newEdges', newEdges)
-
   return { nodes: newNodes, edges: newEdges }
 }
 
@@ -785,16 +782,8 @@ export const removeElements = (
 export const renderPlaceholderNodes = (rung: FlowState): Node[] => {
   const { nodes } = rung
   const placeholderNodes: Node[] = []
-  const nodesInsideParallels = nodesInsideAllParallels(rung)
-  const deepestNodesParallels = deepestNodesInsideParallels(rung)
-
-  console.log('\n\n')
-  console.log('nodesInsideParallels', nodesInsideParallels)
-  console.log('deepestNodesParallels', deepestNodesParallels)
-  console.log(
-    'nodesInsideParallels contains deepestNodesParallels',
-    deepestNodesParallels.every((n) => nodesInsideParallels.includes(n)),
-  )
+  const nodesInsideParallels = getNodesInsideAllParallels(rung)
+  const deepestNodesParallels = getDeepestNodesInsideParallels(rung)
 
   nodes.forEach((node) => {
     let placeholders: Node[] = []
