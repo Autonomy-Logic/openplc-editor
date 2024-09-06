@@ -5,7 +5,7 @@ import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tabl
 import { VariablesTable } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { GlobalVariablesTableType } from '@root/renderer/store/slices'
-import { PLCGlobalVariable, PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCGlobalVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { ColumnFiltersState } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
@@ -28,7 +28,7 @@ const GlobalVariablesEditor = () => {
   /**
    * Table data and column filters states to keep track of the table data and column filters
    */
-  const [tableData, setTableData] = useState<PLCVariable[]>([])
+  const [tableData, setTableData] = useState<PLCGlobalVariable[]>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
   /**
@@ -44,32 +44,25 @@ const GlobalVariablesEditor = () => {
   /**
    * Update the table data and the editor's variables when the editor or the pous change
    */
-  useEffect(() => {
-    const variablesToTable = globalVariables.filter((variable) => variable)
-    setTableData(variablesToTable)
-  }, [editor, globalVariables])
-
-  /**
-   * If the editor name is not the same as the current editor name
-   * set the editor name and the editor's variables to the states
-   */
 
   useEffect(() => {
     if (editor.type === 'plc-resource') {
       if (editor.variable.display === 'table') {
-        const { description, display, selectedRow } = editor.variable
+        const { display, selectedRow, description } = editor.variable
         setEditorVariables({
           display: display,
           selectedRow: selectedRow,
           description: description,
         })
-      } else {
-        setEditorVariables({
-          display: editor.variable.display,
-        })
       }
     }
   }, [editor])
+
+  useEffect(() => {
+    const variablesToTable = globalVariables.filter((variable) => variable.name === 'resource')
+    setTableData(variablesToTable)
+    console.log('variablesToTable', variablesToTable)
+  }, [editor, globalVariables])
 
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {
     updateModelVariables({
@@ -93,9 +86,8 @@ const GlobalVariablesEditor = () => {
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
 
-    const variables = globalVariables.filter((variable) => variable)
-
-    const selectedRow = parseInt(editorVariables.selectedRow)
+    const variables = globalVariables.filter((variable) => variable.name === 'resource')
+    const selectedRow = parseInt(editorVariables.selectedRow, 10)
 
     if (variables.length === 0) {
       createVariable({
@@ -119,32 +111,24 @@ const GlobalVariablesEditor = () => {
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createVariable({ scope: 'global', data: { ...variable } })
+      createVariable({
+        scope: 'global',
+        data: { ...variable },
+        rowToInsert: selectedRow + 1,
+      })
       updateModelVariables({
         display: 'table',
-        selectedRow: variables.length,
+        selectedRow: selectedRow + 1,
       })
-      return
     }
-    createVariable({
-      scope: 'global',
-      data: { ...variable },
-      rowToInsert: selectedRow + 1,
-    })
-    updateModelVariables({
-      display: 'table',
-      selectedRow: selectedRow + 1,
-    })
-    console.log('globalVariables', globalVariables)
   }
-
   const handleRemoveVariable = () => {
     if (editorVariables.display === 'code') return
 
     const selectedRow = parseInt(editorVariables.selectedRow)
     deleteVariable({ scope: 'global', rowId: selectedRow })
 
-    const variables = globalVariables.filter((variable) => variable)
+    const variables = globalVariables.filter((variable) => variable.name)
     if (selectedRow === variables.length - 1) {
       updateModelVariables({
         display: 'table',

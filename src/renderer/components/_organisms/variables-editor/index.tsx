@@ -97,6 +97,7 @@ const VariablesEditor = () => {
   }
 
   const handleCreateVariable = () => {
+    console.log('editor name is', editor.meta.name)
     if (editorVariables.display === 'code') return
 
     const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables

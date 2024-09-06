@@ -2,17 +2,14 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { EditorSlice, EditorState } from './types'
-
 export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> = (setState, getState) => ({
   editors: [],
-
   editor: {
     type: 'available',
     meta: {
       name: 'available',
     },
   },
-
   editorActions: {
     addModel: (editor) =>
       setState(
@@ -28,46 +25,43 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           state.editors = state.editors.filter((model) => model.meta.name !== name)
         }),
       ),
-
     updateModelVariables: (variables) =>
       setState(
         produce((state: EditorState) => {
           const { editor } = state
-          if (
-            !editor ||
-            !(editor.type === 'plc-textual' || editor.type === 'plc-graphical' || editor.type === 'plc-resource')
-          )
-            return
-
-          if (variables.display === 'table') {
-            if (editor.variable.display === 'table') {
-              if ('classFilter' in editor.variable) {
-                editor.variable = {
-                  display: 'table',
-                  selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow,
-                  classFilter: variables.classFilter ?? editor.variable.classFilter,
-                  description: variables.description ?? editor.variable.description,
-                }
-              } else {
-                editor.variable = {
-                  display: 'table',
-                  selectedRow: variables.selectedRow?.toString() ?? '-1',
-                  description: variables.description ?? '',
-                }
+          if (editor.type === 'plc-resource') {
+            if (editor.variable.display === 'table')
+              editor.variable = {
+                display: 'table',
+                selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow,
+                description: variables.description ?? editor.variable.description,
               }
-            } else {
+            else
+              editor.variable = {
+                display: 'code',
+              }
+          }
+          if (!editor || !(editor.type === 'plc-textual' || editor.type === 'plc-graphical')) return
+
+          if (variables.display === 'table')
+            if (editor.variable.display === 'table')
+              editor.variable = {
+                display: 'table',
+                selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow,
+                classFilter: variables.classFilter ?? editor.variable.classFilter,
+                description: variables.description ?? editor.variable.description,
+              }
+            else
               editor.variable = {
                 display: 'table',
                 selectedRow: variables.selectedRow?.toString() ?? '-1',
                 classFilter: variables.classFilter ?? 'All',
                 description: variables.description ?? '',
               }
-            }
-          } else {
+          else
             editor.variable = {
               display: 'code',
             }
-          }
         }),
       ),
 
@@ -102,7 +96,6 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           }
         }),
       ),
-
     getEditorFromEditors: (name) => {
       const { editor, editors } = getState()
       if (name === editor.meta.name) return editor
