@@ -187,6 +187,8 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
   const { nodes } = rung
   const newNodes: Node[] = []
 
+  // console.log(findParallelsDepth(rung))
+
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]
     if (node.type === 'powerRail') {
@@ -300,30 +302,6 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
 /**
  * Parallel functions
  */
-const getNodesInsideParallel = (rung: FlowState, closeParallelNode: Node) => {
-  const openParallelNode = rung.nodes.find(
-    (node) => node.id === closeParallelNode.data.parallelOpenReference,
-  ) as ParallelNode
-  const serial: Node[] = []
-  const parallel: Node[] = []
-
-  const openParallelEdges = rung.edges.filter((edge) => edge.source === openParallelNode.id)
-  for (const parallelEdge of openParallelEdges) {
-    let nextEdge = parallelEdge
-    while (nextEdge.target !== closeParallelNode.id) {
-      const node = rung.nodes.find((n) => n.id === nextEdge.target)
-      if (!node) continue
-      nextEdge = rung.edges.find((edge) => edge.source === nextEdge.target) as Edge
-      // Serial
-      if (parallelEdge.sourceHandle === openParallelNode.data.outputConnector?.id) serial.push(node)
-      // Parallel
-      else parallel.push(node)
-    }
-  }
-
-  return { serial, parallel }
-}
-
 const findParallelsInRung = (rung: FlowState) => {
   const parallels: Node[] = []
   let isAnotherParallel = true
@@ -343,7 +321,7 @@ const findParallelsInRung = (rung: FlowState) => {
       isAnotherParallel = true
     }
   })
-  return parallels
+  return parallels as ParallelNode[]
 }
 
 const findDeepestParallelInsideParallel = (rung: FlowState, parallel: Node) => {
@@ -356,6 +334,16 @@ const findDeepestParallelInsideParallel = (rung: FlowState, parallel: Node) => {
   }
   return parallel as ParallelNode
 }
+
+// const findParallelsDepth = (rung: FlowState, parallel?: ParallelNode[]) => {
+//   const parallels = !parallel ? findParallelsInRung(rung) : parallel
+//   parallels.forEach((parallel) => {
+//     const closeNode = parallel.data.parallelCloseReference
+//       ? (rung.nodes.find((node) => node.id === parallel.data.parallelCloseReference) as ParallelNode)
+//       : parallel
+//     console.log('nodes inside parallel', getNodesInsideParallel(rung, closeNode))
+//   })
+// }
 
 const getDeepestNodesInsideParallels = (rung: FlowState) => {
   const parallels = findParallelsInRung(rung)
@@ -378,6 +366,30 @@ const getNodesInsideAllParallels = (rung: FlowState) => {
     nodes.push(...serial, ...parallelNodes)
   })
   return nodes
+}
+
+const getNodesInsideParallel = (rung: FlowState, closeParallelNode: Node) => {
+  const openParallelNode = rung.nodes.find(
+    (node) => node.id === closeParallelNode.data.parallelOpenReference,
+  ) as ParallelNode
+  const serial: Node[] = []
+  const parallel: Node[] = []
+
+  const openParallelEdges = rung.edges.filter((edge) => edge.source === openParallelNode.id)
+  for (const parallelEdge of openParallelEdges) {
+    let nextEdge = parallelEdge
+    while (nextEdge.target !== closeParallelNode.id) {
+      const node = rung.nodes.find((n) => n.id === nextEdge.target)
+      if (!node) continue
+      nextEdge = rung.edges.find((edge) => edge.source === nextEdge.target) as Edge
+      // Serial
+      if (parallelEdge.sourceHandle === openParallelNode.data.outputConnector?.id) serial.push(node)
+      // Parallel
+      else parallel.push(node)
+    }
+  }
+
+  return { serial, parallel }
 }
 
 const removeEmptyParallelConnections = (rung: FlowState) => {
@@ -743,15 +755,25 @@ export const removeElement = (rung: FlowState, element: Node, defaultViewportBou
   const rails = rung.nodes.filter((node) => node.type === 'powerRail')
   const nodes = rung.nodes.filter((node) => node.type !== 'powerRail')
 
-  const newNodes = nodes.filter((n) => n.id !== element.id)
+  let newNodes = nodes.filter((n) => n.id !== element.id)
   const newRails = changeRailBounds(rails[1], [rails[0], ...newNodes], defaultViewportBounds)
 
+  newNodes = [rails[0], ...newNodes, newRails]
+
   const edge = rung.edges.find((edge) => edge.source === element.id)
-  if (!edge) return { nodes: [rails[0], ...newNodes, newRails], edges: rung.edges }
-  const newEdges = disconnectNodes(rung, edge.source, edge.target)
+  if (!edge) return { nodes: newNodes, edges: rung.edges }
+  let newEdges = disconnectNodes(rung, edge.source, edge.target)
+
+  const { nodes: auxNodes, edges: auxEdges } = removeEmptyParallelConnections({
+    ...rung,
+    nodes: newNodes,
+    edges: newEdges,
+  })
+  newNodes = auxNodes
+  newEdges = auxEdges
 
   return {
-    nodes: [rails[0], ...newNodes, newRails],
+    nodes: newNodes,
     edges: newEdges,
   }
 }
@@ -769,10 +791,6 @@ export const removeElements = (
     rungState.nodes = newNodes
     rungState.edges = newEdges
   }
-
-  const { nodes: newNodes, edges: newEdges } = removeEmptyParallelConnections(rungState)
-  rungState.nodes = newNodes
-  rungState.edges = newEdges
 
   rungState.nodes = rearrangeNodes(rungState, defaultBounds)
 
