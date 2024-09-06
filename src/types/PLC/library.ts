@@ -24,7 +24,7 @@ const baseTypeSchema = z.enum([
   'LOGLEVEL',
 ])
 
-const LibraryVariableSchema = z.object({
+const BaseLibraryVariableSchema = z.object({
   name: z.string(),
   class: z.enum(['input', 'output', 'inOut', 'external', 'local']),
   type: z.discriminatedUnion('definition', [
@@ -34,11 +34,12 @@ const LibraryVariableSchema = z.object({
     }),
     z.object({
       definition: z.literal('derived-type'),
-    //  value: z.Schema(),
+      // This will be overwritten by the derived type schema for the specific library
+      value: z.unknown(),
     }),
   ]),
   location: z.string(),
-  // initialValue: z.string().optional(),
+  initialValue: z.lazy((): z.Schema<unknown> => BaseLibraryVariableSchema.pick({ type: true })), // Define the type as a key in the same object
   documentation: z.string(),
   debug: z.boolean(),
 })
@@ -50,7 +51,9 @@ const DefaultLibrary = z.object({
   stPath: z.string(), // Path to the txt file
   cPath: z.string(), // Path to the C file
   dataTypes: z.array(z.string()), // List of data types
-  pous: z.array(LibraryVariableSchema),
+  variables: z.array(BaseLibraryVariableSchema),
+  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
+  pous: z.array(BaseLibraryVariableSchema),
 })
 
 export { DefaultLibrary }
