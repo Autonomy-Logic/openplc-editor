@@ -1,4 +1,5 @@
 import { BookIcon, LibraryCloseFolderIcon, LibraryFileIcon, MagnifierIcon } from '@root/renderer/assets'
+import { StandardFunctionBlocks } from '@root/renderer/data/library/standard-function-blocks'
 import { ReactNode, useState } from 'react'
 
 import { LibraryFile, LibraryFolder, LibraryRoot } from '../../_molecules'
@@ -19,7 +20,7 @@ type ILibraryRootProps = {
 const Library = () => {
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
 
-  const treeData = [
+  const _treeData = [
     {
       key: '0',
       label: 'P1AM_Modules',
@@ -95,7 +96,21 @@ const Library = () => {
         </div>
       </div>
       <LibraryRoot>
-        {treeData.map((data) => (
+        <LibraryFolder label='Standard Function Blocks'>
+          {StandardFunctionBlocks.pous.map((block) => (
+            <LibraryFile
+              key={block.name}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', block.body)
+              }}
+              label={block.name}
+              isSelected={selectedFileKey === block.name}
+              onSelect={() => setSelectedFileKey(block.name)}
+            />
+          ))}
+        </LibraryFolder>
+        {/* {treeData.map((data) => (
           <LibraryFolder key={data.key} label={data.label} title={data.title}>
             {data.children.map((child) => (
               <LibraryFile
@@ -110,7 +125,7 @@ const Library = () => {
               />
             ))}
           </LibraryFolder>
-        ))}
+        ))} */}
       </LibraryRoot>
     </div>
   )
