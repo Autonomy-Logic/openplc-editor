@@ -179,6 +179,7 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
 
   const parallels = findParallelsInRung(rung)
   const parallelsDepth = parallels.map((parallel) => findAllParallelsDepthAndNodes(rung, parallel))
+  console.log('parallelsDepth --- START', parallelsDepth)
 
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]
@@ -241,10 +242,16 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
       }
     }
 
+    let foundInParallel: boolean = false
     parallelsDepth.forEach((parallel) => {
       for (const object in parallel) {
         const objectParallel = parallel[object]
         if (objectParallel.nodes.parallel.find((n) => n.id === node.id)) {
+          foundInParallel = true
+
+          console.log('INSIDE PARALLEL', objectParallel)
+          console.log('NODE', node)
+          console.log('HIGHTEST NODE', objectParallel.heighestNode)
           const newPosY =
             objectParallel.heighestNode.position.y +
             objectParallel.height +
@@ -259,6 +266,8 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
             posY: newPosY,
             handleY: newHandleY,
           }
+          console.log('NEW NODE POSITION', newNodePosition)
+          break
         }
       }
     })
@@ -310,6 +319,36 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
       }
       newNodes.push(newParallelNode)
     }
+
+    console.log('foundInParallel', foundInParallel)
+    if (foundInParallel) {
+      const newNode = newNodes[newNodes.length - 1]
+      const parallelsDepthCopy = parallelsDepth
+      parallelsDepthCopy.forEach((parallel, index) => {
+        for (const object in parallel) {
+          const objectParallel = parallel[object]
+          if (objectParallel.nodes.parallel.find((n) => n.id === node.id)) {
+            const nodeIndex = objectParallel.nodes.parallel.findIndex((n) => n.id === node.id)
+            parallelsDepth[index][object].nodes.parallel.splice(nodeIndex, 1, newNode)
+          }
+          if (objectParallel.nodes.serial.find((n) => n.id === node.id)) {
+            const nodeIndex = objectParallel.nodes.serial.findIndex((n) => n.id === node.id)
+            parallelsDepth[index][object].nodes.serial.splice(nodeIndex, 1, newNode)
+          }
+          if (objectParallel.heighestNode.id === node.id) {
+            parallelsDepth[index][object].heighestNode = newNode
+          }
+          if (objectParallel.parallels.open.id === node.id) {
+            parallelsDepth[index][object].parallels.open = newNode as ParallelNode
+          }
+          if (objectParallel.parallels.close.id === node.id) {
+            parallelsDepth[index][object].parallels.close = newNode as ParallelNode
+          }
+        }
+      })
+      console.log('PARALLEL DEPTH', parallelsDepth)
+    }
+    console.log('\n')
   }
 
   newNodes[newNodes.length - 1] = changeRailBounds(newNodes[newNodes.length - 1], newNodes, defaultBounds)
@@ -379,8 +418,8 @@ const findAllParallelsDepthAndNodes = (
 
   // check serial nodes
   const serialNodes = nodesInsideParallel.serial
-  let serialHeight = 0
   let heighestNode = serialNodes[0]
+  let serialHeight = heighestNode.height ?? 0
   for (const serialNode of serialNodes) {
     // If it is a parallel node, check if it is an open parallel
     // If it is, call the function recursively
@@ -391,7 +430,7 @@ const findAllParallelsDepthAndNodes = (
         objectParallel = { ...objectParallel, ...object }
       }
     }
-    serialHeight = Math.max(serialHeight, serialNode.height ?? 0)
+    console.log('serialHeight', serialHeight, 'serialNode.height', serialNode.height)
     if (serialHeight < (serialNode.height ?? 0)) {
       serialHeight = serialNode.height ?? 0
       heighestNode = serialNode
@@ -432,8 +471,6 @@ const findAllParallelsDepthAndNodes = (
 
   return objectParallel
 }
-
-// const determineParallelHeight = (rung: FlowState, parallels: ParallelNode) => {}
 
 const getDeepestNodesInsideParallels = (rung: FlowState) => {
   const parallels = findParallelsInRung(rung)
