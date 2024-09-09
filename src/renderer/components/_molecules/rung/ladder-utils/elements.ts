@@ -180,9 +180,6 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
   const parallels = findParallelsInRung(rung)
   const parallelsDepth = parallels.map((parallel) => findAllParallelsDepthAndNodes(rung, parallel))
 
-  console.log('==== START REARRANGE ====')
-  console.log('parallelsDepth', parallelsDepth)
-
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]
     if (node.type === 'powerRail') {
@@ -351,9 +348,9 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
 
   newNodes[newNodes.length - 1] = changeRailBounds(newNodes[newNodes.length - 1], newNodes, defaultBounds)
 
-  console.log('==== END REARRANGE ====')
   return newNodes
 }
+
 /**
  * Parallel functions
  */
