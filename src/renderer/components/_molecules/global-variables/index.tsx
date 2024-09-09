@@ -42,7 +42,6 @@ const GlobalVariablesEditor = () => {
   }, [editor, globalVariables])
 
   useEffect(() => {
-    console.log('Editor state updated:', editor)
     if (editor.type === 'plc-resource') {
       if (editor.variable.display === 'table') {
         const { description, display, selectedRow } = editor.variable

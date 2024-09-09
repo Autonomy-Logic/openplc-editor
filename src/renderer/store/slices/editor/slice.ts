@@ -29,19 +29,43 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       setState(
         produce((state: EditorState) => {
           const { editor } = state
+
           if (editor.type === 'plc-resource') {
-            editor.variable = {
-              display: variables.display ?? editor.variable.display,
-              selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow,
-              description: variables.description ?? editor.variable.description,
+            if (variables.display === 'table') {
+              if (editor.variable.display === 'table') {
+                editor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow ?? '-1',
+                  description: variables.description ?? editor.variable.description ?? '',
+                }
+              } else {
+                editor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? '-1',
+                  description: variables.description ?? '',
+                }
+              }
+            } else {
+              editor.variable = {
+                display: 'code',
+              }
             }
           } else if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
             if (variables.display === 'table') {
-              editor.variable = {
-                display: 'table',
-                selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow,
-                classFilter: variables.classFilter ?? editor.variable.classFilter,
-                description: variables.description ?? editor.variable.description,
+              if (editor.variable.display === 'table') {
+                editor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow ?? '-1',
+                  classFilter: variables.classFilter ?? editor.variable.classFilter ?? 'All',
+                  description: variables.description ?? editor.variable.description ?? '',
+                }
+              } else {
+                editor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? '-1',
+                  classFilter: variables.classFilter ?? 'All',
+                  description: variables.description ?? '',
+                }
               }
             } else {
               editor.variable = {
