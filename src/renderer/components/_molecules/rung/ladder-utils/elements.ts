@@ -179,7 +179,6 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
 
   const parallels = findParallelsInRung(rung)
   const parallelsDepth = parallels.map((parallel) => findAllParallelsDepthAndNodes(rung, parallel))
-  console.log('parallelsDepth --- START', parallelsDepth)
 
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]
@@ -249,9 +248,6 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
         if (objectParallel.nodes.parallel.find((n) => n.id === node.id)) {
           foundInParallel = true
 
-          console.log('INSIDE PARALLEL', objectParallel)
-          console.log('NODE', node)
-          console.log('HIGHTEST NODE', objectParallel.heighestNode)
           const newPosY =
             objectParallel.heighestNode.position.y +
             objectParallel.height +
@@ -266,7 +262,6 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
             posY: newPosY,
             handleY: newHandleY,
           }
-          console.log('NEW NODE POSITION', newNodePosition)
           break
         }
       }
@@ -320,7 +315,6 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
       newNodes.push(newParallelNode)
     }
 
-    console.log('foundInParallel', foundInParallel)
     if (foundInParallel) {
       const newNode = newNodes[newNodes.length - 1]
       const parallelsDepthCopy = parallelsDepth
@@ -346,9 +340,7 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
           }
         }
       })
-      console.log('PARALLEL DEPTH', parallelsDepth)
     }
-    console.log('\n')
   }
 
   newNodes[newNodes.length - 1] = changeRailBounds(newNodes[newNodes.length - 1], newNodes, defaultBounds)
@@ -430,7 +422,6 @@ const findAllParallelsDepthAndNodes = (
         objectParallel = { ...objectParallel, ...object }
       }
     }
-    console.log('serialHeight', serialHeight, 'serialNode.height', serialNode.height)
     if (serialHeight < (serialNode.height ?? 0)) {
       serialHeight = serialNode.height ?? 0
       heighestNode = serialNode
