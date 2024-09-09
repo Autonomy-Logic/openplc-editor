@@ -24,6 +24,7 @@ type CustomNodeTypes = {
     width: number
     height: number
     gap: number
+    verticalGap: number
     handle: {
       x: number
       y: number
@@ -36,6 +37,7 @@ export const customNodesStyles: CustomNodeTypes = {
     width: blockNode.BLOCK_WIDTH,
     height: blockNode.BLOCK_HEIGHT,
     gap: 80,
+    verticalGap: 80,
     handle: {
       x: blockNode.BLOCK_CONNECTOR_X,
       y: blockNode.BLOCK_CONNECTOR_Y,
@@ -46,6 +48,7 @@ export const customNodesStyles: CustomNodeTypes = {
     width: coilNode.COIL_BLOCK_WIDTH,
     height: coilNode.COIL_BLOCK_HEIGHT,
     gap: 55,
+    verticalGap: 80,
     handle: {
       x: coilNode.COIL_CONNECTOR_X,
       y: coilNode.COIL_CONNECTOR_Y,
@@ -56,6 +59,7 @@ export const customNodesStyles: CustomNodeTypes = {
     width: contactNode.CONTACT_BLOCK_WIDTH,
     height: contactNode.CONTACT_BLOCK_HEIGHT,
     gap: 55,
+    verticalGap: 80,
     handle: {
       x: contactNode.CONTACT_CONNECTOR_X,
       y: contactNode.CONTACT_CONNECTOR_Y,
@@ -66,6 +70,7 @@ export const customNodesStyles: CustomNodeTypes = {
     width: parallelNode.PARALLEL_WIDTH,
     height: parallelNode.PARALLEL_HEIGHT,
     gap: parallelNode.GAP,
+    verticalGap: parallelNode.GAP,
     handle: {
       x: 0,
       y: parallelNode.PARALLEL_CONNECTOR_Y,
@@ -76,6 +81,7 @@ export const customNodesStyles: CustomNodeTypes = {
     width: placeholderNode.PLACEHOLDER_WIDTH,
     height: placeholderNode.PLACEHOLDER_HEIGHT,
     gap: placeholderNode.PLACEHOLDER_GAP,
+    verticalGap: placeholderNode.PLACEHOLDER_GAP,
     handle: {
       x: 0,
       y: placeholderNode.PLACEHOLDER_CONNECTOR_Y,
@@ -86,6 +92,7 @@ export const customNodesStyles: CustomNodeTypes = {
     width: placeholderNode.PLACEHOLDER_WIDTH,
     height: placeholderNode.PLACEHOLDER_HEIGHT,
     gap: placeholderNode.PLACEHOLDER_GAP,
+    verticalGap: placeholderNode.PLACEHOLDER_GAP,
     handle: {
       x: 0,
       y: placeholderNode.PLACEHOLDER_CONNECTOR_Y,
@@ -96,6 +103,7 @@ export const customNodesStyles: CustomNodeTypes = {
     width: powerRailNode.POWER_RAIL_WIDTH,
     height: powerRailNode.POWER_RAIL_HEIGHT,
     gap: 20,
+    verticalGap: 0,
     handle: {
       x: powerRailNode.POWER_RAIL_CONNECTOR_X,
       y: powerRailNode.POWER_RAIL_CONNECTOR_Y,
@@ -106,6 +114,7 @@ export const customNodesStyles: CustomNodeTypes = {
     width: 150,
     height: 40,
     gap: 50,
+    verticalGap: 50,
     handle: {
       x: 0,
       y: 20,
