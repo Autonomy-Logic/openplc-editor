@@ -1,4 +1,4 @@
-import { BookIcon, LibraryCloseFolderIcon, LibraryFileIcon, MagnifierIcon } from '@root/renderer/assets'
+import { BookIcon, MagnifierIcon } from '@root/renderer/assets'
 import { StandardFunctionBlocks } from '@root/renderer/data/library/standard-function-blocks'
 import { ReactNode, useState } from 'react'
 
@@ -19,62 +19,6 @@ type ILibraryRootProps = {
 
 const Library = () => {
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
-
-  const _treeData = [
-    {
-      key: '0',
-      label: 'P1AM_Modules',
-      Icon: LibraryCloseFolderIcon,
-      title: 'Module Tree',
-      children: [
-        {
-          key: '0.1',
-          label: 'P1AM_INIT',
-          Icon: LibraryFileIcon,
-          title: 'Module Leaf',
-          children: 'loren ipsum ipsum ipsum ',
-        },
-        { key: '0.2', label: 'P1_16CDR', Icon: LibraryFileIcon, title: 'Module Leaf', children: 'ipsum' },
-        { key: '0.3', label: 'P1_08N', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' dolor' },
-        { key: '0.4', label: 'P1_16N', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' sit' },
-        { key: '0.5', label: 'P1_16N', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' amet' },
-        { key: '0.6', label: 'P1_08T', Icon: LibraryFileIcon, title: 'Module Leaf', children: ' consectetur' },
-        { key: '0.7', label: 'P1_16TR', Icon: LibraryFileIcon, title: 'Module Leaf', children: '  adipiscing' },
-        { key: '0.8', label: 'P1_04AD', Icon: LibraryFileIcon, title: 'Module Leaf', children: '  elit' },
-      ],
-    },
-    {
-      key: '1',
-      label: 'Jaguar',
-      Icon: LibraryCloseFolderIcon,
-      title: 'Module Tree',
-      children: [],
-    },
-    {
-      key: '2',
-      label: 'Arduino',
-      Icon: LibraryCloseFolderIcon,
-      title: 'Module Tree',
-      children: [],
-    },
-    {
-      key: '3',
-      label: 'Communication',
-      Icon: LibraryCloseFolderIcon,
-      title: 'Module Tree',
-      children: [],
-    },
-    {
-      key: '4',
-      label: 'Sequent Microsystems',
-      Icon: LibraryCloseFolderIcon,
-      title: 'Module Tree',
-      children: [
-        { key: '0.1', label: 'P1AM_INIT', Icon: LibraryFileIcon, title: 'Module Leaf', children: '  elit' },
-        { key: '0.2', label: 'P1_16CDR', Icon: LibraryFileIcon, title: 'Module Leaf', children: '  elit adad ' },
-      ],
-    },
-  ]
 
   return (
     <div className='w-full'>
