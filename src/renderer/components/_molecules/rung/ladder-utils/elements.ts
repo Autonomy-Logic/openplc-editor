@@ -180,6 +180,9 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
   const parallels = findParallelsInRung(rung)
   const parallelsDepth = parallels.map((parallel) => findAllParallelsDepthAndNodes(rung, parallel))
 
+  console.log('==== START REARRANGE ====')
+  console.log('parallelsDepth', parallelsDepth)
+
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]
     if (node.type === 'powerRail') {
@@ -247,7 +250,6 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
         const objectParallel = parallel[object]
         if (objectParallel.nodes.parallel.find((n) => n.id === node.id)) {
           foundInParallel = true
-
           const newPosY =
             objectParallel.heighestNode.position.y +
             objectParallel.height +
@@ -262,6 +264,10 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
             posY: newPosY,
             handleY: newHandleY,
           }
+          break
+        }
+        if (objectParallel.nodes.serial.find((n) => n.id === node.id)) {
+          foundInParallel = true
           break
         }
       }
@@ -344,6 +350,8 @@ const rearrangeNodes = (rung: FlowState, defaultBounds: [number, number]) => {
   }
 
   newNodes[newNodes.length - 1] = changeRailBounds(newNodes[newNodes.length - 1], newNodes, defaultBounds)
+
+  console.log('==== END REARRANGE ====')
   return newNodes
 }
 /**
@@ -890,6 +898,8 @@ export const removeElement = (rung: FlowState, element: Node, defaultViewportBou
   newNodes = auxNodes
   newEdges = auxEdges
 
+  newNodes = rearrangeNodes({ ...rung, nodes: newNodes, edges: newEdges }, defaultViewportBounds)
+
   return {
     nodes: newNodes,
     edges: newEdges,
@@ -909,8 +919,6 @@ export const removeElements = (
     rungState.nodes = newNodes
     rungState.edges = newEdges
   }
-
-  rungState.nodes = rearrangeNodes(rungState, defaultBounds)
 
   return { nodes: rungState.nodes, edges: rungState.edges }
 }
