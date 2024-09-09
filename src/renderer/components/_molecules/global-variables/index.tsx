@@ -15,11 +15,7 @@ const GlobalVariablesEditor = () => {
   const {
     editor,
     workspace: {
-      projectData: {
-        configuration: {
-          resource: { globalVariables },
-        },
-      },
+      projectData: { configuration },
     },
     editorActions: { updateModelVariables },
     workspaceActions: { createVariable, deleteVariable, rearrangeVariables },
@@ -28,13 +24,9 @@ const GlobalVariablesEditor = () => {
   /**
    * Table data and column filters states to keep track of the table data and column filters
    */
+  const globalVariables = configuration.resource.globalVariables
   const [tableData, setTableData] = useState<PLCGlobalVariable[]>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-
-  /**
-   * Editor name state to keep track of the editor name
-   * Other states to keep track of the editor's variables and display at the screen
-   */
   const [editorVariables, setEditorVariables] = useState<GlobalVariablesTableType>({
     display: 'table',
     selectedRow: ROWS_NOT_SELECTED.toString(),
@@ -44,25 +36,26 @@ const GlobalVariablesEditor = () => {
   /**
    * Update the table data and the editor's variables when the editor or the pous change
    */
-
   useEffect(() => {
-    if (editor.type === 'plc-resource') {
-      if (editor.variable.display === 'table') {
-        const { display, selectedRow, description } = editor.variable
-        setEditorVariables({
-          display: display,
-          selectedRow: selectedRow,
-          description: description,
-        })
-      }
-    }
-  }, [editor])
-
-  useEffect(() => {
-    const variablesToTable = globalVariables.filter((variable) => variable.name === 'resource')
+    const variablesToTable = globalVariables.filter((variable) => variable.name)
     setTableData(variablesToTable)
-    console.log('variablesToTable', variablesToTable)
+    console.log('configuration: ', configuration)
   }, [editor, globalVariables])
+
+  useEffect(() => {
+    if (editor.type === 'plc-resource' && editor.variable.display === 'table') {
+      const { display, selectedRow, description } = editor.variable
+      setEditorVariables({
+        display: display,
+        selectedRow: selectedRow,
+        description: description,
+      })
+    } else if (editor.type === 'plc-resource') {
+      setEditorVariables({
+        display: 'code',
+      })
+    }
+  }, [editor,globalVariables])
 
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {
     updateModelVariables({
@@ -86,8 +79,8 @@ const GlobalVariablesEditor = () => {
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
 
-    const variables = globalVariables.filter((variable) => variable.name === 'resource')
-    const selectedRow = parseInt(editorVariables.selectedRow, 10)
+    const variables = globalVariables.filter((variable) => variable.name === editor.meta.name)
+    const selectedRow = parseInt(editorVariables.selectedRow)
 
     if (variables.length === 0) {
       createVariable({
@@ -111,16 +104,23 @@ const GlobalVariablesEditor = () => {
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createVariable({
-        scope: 'global',
-        data: { ...variable },
-        rowToInsert: selectedRow + 1,
+      createVariable({scope: 'global',data: { ...variable },
       })
       updateModelVariables({
         display: 'table',
-        selectedRow: selectedRow + 1,
+        selectedRow: variables.length,
       })
+      return
     }
+    createVariable({
+      scope: 'local',
+      data: { ...variable },
+      rowToInsert: selectedRow + 1,
+    })
+    updateModelVariables({
+      display: 'table',
+      selectedRow: selectedRow + 1,
+    })
   }
   const handleRemoveVariable = () => {
     if (editorVariables.display === 'code') return

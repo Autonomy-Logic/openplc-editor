@@ -60,9 +60,6 @@ const editorModelSchema = z.discriminatedUnion('type', [
       derivation: z.enum(['enumerated', 'structure', 'array']),
     }),
   }),
-  /**
-   * This must be reviewed in the future to fit the resource requirements
-   */
   z.object({
     type: z.literal('plc-resource'),
     meta: z.object({
@@ -118,6 +115,6 @@ type EditorSlice = EditorState & {
   editorActions: EditorActions
 }
 
-export { editorModelSchema, editorStateSchema, }
+export { editorModelSchema, editorStateSchema }
 
-export type { EditorActions, EditorModel, EditorSlice, EditorState, GlobalVariablesTableType,VariablesTable }
+export type { EditorActions, EditorModel, EditorSlice, EditorState, GlobalVariablesTableType, VariablesTable }
