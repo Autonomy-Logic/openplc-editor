@@ -50,13 +50,8 @@ export const connectNodes = (
         : edge.sourceHandle === (sourceNode.data as BasicNodeData).outputConnector?.id),
   )
 
-  // console.log('sourceNode', sourceNode)
-  // console.log('sourceEdge', sourceEdge)
-
   const targetNode = rung.nodes.find((node) => node.id === targetNodeId)
   const targetNodeData = targetNode?.data as BasicNodeData
-
-  // console.log('targetNode', targetNode)
 
   /**
    * targetHandle: where the the sourceEdge connects to targetNode
@@ -65,14 +60,10 @@ export const connectNodes = (
   const targetHandle = !options ? targetNodeData.inputConnector?.id : options.targetHandle
   const sourceHandle = !options ? targetNodeData.outputConnector?.id : options.sourceHandle
 
-  // console.log('target sourceHandle', sourceHandle)
-  // console.log('target targetHandle', targetHandle)
-
   // If the source edge is found, update the target
   if (sourceEdge) {
     // Remove the source edge
     const edges = rung.edges.filter((edge) => edge.id !== sourceEdge.id)
-    // console.log('edges after remove source edge', edges)
     // Update the target of the source edge
     edges.push(
       buildEdge(sourceNodeId, targetNodeId, {
@@ -80,7 +71,6 @@ export const connectNodes = (
         targetHandle: targetHandle,
       }),
     )
-    // console.log('edges after update the target of the source edge', edges)
     // Update the target of the target edge
     edges.push(
       buildEdge(targetNodeId, sourceEdge.target, {
@@ -88,7 +78,6 @@ export const connectNodes = (
         targetHandle: sourceEdge.targetHandle ?? undefined,
       }),
     )
-    // console.log('edges after update the target of the target edge', edges)
     return edges
   }
 
