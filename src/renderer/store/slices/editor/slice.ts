@@ -30,38 +30,25 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         produce((state: EditorState) => {
           const { editor } = state
           if (editor.type === 'plc-resource') {
-            if (editor.variable.display === 'table')
-              editor.variable = {
-                display: 'table',
-                selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow,
-                description: variables.description ?? editor.variable.description,
-              }
-            else
-              editor.variable = {
-                display: 'code',
-              }
-          }
-          if (!editor || !(editor.type === 'plc-textual' || editor.type === 'plc-graphical')) return
-
-          if (variables.display === 'table')
-            if (editor.variable.display === 'table')
+            editor.variable = {
+              display: variables.display ?? editor.variable.display,
+              selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow,
+              description: variables.description ?? editor.variable.description,
+            }
+          } else if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+            if (variables.display === 'table') {
               editor.variable = {
                 display: 'table',
                 selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow,
                 classFilter: variables.classFilter ?? editor.variable.classFilter,
                 description: variables.description ?? editor.variable.description,
               }
-            else
+            } else {
               editor.variable = {
-                display: 'table',
-                selectedRow: variables.selectedRow?.toString() ?? '-1',
-                classFilter: variables.classFilter ?? 'All',
-                description: variables.description ?? '',
+                display: 'code',
               }
-          else
-            editor.variable = {
-              display: 'code',
             }
+          }
         }),
       ),
 

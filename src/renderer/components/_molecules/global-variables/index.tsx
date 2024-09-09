@@ -42,9 +42,10 @@ const GlobalVariablesEditor = () => {
   }, [editor, globalVariables])
 
   useEffect(() => {
-    if (editor.type === 'plc-resource' && editor.variable.display === 'table') {
+    console.log('Editor state updated:', editor)
+    if (editor.type === 'plc-resource') {
       if (editor.variable.display === 'table') {
-        const { display, selectedRow, description } = editor.variable
+        const { description, display, selectedRow } = editor.variable
         setEditorVariables({
           display: display,
           selectedRow: selectedRow,
@@ -52,7 +53,7 @@ const GlobalVariablesEditor = () => {
         })
       } else {
         setEditorVariables({
-          display: 'code',
+          display: editor.variable.display,
         })
       }
     }
