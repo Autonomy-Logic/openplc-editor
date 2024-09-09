@@ -92,7 +92,7 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       position: Position.Bottom,
       type: type === 'open' ? 'source' : 'target',
       isConnectable: false,
-      glbX: handleX,
+      glbX: handleX + PARALLEL_WIDTH / 2,
       glbY: handleY,
       relX: PARALLEL_WIDTH / 2,
       relY: PARALLEL_CONNECTOR_Y,
@@ -119,5 +119,6 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
     width: PARALLEL_WIDTH,
     height: PARALLEL_HEIGHT,
     draggable: false,
+    selectable: false,
   }
 }
