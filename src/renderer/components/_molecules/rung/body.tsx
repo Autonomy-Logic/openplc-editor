@@ -6,7 +6,14 @@ import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } f
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
-import { addNewElement, removeElements, removePlaceholderNodes, renderPlaceholderNodes } from './ladder-utils/elements'
+import {
+  addNewElement,
+  onDragElement,
+  onDragStartElement,
+  removeElements,
+  removePlaceholderNodes,
+  renderPlaceholderNodes,
+} from './ladder-utils/elements'
 
 type RungBodyProps = {
   rung: FlowState
@@ -50,9 +57,9 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
     setFlowPanelExtent([
       [0, 0],
-      [bounds.width, bounds.height],
+      [bounds.width, bounds.height + 20],
     ])
-    flowActions.updateFlowViewport({ rungId: rungLocal.id, flowViewport: [bounds.width, bounds.height] })
+    flowActions.updateFlowViewport({ rungId: rungLocal.id, flowViewport: [bounds.width, bounds.height + 20] })
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
@@ -87,8 +94,21 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     [rungLocal],
   )
 
+  const handleNodeStartDrag = (node: FlowNode) => {
+    const result = onDragStartElement(rungLocal, node)
+    const newNodes = renderPlaceholderNodes({ ...rungLocal, ...result })
+    setRungLocal((rung) => ({ ...rung, nodes: newNodes, edges: result.edges }))
+  }
+
+  const handleNodeDrag = (node: FlowNode) => {
+    const result = onDragElement(rungLocal, node)
+    console.log('result drag:', result)
+  }
+
   const onDragEnterViewport = useCallback<DragEventHandler>(
     (event) => {
+      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) return
+
       event.preventDefault()
       const { relatedTarget } = event
       if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
@@ -101,8 +121,11 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onDragLeaveViewport = useCallback<DragEventHandler>(
     (event) => {
+      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) return
+
       const { relatedTarget } = event
       if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
+      console.log('SAI')
       const nodes = removePlaceholderNodes(rungLocal.nodes)
       setRungLocal((rung) => ({ ...rung, nodes }))
     },
@@ -111,6 +134,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onDragOver = useCallback<DragEventHandler>(
     (event) => {
+      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) return
+
       event.preventDefault()
       event.dataTransfer.dropEffect = 'move'
 
@@ -150,8 +175,16 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onDrop = useCallback<DragEventHandler>(
     (event) => {
+      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks'))
+        return
+
       event.preventDefault()
-      const type = event.dataTransfer.getData('application/reactflow')
+      const type = event.dataTransfer.getData('application/reactflow/ladder-blocks')
+      if (!type) {
+        const nodes = removePlaceholderNodes(rungLocal.nodes)
+        setRungLocal((rung) => ({ ...rung, nodes }))
+        return
+      }
       handleAddNode(type)
     },
     [rungLocal],
@@ -178,13 +211,26 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
               nodes: rungLocal.nodes,
               edges: rungLocal.edges,
+
               onInit: setReactFlowInstance,
+
               onNodesChange: onNodesChange,
-              onNodeDragStop: updateFlowStore,
               onNodesDelete: (nodes) => {
                 handleRemoveNode(nodes)
               },
+              onNodeDragStart: (_event, node) => {
+                handleNodeStartDrag(node)
+              },
+              onNodeDrag: (_event, node) => {
+                handleNodeDrag(node)
+              },
+              onDragEnd: () => {
+                console.log('teste drag end')
+              },
+              onNodeDragStop: updateFlowStore,
+
               onConnectEnd: updateFlowStore,
+
               onDragEnter: onDragEnterViewport,
               onDragLeave: onDragLeaveViewport,
               onDragOver: onDragOver,
