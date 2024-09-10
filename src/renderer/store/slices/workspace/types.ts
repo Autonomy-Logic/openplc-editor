@@ -97,7 +97,14 @@ const workspaceActionsSchema = z.object({
     .returns(z.void()),
 
   createDatatype: z.function().args(PLCDataTypeSchema).returns(z.void()),
-  createTask: z.function().args(PLCTaskSchema).returns(z.void()),
+  createTask: z
+    .function()
+    .args(PLCTaskSchema.merge(z.object({ rowToInsert: z.number().optional() })))
+    .returns(z.void()),
+  rearrangeTasks: z
+    .function()
+    .args(z.object({ rowId: z.number(), newIndex: z.number() }))
+    .returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 

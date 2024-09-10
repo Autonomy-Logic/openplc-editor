@@ -313,26 +313,41 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
 
-    createTask: (dataToCreate): WorkspaceResponse => {
-      let response: WorkspaceResponse = { ok: true }
+    createTask: (taskToCreate): WorkspaceResponse => {
+      const response: WorkspaceResponse = { ok: true }
 
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
-          const newName = createTaskValidation(workspace.projectData.configuration.resource.tasks, dataToCreate.name)
-
-          const taskExists = workspace.projectData.configuration.resource.tasks.find((task) => task.name === newName)
-
-          if (taskExists) {
-            response = { ok: false, title: 'Task already exists', message: 'Please provide a unique task name.' }
+          taskToCreate.name = createTaskValidation(
+            workspace.projectData.configuration.resource.tasks,
+            taskToCreate.name,
+          )
+          if (taskToCreate.rowToInsert !== undefined) {
+            workspace.projectData.configuration.resource.tasks.splice(taskToCreate.rowToInsert, 0, taskToCreate)
           } else {
-            dataToCreate.name = newName
-            workspace.projectData.configuration.resource.tasks.push(dataToCreate)
-            response = { ok: true, message: 'Task created successfully' }
+            workspace.projectData.configuration.resource.tasks.push(taskToCreate)
           }
         }),
       )
 
       return response
+    },
+
+    rearrangeTasks: (taskToBeRearranged): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { rowId, newIndex } = taskToBeRearranged
+
+          // Validate indexes
+          if (rowId < 0 || newIndex < 0 || rowId >= workspace.projectData.configuration.resource.tasks.length) {
+            console.error('Invalid rowId or newIndex')
+            return
+          }
+
+          const [removed] = workspace.projectData.configuration.resource.tasks.splice(rowId, 1)
+          workspace.projectData.configuration.resource.tasks.splice(newIndex, 0, removed)
+        }),
+      )
     },
   },
 })

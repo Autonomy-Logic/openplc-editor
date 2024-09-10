@@ -21,7 +21,7 @@ export default function TaskEditor() {
       },
     },
     editorActions: { updateModelVariables },
-    workspaceActions: { createTask },
+    workspaceActions: { createTask, rearrangeTasks },
   } = useOpenPLCStore()
 
   const [taskData, setTaskData] = useState<PLCTask[]>([])
@@ -38,10 +38,10 @@ export default function TaskEditor() {
   useEffect(() => {
     if (editor.type === 'plc-resource') {
       if (editor.variable.display === 'table') {
-        const { selectedRow } = editor.variable
+        const { selectedRow, display } = editor.variable
         setEditorVariables({
           selectedRow: selectedRow,
-          display: 'table',
+          display: display,
         })
       } else {
         return
@@ -49,13 +49,21 @@ export default function TaskEditor() {
     }
   }, [editor])
 
-  const handleCreateTask = () => {
-    console.log('Updated taskData:', taskData)
-    const tasks = taskData.filter((variable) => variable.name)
-    const selectedRow = parseInt(editorVariables.selectedRow)
+  const handleRearrangeTasks = (index: number, row?: number) => {
+    rearrangeTasks({
+      rowId: row ?? parseInt(editorVariables.selectedRow),
+      newIndex: (row ?? parseInt(editorVariables.selectedRow)) + index,
+    })
+    updateModelVariables({
+      display: 'table',
+      selectedRow: parseInt(editorVariables.selectedRow) + index,
+    })
+  }
 
+  const handleCreateTask = () => {
+    const tasks = taskData.filter((task) => task.name)
+    const selectedRow = parseInt(editorVariables.selectedRow)
     if (tasks.length === 0) {
-  
       createTask({
         name: 'Task',
         triggering: 'Cyclic',
@@ -69,16 +77,9 @@ export default function TaskEditor() {
       return
     }
 
-    const isValidIndex = selectedRow >= 0 && selectedRow < tasks.length
-    const task: PLCTask | undefined = isValidIndex ? tasks[selectedRow] : tasks[tasks.length - 1]
-
-    if (!task) {
-      console.error('Selected task is undefined')
-      return
-    }
+    const task: PLCTask = selectedRow === ROWS_NOT_SELECTED ? tasks[tasks.length - 1] : tasks[selectedRow]
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      console.log('Creating new task with default properties...')
       createTask({
         name: 'Task',
         triggering: task.triggering,
@@ -91,13 +92,12 @@ export default function TaskEditor() {
       })
       return
     }
-
-    console.log('Creating new task with selected properties...')
     createTask({
       name: task.name,
       triggering: task.triggering,
       priority: task.priority,
       interval: task.interval,
+      rowToInsert: selectedRow + 1,
     })
     updateModelVariables({
       display: 'table',
@@ -110,7 +110,7 @@ export default function TaskEditor() {
       selectedRow: parseInt(row.id),
     })
   }
-
+  console.log(taskData)
   return (
     <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
       <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
@@ -127,7 +127,7 @@ export default function TaskEditor() {
               <TableActionButton
                 aria-label='Remove table row button'
                 disabled={parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED}
-                onClick={void 0}
+                onClick={() => handleRearrangeTasks(-1)}
               >
                 <MinusIcon />
               </TableActionButton>
@@ -137,7 +137,7 @@ export default function TaskEditor() {
                   parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
                   parseInt(editorVariables.selectedRow) === 0
                 }
-                onClick={() => {}}
+                onClick={() => handleRearrangeTasks(-1)}
               >
                 <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
               </TableActionButton>
@@ -147,7 +147,7 @@ export default function TaskEditor() {
                   parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
                   parseInt(editorVariables.selectedRow) === taskData.length - 1
                 }
-                onClick={() => {}}
+                onClick={() => handleRearrangeTasks(1)}
               >
                 <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
               </TableActionButton>
