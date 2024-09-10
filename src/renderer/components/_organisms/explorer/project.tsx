@@ -59,36 +59,39 @@ const Project = () => {
   return (
     <div className='w-full'>
       {/* Actions handler */}
-      <div id='project-actions-container' className='relative z-10 my-3 flex w-full justify-between gap-2 px-2'>
-  <div
-    id='project-name-container'
-    className='flex h-8 flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 py-[1px] dark:bg-brand-dark'
-    onDoubleClick={() => setIsEditing(true)}
-  >
-    <FolderIcon size='sm' />
-    {isEditing ? (
-      <input
-        id='project-name'
-        className='w-full cursor-text rounded-lg border border-neutral-700 bg-transparent px-2 py-1 text-xs font-medium text-neutral-1000 outline-none dark:text-neutral-50'
-        value={projectNameDefault}
-        onChange={handleNameChange}
-        onBlur={handleBlur}
-        autoFocus
-      />
-    ) : (
-      <p
-        id='project-name'
-        className='min-w-[20px] max-w-[250px] cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap rounded-lg px-2 py-1 text-xs font-medium text-neutral-1000 dark:text-neutral-50'
-      >
-        {projectNameDefault}
-      </p>
-    )}
-  </div>
-  <div id='create-plc-container'>
-    <CreatePLCElement />
-  </div>
-</div>
-
+      <div id='project-actions-container' className='relative z-10 my-3 flex w-full justify-normal gap-2 px-2'>
+        <div
+          id='project-name-container'
+          className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 py-[1px] dark:bg-brand-dark'
+          onDoubleClick={() => setIsEditing(true)}
+        >
+          <div className='flex-shrink-0'>
+            <FolderIcon size='sm' className='h-4 w-4' style={{ minWidth: '16px', minHeight: '16px' }} />
+          </div>
+          {isEditing ? (
+            <div className='flex h-5.5 w-full items-center rounded-sm border border-neutral-700 bg-transparent px-0 py-0'>
+              <input
+                id='project-name'
+                className={`box-border h-full w-full cursor-text bg-transparent px-2 py-0 text-xs font-medium text-neutral-1000 outline-none dark:text-neutral-50`}
+                value={projectNameDefault}
+                onChange={handleNameChange}
+                onBlur={handleBlur}
+                autoFocus
+              />
+            </div>
+          ) : (
+            <span
+              id='project-name'
+              className={`w-full cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap rounded-lg px-2 py-1 text-xs font-medium text-neutral-1000 dark:text-neutral-50`}
+            >
+              {projectNameDefault}
+            </span>
+          )}
+        </div>
+        <div id='create-plc-container' className='mr-2.5'>
+          <CreatePLCElement />
+        </div>
+      </div>
 
       {/* Data display */}
       <ProjectTreeRoot label={Name}>
