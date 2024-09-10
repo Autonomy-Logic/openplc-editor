@@ -2,6 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { WorkspaceResponse, WorkspaceSlice } from './types'
+import { createTaskValidation } from './utils/tasks'
 import { createGlobalVariableValidation, createVariableValidation, updateVariableValidation } from './utils/variables'
 
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
@@ -310,6 +311,28 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           }
         }),
       )
+    },
+
+    createTask: (dataToCreate): WorkspaceResponse => {
+      let response: WorkspaceResponse = { ok: true }
+
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const newName = createTaskValidation(workspace.projectData.configuration.resource.tasks, dataToCreate.name)
+
+          const taskExists = workspace.projectData.configuration.resource.tasks.find((task) => task.name === newName)
+
+          if (taskExists) {
+            response = { ok: false, title: 'Task already exists', message: 'Please provide a unique task name.' }
+          } else {
+            dataToCreate.name = newName
+            workspace.projectData.configuration.resource.tasks.push(dataToCreate)
+            response = { ok: true, message: 'Task created successfully' }
+          }
+        }),
+      )
+
+      return response
     },
   },
 })

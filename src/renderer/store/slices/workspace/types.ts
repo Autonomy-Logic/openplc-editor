@@ -4,6 +4,7 @@ import {
   PLCFunctionSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
+  PLCTaskSchema,
   PLCVariableSchema,
 } from '@root/types/PLC/open-plc'
 import { z } from 'zod'
@@ -96,6 +97,7 @@ const workspaceActionsSchema = z.object({
     .returns(z.void()),
 
   createDatatype: z.function().args(PLCDataTypeSchema).returns(z.void()),
+  createTask: z.function().args(PLCTaskSchema).returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 
@@ -103,5 +105,12 @@ type WorkspaceSlice = WorkspaceState & {
   workspaceActions: WorkspaceActions
 }
 
-export { pouDTOSchema, systemConfigsSchema,variableDTOSchema, workspaceActionsSchema, workspaceResponseSchema, workspaceStateSchema }
-export type { PouDTO, SystemConfigs,VariableDTO, WorkspaceActions, WorkspaceResponse, WorkspaceSlice, WorkspaceState }
+export {
+  pouDTOSchema,
+  systemConfigsSchema,
+  variableDTOSchema,
+  workspaceActionsSchema,
+  workspaceResponseSchema,
+  workspaceStateSchema,
+}
+export type { PouDTO, SystemConfigs, VariableDTO, WorkspaceActions, WorkspaceResponse, WorkspaceSlice, WorkspaceState }

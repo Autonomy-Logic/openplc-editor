@@ -1,11 +1,34 @@
-import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
+import {
+  // ColumnFiltersState,
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from '@tanstack/react-table'
 import { getFilteredRowModel } from '@tanstack/react-table'
-import { useState } from 'react'
+// import { OnChangeFn } from '@tanstack/react-table'
+import { useRef } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
 
-export default function TaskTable() {
-  const ROWS_NOT_SELECTED = -1
+type PLCTaskTableProps = {
+  tableData: {
+    name: string
+    triggering: string
+    interval: string
+    priority: number
+  }[]
+  selectedRow: number
+  handleRowClick: (row: HTMLTableRowElement) => void
+}
+export default function TaskTable({
+  tableData,
+  selectedRow,
+  handleRowClick,
+}: PLCTaskTableProps) {
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null)
+  const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
+
   const columnHelper = createColumnHelper()
   const columns = [
     columnHelper.accessor('name', {
@@ -14,41 +37,38 @@ export default function TaskTable() {
       size: 150,
       minSize: 100,
       maxSize: 150,
+  
     }),
     columnHelper.accessor('triggering', {
       header: 'Triggering',
       enableResizing: true,
-      size: 200,
+      size: 468,
       minSize: 150,
-      maxSize: 200,
-    }),
-    columnHelper.accessor('single', {
-      header: 'Single',
-      enableResizing: true,
-      size: 200,
-      minSize: 80,
-      maxSize: 200,
+      maxSize: 468,
+  
     }),
     columnHelper.accessor('interval', {
       header: 'Interval',
-      size: 200,
+      size: 468,
       minSize: 150,
-      maxSize: 200,
+      maxSize: 468,
       enableResizing: true,
+   
     }),
     columnHelper.accessor('priority', {
       header: 'Priority',
       enableResizing: false,
-      size: 568,
-      minSize: 198,
-      maxSize: 568,
+      size: 468,
+      minSize: 150,
+      maxSize: 468,
+    
     }),
   ]
 
   const table = useReactTable({
     columns: columns,
     columnResizeMode: 'onChange',
-    data: [],
+    data: tableData,
     debugTable: true,
     defaultColumn: {
       size: 128,
@@ -58,45 +78,39 @@ export default function TaskTable() {
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   })
-  const [editorVariables] = useState({
-    display: 'table',
-    selectedRow: ROWS_NOT_SELECTED.toString(),
-  })
 
   return (
     <Table context='Tasks' className='mr-1'>
-      {editorVariables.display === 'table' && (
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead
-                  resizable={header.column.columnDef.enableResizing}
-                  isResizing={header.column.getIsResizing()}
-                  resizeHandler={header.getResizeHandler()}
-                  style={{
-                    width: header.getSize(),
-                    maxWidth: header.column.columnDef.maxSize,
-                    minWidth: header.column.columnDef.minSize,
-                  }}
-                  key={header.id}
-                >
-                  {flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-      )}
-      <TableBody>
+      <TableHeader>
+        {table.getHeaderGroups().map((headerGroup) => (
+          <TableRow key={headerGroup.id}>
+            {headerGroup.headers.map((header) => (
+              <TableHead
+                resizable={header.column.columnDef.enableResizing}
+                isResizing={header.column.getIsResizing()}
+                resizeHandler={header.getResizeHandler()}
+                style={{
+                  width: header.getSize(),
+                  maxWidth: header.column.columnDef.maxSize,
+                  minWidth: header.column.columnDef.minSize,
+                }}
+                key={header.id}
+              >
+                {flexRender(header.column.columnDef.header, header.getContext())}
+              </TableHead>
+            ))}
+          </TableRow>
+        ))}
+      </TableHeader>
+      <TableBody ref={tableBodyRef}>
         {table.getRowModel().rows.map((row) => (
           <TableRow
             id={row.id}
             key={row.id}
             className='h-8 cursor-pointer'
-            onClick={(e) => console.log(e.currentTarget)}
-            // selected={selectedRow === parseInt(row.id)}
-            // ref={selectedRow === parseInt(row.id) ? tableBodyRowRef : null}
+            onClick={(e) => handleRowClick(e.currentTarget)}
+            selected={selectedRow === parseInt(row.id)}
+            ref={selectedRow === parseInt(row.id) ? tableBodyRowRef : null}
           >
             {row.getVisibleCells().map((cell) => (
               <TableCell
@@ -109,7 +123,7 @@ export default function TaskTable() {
               >
                 {flexRender(cell.column.columnDef.cell, {
                   ...cell.getContext(),
-                  // editable: selectedRow === parseInt(row.id),
+                  editable: selectedRow === parseInt(row.id),
                 })}
               </TableCell>
             ))}

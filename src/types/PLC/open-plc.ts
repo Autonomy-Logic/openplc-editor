@@ -115,6 +115,15 @@ type PLCVariable = z.infer<typeof PLCVariableSchema>
 const PLCGlobalVariableSchema = PLCVariableSchema.omit({ class: true })
 type PLCGlobalVariable = z.infer<typeof PLCGlobalVariableSchema>
 
+const PLCTaskSchema = z.object({
+  name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the task object.
+  triggering: z.enum(['Cyclic', 'Interrupt']),
+  interval: z.string(), // TODO: Must have a regex validation for this. Probably a new modal must be created to handle this.
+  priority: z.number(), // TODO: implement this validation. This must be a positive integer from 0 to 100
+})
+
+type PLCTask = z.infer<typeof PLCTaskSchema>
+
 const PLCFunctionSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
   name: z.string(),
@@ -169,19 +178,12 @@ const PLCProjectDataSchema = z.object({
   ),
   configuration: z.object({
     resource: z.object({
-      tasks: z.array(
-        z.object({
-          name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the task object.
-          triggering: z.enum(['Cyclic', 'Interrupt']),
-          interval: z.string(), // TODO: Must have a regex validation for this. Probably a new modal must be created to handle this.
-          priority: z.number(), // TODO: This should be homologate.
-        }),
-      ),
+      tasks: z.array(PLCTaskSchema),
       instances: z.array(
         z.object({
           name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the instance object.
-          type: z.string(), // TODO: Implement this validation. This type must be one of the user's defined pous.
           task: z.string(), // TODO: Implement this validation. This task must be one of the objects in the "tasks" array defined right above.
+          program: z.string(), // TODO: Implement this validation. This program must be one of the user's defined pou of program type.
         }),
       ),
       globalVariables: z.array(PLCVariableSchema.omit({ class: true })),
@@ -201,6 +203,7 @@ export {
   PLCGlobalVariableSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
+  PLCTaskSchema,
   PLCVariableSchema,
 }
 
@@ -213,5 +216,6 @@ export type {
   PLCGlobalVariable,
   PLCProgram,
   PLCProjectData,
+  PLCTask,
   PLCVariable,
 }

@@ -13,18 +13,18 @@ export default function InstancesTable() {
       minSize: 100,
       maxSize: 150,
     }),
-    columnHelper.accessor('type', {
-      header: 'Type',
-      enableResizing: true,
-      size: 710,
-      minSize: 150,
-      maxSize: 710,
-    }),
     columnHelper.accessor('task', {
       header: 'Task',
       enableResizing: false,
       size: 710,
       minSize: 80,
+      maxSize: 710,
+    }),
+    columnHelper.accessor('program', {
+      header: 'Program',
+      enableResizing: true,
+      size: 710,
+      minSize: 150,
       maxSize: 710,
     }),
   ]
@@ -44,7 +44,7 @@ export default function InstancesTable() {
   })
 
   return (
-    <Table context='Tasks' className='mr-1'>
+    <Table context='Instances' className='mr-1'>
       <TableHeader>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
