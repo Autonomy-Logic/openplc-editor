@@ -1,5 +1,7 @@
 import { PLCTask } from '@root/types/PLC/open-plc'
 
+import { WorkspaceResponse } from '../types'
+
 const checkIfTaskExists = (tasks: PLCTask[], name: string) => {
   return tasks.some((task) => task.name === name)
 }
@@ -39,4 +41,33 @@ const createTaskValidation = (tasks: PLCTask[], name: string) => {
   return name
 }
 
-export { checkIfTaskExists, createTaskValidation }
+const updateTaskValidation = (tasks: PLCTask[], dataToBeUpdated: Partial<PLCTask>) => {
+  let response: WorkspaceResponse = { ok: true }
+
+  if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
+    const { name } = dataToBeUpdated
+    if (name === '') {
+      console.error('Task name is empty')
+      response = {
+        ok: false,
+        title: 'Task name is empty.',
+        message: 'Please make sure that the name is not empty.',
+      }
+      return response
+    }
+
+    if (checkIfTaskExists(tasks, name)) {
+      console.error(`Task "${name}" already exists`)
+      response = {
+        ok: false,
+        title: 'Task already exists.',
+        message: 'Please make sure that the name is unique.',
+      }
+      return response
+    }
+  }
+
+  return response
+}
+
+export { checkIfTaskExists, createTaskValidation, updateTaskValidation }

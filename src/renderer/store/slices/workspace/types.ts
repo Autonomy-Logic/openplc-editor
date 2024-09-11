@@ -32,7 +32,6 @@ const pouDTOSchema = z.discriminatedUnion('type', [
 ])
 type PouDTO = z.infer<typeof pouDTOSchema>
 
-
 const systemConfigsSchema = z.object({
   OS: z.enum(['win32', 'linux', 'darwin', '']),
   arch: z.enum(['x64', 'arm', '']),
@@ -102,9 +101,13 @@ const workspaceActionsSchema = z.object({
     .function()
     .args(PLCTaskSchema.merge(z.object({ rowToInsert: z.number().optional() })))
     .returns(z.void()),
+  updateTask: z
+    .function()
+    .args(PLCTaskSchema.merge(z.object({ rowId: z.number() })))
+    .returns(z.void()),
   deleteTask: z
     .function()
-    .args((z.object({ rowId: z.number() })))
+    .args(z.object({ rowId: z.number() }))
     .returns(z.void()),
   rearrangeTasks: z
     .function()

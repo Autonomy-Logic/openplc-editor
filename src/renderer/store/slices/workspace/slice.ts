@@ -2,8 +2,13 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { WorkspaceResponse, WorkspaceSlice } from './types'
-import { createTaskValidation } from './utils/tasks'
-import { createGlobalVariableValidation, createVariableValidation, updateVariableValidation } from './utils/variables'
+import { checkIfTaskExists, createTaskValidation } from './utils/tasks'
+import {
+  createGlobalVariableValidation,
+  createVariableValidation,
+  updateGlobalVariableValidation,
+  updateVariableValidation,
+} from './utils/variables'
 
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   workspace: {
@@ -183,7 +188,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           const { scope } = dataToBeUpdated
           switch (scope) {
             case 'global': {
-              const validationResponse = updateVariableValidation(
+              const validationResponse = updateGlobalVariableValidation(
                 workspace.projectData.configuration.resource.globalVariables,
                 dataToBeUpdated.data,
               )
@@ -347,12 +352,60 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+
+    updateTask: (dataToBeUpdated: {
+      name: string
+      triggering: 'Cyclic' | 'Interrupt'
+      interval: string
+      priority: number
+      rowId: number
+      id?: string
+    }): WorkspaceResponse => {
+      const response: WorkspaceResponse = { ok: true }
+
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { name } = dataToBeUpdated
+
+          if (name === '') {
+            console.error('Task name is empty')
+            response.ok = false
+            response.title = 'Task name is empty.'
+            response.message = 'Please make sure that the name is not empty.'
+            return
+          }
+
+          if (checkIfTaskExists(workspace.projectData.configuration.resource.tasks, name)) {
+            console.error(`Task "${name}" already exists`)
+            response.ok = false
+            response.title = 'Task already exists.'
+            response.message = 'Please make sure that the name is unique.'
+            return
+          }
+
+          const { rowId } = dataToBeUpdated
+          if (rowId < 0 || rowId >= workspace.projectData.configuration.resource.tasks.length) {
+            console.error('Invalid rowId')
+            response.ok = false
+            response.title = 'Invalid Task.'
+            response.message = 'The task rowId is out of range.'
+            return
+          }
+
+          workspace.projectData.configuration.resource.tasks[rowId] = {
+            ...workspace.projectData.configuration.resource.tasks[rowId],
+            ...dataToBeUpdated,
+          }
+        }),
+      )
+      return response
+    },
+
     rearrangeTasks: (taskToBeRearranged): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           const { rowId, newIndex } = taskToBeRearranged
 
-         
           if (rowId < 0 || newIndex < 0 || rowId >= workspace.projectData.configuration.resource.tasks.length) {
             console.error('Invalid rowId or newIndex')
             return

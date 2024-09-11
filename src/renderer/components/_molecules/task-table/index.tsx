@@ -1,3 +1,4 @@
+import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCTask } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import {
@@ -10,6 +11,8 @@ import {
 import { useEffect, useRef } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
+import { EditableNameCell, EditablePriorityCell } from './editable-cell'
+import { SelectableTriggerCell } from './selectable-cell'
 
 const columnHelper = createColumnHelper<PLCTask>()
 const columns = [
@@ -19,6 +22,7 @@ const columns = [
     size: 150,
     minSize: 100,
     maxSize: 150,
+    cell: EditableNameCell,
   }),
   columnHelper.accessor('triggering', {
     header: 'Triggering',
@@ -26,6 +30,7 @@ const columns = [
     size: 468,
     minSize: 150,
     maxSize: 468,
+    cell: SelectableTriggerCell,
   }),
   columnHelper.accessor('interval', {
     header: 'Interval',
@@ -40,6 +45,7 @@ const columns = [
     size: 468,
     minSize: 150,
     maxSize: 468,
+    cell: EditablePriorityCell,
   }),
 ]
 
@@ -55,6 +61,9 @@ type PLCTaskTableProps = {
 }
 
 export default function TaskTable({ tableData, selectedRow, handleRowClick }: PLCTaskTableProps) {
+  const {
+    workspaceActions: { updateTask },
+  } = useOpenPLCStore()
   const TaskBodyRef = useRef<HTMLTableSectionElement>(null)
   const TaskTableRowRef = useRef<HTMLTableRowElement>(null)
   const TaskTableHeaderRef = useRef<HTMLTableSectionElement>(null)
@@ -107,14 +116,14 @@ export default function TaskTable({ tableData, selectedRow, handleRowClick }: PL
     setBorders()
   }, [selectedRow])
 
-  // useEffect(() => {
-  //   resetBorders()
-  //   if (TaskTableRowRef.current) {
-  //     setBorders()
-  //   }
-  // }, [])
+  useEffect(() => {
+    resetBorders()
+    if (TaskTableRowRef.current) {
+      setBorders()
+    }
+  }, [])
 
-  const table = useReactTable({
+  const table = useReactTable<PLCTask>({
     columns: columns,
     columnResizeMode: 'onChange',
     data: tableData,
@@ -124,10 +133,22 @@ export default function TaskTable({ tableData, selectedRow, handleRowClick }: PL
       minSize: 80,
       maxSize: 128,
     },
+    meta: {
+      updateData: (rowIndex: number, columnId: string, value: unknown) => {
+        const updatedTask = { ...tableData[rowIndex], [columnId]: value }
+        updateTask({
+          ...updatedTask,
+          rowId: rowIndex,
+        })
+        return {
+          ok: true,
+          message: 'Task updated successfully',
+        }
+      },
+    },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   })
-
   return (
     <Table context='Tasks' className='mr-1'>
       <TableHeader ref={TaskTableHeaderRef}>

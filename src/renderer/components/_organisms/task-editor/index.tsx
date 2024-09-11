@@ -88,7 +88,7 @@ export default function TaskEditor() {
       return
     }
 
-    const task = selectedRow === ROWS_NOT_SELECTED ? tasks[tasks.length - 1] : tasks[selectedRow]
+  const task : PLCTask = selectedRow === ROWS_NOT_SELECTED ? tasks[tasks.length - 1] : tasks[selectedRow]
 
     if (!task) {
       console.error('No task found for the selectedRow:', selectedRow)
@@ -124,22 +124,22 @@ export default function TaskEditor() {
   const handleDeleteTask = () => {
     if (editorTasks.display === 'code') return
 
-    const selectedRowNumber = parseInt(editorTasks.selectedRow)
-    if (selectedRowNumber === ROWS_NOT_SELECTED) return
+    const selectedRow = parseInt(editorTasks.selectedRow)
+    if (selectedRow === ROWS_NOT_SELECTED) return
 
-    const taskToDelete = taskData[selectedRowNumber]
+    const taskToDelete = taskData[selectedRow]
     if (!taskToDelete) {
-      console.error('No task found for the selectedRow:', selectedRowNumber)
+      console.error('No task found for the selectedRow:', selectedRow)
       return
     }
 
     deleteTask({
-      rowId: selectedRowNumber,
+      rowId: selectedRow,
     })
 
     updateModelTasks({
       display: 'table',
-      selectedRow: ROWS_NOT_SELECTED,
+      selectedRow: selectedRow - 1,
     })
   }
   const handleRowClick = (row: HTMLTableRowElement) => {
