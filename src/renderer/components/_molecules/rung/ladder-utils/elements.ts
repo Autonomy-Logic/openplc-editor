@@ -3,7 +3,7 @@ import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom
 import { PlaceholderNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/placeholder'
 import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 import type { FlowState } from '@root/renderer/store/slices'
-import type { Edge, Node } from '@xyflow/react'
+import type { Edge, Node, ReactFlowInstance } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 import { toInteger } from 'lodash'
 import { v4 as uuidv4 } from 'uuid'
@@ -864,11 +864,7 @@ const appendSerialConnection = (
 /**
  * Exported functions to control the rung elements
  */
-export const addNewElement = (
-  rung: FlowState,
-  newElementType: string,
-  defaultViewportBounds: [number, number],
-): { nodes: Node[]; edges: Edge[] } => {
+export const addNewElement = (rung: FlowState, newElementType: string): { nodes: Node[]; edges: Edge[] } => {
   const [selectedPlaceholderIndex, selectedPlaceholder] =
     Object.entries(rung.nodes).find(
       (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
@@ -894,17 +890,17 @@ export const addNewElement = (
     newNodes = serialNodes
   }
 
-  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, defaultViewportBounds)
+  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
 
   return { nodes: newNodes, edges: newEdges }
 }
 
-export const removeElement = (rung: FlowState, element: Node, defaultViewportBounds: [number, number]) => {
+export const removeElement = (rung: FlowState, element: Node) => {
   const rails = rung.nodes.filter((node) => node.type === 'powerRail')
   const nodes = rung.nodes.filter((node) => node.type !== 'powerRail')
 
   let newNodes = nodes.filter((n) => n.id !== element.id)
-  const newRails = changeRailBounds(rails[1], [rails[0], ...newNodes], defaultViewportBounds)
+  const newRails = changeRailBounds(rails[1], [rails[0], ...newNodes], rung.defaultBounds)
 
   newNodes = [rails[0], ...newNodes, newRails]
 
@@ -920,7 +916,7 @@ export const removeElement = (rung: FlowState, element: Node, defaultViewportBou
   newNodes = auxNodes
   newEdges = auxEdges
 
-  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, defaultViewportBounds)
+  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
 
   return {
     nodes: newNodes,
@@ -928,16 +924,12 @@ export const removeElement = (rung: FlowState, element: Node, defaultViewportBou
   }
 }
 
-export const removeElements = (
-  rungLocal: FlowState,
-  nodes: Node[],
-  defaultBounds: [number, number],
-): { nodes: Node[]; edges: Edge[] } => {
+export const removeElements = (rungLocal: FlowState, nodes: Node[]): { nodes: Node[]; edges: Edge[] } => {
   if (!nodes) return { nodes: rungLocal.nodes, edges: rungLocal.edges }
   const rungState = rungLocal
 
   for (const node of nodes) {
-    const { nodes: newNodes, edges: newEdges } = removeElement(rungState, node, defaultBounds)
+    const { nodes: newNodes, edges: newEdges } = removeElement(rungState, node)
     rungState.nodes = newNodes
     rungState.edges = newEdges
   }
@@ -956,7 +948,12 @@ export const renderPlaceholderNodes = (rung: FlowState): Node[] => {
 
   nodes.forEach((node) => {
     let placeholders: Node[] = []
-    if (node.type === 'placeholder' || node.type === 'parallelPlaceholder' || node.dragging) {
+    if (
+      node.type === 'placeholder' ||
+      node.type === 'parallelPlaceholder' ||
+      nodes.find((n) => n.id === `copycat_${node.id}`)
+    ) {
+      if (nodes.find((n) => n.id === `copycat_${node.id}`)) placeholderNodes.push(node)
       return
     }
 
@@ -1057,13 +1054,36 @@ export const removePlaceholderNodes = (nodes: Node[]): Node[] => {
   return nodesNoPlaceholder
 }
 
+export const searchNearestPlaceholder = (
+  rung: FlowState,
+  reactFlowInstance: ReactFlowInstance,
+  position: { x: number; y: number },
+) => {
+  const placeholderNodes = rung.nodes.filter(
+    (node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder',
+  )
+  if (placeholderNodes.length === 0) return
+
+  const mousePosition = reactFlowInstance?.screenToFlowPosition({ x: position.x, y: position.y })
+  if (!mousePosition) return
+
+  const closestPlaceholder = placeholderNodes.reduce((prev, curr) => {
+    const prevDistance = Math.hypot(prev.position.x - mousePosition.x, prev.position.y - mousePosition.y)
+    const currDistance = Math.hypot(curr.position.x - mousePosition.x, curr.position.y - mousePosition.y)
+    return prevDistance < currDistance ? prev : curr
+  })
+  if (!closestPlaceholder) return
+
+  return closestPlaceholder
+}
+
 export const onDragStartElement = (rung: FlowState, node: Node) => {
   if (!node.draggable) return rung
 
   // Set a new node at the correct place and disconnect the node from the previous one
   const copycatNode = { ...node, id: `copycat_${node.id}`, dragging: false }
   const nodeIndex = rung.nodes.findIndex((n) => n.id === node.id)
-  const newNodes = [...rung.nodes]
+  let newNodes = [...rung.nodes]
   newNodes.splice(nodeIndex, 0, copycatNode)
 
   const newEdges = [...rung.edges]
@@ -1076,9 +1096,105 @@ export const onDragStartElement = (rung: FlowState, node: Node) => {
     }
   })
 
+  newNodes = renderPlaceholderNodes({ ...rung, nodes: newNodes, edges: newEdges })
+
   return { nodes: newNodes, edges: newEdges }
 }
 
-export const onDragElement = (rung: FlowState, node: Node) => {
-  console.log('onDragElement', node, rung)
+export const onDragElement = (
+  rung: FlowState,
+  reactFlowInstance: ReactFlowInstance,
+  position: { x: number; y: number },
+) => {
+  return searchNearestPlaceholder(rung, reactFlowInstance, position)
+}
+
+export const onDragStopElement = (rung: FlowState, node: Node) => {
+  const [selectedPlaceholderIndex, selectedPlaceholder] =
+    Object.entries(rung.nodes).find(
+      (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
+    ) ?? []
+  if (!selectedPlaceholder || !selectedPlaceholderIndex) return { nodes: rung.nodes, edges: rung.edges }
+
+  let newNodes = [...rung.nodes]
+  let newEdges = [...rung.edges]
+
+  // Find copycat node
+  const copycatNode = newNodes.find((n) => n.id === `copycat_${node.id}`)
+  if (!copycatNode) return { nodes: newNodes, edges: newEdges }
+
+  // Remove the old node block
+  newNodes = newNodes.filter((n) => n.id !== node.id)
+
+  // Check if the selected placeholder is the same as the copycat node
+  if ((selectedPlaceholder as PlaceholderNode).data.relatedNode?.id === copycatNode.id) {
+    newNodes[newNodes.indexOf(copycatNode)] = {
+      ...node,
+      id: node.id,
+      dragging: false,
+    }
+    newEdges.forEach((edge, index) => {
+      if (edge.source === copycatNode.id) {
+        newEdges[index] = { ...edge, source: node.id }
+      }
+      if (edge.target === copycatNode.id) {
+        newEdges[index] = { ...edge, target: node.id }
+      }
+    })
+    newNodes = removePlaceholderNodes(newNodes)
+    newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
+    return { nodes: newNodes, edges: newEdges }
+  }
+
+  if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
+    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnection(
+      {
+        ...rung,
+        nodes: newNodes,
+        edges: newEdges,
+      },
+      node.type ?? '',
+      {
+        selectedPlaceholder,
+        selectedPlaceholderIndex,
+      },
+    )
+    newEdges = parallelEdges
+    newNodes = parallelNodes
+  } else {
+    const { nodes: serialNodes, edges: serialEdges } = appendSerialConnection(
+      {
+        ...rung,
+        nodes: newNodes,
+        edges: newEdges,
+      },
+      node.type ?? '',
+      {
+        selectedPlaceholder,
+        selectedPlaceholderIndex,
+      },
+    )
+    newEdges = serialEdges
+    newNodes = serialNodes
+  }
+
+  // If the selected placeholder is not the same as the copycat node, remove the copycat node and the old one
+  const { nodes: removedCopycatNodes, edges: removedCopycatEdges } = removeElement(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    copycatNode,
+  )
+  newNodes = removedCopycatNodes
+  newEdges = removedCopycatEdges
+
+  const { nodes: auxNodes, edges: auxEdges } = removeEmptyParallelConnections({
+    ...rung,
+    nodes: newNodes,
+    edges: newEdges,
+  })
+  newNodes = auxNodes
+  newEdges = auxEdges
+
+  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
+
+  return { nodes: newNodes, edges: newEdges }
 }
