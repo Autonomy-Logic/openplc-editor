@@ -125,7 +125,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const handleNodeDragStop = (node: FlowNode) => {
     const result = onDragStopElement(rungLocal, node)
-    console.log('result', result)
     setRungLocal((rung) => ({ ...rung, nodes: result.nodes, edges: result.edges }))
   }
 
@@ -149,7 +148,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
       const { relatedTarget } = event
       if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
-      console.log('SAI')
       const nodes = removePlaceholderNodes(rungLocal.nodes)
       setRungLocal((rung) => ({ ...rung, nodes }))
     },

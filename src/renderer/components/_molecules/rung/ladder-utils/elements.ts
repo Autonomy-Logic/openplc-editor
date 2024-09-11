@@ -520,6 +520,7 @@ const removeEmptyParallelConnections = (rung: FlowState) => {
 
   let newNodes = [...nodes]
   let newEdges = [...edges]
+
   nodes.forEach((node) => {
     if (node.type === 'parallel') {
       const parallelNode = node as ParallelNode
@@ -656,9 +657,7 @@ const startParallelConnection = (
   let newEdges = [...rung.edges]
 
   // Get the node above the selected placeholder
-  const aboveNode = rung.nodes.find(
-    (node) => node.id === getPreviousElement(rung.nodes, toInteger(selectedPlaceholderIndex)).id,
-  )
+  const aboveNode = selectedPlaceholder.data.relatedNode as Node
   if (!aboveNode) return { nodes: newNodes, edges: newEdges }
   // Get the edges of the above node
   const aboveNodeTargetEdge = newEdges.filter((edge) => edge.target === aboveNode.id)
@@ -1089,10 +1088,10 @@ export const onDragStartElement = (rung: FlowState, node: Node) => {
   const newEdges = [...rung.edges]
   rung.edges.forEach((edge, index) => {
     if (edge.source === node.id) {
-      newEdges[index] = { ...edge, source: copycatNode.id }
+      newEdges[index] = { ...edge, source: copycatNode.id, id: `copycat_${edge.id}` }
     }
     if (edge.target === node.id) {
-      newEdges[index] = { ...edge, target: copycatNode.id }
+      newEdges[index] = { ...edge, target: copycatNode.id, id: `copycat_${edge.id}` }
     }
   })
 
@@ -1119,11 +1118,34 @@ export const onDragStopElement = (rung: FlowState, node: Node) => {
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
+  console.log(
+    '===== START DRAG STOP =====',
+    '\n',
+    'nodes: ',
+    newNodes,
+    '\n',
+    'edges: ',
+    newEdges,
+    '\n',
+    'selectedPlaceholder: ',
+    selectedPlaceholder,
+    '\n',
+    'selectedPlaceholderIndex: ',
+    selectedPlaceholderIndex,
+    '\n',
+    'node: ',
+    node,
+    '\n',
+    'nodeIndex: ',
+    newNodes.findIndex((n) => n.id === node.id),
+  )
+
   // Find copycat node
   const copycatNode = newNodes.find((n) => n.id === `copycat_${node.id}`)
   if (!copycatNode) return { nodes: newNodes, edges: newEdges }
 
   // Remove the old node block
+  const oldNodeIndex = newNodes.findIndex((n) => n.id === node.id)
   newNodes = newNodes.filter((n) => n.id !== node.id)
 
   // Check if the selected placeholder is the same as the copycat node
@@ -1135,14 +1157,15 @@ export const onDragStopElement = (rung: FlowState, node: Node) => {
     }
     newEdges.forEach((edge, index) => {
       if (edge.source === copycatNode.id) {
-        newEdges[index] = { ...edge, source: node.id }
+        newEdges[index] = { ...edge, source: node.id, id: edge.id.replace('copycat_', '') }
       }
       if (edge.target === copycatNode.id) {
-        newEdges[index] = { ...edge, target: node.id }
+        newEdges[index] = { ...edge, target: node.id, id: edge.id.replace('copycat_', '') }
       }
     })
     newNodes = removePlaceholderNodes(newNodes)
     newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
+    console.log('===== END DRAG STOP =====', '\n', 'nodes: ', newNodes, '\n', 'edges: ', newEdges, '\n\n')
     return { nodes: newNodes, edges: newEdges }
   }
 
@@ -1156,7 +1179,10 @@ export const onDragStopElement = (rung: FlowState, node: Node) => {
       node.type ?? '',
       {
         selectedPlaceholder,
-        selectedPlaceholderIndex,
+        selectedPlaceholderIndex:
+          oldNodeIndex < toInteger(selectedPlaceholderIndex)
+            ? (toInteger(selectedPlaceholderIndex) - 1).toString()
+            : selectedPlaceholderIndex,
       },
     )
     newEdges = parallelEdges
@@ -1171,7 +1197,10 @@ export const onDragStopElement = (rung: FlowState, node: Node) => {
       node.type ?? '',
       {
         selectedPlaceholder,
-        selectedPlaceholderIndex,
+        selectedPlaceholderIndex:
+          oldNodeIndex < toInteger(selectedPlaceholderIndex)
+            ? (toInteger(selectedPlaceholderIndex) - 1).toString()
+            : selectedPlaceholderIndex,
       },
     )
     newEdges = serialEdges
@@ -1186,15 +1215,9 @@ export const onDragStopElement = (rung: FlowState, node: Node) => {
   newNodes = removedCopycatNodes
   newEdges = removedCopycatEdges
 
-  const { nodes: auxNodes, edges: auxEdges } = removeEmptyParallelConnections({
-    ...rung,
-    nodes: newNodes,
-    edges: newEdges,
-  })
-  newNodes = auxNodes
-  newEdges = auxEdges
+  newNodes = newNodes.filter((n) => n.id !== node.id)
 
-  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
+  console.log('===== END DRAG STOP =====', '\n', 'nodes: ', newNodes, '\n', 'edges: ', newEdges, '\n\n')
 
   return { nodes: newNodes, edges: newEdges }
 }
