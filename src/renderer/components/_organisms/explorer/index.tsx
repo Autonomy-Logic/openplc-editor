@@ -40,7 +40,7 @@ const Explorer = ({ collapse }: explorerProps): ReactElement => {
         </ResizablePanel>
       </ResizablePanelGroup>
       <div className='flex h-36 w-full flex-col p-2'>
-        <p className='h-full w-full rounded-lg border-[1.5px] border-brand bg-inherit p-1'>Info panel</p>
+        <p className='h-full w-full rounded-lg border-2 border-brand bg-inherit p-1'>Info panel</p>
       </div>
     </ResizablePanel>
   )
