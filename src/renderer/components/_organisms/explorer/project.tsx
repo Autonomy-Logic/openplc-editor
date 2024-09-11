@@ -17,17 +17,6 @@ const Project = () => {
   } = useOpenPLCStore()
   const Name = 'Project Name'
 
-  // const editorType = {
-  //   il: 'plc-textual',
-  //   st: 'plc-textual',
-  //   ld: 'plc-graphical',
-  //   sfc: 'plc-graphical',
-  //   fbd: 'plc-graphical',
-  //   array: 'plc-datatype',
-  //   enumerated: 'plc-datatype',
-  //   structure: 'plc-datatype',
-  // } as const
-
   const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
     const tabToBeCreated = {
       name,
@@ -67,7 +56,7 @@ const Project = () => {
         </div>
       </div>
       {/* Data display */}
-      <div id='project-tree-container' className='flex h-full w-full flex-col overflow-auto pr-1 mb-1'>
+      <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto pr-1'>
         <ProjectTreeRoot label={Name}>
           <ProjectTreeBranch branchTarget='function'>
             {pous

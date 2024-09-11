@@ -2,6 +2,7 @@ import { LegacyRef, ReactElement } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../panel'
+import { Info } from './info'
 import { Library } from './library'
 import { Project } from './project'
 
@@ -39,9 +40,7 @@ const Explorer = ({ collapse }: explorerProps): ReactElement => {
           <Library />
         </ResizablePanel>
       </ResizablePanelGroup>
-      <div className='flex h-36 w-full flex-col p-2'>
-        <p className='h-full w-full rounded-lg border-2 border-brand bg-inherit p-1'>Info panel</p>
-      </div>
+      <Info />
     </ResizablePanel>
   )
 }
