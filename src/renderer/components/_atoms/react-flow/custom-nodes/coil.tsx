@@ -143,7 +143,7 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
     position: Position.Right,
     isConnectable: false,
     type: 'source',
-    glbX: handleX,
+    glbX: handleX + COIL_BLOCK_WIDTH,
     glbY: handleY,
     relX: COIL_BLOCK_WIDTH,
     relY: COIL_CONNECTOR_Y,

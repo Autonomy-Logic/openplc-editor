@@ -117,7 +117,7 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
     position: Position.Right,
     isConnectable: false,
     type: 'source',
-    glbX: handleX,
+    glbX: handleX + CONTACT_BLOCK_WIDTH,
     glbY: handleY,
     relX: CONTACT_BLOCK_WIDTH,
     relY: CONTACT_CONNECTOR_Y,

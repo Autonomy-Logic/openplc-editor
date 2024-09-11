@@ -646,7 +646,7 @@ const removeEmptyParallelConnections = (rung: FlowState) => {
   return { nodes: newNodes, edges: newEdges }
 }
 
-const startParallelConnection = (
+const startParallelConnectionByNodeType = (
   rung: FlowState,
   newElementType: string,
   placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
@@ -683,13 +683,188 @@ const startParallelConnection = (
     ...newElementPosition,
   })
 
-  // Build new above node
+  // Build new above node keeping the old data
   const newAboveNodePosition = getNodePositionBasedOnPreviousNode(openParallelNode, aboveNode, 'serial')
-  const newAboveNode = buildGenericNode({
+  const buildedAboveNode = buildGenericNode({
     nodeType: aboveNode.type ?? '',
     id: `${aboveNode.type?.toUpperCase()}_${uuidv4()}`,
     ...newAboveNodePosition,
   })
+  const newAboveNode = {
+    ...buildedAboveNode,
+    position: { x: newAboveNodePosition.posX, y: newAboveNodePosition.posY },
+    data: {
+      ...aboveNode.data,
+      handles: buildedAboveNode.data.handles,
+      inputConnector: buildedAboveNode.data.inputConnector,
+      outputConnector: buildedAboveNode.data.outputConnector,
+    },
+  }
+
+  // Build parallel close node
+  const closeParallelPositionSerial = getNodePositionBasedOnPreviousNode(newAboveNode, 'parallel', 'serial')
+  const closeParallelPositionParallel = getNodePositionBasedOnPreviousNode(selectedPlaceholder, 'parallel', 'serial')
+  const closeParallelNode = nodesBuilder.parallel({
+    id: `PARALLEL_CLOSE_${uuidv4()}`,
+    type: 'close',
+    posX:
+      closeParallelPositionSerial.posX > closeParallelPositionParallel.posX
+        ? closeParallelPositionSerial.posX
+        : closeParallelPositionParallel.posX,
+    posY: closeParallelPositionSerial.posY,
+    handleX:
+      closeParallelPositionSerial.handleX > closeParallelPositionParallel.handleX
+        ? closeParallelPositionSerial.handleX
+        : closeParallelPositionParallel.handleX,
+    handleY: closeParallelPositionSerial.handleY,
+  })
+
+  // Add reference to the open parallel node
+  openParallelNode.data.parallelCloseReference = closeParallelNode.id
+  closeParallelNode.data.parallelOpenReference = openParallelNode.id
+
+  // get the related node
+  const relatedNode = (selectedPlaceholder as PlaceholderNode).data.relatedNode as Node
+  const { nodes: relatedNodePreviousNodes, edges: relatedNodePreviousEdges } = getPreviousElementsByEdges(
+    { ...rung, nodes: newNodes },
+    relatedNode,
+  )
+  if (!relatedNodePreviousNodes || !relatedNodePreviousEdges) return { nodes: newNodes, edges: newEdges }
+
+  // Insert the new nodes
+  // first insert the new nodes
+  newNodes.splice(toInteger(selectedPlaceholderIndex), 1, openParallelNode, newAboveNode, newElement, closeParallelNode)
+  // then remove the old above node
+  newNodes = newNodes.filter((node) => node.id !== aboveNode.id)
+  // finally remove the placeholder nodes
+  newNodes = removePlaceholderNodes(newNodes)
+
+  // Create the new edges
+  // clear old edges of the above node
+  newEdges = newEdges.filter((edge) => edge.source !== aboveNode.id && edge.target !== aboveNode.id)
+
+  // serial connections
+  newEdges = connectNodes(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    aboveNodeTargetEdge[0].source,
+    openParallelNode.id,
+    relatedNodePreviousNodes.length > 0 &&
+      isNodeOfType(relatedNodePreviousNodes[0], 'parallel') &&
+      (relatedNodePreviousNodes[0] as ParallelNode).data.type === 'open' &&
+      relatedNodePreviousEdges[0].sourceHandle ===
+        (relatedNodePreviousNodes[0] as ParallelNode).data.parallelOutputConnector?.id
+      ? 'parallel'
+      : 'serial',
+    {
+      sourceHandle: aboveNodeTargetEdge[0].sourceHandle ?? undefined,
+      targetHandle: openParallelNode.data.inputConnector?.id,
+    },
+  )
+  newEdges = connectNodes(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    openParallelNode.id,
+    newAboveNode.id,
+    'serial',
+    {
+      sourceHandle: openParallelNode.data.outputConnector?.id,
+      targetHandle: newAboveNode.data.inputConnector?.id,
+    },
+  )
+  newEdges = connectNodes(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    newAboveNode.id,
+    closeParallelNode.id,
+    'serial',
+    {
+      sourceHandle: newAboveNode.data.outputConnector?.id,
+      targetHandle: closeParallelNode.data.inputConnector?.id,
+    },
+  )
+  newEdges = connectNodes(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    closeParallelNode.id,
+    aboveNodeSourceEdge[0].target,
+    'serial',
+    {
+      sourceHandle: closeParallelNode.data.outputConnector?.id,
+      targetHandle: aboveNodeSourceEdge[0].targetHandle ?? undefined,
+    },
+  )
+
+  // parallel connections
+  newEdges = connectNodes(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    openParallelNode.id,
+    newElement.id,
+    'parallel',
+    {
+      sourceHandle: openParallelNode.data.parallelOutputConnector?.id,
+      targetHandle: newElement.data.inputConnector?.id,
+    },
+  )
+  newEdges = connectNodes(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    newElement.id,
+    closeParallelNode.id,
+    'parallel',
+    {
+      sourceHandle: newElement.data.outputConnector?.id,
+      targetHandle: closeParallelNode.data.parallelInputConnector?.id,
+    },
+  )
+
+  return { nodes: newNodes, edges: newEdges }
+}
+
+const startParallelConnectionKeepingTheNode = (
+  rung: FlowState,
+  node: Node,
+  placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
+) => {
+  const { selectedPlaceholder, selectedPlaceholderIndex } = placeholder
+
+  let newNodes = [...rung.nodes]
+  let newEdges = [...rung.edges]
+
+  // Get the node above the selected placeholder
+  const aboveNode = selectedPlaceholder.data.relatedNode as Node
+  if (!aboveNode) return { nodes: newNodes, edges: newEdges }
+  // Get the edges of the above node
+  const aboveNodeTargetEdge = newEdges.filter((edge) => edge.target === aboveNode.id)
+  const aboveNodeSourceEdge = newEdges.filter((edge) => edge.source === aboveNode.id)
+
+  // Build parallel open node based on the node that antecede the above node or the above node itself
+  const openParallelPosition = getNodePositionBasedOnPreviousNode(
+    newNodes.find((node) => node.id === aboveNodeTargetEdge[0].source) ?? aboveNode,
+    'parallel',
+    'serial',
+  )
+  const openParallelNode = buildGenericNode({
+    nodeType: 'parallel',
+    id: `PARALLEL_OPEN_${uuidv4()}`,
+    ...openParallelPosition,
+  }) as ParallelNode
+
+  // Build new element node
+  const newElement = node as Node<BasicNodeData>
+
+  // Build new above node
+  const newAboveNodePosition = getNodePositionBasedOnPreviousNode(openParallelNode, aboveNode, 'serial')
+  const buildedAboveNode = buildGenericNode({
+    nodeType: aboveNode.type ?? '',
+    id: `${aboveNode.type?.toUpperCase()}_${uuidv4()}`,
+    ...newAboveNodePosition,
+  })
+  const newAboveNode = {
+    ...buildedAboveNode,
+    position: { x: newAboveNodePosition.posX, y: newAboveNodePosition.posY },
+    data: {
+      ...aboveNode.data,
+      handles: buildedAboveNode.data.handles,
+      inputConnector: buildedAboveNode.data.inputConnector,
+      outputConnector: buildedAboveNode.data.outputConnector,
+    },
+  }
 
   // Build parallel close node
   const closeParallelPositionSerial = getNodePositionBasedOnPreviousNode(newAboveNode, 'parallel', 'serial')
@@ -860,7 +1035,7 @@ const appendSerialConnectionByNodeType = (
   return { nodes: newNodes, edges: newEdges }
 }
 
-const appendSerialConnectionKeepingNode = (
+const appendSerialConnectionKeepingTheNode = (
   rung: FlowState,
   node: Node,
   placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
@@ -870,35 +1045,7 @@ const appendSerialConnectionKeepingNode = (
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
-  const elementNewPosition = getNodePositionBasedOnPlaceholderNode(selectedPlaceholder, node)
-  console.log(elementNewPosition)
-  const elementData = node.data as BasicNodeData
-  const newElementHandlesPosition = elementData.handles.map((handle) => {
-    return {
-      ...handle,
-      glbPosition: {
-        x:
-          handle.position === Position.Left
-            ? elementNewPosition.handleX
-            : elementNewPosition.handleX + (node.width ?? 0),
-        y: elementNewPosition.handleY,
-      },
-    }
-  })
-  const newElement = {
-    ...node,
-    position: { x: elementNewPosition.posX, y: elementNewPosition.posY },
-    data: {
-      ...elementData,
-      handles: newElementHandlesPosition,
-      inputConnector: newElementHandlesPosition.find(
-        (handle) => handle.id === (node.data as BasicNodeData).inputConnector?.id,
-      ),
-      outputConnector: newElementHandlesPosition.find(
-        (handle) => handle.id === (node.data as BasicNodeData).outputConnector?.id,
-      ),
-    },
-  }
+  const newElement = node
   newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newElement)
   newNodes = removePlaceholderNodes(newNodes)
 
@@ -948,7 +1095,7 @@ export const addNewElement = (rung: FlowState, newElementType: string): { nodes:
   let newEdges = [...rung.edges]
 
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
-    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnection(rung, newElementType, {
+    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnectionByNodeType(rung, newElementType, {
       selectedPlaceholder,
       selectedPlaceholderIndex,
     })
@@ -1192,28 +1339,6 @@ export const onDragStopElement = (rung: FlowState, node: Node) => {
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
-  console.log(
-    '===== START DRAG STOP =====',
-    '\n',
-    'nodes: ',
-    newNodes,
-    '\n',
-    'edges: ',
-    newEdges,
-    '\n',
-    'selectedPlaceholder: ',
-    selectedPlaceholder,
-    '\n',
-    'selectedPlaceholderIndex: ',
-    selectedPlaceholderIndex,
-    '\n',
-    'node: ',
-    node,
-    '\n',
-    'nodeIndex: ',
-    newNodes.findIndex((n) => n.id === node.id),
-  )
-
   // Find copycat node
   const copycatNode = newNodes.find((n) => n.id === `copycat_${node.id}`)
   if (!copycatNode) return { nodes: newNodes, edges: newEdges }
@@ -1239,18 +1364,17 @@ export const onDragStopElement = (rung: FlowState, node: Node) => {
     })
     newNodes = removePlaceholderNodes(newNodes)
     newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
-    console.log('===== END DRAG STOP =====', '\n', 'nodes: ', newNodes, '\n', 'edges: ', newEdges, '\n\n')
     return { nodes: newNodes, edges: newEdges }
   }
 
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
-    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnection(
+    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnectionKeepingTheNode(
       {
         ...rung,
         nodes: newNodes,
         edges: newEdges,
       },
-      node.type ?? '',
+      node,
       {
         selectedPlaceholder,
         selectedPlaceholderIndex:
@@ -1262,7 +1386,7 @@ export const onDragStopElement = (rung: FlowState, node: Node) => {
     newEdges = parallelEdges
     newNodes = parallelNodes
   } else {
-    const { nodes: serialNodes, edges: serialEdges } = appendSerialConnectionKeepingNode(
+    const { nodes: serialNodes, edges: serialEdges } = appendSerialConnectionKeepingTheNode(
       {
         ...rung,
         nodes: newNodes,
@@ -1288,8 +1412,6 @@ export const onDragStopElement = (rung: FlowState, node: Node) => {
   )
   newNodes = removedCopycatNodes
   newEdges = removedCopycatEdges
-
-  console.log('===== END DRAG STOP =====', '\n', 'nodes: ', newNodes, '\n', 'edges: ', newEdges, '\n\n')
 
   return { nodes: newNodes, edges: newEdges }
 }
