@@ -333,12 +333,26 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       return response
     },
 
+    deleteTask: (taskToBeDeleted: { rowId: number }): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { rowId } = taskToBeDeleted
+
+          if (rowId < 0 || rowId >= workspace.projectData.configuration.resource.tasks.length) {
+            console.error('Invalid rowId')
+            return
+          }
+
+          workspace.projectData.configuration.resource.tasks.splice(rowId, 1)
+        }),
+      )
+    },
     rearrangeTasks: (taskToBeRearranged): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           const { rowId, newIndex } = taskToBeRearranged
 
-          // Validate indexes
+         
           if (rowId < 0 || newIndex < 0 || rowId >= workspace.projectData.configuration.resource.tasks.length) {
             console.error('Invalid rowId or newIndex')
             return

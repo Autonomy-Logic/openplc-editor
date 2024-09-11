@@ -22,7 +22,7 @@ export default function TaskEditor() {
       },
     },
     editorActions: { updateModelTasks },
-    workspaceActions: { createTask, rearrangeTasks },
+    workspaceActions: { createTask, rearrangeTasks, deleteTask },
   } = useOpenPLCStore()
 
   const [taskData, setTaskData] = useState<PLCTask[]>([])
@@ -121,13 +121,34 @@ export default function TaskEditor() {
       selectedRow: selectedRow + 1,
     })
   }
+  const handleDeleteTask = () => {
+    if (editorTasks.display === 'code') return
+
+    const selectedRowNumber = parseInt(editorTasks.selectedRow)
+    if (selectedRowNumber === ROWS_NOT_SELECTED) return
+
+    const taskToDelete = taskData[selectedRowNumber]
+    if (!taskToDelete) {
+      console.error('No task found for the selectedRow:', selectedRowNumber)
+      return
+    }
+
+    deleteTask({
+      rowId: selectedRowNumber,
+    })
+
+    updateModelTasks({
+      display: 'table',
+      selectedRow: ROWS_NOT_SELECTED,
+    })
+  }
   const handleRowClick = (row: HTMLTableRowElement) => {
     updateModelTasks({
       display: 'table',
       selectedRow: parseInt(row.id),
     })
   }
-  console.log(taskData)
+
   return (
     <div aria-label='Tasks editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
       <div aria-label='Tasks editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
@@ -144,7 +165,9 @@ export default function TaskEditor() {
               <TableActionButton
                 aria-label='Remove Tasks table row button'
                 disabled={parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED}
-                onClick={() => {}}
+                onClick={() => {
+                  handleDeleteTask()
+                }}
               >
                 <MinusIcon />
               </TableActionButton>
