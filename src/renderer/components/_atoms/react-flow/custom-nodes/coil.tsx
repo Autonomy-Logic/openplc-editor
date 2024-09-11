@@ -94,12 +94,16 @@ const COIL_TYPES: CoilType = {
   },
 }
 
-export const Coil = ({ selected, data }: CoilProps) => {
+export const Coil = ({ selected, data, id }: CoilProps) => {
   const [coilLabelValue, setCoilLabelValue] = useState<string>('')
   const coil = COIL_TYPES[data.variant]
 
   return (
-    <div className='relative'>
+    <div
+      className={cn('relative', {
+        'opacity-40': id.startsWith('copycat'),
+      })}
+    >
       <div
         className={cn(
           'rounded-[1px] border border-transparent hover:outline hover:outline-2 hover:outline-offset-[5px] hover:outline-brand',
@@ -163,6 +167,6 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
     },
     width: COIL_BLOCK_WIDTH,
     height: COIL_BLOCK_HEIGHT,
-    draggable: false,
+    draggable: true,
   }
 }

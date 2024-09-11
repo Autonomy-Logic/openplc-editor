@@ -68,12 +68,16 @@ const CONTACT_TYPES: ContactType = {
   },
 }
 
-export const Contact = ({ selected, data }: ContactProps) => {
+export const Contact = ({ selected, data, id }: ContactProps) => {
   const [contactLabelValue, setContactLabelValue] = useState<string>('')
   const contact = CONTACT_TYPES[data.variant]
 
   return (
-    <div className='relative'>
+    <div
+      className={cn('relative', {
+        'opacity-40': id.startsWith('copycat'),
+      })}
+    >
       <div
         className={cn(
           'rounded-[1px] border border-transparent hover:outline hover:outline-2 hover:outline-offset-[5px] hover:outline-brand',
@@ -137,6 +141,6 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
     },
     width: CONTACT_BLOCK_WIDTH,
     height: CONTACT_BLOCK_HEIGHT,
-    draggable: false,
+    draggable: true,
   }
 }
