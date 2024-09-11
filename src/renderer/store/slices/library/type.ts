@@ -1,8 +1,27 @@
+import {
+  AdditionalFunctionBlocksLibrarySchema,
+  ArduinoFunctionBlocksLibrarySchema,
+  CommunicationBlocksLibrarySchema,
+  JaguarLibrarySchema,
+  MQTTLibrarySchema,
+  P1AMLibrarySchema,
+  SequentMicrosystemsModulesLibrarySchema,
+  StandardFunctionBlocksLibrarySchema,
+} from '@process:renderer/data/library'
 import { z } from 'zod'
 
 const libraryStateSchema = z.object({
   libraries: z.object({
-    system: z.array(z.string()), // This is the libraries that are built-in to the system
+    system: z.tuple([
+      AdditionalFunctionBlocksLibrarySchema,
+      ArduinoFunctionBlocksLibrarySchema,
+      CommunicationBlocksLibrarySchema,
+      JaguarLibrarySchema,
+      MQTTLibrarySchema,
+      P1AMLibrarySchema,
+      SequentMicrosystemsModulesLibrarySchema,
+      StandardFunctionBlocksLibrarySchema,
+    ]), // This is the libraries that are built-in to the system
     user: z.array(z.string()), // This is the libraries that the user has installed
   }),
 })
@@ -18,5 +37,5 @@ type LibrarySlice = LibraryState & {
   libraryActions: LibraryActions
 }
 
-export { libraryActionsSchema,libraryStateSchema }
+export { libraryActionsSchema, libraryStateSchema }
 export type { LibraryActions, LibrarySlice, LibraryState }

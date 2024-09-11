@@ -7,7 +7,7 @@ const P1AMPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(P1AMVariablesSchema),
 })
 
-const P1AMLibrarySchema = BaseLibrarySchema.extend({
+export const P1AMLibrarySchema = BaseLibrarySchema.extend({
   pous: z.array(P1AMPouSchema),
 })
 

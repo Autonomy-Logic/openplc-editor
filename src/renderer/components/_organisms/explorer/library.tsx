@@ -21,8 +21,9 @@ const Library = () => {
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
 
   return (
-    <div className='w-full'>
-      <div id='library-actions-container' className='relative z-10 my-3 flex w-full justify-normal gap-2 px-2'>
+    <div id='library-container' className='flex h-full w-full flex-col pr-2'>
+      {/* Actions handler */}
+      <div id='library-actions-container' className='relative z-10 my-3 flex w-full justify-normal gap-2 pl-2'>
         <div
           id='library-name-container'
           className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 dark:bg-brand-dark'
@@ -39,38 +40,41 @@ const Library = () => {
           <MagnifierIcon />
         </div>
       </div>
-      <LibraryRoot>
-        <LibraryFolder label='Standard Function Blocks'>
-          {StandardFunctionBlocks.pous.map((block) => (
-            <LibraryFile
-              key={block.name}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData('text/plain', block.body)
-              }}
-              label={block.name}
-              isSelected={selectedFileKey === block.name}
-              onSelect={() => setSelectedFileKey(block.name)}
-            />
-          ))}
-        </LibraryFolder>
-        {/* {treeData.map((data) => (
-          <LibraryFolder key={data.key} label={data.label} title={data.title}>
-            {data.children.map((child) => (
+      {/* Data display */}
+      <div id='library-tree-container' className='flex h-full w-full flex-col overflow-auto pr-1'>
+        <LibraryRoot>
+          <LibraryFolder label='Standard Function Blocks'>
+            {StandardFunctionBlocks.pous.map((block) => (
               <LibraryFile
+                key={block.name}
                 draggable
                 onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', child.children)
+                  e.dataTransfer.setData('text/plain', block.body)
                 }}
-                key={child.key}
-                label={child.label}
-                isSelected={selectedFileKey === child.key}
-                onSelect={() => setSelectedFileKey(child.key)}
+                label={block.name}
+                isSelected={selectedFileKey === block.name}
+                onSelect={() => setSelectedFileKey(block.name)}
               />
             ))}
           </LibraryFolder>
-        ))} */}
-      </LibraryRoot>
+          {/* {treeData.map((data) => (
+          <LibraryFolder key={data.key} label={data.label} title={data.title}>
+          {data.children.map((child) => (
+            <LibraryFile
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData('text/plain', child.children)
+              }}
+              key={child.key}
+              label={child.label}
+              isSelected={selectedFileKey === child.key}
+              onSelect={() => setSelectedFileKey(child.key)}
+              />
+              ))}
+              </LibraryFolder>
+              ))} */}
+        </LibraryRoot>
+      </div>
     </div>
   )
 }

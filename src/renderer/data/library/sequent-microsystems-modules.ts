@@ -26,7 +26,7 @@ const SequentMicrosystemsModulesPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(SequentMicrosystemsModulesVariablesSchema),
 })
 
-const SequentMicrosystemsModulesLibrarySchema = BaseLibrarySchema.extend({
+export const SequentMicrosystemsModulesLibrarySchema = BaseLibrarySchema.extend({
   pous: z.array(SequentMicrosystemsModulesPouSchema),
 })
 
@@ -339,4 +339,4 @@ const SequentMicrosystemsModules: SequentMicrosystemsModulesLibrary = {
   ],
 }
 
-export default SequentMicrosystemsModules
+export { SequentMicrosystemsModules }

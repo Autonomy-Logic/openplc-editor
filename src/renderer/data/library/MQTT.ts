@@ -7,7 +7,7 @@ const MQTTPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(MQTTVariablesSchema),
 })
 
-const MQTTLibrarySchema = BaseLibrarySchema.extend({
+export const MQTTLibrarySchema = BaseLibrarySchema.extend({
   pous: z.array(MQTTPouSchema),
 })
 

@@ -11,7 +11,7 @@ const JaguarPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(JaguarVariablesSchema),
 })
 
-const JaguarLibrarySchema = BaseLibrarySchema.extend({
+export const JaguarLibrarySchema = BaseLibrarySchema.extend({
   pous: z.array(JaguarPouSchema),
 })
 

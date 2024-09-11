@@ -47,9 +47,9 @@ const Project = () => {
   }
 
   return (
-    <div className='w-full'>
+    <div id='project-container' className='flex h-full w-full flex-col pr-2'>
       {/* Actions handler */}
-      <div id='project-actions-container' className='relative z-10 my-3 flex w-full justify-normal gap-2 px-2'>
+      <div id='project-actions-container' className='relative z-10 my-3 flex w-full justify-normal gap-2 pl-2'>
         <div
           id='project-name-container'
           className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 dark:bg-brand-dark'
@@ -67,126 +67,128 @@ const Project = () => {
         </div>
       </div>
       {/* Data display */}
-      <ProjectTreeRoot label={Name}>
-        <ProjectTreeBranch branchTarget='function'>
-          {pous
-            ?.filter(({ type }) => type === 'function')
-            .map(({ data }) => (
-              <ProjectTreeLeaf
-                key={data.name}
-                leafLang={data.language}
-                label={data.name}
-                /** Todo: Update the tab state */
-                onClick={() =>
-                  handleCreateTab({
-                    name: data.name,
-                    path: `/data/pous/function/${data.name}`,
-                    elementType: { type: 'function', language: data.language },
-                  })
-                }
-              />
-            ))}
-        </ProjectTreeBranch>
-        <ProjectTreeBranch branchTarget='function-block'>
-          {pous
-            ?.filter(({ type }) => type === 'function-block')
-            .map(({ data }) => (
-              <ProjectTreeLeaf
-                key={data.name}
-                leafLang={data.language}
-                label={data.name}
-                /** Todo: Update the tab state */
-                onClick={() =>
-                  handleCreateTab({
-                    name: data.name,
-                    path: `/data/pous/function-block/${data.name}`,
-                    elementType: { type: 'function-block', language: data.language },
-                  })
-                }
-              />
-            ))}
-        </ProjectTreeBranch>
-        <ProjectTreeBranch branchTarget='program'>
-          {pous
-            ?.filter(({ type }) => type === 'program')
-            .map(({ data }) => (
-              <ProjectTreeLeaf
-                key={data.name}
-                leafLang={data.language}
-                label={data.name}
-                /** Todo: Update the tab state */
-                onClick={() =>
-                  handleCreateTab({
-                    name: data.name,
-                    path: `/data/pous/program/${data.name}`,
-                    elementType: { type: 'program', language: data.language },
-                  })
-                }
-              />
-            ))}
-        </ProjectTreeBranch>
-        <ProjectTreeBranch branchTarget='data-type'>
-          {dataTypes
-            ?.filter(({ derivation }) => derivation.type === 'array')
-            .map(({ id, name }) => (
-              <ProjectTreeLeaf
-                nested
-                key={id}
-                leafLang='arr'
-                label={name}
-                /** Todo: Update the tab state */
-                onClick={() =>
-                  handleCreateTab({
-                    name,
-                    path: `/data/data-types/array/${name}`,
-                    elementType: { type: 'data-type', derivation: 'array' },
-                  })
-                }
-              />
-            ))}
+      <div id='project-tree-container' className='flex h-full w-full flex-col overflow-auto pr-1 mb-1'>
+        <ProjectTreeRoot label={Name}>
+          <ProjectTreeBranch branchTarget='function'>
+            {pous
+              ?.filter(({ type }) => type === 'function')
+              .map(({ data }) => (
+                <ProjectTreeLeaf
+                  key={data.name}
+                  leafLang={data.language}
+                  label={data.name}
+                  /** Todo: Update the tab state */
+                  onClick={() =>
+                    handleCreateTab({
+                      name: data.name,
+                      path: `/data/pous/function/${data.name}`,
+                      elementType: { type: 'function', language: data.language },
+                    })
+                  }
+                />
+              ))}
+          </ProjectTreeBranch>
+          <ProjectTreeBranch branchTarget='function-block'>
+            {pous
+              ?.filter(({ type }) => type === 'function-block')
+              .map(({ data }) => (
+                <ProjectTreeLeaf
+                  key={data.name}
+                  leafLang={data.language}
+                  label={data.name}
+                  /** Todo: Update the tab state */
+                  onClick={() =>
+                    handleCreateTab({
+                      name: data.name,
+                      path: `/data/pous/function-block/${data.name}`,
+                      elementType: { type: 'function-block', language: data.language },
+                    })
+                  }
+                />
+              ))}
+          </ProjectTreeBranch>
+          <ProjectTreeBranch branchTarget='program'>
+            {pous
+              ?.filter(({ type }) => type === 'program')
+              .map(({ data }) => (
+                <ProjectTreeLeaf
+                  key={data.name}
+                  leafLang={data.language}
+                  label={data.name}
+                  /** Todo: Update the tab state */
+                  onClick={() =>
+                    handleCreateTab({
+                      name: data.name,
+                      path: `/data/pous/program/${data.name}`,
+                      elementType: { type: 'program', language: data.language },
+                    })
+                  }
+                />
+              ))}
+          </ProjectTreeBranch>
+          <ProjectTreeBranch branchTarget='data-type'>
+            {dataTypes
+              ?.filter(({ derivation }) => derivation.type === 'array')
+              .map(({ id, name }) => (
+                <ProjectTreeLeaf
+                  nested
+                  key={id}
+                  leafLang='arr'
+                  label={name}
+                  /** Todo: Update the tab state */
+                  onClick={() =>
+                    handleCreateTab({
+                      name,
+                      path: `/data/data-types/array/${name}`,
+                      elementType: { type: 'data-type', derivation: 'array' },
+                    })
+                  }
+                />
+              ))}
 
-          {dataTypes
-            ?.filter(({ derivation }) => derivation.type === 'enumerated')
-            .map(({ id, name }) => (
-              <ProjectTreeLeaf
-                nested
-                key={id}
-                leafLang='enum'
-                label={name}
-                /** Todo: Update the tab state */
-                onClick={() =>
-                  handleCreateTab({
-                    name,
-                    path: `/data/data-types/enumerated/${name}`,
-                    elementType: { type: 'data-type', derivation: 'enumerated' },
-                  })
-                }
-              />
-            ))}
+            {dataTypes
+              ?.filter(({ derivation }) => derivation.type === 'enumerated')
+              .map(({ id, name }) => (
+                <ProjectTreeLeaf
+                  nested
+                  key={id}
+                  leafLang='enum'
+                  label={name}
+                  /** Todo: Update the tab state */
+                  onClick={() =>
+                    handleCreateTab({
+                      name,
+                      path: `/data/data-types/enumerated/${name}`,
+                      elementType: { type: 'data-type', derivation: 'enumerated' },
+                    })
+                  }
+                />
+              ))}
 
-          {dataTypes
-            ?.filter(({ derivation }) => derivation.type === 'structure')
-            .map(({ id, name }) => (
-              <ProjectTreeLeaf
-                nested
-                key={id}
-                leafLang='str'
-                label={name}
-                /** Todo: Update the tab state */
-                onClick={() =>
-                  handleCreateTab({
-                    name,
-                    path: `/data/data-types/structure/${name}`,
-                    elementType: { type: 'data-type', derivation: 'structure' },
-                  })
-                }
-              />
-            ))}
-        </ProjectTreeBranch>
-        <ProjectTreeBranch branchTarget='device'>{/** Will be filled with device */}</ProjectTreeBranch>
-        {/** Maybe a divider component */}
-        {/* <ProjectTreeBranch branchTarget='' label='Resources' /> */}
-      </ProjectTreeRoot>
+            {dataTypes
+              ?.filter(({ derivation }) => derivation.type === 'structure')
+              .map(({ id, name }) => (
+                <ProjectTreeLeaf
+                  nested
+                  key={id}
+                  leafLang='str'
+                  label={name}
+                  /** Todo: Update the tab state */
+                  onClick={() =>
+                    handleCreateTab({
+                      name,
+                      path: `/data/data-types/structure/${name}`,
+                      elementType: { type: 'data-type', derivation: 'structure' },
+                    })
+                  }
+                />
+              ))}
+          </ProjectTreeBranch>
+          <ProjectTreeBranch branchTarget='device'>{/** Will be filled with device */}</ProjectTreeBranch>
+          {/** Maybe a divider component */}
+          {/* <ProjectTreeBranch branchTarget='' label='Resources' /> */}
+        </ProjectTreeRoot>
+      </div>
     </div>
   )
 }

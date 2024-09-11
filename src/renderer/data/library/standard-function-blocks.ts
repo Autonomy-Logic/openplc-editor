@@ -24,7 +24,7 @@ const StandardFunctionBlocksPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(StandardFunctionBlocksVariablesSchema),
 })
 
-const StandardFunctionBlocksLibrarySchema = BaseLibrarySchema.extend({
+export const StandardFunctionBlocksLibrarySchema = BaseLibrarySchema.extend({
   pous: z.array(StandardFunctionBlocksPouSchema),
 })
 

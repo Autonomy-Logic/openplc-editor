@@ -26,7 +26,7 @@ const AdditionalFunctionBlocksPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(AdditionalFunctionBlocksVariablesSchema),
 })
 
-const AdditionalFunctionBlocksLibrarySchema = BaseLibrarySchema.extend({
+export const AdditionalFunctionBlocksLibrarySchema = BaseLibrarySchema.extend({
   pous: z.array(AdditionalFunctionBlocksPouSchema),
 })
 

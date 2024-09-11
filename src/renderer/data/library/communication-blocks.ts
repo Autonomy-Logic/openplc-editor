@@ -11,7 +11,7 @@ const CommunicationBlocksPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(CommunicationBlocksVariableSchema),
 })
 
-const CommunicationBlocksLibrarySchema = BaseLibrarySchema.extend({
+export const CommunicationBlocksLibrarySchema = BaseLibrarySchema.extend({
   pous: z.array(CommunicationBlocksPouSchema),
 })
 

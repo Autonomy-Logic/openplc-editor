@@ -7,11 +7,11 @@ const ArduinoFunctionBlocksPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(ArduinoFunctionBlocksVariableSchema),
 })
 
-const ArduinoFunctionBlocksSchema = BaseLibrarySchema.extend({
+export const ArduinoFunctionBlocksLibrarySchema = BaseLibrarySchema.extend({
   pous: z.array(ArduinoFunctionBlocksPouSchema),
 })
 
-type ArduinoFunctionBlocksLibrary = z.infer<typeof ArduinoFunctionBlocksSchema>
+type ArduinoFunctionBlocksLibrary = z.infer<typeof ArduinoFunctionBlocksLibrarySchema>
 
 const ArduinoFunctionBlocks: ArduinoFunctionBlocksLibrary = {
   name: 'Arduino Function Blocks',
