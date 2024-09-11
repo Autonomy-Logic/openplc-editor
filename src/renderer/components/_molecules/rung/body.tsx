@@ -6,12 +6,7 @@ import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } f
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
-import {
-  addNewElement,
-  removeElements,
-  removePlaceholderNodes,
-  renderPlaceholderNodes,
-} from './ladder-utils/elements'
+import { addNewElement, removeElements, removePlaceholderNodes, renderPlaceholderNodes } from './ladder-utils/elements'
 
 type RungBodyProps = {
   rung: FlowState
@@ -97,7 +92,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       event.preventDefault()
       const { relatedTarget } = event
       if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
-      const nodes = renderPlaceholderNodes(rungLocal.nodes)
+      const copyRungLocal = { ...rungLocal }
+      const nodes = renderPlaceholderNodes(copyRungLocal)
       setRungLocal((rung) => ({ ...rung, nodes }))
     },
     [rungLocal],
@@ -118,7 +114,9 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       event.preventDefault()
       event.dataTransfer.dropEffect = 'move'
 
-      const placeholderNodes = rungLocal.nodes.filter((node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder')
+      const placeholderNodes = rungLocal.nodes.filter(
+        (node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder',
+      )
       if (placeholderNodes.length === 0) return
 
       const mousePosition = reactFlowInstance?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
