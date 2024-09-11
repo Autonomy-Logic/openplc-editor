@@ -63,13 +63,13 @@ const Project = () => {
         <div
           id='project-name-container'
           className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 py-[1px] dark:bg-brand-dark'
-          onDoubleClick={() => setIsEditing(true)}
+          onClick={() => setIsEditing(true)}
         >
           <div className='flex-shrink-0'>
             <FolderIcon size='sm' className='h-4 w-4' style={{ minWidth: '16px', minHeight: '16px' }} />
           </div>
           {isEditing ? (
-            <div className='flex h-5.5 w-full items-center rounded-sm border border-neutral-700 bg-transparent px-0 py-0'>
+            <div className='flex h-5.5 w-full items-center border-none bg-transparent px-0 py-0'>
               <input
                 id='project-name'
                 className={`box-border h-full w-full cursor-text bg-transparent px-2 py-0 text-xs font-medium text-neutral-1000 outline-none dark:text-neutral-50`}
@@ -83,12 +83,13 @@ const Project = () => {
             <span
               id='project-name'
               className={`w-full cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap rounded-lg px-2 py-1 text-xs font-medium text-neutral-1000 dark:text-neutral-50`}
+              title='Edit name project'
             >
               {projectNameDefault}
             </span>
           )}
         </div>
-        <div id='create-plc-container' className='mr-2.5'>
+        <div id='create-plc-container'>
           <CreatePLCElement />
         </div>
       </div>
