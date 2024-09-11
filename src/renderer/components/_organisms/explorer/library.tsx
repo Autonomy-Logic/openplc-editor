@@ -1,5 +1,5 @@
 import { BookIcon, MagnifierIcon } from '@root/renderer/assets'
-import { StandardFunctionBlocks } from '@root/renderer/data/library/standard-function-blocks'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { ReactNode, useState } from 'react'
 
 import { LibraryFile, LibraryFolder, LibraryRoot } from '../../_molecules'
@@ -19,6 +19,10 @@ type ILibraryRootProps = {
 
 const Library = () => {
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
+
+  const {
+    libraries: { system },
+  } = useOpenPLCStore()
 
   return (
     <div id='library-container' className='flex h-full w-full flex-col pr-2'>
@@ -43,36 +47,22 @@ const Library = () => {
       {/* Data display */}
       <div id='library-tree-container' className='flex h-full w-full flex-col overflow-auto pr-1'>
         <LibraryRoot>
-          <LibraryFolder label='Standard Function Blocks'>
-            {StandardFunctionBlocks.pous.map((block) => (
-              <LibraryFile
-                key={block.name}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', block.body)
-                }}
-                label={block.name}
-                isSelected={selectedFileKey === block.name}
-                onSelect={() => setSelectedFileKey(block.name)}
-              />
-            ))}
-          </LibraryFolder>
-          {/* {treeData.map((data) => (
-          <LibraryFolder key={data.key} label={data.label} title={data.title}>
-          {data.children.map((child) => (
-            <LibraryFile
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData('text/plain', child.children)
-              }}
-              key={child.key}
-              label={child.label}
-              isSelected={selectedFileKey === child.key}
-              onSelect={() => setSelectedFileKey(child.key)}
-              />
+          {system.map((library) => (
+            <LibraryFolder key={library.name} label={library.name}>
+              {library.pous.map((pou) => (
+                <LibraryFile
+                  key={pou.name}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', pou.body)
+                  }}
+                  label={pou.name}
+                  isSelected={selectedFileKey === pou.name}
+                  onSelect={() => setSelectedFileKey(pou.name)}
+                />
               ))}
-              </LibraryFolder>
-              ))} */}
+            </LibraryFolder>
+          ))}
         </LibraryRoot>
       </div>
     </div>
