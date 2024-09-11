@@ -2,6 +2,7 @@ import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { TaskType } from '@root/renderer/store/slices'
 import { PLCTask } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
@@ -20,12 +21,12 @@ export default function TaskEditor() {
         },
       },
     },
-    editorActions: { updateModelVariables },
+    editorActions: { updateModelTasks },
     workspaceActions: { createTask, rearrangeTasks },
   } = useOpenPLCStore()
 
   const [taskData, setTaskData] = useState<PLCTask[]>([])
-  const [editorVariables, setEditorVariables] = useState({
+  const [editorTasks, setEditorTasks] = useState<TaskType>({
     selectedRow: ROWS_NOT_SELECTED.toString(),
     display: 'table',
   })
@@ -37,32 +38,42 @@ export default function TaskEditor() {
 
   useEffect(() => {
     if (editor.type === 'plc-resource') {
-      if (editor.variable.display === 'table') {
-        const { selectedRow, display } = editor.variable
-        setEditorVariables({
-          selectedRow: selectedRow,
+      if (!editor.task) {
+        setEditorTasks({
+          display: 'table',
+          selectedRow: ROWS_NOT_SELECTED.toString(),
+        })
+      } else if (editor.task.display === 'table') {
+        const { display, selectedRow } = editor.task
+        setEditorTasks({
           display: display,
+          selectedRow: selectedRow,
         })
       } else {
-        return
+        setEditorTasks({
+          display: editor.task.display,
+        })
       }
     }
   }, [editor])
 
   const handleRearrangeTasks = (index: number, row?: number) => {
+    if (editorTasks.display === 'code') return
     rearrangeTasks({
-      rowId: row ?? parseInt(editorVariables.selectedRow),
-      newIndex: (row ?? parseInt(editorVariables.selectedRow)) + index,
+      rowId: row ?? parseInt(editorTasks.selectedRow),
+      newIndex: (row ?? parseInt(editorTasks.selectedRow)) + index,
     })
-    updateModelVariables({
+    updateModelTasks({
       display: 'table',
-      selectedRow: parseInt(editorVariables.selectedRow) + index,
+      selectedRow: parseInt(editorTasks.selectedRow) + index,
     })
   }
 
   const handleCreateTask = () => {
+    if (editorTasks.display === 'code') return
     const tasks = taskData.filter((task) => task.name)
-    const selectedRow = parseInt(editorVariables.selectedRow)
+    const selectedRow = parseInt(editorTasks.selectedRow)
+
     if (tasks.length === 0) {
       createTask({
         name: 'Task',
@@ -70,14 +81,19 @@ export default function TaskEditor() {
         priority: 0,
         interval: '0',
       })
-      updateModelVariables({
+      updateModelTasks({
         display: 'table',
         selectedRow: 0,
       })
       return
     }
 
-    const task: PLCTask = selectedRow === ROWS_NOT_SELECTED ? tasks[tasks.length - 1] : tasks[selectedRow]
+    const task = selectedRow === ROWS_NOT_SELECTED ? tasks[tasks.length - 1] : tasks[selectedRow]
+
+    if (!task) {
+      console.error('No task found for the selectedRow:', selectedRow)
+      return
+    }
 
     if (selectedRow === ROWS_NOT_SELECTED) {
       createTask({
@@ -86,12 +102,13 @@ export default function TaskEditor() {
         priority: task.priority,
         interval: task.interval,
       })
-      updateModelVariables({
+      updateModelTasks({
         display: 'table',
         selectedRow: tasks.length,
       })
       return
     }
+
     createTask({
       name: task.name,
       triggering: task.triggering,
@@ -99,53 +116,52 @@ export default function TaskEditor() {
       interval: task.interval,
       rowToInsert: selectedRow + 1,
     })
-    updateModelVariables({
+    updateModelTasks({
       display: 'table',
       selectedRow: selectedRow + 1,
     })
   }
   const handleRowClick = (row: HTMLTableRowElement) => {
-    updateModelVariables({
+    updateModelTasks({
       display: 'table',
       selectedRow: parseInt(row.id),
     })
   }
   console.log(taskData)
   return (
-    <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
-      <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
-        {editorVariables.display === 'table' ? (
-          <div aria-label='Variables editor table actions container' className='relative flex h-full w-full '>
+    <div aria-label='Tasks editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
+      <div aria-label='Tasks editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
+        {editorTasks.display === 'table' ? (
+          <div aria-label='Tasks editor table actions container' className='relative flex h-full w-full '>
             <div
-              aria-label='Variables editor table actions container'
+              aria-label='Tasks editor table actions container'
               className=' absolute right-0 flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
             >
               {/** This can be reviewed */}
-              <TableActionButton aria-label='Add table row button' onClick={handleCreateTask}>
+              <TableActionButton aria-label='Add Tasks table row button' onClick={handleCreateTask}>
                 <PlusIcon className='!stroke-brand' />
               </TableActionButton>
               <TableActionButton
-                aria-label='Remove table row button'
-                disabled={parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED}
-                onClick={() => handleRearrangeTasks(-1)}
+                aria-label='Remove Tasks table row button'
+                disabled={parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED}
+                onClick={() => {}}
               >
                 <MinusIcon />
               </TableActionButton>
               <TableActionButton
-                aria-label='Move table row up button'
+                aria-label='Move Tasks table row up button'
                 disabled={
-                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                  parseInt(editorVariables.selectedRow) === 0
+                  parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED || parseInt(editorTasks.selectedRow) === 0
                 }
                 onClick={() => handleRearrangeTasks(-1)}
               >
                 <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
               </TableActionButton>
               <TableActionButton
-                aria-label='Move table row down button'
+                aria-label='Move Tasks table row down button'
                 disabled={
-                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                  parseInt(editorVariables.selectedRow) === taskData.length - 1
+                  parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED ||
+                  parseInt(editorTasks.selectedRow) === taskData.length - 1
                 }
                 onClick={() => handleRearrangeTasks(1)}
               >
@@ -157,43 +173,43 @@ export default function TaskEditor() {
           <></>
         )}
         <div
-          aria-label='Variables visualization switch container'
+          aria-label='Tasks visualization switch container'
           className={cn('flex h-fit w-fit flex-1 items-center justify-center rounded-md', {
-            'absolute right-0': editorVariables.display === 'code',
+            'absolute right-0': editorTasks.display === 'code',
           })}
         >
           <TableIcon
-            aria-label='Variables table visualization'
+            aria-label='Tasks table visualization'
             size='md'
-            currentVisible={editorVariables.display === 'table'}
+            currentVisible={editorTasks.display === 'table'}
             className={cn(
-              editorVariables.display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
+              editorTasks.display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
               'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
             )}
           />
 
           <CodeIcon
-            aria-label='Variables code visualization'
+            aria-label='Tasks code visualization'
             onClick={() => {}}
             size='md'
-            currentVisible={editorVariables.display === 'code'}
+            currentVisible={editorTasks.display === 'code'}
             className={cn(
-              editorVariables.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
+              editorTasks.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
               'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
             )}
           />
         </div>
       </div>
-      {editorVariables.display === 'table' ? (
+      {editorTasks.display === 'table' ? (
         <div
-          aria-label='Variables editor table container'
+          aria-label='Tasks editor table container'
           className='h-full overflow-y-auto'
           style={{ scrollbarGutter: 'stable' }}
         >
           <TaskTable
             tableData={taskData}
             handleRowClick={handleRowClick}
-            selectedRow={parseInt(editorVariables.selectedRow)}
+            selectedRow={parseInt(editorTasks.selectedRow)}
           />
         </div>
       ) : (

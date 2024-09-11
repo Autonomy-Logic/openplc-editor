@@ -33,8 +33,8 @@ const createTaskValidation = (tasks: PLCTask[], name: string) => {
         number = currentNumber
       }
     }
-    const newVariableName = `${name.replace(regex, '')}_${number + 1}`
-    return newVariableName
+    const newTaskName = `${name.replace(regex, '')}_${number + 1}`
+    return newTaskName
   }
   return name
 }

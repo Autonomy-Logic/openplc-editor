@@ -116,6 +116,7 @@ const PLCGlobalVariableSchema = PLCVariableSchema.omit({ class: true })
 type PLCGlobalVariable = z.infer<typeof PLCGlobalVariableSchema>
 
 const PLCTaskSchema = z.object({
+  id: z.string().optional(),
   name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the task object.
   triggering: z.enum(['Cyclic', 'Interrupt']),
   interval: z.string(), // TODO: Must have a regex validation for this. Probably a new modal must be created to handle this.

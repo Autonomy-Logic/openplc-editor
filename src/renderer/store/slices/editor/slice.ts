@@ -9,6 +9,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
     meta: {
       name: 'available',
     },
+    
   },
   editorActions: {
     addModel: (editor) =>
@@ -75,6 +76,26 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           }
         }),
       ),
+
+      updateModelTasks: (tasks: { selectedRow: number; display: 'code' | 'table' }) =>
+        setState(
+          produce((state: EditorState) => {
+            const { editor } = state;
+            if (editor.type === 'plc-resource') {
+              if (tasks.display === 'table') {
+                editor.task = {
+                  ...editor.task,
+                  display: 'table',
+                  selectedRow: tasks.selectedRow.toString(),
+                };
+              } else {
+                editor.variable = {
+                  display: 'code',
+                };
+              }
+            }
+          }),
+        ),
 
     setEditor: (newEditor) =>
       setState(

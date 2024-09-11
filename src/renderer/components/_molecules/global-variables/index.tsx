@@ -39,6 +39,7 @@ const GlobalVariablesEditor = () => {
   useEffect(() => {
     const variablesToTable = globalVariables.filter((variable) => variable.name)
     setTableData(variablesToTable)
+    console.log(configuration)
   }, [editor, globalVariables])
 
   useEffect(() => {

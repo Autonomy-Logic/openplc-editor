@@ -22,6 +22,14 @@ const editorGlobalVariablesSchema = z.discriminatedUnion('display', [
   }),
   z.object({ display: z.literal('code') }),
 ])
+
+const taskSchema = z.discriminatedUnion('display', [
+  z.object({
+    display: z.literal('table'),
+    selectedRow: z.string(),
+  }),
+  z.object({ display: z.literal('code') }),
+])
 /** This is a zod schema for the model.
  * It is used to validate the model if needed,
  * in most cases you can use the type inferred from it.
@@ -67,6 +75,7 @@ const editorModelSchema = z.discriminatedUnion('type', [
       path: z.string(),
     }),
     variable: editorGlobalVariablesSchema,
+    task: taskSchema,
   }),
 ])
 
@@ -98,6 +107,10 @@ const editorActionsSchema = z.object({
     )
     .returns(z.void()),
   setEditor: z.function().args(editorModelSchema).returns(z.void()),
+  updateModelTasks: z
+    .function()
+    .args(z.object({ selectedRow: z.number(), display: z.enum(['code', 'table']) }))
+    .returns(z.void()),
   clearEditor: z.function().returns(z.void()),
   getEditorFromEditors: z.function().args(z.string()).returns(editorModelSchema.or(z.null())),
 })
@@ -105,6 +118,7 @@ const editorActionsSchema = z.object({
 /** The variables, the data that we display in the app. */
 type VariablesTable = z.infer<typeof editorVariablesSchema>
 type GlobalVariablesTableType = z.infer<typeof editorGlobalVariablesSchema>
+type TaskType = z.infer<typeof taskSchema>
 /** The model, the data that we display in the app. */
 type EditorModel = z.infer<typeof editorModelSchema>
 /** The state, the source of truth that drives our app. - Concept based on Redux */
@@ -117,4 +131,4 @@ type EditorSlice = EditorState & {
 
 export { editorModelSchema, editorStateSchema }
 
-export type { EditorActions, EditorModel, EditorSlice, EditorState, GlobalVariablesTableType, VariablesTable }
+export type { EditorActions, EditorModel, EditorSlice, EditorState, GlobalVariablesTableType, TaskType, VariablesTable }

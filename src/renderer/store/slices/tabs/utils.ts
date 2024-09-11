@@ -91,6 +91,10 @@ const CreateResourceEditor = (name = 'resources'): EditorModel => {
       description: '',
       selectedRow: '-1',
     },
+    task: {
+      display: 'table', 
+      selectedRow: '-1', 
+    },
   })
   return editor
 }
