@@ -49,11 +49,11 @@ const LibraryFolder = ({ label, children, initiallyOpen, shouldBeOpen }: ILibrar
           <div className='w-[22px]' />
         )}
         {folderIsOpen ? <LibraryOpenFolderIcon size='sm' /> : <LibraryCloseFolderIcon size='sm' />}
-        <span
-          className={`ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ${folderIsOpen && 'font-medium text-neutral-1000 dark:text-white'}`}
+        <p
+          className={`ml-1 w-full truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ${folderIsOpen && 'font-medium text-neutral-1000 dark:text-white'}`}
         >
           {label}
-        </span>
+        </p>
       </div>
       {children && folderIsOpen && (
         <div>
@@ -78,14 +78,14 @@ const LibraryFile = ({ label, isSelected, onSelect, ...res }: ILibraryFileProps)
     >
       <div className='flex flex-row items-center gap-[6px] py-1 pl-6 '>
         <LibraryFileIcon size='sm' />
-        <span
+        <p
           className={cn(
-            'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+            'ml-1 w-full truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             isSelected && 'font-medium text-neutral-1000 dark:text-white',
           )}
         >
           {label}
-        </span>
+        </p>
       </div>
     </li>
   )

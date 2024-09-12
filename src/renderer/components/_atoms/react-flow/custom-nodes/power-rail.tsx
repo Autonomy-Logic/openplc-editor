@@ -1,9 +1,11 @@
 import { Node, NodeProps, Position } from '@xyflow/react'
 
-import { buildHandle, CustomHandle, CustomHandleProps } from './handle'
+import { buildHandle, CustomHandle } from './handle'
+import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-type PowerRailNode = Node<{ handles: CustomHandleProps[] }, 'text'>
+type PowerRailNode = Node<BasicNodeData>
 type PowerRailProps = NodeProps<PowerRailNode>
+type PowerRailBuilderProps = BuilderBasicProps & { connector: 'left' | 'right' }
 
 export const POWER_RAIL_WIDTH = 3
 export const POWER_RAIL_HEIGHT = 200
@@ -34,24 +36,10 @@ export const PowerRail = ({ data }: PowerRailProps) => {
  * @param handleY: number - The y coordinate of the handle based on the global position (inside the flow panel)
  * @returns PowerRailNode
  */
-export const buildPowerRailNode = ({
-  id,
-  posX,
-  posY,
-  connector,
-  handleX,
-  handleY,
-}: {
-  id: string
-  posX: number
-  posY: number
-  connector: 'left' | 'right'
-  handleX: number
-  handleY: number
-}) => {
+export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY }: PowerRailBuilderProps) => {
   const handles = [
     buildHandle({
-      id: `${connector}-rail`,
+      id: `${connector === 'left' ? 'right' : 'left'}-rail`,
       position: connector === 'left' ? Position.Left : Position.Right,
       type: connector === 'left' ? 'target' : 'source',
       isConnectable: false,
@@ -73,6 +61,8 @@ export const buildPowerRailNode = ({
     position: { x: posX, y: posY },
     data: {
       handles,
+      inputConnector: connector === 'left' ? handles[0] : undefined,
+      outputConnector: connector === 'right' ? handles[0] : undefined,
     },
     width: POWER_RAIL_WIDTH,
     height: POWER_RAIL_HEIGHT,

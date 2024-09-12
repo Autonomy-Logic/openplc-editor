@@ -19,10 +19,10 @@ import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { EditorService, ProjectService, UserService } from './services'
+import { UserSettings } from './rw-utility'
+import { EditorService, ProjectService } from './services'
+// import {Service}
 
-const _editorService = new EditorService()
-const _userService = new UserService()
 class AppUpdater {
   constructor() {
     log.transports.file.level = 'info'
@@ -42,6 +42,12 @@ if (process.env.NODE_ENV === 'production') {
 
   void loadSourceMapSupport()
 }
+
+EditorService.createEditorFolder()
+
+EditorService.setBaseData()
+
+void UserSettings.checkIfUserBaseSettingsExists()
 
 // Retrieves the system information
 const systemInfo = platform()
@@ -112,6 +118,21 @@ const createMainWindow = async () => {
    */
   const { bounds } = store.get('window')
 
+  splash = new BrowserWindow({
+    width: 580,
+    height: 366,
+    resizable: false,
+    frame: false,
+    webPreferences: {
+      sandbox: false,
+    },
+  })
+
+  splash
+    .loadURL(`file://${path.join(__dirname, './modules/preload/scripts/loading/splash.html')}`)
+    .then(() => console.log('Splash screen loaded successfully'))
+    .catch((error) => console.error('Error loading splash screen:', error))
+  splash.setIgnoreMouseEvents(false)
   // Create the main window instance.
   mainWindow = new BrowserWindow({
     minWidth: 1124,
@@ -128,20 +149,15 @@ const createMainWindow = async () => {
     },
   })
 
-  splash = new BrowserWindow({
-    parent: mainWindow,
-    width: 580,
-    height: 366,
-    resizable: false,
-    frame: false,
-    alwaysOnTop: true,
-    webPreferences: {
-      sandbox: true,
-    },
-  })
+  // Send a message to the renderer process when the content finishes loading;
 
-  void splash.loadURL(`file://${path.join(__dirname, './modules/preload/scripts/loading/splash.html')}`)
-  splash.show()
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (splash) {
+      splash?.destroy()
+    }
+    mainWindow?.show()
+    mainWindow?.webContents.send('main-process-message', new Date().toLocaleString())
+  })
   // Save window bounds on resize, close, and move events
   const saveBounds = () => {
     store.set('window.bounds', mainWindow?.getBounds())
@@ -198,7 +214,7 @@ const createMainWindow = async () => {
    * Add event listeners...
    */
 
-  mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
+  // mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
 
   // Handles the creation of the menu
   const menuBuilder = new MenuBuilder(mainWindow)
@@ -229,6 +245,8 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
   process.exit(0)
 }
+
+// console.log(userService.getSetting('window'))
 
 // Quit the app when all windows are closed;
 app.on('window-all-closed', () => {

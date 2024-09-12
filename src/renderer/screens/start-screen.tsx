@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-misused-promises */
 import { IProjectServiceResponse } from '@root/main/services/project-service'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -17,7 +16,7 @@ const StartScreen = () => {
     workspaceActions: { setUserWorkspace },
   } = useOpenPLCStore()
 
-  const handleCreateProject = async () => {
+  const retrieveNewProjectData = async () => {
     const { success, data, error } = await window.bridge.createProject()
     if (success && data) {
       setUserWorkspace({
@@ -40,10 +39,12 @@ const StartScreen = () => {
       })
     }
   }
+  const handleCreateProject = () => {
+    void retrieveNewProjectData()
+  }
 
-  const handleOpenProject = async () => {
+  const retrieveOpenProjectData = async () => {
     const { success, data, error } = await window.bridge.openProject()
-    // console.log(success, data, error)
     if (success && data) {
       setUserWorkspace({
         editingState: 'unsaved',
@@ -64,6 +65,10 @@ const StartScreen = () => {
         variant: 'fail',
       })
     }
+  }
+
+  const handleOpenProject = () => {
+    void retrieveOpenProjectData()
   }
 
   useEffect(() => {
@@ -117,7 +122,6 @@ const StartScreen = () => {
         }
       })
     }
-
     handleCreateProjectAccelerator()
     handleOpenProjectAccelerator()
   }, [])
@@ -127,10 +131,10 @@ const StartScreen = () => {
       <StartSideContent>
         <MenuRoot>
           <MenuSection id='1'>
-            <MenuItem onClick={() => handleCreateProject()}>
+            <MenuItem onClick={handleCreateProject}>
               <PlusIcon className='stroke-white' /> New Project
             </MenuItem>
-            <MenuItem ghosted onClick={() => handleOpenProject()}>
+            <MenuItem ghosted onClick={handleOpenProject}>
               <FolderIcon /> Open
             </MenuItem>
             <MenuItem ghosted>
@@ -139,8 +143,8 @@ const StartScreen = () => {
           </MenuSection>
           <MenuDivider />
           <MenuSection id='2'>
-            <MenuItem  ghosted>
-              <StickArrowIcon className='rotate-180' /> Quit
+            <MenuItem ghosted>
+              <StickArrowIcon className='rotate-180 stroke-brand' /> Quit
             </MenuItem>
           </MenuSection>
         </MenuRoot>

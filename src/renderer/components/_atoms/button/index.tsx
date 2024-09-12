@@ -1,7 +1,7 @@
 import { cn } from '@utils/cn'
-import { ComponentProps, ReactNode } from 'react'
+import { ComponentPropsWithRef, ReactNode } from 'react'
 
-type IButtonProps = ComponentProps<'button'> & {
+type IButtonProps = ComponentPropsWithRef<'button'> & {
   ghosted?: boolean
   children?: ReactNode
 }

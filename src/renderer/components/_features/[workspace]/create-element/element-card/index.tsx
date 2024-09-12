@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import { CreatePouSources, PouLanguageSources } from '@process:renderer/data'
 import * as Popover from '@radix-ui/react-popover'
-import { ArrayIcon, ArrowIcon, EnumIcon, StructureIcon } from '@root/renderer/assets'
+import { ArrowIcon } from '@root/renderer/assets'
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { CreateDatatypeObject } from '@root/renderer/store/slices/shared/utils'
@@ -66,13 +66,20 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
+  const handleMouseEnter = () => {
+    setIsOpen(true)
+  }
 
   return (
-    <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
-      <Popover.Trigger id={`create-${target}-trigger`} asChild>
+    <Popover.Root  open={isOpen} onOpenChange={setIsOpen}>
+      <Popover.Trigger
+        onMouseEnter={handleMouseEnter}
+        id={`create-${target}-trigger`}
+        className='focus:bg-neutral-100 dark:focus:bg-neutral-900 rounded-md'
+      >
         <div
           id={`create-${target}-trigger-container`}
-          className='relative flex h-7 w-full cursor-pointer select-none items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 dark:data-[state=open]:bg-neutral-900'
+          className='relative flex h-7 w-full cursor-pointer  items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 dark:data-[state=open]:bg-neutral-900'
         >
           {CreatePouSources[target]}
           <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
@@ -172,7 +179,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                   return (
                                     <SelectItem
                                       key={lang.value}
-                                      className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                                      className='flex w-full focus:bg-neutral-100 dark:focus:bg-neutral-900 cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                                       value={ConvertToLangShortenedFormat(lang.value)}
                                     >
                                       <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
