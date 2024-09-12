@@ -241,6 +241,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               onNodeDragStop: (_event, node) => {
                 handleNodeDragStop(node)
               },
+              nodesFocusable: false,
+              edgesFocusable: false,
 
               onConnectEnd: updateFlowStore,
 
