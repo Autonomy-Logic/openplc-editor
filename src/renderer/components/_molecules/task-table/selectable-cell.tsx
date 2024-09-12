@@ -5,6 +5,7 @@ import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
+import IntervalModal from './elements/interval-modal'
 
 type ISelectableCellProps = CellContext<PLCTask, unknown> & { editable?: boolean }
 
@@ -61,4 +62,17 @@ const SelectableTriggerCell = ({
   )
 }
 
-export { SelectableTriggerCell }
+const SelectableIntervalCell = ({ getValue }: ISelectableCellProps) => {
+  const { value, definition } = getValue<PLCTask['interval']>()
+
+  console.log(value, definition)
+  const [intervalModalOpen, setIntervalModalIsOpen] = useState(false)
+
+  return (
+    <div>
+      <IntervalModal intervalModalOpen={intervalModalOpen} setIntervalModalIsOpen={setIntervalModalIsOpen} />
+    </div>
+  )
+}
+
+export { SelectableIntervalCell, SelectableTriggerCell }

@@ -12,7 +12,7 @@ import { useEffect, useRef } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
 import { EditableNameCell, EditablePriorityCell } from './editable-cell'
-import { SelectableTriggerCell } from './selectable-cell'
+import { SelectableIntervalCell, SelectableTriggerCell } from './selectable-cell'
 
 const columnHelper = createColumnHelper<PLCTask>()
 const columns = [
@@ -38,6 +38,7 @@ const columns = [
     minSize: 150,
     maxSize: 468,
     enableResizing: true,
+    cell: SelectableIntervalCell,
   }),
   columnHelper.accessor('priority', {
     header: 'Priority',
