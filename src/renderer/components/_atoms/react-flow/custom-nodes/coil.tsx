@@ -168,5 +168,7 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
     width: COIL_BLOCK_WIDTH,
     height: COIL_BLOCK_HEIGHT,
     draggable: true,
+    selectable: true,
+    selected: false,
   }
 }

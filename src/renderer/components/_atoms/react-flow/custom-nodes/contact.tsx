@@ -142,5 +142,7 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
     width: CONTACT_BLOCK_WIDTH,
     height: CONTACT_BLOCK_HEIGHT,
     draggable: true,
+    selectable: true,
+    selected: false,
   }
 }

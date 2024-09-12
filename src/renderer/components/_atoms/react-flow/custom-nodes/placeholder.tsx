@@ -98,5 +98,7 @@ export const builderPlaceholderNode = ({
       height: PLACEHOLDER_HEIGHT,
     },
     draggable: false,
+    selectable: true,
+    selected: false
   }
 }

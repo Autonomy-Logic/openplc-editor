@@ -27,6 +27,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
   const [rungLocal, setRungLocal] = useState<FlowState>(rung)
+  const [selectedNodes, setSelectedNodes] = useState<FlowNode[]>([])
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const flowRef = useRef<HTMLDivElement>(null)
 
@@ -67,6 +68,36 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   useEffect(() => {
     updateFlowStore()
   }, [rungLocal.nodes.length])
+
+  useEffect(() => {
+    const selectedNodes = rungLocal.nodes.filter((node) => node.selected)
+    setSelectedNodes(selectedNodes)
+  }, [rungLocal.nodes.filter((node) => node.selected)])
+
+  useEffect(() => {
+    if (selectedNodes.length > 1) {
+      setRungLocal((rung) => ({
+        ...rung,
+        nodes: rung.nodes.map((node) => {
+          if (selectedNodes.map((n) => n.id).includes(node.id)) {
+            return {
+              ...node,
+              draggable: false,
+            }
+          }
+          return node
+        }),
+      }))
+      return
+    }
+    setRungLocal((rung) => ({
+      ...rung,
+      nodes: rung.nodes.map((node) => ({
+        ...node,
+        draggable: true,
+      })),
+    }))
+  }, [selectedNodes.length])
 
   const updateFlowStore = () => {
     if (reactFlowInstance) {
@@ -217,14 +248,15 @@ export const RungBody = ({ rung }: RungBodyProps) => {
           <FlowPanel
             viewportConfig={{
               nodeTypes: nodeTypes,
+              nodes: rungLocal.nodes,
+              edges: rungLocal.edges,
+              nodesFocusable: false,
+              edgesFocusable: false,
               defaultEdgeOptions: {
                 deletable: false,
                 selectable: false,
                 type: 'smoothstep',
               },
-
-              nodes: rungLocal.nodes,
-              edges: rungLocal.edges,
 
               onInit: setReactFlowInstance,
 
@@ -241,8 +273,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               onNodeDragStop: (_event, node) => {
                 handleNodeDragStop(node)
               },
-              nodesFocusable: false,
-              edgesFocusable: false,
 
               onConnectEnd: updateFlowStore,
 

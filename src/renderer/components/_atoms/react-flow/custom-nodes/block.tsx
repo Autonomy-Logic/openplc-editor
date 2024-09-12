@@ -181,5 +181,7 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: Bl
     width: BLOCK_WIDTH,
     height: BLOCK_HEIGHT,
     draggable: true,
+    selectable: true,
+    selected: false,
   }
 }
