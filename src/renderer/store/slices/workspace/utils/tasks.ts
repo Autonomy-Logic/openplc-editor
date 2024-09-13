@@ -6,11 +6,11 @@ const checkIfTaskExists = (tasks: PLCTask[], name: string) => {
   return tasks.some((task) => task.name === name)
 }
 
-// const taskNameValidation = (taskName: string) => {
-//   const regex =
-//     /^([a-zA-Z0-9]+(?:[A-Z][a-z0-9]*)*)|([A-Z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)|([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*)$/
-//   return regex.test(taskName)
-// }
+const taskNameValidation = (taskName: string) => {
+  const regex =
+    /^([a-zA-Z0-9]+(?:[A-Z][a-z0-9]*)*)|([A-Z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)|([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*)$/
+  return regex.test(taskName)
+}
 
 const createTaskValidation = (tasks: PLCTask[], name: string) => {
   if (checkIfTaskExists(tasks, name)) {
@@ -62,6 +62,15 @@ const updateTaskValidation = (tasks: PLCTask[], dataToBeUpdated: Partial<PLCTask
         ok: false,
         title: 'Task already exists.',
         message: 'Please make sure that the name is unique.',
+      }
+      return response
+    }
+    if (!taskNameValidation(name)) {
+      console.error(`Variable "${name}" name is invalid`)
+      response = {
+        ok: false,
+        title: 'Variable name is invalid.',
+        message: `Please make sure that the name is valid. Valid names: CamelCase, PascalCase or SnakeCase.`,
       }
       return response
     }

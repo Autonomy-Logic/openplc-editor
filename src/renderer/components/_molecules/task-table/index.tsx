@@ -38,7 +38,7 @@ const columns = [
     minSize: 150,
     maxSize: 468,
     enableResizing: true,
-    cell: SelectableIntervalCell,
+    cell: SelectableIntervalCell
   }),
   columnHelper.accessor('priority', {
     header: 'Priority',
