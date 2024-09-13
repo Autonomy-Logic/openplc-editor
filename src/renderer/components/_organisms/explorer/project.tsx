@@ -2,7 +2,6 @@ import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '@components
 import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
-// import { CreateEditorObject } from '@root/renderer/store/slices/shared/utils'
 import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
 import React, { useState } from 'react'
 
@@ -11,13 +10,11 @@ import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 const Project = () => {
   const {
     workspace: {
-      projectData: { pous, dataTypes },
+      projectData: { pous, dataTypes, projectName },
     },
-    // projectName
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
-  const Name = 'Project Name'
 
   // const editorType = {
   //   il: 'plc-textual',
@@ -47,15 +44,18 @@ const Project = () => {
     addModel(editor)
     setEditor(editor)
   }
+
   const [isEditing, setIsEditing] = useState(false)
-  const [projectNameDefault, setProjectNameDefault] = useState('name')
 
   const handleBlur = () => {
     setIsEditing(false)
   }
+
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setProjectNameDefault(e.target.value)
+
+    console.log(e.target.value)
   }
+
   return (
     <div className='w-full'>
       {/* Actions handler */}
@@ -73,7 +73,7 @@ const Project = () => {
               <input
                 id='project-name'
                 className={`box-border h-full w-full cursor-text bg-transparent px-2 py-0 text-xs font-medium text-neutral-1000 outline-none dark:text-neutral-50`}
-                value={projectNameDefault}
+                value={projectName}
                 onChange={handleNameChange}
                 onBlur={handleBlur}
                 autoFocus
@@ -85,7 +85,7 @@ const Project = () => {
               className={`w-full cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap rounded-lg px-2 py-1 text-xs font-medium text-neutral-1000 dark:text-neutral-50`}
               title='Edit name project'
             >
-              {projectNameDefault}
+              {projectName}
             </span>
           )}
         </div>
@@ -95,7 +95,7 @@ const Project = () => {
       </div>
 
       {/* Data display */}
-      <ProjectTreeRoot label={Name}>
+      <ProjectTreeRoot label={projectName}>
         <ProjectTreeBranch branchTarget='function'>
           {pous
             ?.filter(({ type }) => type === 'function')
@@ -212,10 +212,9 @@ const Project = () => {
             ))}
         </ProjectTreeBranch>
         <ProjectTreeBranch branchTarget='device'>{/** Will be filled with device */}</ProjectTreeBranch>
-        {/** Maybe a divider component */}
-        {/* <ProjectTreeBranch branchTarget='' label='Resources' /> */}
       </ProjectTreeRoot>
     </div>
   )
 }
+
 export { Project }

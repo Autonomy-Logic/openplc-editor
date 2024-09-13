@@ -7,12 +7,12 @@ import { createVariableValidation, updateVariableValidation } from './utils/vari
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   workspace: {
     editingState: 'unsaved',
-    projectName: '',
     projectPath: '',
     projectData: {
       dataTypes: [],
       pous: [],
       globalVariables: [],
+      projectName: ''
     },
     systemConfigs: {
       OS: '',
@@ -20,6 +20,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       shouldUseDarkMode: false,
       isWindowMaximized: false,
     },
+    projectName: ''
   },
 
   workspaceActions: {
