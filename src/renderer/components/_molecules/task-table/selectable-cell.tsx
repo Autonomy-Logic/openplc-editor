@@ -19,7 +19,7 @@ const SelectableTriggerCell = ({
   editable = true,
 }: ISelectableCellProps) => {
   const initialValue = getValue()
- 
+
   const [cellValue, setCellValue] = useState(initialValue)
 
   const onValueChange = (value: string) => {
@@ -71,7 +71,7 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
     min: 0,
     sec: 0,
     ms: 0,
-    microsec: 0,
+    micsec: 0,
   })
 
   useEffect(() => {
@@ -85,7 +85,7 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
           min: Number(match[3]),
           sec: Number(match[4]),
           ms: Number(match[5]),
-          microsec: 0, 
+          micsec: 0,
         })
       }
     }
@@ -108,7 +108,7 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
         sideOffset={3}
         className='flex h-20 w-[--radix-popover-trigger-width] items-center justify-center gap-2 rounded-lg bg-neutral-900 p-2'
       >
-        {['day', 'hour', 'min', 'sec', 'ms', 'microsec'].map((interval) => (
+        {['day', 'hour', 'min', 'sec', 'ms', 'micsec'].map((interval) => (
           <div
             key={interval}
             className='flex h-full w-full flex-col justify-center gap-1 font-caption text-xs outline-none'
@@ -117,13 +117,16 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
               {interval}
             </label>
             <input
+              placeholder={
+                values[interval as keyof typeof values] === 0 ? values[interval as keyof typeof values].toString() : ''
+              }
               onBlur={handleBlur}
               id={interval}
               type='number'
               className={cn(
                 'h-5 w-full rounded-sm bg-white p-2 text-center text-cp-sm outline-none ring-brand focus:ring-2',
               )}
-              value={values[interval as keyof typeof values]}
+              value={values[interval as keyof typeof values] > 0 ? values[interval as keyof typeof values] : ''}
               onChange={(e) =>
                 setValues((prevValues) => ({
                   ...prevValues,
