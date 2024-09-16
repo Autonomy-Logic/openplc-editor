@@ -60,14 +60,6 @@ export const buildGenericNode = ({
         handleY,
         variant: 'default',
       })
-    case 'placeholder':
-      return nodesBuilder.placeholder({
-        id,
-        posX,
-        posY,
-        handleX,
-        handleY,
-      })
     case 'parallel':
       return nodesBuilder.parallel({
         id,

@@ -111,6 +111,21 @@ const PLCVariableSchema = z.object({
   debug: z.boolean(),
 })
 
+// const variable: PLCVariable = {
+//   name: 'CU_T',
+//   class: 'local',
+//   type: {
+//     definition: 'base-type',
+//     value: baseTypeSchema.parse('R_TRIG'),
+//   },
+//   location: 'CV location',
+//   documentation: 'CV location',
+//   debug: false,
+// };
+
+
+// PLCVariableSchema.parse(variable);
+
 type PLCVariable = z.infer<typeof PLCVariableSchema>
 
 const PLCFunctionSchema = z.object({

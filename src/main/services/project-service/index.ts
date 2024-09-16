@@ -64,11 +64,7 @@ class ProjectService {
       }
     }
 
-    CreateJSONFile({
-      path: filePath,
-      fileName: 'data',
-      data: JSON.stringify(baseJsonStructure, null, 2),
-    })
+    CreateJSONFile(filePath, JSON.stringify(baseJsonStructure, null, 2), 'data')
 
     const projectPath = join(filePath, 'data.json')
 
