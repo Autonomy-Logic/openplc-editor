@@ -32,6 +32,12 @@ const pouDTOSchema = z.discriminatedUnion('type', [
 ])
 type PouDTO = z.infer<typeof pouDTOSchema>
 
+const taskDTOSchema = z.object({
+  data: PLCTaskSchema,
+})
+
+type TaskDTO = z.infer<typeof taskDTOSchema>
+
 const systemConfigsSchema = z.object({
   OS: z.enum(['win32', 'linux', 'darwin', '']),
   arch: z.enum(['x64', 'arm', '']),
@@ -99,11 +105,11 @@ const workspaceActionsSchema = z.object({
   createDatatype: z.function().args(PLCDataTypeSchema).returns(z.void()),
   createTask: z
     .function()
-    .args(PLCTaskSchema.merge(z.object({ rowToInsert: z.number().optional() })))
+    .args(taskDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
     .returns(z.void()),
   updateTask: z
     .function()
-    .args(PLCTaskSchema.merge(z.object({ rowId: z.number() })))
+    .args(taskDTOSchema.merge(z.object({ rowId: z.number() })))
     .returns(z.void()),
   deleteTask: z
     .function()
@@ -123,9 +129,19 @@ type WorkspaceSlice = WorkspaceState & {
 export {
   pouDTOSchema,
   systemConfigsSchema,
+  taskDTOSchema,
   variableDTOSchema,
   workspaceActionsSchema,
   workspaceResponseSchema,
   workspaceStateSchema,
 }
-export type { PouDTO, SystemConfigs, VariableDTO, WorkspaceActions, WorkspaceResponse, WorkspaceSlice, WorkspaceState }
+export type {
+  PouDTO,
+  SystemConfigs,
+  TaskDTO,
+  VariableDTO,
+  WorkspaceActions,
+  WorkspaceResponse,
+  WorkspaceSlice,
+  WorkspaceState,
+}

@@ -1,3 +1,4 @@
+import { PLCTask } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -318,19 +319,24 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
 
-    createTask: (taskToCreate): WorkspaceResponse => {
+    createTask: (taskToCreate: { data: PLCTask; rowToInsert?: number }): WorkspaceResponse => {
       const response: WorkspaceResponse = { ok: true }
 
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
-          taskToCreate.name = createTaskValidation(
-            workspace.projectData.configuration.resource.tasks,
-            taskToCreate.name,
-          )
-          if (taskToCreate.rowToInsert !== undefined) {
-            workspace.projectData.configuration.resource.tasks.splice(taskToCreate.rowToInsert, 0, taskToCreate)
+          const { data, rowToInsert } = taskToCreate
+
+          data.name = createTaskValidation(workspace.projectData.configuration.resource.tasks, data.name)
+
+          if (rowToInsert !== undefined) {
+            if (rowToInsert >= 0 && rowToInsert <= workspace.projectData.configuration.resource.tasks.length) {
+              workspace.projectData.configuration.resource.tasks.splice(rowToInsert, 0, data)
+            } else {
+              console.error('Invalid row index:', rowToInsert)
+              response.ok = false
+            }
           } else {
-            workspace.projectData.configuration.resource.tasks.push(taskToCreate)
+            workspace.projectData.configuration.resource.tasks.push(data)
           }
         }),
       )
@@ -353,34 +359,17 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
 
-    updateTask: (dataToBeUpdated: {
-      name: string
-      triggering: 'Cyclic' | 'Interrupt'
-      interval: string
-      priority: number
-      rowId: number
-      id?: string
-    }): WorkspaceResponse => {
-      const response: WorkspaceResponse = { ok: true }
+    updateTask: (dataToBeUpdated): WorkspaceResponse => {
+      let response: WorkspaceResponse = { ok: true }
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           const { rowId } = dataToBeUpdated
-
-          if (rowId < 0 || rowId >= workspace.projectData.configuration.resource.tasks.length) {
-            console.error('Invalid rowId')
-            response.ok = false
-            response.title = 'Invalid Task.'
-            response.message = 'The task rowId is out of range.'
-            return
+          const index = rowId
+          if(index === -1) response = { ok: false, title: 'Task not found', message: 'Internal error' }
+          workspace.projectData.configuration.resource.tasks[index] = {
+            ...workspace.projectData.configuration.resource.tasks[index],
+            ...dataToBeUpdated.data,
           }
-
-        
-          workspace.projectData.configuration.resource.tasks[rowId] = {
-            ...workspace.projectData.configuration.resource.tasks[rowId],
-            ...dataToBeUpdated,
-          }
-
-          console.log('Task updated:', workspace.projectData.configuration.resource.tasks[rowId])
         }),
       )
 

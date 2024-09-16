@@ -26,7 +26,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
     if (cellValue === initialValue) return
 
     const res = table.options.meta?.updateData(index, id, cellValue)
-    console.log('Update Data Response:', res)
+    // console.log('Update Data Response:', res)
 
     if (res?.ok) return
 
@@ -66,23 +66,42 @@ const EditablePriorityCell = ({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = Number(e.target.value)
-    if (value >= 0 && value <= 100) {
-      setCellValue(value)
-    }
+    setCellValue(value)
   }
 
   const onBlur = () => {
-    const clampedValue = Math.max(0, Math.min(100, cellValue))
-    table.options.meta?.updateData(index, id, clampedValue)
+    const clampedValue = Math.max(0, Math.min(99, cellValue))
+    if (cellValue > 99 || cellValue < 0) {
+      return
+    } else {
+      table.options.meta?.updateData(index, id, clampedValue)
+    }
   }
+
+  const getTitleMessage = () => {
+    if (cellValue > 99) {
+      return 'Priority must be between 0 and 99'
+    }
+    if (cellValue < 0) {
+      return 'Priority must be between 0 and 99'
+    }
+    return ''
+  }
+
+  useEffect(() => {
+    getTitleMessage()
+  }, [cellValue])
 
   return (
     <InputWithRef
+      placeholder='0-99'
       value={cellValue}
       onChange={handleChange}
       onBlur={onBlur}
+      title={getTitleMessage()}
       className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !editable,
+        'text-red-500': cellValue > 99 || cellValue < 0,
       })}
     />
   )

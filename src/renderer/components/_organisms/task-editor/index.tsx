@@ -55,6 +55,7 @@ export default function TaskEditor() {
         })
       }
     }
+    console.log('taskdata: ', taskData)
   }, [editor])
 
   const handleRearrangeTasks = (index: number, row?: number) => {
@@ -76,10 +77,12 @@ export default function TaskEditor() {
 
     if (tasks.length === 0) {
       createTask({
-        name: 'Task',
-        triggering: 'Cyclic',
-        priority: 0,
-        interval: '0',
+        data: {
+          name: 'Task',
+          triggering: 'Cyclic',
+          priority: 0,
+          interval: '0',
+        },
       })
       updateModelTasks({
         display: 'table',
@@ -88,7 +91,7 @@ export default function TaskEditor() {
       return
     }
 
-  const task : PLCTask = selectedRow === ROWS_NOT_SELECTED ? tasks[tasks.length - 1] : tasks[selectedRow]
+    const task: PLCTask = selectedRow === ROWS_NOT_SELECTED ? tasks[tasks.length - 1] : tasks[selectedRow]
 
     if (!task) {
       console.error('No task found for the selectedRow:', selectedRow)
@@ -96,12 +99,7 @@ export default function TaskEditor() {
     }
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createTask({
-        name: 'Task',
-        triggering: task.triggering,
-        priority: task.priority,
-        interval: task.interval,
-      })
+      createTask({ data: { ...task } })
       updateModelTasks({
         display: 'table',
         selectedRow: tasks.length,
@@ -109,13 +107,7 @@ export default function TaskEditor() {
       return
     }
 
-    createTask({
-      name: task.name,
-      triggering: task.triggering,
-      priority: task.priority,
-      interval: task.interval,
-      rowToInsert: selectedRow + 1,
-    })
+    createTask({ data: { ...task }, rowToInsert: selectedRow + 1 })
     updateModelTasks({
       display: 'table',
       selectedRow: selectedRow + 1,
