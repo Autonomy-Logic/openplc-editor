@@ -2,11 +2,20 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowState } from '@root/renderer/store/slices'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
-import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
-import { addNewElement, removeElements, removePlaceholderNodes, renderPlaceholderNodes } from './ladder-utils/elements'
+import {
+  addNewElement,
+  onDragElement,
+  onDragStartElement,
+  onDragStopElement,
+  removeElements,
+  removePlaceholderNodes,
+  renderPlaceholderNodes,
+  searchNearestPlaceholder,
+} from './ladder-utils/elements'
 
 type RungBodyProps = {
   rung: FlowState
@@ -18,6 +27,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
   const [rungLocal, setRungLocal] = useState<FlowState>(rung)
+  const [selectedNodes, setSelectedNodes] = useState<FlowNode[]>([])
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const flowRef = useRef<HTMLDivElement>(null)
 
@@ -50,14 +60,44 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
     setFlowPanelExtent([
       [0, 0],
-      [bounds.width, bounds.height],
+      [bounds.width, bounds.height + 20],
     ])
-    flowActions.updateFlowViewport({ rungId: rungLocal.id, flowViewport: [bounds.width, bounds.height] })
+    flowActions.updateFlowViewport({ rungId: rungLocal.id, flowViewport: [bounds.width, bounds.height + 20] })
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
     updateFlowStore()
   }, [rungLocal.nodes.length])
+
+  useEffect(() => {
+    const selectedNodes = rungLocal.nodes.filter((node) => node.selected)
+    setSelectedNodes(selectedNodes)
+  }, [rungLocal.nodes.filter((node) => node.selected)])
+
+  useEffect(() => {
+    if (selectedNodes.length > 1) {
+      setRungLocal((rung) => ({
+        ...rung,
+        nodes: rung.nodes.map((node) => {
+          if (selectedNodes.map((n) => n.id).includes(node.id)) {
+            return {
+              ...node,
+              draggable: false,
+            }
+          }
+          return node
+        }),
+      }))
+      return
+    }
+    setRungLocal((rung) => ({
+      ...rung,
+      nodes: rung.nodes.map((node) => ({
+        ...node,
+        draggable: true,
+      })),
+    }))
+  }, [selectedNodes.length])
 
   const updateFlowStore = () => {
     if (reactFlowInstance) {
@@ -68,12 +108,12 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }
 
   const handleAddNode = (newNodeType: string = 'mockNode') => {
-    const { nodes, edges } = addNewElement(rungLocal, newNodeType, rung.defaultBounds)
+    const { nodes, edges } = addNewElement(rungLocal, newNodeType)
     setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
 
   const handleRemoveNode = (nodes: FlowNode[]) => {
-    const { nodes: newNodes, edges: newEdges } = removeElements(rungLocal, nodes, rung.defaultBounds)
+    const { nodes: newNodes, edges: newEdges } = removeElements(rungLocal, nodes)
     setRungLocal((rung) => ({ ...rung, nodes: newNodes, edges: newEdges }))
   }
 
@@ -87,8 +127,42 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     [rungLocal],
   )
 
+  const handleNodeStartDrag = (node: FlowNode) => {
+    const result = onDragStartElement(rungLocal, node)
+    setRungLocal((rung) => ({ ...rung, nodes: result.nodes, edges: result.edges }))
+  }
+
+  const handleNodeDrag = (event: MouseEvent) => {
+    if (!reactFlowInstance) return
+    const closestPlaceholder = onDragElement(rungLocal, reactFlowInstance, { x: event.clientX, y: event.clientY })
+    if (!closestPlaceholder) return
+
+    setRungLocal((rung) => ({
+      ...rung,
+      nodes: rung.nodes.map((node) => {
+        if (node.id === closestPlaceholder.id) {
+          return {
+            ...node,
+            selected: true,
+          }
+        }
+        return {
+          ...node,
+          selected: false,
+        }
+      }),
+    }))
+  }
+
+  const handleNodeDragStop = (node: FlowNode) => {
+    const result = onDragStopElement(rungLocal, node)
+    setRungLocal((rung) => ({ ...rung, nodes: result.nodes, edges: result.edges }))
+  }
+
   const onDragEnterViewport = useCallback<DragEventHandler>(
     (event) => {
+      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) return
+
       event.preventDefault()
       const { relatedTarget } = event
       if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
@@ -101,6 +175,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onDragLeaveViewport = useCallback<DragEventHandler>(
     (event) => {
+      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) return
+
       const { relatedTarget } = event
       if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
       const nodes = removePlaceholderNodes(rungLocal.nodes)
@@ -111,28 +187,23 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onDragOver = useCallback<DragEventHandler>(
     (event) => {
+      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) return
+
       event.preventDefault()
       event.dataTransfer.dropEffect = 'move'
 
-      const placeholderNodes = rungLocal.nodes.filter(
-        (node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder',
-      )
-      if (placeholderNodes.length === 0) return
+      if (!reactFlowInstance) return
 
-      const mousePosition = reactFlowInstance?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
-      if (!mousePosition) return
-
-      const closestNode = placeholderNodes.reduce((prev, curr) => {
-        const prevDistance = Math.hypot(prev.position.x - mousePosition.x, prev.position.y - mousePosition.y)
-        const currDistance = Math.hypot(curr.position.x - mousePosition.x, curr.position.y - mousePosition.y)
-        return prevDistance < currDistance ? prev : curr
+      const closestPlaceholder = searchNearestPlaceholder(rungLocal, reactFlowInstance, {
+        x: event.clientX,
+        y: event.clientY,
       })
-      if (!closestNode) return
+      if (!closestPlaceholder) return
 
       setRungLocal((rung) => ({
         ...rung,
         nodes: rung.nodes.map((node) => {
-          if (node.id === closestNode.id) {
+          if (node.id === closestPlaceholder.id) {
             return {
               ...node,
               selected: true,
@@ -150,8 +221,15 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onDrop = useCallback<DragEventHandler>(
     (event) => {
+      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) return
+
       event.preventDefault()
-      const type = event.dataTransfer.getData('application/reactflow')
+      const type = event.dataTransfer.getData('application/reactflow/ladder-blocks')
+      if (!type) {
+        const nodes = removePlaceholderNodes(rungLocal.nodes)
+        setRungLocal((rung) => ({ ...rung, nodes }))
+        return
+      }
       handleAddNode(type)
     },
     [rungLocal],
@@ -170,21 +248,34 @@ export const RungBody = ({ rung }: RungBodyProps) => {
           <FlowPanel
             viewportConfig={{
               nodeTypes: nodeTypes,
+              nodes: rungLocal.nodes,
+              edges: rungLocal.edges,
+              nodesFocusable: false,
+              edgesFocusable: false,
               defaultEdgeOptions: {
                 deletable: false,
                 selectable: false,
                 type: 'smoothstep',
               },
 
-              nodes: rungLocal.nodes,
-              edges: rungLocal.edges,
               onInit: setReactFlowInstance,
+
               onNodesChange: onNodesChange,
-              onNodeDragStop: updateFlowStore,
               onNodesDelete: (nodes) => {
                 handleRemoveNode(nodes)
               },
+              onNodeDragStart: (_event, node) => {
+                handleNodeStartDrag(node)
+              },
+              onNodeDrag: (event, _node) => {
+                handleNodeDrag(event)
+              },
+              onNodeDragStop: (_event, node) => {
+                handleNodeDragStop(node)
+              },
+
               onConnectEnd: updateFlowStore,
+
               onDragEnter: onDragEnterViewport,
               onDragLeave: onDragLeaveViewport,
               onDragOver: onDragOver,

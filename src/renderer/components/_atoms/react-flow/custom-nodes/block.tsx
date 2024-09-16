@@ -48,12 +48,16 @@ const BLOCK_TYPES: BlockTypes = {
   },
 }
 
-export const Block = ({ selected, data }: BlockProps) => {
+export const Block = ({ selected, data, id, dragging }: BlockProps) => {
   const [blockLabelValue, setBlockLabelValue] = useState<string>('')
   const { name, leftConnectors, rightConnectors, tooltipContent } = BLOCK_TYPES[data.variant]
 
   return (
-    <div className='relative'>
+    <div
+      className={cn('relative', {
+        'opacity-40': id.startsWith('copycat'),
+      })}
+    >
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger>
@@ -90,7 +94,7 @@ export const Block = ({ selected, data }: BlockProps) => {
               ))}
             </div>
           </TooltipTrigger>
-          <TooltipContent side='right'>{tooltipContent}</TooltipContent>
+          {!dragging && <TooltipContent side='right'>{tooltipContent}</TooltipContent>}
         </Tooltip>
       </TooltipProvider>
       <div
@@ -176,6 +180,8 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: Bl
     },
     width: BLOCK_WIDTH,
     height: BLOCK_HEIGHT,
-    draggable: false,
+    draggable: true,
+    selectable: true,
+    selected: false,
   }
 }
