@@ -2,27 +2,22 @@ import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '@components
 import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
-// import { CreateEditorObject } from '@root/renderer/store/slices/shared/utils'
 import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
+import React, { useState } from 'react'
 
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
 const Project = () => {
   const {
     workspace: {
-      projectData: { pous, dataTypes },
+      projectData: { pous, dataTypes, projectName },
     },
+    workspaceActions:{updateProjectName},
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
-  const Name = 'Project Name'
-
   const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
-    const tabToBeCreated = {
-      name,
-      path,
-      elementType,
-    }
+    const tabToBeCreated = { name, path, elementType }
     updateTabs(tabToBeCreated)
     const editor = getEditorFromEditors(tabToBeCreated.name)
     if (!editor) {
@@ -35,29 +30,57 @@ const Project = () => {
     setEditor(editor)
   }
 
+  const [isEditing, setIsEditing] = useState(false)
+  const [inputValue, setInputValue] = useState(projectName)
+
+  const handleBlur = () => {
+    setIsEditing(false)
+    if (inputValue !== projectName) {
+      updateProjectName(inputValue)
+    }
+  }
+
   return (
     <div id='project-container' className='flex h-full w-full flex-col pr-2'>
       {/* Actions handler */}
       <div id='project-actions-container' className='relative z-10 my-3 flex w-full justify-normal gap-2 pl-2'>
         <div
           id='project-name-container'
-          className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 dark:bg-brand-dark'
+          className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 py-[1px] dark:bg-brand-dark'
+          onClick={() => setIsEditing(true)}
         >
-          <FolderIcon size='sm' />
-          <span
-            id='project-name'
-            className='pl-1 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'
-          >
-            {Name}
-          </span>
+          <div className='flex-shrink-0'>
+            <FolderIcon size='sm' className='h-4 w-4' style={{ minWidth: '16px', minHeight: '16px' }} />
+          </div>
+          {isEditing ? (
+            <div className='flex h-5.5 w-full items-center border-none bg-transparent px-0 py-0'>
+              <input
+                id='project-name'
+                className={`box-border h-full w-full cursor-text bg-transparent px-2 py-0 text-xs font-medium text-neutral-1000 outline-none dark:text-neutral-50`}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onBlur={handleBlur}
+                autoFocus
+              />
+            </div>
+          ) : (
+            <span
+              id='project-name'
+              className={`w-full cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap rounded-lg px-2 py-1 text-xs font-medium text-neutral-1000 dark:text-neutral-50`}
+              title='Edit name project'
+            >
+              {projectName}
+            </span>
+          )}
         </div>
         <div id='create-plc-container'>
           <CreatePLCElement />
         </div>
       </div>
+
       {/* Data display */}
       <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto pr-1'>
-        <ProjectTreeRoot label={Name}>
+        <ProjectTreeRoot label={projectName}>
           <ProjectTreeBranch branchTarget='function'>
             {pous
               ?.filter(({ type }) => type === 'function')
@@ -66,8 +89,7 @@ const Project = () => {
                   key={data.name}
                   leafLang={data.language}
                   label={data.name}
-                  /** Todo: Update the tab state */
-                  onClick={() =>
+                    onClick={() =>
                     handleCreateTab({
                       name: data.name,
                       path: `/data/pous/function/${data.name}`,
@@ -85,8 +107,7 @@ const Project = () => {
                   key={data.name}
                   leafLang={data.language}
                   label={data.name}
-                  /** Todo: Update the tab state */
-                  onClick={() =>
+                    onClick={() =>
                     handleCreateTab({
                       name: data.name,
                       path: `/data/pous/function-block/${data.name}`,
@@ -104,8 +125,7 @@ const Project = () => {
                   key={data.name}
                   leafLang={data.language}
                   label={data.name}
-                  /** Todo: Update the tab state */
-                  onClick={() =>
+                    onClick={() =>
                     handleCreateTab({
                       name: data.name,
                       path: `/data/pous/program/${data.name}`,
@@ -124,8 +144,7 @@ const Project = () => {
                   key={id}
                   leafLang='arr'
                   label={name}
-                  /** Todo: Update the tab state */
-                  onClick={() =>
+                    onClick={() =>
                     handleCreateTab({
                       name,
                       path: `/data/data-types/array/${name}`,
@@ -181,4 +200,5 @@ const Project = () => {
     </div>
   )
 }
+
 export { Project }
