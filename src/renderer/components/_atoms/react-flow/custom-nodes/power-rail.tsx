@@ -7,17 +7,17 @@ type PowerRailNode = Node<BasicNodeData>
 type PowerRailProps = NodeProps<PowerRailNode>
 type PowerRailBuilderProps = BuilderBasicProps & { connector: 'left' | 'right' }
 
-export const POWER_RAIL_WIDTH = 3
-export const POWER_RAIL_HEIGHT = 200
+export const DEFAULT_POWER_RAIL_WIDTH = 3
+export const DEFAULT_POWER_RAIL_HEIGHT = 200
 
-export const POWER_RAIL_CONNECTOR_X = POWER_RAIL_WIDTH
-export const POWER_RAIL_CONNECTOR_Y = POWER_RAIL_HEIGHT / 2
+export const DEFAULT_POWER_RAIL_CONNECTOR_X = DEFAULT_POWER_RAIL_WIDTH
+export const DEFAULT_POWER_RAIL_CONNECTOR_Y = DEFAULT_POWER_RAIL_HEIGHT / 2
 
 export const PowerRail = ({ data }: PowerRailProps) => {
   return (
     <>
-      <svg width={POWER_RAIL_WIDTH} height={POWER_RAIL_HEIGHT} xmlns='http://www.w3.org/2000/svg'>
-        <rect width={POWER_RAIL_WIDTH} height={POWER_RAIL_HEIGHT} className='fill-neutral-500' />
+      <svg width={DEFAULT_POWER_RAIL_WIDTH} height={DEFAULT_POWER_RAIL_HEIGHT} xmlns='http://www.w3.org/2000/svg'>
+        <rect width={DEFAULT_POWER_RAIL_WIDTH} height={DEFAULT_POWER_RAIL_HEIGHT} className='fill-neutral-500' />
       </svg>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
@@ -45,12 +45,12 @@ export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY
       isConnectable: false,
       glbX: handleX,
       glbY: handleY,
-      relX: POWER_RAIL_CONNECTOR_X,
-      relY: POWER_RAIL_CONNECTOR_Y,
+      relX: DEFAULT_POWER_RAIL_CONNECTOR_X,
+      relY: DEFAULT_POWER_RAIL_CONNECTOR_Y,
       style: {
-        top: POWER_RAIL_CONNECTOR_Y,
-        left: connector === 'left' ? -POWER_RAIL_WIDTH : undefined,
-        right: connector === 'right' ? -POWER_RAIL_WIDTH : undefined,
+        top: DEFAULT_POWER_RAIL_CONNECTOR_Y,
+        left: connector === 'left' ? -DEFAULT_POWER_RAIL_WIDTH : undefined,
+        right: connector === 'right' ? -DEFAULT_POWER_RAIL_WIDTH : undefined,
       },
     }),
   ]
@@ -64,8 +64,8 @@ export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY
       inputConnector: connector === 'left' ? handles[0] : undefined,
       outputConnector: connector === 'right' ? handles[0] : undefined,
     },
-    width: POWER_RAIL_WIDTH,
-    height: POWER_RAIL_HEIGHT,
+    width: DEFAULT_POWER_RAIL_WIDTH,
+    height: DEFAULT_POWER_RAIL_HEIGHT,
     draggable: false,
     selectable: false,
     selected: false,

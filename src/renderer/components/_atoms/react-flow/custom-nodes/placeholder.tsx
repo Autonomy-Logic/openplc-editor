@@ -15,19 +15,19 @@ type ParallelBuilderProps = BuilderBasicProps & {
   position: 'left' | 'right' | 'bottom'
 }
 
-export const PLACEHOLDER_WIDTH = 10
-export const PLACEHOLDER_HEIGHT = 10
-export const PLACEHOLDER_GAP = 15
+export const DEFAULT_PLACEHOLDER_WIDTH = 10
+export const DEFAULT_PLACEHOLDER_HEIGHT = 10
+export const DEFAULT_PLACEHOLDER_GAP = 15
 
-export const PLACEHOLDER_CONNECTOR_Y = PLACEHOLDER_HEIGHT / 2
+export const DEFAULT_PLACEHOLDER_CONNECTOR_Y = DEFAULT_PLACEHOLDER_HEIGHT / 2
 
 export const Placeholder = ({ selected, data }: PlaceholderProps) => {
   return (
     <>
       <PlaceholderNodeFilled
         className={cn({ 'fill-brand': selected })}
-        width={PLACEHOLDER_WIDTH}
-        height={PLACEHOLDER_HEIGHT}
+        width={DEFAULT_PLACEHOLDER_WIDTH}
+        height={DEFAULT_PLACEHOLDER_HEIGHT}
       />
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
@@ -55,10 +55,10 @@ export const builderPlaceholderNode = ({
       glbX: handleX,
       glbY: handleY,
       relX: 0,
-      relY: PLACEHOLDER_CONNECTOR_Y,
+      relY: DEFAULT_PLACEHOLDER_CONNECTOR_Y,
       style: {
         visibility: 'hidden',
-        top: PLACEHOLDER_CONNECTOR_Y,
+        top: DEFAULT_PLACEHOLDER_CONNECTOR_Y,
         left: 0,
       },
     }),
@@ -67,13 +67,13 @@ export const builderPlaceholderNode = ({
       position: Position.Right,
       type: 'source',
       isConnectable: false,
-      glbX: handleX + PLACEHOLDER_WIDTH,
+      glbX: handleX + DEFAULT_PLACEHOLDER_WIDTH,
       glbY: handleY,
-      relX: PLACEHOLDER_WIDTH,
-      relY: PLACEHOLDER_CONNECTOR_Y,
+      relX: DEFAULT_PLACEHOLDER_WIDTH,
+      relY: DEFAULT_PLACEHOLDER_CONNECTOR_Y,
       style: {
         visibility: 'hidden',
-        top: PLACEHOLDER_CONNECTOR_Y,
+        top: DEFAULT_PLACEHOLDER_CONNECTOR_Y,
         right: 0,
       },
     }),
@@ -94,8 +94,8 @@ export const builderPlaceholderNode = ({
       y: posY,
     },
     style: {
-      width: PLACEHOLDER_WIDTH,
-      height: PLACEHOLDER_HEIGHT,
+      width: DEFAULT_PLACEHOLDER_WIDTH,
+      height: DEFAULT_PLACEHOLDER_HEIGHT,
     },
     draggable: false,
     selectable: true,

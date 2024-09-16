@@ -11,12 +11,12 @@ type BlockNode = Node<BasicNodeData & { variant: 'default' | 'TON' }>
 type BlockProps = NodeProps<BlockNode>
 type BlockBuilderProps = BuilderBasicProps & { variant: 'default' | 'TON' }
 
-export const BLOCK_WIDTH = 96
-export const BLOCK_HEIGHT = 128
+export const DEFAULT_BLOCK_WIDTH = 96
+export const DEFAULT_BLOCK_HEIGHT = 128
 
-export const BLOCK_CONNECTOR_X = BLOCK_WIDTH
-export const BLOCK_CONNECTOR_Y = 40
-export const BLOCK_CONNECTOR_Y_OFFSET = 32
+export const DEFAULT_BLOCK_CONNECTOR_X = DEFAULT_BLOCK_WIDTH
+export const DEFAULT_BLOCK_CONNECTOR_Y = 40
+export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 32
 
 type BlockTypes = {
   [key: string]: {
@@ -26,7 +26,7 @@ type BlockTypes = {
     tooltipContent: string
   }
 }
-const BLOCK_TYPES: BlockTypes = {
+const DEFAULT_BLOCK_TYPES: BlockTypes = {
   default: {
     name: '???',
     leftConnectors: ['???', '???'],
@@ -50,7 +50,7 @@ const BLOCK_TYPES: BlockTypes = {
 
 export const Block = ({ selected, data, id, dragging }: BlockProps) => {
   const [blockLabelValue, setBlockLabelValue] = useState<string>('')
-  const { name, leftConnectors, rightConnectors, tooltipContent } = BLOCK_TYPES[data.variant]
+  const { name, leftConnectors, rightConnectors, tooltipContent } = DEFAULT_BLOCK_TYPES[data.variant]
 
   return (
     <div
@@ -69,8 +69,8 @@ export const Block = ({ selected, data, id, dragging }: BlockProps) => {
                 },
               )}
               style={{
-                width: BLOCK_WIDTH,
-                height: BLOCK_HEIGHT,
+                width: DEFAULT_BLOCK_WIDTH,
+                height: DEFAULT_BLOCK_HEIGHT,
               }}
             >
               <div className='flex h-fit w-full justify-center py-1 text-sm'>{name}</div>
@@ -78,7 +78,7 @@ export const Block = ({ selected, data, id, dragging }: BlockProps) => {
                 <div
                   key={index}
                   className='absolute text-sm'
-                  style={{ top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET - 11, left: 7 }}
+                  style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 11, left: 7 }}
                 >
                   {connector}
                 </div>
@@ -87,7 +87,7 @@ export const Block = ({ selected, data, id, dragging }: BlockProps) => {
                 <div
                   key={index}
                   className='absolute text-sm'
-                  style={{ top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET - 11, right: 7 }}
+                  style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 11, right: 7 }}
                 >
                   {connector}
                 </div>
@@ -100,7 +100,7 @@ export const Block = ({ selected, data, id, dragging }: BlockProps) => {
       <div
         className='absolute -top-7'
         style={{
-          width: BLOCK_WIDTH,
+          width: DEFAULT_BLOCK_WIDTH,
         }}
       >
         <InputWithRef
@@ -128,7 +128,7 @@ export const Block = ({ selected, data, id, dragging }: BlockProps) => {
  * @returns BlockNode
  */
 export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: BlockBuilderProps) => {
-  const type = BLOCK_TYPES[variant]
+  const type = DEFAULT_BLOCK_TYPES[variant]
   const leftConnectors = type.leftConnectors
   const rightConnectors = type.rightConnectors
 
@@ -139,11 +139,11 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: Bl
       type: 'target',
       isConnectable: false,
       glbX: handleX,
-      glbY: handleY + index * BLOCK_CONNECTOR_Y_OFFSET,
+      glbY: handleY + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
       relX: 0,
-      relY: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
+      relY: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
       style: {
-        top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
+        top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
         left: 0,
       },
     }),
@@ -155,12 +155,12 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: Bl
       position: Position.Right,
       type: 'source',
       isConnectable: false,
-      glbX: handleX + BLOCK_CONNECTOR_X,
-      glbY: handleY + index * BLOCK_CONNECTOR_Y_OFFSET,
-      relX: BLOCK_CONNECTOR_X,
-      relY: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
+      glbX: handleX + DEFAULT_BLOCK_CONNECTOR_X,
+      glbY: handleY + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
+      relX: DEFAULT_BLOCK_CONNECTOR_X,
+      relY: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
       style: {
-        top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
+        top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
         right: 0,
       },
     }),
@@ -178,8 +178,8 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: Bl
       inputConnector: leftHandles[0],
       outputConnector: rightHandles[0],
     },
-    width: BLOCK_WIDTH,
-    height: BLOCK_HEIGHT,
+    width: DEFAULT_BLOCK_WIDTH,
+    height: DEFAULT_BLOCK_HEIGHT,
     draggable: true,
     selectable: true,
     selected: false,

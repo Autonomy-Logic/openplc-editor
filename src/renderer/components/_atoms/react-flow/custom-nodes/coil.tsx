@@ -26,23 +26,23 @@ type CoilBuilderProps = BuilderBasicProps & {
   variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset'
 }
 
-export const COIL_BLOCK_WIDTH = 34
-export const COIL_BLOCK_HEIGHT = 28
+export const DEFAULT_COIL_BLOCK_WIDTH = 34
+export const DEFAULT_COIL_BLOCK_HEIGHT = 28
 
-export const COIL_CONNECTOR_X = COIL_BLOCK_WIDTH
-export const COIL_CONNECTOR_Y = COIL_BLOCK_HEIGHT / 2
+export const DEFAULT_COIL_CONNECTOR_X = DEFAULT_COIL_BLOCK_WIDTH
+export const DEFAULT_COIL_CONNECTOR_Y = DEFAULT_COIL_BLOCK_HEIGHT / 2
 
 type CoilType = {
   [key in CoilNode['data']['variant']]: {
     svg: ReactNode
   }
 }
-const COIL_TYPES: CoilType = {
+const DEFAULT_COIL_TYPES: CoilType = {
   default: {
     svg: (
       <DefaultCoil
-        width={COIL_BLOCK_WIDTH}
-        height={COIL_BLOCK_HEIGHT}
+        width={DEFAULT_COIL_BLOCK_WIDTH}
+        height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
       />
     ),
@@ -50,8 +50,8 @@ const COIL_TYPES: CoilType = {
   negated: {
     svg: (
       <NegatedCoil
-        width={COIL_BLOCK_WIDTH}
-        height={COIL_BLOCK_HEIGHT}
+        width={DEFAULT_COIL_BLOCK_WIDTH}
+        height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
       />
     ),
@@ -59,8 +59,8 @@ const COIL_TYPES: CoilType = {
   risingEdge: {
     svg: (
       <RisingEdgeCoil
-        width={COIL_BLOCK_WIDTH}
-        height={COIL_BLOCK_HEIGHT}
+        width={DEFAULT_COIL_BLOCK_WIDTH}
+        height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
       />
     ),
@@ -68,8 +68,8 @@ const COIL_TYPES: CoilType = {
   fallingEdge: {
     svg: (
       <FallingEdgeCoil
-        width={COIL_BLOCK_WIDTH}
-        height={COIL_BLOCK_HEIGHT}
+        width={DEFAULT_COIL_BLOCK_WIDTH}
+        height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
       />
     ),
@@ -77,8 +77,8 @@ const COIL_TYPES: CoilType = {
   set: {
     svg: (
       <SetCoil
-        width={COIL_BLOCK_WIDTH}
-        height={COIL_BLOCK_HEIGHT}
+        width={DEFAULT_COIL_BLOCK_WIDTH}
+        height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
       />
     ),
@@ -86,8 +86,8 @@ const COIL_TYPES: CoilType = {
   reset: {
     svg: (
       <ResetCoil
-        width={COIL_BLOCK_WIDTH}
-        height={COIL_BLOCK_HEIGHT}
+        width={DEFAULT_COIL_BLOCK_WIDTH}
+        height={DEFAULT_COIL_BLOCK_HEIGHT}
         parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
       />
     ),
@@ -96,7 +96,7 @@ const COIL_TYPES: CoilType = {
 
 export const Coil = ({ selected, data, id }: CoilProps) => {
   const [coilLabelValue, setCoilLabelValue] = useState<string>('')
-  const coil = COIL_TYPES[data.variant]
+  const coil = DEFAULT_COIL_TYPES[data.variant]
 
   return (
     <div
@@ -111,7 +111,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
             'outline outline-2 outline-offset-[5px] outline-brand': selected,
           },
         )}
-        style={{ width: COIL_BLOCK_WIDTH, height: COIL_BLOCK_HEIGHT }}
+        style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
       >
         {coil.svg}
       </div>
@@ -139,7 +139,7 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
     glbX: handleX,
     glbY: handleY,
     relX: 0,
-    relY: COIL_CONNECTOR_Y,
+    relY: DEFAULT_COIL_CONNECTOR_Y,
     style: { left: -3 },
   })
   const outputHandle = buildHandle({
@@ -147,10 +147,10 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
     position: Position.Right,
     isConnectable: false,
     type: 'source',
-    glbX: handleX + COIL_BLOCK_WIDTH,
+    glbX: handleX + DEFAULT_COIL_BLOCK_WIDTH,
     glbY: handleY,
-    relX: COIL_BLOCK_WIDTH,
-    relY: COIL_CONNECTOR_Y,
+    relX: DEFAULT_COIL_BLOCK_WIDTH,
+    relY: DEFAULT_COIL_CONNECTOR_Y,
     style: { right: -3 },
   })
   const handles = [inputHandle, outputHandle]
@@ -165,8 +165,8 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
       inputConnector: inputHandle,
       outputConnector: outputHandle,
     },
-    width: COIL_BLOCK_WIDTH,
-    height: COIL_BLOCK_HEIGHT,
+    width: DEFAULT_COIL_BLOCK_WIDTH,
+    height: DEFAULT_COIL_BLOCK_HEIGHT,
     draggable: true,
     selectable: true,
     selected: false,

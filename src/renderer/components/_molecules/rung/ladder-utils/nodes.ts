@@ -18,7 +18,7 @@ export const isNodeOfType = (node: Node, nodeType: string): boolean => {
   return node.type === nodeType
 }
 
-export const getNodeStyle = ({ node, nodeType }: { node?: Node; nodeType?: string }) => {
+export const getDefaultNodeStyle = ({ node, nodeType }: { node?: Node; nodeType?: string }) => {
   return customNodesStyles[node?.type ?? nodeType ?? 'mockNode']
 }
 

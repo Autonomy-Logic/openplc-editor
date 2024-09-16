@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 import type { CustomHandleProps } from '../../../_atoms/react-flow/custom-nodes/handle'
 import { buildEdge, connectNodes, disconnectNodes, removeEdge } from './edges'
-import { buildGenericNode, getNodeStyle, isNodeOfType, removeNode } from './nodes'
+import { buildGenericNode, getDefaultNodeStyle, isNodeOfType, removeNode } from './nodes'
 
 /**
  * Local utilitaries functions
@@ -40,8 +40,8 @@ const getNodePositionBasedOnPreviousNode = (
       ? (previousElement as ParallelNode).data.parallelOutputConnector
       : previousElement.data.outputConnector
   ) as CustomHandleProps
-  const previousElementStyle = getNodeStyle({ node: previousElement })
-  const newNodeStyle = getNodeStyle(typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement })
+  const previousElementStyle = getDefaultNodeStyle({ node: previousElement })
+  const newNodeStyle = getDefaultNodeStyle(typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement })
 
   const gap = previousElementStyle.gap + newNodeStyle.gap
   const offsetY = newNodeStyle.handle.y
@@ -60,7 +60,7 @@ const getNodePositionBasedOnPreviousNode = (
 }
 
 const getNodePositionBasedOnPlaceholderNode = (placeholderNode: Node, newElement: string | Node) => {
-  const newNodeStyle = getNodeStyle(typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement })
+  const newNodeStyle = getDefaultNodeStyle(typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement })
 
   const placeholderHandles = placeholderNode.data.handles as CustomHandleProps[]
   const placeholderHandle = placeholderHandles[0]
@@ -81,61 +81,61 @@ const getPlaceholderPositionBasedOnNode = (node: Node, side: 'left' | 'bottom' |
       return {
         posX:
           node.position.x -
-          getNodeStyle({ nodeType: 'placeholder' }).gap -
-          getNodeStyle({ nodeType: 'placeholder' }).width / 2,
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).gap -
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         posY:
           ((node.data.inputConnector ?? node.data.outputConnector) as CustomHandleProps)?.glbPosition.y -
-          getNodeStyle({ nodeType: 'placeholder' }).handle.y,
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).handle.y,
         handleX:
           node.position.x -
-          getNodeStyle({ nodeType: 'placeholder' }).gap -
-          getNodeStyle({ nodeType: 'placeholder' }).width / 2,
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).gap -
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         handleY: ((node.data.inputConnector ?? node.data.outputConnector) as CustomHandleProps)?.glbPosition.y,
       }
     case 'right':
       return {
         posX:
           node.position.x +
-          getNodeStyle({ node }).width +
-          getNodeStyle({ nodeType: 'placeholder' }).gap -
-          getNodeStyle({ nodeType: 'placeholder' }).width / 2,
+          getDefaultNodeStyle({ node }).width +
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).gap -
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         posY:
           ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y -
-          getNodeStyle({ nodeType: 'placeholder' }).handle.y,
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).handle.y,
         handleX:
           node.position.x +
-          getNodeStyle({ node }).width +
-          getNodeStyle({ nodeType: 'placeholder' }).gap -
-          getNodeStyle({ nodeType: 'placeholder' }).width,
+          getDefaultNodeStyle({ node }).width +
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).gap -
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).width,
         handleY: ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y,
       }
     case 'bottom':
       return {
-        posX: node.position.x + getNodeStyle({ node }).width / 2 - getNodeStyle({ nodeType: 'placeholder' }).width / 2,
+        posX: node.position.x + getDefaultNodeStyle({ node }).width / 2 - getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         posY:
           node.position.y +
           (node?.height ?? 0) -
-          getNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
-          getNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
+          getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
+          getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
         handleX:
-          node.position.x + getNodeStyle({ node }).width / 2 - getNodeStyle({ nodeType: 'placeholder' }).width / 2,
+          node.position.x + getDefaultNodeStyle({ node }).width / 2 - getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         handleY:
           node.position.y +
           (node?.height ?? 0) -
-          getNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
-          getNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
+          getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
+          getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
       }
   }
 }
 
 const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: [number, number]) => {
   const handles = rightRail.data.handles as CustomHandleProps[]
-  const railStyle = getNodeStyle({ node: rightRail })
+  const railStyle = getDefaultNodeStyle({ node: rightRail })
   const nodesWithNoRail = nodes.filter((node) => node.id !== 'right-rail')
 
   const flowXBounds = nodesWithNoRail.reduce(
     (acc, node) => {
-      const nodeStyle = getNodeStyle({ node })
+      const nodeStyle = getDefaultNodeStyle({ node })
       return {
         minX: Math.min(acc.minX, node.position.x),
         maxX: Math.max(acc.maxX, node.position.x + nodeStyle.width + 2 * nodeStyle.gap + railStyle.gap),
@@ -250,12 +250,12 @@ const updateDiagramElementsPosition = (rung: FlowState, defaultBounds: [number, 
           const newPosY =
             objectParallel.heighestNode.position.y +
             objectParallel.height +
-            getNodeStyle({ node: objectParallel.heighestNode }).verticalGap -
-            getNodeStyle({ node }).handle.y
+            getDefaultNodeStyle({ node: objectParallel.heighestNode }).verticalGap -
+            getDefaultNodeStyle({ node }).handle.y
           const newHandleY =
             objectParallel.heighestNode.position.y +
             objectParallel.height +
-            getNodeStyle({ node: objectParallel.heighestNode }).verticalGap
+            getDefaultNodeStyle({ node: objectParallel.heighestNode }).verticalGap
           newNodePosition = {
             ...newNodePosition,
             posY: newPosY,
