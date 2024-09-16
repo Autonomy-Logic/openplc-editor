@@ -38,7 +38,7 @@ const columns = [
     minSize: 150,
     maxSize: 468,
     enableResizing: true,
-    cell: SelectableIntervalCell
+    cell: SelectableIntervalCell,
   }),
   columnHelper.accessor('priority', {
     header: 'Priority',
@@ -138,7 +138,7 @@ export default function TaskTable({ tableData, selectedRow, handleRowClick }: PL
       updateData: (rowIndex: number, columnId: string, value: unknown) => {
         const updatedTask = { ...tableData[rowIndex], [columnId]: value }
         updateTask({
-          ...updatedTask,
+          data: { ...updatedTask },
           rowId: rowIndex,
         })
         return {

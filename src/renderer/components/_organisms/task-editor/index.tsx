@@ -55,7 +55,7 @@ export default function TaskEditor() {
         })
       }
     }
-    console.log('taskdata: ', taskData)
+
   }, [editor])
 
   const handleRearrangeTasks = (index: number, row?: number) => {

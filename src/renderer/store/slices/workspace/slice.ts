@@ -359,16 +359,20 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
 
-    updateTask: (dataToBeUpdated): WorkspaceResponse => {
+    updateTask: (dataToBeUpdated: { rowId: number; data: Partial<PLCTask> }): WorkspaceResponse => {
       let response: WorkspaceResponse = { ok: true }
+
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           const { rowId } = dataToBeUpdated
           const index = rowId
-          if(index === -1) response = { ok: false, title: 'Task not found', message: 'Internal error' }
-          workspace.projectData.configuration.resource.tasks[index] = {
-            ...workspace.projectData.configuration.resource.tasks[index],
-            ...dataToBeUpdated.data,
+          if (index === -1) {
+            response = { ok: false, title: 'Task not found', message: 'Internal error' }
+          } else {
+            workspace.projectData.configuration.resource.tasks[index] = {
+              ...workspace.projectData.configuration.resource.tasks[index],
+              ...dataToBeUpdated.data,
+            }
           }
         }),
       )
