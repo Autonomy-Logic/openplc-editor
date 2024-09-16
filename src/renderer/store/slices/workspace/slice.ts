@@ -66,7 +66,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     updateProjectName: (projectName): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
-          workspace.projectName = projectName
+          workspace.projectData.projectName = projectName
         }),
       )
     },

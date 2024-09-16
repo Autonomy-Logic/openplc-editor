@@ -12,6 +12,7 @@ const Project = () => {
     workspace: {
       projectData: { pous, dataTypes, projectName },
     },
+    workspaceActions:{updateProjectName},
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
@@ -26,13 +27,8 @@ const Project = () => {
   //   enumerated: 'plc-datatype',
   //   structure: 'plc-datatype',
   // } as const
-
   const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
-    const tabToBeCreated = {
-      name,
-      path,
-      elementType,
-    }
+    const tabToBeCreated = { name, path, elementType }
     updateTabs(tabToBeCreated)
     const editor = getEditorFromEditors(tabToBeCreated.name)
     if (!editor) {
@@ -46,14 +42,13 @@ const Project = () => {
   }
 
   const [isEditing, setIsEditing] = useState(false)
+  const [inputValue, setInputValue] = useState(projectName)
 
   const handleBlur = () => {
     setIsEditing(false)
-  }
-
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-
-    console.log(e.target.value)
+    if (inputValue !== projectName) {
+      updateProjectName(inputValue)
+    }
   }
 
   return (
@@ -73,8 +68,8 @@ const Project = () => {
               <input
                 id='project-name'
                 className={`box-border h-full w-full cursor-text bg-transparent px-2 py-0 text-xs font-medium text-neutral-1000 outline-none dark:text-neutral-50`}
-                value={projectName}
-                onChange={handleNameChange}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
                 onBlur={handleBlur}
                 autoFocus
               />
@@ -104,7 +99,6 @@ const Project = () => {
                 key={data.name}
                 leafLang={data.language}
                 label={data.name}
-                /** Todo: Update the tab state */
                 onClick={() =>
                   handleCreateTab({
                     name: data.name,
@@ -123,7 +117,6 @@ const Project = () => {
                 key={data.name}
                 leafLang={data.language}
                 label={data.name}
-                /** Todo: Update the tab state */
                 onClick={() =>
                   handleCreateTab({
                     name: data.name,
@@ -142,7 +135,6 @@ const Project = () => {
                 key={data.name}
                 leafLang={data.language}
                 label={data.name}
-                /** Todo: Update the tab state */
                 onClick={() =>
                   handleCreateTab({
                     name: data.name,
@@ -162,7 +154,6 @@ const Project = () => {
                 key={id}
                 leafLang='arr'
                 label={name}
-                /** Todo: Update the tab state */
                 onClick={() =>
                   handleCreateTab({
                     name,
@@ -181,7 +172,6 @@ const Project = () => {
                 key={id}
                 leafLang='enum'
                 label={name}
-                /** Todo: Update the tab state */
                 onClick={() =>
                   handleCreateTab({
                     name,
@@ -200,7 +190,6 @@ const Project = () => {
                 key={id}
                 leafLang='str'
                 label={name}
-                /** Todo: Update the tab state */
                 onClick={() =>
                   handleCreateTab({
                     name,
@@ -211,7 +200,7 @@ const Project = () => {
               />
             ))}
         </ProjectTreeBranch>
-        <ProjectTreeBranch branchTarget='device'>{/** Will be filled with device */}</ProjectTreeBranch>
+        <ProjectTreeBranch branchTarget='device'>{/* Will be filled with device */}</ProjectTreeBranch>
       </ProjectTreeRoot>
     </div>
   )
