@@ -6,6 +6,8 @@ import { getFilteredRowModel } from '@tanstack/react-table'
 import { useEffect, useRef } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
+import EditableNameCell from './editable-cell'
+import { SelectableProgramCell, SelectableTaskCell } from './selectable-cell'
 
 type PLCInstancesTableProps = {
   tableData: PLCInstance[]
@@ -21,20 +23,23 @@ const columns = [
     size: 150,
     minSize: 100,
     maxSize: 150,
+    cell: EditableNameCell,
+  }),
+  columnHelper.accessor('program', {
+    header: 'Program',
+    size: 768,
+    minSize: 150,
+    maxSize: 768,
+    enableResizing: true,
+    cell: SelectableProgramCell,
   }),
   columnHelper.accessor('task', {
     header: ' Task',
     enableResizing: true,
-    size: 468,
+    size: 768,
     minSize: 150,
-    maxSize: 468,
-  }),
-  columnHelper.accessor('program', {
-    header: 'Program',
-    size: 468,
-    minSize: 150,
-    maxSize: 468,
-    enableResizing: true,
+    maxSize: 768,
+    cell: SelectableTaskCell,
   }),
 ]
 

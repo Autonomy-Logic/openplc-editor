@@ -125,14 +125,6 @@ const PLCTaskSchema = z.object({
 
 type PLCTask = z.infer<typeof PLCTaskSchema>
 
-const PLCInstanceSchema = z.object({
-  id: z.string().optional(),
-  name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the instance object.
-  task: z.string(), // TODO: Implement this validation. This task must be one of the objects in the "tasks" array defined right above.
-  program: z.string(), // TODO: Implement this validation. This program must be one of the user's defined pou of program type.
-})
-
-type PLCInstance = z.infer<typeof PLCInstanceSchema>
 
 const PLCFunctionSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
@@ -156,6 +148,15 @@ const PLCProgramSchema = z.object({
 })
 
 type PLCProgram = z.infer<typeof PLCProgramSchema>
+
+const PLCInstanceSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the instance object.
+  task: z.string(), // TODO: Implement this validation. This task must be one of the objects in the "tasks" array defined right above.
+  program: z.string(), // TODO: Implement this validation. This program must be one of the user's defined pou of program type.
+})
+
+type PLCInstance = z.infer<typeof PLCInstanceSchema>
 
 const PLCFunctionBlockSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),

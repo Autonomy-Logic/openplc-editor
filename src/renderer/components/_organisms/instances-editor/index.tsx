@@ -77,9 +77,9 @@ export default function InstancesEditor() {
     if (instances.length === 0) {
       createInstance({
         data: {
-          name: 'Task',
-          program: 'program',
-          task: 'task1',
+          name: 'instance',
+          program: '',
+          task: '',
         },
       })
       updateModelInstances({
