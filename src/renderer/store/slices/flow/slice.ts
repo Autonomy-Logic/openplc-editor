@@ -1,4 +1,4 @@
-import { customNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
+import { defaultCustomNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
 import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
@@ -12,7 +12,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     startLadderRung: ({ rungId, defaultBounds, flowViewport }) => {
       setState(
         produce((state: RungsState) => {
-          const { powerRail } = customNodesStyles
+          const { powerRail } = defaultCustomNodesStyles
           const railNodes = [
             nodesBuilder.powerRail({
               id: 'left-rail',

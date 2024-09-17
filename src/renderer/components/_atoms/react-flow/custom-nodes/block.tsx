@@ -48,7 +48,7 @@ const DEFAULT_BLOCK_TYPES: BlockTypes = {
   },
 }
 
-export const Block = ({ selected, data, id, dragging }: BlockProps) => {
+export const Block = ({ height, selected, data, id, dragging }: BlockProps) => {
   const [blockLabelValue, setBlockLabelValue] = useState<string>('')
   const { name, leftConnectors, rightConnectors, tooltipContent } = DEFAULT_BLOCK_TYPES[data.variant]
 
@@ -70,7 +70,7 @@ export const Block = ({ selected, data, id, dragging }: BlockProps) => {
               )}
               style={{
                 width: DEFAULT_BLOCK_WIDTH,
-                height: DEFAULT_BLOCK_HEIGHT,
+                height: height,
               }}
             >
               <div className='flex h-fit w-full justify-center py-1 text-sm'>{name}</div>
@@ -168,6 +168,10 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: Bl
 
   const handles = [...leftHandles, ...rightHandles]
 
+  const blocKHeight =
+    DEFAULT_BLOCK_CONNECTOR_Y +
+    Math.max(leftConnectors.length, rightConnectors.length) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
+
   return {
     id,
     type: 'block',
@@ -179,7 +183,7 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: Bl
       outputConnector: rightHandles[0],
     },
     width: DEFAULT_BLOCK_WIDTH,
-    height: DEFAULT_BLOCK_HEIGHT,
+    height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
     draggable: true,
     selectable: true,
     selected: false,

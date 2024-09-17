@@ -32,7 +32,7 @@ type CustomNodeTypes = {
     }
   }
 }
-export const customNodesStyles: CustomNodeTypes = {
+export const defaultCustomNodesStyles: CustomNodeTypes = {
   block: {
     width: blockNode.DEFAULT_BLOCK_WIDTH,
     height: blockNode.DEFAULT_BLOCK_HEIGHT,
