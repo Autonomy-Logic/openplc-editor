@@ -125,6 +125,15 @@ const PLCTaskSchema = z.object({
 
 type PLCTask = z.infer<typeof PLCTaskSchema>
 
+const PLCInstanceSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the instance object.
+  task: z.string(), // TODO: Implement this validation. This task must be one of the objects in the "tasks" array defined right above.
+  program: z.string(), // TODO: Implement this validation. This program must be one of the user's defined pou of program type.
+})
+
+type PLCInstance = z.infer<typeof PLCInstanceSchema>
+
 const PLCFunctionSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
   name: z.string(),
@@ -180,13 +189,7 @@ const PLCProjectDataSchema = z.object({
   configuration: z.object({
     resource: z.object({
       tasks: z.array(PLCTaskSchema),
-      instances: z.array(
-        z.object({
-          name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the instance object.
-          task: z.string(), // TODO: Implement this validation. This task must be one of the objects in the "tasks" array defined right above.
-          program: z.string(), // TODO: Implement this validation. This program must be one of the user's defined pou of program type.
-        }),
-      ),
+      instances: z.array(PLCInstanceSchema),
       globalVariables: z.array(PLCVariableSchema.omit({ class: true })),
     }),
   }),
@@ -202,6 +205,7 @@ export {
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
   PLCGlobalVariableSchema,
+  PLCInstanceSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
   PLCTaskSchema,
@@ -215,6 +219,7 @@ export type {
   PLCFunction,
   PLCFunctionBlock,
   PLCGlobalVariable,
+  PLCInstance,
   PLCProgram,
   PLCProjectData,
   PLCTask,

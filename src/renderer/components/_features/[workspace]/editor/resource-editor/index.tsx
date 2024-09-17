@@ -1,7 +1,7 @@
+import InstancesEditor from '@root/renderer/components/_organisms/instances-editor'
 import TaskEditor from '@root/renderer/components/_organisms/task-editor'
 
 import { GlobalVariablesEditor } from '../../../../_molecules/global-variables'
-// import InstancesTable from '../../../../_molecules/instances'
 
 export default function ResourcesEditor() {
   return (
@@ -12,9 +12,9 @@ export default function ResourcesEditor() {
       <div className='h-[30%] p-2'>
         <TaskEditor />
       </div>
-      {/* <div className='h-[30%]  p-2'>
-        <InstancesTable />
-      </div> */}
+      <div className='h-[30%]  p-2'>
+        <InstancesEditor />
+      </div>
     </div>
   )
 }

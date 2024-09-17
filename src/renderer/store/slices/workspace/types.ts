@@ -2,6 +2,7 @@ import {
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
+  PLCInstanceSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
   PLCTaskSchema,
@@ -37,6 +38,11 @@ const taskDTOSchema = z.object({
 })
 
 type TaskDTO = z.infer<typeof taskDTOSchema>
+
+const instanceDTOSchema = z.object({
+  data: PLCInstanceSchema,
+})
+type InstanceDTO = z.infer<typeof instanceDTOSchema>
 
 const systemConfigsSchema = z.object({
   OS: z.enum(['win32', 'linux', 'darwin', '']),
@@ -119,6 +125,22 @@ const workspaceActionsSchema = z.object({
     .function()
     .args(z.object({ rowId: z.number(), newIndex: z.number() }))
     .returns(z.void()),
+  createInstance: z
+    .function()
+    .args(instanceDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
+    .returns(z.void()),
+  updateInstance: z
+    .function()
+    .args(instanceDTOSchema.merge(z.object({ rowId: z.number() })))
+    .returns(z.void()),
+  deleteInstance: z
+    .function()
+    .args(z.object({ rowId: z.number() }))
+    .returns(z.void()),
+  rearrangeInstances: z
+    .function()
+    .args(z.object({ rowId: z.number(), newIndex: z.number() }))
+    .returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 
@@ -136,6 +158,7 @@ export {
   workspaceStateSchema,
 }
 export type {
+  InstanceDTO,
   PouDTO,
   SystemConfigs,
   TaskDTO,

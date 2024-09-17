@@ -92,8 +92,12 @@ const CreateResourceEditor = (name = 'resources'): EditorModel => {
       selectedRow: '-1',
     },
     task: {
-      display: 'table', 
-      selectedRow: '-1', 
+      display: 'table',
+      selectedRow: '-1',
+    },
+    instance: {
+      display: 'table',
+      selectedRow: '-1',
     },
   })
   return editor

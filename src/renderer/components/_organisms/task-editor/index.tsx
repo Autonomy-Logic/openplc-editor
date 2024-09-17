@@ -55,7 +55,6 @@ export default function TaskEditor() {
         })
       }
     }
-
   }, [editor])
 
   const handleRearrangeTasks = (index: number, row?: number) => {
@@ -145,10 +144,14 @@ export default function TaskEditor() {
     <div aria-label='Tasks editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
       <div aria-label='Tasks editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
         {editorTasks.display === 'table' ? (
-          <div aria-label='Tasks editor table actions container' className='relative flex h-full w-full '>
+          <div
+            aria-label='Tasks editor table actions container'
+            className='relative flex h-full w-full items-center justify-between'
+          >
+            <span>Tasks</span>
             <div
               aria-label='Tasks editor table actions container'
-              className=' absolute right-0 flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
+              className='  flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
             >
               {/** This can be reviewed */}
               <TableActionButton aria-label='Add Tasks table row button' onClick={handleCreateTask}>

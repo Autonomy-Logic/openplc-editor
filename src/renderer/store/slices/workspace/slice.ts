@@ -1,8 +1,9 @@
-import { PLCTask } from '@root/types/PLC/open-plc'
+import { PLCInstance, PLCTask } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { WorkspaceResponse, WorkspaceSlice } from './types'
+import { createInstanceValidation } from './utils/instances'
 import { createTaskValidation } from './utils/tasks'
 import {
   createGlobalVariableValidation,
@@ -392,6 +393,83 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
 
           const [removed] = workspace.projectData.configuration.resource.tasks.splice(rowId, 1)
           workspace.projectData.configuration.resource.tasks.splice(newIndex, 0, removed)
+        }),
+      )
+    },
+
+    createInstance: (instanceToCreate: { data: PLCInstance; rowToInsert?: number }): WorkspaceResponse => {
+      const response: WorkspaceResponse = { ok: true }
+
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { data, rowToInsert } = instanceToCreate
+
+          data.name = createInstanceValidation(workspace.projectData.configuration.resource.instances, data.name)
+
+          if (rowToInsert !== undefined) {
+            if (rowToInsert >= 0 && rowToInsert <= workspace.projectData.configuration.resource.instances.length) {
+              workspace.projectData.configuration.resource.instances.splice(rowToInsert, 0, data)
+            } else {
+              console.error('Invalid row index:', rowToInsert)
+              response.ok = false
+            }
+          } else {
+            workspace.projectData.configuration.resource.instances.push(data)
+          }
+        }),
+      )
+
+      return response
+    },
+
+    deleteInstance: (instanceToBeDeleted: { rowId: number }): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { rowId } = instanceToBeDeleted
+
+          if (rowId < 0 || rowId >= workspace.projectData.configuration.resource.instances.length) {
+            console.error('Invalid rowId')
+            return
+          }
+
+          workspace.projectData.configuration.resource.instances.splice(rowId, 1)
+        }),
+      )
+    },
+
+    updateInstance: (dataToBeUpdated: { rowId: number; data: Partial<PLCInstance> }): WorkspaceResponse => {
+      let response: WorkspaceResponse = { ok: true }
+
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { rowId } = dataToBeUpdated
+          const index = rowId
+          if (index === -1) {
+            response = { ok: false, title: 'Instance not found', message: 'Internal error' }
+          } else {
+            workspace.projectData.configuration.resource.instances[index] = {
+              ...workspace.projectData.configuration.resource.instances[index],
+              ...dataToBeUpdated.data,
+            }
+          }
+        }),
+      )
+
+      return response
+    },
+
+    rearrangeInstances: (instanceToBeRearranged): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { rowId, newIndex } = instanceToBeRearranged
+
+          if (rowId < 0 || newIndex < 0 || rowId >= workspace.projectData.configuration.resource.instances.length) {
+            console.error('Invalid rowId or newIndex')
+            return
+          }
+
+          const [removed] = workspace.projectData.configuration.resource.instances.splice(rowId, 1)
+          workspace.projectData.configuration.resource.instances.splice(newIndex, 0, removed)
         }),
       )
     },
