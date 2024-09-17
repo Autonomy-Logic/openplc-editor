@@ -61,6 +61,7 @@ const BaseLibraryPouSchema = z.object({
   variables: z.array(BaseLibraryVariableSchema),
   body: z.string(),
   documentation: z.string(),
+  extensible: z.boolean().optional(),
 })
 
 /**
