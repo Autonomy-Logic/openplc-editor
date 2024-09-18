@@ -1,26 +1,28 @@
 import {
-    Modal,
-    ModalContent,
-    ModalHeader,
-    ModalTitle,
-  } from '@root/renderer/components/_molecules'
-  import React from 'react'
+  Modal,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalTitle,
+} from '@root/renderer/components/_molecules'
+import React from 'react'
 
-  interface NewProjectModalProps {
-    onClose: () => void
-    isOpen: boolean
-  }
+interface NewProjectModalProps {
+  isOpen: boolean
+  onClose: () => void
+}
 
-  const NewProjectModal: React.FC<NewProjectModalProps> = ({ onClose, isOpen }) => {
-    return (
-      <Modal open={isOpen} onOpenChange={onClose}>
-        <ModalContent onClose={onClose}>
-          <ModalHeader>
-            <ModalTitle>New Project</ModalTitle>
-          </ModalHeader>
-        </ModalContent>
-      </Modal>
-    )
-  }
-
-  export default NewProjectModal
+export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose }) => {
+  return (
+    <Modal open={isOpen} onOpenChange={onClose}>
+      <ModalContent onClose={onClose}>
+        <ModalHeader>
+          <ModalTitle>New Project</ModalTitle>
+        </ModalHeader>
+        <ModalFooter>
+          <button onClick={onClose}>Submit</button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  )
+}
