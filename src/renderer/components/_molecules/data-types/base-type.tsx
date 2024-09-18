@@ -19,27 +19,171 @@ const DTBaseTypeContainer = () => {
           className='box h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
           <SelectItem
-            value='Option 1'
+            value='Bool'
             className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
           >
             <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-              Option 1
+              BOOL
             </span>
           </SelectItem>
           <SelectItem
-            value='Option 2'
+            value='Sint'
             className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
           >
             <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-              Option 2
+              SINT
             </span>
           </SelectItem>
           <SelectItem
-            value='Option 3'
+            value='Int'
             className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
           >
             <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-              Option 3
+              INT
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Dint'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              DINT
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Lint'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              LINT
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Usint'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              USINT
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Uint'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              UINT
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Udint'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              UDINT
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Ulint'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              ULINT
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Real'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              REAL
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Lreal'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              LREAL
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Time'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              TIME
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Date'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              DATE
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Tod'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              TOD
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Dt'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              DT
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='String'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              STRING
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Byte'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              BYTE
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Word'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              WORD
+            </span>
+          </SelectItem>
+          <SelectItem
+            value='Dword'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              DWORD
+            </span>
+          </SelectItem>{' '}
+          <SelectItem
+            value='Lword'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              LWORD
+            </span>
+          </SelectItem>{' '}
+          <SelectItem
+            value='Loglevel'
+            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          >
+            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+              LOGLEVEL
             </span>
           </SelectItem>
         </SelectContent>
