@@ -2,6 +2,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCInstance } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { CellContext } from '@tanstack/react-table'
+import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'

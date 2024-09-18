@@ -149,7 +149,7 @@ export default function InstancesEditor() {
             aria-label='instances editor table actions container'
             className='relative flex h-full w-full items-center justify-between'
           >
-            <span>instances</span>
+            <span>Instances</span>
             <div
               aria-label='instances editor table actions container'
               className='  flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
