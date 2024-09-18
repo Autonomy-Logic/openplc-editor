@@ -1,6 +1,7 @@
 import * as Switch from '@radix-ui/react-switch'
 import { LibraryCloseFolderIcon, LibraryFileIcon, MagnifierIcon } from '@root/renderer/assets'
 import { InputWithRef } from '@root/renderer/components/_atoms'
+import { BlockNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
 import {
   LibraryFile,
   LibraryFolder,
@@ -174,6 +175,7 @@ const filterTreeData = (filterText: string) => {
 
 type BlockElementProps = {
   onClose?: () => void
+  node?: BlockNode
 }
 
 const BlockElement = ({ onClose }: BlockElementProps) => {

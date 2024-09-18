@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../
 import { buildHandle, CustomHandle } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-type BlockNode = Node<BasicNodeData & { variant: 'default' | 'TON' }>
+export type BlockNode = Node<BasicNodeData & { variant: 'default' | 'TON' }>
 type BlockProps = NodeProps<BlockNode>
 type BlockBuilderProps = BuilderBasicProps & { variant: 'default' | 'TON' }
 

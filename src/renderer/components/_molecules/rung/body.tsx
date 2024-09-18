@@ -165,12 +165,10 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }
 
   const handleNodeDoubleClick = (node: FlowNode) => {
-    console.log('Node double clicked', node)
     setModalNode(node)
   }
 
   const handleModalClose = () => {
-    console.log('Modal closed')
     setModalNode(null)
   }
 
