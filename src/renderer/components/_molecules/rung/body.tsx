@@ -6,6 +6,8 @@ import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, 
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
+import { CoilNode } from '../../_atoms/react-flow/custom-nodes/coil'
+import { ContactNode } from '../../_atoms/react-flow/custom-nodes/contact'
 import BlockElement from '../../_features/[workspace]/editor/graphical/elements/block'
 import CoilElement from '../../_features/[workspace]/editor/graphical/elements/coil'
 import ContactElement from '../../_features/[workspace]/editor/graphical/elements/contact'
@@ -163,6 +165,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }
 
   const handleNodeDoubleClick = (node: FlowNode) => {
+    console.log('Node double clicked', node)
     setModalNode(node)
   }
 
@@ -296,7 +299,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
                 handleNodeDragStop(node)
               },
               onNodeDoubleClick: (_event, node) => {
-                return handleNodeDoubleClick(node)
+                handleNodeDoubleClick(node)
               },
 
               onConnectEnd: updateFlowStore,
@@ -329,9 +332,9 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         (modalNode.type === 'block' ? (
           <BlockElement onClose={handleModalClose} />
         ) : modalNode.type === 'contact' ? (
-          <ContactElement onClose={handleModalClose} />
+          <ContactElement onClose={handleModalClose} node={modalNode as ContactNode} />
         ) : modalNode.type === 'coil' ? (
-          <CoilElement />
+          <CoilElement onClose={handleModalClose} node={modalNode as CoilNode} />
         ) : null)}
     </div>
   )

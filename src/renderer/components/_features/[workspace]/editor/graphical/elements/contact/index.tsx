@@ -1,3 +1,4 @@
+import { ContactNode, DEFAULT_CONTACT_TYPES } from '@root/renderer/components/_atoms/react-flow/custom-nodes/contact'
 import {
   Modal,
   ModalContent,
@@ -6,25 +7,22 @@ import {
 } from '@root/renderer/components/_molecules'
 import { useState } from 'react'
 
-import imageMock from '../mockImages/Group112.png'
-import image1 from '../mockImages/image1.png'
-import image2 from '../mockImages/image2.png'
+// import imageMock from '../mockImages/Group112.png'
+// import image1 from '../mockImages/image1.png'
+// import image2 from '../mockImages/image2.png'
 
 type ContactElementProps = {
   onClose?: () => void
+  node?: ContactNode
 }
 
-const ContactElement = ({ onClose }: ContactElementProps) => {
-  const [selectedModifier, setSelectedModifier] = useState<string | null>(null)
-  const contactModifiers = [
-    { label: 'normal', contact: imageMock },
-    { label: 'negated', contact: image1 },
-    { label: 'rising edge', contact: image2 },
-    { label: 'falling edge', contact: imageMock },
-  ]
+const ContactElement = ({ onClose, node }: ContactElementProps) => {
+  const [selectedModifier, setSelectedModifier] = useState<string | null>(node?.data.variant as string)
+  const contactModifiers = Object.entries(DEFAULT_CONTACT_TYPES).map(([label, contact]) => ({ label, contact }))
+
   const getModifierContact = (label: string) => {
     const modifier = contactModifiers.find((modifier) => modifier.label === label)
-    return modifier ? modifier.contact : ''
+    return modifier ? modifier.contact.svg : ''
   }
 
   const handleCloseModal = () => {
@@ -72,14 +70,7 @@ const ContactElement = ({ onClose }: ContactElementProps) => {
               Preview
             </label>
             <div className='flex h-full w-full items-center justify-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'>
-              {selectedModifier && (
-                <img
-                  draggable='false'
-                  className='h-fit w-full select-none'
-                  src={getModifierContact(selectedModifier)}
-                  alt='Modifier Preview'
-                />
-              )}
+              {selectedModifier && getModifierContact(selectedModifier)}
             </div>
           </div>
         </div>

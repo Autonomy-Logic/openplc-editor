@@ -16,7 +16,7 @@ import { InputWithRef } from '../../input'
 import { buildHandle, CustomHandle } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-type CoilNode = Node<
+export type CoilNode = Node<
   BasicNodeData & {
     variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset'
   }
@@ -37,7 +37,7 @@ type CoilType = {
     svg: ReactNode
   }
 }
-const DEFAULT_COIL_TYPES: CoilType = {
+export const DEFAULT_COIL_TYPES: CoilType = {
   default: {
     svg: (
       <DefaultCoil

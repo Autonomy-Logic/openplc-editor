@@ -14,7 +14,7 @@ import { InputWithRef } from '../../input'
 import { buildHandle, CustomHandle } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-type ContactNode = Node<BasicNodeData & { variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }>
+export type ContactNode = Node<BasicNodeData & { variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }>
 type ContactProps = NodeProps<ContactNode>
 type ContactBuilderProps = BuilderBasicProps & { variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }
 
@@ -29,7 +29,7 @@ type ContactType = {
     svg: ReactNode
   }
 }
-const DEFAULT_CONTACT_TYPES: ContactType = {
+export const DEFAULT_CONTACT_TYPES: ContactType = {
   default: {
     svg: (
       <DefaultContact
