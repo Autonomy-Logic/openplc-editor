@@ -56,9 +56,3 @@ export * from './interface/ZoomInOut'
 export * from './flow/Coil'
 export * from './flow/Contact'
 export * from './flow/Placeholder'
-
-/** Reexport all icons from window-controls folder */
-export * from './window-controls/Close'
-export * from './window-controls/Exit-Maximize'
-export * from './window-controls/Maximize'
-export * from './window-controls/Minimize'
