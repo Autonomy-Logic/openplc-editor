@@ -1,4 +1,4 @@
-import { TitleBar } from '@root/renderer/components/_organisms/titlebar'
+import { TitleBar } from '@root/renderer/components/_organisms/title-bar'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { ReactNode, useEffect, useState } from 'react'
