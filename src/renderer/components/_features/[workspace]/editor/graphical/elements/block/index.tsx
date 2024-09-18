@@ -8,7 +8,7 @@ import {
   Modal,
   ModalContent,
   ModalTitle,
-  ModalTrigger,
+  // ModalTrigger,
 } from '@root/renderer/components/_molecules'
 import { ReactElement, useState } from 'react'
 
@@ -154,6 +154,7 @@ const treeData: Array<{
     ],
   },
 ]
+
 const filterTreeData = (filterText: string) => {
   return treeData.reduce(
     //acc - accumulator
@@ -170,7 +171,12 @@ const filterTreeData = (filterText: string) => {
     [] as typeof treeData,
   )
 }
-const BlockElement = () => {
+
+type BlockElementProps = {
+  onClose?: () => void
+}
+
+const BlockElement = ({ onClose }: BlockElementProps) => {
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<{ image: string; text: string } | null>(null)
   const [formState, setFormState] = useState({ name: '', inputs: '', executionOrder: '' })
@@ -208,6 +214,11 @@ const BlockElement = () => {
     }))
   }
 
+  const handleCloseModal = () => {
+    handleClearForm()
+    onClose && onClose()
+  }
+
   const filteredTreeData = filterTreeData(filterText)
 
   const labelStyle = 'text-sm font-medium text-neutral-950 dark:text-white'
@@ -215,9 +226,14 @@ const BlockElement = () => {
     'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
 
   return (
-    <Modal>
-      <ModalTrigger>Open</ModalTrigger>
-      <ModalContent onClose={handleClearForm} className='h-[739px] w-[625px] select-none flex-col gap-8 px-14 py-4'>
+    <Modal defaultOpen>
+      {/* <ModalTrigger>Open</ModalTrigger> */}
+      <ModalContent
+        onClose={handleCloseModal}
+        onEscapeKeyDown={handleCloseModal}
+        onInteractOutside={handleCloseModal}
+        className='h-[739px] w-[625px] select-none flex-col gap-8 px-14 py-4'
+      >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</ModalTitle>
         <div className='flex h-[587px] w-full justify-between'>
           <div id='container-modifier-variable' className='h-full w-[236px]'>
@@ -330,7 +346,7 @@ const BlockElement = () => {
             </label>
             <div
               id='block-preview'
-              className='flex flex-grow items-center -center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'
+              className='-center flex flex-grow items-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'
             >
               {selectedFile?.image && (
                 <img draggable='false' className='h-fit w-full select-none' src={selectedFile.image} alt='' />
@@ -338,7 +354,7 @@ const BlockElement = () => {
             </div>
           </div>
         </div>
-        <div className='flex !h-8 w-full gap-7 justify-evenly'>
+        <div className='flex !h-8 w-full justify-evenly gap-7'>
           <button
             className={`h-full w-[236px] items-center rounded-lg text-center font-medium text-white ${isFormValid ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'}`}
             disabled={!isFormValid}

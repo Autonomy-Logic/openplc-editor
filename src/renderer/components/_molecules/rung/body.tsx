@@ -6,6 +6,9 @@ import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, 
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
+import BlockElement from '../../_features/[workspace]/editor/graphical/elements/block'
+import CoilElement from '../../_features/[workspace]/editor/graphical/elements/coil'
+import ContactElement from '../../_features/[workspace]/editor/graphical/elements/contact'
 import {
   addNewElement,
   onDragElement,
@@ -28,6 +31,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const [rungLocal, setRungLocal] = useState<FlowState>(rung)
   const [selectedNodes, setSelectedNodes] = useState<FlowNode[]>([])
+  const [modalNode, setModalNode] = useState<FlowNode | null>(null)
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const flowRef = useRef<HTMLDivElement>(null)
 
@@ -159,7 +163,12 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }
 
   const handleNodeDoubleClick = (node: FlowNode) => {
-    console.log('Node double clicked:', node)
+    setModalNode(node)
+  }
+
+  const handleModalClose = () => {
+    console.log('Modal closed')
+    setModalNode(null)
   }
 
   const onNodesChange: OnNodesChange<FlowNode> = useCallback(
@@ -287,7 +296,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
                 handleNodeDragStop(node)
               },
               onNodeDoubleClick: (_event, node) => {
-                handleNodeDoubleClick(node)
+                return handleNodeDoubleClick(node)
               },
 
               onConnectEnd: updateFlowStore,
@@ -316,6 +325,14 @@ export const RungBody = ({ rung }: RungBodyProps) => {
           />
         </div>
       </div>
+      {modalNode &&
+        (modalNode.type === 'block' ? (
+          <BlockElement onClose={handleModalClose} />
+        ) : modalNode.type === 'contact' ? (
+          <ContactElement onClose={handleModalClose} />
+        ) : modalNode.type === 'coil' ? (
+          <CoilElement />
+        ) : null)}
     </div>
   )
 }

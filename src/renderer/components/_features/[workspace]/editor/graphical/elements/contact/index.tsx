@@ -1,11 +1,20 @@
-import { Modal, ModalContent, ModalTitle, ModalTrigger } from '@root/renderer/components/_molecules'
+import {
+  Modal,
+  ModalContent,
+  ModalTitle,
+  // ModalTrigger
+} from '@root/renderer/components/_molecules'
 import { useState } from 'react'
 
 import imageMock from '../mockImages/Group112.png'
 import image1 from '../mockImages/image1.png'
 import image2 from '../mockImages/image2.png'
 
-const ContactElement = () => {
+type ContactElementProps = {
+  onClose?: () => void
+}
+
+const ContactElement = ({ onClose }: ContactElementProps) => {
   const [selectedModifier, setSelectedModifier] = useState<string | null>(null)
   const contactModifiers = [
     { label: 'normal', contact: imageMock },
@@ -20,13 +29,16 @@ const ContactElement = () => {
 
   const handleCloseModal = () => {
     setSelectedModifier(null)
+    onClose && onClose()
   }
 
   return (
-    <Modal>
-      <ModalTrigger>Open Contact</ModalTrigger>
+    <Modal defaultOpen>
+      {/* <ModalTrigger>Open Contact</ModalTrigger> */}
       <ModalContent
         onClose={handleCloseModal}
+        onEscapeKeyDown={handleCloseModal}
+        onInteractOutside={handleCloseModal}
         className='h-[498px] w-[468px] select-none flex-col justify-between px-8 py-4'
       >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Edit Contact Values</ModalTitle>

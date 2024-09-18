@@ -2,9 +2,9 @@ import { CreateRung } from '@root/renderer/components/_molecules/rung/create-run
 import { Rung } from '@root/renderer/components/_organisms/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
 
-import BlockElement from '../elements/block'
-import CoilElement from '../elements/coil'
-import ContactElement from '../elements/contact'
+// import BlockElement from '../elements/block'
+// import CoilElement from '../elements/coil'
+// import ContactElement from '../elements/contact'
 
 export default function LadderEditor() {
   const { rungs, flowActions } = useOpenPLCStore()
@@ -26,9 +26,9 @@ export default function LadderEditor() {
           <Rung key={index} id={index.toString()} rung={rung} />
         ))}
         <CreateRung onClick={handleAddNewRung} />
-        <BlockElement />
+        {/* <BlockElement />
         <ContactElement />
-        <CoilElement />
+        <CoilElement /> */}
       </div>
     </div>
   )
