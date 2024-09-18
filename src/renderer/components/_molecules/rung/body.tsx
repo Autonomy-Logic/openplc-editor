@@ -65,15 +65,24 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     flowActions.updateFlowViewport({ rungId: rungLocal.id, flowViewport: [bounds.width, bounds.height + 20] })
   }, [rungLocal.nodes.length])
 
+  /**
+   * Take a snapshot of the nodes array and update the flow store
+   */
   useEffect(() => {
     updateFlowStore()
   }, [rungLocal.nodes.length])
 
+  /**
+   * Update the selected nodes array when the nodes array changes
+   */
   useEffect(() => {
     const selectedNodes = rungLocal.nodes.filter((node) => node.selected)
     setSelectedNodes(selectedNodes)
   }, [rungLocal.nodes.filter((node) => node.selected)])
 
+  /**
+   * Disable dragging for all nodes when multiple nodes are selected
+   */
   useEffect(() => {
     if (selectedNodes.length > 1) {
       setRungLocal((rung) => ({
@@ -117,16 +126,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     setRungLocal((rung) => ({ ...rung, nodes: newNodes, edges: newEdges }))
   }
 
-  const onNodesChange: OnNodesChange<FlowNode> = useCallback(
-    (changes) => {
-      setRungLocal((rung) => ({
-        ...rung,
-        nodes: applyNodeChanges(changes, rung.nodes),
-      }))
-    },
-    [rungLocal],
-  )
-
   const handleNodeStartDrag = (node: FlowNode) => {
     const result = onDragStartElement(rungLocal, node)
     setRungLocal((rung) => ({ ...rung, nodes: result.nodes, edges: result.edges }))
@@ -158,6 +157,20 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     const result = onDragStopElement(rungLocal, node)
     setRungLocal((rung) => ({ ...rung, nodes: result.nodes, edges: result.edges }))
   }
+
+  const handleNodeDoubleClick = (node: FlowNode) => {
+    console.log('Node double clicked:', node)
+  }
+
+  const onNodesChange: OnNodesChange<FlowNode> = useCallback(
+    (changes) => {
+      setRungLocal((rung) => ({
+        ...rung,
+        nodes: applyNodeChanges(changes, rung.nodes),
+      }))
+    },
+    [rungLocal],
+  )
 
   const onDragEnterViewport = useCallback<DragEventHandler>(
     (event) => {
@@ -273,6 +286,9 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               onNodeDragStop: (_event, node) => {
                 handleNodeDragStop(node)
               },
+              onNodeDoubleClick: (_event, node) => {
+                handleNodeDoubleClick(node)
+              },
 
               onConnectEnd: updateFlowStore,
 
@@ -291,6 +307,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               zoomOnPinch: false,
               zoomOnScroll: false,
               preventScrolling: false,
+              nodeDragThreshold: 15,
 
               proOptions: {
                 hideAttribution: true,

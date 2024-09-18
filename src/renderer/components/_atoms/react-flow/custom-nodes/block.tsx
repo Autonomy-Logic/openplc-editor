@@ -29,8 +29,8 @@ type BlockTypes = {
 const DEFAULT_BLOCK_TYPES: BlockTypes = {
   default: {
     name: '???',
-    leftConnectors: ['???', '???'],
-    rightConnectors: ['???'],
+    leftConnectors: ['???', '???', '???', '???', '???', '???'],
+    rightConnectors: ['???', '???', '???'],
     tooltipContent: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam aliquam tristique tincidunt. Duis elementum
             tortor sem, non convallis orci facilisis at. Suspendisse id bibendum nisl. Mauris ac massa diam. Mauris
             ultrices massa justo, sed vehicula tellus rhoncus eget. Suspendisse lacinia nec dolor vitae sollicitudin.
@@ -49,8 +49,10 @@ const DEFAULT_BLOCK_TYPES: BlockTypes = {
 }
 
 export const Block = ({ height, selected, data, id, dragging }: BlockProps) => {
-  const [blockLabelValue, setBlockLabelValue] = useState<string>('')
   const { name, leftConnectors, rightConnectors, tooltipContent } = DEFAULT_BLOCK_TYPES[data.variant]
+
+  const [blockLabelValue, setBlockLabelValue] = useState<string>('')
+  const [blockNameValue, setBlockNameValue] = useState<string>(name)
 
   return (
     <div
@@ -65,7 +67,7 @@ export const Block = ({ height, selected, data, id, dragging }: BlockProps) => {
               className={cn(
                 'relative flex flex-col rounded-md border border-neutral-850 bg-white hover:border-transparent hover:ring-2 hover:ring-brand dark:bg-neutral-900',
                 {
-                  'ring-2 ring-brand': selected,
+                  'border-transparent ring-2 ring-brand': selected,
                 },
               )}
               style={{
@@ -73,7 +75,13 @@ export const Block = ({ height, selected, data, id, dragging }: BlockProps) => {
                 height: height,
               }}
             >
-              <div className='flex h-fit w-full justify-center py-1 text-sm'>{name}</div>
+              <InputWithRef
+                value={blockNameValue}
+                onChange={(e) => setBlockNameValue(e.target.value)}
+                maxLength={20}
+                placeholder='???'
+                className='w-full bg-transparent text-center text-sm outline-none p-1'
+              />
               {leftConnectors.map((connector, index) => (
                 <div
                   key={index}
