@@ -5,8 +5,9 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCDataType } from '@root/types/PLC/open-plc'
 import { useEffect, useState } from 'react'
 
-import { DTBaseTypeContainer } from '../base-type'
-import { ArrayDTInitialValueContainer } from './initial-value'
+import { DTBaseTypeContainer } from './header/base-type'
+import { ArrayDataTypeInitialValueContainer } from './header/initial-value'
+import {DimensionsTable} from './table'
 
 const ArrayDataType = () => {
   const {
@@ -14,9 +15,12 @@ const ArrayDataType = () => {
       projectData: { dataTypes },
     },
   } = useOpenPLCStore()
+  const ROWS_NOT_SELECTED = -1
 
   const [dataTypesState, setDataTypesState] = useState<PLCDataType>()
+  const [arrayTable, setArrayTable] = useState<{selectedRow: string}>({selectedRow: ROWS_NOT_SELECTED.toString()})
 
+  
   useEffect(() => {
     const arrayDataType = dataTypes.find((dataType) => dataType.derivation.type === 'array')
     setDataTypesState(arrayDataType)
@@ -58,7 +62,7 @@ const ArrayDataType = () => {
           </div>
         </div>
         <div className='w-1/2'>
-        <ArrayDTInitialValueContainer />
+        <ArrayDataTypeInitialValueContainer />
         </div>
       </div>
 
@@ -75,6 +79,7 @@ const ArrayDataType = () => {
             ))}
         </TableBody>
       </Table>
+      <DimensionsTable handleRowClick={(row) => setArrayTable({selectedRow: row.id}) } selectedRow={parseInt(arrayTable.selectedRow)}/>
     </div>
   )
 }
