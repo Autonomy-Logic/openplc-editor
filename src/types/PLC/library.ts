@@ -52,6 +52,7 @@ const genericTypeSchema = z.object({
     z.literal('ANY_SIGNED'),
     z.literal('ANY_UNSIGNED'),
     z.literal('ANY_MAGNITUDE'),
+    z.literal('ANY_ELEMENTARY'),
   ]),
   ANY_INT: baseTypeSchema.extract(['SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT']),
   ANY_BIT: baseTypeSchema.extract(['BOOL', 'BYTE', 'WORD', 'DWORD', 'LWORD']),
@@ -66,6 +67,7 @@ const genericTypeSchema = z.object({
   ANY_SIGNED: baseTypeSchema.extract(['SINT', 'INT', 'DINT', 'LINT']),
   ANY_UNSIGNED: baseTypeSchema.extract(['USINT', 'UINT', 'UDINT', 'ULINT']),
   ANY_MAGNITUDE: z.union([z.literal('ANY_REAL'), z.literal('ANY_INT'), z.literal('TIME')]),
+  ANY_ELEMENTARY: z.union([z.literal('ANY_MAGNITUDE'), z.literal('ANY_BIT'), z.literal('ANY_CHARS'), z.literal('ANY_DATE')]),
 })
 
 /**

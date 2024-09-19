@@ -1,7 +1,24 @@
-import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema } from '@root/types/PLC/library'
+import {
+  BaseLibraryPouSchema,
+  BaseLibrarySchema,
+  BaseLibraryVariableSchema,
+  baseTypeSchema,
+  genericTypeSchema,
+} from '@root/types/PLC/library'
 import { z } from 'zod'
 
-const ComparisonVariableSchema = BaseLibraryVariableSchema
+const ComparisonVariableSchema = BaseLibraryVariableSchema.extend({
+  type: z.discriminatedUnion('definition', [
+    z.object({
+      definition: z.literal('base-type'),
+      value: baseTypeSchema,
+    }),
+    z.object({
+      definition: z.literal('generic-type'),
+      value: genericTypeSchema.keyof(),
+    }),
+  ]),
+})
 
 const ComparisonPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(ComparisonVariableSchema),
@@ -28,12 +45,12 @@ const Comparison: ComparisonLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'OUT',
@@ -53,12 +70,12 @@ const Comparison: ComparisonLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'OUT',
@@ -78,12 +95,12 @@ const Comparison: ComparisonLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'OUT',
@@ -103,12 +120,12 @@ const Comparison: ComparisonLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'OUT',
@@ -128,12 +145,12 @@ const Comparison: ComparisonLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'OUT',
@@ -153,12 +170,12 @@ const Comparison: ComparisonLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'OUT',

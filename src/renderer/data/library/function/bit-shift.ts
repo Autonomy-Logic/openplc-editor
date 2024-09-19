@@ -1,7 +1,24 @@
-import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema } from '@root/types/PLC/library'
+import {
+  BaseLibraryPouSchema,
+  BaseLibrarySchema,
+  BaseLibraryVariableSchema,
+  baseTypeSchema,
+  genericTypeSchema,
+} from '@root/types/PLC/library'
 import { z } from 'zod'
 
-const BitShiftVariableSchema = BaseLibraryVariableSchema
+const BitShiftVariableSchema = BaseLibraryVariableSchema.extend({
+  type: z.discriminatedUnion('definition', [
+    z.object({
+      definition: z.literal('base-type'),
+      value: baseTypeSchema,
+    }),
+    z.object({
+      definition: z.literal('generic-type'),
+      value: genericTypeSchema.keyof(),
+    }),
+  ]),
+})
 
 const BitShiftPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(BitShiftVariableSchema),
@@ -28,7 +45,7 @@ const BitShift: BitShiftLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
         {
           name: 'N',
@@ -38,7 +55,7 @@ const BitShift: BitShiftLibrary = {
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
       ],
       body: 'Shift Left',
@@ -53,7 +70,7 @@ const BitShift: BitShiftLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
         {
           name: 'N',
@@ -63,7 +80,7 @@ const BitShift: BitShiftLibrary = {
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
       ],
       body: 'Shift Right',
@@ -78,7 +95,7 @@ const BitShift: BitShiftLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for NBIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' }, // need review
         },
         {
           name: 'N',
@@ -88,7 +105,7 @@ const BitShift: BitShiftLibrary = {
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for NBIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' }, // need review
         },
       ],
       body: 'Rotate Right',
@@ -103,7 +120,7 @@ const BitShift: BitShiftLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for NBIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' }, // need review
         },
         {
           name: 'N',
@@ -113,14 +130,14 @@ const BitShift: BitShiftLibrary = {
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for NBIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' }, // need review
         },
       ],
       body: 'Rotate Left',
       documentation: '(IN: ANY_NBIT, N:INT) -> OUT:ANY_NBIT',
       extensible: false,
     },
-  ]
+  ],
 }
 
 export { BitShift }

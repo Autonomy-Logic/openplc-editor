@@ -1,7 +1,18 @@
-import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema } from '@root/types/PLC/library'
+import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema, baseTypeSchema, genericTypeSchema } from '@root/types/PLC/library'
 import { z } from 'zod'
 
-const CharacterStringVariableSchema = BaseLibraryVariableSchema
+const CharacterStringVariableSchema = BaseLibraryVariableSchema.extend({
+  type: z.discriminatedUnion('definition', [
+    z.object({
+      definition: z.literal('base-type'),
+      value: baseTypeSchema,
+    }),
+    z.object({
+      definition: z.literal('generic-type'),
+      value: genericTypeSchema.keyof(),
+    }),
+  ]),
+})
 
 const CharacterStringPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(CharacterStringVariableSchema),
@@ -53,7 +64,7 @@ const CharacterString: CharacterStringLibrary = {
         {
           name: 'L',
           class: 'input',
-          type: { definition: 'base-type', value: 'INT' },
+          type: { definition: 'generic-type', value: 'ANY_INT' },
         },
         {
           name: 'OUT',
@@ -78,7 +89,7 @@ const CharacterString: CharacterStringLibrary = {
         {
           name: 'L',
           class: 'input',
-          type: { definition: 'base-type', value: 'INT' },
+          type: { definition: 'generic-type', value: 'ANY_INT' },
         },
         {
           name: 'OUT',
@@ -103,12 +114,12 @@ const CharacterString: CharacterStringLibrary = {
         {
           name: 'L',
           class: 'input',
-          type: { definition: 'base-type', value: 'INT' },
+          type: { definition: 'generic-type', value: 'ANY_INT' },
         },
         {
           name: 'S',
           class: 'input',
-          type: { definition: 'base-type', value: 'INT' },
+          type: { definition: 'generic-type', value: 'ANY_INT' },
         },
         {
           name: 'OUT',
@@ -188,7 +199,7 @@ const CharacterString: CharacterStringLibrary = {
         {
           name: 'P',
           class: 'input',
-          type: { definition: 'base-type', value: 'INT' },
+          type: { definition: 'generic-type', value: 'ANY_INT' },
         },
         {
           name: 'OUT',
@@ -213,12 +224,12 @@ const CharacterString: CharacterStringLibrary = {
         {
           name: 'L',
           class: 'input',
-          type: { definition: 'base-type', value: 'INT' },
+          type: { definition: 'generic-type', value: 'ANY_INT' },
         },
         {
           name: 'P',
           class: 'input',
-          type: { definition: 'base-type', value: 'INT' },
+          type: { definition: 'generic-type', value: 'ANY_INT' },
         },
         {
           name: 'OUT',
@@ -248,12 +259,12 @@ const CharacterString: CharacterStringLibrary = {
         {
           name: 'L',
           class: 'input',
-          type: { definition: 'base-type', value: 'INT' },
+          type: { definition: 'generic-type', value: 'ANY_INT' },
         },
         {
           name: 'P',
           class: 'input',
-          type: { definition: 'base-type', value: 'INT' },
+          type: { definition: 'generic-type', value: 'ANY_INT' },
         },
         {
           name: 'OUT',

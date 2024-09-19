@@ -1,7 +1,24 @@
-import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema } from '@root/types/PLC/library'
+import {
+  BaseLibraryPouSchema,
+  BaseLibrarySchema,
+  BaseLibraryVariableSchema,
+  baseTypeSchema,
+  genericTypeSchema,
+} from '@root/types/PLC/library'
 import { z } from 'zod'
 
-const BitwiseVariableSchema = BaseLibraryVariableSchema
+const BitwiseVariableSchema = BaseLibraryVariableSchema.extend({
+  type: z.discriminatedUnion('definition', [
+    z.object({
+      definition: z.literal('base-type'),
+      value: baseTypeSchema,
+    }),
+    z.object({
+      definition: z.literal('generic-type'),
+      value: genericTypeSchema.keyof(),
+    }),
+  ]),
+})
 
 const BitwisePouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(BitwiseVariableSchema),
@@ -28,17 +45,17 @@ const Bitwise: BitwiseLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
       ],
       body: 'Bitwise AND',
@@ -53,17 +70,17 @@ const Bitwise: BitwiseLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
       ],
       body: 'Bitwise OR',
@@ -78,17 +95,17 @@ const Bitwise: BitwiseLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
       ],
       body: 'Bitwise XOR',
@@ -103,18 +120,18 @@ const Bitwise: BitwiseLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for BIT
+          type: { definition: 'generic-type', value: 'ANY_BIT' },
         },
       ],
       body: 'Bitwise NOT',
       documentation: '(IN: ANY_BIT) -> OUT:ANY_BIT',
       extensible: false,
-    }
+    },
   ],
 }
 

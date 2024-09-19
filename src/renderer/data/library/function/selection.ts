@@ -1,7 +1,24 @@
-import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema } from '@root/types/PLC/library'
+import {
+  BaseLibraryPouSchema,
+  BaseLibrarySchema,
+  BaseLibraryVariableSchema,
+  baseTypeSchema,
+  genericTypeSchema,
+} from '@root/types/PLC/library'
 import { z } from 'zod'
 
-const SelectionVariableSchema = BaseLibraryVariableSchema
+const SelectionVariableSchema = BaseLibraryVariableSchema.extend({
+  type: z.discriminatedUnion('definition', [
+    z.object({
+      definition: z.literal('base-type'),
+      value: baseTypeSchema,
+    }),
+    z.object({
+      definition: z.literal('generic-type'),
+      value: genericTypeSchema.keyof(),
+    }),
+  ]),
+})
 
 const SelectionPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(SelectionVariableSchema),
@@ -33,17 +50,17 @@ const Selection: SelectionLibrary = {
         {
           name: 'IN0',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
       ],
       body: 'Binary selection (1 of 2)',
@@ -58,17 +75,17 @@ const Selection: SelectionLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
       ],
       body: 'Maximum',
@@ -83,17 +100,17 @@ const Selection: SelectionLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
       ],
       body: 'Minimum',
@@ -108,22 +125,22 @@ const Selection: SelectionLibrary = {
         {
           name: 'MN',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'MX',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
       ],
       body: 'Limitation',
@@ -143,17 +160,17 @@ const Selection: SelectionLibrary = {
         {
           name: 'IN0',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for ANY
+          type: { definition: 'generic-type', value: 'ANY' },
         },
       ],
       body: 'Multiplexer (select 1 of N)',

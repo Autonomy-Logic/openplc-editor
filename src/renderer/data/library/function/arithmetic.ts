@@ -1,4 +1,10 @@
-import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema, baseTypeSchema, genericTypeSchema } from '@root/types/PLC/library'
+import {
+  BaseLibraryPouSchema,
+  BaseLibrarySchema,
+  BaseLibraryVariableSchema,
+  baseTypeSchema,
+  genericTypeSchema,
+} from '@root/types/PLC/library'
 import { z } from 'zod'
 
 const ArithmeticVariableSchema = BaseLibraryVariableSchema.extend({
@@ -44,12 +50,12 @@ const Arithmetic: ArithmeticLibrary = {
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
       ],
       body: 'Addition',
@@ -64,17 +70,17 @@ const Arithmetic: ArithmeticLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
       ],
       body: 'Multiplication',
@@ -89,17 +95,17 @@ const Arithmetic: ArithmeticLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
       ],
       body: 'Subtraction',
@@ -114,17 +120,17 @@ const Arithmetic: ArithmeticLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
       ],
       body: 'Division',
@@ -139,17 +145,17 @@ const Arithmetic: ArithmeticLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'INT' },
+          type: { definition: 'generic-type', value: 'ANY_INT' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'INT' },
+          type: { definition: 'generic-type', value: 'ANY_INT' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'INT' },
+          type: { definition: 'generic-type', value: 'ANY_INT' },
         },
       ],
       body: 'Remainder (modulo)',
@@ -164,17 +170,17 @@ const Arithmetic: ArithmeticLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
         {
           name: 'IN2',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
       ],
       body: 'Exponent',
@@ -189,12 +195,12 @@ const Arithmetic: ArithmeticLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' },
+          type: { definition: 'generic-type', value: 'ANY' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' },
+          type: { definition: 'generic-type', value: 'ANY' },
         },
       ],
       body: 'Assignment',

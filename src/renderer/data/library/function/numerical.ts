@@ -1,7 +1,18 @@
-import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema } from '@root/types/PLC/library'
+import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema, baseTypeSchema, genericTypeSchema } from '@root/types/PLC/library'
 import { z } from 'zod'
 
-const NumericalVariableSchema = BaseLibraryVariableSchema
+const NumericalVariableSchema = BaseLibraryVariableSchema.extend({
+  type: z.discriminatedUnion('definition', [
+    z.object({
+      definition: z.literal('base-type'),
+      value: baseTypeSchema,
+    }),
+    z.object({
+      definition: z.literal('generic-type'),
+      value: genericTypeSchema.keyof(),
+    }),
+  ]),
+})
 
 const NumericalPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(NumericalVariableSchema),
@@ -28,12 +39,12 @@ const Numerical: NumericalLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for NUM
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'STRING' }, // Dont have a type for NUM
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
       ],
       body: 'Absolute value',
@@ -48,12 +59,12 @@ const Numerical: NumericalLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
       ],
       body: 'Square root (base 2)',
@@ -68,12 +79,12 @@ const Numerical: NumericalLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
       ],
       body: 'Arc tangent',
@@ -88,12 +99,12 @@ const Numerical: NumericalLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
       ],
       body: 'Logarithm to base 10',
@@ -108,12 +119,12 @@ const Numerical: NumericalLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
       ],
       body: 'Exponentiation',
@@ -128,12 +139,12 @@ const Numerical: NumericalLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
       ],
       body: 'Sine',
@@ -148,12 +159,12 @@ const Numerical: NumericalLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
       ],
       body: 'Cosine',
@@ -168,12 +179,12 @@ const Numerical: NumericalLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
       ],
       body: 'Tangent',
@@ -188,12 +199,12 @@ const Numerical: NumericalLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
       ],
       body: 'Arc sine',
@@ -208,12 +219,12 @@ const Numerical: NumericalLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
       ],
       body: 'Arc cosine',
@@ -228,12 +239,12 @@ const Numerical: NumericalLibrary = {
         {
           name: 'IN',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
         {
           name: 'OUT',
           class: 'output',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_REAL' },
         },
       ],
       body: 'Arc tangent',
