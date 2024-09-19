@@ -84,6 +84,8 @@ export const builderPlaceholderNode = ({
     type: type === 'default' ? 'placeholder' : 'parallelPlaceholder',
     data: {
       handles: handles,
+      inputHandles: [handles[0]],
+      outputHandles: [handles[1]],
       inputConnector: handles[0],
       outputConnector: handles[1],
       position,

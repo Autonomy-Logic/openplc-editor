@@ -6,6 +6,7 @@ import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, 
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
+import { BlockNode } from '../../_atoms/react-flow/custom-nodes/block'
 import { CoilNode } from '../../_atoms/react-flow/custom-nodes/coil'
 import { ContactNode } from '../../_atoms/react-flow/custom-nodes/contact'
 import BlockElement from '../../_features/[workspace]/editor/graphical/elements/block'
@@ -328,7 +329,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       </div>
       {modalNode &&
         (modalNode.type === 'block' ? (
-          <BlockElement onClose={handleModalClose} />
+          <BlockElement onClose={handleModalClose} node={modalNode as BlockNode} />
         ) : modalNode.type === 'contact' ? (
           <ContactElement onClose={handleModalClose} node={modalNode as ContactNode} />
         ) : modalNode.type === 'coil' ? (

@@ -61,6 +61,8 @@ export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY
     position: { x: posX, y: posY },
     data: {
       handles,
+      inputHandles: connector === 'left' ? handles : [],
+      outputHandles: connector === 'right' ? handles : [],
       inputConnector: connector === 'left' ? handles[0] : undefined,
       outputConnector: connector === 'right' ? handles[0] : undefined,
     },

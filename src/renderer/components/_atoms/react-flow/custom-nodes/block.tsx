@@ -21,16 +21,16 @@ export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 32
 type BlockTypes = {
   [key: string]: {
     name: string
-    leftConnectors: string[]
-    rightConnectors: string[]
+    inputConnectors: string[]
+    outputConnectors: string[]
     tooltipContent: string
   }
 }
-const DEFAULT_BLOCK_TYPES: BlockTypes = {
+export const DEFAULT_BLOCK_TYPES: BlockTypes = {
   default: {
     name: '???',
-    leftConnectors: ['???', '???', '???', '???', '???', '???'],
-    rightConnectors: ['???', '???', '???'],
+    inputConnectors: ['???', '???', '???', '???', '???', '???'],
+    outputConnectors: ['???', '???', '???'],
     tooltipContent: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam aliquam tristique tincidunt. Duis elementum
             tortor sem, non convallis orci facilisis at. Suspendisse id bibendum nisl. Mauris ac massa diam. Mauris
             ultrices massa justo, sed vehicula tellus rhoncus eget. Suspendisse lacinia nec dolor vitae sollicitudin.
@@ -42,14 +42,14 @@ const DEFAULT_BLOCK_TYPES: BlockTypes = {
   },
   TON: {
     name: 'TON',
-    leftConnectors: ['EN', 'IN', 'PT'],
-    rightConnectors: ['EN0', 'Q', 'ET'],
+    inputConnectors: ['EN', 'IN', 'PT'],
+    outputConnectors: ['EN0', 'Q', 'ET'],
     tooltipContent: `The TON block is a timer block that can be used to trigger an event after a certain amount of time has passed.`,
   },
 }
 
 export const Block = ({ height, selected, data, id, dragging }: BlockProps) => {
-  const { name, leftConnectors, rightConnectors, tooltipContent } = DEFAULT_BLOCK_TYPES[data.variant]
+  const { name, inputConnectors, outputConnectors, tooltipContent } = DEFAULT_BLOCK_TYPES[data.variant]
 
   const [blockLabelValue, setBlockLabelValue] = useState<string>('')
   const [blockNameValue, setBlockNameValue] = useState<string>(name)
@@ -82,7 +82,7 @@ export const Block = ({ height, selected, data, id, dragging }: BlockProps) => {
                 placeholder='???'
                 className='w-full bg-transparent text-center text-sm outline-none p-1'
               />
-              {leftConnectors.map((connector, index) => (
+              {inputConnectors.map((connector, index) => (
                 <div
                   key={index}
                   className='absolute text-sm'
@@ -91,7 +91,7 @@ export const Block = ({ height, selected, data, id, dragging }: BlockProps) => {
                   {connector}
                 </div>
               ))}
-              {rightConnectors.map((connector, index) => (
+              {outputConnectors.map((connector, index) => (
                 <div
                   key={index}
                   className='absolute text-sm'
@@ -137,10 +137,10 @@ export const Block = ({ height, selected, data, id, dragging }: BlockProps) => {
  */
 export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: BlockBuilderProps) => {
   const type = DEFAULT_BLOCK_TYPES[variant]
-  const leftConnectors = type.leftConnectors
-  const rightConnectors = type.rightConnectors
+  const inputConnectors = type.inputConnectors
+  const outputConnectors = type.outputConnectors
 
-  const leftHandles = leftConnectors.map((connector, index) =>
+  const leftHandles = inputConnectors.map((connector, index) =>
     buildHandle({
       id: `${connector}`,
       position: Position.Left,
@@ -157,7 +157,7 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: Bl
     }),
   )
 
-  const rightHandles = rightConnectors.map((connector, index) =>
+  const rightHandles = outputConnectors.map((connector, index) =>
     buildHandle({
       id: `${connector}`,
       position: Position.Right,
@@ -178,7 +178,7 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: Bl
 
   const blocKHeight =
     DEFAULT_BLOCK_CONNECTOR_Y +
-    Math.max(leftConnectors.length, rightConnectors.length) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
+    Math.max(inputConnectors.length, outputConnectors.length) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
 
   return {
     id,
@@ -187,6 +187,8 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: Bl
     data: {
       variant,
       handles,
+      inputHandles: leftHandles,
+      outputHandles: rightHandles,
       inputConnector: leftHandles[0],
       outputConnector: rightHandles[0],
     },

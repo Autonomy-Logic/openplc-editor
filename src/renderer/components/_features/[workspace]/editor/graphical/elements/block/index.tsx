@@ -1,7 +1,7 @@
 import * as Switch from '@radix-ui/react-switch'
-import { LibraryCloseFolderIcon, LibraryFileIcon, MagnifierIcon } from '@root/renderer/assets'
+import { MagnifierIcon } from '@root/renderer/assets'
 import { InputWithRef } from '@root/renderer/components/_atoms'
-import { BlockNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
+import { BlockNode, DEFAULT_BLOCK_TYPES } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
 import {
   LibraryFile,
   LibraryFolder,
@@ -11,177 +11,28 @@ import {
   ModalTitle,
   // ModalTrigger,
 } from '@root/renderer/components/_molecules'
-import { ReactElement, useState } from 'react'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { useState } from 'react'
 
 import ArrowButtonGroup from '../arrow-button-group'
-import imageMock from '../mockImages/Group112.png'
-import image1 from '../mockImages/image1.png'
-import image2 from '../mockImages/image2.png'
-
-type TreeDataChildren = {
-  key: string
-  label: string
-  icon: ReactElement
-  title: string
-  children: string
-  image: string
-}
-
-const lorem =
-  ' Lorem ipsum dolor sit amet consectetur adipisicing elit. Autem blanditiis voluptates eius quasi quam illum deserunt perspiciatis magnam, corrupti vel! Nesciunt nostrum maxime aliquid amet asperiores quibusdam ipsam impedit corporis?'
-
-const treeData: Array<{
-  key: string
-  label: string
-  icon: ReactElement
-  title: string
-  children: TreeDataChildren[]
-}> = [
-  {
-    key: '0',
-    label: 'P1AM_Modules',
-    icon: <LibraryCloseFolderIcon size='sm' />,
-    title: 'Module Tree',
-    children: [
-      {
-        key: '0.1',
-        label: 'P1AM_INIT',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: 1 + lorem,
-        image: imageMock,
-      },
-      {
-        key: '0.2',
-        label: 'P1_16CDR',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: 2 + lorem,
-        image: image1,
-      },
-      {
-        key: '0.3',
-        label: 'P1_08N',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: 3 + lorem,
-        image: image2,
-      },
-      {
-        key: '0.4',
-        label: 'P1_16N',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: lorem,
-        image: imageMock,
-      },
-      {
-        key: '0.5',
-        label: 'P1_16N',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: lorem,
-        image: image1,
-      },
-      {
-        key: '0.6',
-        label: 'P1_08T',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: lorem,
-        image: image2,
-      },
-      {
-        key: '0.7',
-        label: 'P1_16TR',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: lorem,
-        image: imageMock,
-      },
-      {
-        key: '0.8',
-        label: 'P1_04AD',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: lorem,
-        image: image1,
-      },
-    ],
-  },
-  {
-    key: '1',
-    label: 'Jaguar',
-    icon: <LibraryCloseFolderIcon size='sm' />,
-    title: 'Module Tree',
-    children: [],
-  },
-  {
-    key: '2',
-    label: 'Arduino',
-    icon: <LibraryCloseFolderIcon size='sm' />,
-    title: 'Module Tree',
-    children: [],
-  },
-  {
-    key: '3',
-    label: 'Communication',
-    icon: <LibraryCloseFolderIcon size='sm' />,
-    title: 'Module Tree',
-    children: [],
-  },
-  {
-    key: '4',
-    label: 'Sequent Microsystems',
-    icon: <LibraryCloseFolderIcon size='sm' />,
-    title: 'Module Tree',
-    children: [
-      {
-        key: '0.1',
-        label: 'P12AM_INIT',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        image: imageMock,
-        children: '',
-      },
-      {
-        key: '0.2',
-        label: 'P13_16CDR',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        image: image1,
-        children: '',
-      },
-    ],
-  },
-]
-
-const filterTreeData = (filterText: string) => {
-  return treeData.reduce(
-    //acc - accumulator
-    (acc, folder) => {
-      const filteredChildren = folder.children.filter((child) => child.label.toLowerCase().includes(filterText))
-      if (filteredChildren.length > 0 || folder.label.toLowerCase().includes(filterText)) {
-        acc.push({
-          ...folder,
-          children: filteredChildren,
-        })
-      }
-      return acc
-    },
-    [] as typeof treeData,
-  )
-}
 
 type BlockElementProps = {
   onClose?: () => void
   node?: BlockNode
 }
 
-const BlockElement = ({ onClose }: BlockElementProps) => {
+const BlockElement = ({ onClose, node }: BlockElementProps) => {
+  const {
+    libraries: { system },
+  } = useOpenPLCStore()
+
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<{ image: string; text: string } | null>(null)
-  const [formState, setFormState] = useState({ name: '', inputs: '', executionOrder: '' })
+  const [formState, setFormState] = useState<{ name: string; inputs: string; executionOrder: string }>({
+    name: DEFAULT_BLOCK_TYPES[node?.data.variant || 'default'].name,
+    inputs: (node?.data.inputHandles.length || 0).toString(),
+    executionOrder: '',
+  })
   const [filterText, setFilterText] = useState('')
 
   const isFormValid = Object.values(formState).every((value) => value !== '')
@@ -221,7 +72,9 @@ const BlockElement = ({ onClose }: BlockElementProps) => {
     onClose && onClose()
   }
 
-  const filteredTreeData = filterTreeData(filterText)
+  const filteredLibraries = system.filter((library) =>
+    library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
+  )
 
   const labelStyle = 'text-sm font-medium text-neutral-950 dark:text-white'
   const inputStyle =
@@ -257,25 +110,27 @@ const BlockElement = ({ onClose }: BlockElementProps) => {
               <div className='border-neural-100 h-[388px] w-full rounded-lg border px-1 py-4 dark:border-neutral-850'>
                 <div className='h-full w-full overflow-auto'>
                   <LibraryRoot>
-                    {filteredTreeData.map((data) => (
+                    {filteredLibraries.map((library) => (
                       <LibraryFolder
-                        key={data.key}
-                        label={data.label}
+                        key={library.name}
+                        label={library.name}
                         initiallyOpen={false}
                         shouldBeOpen={filterText.length > 0}
                       >
-                        {data.children.map((child) => (
-                          <LibraryFile
-                            key={child.key}
-                            label={child.label}
-                            isSelected={selectedFileKey === `${data.key}-${child.key}`}
-                            onSelect={() => setSelectedFileKey(`${data.key}-${child.key}`)}
-                            onClick={() => {
-                              setSelectedFileKey(`${data.key}-${child.key}`)
-                              setSelectedFile({ image: child.image, text: child.children })
-                            }}
-                          />
-                        ))}
+                        {library.pous
+                          .filter((pou) => pou.name.toLowerCase().includes(filterText))
+                          .map((pou) => (
+                            <LibraryFile
+                              key={pou.name}
+                              label={pou.name}
+                              isSelected={selectedFileKey === pou.name}
+                              onSelect={() => setSelectedFileKey(pou.name)}
+                              onClick={() => {
+                                setSelectedFileKey(pou.name)
+                                setSelectedFile({ image: '', text: pou.documentation })
+                              }}
+                            />
+                          ))}
                       </LibraryFolder>
                     ))}
                   </LibraryRoot>

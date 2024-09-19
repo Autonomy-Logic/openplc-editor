@@ -162,6 +162,8 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
     data: {
       handles,
       variant,
+      inputHandles: [inputHandle],
+      outputHandles: [outputHandle],
       inputConnector: inputHandle,
       outputConnector: outputHandle,
     },

@@ -136,6 +136,8 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
     data: {
       handles,
       variant,
+      inputHandles: [inputHandle],
+      outputHandles: [outputHandle],
       inputConnector: inputHandle,
       outputConnector: outputHandle,
     },

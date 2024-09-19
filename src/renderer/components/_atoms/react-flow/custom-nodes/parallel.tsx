@@ -102,12 +102,21 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       },
     }),
   ]
+
+  const inputHandles = [handles[0]]
+  type !== 'open' && inputHandles.push(handles[2])
+
+  const outputHandles = [handles[1]]
+  type === 'open' && outputHandles.push(handles[2])
+
   return {
     id,
     type: 'parallel',
     position: { x: posX, y: posY },
     data: {
       handles,
+      inputHandles: inputHandles,
+      outputHandles: outputHandles,
       inputConnector: handles[0],
       outputConnector: handles[1],
       parallelInputConnector: type === 'close' ? handles[2] : undefined,
@@ -120,6 +129,6 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
     height: DEFAULT_PARALLEL_HEIGHT,
     draggable: false,
     selectable: false,
-    selected: false
+    selected: false,
   }
 }
