@@ -14,7 +14,6 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
     setSelected(value)
   }
 
-  // Reset the state when the modal closes
   useEffect(() => {
     if (!isOpen) {
       setSelected(null)
@@ -23,16 +22,15 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
 
   return (
     <Modal open={isOpen} onOpenChange={onClose}>
-      <ModalContent onClose={onClose}>
-        <div className='flex h-full  w-full flex-col items-center justify-around '>
-          {/* Progress Bar */}
+      <ModalContent onClose={onClose} className='h-[400px] '>
+        <div className='flex h-full  w-full flex-col items-center justify-around'>
           <div className='relative mb-8 flex h-[100px] items-center justify-center'>
-            <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white font-bold text-blue-500 '>
+            <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2  border-blue-500  bg-white font-bold text-blue-500 '>
               1
             </div>
             <div className='h-[2px] w-12 bg-gray-500'></div>
             <div className='flex items-center'>
-              <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-gray-500 bg-gray-200 font-bold text-gray-500'>
+              <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-gray-500 bg-gray-200 font-bold text-gray-500 dark:border-neutral-300 dark:bg-white dark:text-neutral-700'>
                 2
               </div>
             </div>
@@ -40,13 +38,15 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             <div className='h-[2px] w-12 bg-gray-500'></div>
 
             <div className='flex items-center'>
-              <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-gray-500 bg-gray-200 font-bold text-gray-500'>
+              <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-gray-500 bg-gray-200 font-bold text-gray-500 dark:border-neutral-300 dark:bg-white dark:text-neutral-700'>
                 3
               </div>
             </div>
           </div>
           <div>
-            <h2 className=' mb-14 text-center text-lg font-semibold'>What type of project you will be working on?</h2>{' '}
+            <h2 className=' mb-14 text-center text-lg font-semibold text-neutral-1000 dark:text-neutral-50'>
+              What type of project you will be working on?
+            </h2>{' '}
             <div className='mb-16 flex w-full justify-around '>
               <button
                 className={`flex h-10 w-40 items-center justify-center rounded-md border-2  ${selected === 'project' ? 'border-blue-300 bg-blue-300 text-white' : 'border-transparent bg-gray-200 text-black hover:border-blue-500'}`}
