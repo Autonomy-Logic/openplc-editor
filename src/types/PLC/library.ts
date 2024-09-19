@@ -36,6 +36,38 @@ const baseTypeSchema = z.enum([
   'LOGLEVEL',
 ])
 
+const genericTypeSchema = z.object({
+  ANY: z.union([
+    baseTypeSchema,
+    z.literal('ANY_INT'),
+    z.literal('ANY_BIT'),
+    z.literal('ANY_STRING'),
+    z.literal('ANY_REAL'),
+    z.literal('ANY_DATE'),
+    z.literal('ANY_LOGLEVEL'),
+    z.literal('ANY_CHAR'),
+    z.literal('ANY_CHARS'),
+    z.literal('ANY_NUM'),
+    z.literal('ANY_INTEGRAL'),
+    z.literal('ANY_SIGNED'),
+    z.literal('ANY_UNSIGNED'),
+    z.literal('ANY_MAGNITUDE'),
+  ]),
+  ANY_INT: baseTypeSchema.extract(['SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT']),
+  ANY_BIT: baseTypeSchema.extract(['BOOL', 'BYTE', 'WORD', 'DWORD', 'LWORD']),
+  ANY_STRING: baseTypeSchema.extract(['STRING']),
+  ANY_REAL: baseTypeSchema.extract(['REAL', 'LREAL']),
+  ANY_DATE: baseTypeSchema.extract(['TIME', 'DATE', 'TOD', 'DT']),
+  ANY_LOGLEVEL: baseTypeSchema.extract(['LOGLEVEL']),
+  ANY_CHAR: z.enum(['CHAR', 'WCHAR']),
+  ANY_CHARS: z.union([z.literal('ANY_CHAR'), z.array(z.literal('ANY_STRING'))]), // Should be reviewed
+  ANY_NUM: z.union([z.literal('ANY_INT'), z.literal('ANY_REAL')]),
+  ANY_INTEGRAL: z.union([z.literal('ANY_INT'), z.literal('ANY_BIT')]),
+  ANY_SIGNED: baseTypeSchema.extract(['SINT', 'INT', 'DINT', 'LINT']),
+  ANY_UNSIGNED: baseTypeSchema.extract(['USINT', 'UINT', 'UDINT', 'ULINT']),
+  ANY_MAGNITUDE: z.union([z.literal('ANY_REAL'), z.literal('ANY_INT'), z.literal('TIME')]),
+})
+
 /**
  * This schema defines the structure of the variables that are used in the functions and function blocks.
  */
@@ -78,4 +110,4 @@ const BaseLibrarySchema = z.object({
   pous: z.array(BaseLibraryPouSchema),
 })
 
-export { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema, baseTypeSchema }
+export { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema, baseTypeSchema, genericTypeSchema }

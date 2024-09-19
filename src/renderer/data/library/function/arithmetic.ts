@@ -1,7 +1,18 @@
-import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema } from '@root/types/PLC/library'
+import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema, baseTypeSchema, genericTypeSchema } from '@root/types/PLC/library'
 import { z } from 'zod'
 
-const ArithmeticVariableSchema = BaseLibraryVariableSchema
+const ArithmeticVariableSchema = BaseLibraryVariableSchema.extend({
+  type: z.discriminatedUnion('definition', [
+    z.object({
+      definition: z.literal('base-type'),
+      value: baseTypeSchema,
+    }),
+    z.object({
+      definition: z.literal('generic-type'),
+      value: genericTypeSchema.keyof(),
+    }),
+  ]),
+})
 
 const ArithmeticPouSchema = BaseLibraryPouSchema.extend({
   variables: z.array(ArithmeticVariableSchema),
@@ -28,7 +39,7 @@ const Arithmetic: ArithmeticLibrary = {
         {
           name: 'IN1',
           class: 'input',
-          type: { definition: 'base-type', value: 'REAL' },
+          type: { definition: 'generic-type', value: 'ANY_NUM' },
         },
         {
           name: 'IN2',
