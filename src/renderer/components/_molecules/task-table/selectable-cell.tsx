@@ -6,6 +6,7 @@ import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
+import ArrowButtonGroup from '../../_features/[workspace]/editor/graphical/elements/arrow-button-group'
 
 type ISelectableCellProps = CellContext<PLCTask, unknown> & { editable?: boolean }
 
@@ -71,8 +72,10 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
     min: 0,
     sec: 0,
     ms: 0,
-    micsec: 0,
+    microS: 0,
   })
+
+  const [tempValues, setTempValues] = useState(values)
 
   useEffect(() => {
     if (typeof initialValue === 'string') {
@@ -85,17 +88,46 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
           min: Number(match[3]),
           sec: Number(match[4]),
           ms: Number(match[5]),
-          micsec: 0,
+          microS: 0,
+        })
+        setTempValues({
+          day: Number(match[1]),
+          hour: Number(match[2]),
+          min: Number(match[3]),
+          sec: Number(match[4]),
+          ms: Number(match[5]),
+          microS: 0,
         })
       }
     }
   }, [initialValue])
 
-  const formattedInterval = `T#${values.day}d${values.hour}h${values.min}m${values.sec}s${values.ms}ms`
+  const formattedInterval = `T#${tempValues.day}d${tempValues.hour}h${tempValues.min}m${tempValues.sec}s${tempValues.ms}ms`
 
   const shouldDisplayInterval = Object.values(values).some((val) => val > 0)
-  const handleBlur = () => {
+
+  const handleSave = () => {
+    setValues(tempValues)
     table.options.meta?.updateData(index, id, formattedInterval)
+    setIntervalModalIsOpen(false)
+  }
+
+  const handleClearForm = () => {
+    setTempValues({ day: 0, hour: 0, min: 0, sec: 0, ms: 0, microS: 0 })
+  }
+
+  const handleIncrement = (field: 'day' | 'hour' | 'min' | 'sec' | 'ms' | 'microS') => {
+    setTempValues((prevState) => ({
+      ...prevState,
+      [field]: String(Math.min(Number(prevState[field]) + 1, 20)),
+    }))
+  }
+
+  const handleDecrement = (field: 'day' | 'hour' | 'min' | 'sec' | 'ms' | 'microS') => {
+    setTempValues((prevState) => ({
+      ...prevState,
+      [field]: String(Math.max(Number(prevState[field]) - 1, 0)),
+    }))
   }
 
   return (
@@ -105,9 +137,12 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
           {shouldDisplayInterval ? formattedInterval : ''}
         </span>
       </ModalTrigger>
-      <ModalContent className='flex max-h-52 w-fit flex-col items-center justify-between gap-2 rounded-lg bg-neutral-900 p-8'>
-        <div className='flex w-full h-28  gap-2'>
-          {['day', 'hour', 'min', 'sec', 'ms', 'micsec'].map((interval) => (
+      <ModalContent
+        onClose={handleClearForm}
+        className='flex max-h-52  w-fit select-none flex-col items-center justify-between gap-2 rounded-lg bg-neutral-900 p-8'
+      >
+        <div className='flex h-28 w-full  gap-2'>
+          {(['day', 'hour', 'min', 'sec', 'ms', 'microS'] as const).map((interval) => (
             <div
               key={interval}
               className='flex  w-full flex-col justify-center gap-1 font-caption text-xs outline-none'
@@ -115,38 +150,44 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
               <label htmlFor={interval} className='w-full text-neutral-950 dark:text-white'>
                 {interval}
               </label>
-
-              <input
-                placeholder={
-                  values[interval as keyof typeof values] === 0
-                    ? values[interval as keyof typeof values].toString()
-                    : ''
-                }
-                onBlur={handleBlur}
-                id={interval}
-                type='number'
-                className={cn(
-                  'h-5 w-16 rounded-sm bg-white p-2 text-center text-cp-sm outline-none ring-brand focus:ring-2',
-                )}
-                value={values[interval as keyof typeof values] > 0 ? values[interval as keyof typeof values] : ''}
-                onChange={(e) =>
-                  setValues((prevValues) => ({
-                    ...prevValues,
-                    [interval]: Number(e.target.value),
-                  }))
-                }
-              />
+              <div className='flex gap-1'>
+                <input
+                  placeholder={tempValues[interval] === 0 ? tempValues[interval].toString() : ''}
+                  id={interval}
+                  type='number'
+                  className={cn(
+                    'h-6 w-16 rounded-sm bg-white p-2 text-center text-cp-sm outline-none ring-brand focus:ring-2',
+                  )}
+                  value={tempValues[interval] > 0 ? tempValues[interval] : ''}
+                  onChange={(e) =>
+                    setTempValues((prevValues) => ({
+                      ...prevValues,
+                      [interval]: Number(e.target.value),
+                    }))
+                  }
+                />
+                <ArrowButtonGroup
+                  onIncrement={() => handleIncrement(interval)}
+                  onDecrement={() => handleDecrement(interval)}
+                />
+              </div>
             </div>
           ))}
         </div>
-          <div className='flex  !h-8 w-full justify-evenly gap-7'>
-            <button className={`h-full w-[236px] items-center rounded-lg bg-brand text-center font-medium text-white`}>
-              Ok
-            </button>
-            <button className='h-full w-[236px] items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
-              Cancel
-            </button>
-          </div>
+        <div className='flex  !h-8 w-full justify-evenly gap-7'>
+          <button
+            onClick={() => setIntervalModalIsOpen(false)}
+            className='h-full w-[236px] items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className={`h-full w-[236px] items-center rounded-lg bg-brand text-center font-medium text-white`}
+          >
+            Ok
+          </button>
+        </div>
       </ModalContent>
     </Modal>
   )

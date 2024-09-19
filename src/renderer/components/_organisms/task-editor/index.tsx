@@ -98,7 +98,14 @@ export default function TaskEditor() {
     }
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createTask({ data: { ...task } })
+      createTask({
+        data: {
+          name: 'Task',
+          triggering: 'Cyclic',
+          interval: '0',
+          priority: 0,
+        },
+      })
       updateModelTasks({
         display: 'table',
         selectedRow: tasks.length,
