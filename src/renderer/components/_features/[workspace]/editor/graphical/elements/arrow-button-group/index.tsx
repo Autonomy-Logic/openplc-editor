@@ -3,7 +3,7 @@ import ArrowButton from '@root/renderer/assets/icons/interface/ArrowButton'
 type ArrowButtonGroupProps = {
   onIncrement: () => void
   onDecrement: () => void
-  onMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void 
+  onMouseDown?: (e: React.MouseEvent<HTMLDivElement>) => void 
 }
 
 const ArrowButtonGroup = ({ onIncrement, onDecrement, onMouseDown }: ArrowButtonGroupProps) => (

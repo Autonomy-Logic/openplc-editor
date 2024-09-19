@@ -27,7 +27,6 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
     if (cellValue === initialValue) return
 
     const res = table.options.meta?.updateData(index, id, cellValue)
-    // console.log('Update Data Response:', res)
 
     if (res?.ok) return
 
@@ -67,33 +66,34 @@ const EditablePriorityCell = ({
   }, [initialValue])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = Number(e.target.value)
+    const value = Math.max(0, Math.min(99, Number(e.target.value)))
     setCellValue(value)
+    table.options.meta?.updateData(index, id, value)
   }
 
   const onBlur = () => {
     const clampedValue = Math.max(0, Math.min(99, cellValue))
     setIsFocused(false)
-    if (cellValue > 99 || cellValue < 0) {
-      return
-    } else {
-      table.options.meta?.updateData(index, id, clampedValue)
-    }
+    table.options.meta?.updateData(index, id, clampedValue)
   }
 
   const onFocus = () => {
-    setIsFocused(true) 
+    setIsFocused(true)
   }
 
   const handleIncrement = () => {
-    setCellValue(cellValue + 1)
+    const newValue = Math.min(99, cellValue + 1)
+    setCellValue(newValue)
+    table.options.meta?.updateData(index, id, newValue)
   }
 
   const handleDecrement = () => {
-    setCellValue(cellValue - 1)
+    const newValue = Math.max(0, cellValue - 1)
+    setCellValue(newValue)
+    table.options.meta?.updateData(index, id, newValue)
   }
 
-  const preventBlurOnButtonClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const preventBlurOnButtonClick = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault()
   }
 
@@ -107,11 +107,10 @@ const EditablePriorityCell = ({
         onFocus={onFocus}
         className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
           'pointer-events-none': !editable,
-          'text-red-500': cellValue > 99 || cellValue < 0,
         })}
       />
       {isFocused && (
-        <div className='absolute right-2'>
+        <div className='absolute right-2' onMouseDown={preventBlurOnButtonClick}>
           <ArrowButtonGroup
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}

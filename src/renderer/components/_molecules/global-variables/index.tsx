@@ -146,7 +146,7 @@ const GlobalVariablesEditor = () => {
   }
 
   return (
-    <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
+    <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 '>
       <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
         {editorVariables.display === 'table' ? (
           <div aria-label='Variables editor table actions container' className='relative flex h-full w-full '>
@@ -222,7 +222,7 @@ const GlobalVariablesEditor = () => {
       {editorVariables.display === 'table' ? (
         <div
           aria-label='Variables editor table container'
-          className='h-full overflow-y-auto'
+          className='h-auto overflow-hidden'
           style={{ scrollbarGutter: 'stable' }}
         >
           <VariablesTable

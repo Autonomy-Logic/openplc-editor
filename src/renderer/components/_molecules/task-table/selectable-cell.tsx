@@ -1,4 +1,4 @@
-import { Modal, ModalContent, ModalTrigger } from '@root/renderer/components/_molecules'
+import { Modal, ModalContent, ModalTitle, ModalTrigger } from '@root/renderer/components/_molecules'
 import type { PLCTask } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext } from '@tanstack/react-table'
@@ -119,14 +119,14 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
   const handleIncrement = (field: 'day' | 'hour' | 'min' | 'sec' | 'ms' | 'microS') => {
     setTempValues((prevState) => ({
       ...prevState,
-      [field]: String(Math.min(Number(prevState[field]) + 1, 20)),
+      [field]: Math.min(Number(prevState[field]) + 1, 20), // Update the max value as needed
     }))
   }
 
   const handleDecrement = (field: 'day' | 'hour' | 'min' | 'sec' | 'ms' | 'microS') => {
     setTempValues((prevState) => ({
       ...prevState,
-      [field]: String(Math.max(Number(prevState[field]) - 1, 0)),
+      [field]: Math.max(Number(prevState[field]) - 1, 0), // Ensure the value does not go below 0
     }))
   }
 
@@ -139,9 +139,10 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
       </ModalTrigger>
       <ModalContent
         onClose={handleClearForm}
-        className='flex max-h-52  w-fit select-none flex-col items-center justify-between gap-2 rounded-lg bg-neutral-900 p-8'
+        className='flex max-h-56  w-fit select-none flex-col  justify-between gap-2 rounded-lg bg-neutral-900 p-8'
       >
-        <div className='flex h-28 w-full  gap-2'>
+        <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Set interval</ModalTitle>
+        <div className='flex h-24 w-full  gap-2'>
           {(['day', 'hour', 'min', 'sec', 'ms', 'microS'] as const).map((interval) => (
             <div
               key={interval}

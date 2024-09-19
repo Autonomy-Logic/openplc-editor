@@ -148,7 +148,7 @@ export default function TaskEditor() {
   }
 
   return (
-    <div aria-label='Tasks editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
+    <div aria-label='Tasks editor container' className='flex  w-full flex-1 flex-col gap-4 '>
       <div aria-label='Tasks editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
         {editorTasks.display === 'table' ? (
           <div
@@ -228,7 +228,7 @@ export default function TaskEditor() {
       {editorTasks.display === 'table' ? (
         <div
           aria-label='Tasks editor table container'
-          className='h-full overflow-y-auto'
+          className=''
           style={{ scrollbarGutter: 'stable' }}
         >
           <TaskTable

@@ -5,16 +5,12 @@ import { GlobalVariablesEditor } from '../../../../_molecules/global-variables'
 
 export default function ResourcesEditor() {
   return (
-    <div className=' h-full w-full '>
-      <div className='h-2/5 p-2'>
-        <GlobalVariablesEditor />
-      </div>
-      <div className='h-[30%] p-2'>
-        <TaskEditor />
-      </div>
-      <div className='h-[30%]  p-2'>
-        <InstancesEditor />
-      </div>
+    <div className=' h-full w-full gap-12 flex flex-col overflow-y-auto'>
+      <GlobalVariablesEditor />
+
+      <TaskEditor />
+
+      <InstancesEditor />
     </div>
   )
 }
