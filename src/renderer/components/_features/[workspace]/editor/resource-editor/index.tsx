@@ -1,11 +1,10 @@
+import { GlobalVariablesEditor } from '@root/renderer/components/_organisms/global-variables-editor'
 import InstancesEditor from '@root/renderer/components/_organisms/instances-editor'
 import TaskEditor from '@root/renderer/components/_organisms/task-editor'
 
-import { GlobalVariablesEditor } from '../../../../_molecules/global-variables'
-
 export default function ResourcesEditor() {
   return (
-    <div className=' h-full w-full gap-12 flex flex-col overflow-y-auto'>
+    <div className=' flex h-full w-full flex-col gap-12 overflow-y-auto'>
       <GlobalVariablesEditor />
 
       <TaskEditor />

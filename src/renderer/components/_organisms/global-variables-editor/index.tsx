@@ -1,21 +1,27 @@
+// import * as PrimitiveSwitch from '@radix-ui/react-switch'
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
-import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
-import { VariablesTable } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { GlobalVariablesTableType } from '@root/renderer/store/slices'
 import { PLCGlobalVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
-import { ColumnFiltersState } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
+
+import { InputWithRef } from '../../_atoms'
+import { TableActionButton } from '../../_atoms/buttons/tables-actions'
+import { GlobalVariablesTable } from '../../_molecules/global-variables-table'
 
 const GlobalVariablesEditor = () => {
   const ROWS_NOT_SELECTED = -1
   const {
     editor,
     workspace: {
-      projectData: { configuration },
+      projectData: {
+        configuration: {
+          resource: { globalVariables },
+        },
+      },
     },
     editorActions: { updateModelVariables },
     workspaceActions: { createVariable, deleteVariable, rearrangeVariables },
@@ -24,9 +30,8 @@ const GlobalVariablesEditor = () => {
   /**
    * Table data and column filters states to keep track of the table data and column filters
    */
-  const globalVariables = configuration.resource.globalVariables
   const [tableData, setTableData] = useState<PLCGlobalVariable[]>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+
   const [editorVariables, setEditorVariables] = useState<GlobalVariablesTableType>({
     display: 'table',
     selectedRow: ROWS_NOT_SELECTED.toString(),
@@ -39,11 +44,14 @@ const GlobalVariablesEditor = () => {
   useEffect(() => {
     const variablesToTable = globalVariables.filter((variable) => variable.name)
     setTableData(variablesToTable)
-    console.log(configuration)
   }, [editor, globalVariables])
 
+  /**
+   * If the editor name is not the same as the current editor name
+   * set the editor name and the editor's variables to the states
+   */
   useEffect(() => {
-    if (editor.type === 'plc-resource') {
+    if (editor.type === 'plc-resource')
       if (editor.variable.display === 'table') {
         const { description, display, selectedRow } = editor.variable
         setEditorVariables({
@@ -51,12 +59,11 @@ const GlobalVariablesEditor = () => {
           selectedRow: selectedRow,
           description: description,
         })
-      } else {
+      } else
         setEditorVariables({
           display: editor.variable.display,
         })
-      }
-    }
+    console.log('table data ', tableData)
   }, [editor])
 
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {
@@ -123,6 +130,7 @@ const GlobalVariablesEditor = () => {
       selectedRow: selectedRow + 1,
     })
   }
+
   const handleRemoveVariable = () => {
     if (editorVariables.display === 'code') return
 
@@ -146,13 +154,29 @@ const GlobalVariablesEditor = () => {
   }
 
   return (
-    <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 '>
+    <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4'>
       <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
         {editorVariables.display === 'table' ? (
-          <div aria-label='Variables editor table actions container' className='relative flex h-full w-full '>
+          <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
+            <div
+              aria-label='Variables editor table description container'
+              className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
+            >
+              <label
+                htmlFor='description'
+                className='w-fit text-base font-medium text-neutral-1000 dark:text-neutral-300'
+              >
+                Description :
+              </label>
+              <InputWithRef
+                id='description'
+                className='h-full w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
+              />
+            </div>
+
             <div
               aria-label='Variables editor table actions container'
-              className=' absolute right-0 flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
+              className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
             >
               {/** This can be reviewed */}
               <TableActionButton aria-label='Add table row button' onClick={handleCreateVariable}>
@@ -222,13 +246,11 @@ const GlobalVariablesEditor = () => {
       {editorVariables.display === 'table' ? (
         <div
           aria-label='Variables editor table container'
-          className='h-auto overflow-hidden'
+          className=''
           style={{ scrollbarGutter: 'stable' }}
         >
-          <VariablesTable
+          <GlobalVariablesTable
             tableData={tableData}
-            columnFilters={columnFilters}
-            setColumnFilters={setColumnFilters}
             selectedRow={parseInt(editorVariables.selectedRow)}
             handleRowClick={handleRowClick}
           />
