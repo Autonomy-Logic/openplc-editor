@@ -18,6 +18,14 @@ import { SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 const columnHelper = createColumnHelper<PLCGlobalVariable>()
 
 const columns = [
+  columnHelper.accessor('id', {
+    header: '#',
+    size: 64,
+    minSize: 32,
+    maxSize: 64,
+    enableResizing: true,
+    cell: (props) => props.row.id,
+  }),
   columnHelper.accessor('name', {
     header: 'Name',
     enableResizing: true,
@@ -37,6 +45,9 @@ const columns = [
   columnHelper.accessor('location', {
     header: 'Location',
     enableResizing: true,
+    size: 300,
+    minSize: 80,
+    maxSize:  300,
     cell: EditableNameCell,
   }),
   columnHelper.accessor('documentation', {
@@ -58,9 +69,7 @@ type PLCVariablesTableProps = {
 
 const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVariablesTableProps) => {
   const {
-    editor: {
-      meta: { name },
-    },
+   
     workspaceActions: { updateVariable },
   } = useOpenPLCStore()
 
@@ -132,8 +141,7 @@ const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVar
     meta: {
       updateData: (rowIndex, columnId, value) => {
         return updateVariable({
-          scope: 'local',
-          associatedPou: name,
+          scope: 'global',
           rowId: rowIndex,
           data: {
             [columnId]: value,

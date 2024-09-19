@@ -8,7 +8,6 @@ import { PLCGlobalVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 
-import { InputWithRef } from '../../_atoms'
 import { TableActionButton } from '../../_atoms/buttons/tables-actions'
 import { GlobalVariablesTable } from '../../_molecules/global-variables-table'
 
@@ -158,22 +157,7 @@ const GlobalVariablesEditor = () => {
       <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
         {editorVariables.display === 'table' ? (
           <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
-            <div
-              aria-label='Variables editor table description container'
-              className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
-            >
-              <label
-                htmlFor='description'
-                className='w-fit text-base font-medium text-neutral-1000 dark:text-neutral-300'
-              >
-                Description :
-              </label>
-              <InputWithRef
-                id='description'
-                className='h-full w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
-              />
-            </div>
-
+            <span>Global Variables</span>
             <div
               aria-label='Variables editor table actions container'
               className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
@@ -244,11 +228,7 @@ const GlobalVariablesEditor = () => {
         </div>
       </div>
       {editorVariables.display === 'table' ? (
-        <div
-          aria-label='Variables editor table container'
-          className=''
-          style={{ scrollbarGutter: 'stable' }}
-        >
+        <div aria-label='Variables editor table container' className='' style={{ scrollbarGutter: 'stable' }}>
           <GlobalVariablesTable
             tableData={tableData}
             selectedRow={parseInt(editorVariables.selectedRow)}
