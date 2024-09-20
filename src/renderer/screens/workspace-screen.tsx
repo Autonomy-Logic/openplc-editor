@@ -75,6 +75,8 @@ const WorkspaceScreen = () => {
   const workspacePanelRef = useRef(null)
   const consolePanelRef = useRef(null)
 
+  console.log(projectData.dataTypes)
+
   const togglePanel = () => {
     if (panelRef.current) {
       panelRef.current.resize(25)

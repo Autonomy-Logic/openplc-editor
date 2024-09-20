@@ -80,7 +80,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     const normalizedDatatypeObject = CreateDatatypeObject(data)
     console.log('data ->', data)
     console.log('Normalized obj ->', normalizedDatatypeObject)
-    // createDatatype(normalizedDatatypeObject)
+    createDatatype(normalizedDatatypeObject)
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
