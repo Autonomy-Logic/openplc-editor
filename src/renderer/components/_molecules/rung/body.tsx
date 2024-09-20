@@ -1,3 +1,4 @@
+import * as Portal from '@radix-ui/react-portal'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowState } from '@root/renderer/store/slices'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
@@ -34,7 +35,10 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const [rungLocal, setRungLocal] = useState<FlowState>(rung)
   const [selectedNodes, setSelectedNodes] = useState<FlowNode[]>([])
+
   const [modalNode, setModalNode] = useState<FlowNode | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const flowRef = useRef<HTMLDivElement>(null)
 
@@ -83,9 +87,17 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    * Update the selected nodes array when the nodes array changes
    */
   useEffect(() => {
+    console.log(
+      'rungLocal.nodes.filter((node) => node.selected).length > 0',
+      rungLocal.nodes.filter((node) => node.selected).length > 0,
+    )
     const selectedNodes = rungLocal.nodes.filter((node) => node.selected)
     setSelectedNodes(selectedNodes)
-  }, [rungLocal.nodes.filter((node) => node.selected)])
+  }, [
+    rungLocal.nodes.filter(
+      (node) => node.selected && node.type !== 'placeholder' && node.type !== 'parallelPlaceholder',
+    ).length > 0,
+  ])
 
   /**
    * Disable dragging for all nodes when multiple nodes are selected
@@ -167,10 +179,12 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const handleNodeDoubleClick = (node: FlowNode) => {
     setModalNode(node)
+    setModalOpen(true)
   }
 
   const handleModalClose = () => {
     setModalNode(null)
+    setModalOpen(false)
   }
 
   const onNodesChange: OnNodesChange<FlowNode> = useCallback(
@@ -327,14 +341,32 @@ export const RungBody = ({ rung }: RungBodyProps) => {
           />
         </div>
       </div>
-      {modalNode &&
-        (modalNode.type === 'block' ? (
-          <BlockElement onClose={handleModalClose} node={modalNode as BlockNode} />
-        ) : modalNode.type === 'contact' ? (
-          <ContactElement onClose={handleModalClose} node={modalNode as ContactNode} />
-        ) : modalNode.type === 'coil' ? (
-          <CoilElement onClose={handleModalClose} node={modalNode as CoilNode} />
-        ) : null)}
+      <Portal.Root>
+        {modalNode?.type === 'block' && (
+          <BlockElement
+            onClose={handleModalClose}
+            node={modalNode as BlockNode}
+            isOpen={modalOpen}
+            onOpenChange={setModalOpen}
+          />
+        )}
+        {modalNode?.type === 'contact' && (
+          <ContactElement
+            onClose={handleModalClose}
+            node={modalNode as ContactNode}
+            isOpen={modalOpen}
+            onOpenChange={setModalOpen}
+          />
+        )}
+        {modalNode?.type === 'coil' && (
+          <CoilElement
+            onClose={handleModalClose}
+            node={modalNode as CoilNode}
+            isOpen={modalOpen}
+            onOpenChange={setModalOpen}
+          />
+        )}
+      </Portal.Root>
     </div>
   )
 }

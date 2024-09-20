@@ -5,18 +5,20 @@ import {
   ModalTitle,
   // ModalTrigger
 } from '@root/renderer/components/_molecules'
-import { useState } from 'react'
+import { Dispatch, SetStateAction, useState } from 'react'
 
 // import imageMock from '../mockImages/Group112.png'
 // import image1 from '../mockImages/image1.png'
 // import image2 from '../mockImages/image2.png'
 
 type ContactElementProps = {
+  isOpen: boolean
+  onOpenChange: Dispatch<SetStateAction<boolean>>
   onClose?: () => void
   node?: ContactNode
 }
 
-const ContactElement = ({ onClose, node }: ContactElementProps) => {
+const ContactElement = ({ isOpen, onOpenChange, onClose, node }: ContactElementProps) => {
   const [selectedModifier, setSelectedModifier] = useState<string | null>(node?.data.variant as string)
   const contactModifiers = Object.entries(DEFAULT_CONTACT_TYPES).map(([label, contact]) => ({ label, contact }))
 
@@ -31,7 +33,7 @@ const ContactElement = ({ onClose, node }: ContactElementProps) => {
   }
 
   return (
-    <Modal defaultOpen>
+    <Modal open={isOpen} onOpenChange={onOpenChange}>
       {/* <ModalTrigger>Open Contact</ModalTrigger> */}
       <ModalContent
         onClose={handleCloseModal}

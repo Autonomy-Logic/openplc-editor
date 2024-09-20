@@ -1,39 +1,31 @@
 import * as Switch from '@radix-ui/react-switch'
-import { MagnifierIcon } from '@root/renderer/assets'
 import { InputWithRef } from '@root/renderer/components/_atoms'
 import { BlockNode, DEFAULT_BLOCK_TYPES } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
 import {
-  LibraryFile,
-  LibraryFolder,
-  LibraryRoot,
   Modal,
   ModalContent,
   ModalTitle,
   // ModalTrigger,
 } from '@root/renderer/components/_molecules'
-import { useOpenPLCStore } from '@root/renderer/store'
-import { useState } from 'react'
+import { Dispatch, SetStateAction, useState } from 'react'
 
 import ArrowButtonGroup from '../arrow-button-group'
+import { ModalBlockLibrary } from './library'
 
 type BlockElementProps = {
+  isOpen: boolean
+  onOpenChange: Dispatch<SetStateAction<boolean>>
   onClose?: () => void
   node?: BlockNode
 }
 
-const BlockElement = ({ onClose, node }: BlockElementProps) => {
-  const {
-    libraries: { system },
-  } = useOpenPLCStore()
-
-  const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
+const BlockElement = ({ isOpen, onOpenChange, onClose, node }: BlockElementProps) => {
   const [selectedFile, setSelectedFile] = useState<{ image: string; text: string } | null>(null)
   const [formState, setFormState] = useState<{ name: string; inputs: string; executionOrder: string }>({
     name: DEFAULT_BLOCK_TYPES[node?.data.variant || 'default'].name,
     inputs: (node?.data.inputHandles.length || 0).toString(),
     executionOrder: '',
   })
-  const [filterText, setFilterText] = useState('')
 
   const isFormValid = Object.values(formState).every((value) => value !== '')
 
@@ -42,15 +34,9 @@ const BlockElement = ({ onClose, node }: BlockElementProps) => {
     setFormState((prevState) => ({ ...prevState, [id]: value }))
   }
 
-  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFilterText(e.target.value.toLowerCase())
-  }
-
   const handleClearForm = () => {
     setFormState({ name: '', inputs: '', executionOrder: '' })
-    setSelectedFileKey(null)
     setSelectedFile(null)
-    setFilterText('')
   }
 
   const handleIncrement = (field: 'inputs' | 'executionOrder') => {
@@ -72,16 +58,12 @@ const BlockElement = ({ onClose, node }: BlockElementProps) => {
     onClose && onClose()
   }
 
-  const filteredLibraries = system.filter((library) =>
-    library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
-  )
-
   const labelStyle = 'text-sm font-medium text-neutral-950 dark:text-white'
   const inputStyle =
     'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
 
   return (
-    <Modal defaultOpen>
+    <Modal open={isOpen} onOpenChange={onOpenChange}>
       {/* <ModalTrigger>Open</ModalTrigger> */}
       <ModalContent
         onClose={handleCloseModal}
@@ -94,48 +76,7 @@ const BlockElement = ({ onClose, node }: BlockElementProps) => {
           <div id='container-modifier-variable' className='h-full w-[236px]'>
             <div className='flex h-full w-full flex-col gap-2'>
               <label className={labelStyle}>Type:</label>
-              <div className={`relative flex items-center focus-within:border-brand ${inputStyle}`}>
-                <InputWithRef
-                  className='h-full w-full bg-inherit outline-none'
-                  id='Search-File'
-                  placeholder='Search'
-                  type='text'
-                  value={filterText}
-                  onChange={handleFilterChange}
-                />
-                <label className='relative right-0 stroke-brand' htmlFor='Search-File'>
-                  <MagnifierIcon size='sm' className='stroke-brand' />
-                </label>
-              </div>
-              <div className='border-neural-100 h-[388px] w-full rounded-lg border px-1 py-4 dark:border-neutral-850'>
-                <div className='h-full w-full overflow-auto'>
-                  <LibraryRoot>
-                    {filteredLibraries.map((library) => (
-                      <LibraryFolder
-                        key={library.name}
-                        label={library.name}
-                        initiallyOpen={false}
-                        shouldBeOpen={filterText.length > 0}
-                      >
-                        {library.pous
-                          .filter((pou) => pou.name.toLowerCase().includes(filterText))
-                          .map((pou) => (
-                            <LibraryFile
-                              key={pou.name}
-                              label={pou.name}
-                              isSelected={selectedFileKey === pou.name}
-                              onSelect={() => setSelectedFileKey(pou.name)}
-                              onClick={() => {
-                                setSelectedFileKey(pou.name)
-                                setSelectedFile({ image: '', text: pou.documentation })
-                              }}
-                            />
-                          ))}
-                      </LibraryFolder>
-                    ))}
-                  </LibraryRoot>
-                </div>
-              </div>
+              <ModalBlockLibrary />
               <div className='border-neural-100 h-full max-h-[119px] overflow-hidden rounded-lg border px-2 py-4 text-xs font-normal text-neutral-950 dark:border-neutral-850 dark:text-neutral-100'>
                 <p className='h-full overflow-y-auto dark:text-neutral-100'>{selectedFile?.text}</p>
               </div>

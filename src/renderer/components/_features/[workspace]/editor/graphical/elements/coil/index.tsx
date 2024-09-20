@@ -5,18 +5,20 @@ import {
   ModalTitle,
   // ModalTrigger
 } from '@root/renderer/components/_molecules'
-import { useState } from 'react'
+import { Dispatch, SetStateAction, useState } from 'react'
 
 // import imageMock from '../mockImages/Group112.png'
 // import image1 from '../mockImages/image1.png'
 // import image2 from '../mockImages/image2.png'
 
 type CoilElementProps = {
+  isOpen: boolean
+  onOpenChange: Dispatch<SetStateAction<boolean>>
   onClose?: () => void
   node?: CoilNode
 }
 
-const CoilElement = ({ onClose, node }: CoilElementProps) => {
+const CoilElement = ({ isOpen, onOpenChange, onClose, node }: CoilElementProps) => {
   const [selectedModifier, setSelectedModifier] = useState<string | null>(node?.data.variant as string)
   const coilModifiers = Object.entries(DEFAULT_COIL_TYPES).map(([label, coil]) => ({ label, coil }))
 
@@ -31,7 +33,7 @@ const CoilElement = ({ onClose, node }: CoilElementProps) => {
   }
 
   return (
-    <Modal defaultOpen>
+    <Modal open={isOpen} onOpenChange={onOpenChange}>
       {/* <ModalTrigger>Open Coil</ModalTrigger> */}
       <ModalContent
         onClose={handleCloseModal}
