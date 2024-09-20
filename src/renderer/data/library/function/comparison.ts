@@ -59,7 +59,7 @@ const Comparison: ComparisonLibrary = {
         },
       ],
       body: 'Greater Than',
-      documentation: '(IN1: ANY, IN2: ANY) -> OUT:BOOL',
+      documentation: '(IN1: ANY, IN2: ANY) => OUT:BOOL',
       extensible: true,
     },
     {
@@ -84,7 +84,7 @@ const Comparison: ComparisonLibrary = {
         },
       ],
       body: 'Greater Than or equal to',
-      documentation: '(IN1: ANY, IN2: ANY) -> OUT:BOOL',
+      documentation: '(IN1: ANY, IN2: ANY) => OUT:BOOL',
       extensible: true,
     },
     {
@@ -109,7 +109,7 @@ const Comparison: ComparisonLibrary = {
         },
       ],
       body: 'Equal to',
-      documentation: '(IN1: ANY, IN2: ANY) -> OUT:BOOL',
+      documentation: '(IN1: ANY, IN2: ANY) => OUT:BOOL',
       extensible: true,
     },
     {
@@ -134,7 +134,7 @@ const Comparison: ComparisonLibrary = {
         },
       ],
       body: 'Less Than',
-      documentation: '(IN1: ANY, IN2: ANY) -> OUT:BOOL',
+      documentation: '(IN1: ANY, IN2: ANY) => OUT:BOOL',
       extensible: true,
     },
     {
@@ -159,7 +159,7 @@ const Comparison: ComparisonLibrary = {
         },
       ],
       body: 'Less Than or equal to',
-      documentation: '(IN1: ANY, IN2: ANY) -> OUT:BOOL',
+      documentation: '(IN1: ANY, IN2: ANY) => OUT:BOOL',
       extensible: true,
     },
     {
@@ -184,7 +184,7 @@ const Comparison: ComparisonLibrary = {
         },
       ],
       body: 'Not Equal to',
-      documentation: '(IN1: ANY, IN2: ANY) -> OUT:BOOL',
+      documentation: '(IN1: ANY, IN2: ANY) => OUT:BOOL',
       extensible: false,
     },
   ],

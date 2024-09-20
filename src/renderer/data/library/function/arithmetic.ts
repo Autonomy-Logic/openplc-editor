@@ -59,7 +59,7 @@ const Arithmetic: ArithmeticLibrary = {
         },
       ],
       body: 'Addition',
-      documentation: '(IN1: ANY_NUM, IN2:ANY_NUM) -> OUT:ANY_NUM',
+      documentation: '(IN1: ANY_NUM, IN2:ANY_NUM) => OUT:ANY_NUM',
       extensible: true,
     },
     {
@@ -84,7 +84,7 @@ const Arithmetic: ArithmeticLibrary = {
         },
       ],
       body: 'Multiplication',
-      documentation: '(IN1: ANY_NUM, IN2:ANY_NUM) -> OUT:ANY_NUM',
+      documentation: '(IN1: ANY_NUM, IN2:ANY_NUM) => OUT:ANY_NUM',
       extensible: true,
     },
     {
@@ -109,7 +109,7 @@ const Arithmetic: ArithmeticLibrary = {
         },
       ],
       body: 'Subtraction',
-      documentation: '(IN1: ANY_NUM, IN2:ANY_NUM) -> OUT:ANY_NUM',
+      documentation: '(IN1: ANY_NUM, IN2:ANY_NUM) => OUT:ANY_NUM',
       extensible: false,
     },
     {
@@ -134,7 +134,7 @@ const Arithmetic: ArithmeticLibrary = {
         },
       ],
       body: 'Division',
-      documentation: '(IN1: ANY_NUM, IN2:ANY_NUM) -> OUT:ANY_NUM',
+      documentation: '(IN1: ANY_NUM, IN2:ANY_NUM) => OUT:ANY_NUM',
       extensible: false,
     },
     {
@@ -159,7 +159,7 @@ const Arithmetic: ArithmeticLibrary = {
         },
       ],
       body: 'Remainder (modulo)',
-      documentation: '(IN1: ANY_INT, IN2:ANY_INT) -> OUT:ANY_INT',
+      documentation: '(IN1: ANY_INT, IN2:ANY_INT) => OUT:ANY_INT',
       extensible: false,
     },
     {
@@ -184,7 +184,7 @@ const Arithmetic: ArithmeticLibrary = {
         },
       ],
       body: 'Exponent',
-      documentation: '(IN1: ANY_REAL, IN2:ANY_REAL) -> OUT:ANY_REAL',
+      documentation: '(IN1: ANY_REAL, IN2:ANY_REAL) => OUT:ANY_REAL',
       extensible: false,
     },
     {
@@ -204,7 +204,7 @@ const Arithmetic: ArithmeticLibrary = {
         },
       ],
       body: 'Assignment',
-      documentation: '(IN: ANY, OUT:ANY) -> OUT:ANY',
+      documentation: '(IN: ANY, OUT:ANY) => OUT:ANY',
       extensible: false,
     },
   ],

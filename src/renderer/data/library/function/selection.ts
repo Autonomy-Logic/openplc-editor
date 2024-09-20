@@ -64,7 +64,7 @@ const Selection: SelectionLibrary = {
         },
       ],
       body: 'Binary selection (1 of 2)',
-      documentation: '(G:BOOL, IN0:ANY, IN1:ANY) -> OUT:ANY',
+      documentation: '(G:BOOL, IN0:ANY, IN1:ANY) => OUT:ANY',
       extensible: false,
     },
     {
@@ -89,7 +89,7 @@ const Selection: SelectionLibrary = {
         },
       ],
       body: 'Maximum',
-      documentation: '(IN1:ANY, IN2:ANY) -> OUT:ANY',
+      documentation: '(IN1:ANY, IN2:ANY) => OUT:ANY',
       extensible: true,
     },
     {
@@ -114,7 +114,7 @@ const Selection: SelectionLibrary = {
         },
       ],
       body: 'Minimum',
-      documentation: '(IN1:ANY, IN2:ANY) -> OUT:ANY',
+      documentation: '(IN1:ANY, IN2:ANY) => OUT:ANY',
       extensible: true,
     },
     {
@@ -144,7 +144,7 @@ const Selection: SelectionLibrary = {
         },
       ],
       body: 'Limitation',
-      documentation: '(MN:ANY, IN:ANY, MX:ANY) -> OUT:ANY',
+      documentation: '(MN:ANY, IN:ANY, MX:ANY) => OUT:ANY',
       extensible: false,
     },
     {
@@ -174,7 +174,7 @@ const Selection: SelectionLibrary = {
         },
       ],
       body: 'Multiplexer (select 1 of N)',
-      documentation: '(K:INT, IN0:ANY, IN1:ANY) -> OUT:ANY',
+      documentation: '(K:INT, IN0:ANY, IN1:ANY) => OUT:ANY',
       extensible: true,
     },
   ],

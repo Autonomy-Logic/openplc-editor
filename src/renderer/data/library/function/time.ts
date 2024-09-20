@@ -59,7 +59,7 @@ const Time: TimeLibrary = {
         },
       ],
       body: 'Time addition',
-      documentation: '(IN1:TIME, IN2:TIME) -> OUT:TIME',
+      documentation: '(IN1:TIME, IN2:TIME) => OUT:TIME',
       extensible: false,
     },
     {
@@ -84,7 +84,7 @@ const Time: TimeLibrary = {
         },
       ],
       body: 'Time-of-day addition',
-      documentation: '(IN1:TOD, IN2:TIME) -> OUT:TOD',
+      documentation: '(IN1:TOD, IN2:TIME) => OUT:TOD',
       extensible: false,
     },
     {
@@ -109,7 +109,7 @@ const Time: TimeLibrary = {
         },
       ],
       body: 'Date addition',
-      documentation: '(IN1:DT, IN2:TIME) -> OUT:DT',
+      documentation: '(IN1:DT, IN2:TIME) => OUT:DT',
       extensible: false,
     },
     {
@@ -134,7 +134,7 @@ const Time: TimeLibrary = {
         },
       ],
       body: 'Time multiplication',
-      documentation: '(IN1:TIME, IN2:ANY_NUM) -> OUT:TIME',
+      documentation: '(IN1:TIME, IN2:ANY_NUM) => OUT:TIME',
       extensible: false,
     },
     {
@@ -159,7 +159,7 @@ const Time: TimeLibrary = {
         },
       ],
       body: 'Time subtraction',
-      documentation: '(IN1:TIME, IN2:TIME) -> OUT:TIME',
+      documentation: '(IN1:TIME, IN2:TIME) => OUT:TIME',
       extensible: false,
     },
     {
@@ -184,7 +184,7 @@ const Time: TimeLibrary = {
         },
       ],
       body: 'Date subtraction',
-      documentation: '(IN1:DATE, IN2:DATE) -> OUT:TIME',
+      documentation: '(IN1:DATE, IN2:DATE) => OUT:TIME',
       extensible: false,
     },
     {
@@ -209,7 +209,7 @@ const Time: TimeLibrary = {
         },
       ],
       body: 'Time-of-day subtraction',
-      documentation: '(IN1:TOD, IN2:TIME) -> OUT:TOD',
+      documentation: '(IN1:TOD, IN2:TIME) => OUT:TOD',
       extensible: false,
     },
     {
@@ -234,7 +234,7 @@ const Time: TimeLibrary = {
         },
       ],
       body: 'Time-of-day subtraction',
-      documentation: '(IN1:TOD, IN2:TOD) -> OUT:TIME',
+      documentation: '(IN1:TOD, IN2:TOD) => OUT:TIME',
       extensible: false,
     },
     {
@@ -259,7 +259,7 @@ const Time: TimeLibrary = {
         },
       ],
       body: 'Date and time subtraction',
-      documentation: '(IN1:DT, IN2:TIME) -> OUT:DT',
+      documentation: '(IN1:DT, IN2:TIME) => OUT:DT',
       extensible: false,
     },
     {
@@ -284,7 +284,7 @@ const Time: TimeLibrary = {
         },
       ],
       body: 'Date and time subtraction',
-      documentation: '(IN1:DT, IN2:DT) -> OUT:TIME',
+      documentation: '(IN1:DT, IN2:DT) => OUT:TIME',
       extensible: false,
     },
     {
@@ -309,7 +309,7 @@ const Time: TimeLibrary = {
         },
       ],
       body: 'Time division',
-      documentation: '(IN1:TIME, IN2:ANY_NUM) -> OUT:TIME',
+      documentation: '(IN1:TIME, IN2:ANY_NUM) => OUT:TIME',
       extensible: false,
     },
   ],

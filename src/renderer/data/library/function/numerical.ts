@@ -48,7 +48,7 @@ const Numerical: NumericalLibrary = {
         },
       ],
       body: 'Absolute value',
-      documentation: '(IN:ANY_NUM) -> OUT:ANY_NUM',
+      documentation: '(IN:ANY_NUM) => OUT:ANY_NUM',
       extensible: false,
     },
     {
@@ -68,7 +68,7 @@ const Numerical: NumericalLibrary = {
         },
       ],
       body: 'Square root (base 2)',
-      documentation: '(IN:ANY_REAL) -> OUT:ANY_REAL',
+      documentation: '(IN:ANY_REAL) => OUT:ANY_REAL',
       extensible: false,
     },
     {
@@ -88,7 +88,7 @@ const Numerical: NumericalLibrary = {
         },
       ],
       body: 'Arc tangent',
-      documentation: '(IN:ANY_REAL) -> OUT:ANY_REAL',
+      documentation: '(IN:ANY_REAL) => OUT:ANY_REAL',
       extensible: false,
     },
     {
@@ -108,7 +108,7 @@ const Numerical: NumericalLibrary = {
         },
       ],
       body: 'Logarithm to base 10',
-      documentation: '(IN:ANY_REAL) -> OUT:ANY_REAL',
+      documentation: '(IN:ANY_REAL) => OUT:ANY_REAL',
       extensible: false,
     },
     {
@@ -128,7 +128,7 @@ const Numerical: NumericalLibrary = {
         },
       ],
       body: 'Exponentiation',
-      documentation: '(IN:ANY_REAL) -> OUT:ANY_REAL',
+      documentation: '(IN:ANY_REAL) => OUT:ANY_REAL',
       extensible: false,
     },
     {
@@ -148,7 +148,7 @@ const Numerical: NumericalLibrary = {
         },
       ],
       body: 'Sine',
-      documentation: '(IN:ANY_REAL) -> OUT:ANY_REAL',
+      documentation: '(IN:ANY_REAL) => OUT:ANY_REAL',
       extensible: false,
     },
     {
@@ -168,7 +168,7 @@ const Numerical: NumericalLibrary = {
         },
       ],
       body: 'Cosine',
-      documentation: '(IN:ANY_REAL) -> OUT:ANY_REAL',
+      documentation: '(IN:ANY_REAL) => OUT:ANY_REAL',
       extensible: false,
     },
     {
@@ -188,7 +188,7 @@ const Numerical: NumericalLibrary = {
         },
       ],
       body: 'Tangent',
-      documentation: '(IN:ANY_REAL) -> OUT:ANY_REAL',
+      documentation: '(IN:ANY_REAL) => OUT:ANY_REAL',
       extensible: false,
     },
     {
@@ -208,7 +208,7 @@ const Numerical: NumericalLibrary = {
         },
       ],
       body: 'Arc sine',
-      documentation: '(IN:ANY_REAL) -> OUT:ANY_REAL',
+      documentation: '(IN:ANY_REAL) => OUT:ANY_REAL',
       extensible: false,
     },
     {
@@ -228,7 +228,7 @@ const Numerical: NumericalLibrary = {
         },
       ],
       body: 'Arc cosine',
-      documentation: '(IN:ANY_REAL) -> OUT:ANY_REAL',
+      documentation: '(IN:ANY_REAL) => OUT:ANY_REAL',
       extensible: false,
     },
     {
@@ -248,7 +248,7 @@ const Numerical: NumericalLibrary = {
         },
       ],
       body: 'Arc tangent',
-      documentation: '(IN:ANY_REAL) -> OUT:ANY_REAL',
+      documentation: '(IN:ANY_REAL) => OUT:ANY_REAL',
       extensible: false,
     },
   ],

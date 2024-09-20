@@ -48,7 +48,7 @@ const CharacterString: CharacterStringLibrary = {
         },
       ],
       body: 'Length of string',
-      documentation: '(IN:STRING) -> OUT:INT',
+      documentation: '(IN:STRING) => OUT:INT',
       extensible: false,
     },
     {
@@ -73,7 +73,7 @@ const CharacterString: CharacterStringLibrary = {
         },
       ],
       body: 'String left of',
-      documentation: '(IN:STRING, L:ANY_INT) -> OUT:STRING',
+      documentation: '(IN:STRING, L:ANY_INT) => OUT:STRING',
       extensible: false,
     },
     {
@@ -98,7 +98,7 @@ const CharacterString: CharacterStringLibrary = {
         },
       ],
       body: 'String right of',
-      documentation: '(IN:STRING, L:ANY_INT) -> OUT:STRING',
+      documentation: '(IN:STRING, L:ANY_INT) => OUT:STRING',
       extensible: false,
     },
     {
@@ -128,7 +128,7 @@ const CharacterString: CharacterStringLibrary = {
         },
       ],
       body: 'String from middle of',
-      documentation: '(IN:STRING, L:ANY_INT, S:ANY_INT) -> OUT:STRING',
+      documentation: '(IN:STRING, L:ANY_INT, S:ANY_INT) => OUT:STRING',
       extensible: false,
     },
     {
@@ -153,7 +153,7 @@ const CharacterString: CharacterStringLibrary = {
         },
       ],
       body: 'Concatenation',
-      documentation: '(IN1:STRING, IN2:STRING) -> OUT:STRING',
+      documentation: '(IN1:STRING, IN2:STRING) => OUT:STRING',
       extensible: true,
     },
     {
@@ -178,7 +178,7 @@ const CharacterString: CharacterStringLibrary = {
         },
       ],
       body: 'Time concatenation',
-      documentation: '(IN1:DATE, IN2:TOD) -> OUT:DT',
+      documentation: '(IN1:DATE, IN2:TOD) => OUT:DT',
       extensible: false,
     },
     {
@@ -208,7 +208,7 @@ const CharacterString: CharacterStringLibrary = {
         },
       ],
       body: 'Insertion (into)',
-      documentation: '(IN1:STRING, IN2:STRING, P:ANY_INT) -> OUT:STRING',
+      documentation: '(IN1:STRING, IN2:STRING, P:ANY_INT) => OUT:STRING',
       extensible: false,
     },
     {
@@ -238,7 +238,7 @@ const CharacterString: CharacterStringLibrary = {
         },
       ],
       body: 'Deletion (within)',
-      documentation: '(IN:STRING, L:ANY_INT, P:ANY_INT) -> OUT:STRING',
+      documentation: '(IN:STRING, L:ANY_INT, P:ANY_INT) => OUT:STRING',
       extensible: false,
     },
     {
@@ -273,7 +273,7 @@ const CharacterString: CharacterStringLibrary = {
         },
       ],
       body: 'Replacement (within)',
-      documentation: '(IN1:STRING, IN2:STRING, L:ANY_INT, P:ANY_INT) -> OUT:STRING',
+      documentation: '(IN1:STRING, IN2:STRING, L:ANY_INT, P:ANY_INT) => OUT:STRING',
       extensible: false,
     },
     {
@@ -298,7 +298,7 @@ const CharacterString: CharacterStringLibrary = {
         },
       ],
       body: 'Find position',
-      documentation: '(IN1:STRING, IN2:STRING) -> OUT:INT',
+      documentation: '(IN1:STRING, IN2:STRING) => OUT:INT',
       extensible: false,
     },
   ],

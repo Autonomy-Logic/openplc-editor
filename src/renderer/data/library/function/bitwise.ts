@@ -59,7 +59,7 @@ const Bitwise: BitwiseLibrary = {
         },
       ],
       body: 'Bitwise AND',
-      documentation: '(IN1: ANY_BIT, IN2:ANY_BIT) -> OUT:ANY_BIT',
+      documentation: '(IN1: ANY_BIT, IN2:ANY_BIT) => OUT:ANY_BIT',
       extensible: true,
     },
     {
@@ -84,7 +84,7 @@ const Bitwise: BitwiseLibrary = {
         },
       ],
       body: 'Bitwise OR',
-      documentation: '(IN1: ANY_BIT, IN2:ANY_BIT) -> OUT:ANY_BIT',
+      documentation: '(IN1: ANY_BIT, IN2:ANY_BIT) => OUT:ANY_BIT',
       extensible: true,
     },
     {
@@ -109,7 +109,7 @@ const Bitwise: BitwiseLibrary = {
         },
       ],
       body: 'Bitwise XOR',
-      documentation: '(IN1: ANY_BIT, IN2:ANY_BIT) -> OUT:ANY_BIT',
+      documentation: '(IN1: ANY_BIT, IN2:ANY_BIT) => OUT:ANY_BIT',
       extensible: true,
     },
     {
@@ -129,7 +129,7 @@ const Bitwise: BitwiseLibrary = {
         },
       ],
       body: 'Bitwise NOT',
-      documentation: '(IN: ANY_BIT) -> OUT:ANY_BIT',
+      documentation: '(IN: ANY_BIT) => OUT:ANY_BIT',
       extensible: false,
     },
   ],

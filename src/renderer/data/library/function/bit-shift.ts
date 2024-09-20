@@ -59,7 +59,7 @@ const BitShift: BitShiftLibrary = {
         },
       ],
       body: 'Shift Left',
-      documentation: '(IN: ANY_BIT, N:INT) -> OUT:ANY_BIT',
+      documentation: '(IN: ANY_BIT, N:INT) => OUT:ANY_BIT',
       extensible: false,
     },
     {
@@ -84,7 +84,7 @@ const BitShift: BitShiftLibrary = {
         },
       ],
       body: 'Shift Right',
-      documentation: '(IN: ANY_BIT, N:INT) -> OUT:ANY_BIT',
+      documentation: '(IN: ANY_BIT, N:INT) => OUT:ANY_BIT',
       extensible: false,
     },
     {
@@ -109,7 +109,7 @@ const BitShift: BitShiftLibrary = {
         },
       ],
       body: 'Rotate Right',
-      documentation: '(IN: ANY_NBIT, N:INT) -> OUT:ANY_NBIT',
+      documentation: '(IN: ANY_NBIT, N:INT) => OUT:ANY_NBIT',
       extensible: false,
     },
     {
@@ -134,7 +134,7 @@ const BitShift: BitShiftLibrary = {
         },
       ],
       body: 'Rotate Left',
-      documentation: '(IN: ANY_NBIT, N:INT) -> OUT:ANY_NBIT',
+      documentation: '(IN: ANY_NBIT, N:INT) => OUT:ANY_NBIT',
       extensible: false,
     },
   ],
