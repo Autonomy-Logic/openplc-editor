@@ -18,7 +18,7 @@ export type ISharedSlice = {
   pouActions: {
     create: {
       pou: (propsToCreatePou: PropsToCreatePou) => boolean
-      dataType: (derivation: 'enumerated' | 'structure' | 'array') => boolean
+      dataType: (name: string, derivation: 'enumerated' | 'structure' | 'array') => boolean
     }
     update: () => void
     delete: () => void
@@ -97,11 +97,11 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
         }
         return false
       },
-      dataType: (derivation: 'enumerated' | 'structure' | 'array') => {
+      dataType: (name: string, derivation:  'array' | 'enumerated' | 'structure') => {
         /**
          * This is a temporary solution to create a datatype
          **/
-        getState().workspaceActions.createDatatype(CreateDatatypeObject(derivation))
+        getState().workspaceActions.createDatatype(CreateDatatypeObject({name, derivation}))
         const data = CreateEditorObject({
           type: 'plc-datatype',
           meta: { name: '', derivation },
