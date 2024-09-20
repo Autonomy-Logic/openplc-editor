@@ -157,7 +157,7 @@ const GlobalVariablesEditor = () => {
       <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
         {editorVariables.display === 'table' ? (
           <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
-            <span>Global Variables</span>
+            <span className='select-none'>Global Variables</span>
             <div
               aria-label='Variables editor table actions container'
               className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'

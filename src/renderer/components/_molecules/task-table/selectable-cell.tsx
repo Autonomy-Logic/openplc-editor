@@ -102,7 +102,7 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
     }
   }, [initialValue])
 
-  const formattedInterval = `T#${tempValues.day}d${tempValues.hour}h${tempValues.min}m${tempValues.sec}s${tempValues.ms}ms`
+  const formattedInterval = `T#${tempValues.day > 0 ? `${tempValues.day}d` : ''}${tempValues.hour > 0 ? `${tempValues.hour}h` : ''}${tempValues.min > 0 ? `${tempValues.min}m` : ''}${tempValues.sec > 0 ? `${tempValues.sec}s` : ''}${tempValues.ms > 0 ? `${tempValues.ms}ms` : ''}`
 
   const shouldDisplayInterval = Object.values(values).some((val) => val > 0)
 
@@ -119,14 +119,14 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
   const handleIncrement = (field: 'day' | 'hour' | 'min' | 'sec' | 'ms' | 'microS') => {
     setTempValues((prevState) => ({
       ...prevState,
-      [field]: Math.min(Number(prevState[field]) + 1, 20), // Update the max value as needed
+      [field]: Math.min(Number(prevState[field]) + 1, 20),
     }))
   }
 
   const handleDecrement = (field: 'day' | 'hour' | 'min' | 'sec' | 'ms' | 'microS') => {
     setTempValues((prevState) => ({
       ...prevState,
-      [field]: Math.max(Number(prevState[field]) - 1, 0), // Ensure the value does not go below 0
+      [field]: Math.max(Number(prevState[field]) - 1, 0),
     }))
   }
 
@@ -139,7 +139,7 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
       </ModalTrigger>
       <ModalContent
         onClose={handleClearForm}
-        className='flex max-h-56  w-fit select-none flex-col  justify-between gap-2 rounded-lg bg-neutral-900 p-8'
+        className='flex max-h-56  w-fit select-none flex-col  justify-between gap-2 rounded-lg bg-white p-8   dark:bg-neutral-900'
       >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Set interval</ModalTitle>
         <div className='flex h-24 w-full  gap-2'>
@@ -157,7 +157,7 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
                   id={interval}
                   type='number'
                   className={cn(
-                    'h-6 w-16 rounded-sm bg-white p-2 text-center text-cp-sm outline-none ring-brand focus:ring-2',
+                    'h-[26px] w-16 rounded-sm border border-neutral-300 bg-white p-2 text-center text-cp-sm outline-none ring-brand focus:ring-2 dark:border-neutral-700',
                   )}
                   value={tempValues[interval] > 0 ? tempValues[interval] : ''}
                   onChange={(e) =>

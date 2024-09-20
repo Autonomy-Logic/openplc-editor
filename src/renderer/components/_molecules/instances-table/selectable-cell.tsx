@@ -50,7 +50,7 @@ const SelectableTaskCell = ({
         position='popper'
         side='bottom'
         sideOffset={-20}
-        className='box h-fit max-h-[300px] w-[200px]  rounded-lg bg-white outline-none dark:bg-neutral-950'
+        className='box h-fit max-h-[300px] w-[200px] overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
       >
         {tasks.map((option) => (
           <SelectItem
@@ -105,7 +105,7 @@ const SelectableProgramCell = ({
         position='popper'
         side='bottom'
         sideOffset={-20}
-        className='box h-[150px] w-[200px] overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
+        className='box h-fit max-h-[300px] w-[200px] overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
       >
         {pous
           .filter((option) => option.type === 'program')

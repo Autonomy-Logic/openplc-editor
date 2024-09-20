@@ -155,7 +155,7 @@ export default function TaskEditor() {
             aria-label='Tasks editor table actions container'
             className='relative flex h-full w-full items-center justify-between'
           >
-            <span>Tasks</span>
+            <span className='select-none'>Tasks</span>
             <div
               aria-label='Tasks editor table actions container'
               className='  flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'

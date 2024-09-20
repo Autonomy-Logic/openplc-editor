@@ -136,7 +136,7 @@ export default function InstancesTable({ tableData, handleRowClick, selectedRow 
     <Table context='Instances' className='mr-1'>
       <TableHeader ref={InstanceTableHeaderRef}>
         {table.getHeaderGroups().map((headerGroup) => (
-          <TableRow key={headerGroup.id}>
+          <TableRow className='select-none' key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
               <TableHead
                 resizable={header.column.columnDef.enableResizing}

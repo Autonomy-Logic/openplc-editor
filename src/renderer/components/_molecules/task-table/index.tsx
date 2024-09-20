@@ -154,7 +154,7 @@ export default function TaskTable({ tableData, selectedRow, handleRowClick }: PL
     <Table context='Tasks' className='mr-1'>
       <TableHeader ref={TaskTableHeaderRef}>
         {table.getHeaderGroups().map((headerGroup) => (
-          <TableRow key={headerGroup.id}>
+          <TableRow className='select-none' key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
               <TableHead
                 resizable={header.column.columnDef.enableResizing}
