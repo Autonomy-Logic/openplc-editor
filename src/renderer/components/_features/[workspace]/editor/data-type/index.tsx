@@ -1,15 +1,23 @@
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { ArrayDataType } from '@root/renderer/components/_molecules/data-types/array'
 import { EnumeratorDataType } from '@root/renderer/components/_molecules/data-types/enumerated'
-import { StructureDataType } from '@root/renderer/components/_molecules/data-types/structure'
+import { ComponentPropsWithoutRef } from 'react'
+// import { StructureDataType } from '@root/renderer/components/_molecules/data-types/structure'
 
-type IDataTypeEditorProps = {
-  derivation: 'enumerated' | 'structure' | 'array'
+type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
+  data: {
+
+    type: 'plc-datatype',
+    meta: {
+      name: string,
+      derivation: 'enumerated' | 'structure' | 'array',
+    }
 }
-const DataTypeEditor = (props: IDataTypeEditorProps) => {
-  const { derivation } = props
+}
+
+const DataTypeEditor = ({data, ...rest}: DatatypeEditorProps) => {
   return (
-    <div aria-label='Data type editor container' className='flex h-full w-full flex-col items-center p-2'>
+    <div aria-label='Data type editor container' className='flex h-full w-full flex-col items-center p-2' {...rest}>
       <div
         aria-label='Data type metadata container'
         className='h-46 mb-4 flex w-full items-center gap-4 rounded-md bg-neutral-50 p-2 shadow-md dark:border dark:border-neutral-800 dark:bg-neutral-1000'
@@ -26,6 +34,7 @@ const DataTypeEditor = (props: IDataTypeEditorProps) => {
             className='h-[30px] w-full max-w-[385px] rounded-lg border border-neutral-400 bg-white focus-within:border-brand dark:border-neutral-800 dark:bg-neutral-950'
           >
             <InputWithRef
+              value={data.meta.name}
               id='data-type-name'
               aria-label='data-type-name'
               className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
@@ -42,7 +51,7 @@ const DataTypeEditor = (props: IDataTypeEditorProps) => {
           <Select aria-label='data-type-derivation'>
             <SelectTrigger
               withIndicator
-              placeholder='Derivation'
+              placeholder={data.meta.derivation}
               className='flex h-[30px] w-full max-w-[385px] items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
             />
             <SelectContent
@@ -80,9 +89,8 @@ const DataTypeEditor = (props: IDataTypeEditorProps) => {
         </div>
       </div>
       <div aria-label='Data type content container' className='h-full w-full'>
-        {derivation === 'array' && <ArrayDataType />}
-        {derivation === 'enumerated' && <EnumeratorDataType />}
-        {derivation === 'structure' && <StructureDataType />}
+        {data.meta.derivation === 'array' && <ArrayDataType />}
+        {data.meta.derivation === 'enumerated' && <EnumeratorDataType />}
       </div>
     </div>
   )

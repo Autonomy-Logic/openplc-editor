@@ -139,7 +139,7 @@ const WorkspaceScreen = () => {
                     <>
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
-                          <DataTypeEditor derivation={editor['meta']['derivation']} />{' '}
+                          <DataTypeEditor data={editor} />{' '}
                         </div>
                       )}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
