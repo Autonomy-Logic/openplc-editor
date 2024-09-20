@@ -36,36 +36,40 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   const { toast } = useToast()
   const { target, closeContainer } = props
   const {
-    control,
-    register,
-    handleSubmit,
-    setError,
-    formState: { errors },
+    control: pouControl,
+    register: pouRegister,
+    handleSubmit: handleSubmitPou,
+    setError: pouSetError,
+    formState: { errors: pouErrors },
   } = useForm<CreatePouFormProps>()
 
   const {
     control: datatypeControl,
     register: datatypeRegister,
     handleSubmit: handleSubmitDatatype,
+    /**
+     * TODO: add validation
+     */
     // setError: datatypeSetError,
     formState: { errors: datatypeErrors },
   } = useForm<CreateDataTypeFormProps>()
 
   const {
     pouActions: { create },
-    workspaceActions: { createDatatype },
+    datatypeActions: {create: createDatatype},
+    // workspaceActions: { createDatatype },
   } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
 
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
     try {
-      const pouWasCreated = create.pou(data)
+      const pouWasCreated = create(data)
       if (!pouWasCreated) throw new TypeError()
       toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
       closeContainer((prev) => !prev)
       setIsOpen(false)
     } catch (_error) {
-      setError('name', {
+      pouSetError('name', {
         type: 'already-exists',
       })
     }
@@ -77,10 +81,8 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   }
 
   const handleCreateDatatype: SubmitHandler<CreateDataTypeFormProps> = (data) => {
-    const normalizedDatatypeObject = CreateDatatypeObject(data)
-    console.log('data ->', data)
-    console.log('Normalized obj ->', normalizedDatatypeObject)
-    createDatatype(normalizedDatatypeObject)
+    const res = createDatatype(data)
+    if (res) console.log('Created!!')
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
@@ -243,10 +245,10 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                 </div>
                 <div id='pou-card-form'>
                   <form
-                    onSubmit={handleSubmit(handleCreatePou)}
+                    onSubmit={handleSubmitPou(handleCreatePou)}
                     className='flex h-fit w-full select-none flex-col gap-3'
                   >
-                    <input type='hidden' {...register('type')} value={target} />
+                    <input type='hidden' {...pouRegister('type')} value={target} />
                     <div id='pou-name-form-container' className='flex w-full flex-col'>
                       <label
                         id='pou-name-label'
@@ -254,10 +256,10 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                         className='flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
                       >
                         POU name:
-                        {errors.name?.type === 'required' && <span className='text-red-500'>*</span>}
+                        {pouErrors.name?.type === 'required' && <span className='text-red-500'>*</span>}
                       </label>
                       <InputWithRef
-                        {...register('name', {
+                        {...pouRegister('name', {
                           required: true,
                           minLength: 3,
                         })}
@@ -266,7 +268,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                         placeholder='POU name'
                         className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
                       />
-                      {errors.name?.type === 'already-exists' && (
+                      {pouErrors.name?.type === 'already-exists' && (
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
                           * POU name already exists
                         </span>
@@ -282,11 +284,11 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                         className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
                       >
                         Language:
-                        {errors.language && <span className='text-red-500'>*</span>}
+                        {pouErrors.language && <span className='text-red-500'>*</span>}
                       </label>
                       <Controller
                         name='language'
-                        control={control}
+                        control={pouControl}
                         rules={{ required: true }}
                         render={({ field: { value, onChange } }) => {
                           return (
