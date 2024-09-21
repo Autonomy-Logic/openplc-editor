@@ -116,21 +116,16 @@ export default function InstancesTable({ tableData, handleRowClick, selectedRow 
       minSize: 80,
       maxSize: 128,
     },
-    meta: {
-      updateData: (rowIndex: number, columnId: string, value: unknown) => {
-        const updateInstances = { ...tableData[rowIndex], [columnId]: value }
-        updateInstance({
-          data: { ...updateInstances },
-          rowId: rowIndex,
-        })
-        return {
-          ok: true,
-          message: 'Instance updated successfully',
-        }
-      },
-    },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    meta: {
+      updateData: (rowIndex, columnId, value) => {
+        return updateInstance({
+          rowId: rowIndex,
+          data: { [columnId]: value },
+        })
+      },
+    },
   })
   return (
     <Table context='Instances' className='mr-1'>

@@ -3,7 +3,7 @@ import type { PLCTask } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 import ArrowButtonGroup from '../../_features/[workspace]/editor/graphical/elements/arrow-button-group'
@@ -64,7 +64,7 @@ const SelectableTriggerCell = ({
 }
 
 const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
-  const initialValue = getValue()
+  const initialValue: string = getValue() as string
   const [intervalModalOpen, setIntervalModalIsOpen] = useState(false)
   const [values, setValues] = useState({
     day: 0,
@@ -74,37 +74,26 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
     ms: 0,
     microS: 0,
   })
-
   const [tempValues, setTempValues] = useState(values)
 
   useEffect(() => {
-    if (typeof initialValue === 'string') {
-      const regex = /T#(\d+)d(\d+)h(\d+)m(\d+)s(\d+)ms/
-      const match = initialValue.match(regex)
-      if (match) {
-        setValues({
-          day: Number(match[1]),
-          hour: Number(match[2]),
-          min: Number(match[3]),
-          sec: Number(match[4]),
-          ms: Number(match[5]),
-          microS: 0,
-        })
-        setTempValues({
-          day: Number(match[1]),
-          hour: Number(match[2]),
-          min: Number(match[3]),
-          sec: Number(match[4]),
-          ms: Number(match[5]),
-          microS: 0,
-        })
-      }
+    const regex = /T#(\d+)d(\d+)h(\d+)m(\d+)s(\d+)ms/
+    const match = initialValue?.match(regex)
+
+    if (match) {
+      const [_, day, hour, min, sec, ms] = match.map(Number)
+      const newValues = { day, hour, min, sec, ms, microS: 0 }
+      setValues(newValues)
+      setTempValues(newValues)
     }
   }, [initialValue])
 
-  const formattedInterval = `T#${tempValues.day > 0 ? `${tempValues.day}d` : ''}${tempValues.hour > 0 ? `${tempValues.hour}h` : ''}${tempValues.min > 0 ? `${tempValues.min}m` : ''}${tempValues.sec > 0 ? `${tempValues.sec}s` : ''}${tempValues.ms > 0 ? `${tempValues.ms}ms` : ''}`
+  const formattedInterval = useMemo(() => {
+    const { day, hour, min, sec, ms } = values
+    return `T#${day ? `${day}d` : ''}${hour ? `${hour}h` : ''}${min ? `${min}m` : ''}${sec ? `${sec}s` : ''}${ms ? `${ms}ms` : ''}`
+  }, [values])
 
-  const shouldDisplayInterval = Object.values(values).some((val) => val > 0)
+  const shouldDisplayInterval = useMemo(() => Object.values(values).some((val) => val > 0), [values])
 
   const handleSave = () => {
     setValues(tempValues)
@@ -112,79 +101,64 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
     setIntervalModalIsOpen(false)
   }
 
-  const handleClearForm = () => {
-    setTempValues({ day: 0, hour: 0, min: 0, sec: 0, ms: 0, microS: 0 })
+  const handleCancel = () => {
+    setTempValues(values)
+    setIntervalModalIsOpen(false)
   }
 
-  const handleIncrement = (field: 'day' | 'hour' | 'min' | 'sec' | 'ms' | 'microS') => {
-    setTempValues((prevState) => ({
-      ...prevState,
-      [field]: Math.min(Number(prevState[field]) + 1, 20),
-    }))
-  }
-
-  const handleDecrement = (field: 'day' | 'hour' | 'min' | 'sec' | 'ms' | 'microS') => {
-    setTempValues((prevState) => ({
-      ...prevState,
-      [field]: Math.max(Number(prevState[field]) - 1, 0),
+  const handleValueChange = (field: keyof typeof values, change: number) => {
+    setTempValues((prev) => ({
+      ...prev,
+      [field]: Math.max(0, prev[field] + change),
     }))
   }
 
   return (
     <Modal open={intervalModalOpen} onOpenChange={setIntervalModalIsOpen}>
-      <ModalTrigger className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 data-[state=open]:dark:bg-neutral-900'>
+      <ModalTrigger className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900'>
         <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
           {shouldDisplayInterval ? formattedInterval : ''}
         </span>
       </ModalTrigger>
-      <ModalContent
-        onClose={handleClearForm}
-        className='flex max-h-56  w-fit select-none flex-col  justify-between gap-2 rounded-lg bg-white p-8   dark:bg-neutral-900'
-      >
+      <ModalContent className='flex max-h-56 w-fit select-none flex-col justify-between gap-2 rounded-lg bg-white p-8 dark:bg-neutral-900'>
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Set interval</ModalTitle>
-        <div className='flex h-24 w-full  gap-2'>
+        <div className='flex h-24 w-full gap-2'>
           {(['day', 'hour', 'min', 'sec', 'ms', 'microS'] as const).map((interval) => (
-            <div
-              key={interval}
-              className='flex  w-full flex-col justify-center gap-1 font-caption text-xs outline-none'
-            >
+            <div key={interval} className='flex w-full flex-col justify-center gap-1 font-caption text-xs'>
               <label htmlFor={interval} className='w-full text-neutral-950 dark:text-white'>
                 {interval}
               </label>
               <div className='flex gap-1'>
                 <input
-                  placeholder={tempValues[interval] === 0 ? tempValues[interval].toString() : ''}
                   id={interval}
                   type='number'
-                  className={cn(
-                    'h-[26px] w-16 rounded-sm border border-neutral-300 bg-white p-2 text-center text-cp-sm outline-none ring-brand focus:ring-2 dark:border-neutral-700',
-                  )}
-                  value={tempValues[interval] > 0 ? tempValues[interval] : ''}
+                  className='h-[26px] w-16 rounded-sm border border-neutral-300 bg-white p-2 text-center text-cp-sm outline-none ring-brand focus:ring-2 dark:border-neutral-700'
+                  value={tempValues[interval] || ''}
                   onChange={(e) =>
-                    setTempValues((prevValues) => ({
-                      ...prevValues,
+                    setTempValues((prev) => ({
+                      ...prev,
                       [interval]: Number(e.target.value),
                     }))
                   }
                 />
                 <ArrowButtonGroup
-                  onIncrement={() => handleIncrement(interval)}
-                  onDecrement={() => handleDecrement(interval)}
+                  onIncrement={() => handleValueChange(interval, 1)}
+                  onDecrement={() => handleValueChange(interval, -1)}
                 />
               </div>
             </div>
           ))}
         </div>
-        <div className='flex  !h-8 w-full justify-evenly gap-7'>
+        <div className='flex h-8 w-full justify-evenly gap-7'>
           <button
-            onClick={() => setIntervalModalIsOpen(false)}
-            className='h-full w-[236px] items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+            onClick={handleCancel}
+            className='h-full w-[236px] rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
-            className={`h-full w-[236px] items-center rounded-lg bg-brand text-center font-medium text-white`}
+            className='h-full w-[236px] rounded-lg bg-brand text-center font-medium text-white'
           >
             Ok
           </button>

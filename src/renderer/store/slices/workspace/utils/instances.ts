@@ -1,5 +1,6 @@
 import { PLCInstance } from '@root/types/PLC/open-plc'
 
+import { WorkspaceResponse } from '../types'
 const checkIfInstanceExists = (instances: PLCInstance[], name: string) => {
   return instances.some((instance) => instance.name === name)
 }
@@ -41,6 +42,43 @@ const createInstanceValidation = (instances: PLCInstance[], name: string) => {
   return name
 }
 
+const updateInstancevalidation = (instances: PLCInstance[], dataToBeUpdated: Partial<PLCInstance>) => {
+  let response: WorkspaceResponse = { ok: true }
 
+  if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
+    const { name } = dataToBeUpdated
+    if (name === '') {
+      console.error('Instance name is empty')
+      response = {
+        ok: false,
+        title: 'Instance name is empty.',
+        message: 'Please make sure that the name is not empty.',
+      }
+      return response
+    }
 
-export { checkIfInstanceExists, createInstanceValidation,instanceNameValidation }
+    if (checkIfInstanceExists(instances, name)) {
+      console.error(`Instance "${name}" already exists`)
+      response = {
+        ok: false,
+        title: 'Instance already exists',
+        message: 'Please make sure that the name is unique.',
+      }
+      return response
+    }
+
+    if (!instanceNameValidation(name)) {
+      console.error(`Instance "${name}" name is invalid`)
+      response = {
+        ok: false,
+        title: 'Instance name is invalid.',
+        message: 'Please make sure that the name is valid.',
+      }
+      return response
+    }
+  }
+
+  return response
+}
+
+export { checkIfInstanceExists, createInstanceValidation, instanceNameValidation, updateInstancevalidation }

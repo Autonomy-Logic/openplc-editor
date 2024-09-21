@@ -2,7 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { WorkspaceResponse, WorkspaceSlice } from './types'
-import { createInstanceValidation } from './utils/instances'
+import { createInstanceValidation, updateInstancevalidation } from './utils/instances'
 import { createTaskValidation, updateTaskValidation } from './utils/tasks'
 import {
   createGlobalVariableValidation,
@@ -459,13 +459,30 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           const { rowId } = dataToBeUpdated
-          const index = rowId
-          if (index === -1) {
-            response = { ok: false, title: 'Instance not found', message: 'Internal error' }
-          } else {
-            workspace.projectData.configuration.resource.instances[index] = {
-              ...workspace.projectData.configuration.resource.instances[index],
-              ...dataToBeUpdated.data,
+          switch (rowId) {
+            case rowId: {
+              const validationResponse = updateInstancevalidation(
+                workspace.projectData.configuration.resource.instances,
+                dataToBeUpdated.data,
+              )
+              if (!validationResponse.ok) {
+                response = validationResponse
+                break
+              }
+              const index = dataToBeUpdated.rowId
+              if (index === -1) response = { ok: false, title: 'Instance not found', message: 'Internal error' }
+
+              workspace.projectData.configuration.resource.instances[index] = {
+                ...workspace.projectData.configuration.resource.instances[index],
+                ...dataToBeUpdated.data,
+              }
+
+              break
+            }
+            default: {
+              console.error(` ${rowId ? rowId : ''} not found or invalid params`)
+              response = { ok: false, title: 'Instance not found', message: 'Instance not found or invalid params' }
+              break
             }
           }
         }),

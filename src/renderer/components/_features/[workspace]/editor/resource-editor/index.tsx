@@ -4,7 +4,7 @@ import TaskEditor from '@root/renderer/components/_organisms/task-editor'
 
 export default function ResourcesEditor() {
   return (
-    <div className=' flex h-full w-full flex-col gap-12 overflow-y-auto'>
+    <div className=' flex h-full w-full flex-col gap-8 overflow-y-auto'>
       <GlobalVariablesEditor />
 
       <TaskEditor />
