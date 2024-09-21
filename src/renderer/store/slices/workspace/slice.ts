@@ -1,10 +1,9 @@
-import { PLCInstance, PLCTask } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { WorkspaceResponse, WorkspaceSlice } from './types'
 import { createInstanceValidation } from './utils/instances'
-import { createTaskValidation } from './utils/tasks'
+import { createTaskValidation, updateTaskValidation } from './utils/tasks'
 import {
   createGlobalVariableValidation,
   createVariableValidation,
@@ -320,7 +319,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
 
-    createTask: (taskToCreate: { data: PLCTask; rowToInsert?: number }): WorkspaceResponse => {
+    createTask: (taskToCreate): WorkspaceResponse => {
       const response: WorkspaceResponse = { ok: true }
 
       setState(
@@ -360,19 +359,36 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
 
-    updateTask: (dataToBeUpdated: { rowId: number; data: Partial<PLCTask> }): WorkspaceResponse => {
+    updateTask: (dataToBeUpdated): WorkspaceResponse => {
       let response: WorkspaceResponse = { ok: true }
 
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           const { rowId } = dataToBeUpdated
-          const index = rowId
-          if (index === -1) {
-            response = { ok: false, title: 'Task not found', message: 'Internal error' }
-          } else {
-            workspace.projectData.configuration.resource.tasks[index] = {
-              ...workspace.projectData.configuration.resource.tasks[index],
-              ...dataToBeUpdated.data,
+          switch (rowId) {
+            case rowId: {
+              const validationResponse = updateTaskValidation(
+                workspace.projectData.configuration.resource.tasks,
+                dataToBeUpdated.data,
+              )
+              if (!validationResponse.ok) {
+                response = validationResponse
+                break
+              }
+              const index = dataToBeUpdated.rowId
+              if (index === -1) response = { ok: false, title: 'Task not found', message: 'Internal error' }
+
+              workspace.projectData.configuration.resource.tasks[index] = {
+                ...workspace.projectData.configuration.resource.tasks[index],
+                ...dataToBeUpdated.data,
+              }
+
+              break
+            }
+            default: {
+              console.error(` ${rowId ? rowId : ''} not found or invalid params`)
+              response = { ok: false, title: 'Task not found', message: 'Task not found or invalid params' }
+              break
             }
           }
         }),
@@ -397,7 +413,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
 
-    createInstance: (instanceToCreate: { data: PLCInstance; rowToInsert?: number }): WorkspaceResponse => {
+    createInstance: (instanceToCreate): WorkspaceResponse => {
       const response: WorkspaceResponse = { ok: true }
 
       setState(
@@ -437,7 +453,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
 
-    updateInstance: (dataToBeUpdated: { rowId: number; data: Partial<PLCInstance> }): WorkspaceResponse => {
+    updateInstance: (dataToBeUpdated): WorkspaceResponse => {
       let response: WorkspaceResponse = { ok: true }
 
       setState(

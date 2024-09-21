@@ -66,10 +66,10 @@ const updateTaskValidation = (tasks: PLCTask[], dataToBeUpdated: Partial<PLCTask
       return response
     }
     if (!taskNameValidation(name)) {
-      console.error(`Variable "${name}" name is invalid`)
+      console.error(`Task "${name}" name is invalid`)
       response = {
         ok: false,
-        title: 'Variable name is invalid.',
+        title: 'Task name is invalid.',
         message: `Please make sure that the name is valid. Valid names: CamelCase, PascalCase or SnakeCase.`,
       }
       return response

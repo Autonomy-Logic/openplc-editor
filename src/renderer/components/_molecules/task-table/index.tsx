@@ -124,7 +124,7 @@ export default function TaskTable({ tableData, selectedRow, handleRowClick }: PL
     }
   }, [])
 
-  const table = useReactTable<PLCTask>({
+  const table = useReactTable({
     columns: columns,
     columnResizeMode: 'onChange',
     data: tableData,
@@ -134,21 +134,18 @@ export default function TaskTable({ tableData, selectedRow, handleRowClick }: PL
       minSize: 80,
       maxSize: 128,
     },
-    meta: {
-      updateData: (rowIndex: number, columnId: string, value: unknown) => {
-        const updatedTask = { ...tableData[rowIndex], [columnId]: value }
-        updateTask({
-          data: { ...updatedTask },
-          rowId: rowIndex,
-        })
-        return {
-          ok: true,
-          message: 'Task updated successfully',
-        }
-      },
-    },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    meta: {
+      updateData: (rowIndex, columnId, value) => {
+        return updateTask({
+          rowId: rowIndex,
+          data: {
+            [columnId]: value,
+          },
+        })
+      },
+    },
   })
   return (
     <Table context='Tasks' className='mr-1'>

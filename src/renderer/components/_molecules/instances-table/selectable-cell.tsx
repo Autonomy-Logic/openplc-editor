@@ -52,17 +52,21 @@ const SelectableTaskCell = ({
         sideOffset={-20}
         className='box h-fit max-h-[300px] w-[200px] overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
       >
-        {tasks.map((option) => (
-          <SelectItem
-            key={option.name}
-            value={option.name}
-            className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
-          >
-            <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-              {_.startCase(option.name)}
-            </span>
-          </SelectItem>
-        ))}
+        {tasks.map(
+          (option) =>
+            option.name !== 'undefined' &&
+            option.name !== '' && (
+              <SelectItem
+                key={option.name}
+                value={option.name}
+                className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+              >
+                <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                  {_.startCase(option.name)}
+                </span>
+              </SelectItem>
+            ),
+        )}
       </SelectContent>
     </Select>
   )

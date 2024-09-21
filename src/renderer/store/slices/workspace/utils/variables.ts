@@ -173,20 +173,20 @@ const updateGlobalVariableValidation = (
   if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
     const { name } = dataToBeUpdated
     if (name === '') {
-      console.error('Variable name is empty')
+      console.error('Global Variable name is empty')
       response = {
         ok: false,
-        title: 'Variable name is empty.',
+        title: 'Global Variable name is empty.',
         message: 'Please make sure that the name is not empty.',
       }
       return response
     }
 
     if (checkIfGlobalVariableExists(variables, name)) {
-      console.error(`Variable "${name}" already exists`)
+      console.error(`Global Variable "${name}" already exists`)
       response = {
         ok: false,
-        title: 'Variable already exists',
+        title: 'Global Variable already exists',
         message: 'Please make sure that the name is unique.',
       }
       return response
