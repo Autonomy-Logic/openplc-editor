@@ -14,27 +14,27 @@ import { InputWithRef } from '../../input'
 import { buildHandle, CustomHandle } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-type ContactNode = Node<BasicNodeData & { variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }>
+export type ContactNode = Node<BasicNodeData & { variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }>
 type ContactProps = NodeProps<ContactNode>
 type ContactBuilderProps = BuilderBasicProps & { variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }
 
-export const CONTACT_BLOCK_WIDTH = 28
-export const CONTACT_BLOCK_HEIGHT = 28
+export const DEFAULT_CONTACT_BLOCK_WIDTH = 28
+export const DEFAULT_CONTACT_BLOCK_HEIGHT = 28
 
-export const CONTACT_CONNECTOR_X = CONTACT_BLOCK_WIDTH
-export const CONTACT_CONNECTOR_Y = CONTACT_BLOCK_HEIGHT / 2
+export const DEFAULT_CONTACT_CONNECTOR_X = DEFAULT_CONTACT_BLOCK_WIDTH
+export const DEFAULT_CONTACT_CONNECTOR_Y = DEFAULT_CONTACT_BLOCK_HEIGHT / 2
 
 type ContactType = {
   [key in ContactNode['data']['variant']]: {
     svg: ReactNode
   }
 }
-const CONTACT_TYPES: ContactType = {
+export const DEFAULT_CONTACT_TYPES: ContactType = {
   default: {
     svg: (
       <DefaultContact
-        width={CONTACT_BLOCK_WIDTH}
-        height={CONTACT_BLOCK_HEIGHT}
+        width={DEFAULT_CONTACT_BLOCK_WIDTH}
+        height={DEFAULT_CONTACT_BLOCK_HEIGHT}
         strokeClassName='stroke-neutral-1000 dark:stroke-neutral-100'
       />
     ),
@@ -42,8 +42,8 @@ const CONTACT_TYPES: ContactType = {
   negated: {
     svg: (
       <NegatedContact
-        width={CONTACT_BLOCK_WIDTH}
-        height={CONTACT_BLOCK_HEIGHT}
+        width={DEFAULT_CONTACT_BLOCK_WIDTH}
+        height={DEFAULT_CONTACT_BLOCK_HEIGHT}
         strokeClassName='stroke-neutral-1000 dark:stroke-neutral-100'
       />
     ),
@@ -51,8 +51,8 @@ const CONTACT_TYPES: ContactType = {
   risingEdge: {
     svg: (
       <RisingEdgeContact
-        width={CONTACT_BLOCK_WIDTH}
-        height={CONTACT_BLOCK_HEIGHT}
+        width={DEFAULT_CONTACT_BLOCK_WIDTH}
+        height={DEFAULT_CONTACT_BLOCK_HEIGHT}
         strokeClassName='stroke-neutral-1000 dark:stroke-neutral-100'
       />
     ),
@@ -60,8 +60,8 @@ const CONTACT_TYPES: ContactType = {
   fallingEdge: {
     svg: (
       <FallingEdgeContact
-        width={CONTACT_BLOCK_WIDTH}
-        height={CONTACT_BLOCK_HEIGHT}
+        width={DEFAULT_CONTACT_BLOCK_WIDTH}
+        height={DEFAULT_CONTACT_BLOCK_HEIGHT}
         strokeClassName='stroke-neutral-1000 dark:stroke-neutral-100'
       />
     ),
@@ -70,7 +70,7 @@ const CONTACT_TYPES: ContactType = {
 
 export const Contact = ({ selected, data, id }: ContactProps) => {
   const [contactLabelValue, setContactLabelValue] = useState<string>('')
-  const contact = CONTACT_TYPES[data.variant]
+  const contact = DEFAULT_CONTACT_TYPES[data.variant]
 
   return (
     <div
@@ -85,7 +85,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
             'outline outline-2 outline-offset-[5px] outline-brand': selected,
           },
         )}
-        style={{ width: CONTACT_BLOCK_WIDTH, height: CONTACT_BLOCK_HEIGHT }}
+        style={{ width: DEFAULT_CONTACT_BLOCK_WIDTH, height: DEFAULT_CONTACT_BLOCK_HEIGHT }}
       >
         {contact.svg}
       </div>
@@ -113,7 +113,7 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
     glbX: handleX,
     glbY: handleY,
     relX: 0,
-    relY: CONTACT_CONNECTOR_Y,
+    relY: DEFAULT_CONTACT_CONNECTOR_Y,
     style: { left: -3 },
   })
   const outputHandle = buildHandle({
@@ -121,10 +121,10 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
     position: Position.Right,
     isConnectable: false,
     type: 'source',
-    glbX: handleX + CONTACT_BLOCK_WIDTH,
+    glbX: handleX + DEFAULT_CONTACT_BLOCK_WIDTH,
     glbY: handleY,
-    relX: CONTACT_BLOCK_WIDTH,
-    relY: CONTACT_CONNECTOR_Y,
+    relX: DEFAULT_CONTACT_BLOCK_WIDTH,
+    relY: DEFAULT_CONTACT_CONNECTOR_Y,
     style: { right: -3 },
   })
   const handles = [inputHandle, outputHandle]
@@ -136,11 +136,13 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
     data: {
       handles,
       variant,
+      inputHandles: [inputHandle],
+      outputHandles: [outputHandle],
       inputConnector: inputHandle,
       outputConnector: outputHandle,
     },
-    width: CONTACT_BLOCK_WIDTH,
-    height: CONTACT_BLOCK_HEIGHT,
+    width: DEFAULT_CONTACT_BLOCK_WIDTH,
+    height: DEFAULT_CONTACT_BLOCK_HEIGHT,
     draggable: true,
     selectable: true,
     selected: false,

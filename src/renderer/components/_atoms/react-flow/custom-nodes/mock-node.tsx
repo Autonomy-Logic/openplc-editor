@@ -78,6 +78,38 @@ export const buildMockNode = ({
         },
       },
     ],
+    inputHandles: [
+      {
+        id: 'left',
+        position: 'left',
+        type: 'target',
+        isConnectable: false,
+        glbPosition: {
+          x: handleX,
+          y: handleY,
+        },
+        relPosition: {
+          x: 0,
+          y: 20,
+        },
+      },
+    ],
+    outputHandles: [
+      {
+        id: 'right',
+        position: 'right',
+        type: 'source',
+        isConnectable: false,
+        glbPosition: {
+          x: handleX + 150,
+          y: handleY,
+        },
+        relPosition: {
+          x: 150,
+          y: 20,
+        },
+      },
+    ],
     inputConnector: {
       id: 'left',
       position: 'left',
