@@ -13,7 +13,7 @@ import { buildEdge, connectNodes, disconnectNodes, removeEdge } from './edges'
 import { buildGenericNode, getDefaultNodeStyle, isNodeOfType, removeNode } from './nodes'
 
 /**
- * Local utilitaries functions
+ * Local utility functions
  */
 const getPreviousElement = (nodes: Node[], nodeIndex?: number) => {
   return nodes[(nodeIndex ?? nodes.length - 1) - 1]
@@ -248,14 +248,14 @@ const updateDiagramElementsPosition = (rung: FlowState, defaultBounds: [number, 
         if (objectParallel.nodes.parallel.find((n) => n.id === node.id)) {
           foundInParallel = true
           const newPosY =
-            objectParallel.heighestNode.position.y +
+            objectParallel.highestNode.position.y +
             objectParallel.height +
-            getDefaultNodeStyle({ node: objectParallel.heighestNode }).verticalGap -
+            getDefaultNodeStyle({ node: objectParallel.highestNode }).verticalGap -
             getDefaultNodeStyle({ node }).handle.y
           const newHandleY =
-            objectParallel.heighestNode.position.y +
+            objectParallel.highestNode.position.y +
             objectParallel.height +
-            getDefaultNodeStyle({ node: objectParallel.heighestNode }).verticalGap
+            getDefaultNodeStyle({ node: objectParallel.highestNode }).verticalGap
           newNodePosition = {
             ...newNodePosition,
             posY: newPosY,
@@ -332,8 +332,8 @@ const updateDiagramElementsPosition = (rung: FlowState, defaultBounds: [number, 
             const nodeIndex = objectParallel.nodes.serial.findIndex((n) => n.id === node.id)
             parallelsDepth[index][object].nodes.serial.splice(nodeIndex, 1, newNode)
           }
-          if (objectParallel.heighestNode.id === node.id) {
-            parallelsDepth[index][object].heighestNode = newNode
+          if (objectParallel.highestNode.id === node.id) {
+            parallelsDepth[index][object].highestNode = newNode
           }
           if (objectParallel.parallels.open.id === node.id) {
             parallelsDepth[index][object].parallels.open = newNode as ParallelNode
@@ -402,7 +402,7 @@ const findAllParallelsDepthAndNodes = (
       }
       depth: number
       height: number
-      heighestNode: Node
+      highestNode: Node
       nodes: {
         serial: Node[]
         parallel: Node[]
@@ -415,8 +415,8 @@ const findAllParallelsDepthAndNodes = (
 
   // check serial nodes
   const serialNodes = nodesInsideParallel.serial
-  let heighestNode = serialNodes[0]
-  let serialHeight = heighestNode.height ?? 0
+  let highestNode = serialNodes[0]
+  let serialHeight = highestNode.height ?? 0
   for (const serialNode of serialNodes) {
     // If it is a parallel node, check if it is an open parallel
     // If it is, call the function recursively
@@ -429,7 +429,7 @@ const findAllParallelsDepthAndNodes = (
     }
     if (serialHeight < (serialNode.height ?? 0)) {
       serialHeight = serialNode.height ?? 0
-      heighestNode = serialNode
+      highestNode = serialNode
     }
   }
 
@@ -454,7 +454,7 @@ const findAllParallelsDepthAndNodes = (
     parent: parentNode,
     depth,
     height: serialHeight,
-    heighestNode,
+    highestNode,
     parallels: {
       open: openParallel,
       close: closeNode,

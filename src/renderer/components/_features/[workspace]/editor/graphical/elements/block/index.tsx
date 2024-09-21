@@ -144,7 +144,7 @@ const BlockElement = ({ isOpen, onOpenChange, onClose, node }: BlockElementProps
             </label>
             <div
               id='block-preview'
-              className='-center flex flex-grow items-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'
+              className='flex flex-grow items-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'
             >
               {selectedFile?.image && (
                 <img draggable='false' className='h-fit w-full select-none' src={selectedFile.image} alt='' />
