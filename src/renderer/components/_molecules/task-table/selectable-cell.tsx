@@ -72,25 +72,25 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
     min: 0,
     sec: 0,
     ms: 0,
-    microS: 0,
+    µs: 0,
   })
   const [tempValues, setTempValues] = useState(values)
 
   useEffect(() => {
-    const regex = /T#(\d+)d(\d+)h(\d+)m(\d+)s(\d+)ms(\d+)?microS?/
+    const regex = /T#(\d+)d(\d+)h(\d+)m(\d+)s(\d+)ms(\d+)?µs?/
     const match = initialValue?.match(regex)
 
     if (match) {
-      const [_, day, hour, min, sec, ms, microS = 0] = match.map(Number)
-      const newValues = { day, hour, min, sec, ms, microS }
+      const [_, day, hour, min, sec, ms, µs = 0] = match.map(Number)
+      const newValues = { day, hour, min, sec, ms, µs }
       setValues(newValues)
       setTempValues(newValues)
     }
   }, [initialValue])
 
   const formattedInterval = useMemo(() => {
-    const { day, hour, min, sec, ms, microS } = values
-    const totalMs = ms + microS / 1000
+    const { day, hour, min, sec, ms, µs } = values
+    const totalMs = ms + µs / 1000
     const formattedMs = totalMs % 1 === 0 ? `${Math.floor(totalMs)}ms` : `${totalMs}ms`
 
     return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}m` : ''}${sec > 0 ? `${sec}s` : ''}${formattedMs === '0ms' ? '' : formattedMs}`
@@ -101,10 +101,10 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
   const handleSave = () => {
     const updatedValues = { ...tempValues }
 
-    if (tempValues.microS >= 1000) {
-      const additionalMs = Math.floor(tempValues.microS / 1000)
+    if (tempValues.µs >= 1000) {
+      const additionalMs = Math.floor(tempValues.µs / 1000)
       updatedValues.ms += additionalMs
-      updatedValues.microS = 0
+      updatedValues.µs = 0
     }
 
     if (updatedValues.ms >= 1000) {
@@ -147,7 +147,7 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
       >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Set interval</ModalTitle>
         <div className='flex h-24 w-full gap-2'>
-          {(['day', 'hour', 'min', 'sec', 'ms', 'microS'] as const).map((interval) => (
+          {(['day', 'hour', 'min', 'sec', 'ms', 'µs'] as const).map((interval) => (
             <div key={interval} className='flex w-full flex-col justify-center gap-1 font-caption text-xs'>
               <label htmlFor={interval} className='w-full text-neutral-950 dark:text-white'>
                 {interval}
