@@ -7800,4 +7800,4 @@ const TypeConversion: TypeConversionLibrary = {
   ],
 }
 
-export { TypeConversion }
+export { TypeConversion, TypeConversionLibrarySchema }

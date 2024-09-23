@@ -135,4 +135,4 @@ const Bitwise: BitwiseLibrary = {
   ],
 }
 
-export { Bitwise }
+export { Bitwise, BitwiseLibrarySchema }

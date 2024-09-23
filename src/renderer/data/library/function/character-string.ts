@@ -304,4 +304,4 @@ const CharacterString: CharacterStringLibrary = {
   ],
 }
 
-export { CharacterString }
+export { CharacterString, CharacterStringLibrarySchema }

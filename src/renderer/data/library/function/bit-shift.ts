@@ -140,4 +140,4 @@ const BitShift: BitShiftLibrary = {
   ],
 }
 
-export { BitShift }
+export { BitShift, BitShiftLibrarySchema }
