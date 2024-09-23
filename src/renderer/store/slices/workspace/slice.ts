@@ -14,7 +14,6 @@ import {
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   workspace: {
     editingState: 'unsaved',
-    projectName: '',
     projectPath: '',
     projectData: {
       dataTypes: [],
@@ -26,6 +25,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           globalVariables: [],
         },
       },
+      projectName: ''
     },
     systemConfigs: {
       OS: '',
@@ -33,6 +33,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       shouldUseDarkMode: false,
       isWindowMaximized: false,
     },
+    projectName: ''
   },
 
   workspaceActions: {
@@ -78,7 +79,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     updateProjectName: (projectName): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
-          workspace.projectName = projectName
+          workspace.projectData.projectName = projectName
         }),
       )
     },

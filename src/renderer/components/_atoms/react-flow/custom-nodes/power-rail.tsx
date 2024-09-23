@@ -1,21 +1,23 @@
 import { Node, NodeProps, Position } from '@xyflow/react'
 
-import { buildHandle, CustomHandle, CustomHandleProps } from './handle'
+import { buildHandle, CustomHandle } from './handle'
+import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-type PowerRailNode = Node<{ handles: CustomHandleProps[] }, 'text'>
+type PowerRailNode = Node<BasicNodeData>
 type PowerRailProps = NodeProps<PowerRailNode>
+type PowerRailBuilderProps = BuilderBasicProps & { connector: 'left' | 'right' }
 
-export const POWER_RAIL_WIDTH = 3
-export const POWER_RAIL_HEIGHT = 200
+export const DEFAULT_POWER_RAIL_WIDTH = 3
+export const DEFAULT_POWER_RAIL_HEIGHT = 200
 
-export const POWER_RAIL_CONNECTOR_X = POWER_RAIL_WIDTH
-export const POWER_RAIL_CONNECTOR_Y = POWER_RAIL_HEIGHT / 2
+export const DEFAULT_POWER_RAIL_CONNECTOR_X = DEFAULT_POWER_RAIL_WIDTH
+export const DEFAULT_POWER_RAIL_CONNECTOR_Y = DEFAULT_POWER_RAIL_HEIGHT / 2
 
 export const PowerRail = ({ data }: PowerRailProps) => {
   return (
     <>
-      <svg width={POWER_RAIL_WIDTH} height={POWER_RAIL_HEIGHT} xmlns='http://www.w3.org/2000/svg'>
-        <rect width={POWER_RAIL_WIDTH} height={POWER_RAIL_HEIGHT} className='fill-neutral-500' />
+      <svg width={DEFAULT_POWER_RAIL_WIDTH} height={DEFAULT_POWER_RAIL_HEIGHT} xmlns='http://www.w3.org/2000/svg'>
+        <rect width={DEFAULT_POWER_RAIL_WIDTH} height={DEFAULT_POWER_RAIL_HEIGHT} className='fill-neutral-500' />
       </svg>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
@@ -34,35 +36,21 @@ export const PowerRail = ({ data }: PowerRailProps) => {
  * @param handleY: number - The y coordinate of the handle based on the global position (inside the flow panel)
  * @returns PowerRailNode
  */
-export const buildPowerRailNode = ({
-  id,
-  posX,
-  posY,
-  connector,
-  handleX,
-  handleY,
-}: {
-  id: string
-  posX: number
-  posY: number
-  connector: 'left' | 'right'
-  handleX: number
-  handleY: number
-}) => {
+export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY }: PowerRailBuilderProps) => {
   const handles = [
     buildHandle({
-      id: `${connector}-rail`,
+      id: `${connector === 'left' ? 'right' : 'left'}-rail`,
       position: connector === 'left' ? Position.Left : Position.Right,
       type: connector === 'left' ? 'target' : 'source',
       isConnectable: false,
       glbX: handleX,
       glbY: handleY,
-      relX: POWER_RAIL_CONNECTOR_X,
-      relY: POWER_RAIL_CONNECTOR_Y,
+      relX: DEFAULT_POWER_RAIL_CONNECTOR_X,
+      relY: DEFAULT_POWER_RAIL_CONNECTOR_Y,
       style: {
-        top: POWER_RAIL_CONNECTOR_Y,
-        left: connector === 'left' ? -POWER_RAIL_WIDTH : undefined,
-        right: connector === 'right' ? -POWER_RAIL_WIDTH : undefined,
+        top: DEFAULT_POWER_RAIL_CONNECTOR_Y,
+        left: connector === 'left' ? -DEFAULT_POWER_RAIL_WIDTH : undefined,
+        right: connector === 'right' ? -DEFAULT_POWER_RAIL_WIDTH : undefined,
       },
     }),
   ]
@@ -73,10 +61,15 @@ export const buildPowerRailNode = ({
     position: { x: posX, y: posY },
     data: {
       handles,
+      inputHandles: connector === 'left' ? handles : [],
+      outputHandles: connector === 'right' ? handles : [],
+      inputConnector: connector === 'left' ? handles[0] : undefined,
+      outputConnector: connector === 'right' ? handles[0] : undefined,
     },
-    width: POWER_RAIL_WIDTH,
-    height: POWER_RAIL_HEIGHT,
+    width: DEFAULT_POWER_RAIL_WIDTH,
+    height: DEFAULT_POWER_RAIL_HEIGHT,
     draggable: false,
     selectable: false,
+    selected: false,
   }
 }

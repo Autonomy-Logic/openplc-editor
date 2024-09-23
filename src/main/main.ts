@@ -19,10 +19,10 @@ import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { EditorService, ProjectService, UserService } from './services'
+import { UserSettings } from './rw-utility'
+import { EditorService, ProjectService } from './services'
+// import {Service}
 
-const _editorService = new EditorService()
-const _userService = new UserService()
 class AppUpdater {
   constructor() {
     log.transports.file.level = 'info'
@@ -42,6 +42,12 @@ if (process.env.NODE_ENV === 'production') {
 
   void loadSourceMapSupport()
 }
+
+EditorService.createEditorFolder()
+
+EditorService.setBaseData()
+
+void UserSettings.checkIfUserBaseSettingsExists()
 
 // Retrieves the system information
 const systemInfo = platform()
@@ -208,7 +214,7 @@ const createMainWindow = async () => {
    * Add event listeners...
    */
 
-  mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
+  // mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
 
   // Handles the creation of the menu
   const menuBuilder = new MenuBuilder(mainWindow)
@@ -239,6 +245,8 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
   process.exit(0)
 }
+
+// console.log(userService.getSetting('window'))
 
 // Quit the app when all windows are closed;
 app.on('window-all-closed', () => {

@@ -111,6 +111,21 @@ const PLCVariableSchema = z.object({
   debug: z.boolean(),
 })
 
+// const variable: PLCVariable = {
+//   name: 'CU_T',
+//   class: 'local',
+//   type: {
+//     definition: 'base-type',
+//     value: baseTypeSchema.parse('R_TRIG'),
+//   },
+//   location: 'CV location',
+//   documentation: 'CV location',
+//   debug: false,
+// };
+
+
+// PLCVariableSchema.parse(variable);
+
 type PLCVariable = z.infer<typeof PLCVariableSchema>
 const PLCGlobalVariableSchema = PLCVariableSchema
 type PLCGlobalVariable = z.infer<typeof PLCGlobalVariableSchema>
@@ -170,6 +185,7 @@ const PLCFunctionBlockSchema = z.object({
 type PLCFunctionBlock = z.infer<typeof PLCFunctionBlockSchema>
 
 const PLCProjectDataSchema = z.object({
+  projectName: z.string(),
   dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(
     z.discriminatedUnion('type', [

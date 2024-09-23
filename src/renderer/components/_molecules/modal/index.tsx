@@ -33,6 +33,7 @@ const ModalContent = forwardRef<
     <ModalOverlay />
     <PrimitiveDialog.Content
       ref={ref}
+      aria-describedby={undefined}
       className={cn(
         'box fixed inset-0 z-50 m-auto flex h-[500px] w-[525px] flex-col gap-4 rounded-lg bg-white p-4 outline-none dark:bg-neutral-950',
         className,

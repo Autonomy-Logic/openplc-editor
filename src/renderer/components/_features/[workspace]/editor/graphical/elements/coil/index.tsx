@@ -1,34 +1,44 @@
-import { Modal, ModalContent, ModalTitle, ModalTrigger } from '@root/renderer/components/_molecules'
-import { useState } from 'react'
+import { CoilNode, DEFAULT_COIL_TYPES } from '@root/renderer/components/_atoms/react-flow/custom-nodes/coil'
+import {
+  Modal,
+  ModalContent,
+  ModalTitle,
+  // ModalTrigger
+} from '@root/renderer/components/_molecules'
+import { Dispatch, SetStateAction, useState } from 'react'
 
-import imageMock from '../mockImages/Group112.png'
-import image1 from '../mockImages/image1.png'
-import image2 from '../mockImages/image2.png'
+// import imageMock from '../mockImages/Group112.png'
+// import image1 from '../mockImages/image1.png'
+// import image2 from '../mockImages/image2.png'
 
-const CoilElement = () => {
-  const [selectedModifier, setSelectedModifier] = useState<string | null>(null)
-  const coilModifiers = [
-    { label: 'normal', coil: imageMock },
-    { label: 'negated', coil: image1 },
-    { label: 'set', coil: image2 },
-    { label: 'reset', coil: imageMock },
-    { label: 'rising edge', coil: image2 },
-    { label: 'falling edge', coil: imageMock },
-  ]
+type CoilElementProps = {
+  isOpen: boolean
+  onOpenChange: Dispatch<SetStateAction<boolean>>
+  onClose?: () => void
+  node?: CoilNode
+}
+
+const CoilElement = ({ isOpen, onOpenChange, onClose, node }: CoilElementProps) => {
+  const [selectedModifier, setSelectedModifier] = useState<string | null>(node?.data.variant as string)
+  const coilModifiers = Object.entries(DEFAULT_COIL_TYPES).map(([label, coil]) => ({ label, coil }))
+
   const getModifierCoil = (label: string) => {
     const modifier = coilModifiers.find((modifier) => modifier.label === label)
-    return modifier ? modifier.coil : ''
+    return modifier ? modifier.coil.svg : ''
   }
 
   const handleCloseModal = () => {
     setSelectedModifier(null)
+    onClose && onClose()
   }
 
   return (
-    <Modal>
-      <ModalTrigger>Open Coil</ModalTrigger>
+    <Modal open={isOpen} onOpenChange={onOpenChange}>
+      {/* <ModalTrigger>Open Coil</ModalTrigger> */}
       <ModalContent
         onClose={handleCloseModal}
+        onEscapeKeyDown={handleCloseModal}
+        onInteractOutside={handleCloseModal}
         className='h-[498px] w-[468px] select-none flex-col justify-between px-8 py-4'
       >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Edit Coil Values</ModalTitle>
@@ -62,14 +72,7 @@ const CoilElement = () => {
               Preview
             </label>
             <div className='flex h-full w-full items-center justify-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'>
-              {selectedModifier && (
-                <img
-                  draggable='false'
-                  className='h-fit w-full select-none'
-                  src={getModifierCoil(selectedModifier)}
-                  alt='Modifier Preview'
-                />
-              )}
+              {selectedModifier && getModifierCoil(selectedModifier)}
             </div>
           </div>
         </div>
