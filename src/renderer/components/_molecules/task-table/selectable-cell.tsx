@@ -77,26 +77,46 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
   const [tempValues, setTempValues] = useState(values)
 
   useEffect(() => {
-    const regex = /T#(\d+)d(\d+)h(\d+)m(\d+)s(\d+)ms/
+    const regex = /T#(\d+)d(\d+)h(\d+)m(\d+)s(\d+)ms(\d+)?microS?/
     const match = initialValue?.match(regex)
 
     if (match) {
-      const [_, day, hour, min, sec, ms] = match.map(Number)
-      const newValues = { day, hour, min, sec, ms, microS: 0 }
+      const [_, day, hour, min, sec, ms, microS = 0] = match.map(Number)
+      const newValues = { day, hour, min, sec, ms, microS }
       setValues(newValues)
       setTempValues(newValues)
     }
   }, [initialValue])
 
   const formattedInterval = useMemo(() => {
-    const { day, hour, min, sec, ms } = values
-    return `T#${day ? `${day}d` : ''}${hour ? `${hour}h` : ''}${min ? `${min}m` : ''}${sec ? `${sec}s` : ''}${ms ? `${ms}ms` : ''}`
+    const { day, hour, min, sec, ms, microS } = values
+    const totalMs = ms + microS / 1000
+    const formattedMs = totalMs % 1 === 0 ? `${Math.floor(totalMs)}ms` : `${totalMs}ms`
+
+    return `T#${day ? `${day}d` : ''}${hour ? `${hour}h` : ''}${min ? `${min}m` : ''}${sec ? `${sec}s` : ''}${formattedMs}`
   }, [values])
 
   const shouldDisplayInterval = useMemo(() => Object.values(values).some((val) => val > 0), [values])
 
   const handleSave = () => {
-    setValues(tempValues)
+    const updatedValues = { ...tempValues }
+
+   
+    if (tempValues.microS >= 1000) {
+      const additionalMs = Math.floor(tempValues.microS / 1000)
+      updatedValues.ms += additionalMs 
+      updatedValues.microS = 0 
+    }
+
+  
+    if (updatedValues.ms >= 1000) {
+      const additionalSec = Math.floor(updatedValues.ms / 1000)
+      updatedValues.sec += additionalSec 
+      updatedValues.ms = updatedValues.ms % 1000 
+    }
+
+    setValues(updatedValues) 
+    setTempValues(updatedValues) 
     table.options.meta?.updateData(index, id, formattedInterval)
     setIntervalModalIsOpen(false)
   }
@@ -107,10 +127,13 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
   }
 
   const handleValueChange = (field: keyof typeof values, change: number) => {
-    setTempValues((prev) => ({
-      ...prev,
-      [field]: Math.max(0, prev[field] + change),
-    }))
+    setTempValues((prev) => {
+      const newValue = Math.max(0, prev[field] + change)
+      return {
+        ...prev,
+        [field]: newValue,
+      }
+    })
   }
 
   return (
@@ -156,6 +179,7 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
           >
             Cancel
           </button>
+
           <button
             onClick={handleSave}
             className='h-full w-[236px] rounded-lg bg-brand text-center font-medium text-white'
@@ -167,4 +191,5 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
     </Modal>
   )
 }
+
 export { SelectableIntervalCell, SelectableTriggerCell }

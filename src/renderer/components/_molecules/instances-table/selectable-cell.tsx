@@ -39,13 +39,15 @@ const SelectableTaskCell = ({
 
   return (
     <Select value={cellValue as string} onValueChange={(value) => onValueChange(value)}>
-      <SelectTrigger
-        placeholder={cellValue as string}
-        className={cn(
-          'flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
-          { 'pointer-events-none': !editable },
-        )}
-      />
+      {!_.isEmpty(tasks) && (
+        <SelectTrigger
+          placeholder={cellValue as string}
+          className={cn(
+            'flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
+            { 'pointer-events-none': !editable },
+          )}
+        />
+      )}
       <SelectContent
         position='popper'
         side='bottom'
@@ -62,7 +64,7 @@ const SelectableTaskCell = ({
                 className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
               >
                 <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                  {_.startCase(option.name)}
+                  {option.name}
                 </span>
               </SelectItem>
             ),
@@ -83,9 +85,9 @@ const SelectableProgramCell = ({
       projectData: { pous },
     },
   } = useOpenPLCStore()
-  const initialValue = getValue()
+  const initialValue = getValue<string>()
 
-  const [cellValue, setCellValue] = useState(initialValue)
+  const [cellValue, setCellValue] = useState<string>(initialValue)
 
   const onValueChange = (value: string) => {
     setCellValue(value)
@@ -97,14 +99,16 @@ const SelectableProgramCell = ({
   }, [initialValue])
 
   return (
-    <Select value={cellValue as string} onValueChange={onValueChange}>
-      <SelectTrigger
-        placeholder={cellValue as string}
-        className={cn(
-          'flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
-          { 'pointer-events-none': !editable },
-        )}
-      />
+    <Select value={cellValue} onValueChange={onValueChange}>
+      {!_.isEmpty(pous) && (
+        <SelectTrigger
+          placeholder={cellValue}
+          className={cn(
+            'flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
+            { 'pointer-events-none': !editable },
+          )}
+        />
+      )}
       <SelectContent
         position='popper'
         side='bottom'
@@ -120,7 +124,7 @@ const SelectableProgramCell = ({
               className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
             >
               <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                {_.startCase(option.data.name)}
+                {option.data.name}
               </span>
             </SelectItem>
           ))}

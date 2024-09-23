@@ -112,7 +112,7 @@ const PLCVariableSchema = z.object({
 })
 
 type PLCVariable = z.infer<typeof PLCVariableSchema>
-const PLCGlobalVariableSchema = PLCVariableSchema.omit({ class: true })
+const PLCGlobalVariableSchema = PLCVariableSchema
 type PLCGlobalVariable = z.infer<typeof PLCGlobalVariableSchema>
 
 const PLCTaskSchema = z.object({

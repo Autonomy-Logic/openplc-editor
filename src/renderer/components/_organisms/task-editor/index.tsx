@@ -34,6 +34,7 @@ export default function TaskEditor() {
   useEffect(() => {
     const tasksToTable = tasks.filter((task) => task.name)
     setTaskData(tasksToTable)
+    console.log("taskData", taskData)
   }, [editor, tasks])
 
   useEffect(() => {
@@ -118,8 +119,11 @@ export default function TaskEditor() {
       display: 'table',
       selectedRow: selectedRow + 1,
     })
+
+    console.log("taskData", taskData)
   }
-  const handleDeleteTask = () => {
+/*************  ✨ Codeium Command ⭐  *************/
+/******  4f936eba-8f90-4acc-9a4d-724087fd7c17  *******/  const handleDeleteTask = () => {
     if (editorTasks.display === 'code') return
 
     const selectedRow = parseInt(editorTasks.selectedRow)
@@ -146,7 +150,7 @@ export default function TaskEditor() {
       selectedRow: parseInt(row.id),
     })
   }
-
+  console.log("taskData", taskData)
   return (
     <div aria-label='Tasks editor container' className='flex  w-full flex-shrink-0 flex-col gap-4 '>
       <div aria-label='Tasks editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
@@ -226,11 +230,7 @@ export default function TaskEditor() {
         </div>
       </div>
       {editorTasks.display === 'table' ? (
-        <div
-          aria-label='Tasks editor table container'
-          className=''
-          style={{ scrollbarGutter: 'stable' }}
-        >
+        <div aria-label='Tasks editor table container' className='' style={{ scrollbarGutter: 'stable' }}>
           <TaskTable
             tableData={taskData}
             handleRowClick={handleRowClick}

@@ -36,7 +36,7 @@ const SelectableTypeCell = ({
   const [poppoverIsOpen, setPoppoverIsOpen] = useState(false)
 
   // When the input is blurred, we'll call our table meta's updateData function
-  const onSelect = (definition: PLCGlobalVariable, value: PLCGlobalVariable) => {
+  const onSelect = (definition: PLCGlobalVariable['type']['definition'], value: PLCGlobalVariable['type']['value']) => {
     // Todo: Must update the data in the store
     setCellValue(value)
     table.options.meta?.updateData(index, id, { definition, value })

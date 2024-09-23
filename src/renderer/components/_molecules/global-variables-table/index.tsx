@@ -14,8 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { EditableDocumentationCell, EditableNameCell } from './editable-cell'
 import { SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 
-
-const columnHelper = createColumnHelper<PLCGlobalVariable>()
+const columnHelper = createColumnHelper<PLCGlobalVariable >()
 
 const columns = [
   columnHelper.accessor('id', {
@@ -34,6 +33,14 @@ const columns = [
     maxSize: 300,
     cell: EditableNameCell,
   }),
+  columnHelper.accessor('class', {
+    header: 'Class',
+    enableResizing: true,
+    size: 300,
+    minSize: 80,
+    maxSize: 300,
+    cell: "Global",
+  }),
   columnHelper.accessor('type', {
     header: 'Type',
     enableResizing: true,
@@ -47,7 +54,7 @@ const columns = [
     enableResizing: true,
     size: 300,
     minSize: 80,
-    maxSize:  300,
+    maxSize: 300,
     cell: EditableNameCell,
   }),
   columnHelper.accessor('documentation', {
@@ -69,7 +76,6 @@ type PLCVariablesTableProps = {
 
 const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVariablesTableProps) => {
   const {
-   
     workspaceActions: { updateVariable },
   } = useOpenPLCStore()
 
