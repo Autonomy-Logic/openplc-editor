@@ -1,13 +1,17 @@
 import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
+import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
+import { StickArrowIcon } from '@root/renderer/assets'
+import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
+import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils/cn'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useEffect, useRef, useState } from 'react'
 
 import { DimensionCell } from './editable-cell'
 
-const columnHelper = createColumnHelper<{ dimension: string }>()
+const columnHelper = createColumnHelper<PLCArrayDatatype>()
 const columns = [
-  columnHelper.accessor('dimension', {
+  columnHelper.accessor('dimensions', {
     header: '',
     size: 300,
     minSize: 150,
@@ -18,9 +22,7 @@ const columns = [
 ]
 
 type DataTypeDimensionsTableProps = {
-  tableData?: {
-    dimension: string
-  }[]
+  tableData?: PLCArrayDatatype['dimensions']
   selectedRow: number
   handleRowClick: (row: HTMLTableRowElement) => void
 }
@@ -29,12 +31,7 @@ const DimensionsTable = ({ selectedRow, handleRowClick }: DataTypeDimensionsTabl
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
-  const [tableData, _setTableData] = useState<{ dimension: string }[]>([
-    { dimension: '1' },
-    { dimension: '2' },
-    { dimension: '3' },
-    { dimension: '4' },
-  ])
+  const [tableData, _setTableData] = useState<PLCArrayDatatype['dimensions']>([])
 
   const resetBorders = () => {
     const parent = tableBodyRef.current
@@ -85,32 +82,59 @@ const DimensionsTable = ({ selectedRow, handleRowClick }: DataTypeDimensionsTabl
   })
 
   return (
-    <Table context='data-type-array'>
-      <TableBody ref={tableBodyRef} >
-        {table.getRowModel().rows.map((row) => (
-          <TableRow
-            id={row.id}
-            key={row.id}
-            className='h-8'
-            selected={selectedRow === parseInt(row.id)}
-            ref={selectedRow === parseInt(row.id) ? tableBodyRowRef : null}
-            onClick={(e) => handleRowClick(e.currentTarget)}
-          >
-            {row.getVisibleCells().map((cell) => (
-              <TableCell
-                style={{ maxWidth: cell.column.columnDef.maxSize, minWidth: cell.column.columnDef.minSize }}
-                key={cell.id}
-              >
-                {flexRender(cell.column.columnDef.cell, {
-                  ...cell.getContext(), 
-                  editable: selectedRow === parseInt(row.id)
-                })}
-              </TableCell>
-            ))}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <>
+      <div
+        aria-label='Array data type table actions container'
+        className='flex h-fit w-full items-center justify-between'
+      >
+        <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
+          Dimensions
+        </p>
+        <div
+          aria-label='Data type table actions buttons container'
+          className='flex h-full w-fit items-center justify-evenly *:rounded-md *:p-1'
+        >
+          <TableActionButton aria-label='Add table row button' onClick={() => console.log('Button clicked')}>
+            <PlusIcon className='!stroke-brand' />
+          </TableActionButton>
+          <TableActionButton aria-label='Remove table row button' onClick={() => console.log('Button clicked')}>
+            <MinusIcon />
+          </TableActionButton>
+          <TableActionButton aria-label='Move table row up button' onClick={() => console.log('Button clicked')}>
+            <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
+          </TableActionButton>
+          <TableActionButton aria-label='Move table row down button' onClick={() => console.log('Button clicked')}>
+            <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
+          </TableActionButton>
+        </div>
+      </div>
+      <Table context='data-type-array'>
+        <TableBody ref={tableBodyRef}>
+          {table.getRowModel().rows.map((row) => (
+            <TableRow
+              id={row.id}
+              key={row.id}
+              className='h-8'
+              selected={selectedRow === parseInt(row.id)}
+              ref={selectedRow === parseInt(row.id) ? tableBodyRowRef : null}
+              onClick={(e) => handleRowClick(e.currentTarget)}
+            >
+              {row.getVisibleCells().map((cell) => (
+                <TableCell
+                  style={{ maxWidth: cell.column.columnDef.maxSize, minWidth: cell.column.columnDef.minSize }}
+                  key={cell.id}
+                >
+                  {flexRender(cell.column.columnDef.cell, {
+                    ...cell.getContext(),
+                    editable: selectedRow === parseInt(row.id),
+                  })}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </>
   )
 }
 

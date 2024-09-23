@@ -4,7 +4,7 @@ import { baseTypeSchema } from '@root/types/PLC/open-plc'
 const DTBaseTypeContainer = () => {
   const baseTypes = baseTypeSchema.options
   return (
-    <div aria-label='Array data type base type container' className='flex h-fit w-full items-center justify-between'>
+    <div aria-label='Array base type content' className='flex h-fit w-full items-center justify-between'>
       <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
         Base type
       </label>

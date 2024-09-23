@@ -1,85 +1,77 @@
-import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
-import { Table, TableBody, TableCell, TableRow } from '@root/renderer/components/_atoms'
-import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
-import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCDataType } from '@root/types/PLC/open-plc'
-import { useEffect, useState } from 'react'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { baseTypeSchema, PLCArrayDatatype } from '@root/types/PLC/open-plc'
+import { ComponentPropsWithoutRef, useState } from 'react'
 
-import { DTBaseTypeContainer } from './header/base-type'
-import { ArrayDataTypeInitialValueContainer } from './header/initial-value'
-import {DimensionsTable} from './table'
+import { DimensionsTable } from './table'
 
-const ArrayDataType = () => {
-  const {
-    workspace: {
-      projectData: { dataTypes },
-    },
-  } = useOpenPLCStore()
+type ArrayDatatypeProps = ComponentPropsWithoutRef<'div'> & {
+  data: PLCArrayDatatype
+}
+
+const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
+  const baseTypes = baseTypeSchema.options
+
   const ROWS_NOT_SELECTED = -1
-
-  const [dataTypesState, setDataTypesState] = useState<PLCDataType>()
-  const [arrayTable, setArrayTable] = useState<{selectedRow: string}>({selectedRow: ROWS_NOT_SELECTED.toString()})
-
-  
-  useEffect(() => {
-    const arrayDataType = dataTypes.find((dataType) => dataType.derivation.type === 'array')
-    setDataTypesState(arrayDataType)
-  }, [dataTypes])
-
-  useEffect(() => {
-    console.log('array data type', dataTypesState)
-  }, [dataTypesState])
+  const [arrayTable, setArrayTable] = useState<{ selectedRow: string }>({ selectedRow: ROWS_NOT_SELECTED.toString() })
+  const [_value, _setValue] = useState()
 
   return (
-    <div aria-label='Array data type container' className='flex h-full w-full flex-col gap-4 bg-transparent'>
+    <div aria-label='Array data type container' className='flex h-full w-full flex-col gap-4 bg-transparent' {...rest}>
       <div aria-label='Data type content actions container' className='flex h-fit w-full gap-8'>
-        <div aria-label='Array data type first header container' className='flex w-1/2 flex-col gap-3'>
-          <DTBaseTypeContainer />
-          <div
-            aria-label='Array data type table actions container'
-            className='flex h-fit w-full items-center justify-between'
-          >
-            <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
-              Dimensions
-            </p>
-            <div
-              aria-label='Data type table actions buttons container'
-              className='flex h-full w-fit items-center justify-evenly *:rounded-md *:p-1'
-            >
-              <TableActionButton aria-label='Add table row button' onClick={() => console.log('Button clicked')}>
-                <PlusIcon className='!stroke-brand' />
-              </TableActionButton>
-              <TableActionButton aria-label='Remove table row button' onClick={() => console.log('Button clicked')}>
-                <MinusIcon />
-              </TableActionButton>
-              <TableActionButton aria-label='Move table row up button' onClick={() => console.log('Button clicked')}>
-                <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
-              </TableActionButton>
-              <TableActionButton aria-label='Move table row down button' onClick={() => console.log('Button clicked')}>
-                <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
-              </TableActionButton>
-            </div>
+        <div aria-label='Array base type container' className='flex w-1/2 flex-col gap-3'>
+          <div aria-label='Array base type content' className='flex h-fit w-full items-center justify-between'>
+            <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
+              Base type
+            </label>
+            <Select aria-label='Array data type base type select' id='select-base-type'>
+              <SelectTrigger
+                withIndicator
+                placeholder='Base type'
+                className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
+              />
+              <SelectContent
+                position='popper'
+                side='bottom'
+                sideOffset={-28}
+                className='box h-fit w-[--radix-select-trigger-width] overflow-hidden overflow-y-scroll rounded-lg bg-white outline-none dark:bg-neutral-950'
+              >
+                {baseTypes.map((type) => {
+                  return (
+                    <SelectItem
+                      value={type}
+                      className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                    >
+                      <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        {type.toLocaleUpperCase()}
+                      </span>
+                    </SelectItem>
+                  )
+                })}
+              </SelectContent>
+            </Select>
           </div>
         </div>
-        <div className='w-1/2'>
-        <ArrayDataTypeInitialValueContainer />
+        <div aria-label='Array initial value container' className='w-1/2'>
+          <div
+            aria-label='Array data type initial value container'
+            className='flex h-fit w-full items-center justify-end'
+          >
+            <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
+              Initial Value
+            </label>
+            <input
+              // onChange={handleChange}
+              value={data.initialValue}
+              className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
+            />
+          </div>
         </div>
       </div>
 
-      <Table aria-label='Array data type table' className='w-1/2'>
-        <TableBody>
-          {dataTypesState?.derivation.type === 'array' &&
-            dataTypesState.derivation.data.dimensions.map((dimension, index) => (
-              <TableRow
-                key={index}
-                className='[&:first-child>*]:rounded-t-md [&:first-child>*]:border-t [&:first-child>*]:border-t-neutral-500'
-              >
-                <TableCell className='p-2'>{dimension}</TableCell>
-              </TableRow>
-            ))}
-        </TableBody>
-      </Table>
-      <DimensionsTable handleRowClick={(row) => setArrayTable({selectedRow: row.id}) } selectedRow={parseInt(arrayTable.selectedRow)}/>
+      <DimensionsTable
+        handleRowClick={(row) => setArrayTable({ selectedRow: row.id })}
+        selectedRow={parseInt(arrayTable.selectedRow)}
+      />
     </div>
   )
 }

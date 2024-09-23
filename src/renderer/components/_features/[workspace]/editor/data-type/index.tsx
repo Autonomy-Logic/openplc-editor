@@ -1,21 +1,35 @@
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { ArrayDataType } from '@root/renderer/components/_molecules/data-types/array'
 import { EnumeratorDataType } from '@root/renderer/components/_molecules/data-types/enumerated'
-import { ComponentPropsWithoutRef } from 'react'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { PLCArrayDatatype, PLCDataType } from '@root/types/PLC/open-plc'
+import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 // import { StructureDataType } from '@root/renderer/components/_molecules/data-types/structure'
 
 type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
   data: {
-
-    type: 'plc-datatype',
+    type: 'plc-datatype'
     meta: {
-      name: string,
-      derivation: 'enumerated' | 'structure' | 'array',
+      name: string
+      derivation: 'enumerated' | 'structure' | 'array'
     }
-}
+  }
 }
 
-const DataTypeEditor = ({data, ...rest}: DatatypeEditorProps) => {
+const DataTypeEditor = ({ data, ...rest }: DatatypeEditorProps) => {
+  const {
+    workspace: {
+      projectData: { dataTypes },
+    },
+  } = useOpenPLCStore()
+  const [editorContent, setEditorContent] = useState<PLCDataType>()
+
+  useEffect(() => {
+    const res = dataTypes.find((dataToEdit) => dataToEdit.name === data.meta.name)
+    setEditorContent(res)
+  }),
+    [dataTypes]
+
   return (
     <div aria-label='Data type editor container' className='flex h-full w-full flex-col items-center p-2' {...rest}>
       <div
@@ -89,7 +103,7 @@ const DataTypeEditor = ({data, ...rest}: DatatypeEditorProps) => {
         </div>
       </div>
       <div aria-label='Data type content container' className='h-full w-full'>
-        {data.meta.derivation === 'array' && <ArrayDataType />}
+        {data.meta.derivation === 'array' && <ArrayDataType data={editorContent as unknown as PLCArrayDatatype} />}
         {data.meta.derivation === 'enumerated' && <EnumeratorDataType />}
       </div>
     </div>
