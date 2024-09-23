@@ -55,7 +55,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
           <div className='flex flex-grow flex-col items-center justify-center'>
             {step === 1 ? (
               <>
-                <h2 className='mb-14 text-center text-lg font-semibold text-neutral-1000'>
+                <h2 className='mb-14 text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
                   What type of project will you be working on?
                 </h2>
                 <div className='mb-16 flex w-full justify-around'>
@@ -77,9 +77,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
               // Step 2 Content
               <>
                 <div className='mb-8'>
-                  {' '}
-                  {/* Aumente o valor aqui para mais espaço */}
-                  <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000'>
+                  <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
                     Give a name for the project:
                   </h2>
                   <input
@@ -91,14 +89,12 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
                   />
                 </div>
                 <div className='mb-8'>
-                  {' '}
-                  {/* Aumente o valor aqui para mais espaço */}
-                  <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000'>
+                  <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
                     Choose an empty directory for data:
                   </h2>
                   <div className='group flex h-10 w-full cursor-pointer items-center justify-center rounded-md p-2 hover:bg-gray-300 active:bg-gray-400'>
                     <PasteIcon className='mr-2 mt-2 flex-shrink-0' />
-                    <h2 className='text-sm font-medium text-gray-400 group-hover:text-neutral-1000'>
+                    <h2 className='text-sm font-medium text-gray-400 group-hover:text-neutral-1000 dark:text-white'>
                       User/userName/data/plcproject
                     </h2>
                   </div>
