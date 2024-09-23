@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   AdditionalFunctionBlocks,
   ArduinoFunctionBlocks,
+  Arithmetic,
   CommunicationBlocks,
   Jaguar,
   MQTT,
@@ -24,6 +26,7 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
       P1AM,
       SequentMicrosystemsModules,
       StandardFunctionBlocks,
+      Arithmetic
     ],
     user: [],
   },

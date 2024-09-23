@@ -210,4 +210,4 @@ const Arithmetic: ArithmeticLibrary = {
   ],
 }
 
-export { Arithmetic }
+export { Arithmetic, ArithmeticLibrarySchema }

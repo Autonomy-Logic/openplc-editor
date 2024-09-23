@@ -1,6 +1,7 @@
 import {
   AdditionalFunctionBlocksLibrarySchema,
   ArduinoFunctionBlocksLibrarySchema,
+  ArithmeticLibrarySchema,
   CommunicationBlocksLibrarySchema,
   JaguarLibrarySchema,
   MQTTLibrarySchema,
@@ -21,6 +22,7 @@ const libraryStateSchema = z.object({
       P1AMLibrarySchema,
       SequentMicrosystemsModulesLibrarySchema,
       StandardFunctionBlocksLibrarySchema,
+      ArithmeticLibrarySchema
     ]), // This is the libraries that are built-in to the system
     user: z.array(z.string()), // This is the libraries that the user has installed
   }),
