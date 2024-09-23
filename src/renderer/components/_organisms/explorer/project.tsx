@@ -32,7 +32,7 @@ const Project = () => {
   }
 
   const [isEditing, setIsEditing] = useState(false)
-  const [inputValue, setInputValue] = useState<string>(projectName as string)
+  const [inputValue, setInputValue] = useState<string>(projectName)
 
   const handleBlur = () => {
     setIsEditing(false)

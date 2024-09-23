@@ -136,12 +136,15 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
 
   return (
     <Modal open={intervalModalOpen} onOpenChange={setIntervalModalIsOpen}>
-      <ModalTrigger className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900'>
+      <ModalTrigger className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none dark:hover:bg-neutral-900'>
         <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
           {shouldDisplayInterval ? formattedInterval : ''}
         </span>
       </ModalTrigger>
-      <ModalContent className='flex max-h-56 w-fit select-none flex-col justify-between gap-2 rounded-lg bg-white p-8 dark:bg-neutral-900'>
+      <ModalContent
+        onClose={handleCancel}
+        className='flex max-h-56 w-fit select-none flex-col justify-between gap-2 rounded-lg  p-8 '
+      >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Set interval</ModalTitle>
         <div className='flex h-24 w-full gap-2'>
           {(['day', 'hour', 'min', 'sec', 'ms', 'microS'] as const).map((interval) => (
@@ -153,7 +156,7 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
                 <input
                   id={interval}
                   type='number'
-                  className='h-[26px] w-16 rounded-sm border border-neutral-300 bg-white p-2 text-center text-cp-sm outline-none ring-brand focus:ring-2 dark:border-neutral-700'
+                  className='h-[26px]  w-16 rounded-lg border border-neutral-300  bg-white  p-2 text-center text-xs text-neutral-700 outline-none  ring-brand focus:border-brand  focus:ring-2 dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-100 '
                   value={tempValues[interval] || ''}
                   onChange={(e) =>
                     setTempValues((prev) => ({
