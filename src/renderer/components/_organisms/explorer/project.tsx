@@ -111,13 +111,13 @@ const Project = () => {
             ))}
         </ProjectTreeBranch>
         <ProjectTreeBranch
-          branchTarget='resources'
+          branchTarget='resource'
           onClick={() =>
             handleCreateTab({
               configuration: configuration,
-              name: 'resources',
-              path: `/data/configuration/resources`,
-              elementType: { type: 'resources' },
+              name: 'resource',
+              path: `/data/configuration/resource`,
+              elementType: { type: 'resource' },
             })
           }
         />

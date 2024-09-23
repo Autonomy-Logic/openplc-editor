@@ -93,7 +93,7 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
     const totalMs = ms + microS / 1000
     const formattedMs = totalMs % 1 === 0 ? `${Math.floor(totalMs)}ms` : `${totalMs}ms`
 
-    return `T#${day ? `${day}d` : ''}${hour ? `${hour}h` : ''}${min ? `${min}m` : ''}${sec ? `${sec}s` : ''}${formattedMs}`
+    return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}m` : ''}${sec > 0 ? `${sec}s` : ''}${formattedMs === '0ms' ? '' : formattedMs}`
   }, [values])
 
   const shouldDisplayInterval = useMemo(() => Object.values(values).some((val) => val > 0), [values])
@@ -101,22 +101,20 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
   const handleSave = () => {
     const updatedValues = { ...tempValues }
 
-   
     if (tempValues.microS >= 1000) {
       const additionalMs = Math.floor(tempValues.microS / 1000)
-      updatedValues.ms += additionalMs 
-      updatedValues.microS = 0 
+      updatedValues.ms += additionalMs
+      updatedValues.microS = 0
     }
 
-  
     if (updatedValues.ms >= 1000) {
       const additionalSec = Math.floor(updatedValues.ms / 1000)
-      updatedValues.sec += additionalSec 
-      updatedValues.ms = updatedValues.ms % 1000 
+      updatedValues.sec += additionalSec
+      updatedValues.ms = updatedValues.ms % 1000
     }
 
-    setValues(updatedValues) 
-    setTempValues(updatedValues) 
+    setValues(updatedValues)
+    setTempValues(updatedValues)
     table.options.meta?.updateData(index, id, formattedInterval)
     setIntervalModalIsOpen(false)
   }

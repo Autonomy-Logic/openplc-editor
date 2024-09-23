@@ -22,7 +22,7 @@ const tabsPropsSchema = z.object({
       derivation: z.enum(['enumerated', 'structure', 'array']),
     }),
     z.object({
-      type: z.literal('resources'),
+      type: z.literal('resource'),
     }),
   ]),
   configuration: z.object({}).optional(),

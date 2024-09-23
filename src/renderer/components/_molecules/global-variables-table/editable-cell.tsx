@@ -20,10 +20,9 @@ type IEditableCellProps = CellContext<PLCVariable, unknown> & { editable?: boole
 const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
   const initialValue = getValue<string>()
   const { toast } = useToast()
-  // We need to keep and update the state of the cell normally
+
   const [cellValue, setCellValue] = useState(initialValue)
 
-  // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = () => {
     if (cellValue === initialValue) return
     const res = table.options.meta?.updateData(index, id, cellValue)
@@ -31,7 +30,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
     setCellValue(initialValue)
     toast({ title: res?.title, description: res?.message, variant: 'fail' })
   }
-  // If the initialValue is changed external, sync it up with our state
+
   useEffect(() => {
     setCellValue(initialValue)
   }, [initialValue])
@@ -56,14 +55,13 @@ const EditableDocumentationCell = ({
   editable = true,
 }: IEditableCellProps) => {
   const initialValue = getValue<string | undefined>()
-  // We need to keep and update the state of the cell normally
+
   const [cellValue, setCellValue] = useState(initialValue ?? '')
 
-  // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = () => {
     table.options.meta?.updateData(index, id, cellValue)
   }
-  // If the initialValue is changed external, sync it up with our state
+
   useEffect(() => {
     setCellValue(initialValue ?? '')
   }, [initialValue])

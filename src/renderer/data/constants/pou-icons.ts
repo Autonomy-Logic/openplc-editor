@@ -11,7 +11,7 @@ export const PouIcon = {
   function: FunctionIcon,
   'function-block': FunctionBlockIcon,
   program: ProgramIcon,
-  resources: ResourceIcon,
+  resource: ResourceIcon,
   'data-type': DataTypeIcon,
   device: DeviceIcon,
 }

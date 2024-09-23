@@ -31,12 +31,12 @@ const TabIcons = {
   enumerated: <EnumIcon className='h-4 w-4 flex-shrink-0' />,
   structure: <StructureIcon className='h-4 w-4 flex-shrink-0' />,
   array: <ArrayIcon className='h-4 w-4 flex-shrink-0' />,
-  resources: <ResourceIcon className='h-4 w-4 flex-shrink-0' />,
+  resource: <ResourceIcon className='h-4 w-4 flex-shrink-0' />,
 }
 
 const Tab = (props: ITabProps) => {
   const { fileName, fileDerivation, currentTab, handleDeleteTab, handleClickedTab, ...res } = props
-  let languageOrDerivation: 'il' | 'st' | 'resources' | 'ld' | 'sfc' | 'fbd' | 'array' | 'enumerated' | 'structure' =
+  let languageOrDerivation: 'il' | 'st' | 'resource' | 'ld' | 'sfc' | 'fbd' | 'array' | 'enumerated' | 'structure' =
     'il'
 
   if (fileDerivation?.type === 'data-type') {
@@ -49,8 +49,8 @@ const Tab = (props: ITabProps) => {
   ) {
     languageOrDerivation = fileDerivation?.language
   }
-  if (fileDerivation?.type === 'resources') {
-    languageOrDerivation = 'resources'
+  if (fileDerivation?.type === 'resource') {
+    languageOrDerivation = 'resource'
   }
   return (
     <div
