@@ -254,4 +254,4 @@ const Numerical: NumericalLibrary = {
   ],
 }
 
-export { Numerical }
+export { Numerical, NumericalLibrarySchema }

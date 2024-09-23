@@ -1,12 +1,22 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   AdditionalFunctionBlocks,
   ArduinoFunctionBlocks,
+  Arithmetic,
+  BitShift,
+  Bitwise,
+  CharacterString,
   CommunicationBlocks,
+  Comparison,
   Jaguar,
   MQTT,
+  Numerical,
   P1AM,
+  Selection,
   SequentMicrosystemsModules,
   StandardFunctionBlocks,
+  Time,
+  TypeConversion,
 } from '@process:renderer/data/library'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
@@ -24,6 +34,15 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
       P1AM,
       SequentMicrosystemsModules,
       StandardFunctionBlocks,
+      Arithmetic,
+      BitShift,
+      Bitwise,
+      CharacterString,
+      Comparison,
+      Numerical,
+      Selection,
+      Time,
+      TypeConversion,
     ],
     user: [],
   },

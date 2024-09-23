@@ -180,4 +180,4 @@ const Selection: SelectionLibrary = {
   ],
 }
 
-export { Selection }
+export { Selection, SelectionLibrarySchema }
