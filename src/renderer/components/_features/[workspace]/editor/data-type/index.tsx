@@ -103,7 +103,7 @@ const DataTypeEditor = ({ data, ...rest }: DatatypeEditorProps) => {
         </div>
       </div>
       <div aria-label='Data type content container' className='h-full w-full'>
-        {data.meta.derivation === 'array' && <ArrayDataType data={editorContent as unknown as PLCArrayDatatype} />}
+        {data.meta.derivation === 'array' && <ArrayDataType data={editorContent as PLCArrayDatatype} />}
         {data.meta.derivation === 'enumerated' && <EnumeratorDataType />}
       </div>
     </div>

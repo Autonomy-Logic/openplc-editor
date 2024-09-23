@@ -61,7 +61,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
             </label>
             <input
               // onChange={handleChange}
-              value={data.initialValue}
+              value={data?.initialValue}
               className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
             />
           </div>

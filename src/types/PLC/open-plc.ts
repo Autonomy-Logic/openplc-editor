@@ -25,14 +25,18 @@ const baseTypeSchema = z.enum([
 ])
 type BaseType = z.infer<typeof baseTypeSchema>
 
+const PLCArrayDatatypeSchema = z.object({
+  name: z.string(),
+  derivation: z.literal('array'),
+  baseType: baseTypeSchema,
+  initialValue: z.string(),
+  dimensions: z.array(z.string())
+})
+
+type PLCArrayDatatype = z.infer<typeof PLCArrayDatatypeSchema>
+
 const PLCDataTypeSchema =  z.discriminatedUnion('derivation', [
-  z.object({
-    name: z.string(),
-    derivation: z.literal('array'),
-    baseType: baseTypeSchema,
-    initialValue: z.string(),
-    dimensions: z.array(z.string())
-  }),
+  PLCArrayDatatypeSchema,
   z.object({ name: z.string(),derivation: z.literal('structure') }),
   z.object({ name: z.string(),derivation: z.literal('enumerated') }),
 ])
@@ -136,6 +140,7 @@ type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
 export {
   baseTypeSchema,
+  PLCArrayDatatypeSchema,
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
@@ -146,6 +151,7 @@ export {
 
 export type {
   BaseType,
+  PLCArrayDatatype,
   PLCDataType,
   PLCFunction,
   PLCFunctionBlock,

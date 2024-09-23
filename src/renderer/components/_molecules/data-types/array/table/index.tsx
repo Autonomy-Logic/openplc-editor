@@ -74,9 +74,12 @@ const DimensionsTable = ({ selectedRow, handleRowClick }: DataTypeDimensionsTabl
     setBorders()
   }, [selectedRow])
 
+
   const table = useReactTable({
     columns: columns,
-    data: tableData,
+    // @ts-expect-error error for data type
+    data: tableData, 
+
     getCoreRowModel: getCoreRowModel(),
     columnResizeMode: 'onChange',
   })
