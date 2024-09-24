@@ -54,7 +54,10 @@ const Library = () => {
           )}
         </div>
 
-        <div id='search-container' className='flex h-8 items-center justify-center rounded-lg bg-brand'>
+        <div
+          id='search-container'
+          className={`flex h-8 items-center rounded-lg bg-brand ${isSearchActive ? 'w-full' : 'w-10'}`}
+        >
           {isSearchActive && (
             <InputWithRef
               id='Search-File'
@@ -66,7 +69,9 @@ const Library = () => {
               onChange={handleFilterChange}
             />
           )}
-          <MagnifierIcon className='w-10' onClick={() => setIsSearchActive(!isSearchActive)} />
+          <div className='flex-shrink-0 w-10 flex items-center justify-center'>
+            <MagnifierIcon className='w-6' onClick={() => setIsSearchActive(!isSearchActive)} />
+          </div>
         </div>
       </div>
       {/* Data display */}
@@ -79,18 +84,20 @@ const Library = () => {
               initiallyOpen={false}
               shouldBeOpen={filterText.length > 0}
             >
-              {library.pous.map((pou) => (
-                <LibraryFile
-                  key={pou.name}
-                  label={pou.name}
-                  isSelected={selectedFileKey === pou.name}
-                  onSelect={() => setSelectedFileKey(pou.name)}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData('text/plain', pou.body)
-                  }}
-                />
-              ))}
+              {library.pous
+                .filter((pou) => pou.name.toLowerCase().includes(filterText))
+                .map((pou) => (
+                  <LibraryFile
+                    key={pou.name}
+                    label={pou.name}
+                    isSelected={selectedFileKey === pou.name}
+                    onSelect={() => setSelectedFileKey(pou.name)}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', pou.body)
+                    }}
+                  />
+                ))}
             </LibraryFolder>
           ))}
         </LibraryRoot>
