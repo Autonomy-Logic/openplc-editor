@@ -80,7 +80,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             // Step 2 Content
             <>
               <div className='mb-4'>
-                <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white select-none select-none'>
+                <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white  select-none'>
                   Give a name for the project:
                 </h2>
                 <div className={`relative flex items-center focus-within:border-brand ${inputStyle}`}>
@@ -95,7 +95,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
                 </div>
               </div>
               <div className='mb-4'>
-                <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
+                <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white select-none'>
                   Choose an empty directory for your project:
                 </h2>
                 <div className='group flex h-10 w-full cursor-pointer items-center justify-center rounded-md border border-gray-300 p-2 hover:bg-gray-300 active:bg-gray-400'>
