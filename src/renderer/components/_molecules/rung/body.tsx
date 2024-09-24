@@ -10,6 +10,7 @@ import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
 import { BlockNode } from '../../_atoms/react-flow/custom-nodes/block'
 import { CoilNode } from '../../_atoms/react-flow/custom-nodes/coil'
 import { ContactNode } from '../../_atoms/react-flow/custom-nodes/contact'
+import { BasicNodeData } from '../../_atoms/react-flow/custom-nodes/utils/types'
 import BlockElement from '../../_features/[workspace]/editor/graphical/elements/block'
 import CoilElement from '../../_features/[workspace]/editor/graphical/elements/coil'
 import ContactElement from '../../_features/[workspace]/editor/graphical/elements/contact'
@@ -29,7 +30,7 @@ type RungBodyProps = {
 }
 
 export const RungBody = ({ rung }: RungBodyProps) => {
-  const { flowActions } = useOpenPLCStore()
+  const { flowActions, libraries } = useOpenPLCStore()
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
@@ -135,8 +136,15 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     }
   }
 
-  const handleAddNode = (newNodeType: string = 'mockNode') => {
-    const { nodes, edges } = addNewElement(rungLocal, newNodeType)
+  const handleAddNode = (newNodeType: string = 'mockNode', blockType: string | undefined) => {
+    let pou = undefined
+    if (blockType) {
+      const [type, library, pouName] = blockType.split('/')
+      if (type === 'system')
+        pou = libraries.system.find((lib) => lib.name === library)?.pous.find((p) => p.name === pouName)
+    }
+    console.log('pou', pou)
+    const { nodes, edges } = addNewElement(rungLocal, { newElementType: newNodeType, blockType: pou })
     setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }
 
@@ -268,7 +276,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         setRungLocal((rung) => ({ ...rung, nodes }))
         return
       }
-      handleAddNode(type)
+      const library = event.dataTransfer.getData('application/reactflow/ladder-blocks/library') ?? undefined
+      handleAddNode(type, library)
     },
     [rungLocal],
   )
@@ -345,7 +354,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         {modalNode?.type === 'block' && (
           <BlockElement
             onClose={handleModalClose}
-            node={modalNode as BlockNode}
+            node={modalNode as BlockNode<BasicNodeData>}
             isOpen={modalOpen}
             onOpenChange={setModalOpen}
           />

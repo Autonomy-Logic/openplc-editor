@@ -22,8 +22,9 @@ export const getDefaultNodeStyle = ({ node, nodeType }: { node?: Node; nodeType?
   return defaultCustomNodesStyles[node?.type ?? nodeType ?? 'mockNode']
 }
 
-export const buildGenericNode = ({
+export const buildGenericNode = <T> ({
   nodeType,
+  blockType,
   id,
   posX,
   posY,
@@ -31,6 +32,7 @@ export const buildGenericNode = ({
   handleY,
 }: BuilderBasicProps & {
   nodeType: string
+  blockType?: T | undefined
 }) => {
   switch (nodeType) {
     case 'block':
@@ -40,7 +42,7 @@ export const buildGenericNode = ({
         posY,
         handleX,
         handleY,
-        variant: 'default',
+        variant: blockType ?? {name: 'default'},
       })
     case 'coil':
       return nodesBuilder.coil({

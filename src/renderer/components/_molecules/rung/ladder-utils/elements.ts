@@ -646,9 +646,9 @@ const removeEmptyParallelConnections = (rung: FlowState) => {
   return { nodes: newNodes, edges: newEdges }
 }
 
-const startParallelConnectionByNodeType = (
+const startParallelConnectionByNodeType = <T> (
   rung: FlowState,
-  newElementType: string,
+  node: {newElementType: string, blockType: T | undefined},
   placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
 ) => {
   const { selectedPlaceholder, selectedPlaceholderIndex } = placeholder
@@ -676,10 +676,11 @@ const startParallelConnectionByNodeType = (
   }) as ParallelNode
 
   // Build new element node
-  const newElementPosition = getNodePositionBasedOnPreviousNode(openParallelNode, newElementType, 'parallel')
+  const newElementPosition = getNodePositionBasedOnPreviousNode(openParallelNode, node.newElementType, 'parallel')
   const newElement = buildGenericNode({
-    nodeType: newElementType,
-    id: `${newElementType.toUpperCase()}_${uuidv4()}`,
+    nodeType: node.newElementType,
+    blockType: node.blockType,
+    id: `${node.newElementType.toUpperCase()}_${uuidv4()}`,
     ...newElementPosition,
   })
 
@@ -984,9 +985,9 @@ const startParallelConnectionKeepingTheNode = (
 /**
  * Serial functions
  */
-const appendSerialConnectionByNodeType = (
+const appendSerialConnectionByNodeType = <T> (
   rung: FlowState,
-  newElementType: string,
+  node: {newElementType: string, blockType: T | undefined},
   placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
 ) => {
   const { selectedPlaceholder, selectedPlaceholderIndex } = placeholder
@@ -994,10 +995,11 @@ const appendSerialConnectionByNodeType = (
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
-  const newElelementPosition = getNodePositionBasedOnPlaceholderNode(selectedPlaceholder, newElementType)
+  const newElelementPosition = getNodePositionBasedOnPlaceholderNode(selectedPlaceholder, node.newElementType)
   const newElement = buildGenericNode({
-    nodeType: newElementType,
-    id: `${newElementType.toUpperCase()}_${uuidv4()}`,
+    nodeType: node.newElementType,
+    blockType: node.blockType,
+    id: `${node.newElementType.toUpperCase()}_${uuidv4()}`,
     ...newElelementPosition,
   })
   newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newElement)
@@ -1084,7 +1086,10 @@ const appendSerialConnectionKeepingTheNode = (
 /**
  * Exported functions to control the rung elements
  */
-export const addNewElement = (rung: FlowState, newElementType: string): { nodes: Node[]; edges: Edge[] } => {
+export const addNewElement = <T> (rung: FlowState, node: {newElementType: string, blockType: T | undefined}): { nodes: Node[]; edges: Edge[] } => {
+
+  console.log('addNewElement', rung, node)
+
   const [selectedPlaceholderIndex, selectedPlaceholder] =
     Object.entries(rung.nodes).find(
       (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
@@ -1095,14 +1100,14 @@ export const addNewElement = (rung: FlowState, newElementType: string): { nodes:
   let newEdges = [...rung.edges]
 
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
-    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnectionByNodeType(rung, newElementType, {
+    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnectionByNodeType(rung, node, {
       selectedPlaceholder,
       selectedPlaceholderIndex,
     })
     newEdges = parallelEdges
     newNodes = parallelNodes
   } else {
-    const { nodes: serialNodes, edges: serialEdges } = appendSerialConnectionByNodeType(rung, newElementType, {
+    const { nodes: serialNodes, edges: serialEdges } = appendSerialConnectionByNodeType(rung, node, {
       selectedPlaceholder,
       selectedPlaceholderIndex,
     })
@@ -1111,6 +1116,8 @@ export const addNewElement = (rung: FlowState, newElementType: string): { nodes:
   }
 
   newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
+
+  console.log('newNodes', newNodes)
 
   return { nodes: newNodes, edges: newEdges }
 }
