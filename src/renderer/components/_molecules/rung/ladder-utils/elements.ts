@@ -688,6 +688,7 @@ const startParallelConnectionByNodeType = <T> (
   const newAboveNodePosition = getNodePositionBasedOnPreviousNode(openParallelNode, aboveNode, 'serial')
   const buildedAboveNode = buildGenericNode({
     nodeType: aboveNode.type ?? '',
+    blockType: aboveNode.data.variant,
     id: `${aboveNode.type?.toUpperCase()}_${uuidv4()}`,
     ...newAboveNodePosition,
   })
@@ -1087,9 +1088,6 @@ const appendSerialConnectionKeepingTheNode = (
  * Exported functions to control the rung elements
  */
 export const addNewElement = <T> (rung: FlowState, node: {newElementType: string, blockType: T | undefined}): { nodes: Node[]; edges: Edge[] } => {
-
-  console.log('addNewElement', rung, node)
-
   const [selectedPlaceholderIndex, selectedPlaceholder] =
     Object.entries(rung.nodes).find(
       (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,

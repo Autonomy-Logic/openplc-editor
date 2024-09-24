@@ -42,7 +42,7 @@ export const buildGenericNode = <T> ({
         posY,
         handleX,
         handleY,
-        variant: blockType ?? {name: 'default'},
+        variant: blockType ?? undefined,
       })
     case 'coil':
       return nodesBuilder.coil({

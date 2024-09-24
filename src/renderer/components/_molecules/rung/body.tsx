@@ -143,7 +143,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       if (type === 'system')
         pou = libraries.system.find((lib) => lib.name === library)?.pous.find((p) => p.name === pouName)
     }
-    console.log('pou', pou)
     const { nodes, edges } = addNewElement(rungLocal, { newElementType: newNodeType, blockType: pou })
     setRungLocal((rung) => ({ ...rung, nodes, edges }))
   }

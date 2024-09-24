@@ -7,32 +7,31 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../
 import { buildHandle, CustomHandle } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
+type Variant = {
+  name: string
+  variables: { name: string; class: string; type: { definition: string; value: string } }[]
+  documentation: string
+}
+
 export type BlockNodeData<V> = BasicNodeData & { variant: V }
 export type BlockNode<V> = Node<BlockNodeData<V>>
 type BlockProps<V> = NodeProps<BlockNode<V>>
 type BlockBuilderProps<V> = BuilderBasicProps & { variant: V }
 
-export const DEFAULT_BLOCK_WIDTH = 96
+export const DEFAULT_BLOCK_WIDTH = 216
 export const DEFAULT_BLOCK_HEIGHT = 128
 
 export const DEFAULT_BLOCK_CONNECTOR_X = DEFAULT_BLOCK_WIDTH
 export const DEFAULT_BLOCK_CONNECTOR_Y = 40
 export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 32
 
-type BlockTypes = {
-  [key: string]: {
-    name: string
-    inputConnectors: string[]
-    outputConnectors: string[]
-    tooltipContent: string
-  }
-}
-export const DEFAULT_BLOCK_TYPES: BlockTypes = {
-  default: {
-    name: '???',
-    inputConnectors: ['???', '???', '???', '???', '???', '???'],
-    outputConnectors: ['???', '???', '???'],
-    tooltipContent: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam aliquam tristique tincidunt. Duis elementum
+export const DEFAULT_BLOCK_TYPE = {
+  name: '???',
+  variables: [
+    { name: '???', class: 'input', type: { definition: 'base-type', value: 'SINT' } },
+    { name: '???', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
+  ],
+  documentation: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam aliquam tristique tincidunt. Duis elementum
             tortor sem, non convallis orci facilisis at. Suspendisse id bibendum nisl. Mauris ac massa diam. Mauris
             ultrices massa justo, sed vehicula tellus rhoncus eget. Suspendisse lacinia nec dolor vitae sollicitudin.
             Interdum et malesuada fames ac ante ipsum primis in faucibus. Quisque rutrum, tellus eu maximus cursus,
@@ -40,17 +39,13 @@ export const DEFAULT_BLOCK_TYPES: BlockTypes = {
             eget mauris. Aenean aliquet, justo id tempor placerat, ipsum purus molestie justo, sed euismod est arcu
             fermentum odio. Nullam et mauris leo. Aenean magna ex, sollicitudin at consequat non, cursus nec elit. Morbi
             sodales porta elementum.`,
-  },
-  TON: {
-    name: 'TON',
-    inputConnectors: ['EN', 'IN', 'PT'],
-    outputConnectors: ['EN0', 'Q', 'ET'],
-    tooltipContent: `The TON block is a timer block that can be used to trigger an event after a certain amount of time has passed.`,
-  },
 }
 
 export const Block = <V extends object>({ height, selected, data, id, dragging }: BlockProps<V>) => {
-  const { name, inputConnectors, outputConnectors, tooltipContent } = DEFAULT_BLOCK_TYPES['default']
+  const { name, variables, documentation } = data.variant as Variant ?? DEFAULT_BLOCK_TYPE
+
+  const inputConnectors = variables.filter((variable) => variable.class === 'input').map((variable) => variable.name)
+  const outputConnectors = variables.filter((variable) => variable.class === 'output').map((variable) => variable.name)
 
   const [blockLabelValue, setBlockLabelValue] = useState<string>('')
   const [blockNameValue, setBlockNameValue] = useState<string>(name)
@@ -103,7 +98,7 @@ export const Block = <V extends object>({ height, selected, data, id, dragging }
               ))}
             </div>
           </TooltipTrigger>
-          {!dragging && <TooltipContent side='right'>{tooltipContent}</TooltipContent>}
+          {!dragging && <TooltipContent side='right'>{documentation}</TooltipContent>}
         </Tooltip>
       </TooltipProvider>
       <div
@@ -136,7 +131,7 @@ export const Block = <V extends object>({ height, selected, data, id, dragging }
  * @param blockType: 'template' - The type of the block node
  * @returns BlockNode
  */
-export const buildBlockNode = <V extends object>({
+export const buildBlockNode = <V extends object | undefined>({
   id,
   posX,
   posY,
@@ -144,9 +139,10 @@ export const buildBlockNode = <V extends object>({
   handleY,
   variant,
 }: BlockBuilderProps<V>) => {
-  const type = DEFAULT_BLOCK_TYPES['default']
-  const inputConnectors = type.inputConnectors
-  const outputConnectors = type.outputConnectors
+
+  const type = variant as Variant ?? DEFAULT_BLOCK_TYPE
+  const inputConnectors = type.variables.filter((variable) => variable.class === 'input').map((variable) => variable.name)
+  const outputConnectors = type.variables.filter((variable) => variable.class === 'output').map((variable) => variable.name)
 
   const leftHandles = inputConnectors.map((connector, index) =>
     buildHandle({

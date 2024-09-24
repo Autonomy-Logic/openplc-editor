@@ -1,6 +1,6 @@
 import * as Switch from '@radix-ui/react-switch'
 import { InputWithRef } from '@root/renderer/components/_atoms'
-import { BlockNode, DEFAULT_BLOCK_TYPES } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
+import { BlockNode, DEFAULT_BLOCK_TYPE } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
 import {
   Modal,
   ModalContent,
@@ -12,17 +12,17 @@ import { Dispatch, SetStateAction, useState } from 'react'
 import ArrowButtonGroup from '../arrow-button-group'
 import { ModalBlockLibrary } from './library'
 
-type BlockElementProps = {
+type BlockElementProps <V> = {
   isOpen: boolean
   onOpenChange: Dispatch<SetStateAction<boolean>>
   onClose?: () => void
-  node?: BlockNode
+  node?: BlockNode<V>
 }
 
-const BlockElement = ({ isOpen, onOpenChange, onClose, node }: BlockElementProps) => {
+const BlockElement = <V extends object> ({ isOpen, onOpenChange, onClose, node }: BlockElementProps<V>) => {
   const [selectedFile, setSelectedFile] = useState<{ image: string; text: string } | null>(null)
   const [formState, setFormState] = useState<{ name: string; inputs: string; executionOrder: string }>({
-    name: DEFAULT_BLOCK_TYPES[node?.data.variant || 'default'].name,
+    name: DEFAULT_BLOCK_TYPE.name,
     inputs: (node?.data.inputHandles.length || 0).toString(),
     executionOrder: '',
   })
