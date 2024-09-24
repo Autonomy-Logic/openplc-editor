@@ -64,7 +64,6 @@ const Library = () => {
               type='text'
               placeholder='Search'
               className='h-8 w-full flex-grow rounded-s-lg bg-neutral-100 px-2 focus:outline-none dark:bg-brand-dark'
-              onBlur={() => setIsSearchActive(false)}
               value={filterText}
               onChange={handleFilterChange}
             />
