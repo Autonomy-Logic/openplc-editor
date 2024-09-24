@@ -1,5 +1,6 @@
 import { BookIcon, FolderIcon, PathIcon } from '@root/renderer/assets'
 import { Modal, ModalContent } from '@root/renderer/components/_molecules'
+import { cn } from '@root/utils'
 import React, { useEffect, useState } from 'react'
 
 interface NewProjectModalProps {
@@ -28,11 +29,12 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
       setStep(2)
     }
   }
-
+  const inputStyle =
+    'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
   return (
     <Modal open={isOpen} onOpenChange={onClose}>
       <ModalContent onClose={onClose} className='flex h-[450px] flex-col justify-between p-6'>
-        <div className='flex h-[60px] flex-shrink-0 items-center justify-center'>
+        <div className='flex h-[60px] flex-shrink-0 items-center justify-center select-none'>
           {/* Progress Bar */}
           <div className='relative flex items-center justify-center pt-2'>
             <div
@@ -56,7 +58,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
         <div className='flex flex-grow flex-col items-center justify-around py-8'>
           {step === 1 ? (
             <>
-              <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
+              <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white select-none'>
                 What type of project will you be working on?
               </h2>
               <div className='flex w-full justify-around'>
@@ -78,22 +80,25 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             // Step 2 Content
             <>
               <div className='mb-4'>
-                <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
+                <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white select-none select-none'>
                   Give a name for the project:
                 </h2>
-                <input
-                  id='project-name'
-                  className='box-border h-[28px] w-[260px] cursor-text rounded-lg border-2 border-blue-500 bg-transparent px-2 py-0 text-xs font-medium leading-tight text-neutral-1000 outline-none dark:text-neutral-50'
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  autoFocus
-                />
+                <div className={`relative flex items-center focus-within:border-brand ${inputStyle}`}>
+                  <input
+                    id='project-name'
+                    className='h-full w-full truncate bg-inherit px-2 py-0 text-sm font-medium leading-tight text-neutral-950 outline-none dark:text-white'
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    autoFocus
+                    placeholder='Project Name'
+                  />
+                </div>
               </div>
               <div className='mb-4'>
                 <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
                   Choose an empty directory for your project:
                 </h2>
-                <div className='group flex h-10 w-full cursor-pointer items-center justify-center rounded-md p-2 hover:bg-gray-300 active:bg-gray-400'>
+                <div className='group flex h-10 w-full cursor-pointer items-center justify-center rounded-md border border-gray-300 p-2 hover:bg-gray-300 active:bg-gray-400'>
                   <PathIcon className='mr-2 mt-2 flex-shrink-0' />
                   <h2 className='text-sm font-medium text-gray-400 group-hover:text-neutral-1000 dark:text-white'>
                     User/userName/data/plcproject
@@ -108,8 +113,10 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
         <div className='mt-4 flex flex-row justify-center space-x-4'>
           {step === 1 && (
             <button
-              className='flex h-8 w-52 items-center justify-center rounded-md bg-neutral-100 font-semibold !text-neutral-1000 hover:bg-neutral-200 dark:bg-white dark:hover:bg-neutral-100'
               type='button'
+              className={cn(
+                'h-8 w-52  items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100',
+              )}
               onClick={onClose}
             >
               Cancel
@@ -117,18 +124,18 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
           )}
           {step === 2 && (
             <button
-              className='flex h-8 w-52 items-center justify-center rounded-md bg-neutral-100 font-semibold !text-neutral-1000 hover:bg-neutral-200 dark:bg-white dark:hover:bg-neutral-100'
               type='button'
+              className={cn(
+                'h-8 w-52  items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100',
+              )}
               onClick={() => setStep(1)}
             >
               Prev
             </button>
           )}
           <button
-            className={`flex h-8 w-52 items-center justify-center rounded-md bg-blue-500 font-semibold text-white hover:bg-blue-600 focus:bg-blue-700 ${
-              !selected ? 'cursor-not-allowed opacity-50' : ''
-            }`}
             type='button'
+            className={`h-8 w-52 items-center rounded-lg text-center font-medium text-white ${selected ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'}`}
             onClick={handleNext}
             disabled={!selected}
           >
