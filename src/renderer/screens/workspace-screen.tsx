@@ -66,7 +66,6 @@ const WorkspaceScreen = () => {
     { name: 'c', type: 'false' },
     { name: 'd', type: 'false' },
   ]
-
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
   const [collapseAll, setCollapseAll] = useState(false)
@@ -75,7 +74,6 @@ const WorkspaceScreen = () => {
   const workspacePanelRef = useRef(null)
   const consolePanelRef = useRef(null)
 
-  console.log(projectData.dataTypes)
 
   const togglePanel = () => {
     if (panelRef.current) {
@@ -139,7 +137,7 @@ const WorkspaceScreen = () => {
                     <>
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
-                          <DataTypeEditor data={editor} />{' '}
+                          <DataTypeEditor data={projectData.dataTypes.find((datatype) => datatype['name'] === editor.meta.name)} />{' '}
                         </div>
                       )}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (

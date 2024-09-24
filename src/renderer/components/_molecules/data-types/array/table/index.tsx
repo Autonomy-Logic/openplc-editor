@@ -2,6 +2,7 @@ import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
 import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
 import { StickArrowIcon } from '@root/renderer/assets'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils/cn'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
@@ -9,9 +10,9 @@ import { useEffect, useRef, useState } from 'react'
 
 import { DimensionCell } from './editable-cell'
 
-const columnHelper = createColumnHelper<PLCArrayDatatype>()
+const columnHelper = createColumnHelper<{ dimension: string }>()
 const columns = [
-  columnHelper.accessor('dimensions', {
+  columnHelper.accessor('dimension', {
     header: '',
     size: 300,
     minSize: 150,
@@ -22,21 +23,33 @@ const columns = [
 ]
 
 type DataTypeDimensionsTableProps = {
-  tableData?: PLCArrayDatatype['dimensions']
+  name: string
+  dimensions?: PLCArrayDatatype['dimensions']
   selectedRow: number
   handleRowClick: (row: HTMLTableRowElement) => void
 }
 
-const DimensionsTable = ({ selectedRow, handleRowClick }: DataTypeDimensionsTableProps) => {
+const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: DataTypeDimensionsTableProps) => {
+  const {
+    workspaceActions: { createArrayDimension },
+    workspace: {
+      projectData: { dataTypes },
+    },
+  } = useOpenPLCStore()
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
-  const [tableData, _setTableData] = useState<PLCArrayDatatype['dimensions']>([])
-
+  const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>(dimensions ? dimensions : [])
+  
+  useEffect(() => {
+    const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype
+    if (dimensionsToTable) setTableData(dimensionsToTable['dimensions'])
+    }, [dataTypes])
+  
   const resetBorders = () => {
     const parent = tableBodyRef.current
     if (!parent?.children) return
-
+ 
     const rows = Array.from(parent.children)
     rows.forEach((row) => {
       row.className = cn(
@@ -74,12 +87,9 @@ const DimensionsTable = ({ selectedRow, handleRowClick }: DataTypeDimensionsTabl
     setBorders()
   }, [selectedRow])
 
-
   const table = useReactTable({
     columns: columns,
-    // @ts-expect-error error for data type
-    data: tableData, 
-
+    data: tableData,
     getCoreRowModel: getCoreRowModel(),
     columnResizeMode: 'onChange',
   })
@@ -97,7 +107,15 @@ const DimensionsTable = ({ selectedRow, handleRowClick }: DataTypeDimensionsTabl
           aria-label='Data type table actions buttons container'
           className='flex h-full w-fit items-center justify-evenly *:rounded-md *:p-1'
         >
-          <TableActionButton aria-label='Add table row button' onClick={() => console.log('Button clicked')}>
+          <TableActionButton
+            aria-label='Add table row button'
+            onClick={() =>
+              createArrayDimension({
+                name: name,
+                derivation: 'array',
+              })
+            }
+          >
             <PlusIcon className='!stroke-brand' />
           </TableActionButton>
           <TableActionButton aria-label='Remove table row button' onClick={() => console.log('Button clicked')}>

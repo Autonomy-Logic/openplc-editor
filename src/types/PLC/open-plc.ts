@@ -30,7 +30,7 @@ const PLCArrayDatatypeSchema = z.object({
   derivation: z.literal('array'),
   baseType: baseTypeSchema,
   initialValue: z.string(),
-  dimensions: z.array(z.string())
+  dimensions: z.array(z.object({dimension: z.string()}))
 })
 
 type PLCArrayDatatype = z.infer<typeof PLCArrayDatatypeSchema>

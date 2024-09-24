@@ -14,7 +14,6 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const ROWS_NOT_SELECTED = -1
   const [arrayTable, setArrayTable] = useState<{ selectedRow: string }>({ selectedRow: ROWS_NOT_SELECTED.toString() })
   const [_value, _setValue] = useState()
-
   return (
     <div aria-label='Array data type container' className='flex h-full w-full flex-col gap-4 bg-transparent' {...rest}>
       <div aria-label='Data type content actions container' className='flex h-fit w-full gap-8'>
@@ -69,6 +68,8 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       </div>
 
       <DimensionsTable
+        name={data.name}
+        dimensions={data.dimensions}
         handleRowClick={(row) => setArrayTable({ selectedRow: row.id })}
         selectedRow={parseInt(arrayTable.selectedRow)}
       />

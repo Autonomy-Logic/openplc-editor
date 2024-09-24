@@ -1,4 +1,5 @@
 import {
+  PLCArrayDatatypeSchema,
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
@@ -96,6 +97,12 @@ const workspaceActionsSchema = z.object({
     .returns(z.void()),
 
   createDatatype: z.function().args(PLCDataTypeSchema).returns(z.void()),
+  updateDatatype: z.function().args(z.object({
+    name: z.string(),
+    derivation: z.enum(['array', 'structure', 'enumerated']),
+    dataToUpdate: PLCArrayDatatypeSchema.partial()
+  })).returns(z.void()),
+  createArrayDimension: z.function().args(z.object({ name: z.string(), derivation: z.enum(['array', 'enumerated', 'structure'])})).returns(z.void())
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 

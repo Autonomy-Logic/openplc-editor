@@ -1,10 +1,9 @@
 import { InputWithRef } from '@root/renderer/components/_atoms'
-import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils/cn'
 import { CellContext } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
-type EditableCellProps = CellContext<PLCArrayDatatype, unknown> & { editable?: boolean }
+type EditableCellProps = CellContext<{dimension: string}, unknown> & { editable?: boolean }
 const DimensionCell = ({ getValue, editable = true }: EditableCellProps) => {
   const initialValue = getValue<string>()
   const [cellValue, setCellValue] = useState(initialValue)

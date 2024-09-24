@@ -1,3 +1,4 @@
+import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -12,7 +13,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       dataTypes: [],
       pous: [],
       globalVariables: [],
-      projectName: ''
+      projectName: '',
     },
     systemConfigs: {
       OS: '',
@@ -20,7 +21,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       shouldUseDarkMode: false,
       isWindowMaximized: false,
     },
-    projectName: ''
+    projectName: '',
   },
 
   workspaceActions: {
@@ -302,6 +303,26 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
             workspace.projectData.dataTypes.push(dataToCreate)
           } else {
             console.error(`Datatype ${name} already exists`)
+          }
+        }),
+      )
+    },
+    updateDatatype: ({ name, derivation, dataToUpdate}) => {
+      setState(produce(({workspace}:WorkspaceSlice) => {
+        const _dataTypeExists = workspace.projectData.dataTypes.find((datatype) => datatype.name === name)
+        console.log(derivation, dataToUpdate)
+        }))
+    },
+    createArrayDimension: (dataToCreateDimension) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { name, derivation } = dataToCreateDimension
+          const dataExists = workspace.projectData.dataTypes.find(
+            (datatype) => datatype.name === name,
+          ) as PLCArrayDatatype
+          if (!dataExists) return
+          if (dataExists && derivation === 'array') {
+            dataExists.dimensions.push({ dimension: '' })
           }
         }),
       )
