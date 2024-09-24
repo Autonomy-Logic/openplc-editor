@@ -11,7 +11,7 @@ const sizeClasses = {
   lg: 'w-12 h-12',
 }
 
-export const PasteIcon = (props: IFBDIconProps) => {
+export const PathIcon = (props: IFBDIconProps) => {
   const { className, size = 'sm', ...res } = props
   return (
     <svg
