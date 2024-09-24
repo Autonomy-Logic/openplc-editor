@@ -34,7 +34,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
       <ModalContent onClose={onClose} className='flex h-[450px] flex-col justify-between p-6'>
         <div className='flex h-[60px] flex-shrink-0 items-center justify-center'>
           {/* Progress Bar */}
-          <div className= 'pt-2 relative flex items-center justify-center'>
+          <div className='relative flex items-center justify-center pt-2'>
             <div
               className={`z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 ${step === 1 ? 'border-blue-500 bg-white text-blue-500' : 'border-blue-200 bg-blue-300 font-bold text-white'} font-bold`}
             >
@@ -53,13 +53,13 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
           </div>
         </div>
 
-        <div className='flex flex-grow flex-col items-center justify-between py-4'>
+        <div className='flex flex-grow flex-col items-center justify-around py-8'>
           {step === 1 ? (
             <>
-              <h2 className='mb-8 text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
+              <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
                 What type of project will you be working on?
               </h2>
-              <div className='mb-8 flex w-full justify-around'>
+              <div className='flex w-full justify-around'>
                 <button
                   className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${selected === 'project' ? 'border-blue-300 bg-blue-300 text-white' : 'border-transparent bg-gray-200 text-black hover:border-blue-500'}`}
                   onClick={() => handleClick('project')}
@@ -91,7 +91,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
               </div>
               <div className='mb-4'>
                 <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
-                  Choose an empty directory for data:
+                  Choose an empty directory for your project:
                 </h2>
                 <div className='group flex h-10 w-full cursor-pointer items-center justify-center rounded-md p-2 hover:bg-gray-300 active:bg-gray-400'>
                   <PathIcon className='mr-2 mt-2 flex-shrink-0' />
@@ -125,7 +125,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             </button>
           )}
           <button
-            className={`pb-2 flex h-8 w-52 items-center justify-center rounded-md bg-blue-500 font-semibold text-white hover:bg-blue-600 focus:bg-blue-700 ${
+            className={`flex h-8 w-52 items-center justify-center rounded-md bg-blue-500 font-semibold text-white hover:bg-blue-600 focus:bg-blue-700 ${
               !selected ? 'cursor-not-allowed opacity-50' : ''
             }`}
             type='button'
