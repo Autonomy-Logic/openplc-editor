@@ -27,7 +27,7 @@ export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 32
 export const DEFAULT_BLOCK_TYPE = {
   name: '???',
   variables: [
-    { name: '???', class: 'input', type: { definition: 'base-type', value: 'SINT' } },
+    { name: '???', class: 'input', type: { definition: 'base-type', value: 'BOOL' } },
     { name: '???', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
   ],
   documentation: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam aliquam tristique tincidunt. Duis elementum
@@ -224,7 +224,7 @@ export const buildBlockNode = <T extends object | undefined>({
     type: 'block',
     position: { x: posX, y: posY },
     data: {
-      variant,
+      variant: variant ?? DEFAULT_BLOCK_TYPE,
       handles,
       inputHandles: leftHandles,
       outputHandles: rightHandles,

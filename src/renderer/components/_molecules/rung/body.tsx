@@ -348,7 +348,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         {modalNode?.type === 'block' && (
           <BlockElement
             onClose={handleModalClose}
-            node={modalNode as BlockNode<object>}
+            selectedNode={modalNode as BlockNode<object>}
             isOpen={modalOpen}
             onOpenChange={setModalOpen}
           />

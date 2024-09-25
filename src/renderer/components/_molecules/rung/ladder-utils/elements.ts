@@ -41,7 +41,9 @@ const getNodePositionBasedOnPreviousNode = (
       : previousElement.data.outputConnector
   ) as CustomHandleProps
   const previousElementStyle = getDefaultNodeStyle({ node: previousElement })
-  const newNodeStyle = getDefaultNodeStyle(typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement })
+  const newNodeStyle = getDefaultNodeStyle(
+    typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement },
+  )
 
   const gap = previousElementStyle.gap + newNodeStyle.gap
   const offsetY = newNodeStyle.handle.y
@@ -60,7 +62,9 @@ const getNodePositionBasedOnPreviousNode = (
 }
 
 const getNodePositionBasedOnPlaceholderNode = (placeholderNode: Node, newElement: string | Node) => {
-  const newNodeStyle = getDefaultNodeStyle(typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement })
+  const newNodeStyle = getDefaultNodeStyle(
+    typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement },
+  )
 
   const placeholderHandles = placeholderNode.data.handles as CustomHandleProps[]
   const placeholderHandle = placeholderHandles[0]
@@ -111,14 +115,19 @@ const getPlaceholderPositionBasedOnNode = (node: Node, side: 'left' | 'bottom' |
       }
     case 'bottom':
       return {
-        posX: node.position.x + getDefaultNodeStyle({ node }).width / 2 - getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
+        posX:
+          node.position.x +
+          getDefaultNodeStyle({ node }).width / 2 -
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         posY:
           node.position.y +
           (node?.height ?? 0) -
           getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
           getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
         handleX:
-          node.position.x + getDefaultNodeStyle({ node }).width / 2 - getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
+          node.position.x +
+          getDefaultNodeStyle({ node }).width / 2 -
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         handleY:
           node.position.y +
           (node?.height ?? 0) -
@@ -646,9 +655,9 @@ const removeEmptyParallelConnections = (rung: FlowState) => {
   return { nodes: newNodes, edges: newEdges }
 }
 
-const startParallelConnectionByNodeType = <T> (
+const startParallelConnectionByNodeType = <T>(
   rung: FlowState,
-  node: {newElementType: string, blockType: T | undefined},
+  node: { newElementType: string; blockType: T | undefined },
   placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
 ) => {
   const { selectedPlaceholder, selectedPlaceholderIndex } = placeholder
@@ -986,9 +995,9 @@ const startParallelConnectionKeepingTheNode = (
 /**
  * Serial functions
  */
-const appendSerialConnectionByNodeType = <T> (
+const appendSerialConnectionByNodeType = <T>(
   rung: FlowState,
-  node: {newElementType: string, blockType: T | undefined},
+  node: { newElementType: string; blockType: T | undefined },
   placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
 ) => {
   const { selectedPlaceholder, selectedPlaceholderIndex } = placeholder
@@ -1087,7 +1096,10 @@ const appendSerialConnectionKeepingTheNode = (
 /**
  * Exported functions to control the rung elements
  */
-export const addNewElement = <T> (rung: FlowState, node: {newElementType: string, blockType: T | undefined}): { nodes: Node[]; edges: Edge[] } => {
+export const addNewElement = <T>(
+  rung: FlowState,
+  node: { newElementType: string; blockType: T | undefined },
+): { nodes: Node[]; edges: Edge[] } => {
   const [selectedPlaceholderIndex, selectedPlaceholder] =
     Object.entries(rung.nodes).find(
       (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
@@ -1114,9 +1126,6 @@ export const addNewElement = <T> (rung: FlowState, node: {newElementType: string
   }
 
   newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
-
-  console.log('newNodes', newNodes)
-
   return { nodes: newNodes, edges: newEdges }
 }
 
