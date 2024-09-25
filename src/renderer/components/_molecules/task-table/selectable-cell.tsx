@@ -63,7 +63,13 @@ const SelectableTriggerCell = ({
   )
 }
 
-const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, table }: ISelectableCellProps) => {
+const SelectableIntervalCell = ({
+  getValue,
+  row: { index },
+  column: { id },
+  editable = true,
+  table,
+}: ISelectableCellProps) => {
   const initialValue: string = getValue() as string
   const [intervalModalOpen, setIntervalModalIsOpen] = useState(false)
   const [values, setValues] = useState({
@@ -103,7 +109,6 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
     console.log('Current Values:', values)
   }, [values])
 
-
   const formattedInterval = useMemo(() => {
     const { day, hour, min, sec, ms, µs } = values
     const totalMs = ms + µs / 1000
@@ -113,29 +118,28 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
     return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}min` : ''}${sec > 0 ? `${sec}s` : ''}${formattedMs === '0ms' ? '' : formattedMs}`
   }, [values])
   const handleSave = () => {
-    const updatedValues = { ...tempValues };
-  
-    
+    const updatedValues = { ...tempValues }
+
     if (tempValues.µs >= 1000) {
-      const additionalMs = Math.floor(tempValues.µs / 1000);
-      updatedValues.ms += additionalMs;
-      updatedValues.µs = tempValues.µs % 1000;
+      const additionalMs = Math.floor(tempValues.µs / 1000)
+      updatedValues.ms += additionalMs
+      updatedValues.µs = tempValues.µs % 1000
     }
-  
+
     if (updatedValues.ms >= 1000) {
-      const additionalSec = Math.floor(updatedValues.ms / 1000);
-      updatedValues.sec += additionalSec;
-      updatedValues.ms = updatedValues.ms % 1000;
+      const additionalSec = Math.floor(updatedValues.ms / 1000)
+      updatedValues.sec += additionalSec
+      updatedValues.ms = updatedValues.ms % 1000
     }
-  
-    setValues(updatedValues);
-    setTempValues(updatedValues);
- 
-    const formattedInterval = `T#${updatedValues.day > 0 ? `${updatedValues.day}d` : ''}${updatedValues.hour > 0 ? `${updatedValues.hour}h` : ''}${updatedValues.min > 0 ? `${updatedValues.min}min` : ''}${updatedValues.sec > 0 ? `${updatedValues.sec}s` : ''}${updatedValues.ms > 0 || updatedValues.µs > 0 ? `${updatedValues.ms + updatedValues.µs / 1000}ms` : ''}`;
-  
-    table.options.meta?.updateData(index, id, formattedInterval);
-    setIntervalModalIsOpen(false);
-  };
+
+    setValues(updatedValues)
+    setTempValues(updatedValues)
+
+    const formattedInterval = `T#${updatedValues.day > 0 ? `${updatedValues.day}d` : ''}${updatedValues.hour > 0 ? `${updatedValues.hour}h` : ''}${updatedValues.min > 0 ? `${updatedValues.min}min` : ''}${updatedValues.sec > 0 ? `${updatedValues.sec}s` : ''}${updatedValues.ms > 0 || updatedValues.µs > 0 ? `${updatedValues.ms + updatedValues.µs / 1000}ms` : ''}`
+
+    table.options.meta?.updateData(index, id, formattedInterval)
+    setIntervalModalIsOpen(false)
+  }
 
   const handleCancel = () => {
     setTempValues(values)
@@ -154,10 +158,19 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
 
   return (
     <Modal open={intervalModalOpen} onOpenChange={setIntervalModalIsOpen}>
-      <ModalTrigger className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none dark:hover:bg-neutral-900'>
-        <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-          {formattedInterval}
-        </span>
+      <ModalTrigger
+        asChild
+        className='flex h-8 w-full cursor-pointer items-center justify-center outline-none dark:hover:bg-neutral-900'
+      >
+        <div
+          className={cn('flex h-full w-full cursor-pointer justify-center outline-none p-2', {
+            'pointer-events-none': !editable,
+          })}
+        >
+          <span className='line-clamp-1 font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+            {formattedInterval}
+          </span>
+        </div>
       </ModalTrigger>
       <ModalContent
         onClose={handleCancel}
