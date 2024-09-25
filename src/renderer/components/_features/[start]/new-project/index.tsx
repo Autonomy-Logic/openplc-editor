@@ -25,12 +25,14 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
   }
 
   const handleNext = () => {
-    if (selected) {
-      setStep(2)
+    if (step < 3) {
+      setStep(step + 1)
     }
   }
+
   const inputStyle =
     'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
+
   return (
     <Modal open={isOpen} onOpenChange={onClose}>
       <ModalContent onClose={onClose} className='flex h-[450px] flex-col justify-between p-6'>
@@ -38,18 +40,34 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
           {/* Progress Bar */}
           <div className='relative flex items-center justify-center pt-2'>
             <div
-              className={`z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 ${step === 1 ? 'border-blue-500 bg-white text-blue-500' : 'border-blue-200 bg-blue-300 font-bold text-white'} font-bold`}
+              className={`z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 ${
+                step >= 1
+                  ? step === 2 || step === 3
+                    ? 'border-blue-200 bg-blue-300 text-white font-bold'
+                    : 'border-blue-500 bg-white text-blue-500'
+                  : 'border-gray-500 bg-gray-200 text-gray-500'
+              }`}
             >
               1
             </div>
-            <div className={`h-[2px] w-12 ${step === 2 ? 'bg-blue-300' : 'bg-gray-500'}`}></div>
+            <div className={`h-[2px] w-12 ${step >= 2 ? 'bg-blue-300' : 'bg-gray-500'}`}></div>
             <div
-              className={`z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 ${step === 2 ? 'border-blue-500 bg-white text-blue-500' : 'border-gray-500 bg-gray-200 text-gray-500'} font-bold`}
+              className={`z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 ${
+                step === 2
+                  ? 'border-blue-500 bg-white text-blue-500 font-bold'
+                  : step === 3
+                  ? 'border-blue-200 bg-blue-300 text-white font-bold'
+                  : 'border-gray-500 bg-gray-200 text-gray-500'
+              }`}
             >
               2
             </div>
-            <div className='h-[2px] w-12 bg-gray-500'></div>
-            <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-gray-500 bg-gray-200 font-bold text-gray-500'>
+            <div className={`h-[2px] w-12 ${step === 3 ? 'bg-blue-300' : 'bg-gray-500'}`}></div>
+            <div
+              className={`z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 ${
+                step === 3 ? 'border-blue-500 bg-white text-blue-500 font-bold' : 'border-gray-500 bg-gray-200 text-gray-500'
+              }`}
+            >
               3
             </div>
           </div>
@@ -63,24 +81,31 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
               </h2>
               <div className='flex w-full justify-around'>
                 <button
-                  className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${selected === 'project' ? 'border-blue-300 bg-blue-300 text-white' : 'border-transparent bg-gray-200 text-black hover:border-blue-500'}`}
+                  className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
+                    selected === 'project'
+                      ? 'border-blue-300 bg-blue-300 text-white'
+                      : 'border-transparent bg-gray-200 text-black hover:border-blue-500'
+                  }`}
                   onClick={() => handleClick('project')}
                 >
                   <FolderIcon className='mr-2' /> PLC Project
                 </button>
                 <button
-                  className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${selected === 'library' ? 'border-blue-300 bg-blue-300 text-white' : 'border-transparent bg-gray-200 text-black hover:border-blue-500'}`}
+                  className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
+                    selected === 'library'
+                      ? 'border-blue-300 bg-blue-300 text-white'
+                      : 'border-transparent bg-gray-200 text-black hover:border-blue-500'
+                  }`}
                   onClick={() => handleClick('library')}
                 >
                   <BookIcon className='mr-2' /> Library
                 </button>
               </div>
             </>
-          ) : (
-            // Step 2 Content
+          ) : step === 2 ? (
             <>
               <div className='mb-4'>
-                <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white  select-none'>
+                <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white select-none'>
                   Give a name for the project:
                 </h2>
                 <div className={`relative flex items-center focus-within:border-brand ${inputStyle}`}>
@@ -106,41 +131,82 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
                 </div>
               </div>
             </>
+          ) : (
+            <>
+              <h2 className='mb-2 text-center text-lg font-semibold text-neutral-1000 dark:text-white select-none'>
+                Review your project details and confirm:
+              </h2>
+              <p className='text-center text-neutral-700 dark:text-neutral-300'>Project Name: {projectName}</p>
+              <p className='text-center text-neutral-700 dark:text-neutral-300'>Directory: User/userName/data/plcproject</p>
+            </>
           )}
         </div>
 
         {/* Bottom Buttons */}
         <div className='mt-4 flex flex-row justify-center space-x-4'>
           {step === 1 && (
-            <button
-              type='button'
-              className={cn(
-                'h-8 w-52  items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100',
-              )}
-              onClick={onClose}
-            >
-              Cancel
-            </button>
+            <>
+              <button
+                type='button'
+                className={cn(
+                  'h-8 w-52  items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100',
+                )}
+                onClick={onClose}
+              >
+                Cancel
+              </button>
+              <button
+                type='button'
+                className={`h-8 w-52 items-center rounded-lg text-center font-medium text-white ${
+                  selected ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'
+                }`}
+                onClick={handleNext}
+                disabled={!selected}
+              >
+                Next
+              </button>
+            </>
           )}
           {step === 2 && (
-            <button
-              type='button'
-              className={cn(
-                'h-8 w-52  items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100',
-              )}
-              onClick={() => setStep(1)}
-            >
-              Prev
-            </button>
+            <>
+              <button
+                type='button'
+                className={cn(
+                  'h-8 w-52 items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100',
+                )}
+                onClick={() => setStep(1)}
+              >
+                Prev
+              </button>
+              <button
+                type='button'
+                className={`h-8 w-52 items-center rounded-lg text-center font-medium text-white bg-brand`}
+                onClick={handleNext}
+              >
+                Next
+              </button>
+            </>
           )}
-          <button
-            type='button'
-            className={`h-8 w-52 items-center rounded-lg text-center font-medium text-white ${selected ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'}`}
-            onClick={handleNext}
-            disabled={!selected}
-          >
-            Next
-          </button>
+          {step === 3 && (
+            <>
+              <button
+                type='button'
+                className={cn(
+                  'h-8 w-52 items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100',
+                )}
+                onClick={() => setStep(2)}
+              >
+                Prev
+              </button>
+              <button
+                type='button'
+                className={`h-8 w-52 items-center rounded-lg text-center font-medium text-white bg-brand`}
+                onClick={onClose}
+              >
+                Create Project
+              </button>
+            </>
+          )}
         </div>
       </ModalContent>
     </Modal>
