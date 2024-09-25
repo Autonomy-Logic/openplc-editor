@@ -122,8 +122,7 @@ const TaskEditor = () => {
 
     console.log('taskData', taskData)
   }
-  /*************  ✨ Codeium Command ⭐  *************/
-  /******  4f936eba-8f90-4acc-9a4d-724087fd7c17  *******/ const handleDeleteTask = () => {
+  const handleDeleteTask = () => {
     if (editorTasks.display === 'code') return
 
     const selectedRow = parseInt(editorTasks.selectedRow)
