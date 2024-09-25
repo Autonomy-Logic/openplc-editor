@@ -62,7 +62,6 @@ const GlobalVariablesEditor = () => {
         setEditorVariables({
           display: editor.variable.display,
         })
-    console.log('table data ', tableData)
   }, [editor])
 
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {

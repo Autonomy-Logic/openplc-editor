@@ -34,7 +34,6 @@ const TaskEditor = () => {
   useEffect(() => {
     const tasksToTable = tasks.filter((task) => task.name)
     setTaskData(tasksToTable)
-    console.log('taskData', taskData)
   }, [editor, tasks])
 
   useEffect(() => {
@@ -120,7 +119,6 @@ const TaskEditor = () => {
       selectedRow: selectedRow + 1,
     })
 
-    console.log('taskData', taskData)
   }
   const handleDeleteTask = () => {
     if (editorTasks.display === 'code') return
@@ -145,7 +143,6 @@ const TaskEditor = () => {
       selectedRow: parseInt(row.id),
     })
   }
-  console.log('taskData', taskData)
   return (
     <div aria-label='Tasks editor container' className='flex  w-full flex-shrink-0 flex-col gap-4 '>
       <div aria-label='Tasks editor actions' className='relative flex h-8 w-full min-w-[1035px]'>

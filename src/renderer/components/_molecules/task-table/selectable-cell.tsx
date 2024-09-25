@@ -86,7 +86,6 @@ const SelectableIntervalCell = ({
     const regex = /T#(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)min)?(?:(\d+)s)?(?:(\d+)ms)?(?:(\d+)µs)?/
 
     const match = initialValue?.match(regex)
-    console.log('Regex Match:', match)
 
     if (match) {
       const [, day = 0, hour = 0, min = 0, sec = 0, ms = 0, µs = 0] = match.map((v) => (v ? Number(v) : 0))
@@ -104,10 +103,6 @@ const SelectableIntervalCell = ({
       setTempValues(newValues)
     }
   }, [initialValue])
-
-  useEffect(() => {
-    console.log('Current Values:', values)
-  }, [values])
 
   const formattedInterval = useMemo(() => {
     const { day, hour, min, sec, ms, µs } = values

@@ -26,7 +26,6 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
     if (cellValue === initialValue) return
 
     const res = table.options.meta?.updateData(index, id, cellValue)
-    // console.log('Update Data Response:', res)
 
     if (res?.ok) return
 

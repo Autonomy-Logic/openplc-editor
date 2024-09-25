@@ -88,7 +88,7 @@ const WorkspaceScreen = () => {
       if (ref.current) ref.current[action]()
     })
   }, [collapseAll])
-  console.log('editor', editor)
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
