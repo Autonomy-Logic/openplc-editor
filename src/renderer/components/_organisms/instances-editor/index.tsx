@@ -8,7 +8,7 @@ import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 
 import { TableActionButton } from '../../_atoms/buttons/tables-actions'
-import InstancesTable from '../../_molecules/instances-table'
+import { InstancesTable } from '../../_molecules/instances-table'
 
 const InstancesEditor = () => {
   const ROWS_NOT_SELECTED = -1

@@ -8,7 +8,7 @@ import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 
 import { TableActionButton } from '../../_atoms/buttons/tables-actions'
-import TaskTable from '../../_molecules/task-table'
+import { TaskTable } from '../../_molecules/task-table'
 
 const TaskEditor = () => {
   const ROWS_NOT_SELECTED = -1
