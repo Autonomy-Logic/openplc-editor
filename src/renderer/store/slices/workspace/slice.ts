@@ -307,11 +307,29 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    updateDatatype: ({ name, derivation, dataToUpdate}) => {
-      setState(produce(({workspace}:WorkspaceSlice) => {
-        const _dataTypeExists = workspace.projectData.dataTypes.find((datatype) => datatype.name === name)
-        console.log(derivation, dataToUpdate)
-        }))
+    /**
+     * Function to update a unique data type.
+     * @param name - string
+     * @param derivation - 'array'
+     * @param dataToUpdate - Object contain data to update a data type
+     */
+    updateDatatype: ({ name, derivation, dataToUpdate }) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const _dataTypeExists = workspace.projectData.dataTypes.findIndex((datatype) => datatype.name === name)
+          type AnyObject = { [key: string]: unknown }
+          function _filterUndefined<T extends AnyObject>(source: T): Partial<T> {
+            return Object.fromEntries(Object.entries(source).filter((_, value) => value !== undefined)) as Partial<T>
+          }
+          // TODO: Need to validate what key have an undefined value and filter it from the original object
+          // // @ts-expect-error Index is not a number
+          if(_dataTypeExists === -1) return
+          let dataTypeToBeUpdated = workspace.projectData.dataTypes[_dataTypeExists] as PLCArrayDatatype
+          dataTypeToBeUpdated = dataToUpdate
+          workspace.projectData.dataTypes[_dataTypeExists] = dataTypeToBeUpdated
+          console.log(name, derivation, dataToUpdate, dataTypeToBeUpdated)
+        }),
+      )
     },
     createArrayDimension: (dataToCreateDimension) => {
       setState(

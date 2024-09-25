@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import * as Tabs from '@radix-ui/react-tabs'
+// import { PLCDataType } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
@@ -88,6 +89,8 @@ const WorkspaceScreen = () => {
     })
   }, [collapseAll])
 
+  console.log('datatype ->', projectData.dataTypes)
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -137,7 +140,7 @@ const WorkspaceScreen = () => {
                     <>
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
-                          <DataTypeEditor data={projectData.dataTypes.find((datatype) => datatype['name'] === editor.meta.name)} />{' '}
+                          <DataTypeEditor dataTypeName={editor.meta.name}  />{' '}
                         </div>
                       )}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (

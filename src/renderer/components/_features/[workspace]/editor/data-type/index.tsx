@@ -1,17 +1,38 @@
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { ArrayDataType } from '@root/renderer/components/_molecules/data-types/array'
+import { useOpenPLCStore } from '@root/renderer/store'
 // import { EnumeratorDataType } from '@root/renderer/components/_molecules/data-types/enumerated'
 // import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCArrayDatatype, PLCDataType } from '@root/types/PLC/open-plc'
-import { ComponentPropsWithoutRef, useState } from 'react'
+import { PLCDataType } from '@root/types/PLC/open-plc'
+import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 // import { StructureDataType } from '@root/renderer/components/_molecules/data-types/structure'
 
 type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
-  data: PLCDataType
+  dataTypeName: string
+  data?: PLCDataType
 }
 
-const DataTypeEditor = ({ data, ...rest }: DatatypeEditorProps) => {
-  const [editorContent, _setEditorContent] = useState<PLCDataType>(data)
+const DataTypeEditor = ({ dataTypeName,data, ...rest }: DatatypeEditorProps) => {
+  const {
+    workspace: {
+      projectData: { dataTypes },
+    },
+  } = useOpenPLCStore()
+  const [editorContent, setEditorContent] = useState<PLCDataType>({
+    name: '',
+    derivation: 'array',
+    baseType: 'bool',
+    dimensions: [{ dimension: '' }],
+    initialValue: '',
+  })
+
+  useEffect(() => {
+    const dataTypeIndex = dataTypes.findIndex((dataType) => dataType.name === dataTypeName)
+    if (dataTypeIndex !== -1) {
+      const dataType = dataTypes[dataTypeIndex]
+      setEditorContent(dataType)
+    }
+  }, [dataTypes, dataTypeName])
 
   return (
     <div aria-label='Data type editor container' className='flex h-full w-full flex-col items-center p-2' {...rest}>
@@ -31,7 +52,7 @@ const DataTypeEditor = ({ data, ...rest }: DatatypeEditorProps) => {
             className='h-[30px] w-full max-w-[385px] rounded-lg border border-neutral-400 bg-white focus-within:border-brand dark:border-neutral-800 dark:bg-neutral-950'
           >
             <InputWithRef
-              value={data.name}
+              value={editorContent.name}
               id='data-type-name'
               aria-label='data-type-name'
               className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
@@ -48,7 +69,7 @@ const DataTypeEditor = ({ data, ...rest }: DatatypeEditorProps) => {
           <Select aria-label='data-type-derivation'>
             <SelectTrigger
               withIndicator
-              placeholder={data.derivation}
+              placeholder={editorContent.derivation}
               className='flex h-[30px] w-full max-w-[385px] items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
             />
             <SelectContent
@@ -86,7 +107,7 @@ const DataTypeEditor = ({ data, ...rest }: DatatypeEditorProps) => {
         </div>
       </div>
       <div aria-label='Data type content container' className='h-full w-full'>
-        {data.derivation === 'array' && <ArrayDataType data={editorContent as PLCArrayDatatype} />}
+        {editorContent.derivation === 'array' && <ArrayDataType data={editorContent} />}
         {/* {data.derivation === 'enumerated' && <EnumeratorDataType />} */}
       </div>
     </div>

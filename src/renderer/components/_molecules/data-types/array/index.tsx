@@ -1,6 +1,9 @@
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { baseTypeSchema, PLCArrayDatatype } from '@root/types/PLC/open-plc'
-import { ComponentPropsWithoutRef, useState } from 'react'
+import _ from 'lodash'
+// import _ from 'lodash'
+import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
 import { DimensionsTable } from './table'
 
@@ -11,9 +14,23 @@ type ArrayDatatypeProps = ComponentPropsWithoutRef<'div'> & {
 const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const baseTypes = baseTypeSchema.options
 
+  const {
+    workspaceActions: { updateDatatype },
+  } = useOpenPLCStore()
   const ROWS_NOT_SELECTED = -1
   const [arrayTable, setArrayTable] = useState<{ selectedRow: string }>({ selectedRow: ROWS_NOT_SELECTED.toString() })
-  const [_value, _setValue] = useState()
+  const [initialValueData, setInitialValueData] = useState<string>('')
+
+  useEffect(() => {
+    setInitialValueData(data.initialValue)
+  }, [data])
+
+  const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
+    _.debounce(
+      () => updateDatatype({ name: data.name, derivation: 'array', dataToUpdate: { initialValue: e.target.value } }),
+      1000,
+    )()
+  }
   return (
     <div aria-label='Array data type container' className='flex h-full w-full flex-col gap-4 bg-transparent' {...rest}>
       <div aria-label='Data type content actions container' className='flex h-fit w-full gap-8'>
@@ -22,7 +39,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
             <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
               Base type
             </label>
-            <Select aria-label='Array data type base type select' id='select-base-type'>
+            <Select aria-label='Array data type base type select'>
               <SelectTrigger
                 withIndicator
                 placeholder='Base type'
@@ -37,6 +54,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
                 {baseTypes.map((type) => {
                   return (
                     <SelectItem
+                      onClick={() => console.log('Clicked')}
                       value={type}
                       className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
                     >
@@ -58,9 +76,10 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
             <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
               Initial Value
             </label>
-            <input
-              // onChange={handleChange}
-              value={data?.initialValue}
+            <InputWithRef
+              onChange={handleInitialValueChange}
+              // value={initialValueData}
+              defaultValue={initialValueData}
               className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
             />
           </div>

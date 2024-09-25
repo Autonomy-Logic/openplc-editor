@@ -1,5 +1,5 @@
 import {
-  PLCArrayDatatypeSchema,
+  baseTypeSchema,
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
@@ -31,6 +31,14 @@ const pouDTOSchema = z.discriminatedUnion('type', [
   }),
 ])
 type PouDTO = z.infer<typeof pouDTOSchema>
+
+const updateDataTypeDTO = z.object({
+  name: z.string().optional(),
+  derivation: z.literal('array').optional(),
+  baseType: baseTypeSchema.optional(),
+  initialValue: z.string().optional(),
+  dimensions: z.array(z.object({ dimension: z.string() })).optional(),
+})
 
 const systemConfigsSchema = z.object({
   OS: z.enum(['win32', 'linux', 'darwin', '']),
@@ -100,7 +108,7 @@ const workspaceActionsSchema = z.object({
   updateDatatype: z.function().args(z.object({
     name: z.string(),
     derivation: z.enum(['array', 'structure', 'enumerated']),
-    dataToUpdate: PLCArrayDatatypeSchema.partial()
+    dataToUpdate: updateDataTypeDTO
   })).returns(z.void()),
   createArrayDimension: z.function().args(z.object({ name: z.string(), derivation: z.enum(['array', 'enumerated', 'structure'])})).returns(z.void())
 })

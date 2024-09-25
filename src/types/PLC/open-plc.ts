@@ -25,20 +25,31 @@ const baseTypeSchema = z.enum([
 ])
 type BaseType = z.infer<typeof baseTypeSchema>
 
+const _PLCTesting = z.map(
+  z.union([
+    z.literal('name'),
+    z.literal('derivation'),
+    z.literal('baseType'),
+    z.literal('initialValue'),
+    z.literal('dimensions'),
+  ]),
+  z.union([z.string(), z.literal('array'), baseTypeSchema, z.string(), z.array(z.object({ dimension: z.string() }))]),
+)
+
 const PLCArrayDatatypeSchema = z.object({
   name: z.string(),
   derivation: z.literal('array'),
   baseType: baseTypeSchema,
   initialValue: z.string(),
-  dimensions: z.array(z.object({dimension: z.string()}))
+  dimensions: z.array(z.object({ dimension: z.string() })),
 })
 
 type PLCArrayDatatype = z.infer<typeof PLCArrayDatatypeSchema>
 
-const PLCDataTypeSchema =  z.discriminatedUnion('derivation', [
+const PLCDataTypeSchema = z.discriminatedUnion('derivation', [
   PLCArrayDatatypeSchema,
-  z.object({ name: z.string(),derivation: z.literal('structure') }),
-  z.object({ name: z.string(),derivation: z.literal('enumerated') }),
+  z.object({ name: z.string(), derivation: z.literal('structure') }),
+  z.object({ name: z.string(), derivation: z.literal('enumerated') }),
 ])
 
 type PLCDataType = z.infer<typeof PLCDataTypeSchema>
@@ -114,9 +125,7 @@ type PLCFunctionBlock = z.infer<typeof PLCFunctionBlockSchema>
 
 const PLCProjectDataSchema = z.object({
   projectName: z.string(),
-  dataTypes: z.array(
-   PLCDataTypeSchema
-  ),
+  dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(
     z.discriminatedUnion('type', [
       z.object({
