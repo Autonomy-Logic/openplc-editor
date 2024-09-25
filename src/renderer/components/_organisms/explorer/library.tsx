@@ -1,7 +1,8 @@
-import { BookIcon, MagnifierIcon } from '@root/renderer/assets'
+import { BookIcon, CloseIcon, MagnifierIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { ReactNode, useState } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 
+import { InputWithRef } from '../../_atoms'
 import { LibraryFile, LibraryFolder, LibraryRoot } from '../../_molecules'
 
 type ILibraryFileProps = {
@@ -18,11 +19,34 @@ type ILibraryRootProps = {
 }
 
 const Library = () => {
-  const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
-
   const {
     libraries: { system },
   } = useOpenPLCStore()
+
+  const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
+  const [isSearchActive, setIsSearchActive] = useState(false)
+  const [filterText, setFilterText] = useState('')
+  const [shouldRenderInput, setShouldRenderInput] = useState(false)
+
+  useEffect(() => {
+    if (isSearchActive) {
+      setShouldRenderInput(true)
+    } else {
+      const timer = setTimeout(() => {
+        setShouldRenderInput(false)
+      }, 500)
+
+      return () => clearTimeout(timer)
+    }
+  }, [isSearchActive])
+
+  const filteredLibraries = system.filter((library) =>
+    library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
+  )
+
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFilterText(e.target.value.toLowerCase())
+  }
 
   return (
     <div id='library-container' className='flex h-full w-full flex-col pr-2'>
@@ -33,34 +57,82 @@ const Library = () => {
           className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 dark:bg-brand-dark'
         >
           <BookIcon size='sm' />
-          <span
-            id='project-name'
-            className='pl-1 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'
-          >
-            Library
-          </span>
+          {!isSearchActive && (
+            <span
+              id='project-name'
+              className='pl-1 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'
+            >
+              Library
+            </span>
+          )}
         </div>
-        <div id='search-container' className='flex h-8 w-10 items-center justify-center rounded-lg bg-brand'>
-          <MagnifierIcon />
+
+        <div
+          id='search-container'
+          className={`relative flex h-8 items-center justify-start overflow-hidden rounded-lg transition-all duration-500 ease-in-out ${isSearchActive ? 'w-full' : 'w-10'}`}
+        >
+          {shouldRenderInput && (
+            <div
+              className={`absolute left-0 flex w-full items-center justify-between bg-neutral-100 transition-all duration-500 ease-in-out dark:bg-brand-dark ${
+                isSearchActive ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              <InputWithRef
+                id='Search-File'
+                type='text'
+                placeholder='Search'
+                className='h-8 w-full px-2 bg-neutral-100 font-caption text-xs font-medium focus:outline-none dark:bg-brand-dark'
+                value={filterText}
+                onChange={handleFilterChange}
+              />
+            </div>
+          )}
+          <div className='absolute right-0 flex h-8 w-10 flex-shrink-0 items-center justify-center bg-brand'>
+            {isSearchActive ? (
+              <CloseIcon
+                className='w-4 cursor-pointer stroke-white'
+                onClick={() => {
+                  setFilterText('')
+                  setIsSearchActive(false)
+                }}
+              />
+            ) : (
+              <MagnifierIcon
+                className='w-6 cursor-pointer'
+                onClick={() => {
+                  setIsSearchActive(!isSearchActive)
+                  setFilterText('')
+                }}
+              />
+            )}
+          </div>
         </div>
       </div>
+
       {/* Data display */}
       <div id='library-tree-container' className='flex h-full w-full flex-col overflow-auto pr-1'>
         <LibraryRoot>
-          {system.map((library) => (
-            <LibraryFolder key={library.name} label={library.name}>
-              {library.pous.map((pou) => (
-                <LibraryFile
-                  key={pou.name}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData('text/plain', pou.body)
-                  }}
-                  label={pou.name}
-                  isSelected={selectedFileKey === pou.name}
-                  onSelect={() => setSelectedFileKey(pou.name)}
-                />
-              ))}
+          {filteredLibraries.map((library) => (
+            <LibraryFolder
+              key={library.name}
+              label={library.name}
+              initiallyOpen={false}
+              shouldBeOpen={filterText.length > 0}
+            >
+              {library.pous
+                .filter((pou) => pou.name.toLowerCase().includes(filterText))
+                .map((pou) => (
+                  <LibraryFile
+                    key={pou.name}
+                    label={pou.name}
+                    isSelected={selectedFileKey === pou.name}
+                    onSelect={() => setSelectedFileKey(pou.name)}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', pou.body)
+                    }}
+                  />
+                ))}
             </LibraryFolder>
           ))}
         </LibraryRoot>
