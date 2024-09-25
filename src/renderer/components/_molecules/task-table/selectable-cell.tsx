@@ -77,7 +77,7 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
   const [tempValues, setTempValues] = useState(values)
 
   useEffect(() => {
-    const regex = /T#(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?(?:(\d+(?:\.\d+)?)ms)?(?:(\d+(?:\.\d+)?)µs)?/
+    const regex = /T#(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)min)?(?:(\d+)s)?(?:(\d+(?:\.\d+)?)ms)?(?:(\d+(?:\.\d+)?)µs)?/
 
     const match = initialValue?.match(regex)
     console.log('Regex Match:', match)
@@ -103,41 +103,39 @@ const SelectableIntervalCell = ({ getValue, row: { index }, column: { id }, tabl
     console.log('Current Values:', values)
   }, [values])
 
+
   const formattedInterval = useMemo(() => {
     const { day, hour, min, sec, ms, µs } = values
     const totalMs = ms + µs / 1000
 
     const formattedMs = totalMs % 1 === 0 ? `${Math.floor(totalMs)}ms` : `${totalMs}ms`
 
-    return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}m` : ''}${sec > 0 ? `${sec}s` : ''}${formattedMs === '0ms' ? '' : formattedMs}`
+    return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}min` : ''}${sec > 0 ? `${sec}s` : ''}${formattedMs === '0ms' ? '' : formattedMs}`
   }, [values])
   const handleSave = () => {
-    const updatedValues = { ...tempValues }
-
+    const updatedValues = { ...tempValues };
+  
+    
     if (tempValues.µs >= 1000) {
-      const additionalMs = Math.floor(tempValues.µs / 1000)
-      updatedValues.ms += additionalMs
-      updatedValues.µs = tempValues.µs % 1000
+      const additionalMs = Math.floor(tempValues.µs / 1000);
+      updatedValues.ms += additionalMs;
+      updatedValues.µs = tempValues.µs % 1000;
     }
-
+  
     if (updatedValues.ms >= 1000) {
-      const additionalSec = Math.floor(updatedValues.ms / 1000)
-      updatedValues.sec += additionalSec
-      updatedValues.ms = updatedValues.ms % 1000
+      const additionalSec = Math.floor(updatedValues.ms / 1000);
+      updatedValues.sec += additionalSec;
+      updatedValues.ms = updatedValues.ms % 1000;
     }
-
-    setValues(updatedValues)
-    setTempValues(updatedValues)
-
-    const totalMs = updatedValues.ms + updatedValues.µs / 1000
-    const formattedMs = totalMs % 1 === 0 ? `${Math.floor(totalMs)}ms` : `${totalMs}ms`
-
-    const formattedInterval = `T#${updatedValues.day > 0 ? `${updatedValues.day}d` : ''}${updatedValues.hour > 0 ? `${updatedValues.hour}h` : ''}${updatedValues.min > 0 ? `${updatedValues.min}m` : ''}${updatedValues.sec > 0 ? `${updatedValues.sec}s` : ''}${formattedMs === '0ms' ? '' : formattedMs}`
-
-    table.options.meta?.updateData(index, id, formattedInterval)
-
-    setIntervalModalIsOpen(false)
-  }
+  
+    setValues(updatedValues);
+    setTempValues(updatedValues);
+ 
+    const formattedInterval = `T#${updatedValues.day > 0 ? `${updatedValues.day}d` : ''}${updatedValues.hour > 0 ? `${updatedValues.hour}h` : ''}${updatedValues.min > 0 ? `${updatedValues.min}min` : ''}${updatedValues.sec > 0 ? `${updatedValues.sec}s` : ''}${updatedValues.ms > 0 || updatedValues.µs > 0 ? `${updatedValues.ms + updatedValues.µs / 1000}ms` : ''}`;
+  
+    table.options.meta?.updateData(index, id, formattedInterval);
+    setIntervalModalIsOpen(false);
+  };
 
   const handleCancel = () => {
     setTempValues(values)
