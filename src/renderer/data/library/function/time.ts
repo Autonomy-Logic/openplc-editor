@@ -315,4 +315,4 @@ const Time: TimeLibrary = {
   ],
 }
 
-export { Time }
+export { Time, TimeLibrarySchema }

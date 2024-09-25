@@ -190,4 +190,4 @@ const Comparison: ComparisonLibrary = {
   ],
 }
 
-export { Comparison }
+export { Comparison, ComparisonLibrarySchema }
