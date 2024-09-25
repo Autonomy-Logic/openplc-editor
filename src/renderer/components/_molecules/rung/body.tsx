@@ -10,7 +10,6 @@ import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
 import { BlockNode } from '../../_atoms/react-flow/custom-nodes/block'
 import { CoilNode } from '../../_atoms/react-flow/custom-nodes/coil'
 import { ContactNode } from '../../_atoms/react-flow/custom-nodes/contact'
-import { BasicNodeData } from '../../_atoms/react-flow/custom-nodes/utils/types'
 import BlockElement from '../../_features/[workspace]/editor/graphical/elements/block'
 import CoilElement from '../../_features/[workspace]/editor/graphical/elements/coil'
 import ContactElement from '../../_features/[workspace]/editor/graphical/elements/contact'
@@ -88,10 +87,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    * Update the selected nodes array when the nodes array changes
    */
   useEffect(() => {
-    console.log(
-      'rungLocal.nodes.filter((node) => node.selected).length > 0',
-      rungLocal.nodes.filter((node) => node.selected).length > 0,
-    )
     const selectedNodes = rungLocal.nodes.filter((node) => node.selected)
     setSelectedNodes(selectedNodes)
   }, [
@@ -353,7 +348,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         {modalNode?.type === 'block' && (
           <BlockElement
             onClose={handleModalClose}
-            node={modalNode as BlockNode<BasicNodeData>}
+            node={modalNode as BlockNode<object>}
             isOpen={modalOpen}
             onOpenChange={setModalOpen}
           />

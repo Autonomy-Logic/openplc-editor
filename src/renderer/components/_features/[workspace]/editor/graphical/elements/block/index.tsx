@@ -1,6 +1,12 @@
 import * as Switch from '@radix-ui/react-switch'
 import { InputWithRef } from '@root/renderer/components/_atoms'
-import { BlockNode, DEFAULT_BLOCK_TYPE } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
+import {
+  BlockNode,
+  BlockNodeData,
+  BlockNodeElement,
+  BlockVariant,
+  DEFAULT_BLOCK_TYPE,
+} from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
 import {
   Modal,
   ModalContent,
@@ -12,18 +18,20 @@ import { Dispatch, SetStateAction, useState } from 'react'
 import ArrowButtonGroup from '../arrow-button-group'
 import { ModalBlockLibrary } from './library'
 
-type BlockElementProps <V> = {
+type BlockElementProps<T> = {
   isOpen: boolean
   onOpenChange: Dispatch<SetStateAction<boolean>>
   onClose?: () => void
-  node?: BlockNode<V>
+  node?: BlockNode<T>
 }
 
-const BlockElement = <V extends object> ({ isOpen, onOpenChange, onClose, node }: BlockElementProps<V>) => {
+const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, node }: BlockElementProps<T>) => {
+  const blockVariant = node?.data.variant as BlockVariant
+
   const [selectedFile, setSelectedFile] = useState<{ image: string; text: string } | null>(null)
   const [formState, setFormState] = useState<{ name: string; inputs: string; executionOrder: string }>({
-    name: DEFAULT_BLOCK_TYPE.name,
-    inputs: (node?.data.inputHandles.length || 0).toString(),
+    name: blockVariant?.name || DEFAULT_BLOCK_TYPE.name,
+    inputs: blockVariant?.variables.filter((variable) => variable.class === 'input').length.toString() || '0',
     executionOrder: '',
   })
 
@@ -144,11 +152,15 @@ const BlockElement = <V extends object> ({ isOpen, onOpenChange, onClose, node }
             </label>
             <div
               id='block-preview'
-              className='flex flex-grow items-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'
+              className='flex h-[330px] items-center justify-center rounded-lg border-[2px] border-brand-dark bg-transparent dark:border-neutral-850'
             >
-              {selectedFile?.image && (
-                <img draggable='false' className='h-fit w-full select-none' src={selectedFile.image} alt='' />
-              )}
+              <BlockNodeElement
+                data={node?.data as BlockNodeData<object>}
+                height={node?.height || 0}
+                selected={false}
+                disabled={true}
+                scale={310 / ((node?.height || 310) <= 310 ? 310 : node?.height || 310)}
+              />
             </div>
           </div>
         </div>
