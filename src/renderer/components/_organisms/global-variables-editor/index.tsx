@@ -96,6 +96,7 @@ const GlobalVariablesEditor = () => {
         data: {
           name: 'GlobalVar',
           type: { definition: 'base-type', value: 'dint' },
+          class: 'global',
           location: '',
           documentation: '',
           debug: false,

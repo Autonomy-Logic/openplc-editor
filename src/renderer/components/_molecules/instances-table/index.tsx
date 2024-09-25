@@ -122,7 +122,7 @@ const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstances
     },
   })
   return (
-    <Table context='Instances' className='mr-1'>
+    <Table context='Instances' className='mr-1 w-full'>
       <TableHeader ref={tableHeaderRef}>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow className='select-none' key={headerGroup.id}>

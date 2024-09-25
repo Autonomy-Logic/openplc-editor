@@ -148,7 +148,7 @@ const TaskTable = ({ tableData, selectedRow, handleRowClick }: PLCTaskTableProps
     },
   })
   return (
-    <Table context='Tasks' className='mr-1'>
+    <Table context='Tasks' className='mr-1 w-full'>
       <TableHeader ref={TaskTableHeaderRef}>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow className='select-none' key={headerGroup.id}>

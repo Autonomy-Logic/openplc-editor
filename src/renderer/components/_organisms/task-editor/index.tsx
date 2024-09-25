@@ -80,8 +80,8 @@ const TaskEditor = () => {
         data: {
           name: 'Task',
           triggering: 'Cyclic',
+          interval: 'T#0d0h0min0s20ms0µs',
           priority: 0,
-          interval: '0',
         },
       })
       updateModelTasks({
@@ -103,7 +103,7 @@ const TaskEditor = () => {
         data: {
           name: 'Task',
           triggering: 'Cyclic',
-          interval: '0',
+          interval: 'T#0d0h0min0s20ms0µs',
           priority: 0,
         },
       })

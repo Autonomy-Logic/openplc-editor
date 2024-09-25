@@ -158,7 +158,7 @@ const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVar
   })
 
   return (
-    <Table context='Variables' className='mr-1'>
+    <Table context='Variables' className='mr-1 w-full'>
       <TableHeader ref={tableHeaderRef}>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow className='select-none' key={headerGroup.id}>

@@ -83,7 +83,7 @@ const SelectableIntervalCell = ({
   const [tempValues, setTempValues] = useState(values)
 
   useEffect(() => {
-    const regex = /T#(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)min)?(?:(\d+)s)?(?:(\d+(?:\.\d+)?)ms)?(?:(\d+(?:\.\d+)?)µs)?/
+    const regex = /T#(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)min)?(?:(\d+)s)?(?:(\d+)ms)?(?:(\d+)µs)?/
 
     const match = initialValue?.match(regex)
     console.log('Regex Match:', match)
@@ -96,8 +96,8 @@ const SelectableIntervalCell = ({
         hour,
         min,
         sec,
-        ms: Number(ms) + Number(µs) / 1000,
-        µs: Number(µs),
+        ms,
+        µs,
       }
 
       setValues(newValues)
@@ -111,11 +111,9 @@ const SelectableIntervalCell = ({
 
   const formattedInterval = useMemo(() => {
     const { day, hour, min, sec, ms, µs } = values
-    const totalMs = ms + µs / 1000
+  
 
-    const formattedMs = totalMs % 1 === 0 ? `${Math.floor(totalMs)}ms` : `${totalMs}ms`
-
-    return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}min` : ''}${sec > 0 ? `${sec}s` : ''}${formattedMs === '0ms' ? '' : formattedMs}`
+    return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}m` : ''}${sec > 0 ? `${sec}s` : ''}${ms > 0 ? `${ms}ms` : ''}${µs > 0 ? `${µs}µs` : ''}`
   }, [values])
   const handleSave = () => {
     const updatedValues = { ...tempValues }
@@ -135,7 +133,7 @@ const SelectableIntervalCell = ({
     setValues(updatedValues)
     setTempValues(updatedValues)
 
-    const formattedInterval = `T#${updatedValues.day > 0 ? `${updatedValues.day}d` : ''}${updatedValues.hour > 0 ? `${updatedValues.hour}h` : ''}${updatedValues.min > 0 ? `${updatedValues.min}min` : ''}${updatedValues.sec > 0 ? `${updatedValues.sec}s` : ''}${updatedValues.ms > 0 || updatedValues.µs > 0 ? `${updatedValues.ms + updatedValues.µs / 1000}ms` : ''}`
+    const formattedInterval = `T#${updatedValues.day > 0 ? `${updatedValues.day}d` : ''}${updatedValues.hour > 0 ? `${updatedValues.hour}h` : ''}${updatedValues.min > 0 ? `${updatedValues.min}min` : ''}${updatedValues.sec > 0 ? `${updatedValues.sec}s` : ''}${updatedValues.ms > 0 ? `${updatedValues.ms}ms` : ''}${updatedValues.µs > 0 ? `${updatedValues.µs}µs` : ''}`
 
     table.options.meta?.updateData(index, id, formattedInterval)
     setIntervalModalIsOpen(false)
@@ -163,7 +161,7 @@ const SelectableIntervalCell = ({
         className='flex h-8 w-full cursor-pointer items-center justify-center outline-none dark:hover:bg-neutral-900'
       >
         <div
-          className={cn('flex h-full w-full cursor-pointer justify-center outline-none p-2', {
+          className={cn('flex h-full w-full cursor-pointer justify-center p-2 outline-none', {
             'pointer-events-none': !editable,
           })}
         >
