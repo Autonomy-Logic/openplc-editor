@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { TableActionButton } from '../../_atoms/buttons/tables-actions'
 import InstancesTable from '../../_molecules/instances-table'
 
-export default function InstancesEditor() {
+const InstancesEditor = () => {
   const ROWS_NOT_SELECTED = -1
   const {
     editor,
@@ -221,11 +221,7 @@ export default function InstancesEditor() {
         </div>
       </div>
       {editorInstances.display === 'table' ? (
-        <div
-          aria-label='instances editor table container'
-          className=''
-          style={{ scrollbarGutter: 'stable' }}
-        >
+        <div aria-label='instances editor table container' className='' style={{ scrollbarGutter: 'stable' }}>
           <InstancesTable
             tableData={instanceData}
             handleRowClick={handleRowClick}
@@ -238,3 +234,5 @@ export default function InstancesEditor() {
     </div>
   )
 }
+
+export { InstancesEditor }

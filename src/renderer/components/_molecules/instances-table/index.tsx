@@ -43,7 +43,7 @@ const columns = [
   }),
 ]
 
-export default function InstancesTable({ tableData, handleRowClick, selectedRow }: PLCInstancesTableProps) {
+const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstancesTableProps) => {
   const {
     workspaceActions: { updateInstance },
   } = useOpenPLCStore()
@@ -181,3 +181,5 @@ export default function InstancesTable({ tableData, handleRowClick, selectedRow 
     </Table>
   )
 }
+
+export { InstancesTable }

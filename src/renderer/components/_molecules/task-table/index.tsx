@@ -61,7 +61,7 @@ type PLCTaskTableProps = {
   handleRowClick: (row: HTMLTableRowElement) => void
 }
 
-export default function TaskTable({ tableData, selectedRow, handleRowClick }: PLCTaskTableProps) {
+const TaskTable = ({ tableData, selectedRow, handleRowClick }: PLCTaskTableProps) => {
   const {
     workspaceActions: { updateTask },
   } = useOpenPLCStore()
@@ -201,3 +201,5 @@ export default function TaskTable({ tableData, selectedRow, handleRowClick }: PL
     </Table>
   )
 }
+
+export { TaskTable }

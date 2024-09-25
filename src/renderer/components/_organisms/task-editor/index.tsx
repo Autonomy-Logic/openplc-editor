@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { TableActionButton } from '../../_atoms/buttons/tables-actions'
 import TaskTable from '../../_molecules/task-table'
 
-export default function TaskEditor() {
+const TaskEditor = () => {
   const ROWS_NOT_SELECTED = -1
   const {
     editor,
@@ -34,7 +34,7 @@ export default function TaskEditor() {
   useEffect(() => {
     const tasksToTable = tasks.filter((task) => task.name)
     setTaskData(tasksToTable)
-    console.log("taskData", taskData)
+    console.log('taskData', taskData)
   }, [editor, tasks])
 
   useEffect(() => {
@@ -120,10 +120,10 @@ export default function TaskEditor() {
       selectedRow: selectedRow + 1,
     })
 
-    console.log("taskData", taskData)
+    console.log('taskData', taskData)
   }
-/*************  ✨ Codeium Command ⭐  *************/
-/******  4f936eba-8f90-4acc-9a4d-724087fd7c17  *******/  const handleDeleteTask = () => {
+  /*************  ✨ Codeium Command ⭐  *************/
+  /******  4f936eba-8f90-4acc-9a4d-724087fd7c17  *******/ const handleDeleteTask = () => {
     if (editorTasks.display === 'code') return
 
     const selectedRow = parseInt(editorTasks.selectedRow)
@@ -150,7 +150,7 @@ export default function TaskEditor() {
       selectedRow: parseInt(row.id),
     })
   }
-  console.log("taskData", taskData)
+  console.log('taskData', taskData)
   return (
     <div aria-label='Tasks editor container' className='flex  w-full flex-shrink-0 flex-col gap-4 '>
       <div aria-label='Tasks editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
@@ -243,3 +243,5 @@ export default function TaskEditor() {
     </div>
   )
 }
+
+export { TaskEditor }
