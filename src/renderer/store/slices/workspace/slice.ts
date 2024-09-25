@@ -318,12 +318,12 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         produce(({ workspace }: WorkspaceSlice) => {
           const _dataTypeExists = workspace.projectData.dataTypes.findIndex((datatype) => datatype.name === name)
           type AnyObject = { [key: string]: unknown }
-          function _filterUndefined<T extends AnyObject>(source: T): Partial<T> {
+          function filterUndefined<T extends AnyObject>(source: T): Partial<T> {
             return Object.fromEntries(Object.entries(source).filter(([_, value]) => value !== undefined)) as Partial<T>
           }
           // // @ts-expect-error Index is not a number
           if (_dataTypeExists === -1) return
-          const filteredDataToUpdate = _filterUndefined(dataToUpdate)
+          const filteredDataToUpdate = filterUndefined(dataToUpdate)
 
           let dataTypeToBeUpdated = workspace.projectData.dataTypes[_dataTypeExists] as PLCArrayDatatype
           dataTypeToBeUpdated = { ...dataTypeToBeUpdated, ...filteredDataToUpdate }
