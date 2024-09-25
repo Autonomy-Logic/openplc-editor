@@ -319,15 +319,16 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           const _dataTypeExists = workspace.projectData.dataTypes.findIndex((datatype) => datatype.name === name)
           type AnyObject = { [key: string]: unknown }
           function _filterUndefined<T extends AnyObject>(source: T): Partial<T> {
-            return Object.fromEntries(Object.entries(source).filter((_, value) => value !== undefined)) as Partial<T>
+            return Object.fromEntries(Object.entries(source).filter(([_, value]) => value !== undefined)) as Partial<T>
           }
-          // TODO: Need to validate what key have an undefined value and filter it from the original object
           // // @ts-expect-error Index is not a number
-          if(_dataTypeExists === -1) return
+          if (_dataTypeExists === -1) return
+          const filteredDataToUpdate = _filterUndefined(dataToUpdate)
+
           let dataTypeToBeUpdated = workspace.projectData.dataTypes[_dataTypeExists] as PLCArrayDatatype
-          dataTypeToBeUpdated = dataToUpdate
+          dataTypeToBeUpdated = { ...dataTypeToBeUpdated, ...filteredDataToUpdate }
           workspace.projectData.dataTypes[_dataTypeExists] = dataTypeToBeUpdated
-          console.log(name, derivation, dataToUpdate, dataTypeToBeUpdated)
+          console.log( "chegou aqui", name, derivation, dataToUpdate, dataTypeToBeUpdated)
         }),
       )
     },
