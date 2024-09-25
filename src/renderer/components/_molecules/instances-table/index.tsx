@@ -9,11 +9,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import EditableNameCell from './editable-cell'
 import { SelectableProgramCell, SelectableTaskCell } from './selectable-cell'
 
-type PLCInstancesTableProps = {
-  tableData: PLCInstance[]
-  selectedRow: number
-  handleRowClick: (row: HTMLTableRowElement) => void
-}
 
 const columnHelper = createColumnHelper<PLCInstance>()
 const columns = [
@@ -43,17 +38,23 @@ const columns = [
   }),
 ]
 
+type PLCInstancesTableProps = {
+  tableData: PLCInstance[]
+  selectedRow: number
+  handleRowClick: (row: HTMLTableRowElement) => void
+}
+
 const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstancesTableProps) => {
   const {
     workspaceActions: { updateInstance },
   } = useOpenPLCStore()
-  const InstanceBodyRef = useRef<HTMLTableSectionElement>(null)
-  const InstanceTableRowRef = useRef<HTMLTableRowElement>(null)
-  const InstanceTableHeaderRef = useRef<HTMLTableSectionElement>(null)
+  const tableHeaderRef = useRef<HTMLTableSectionElement>(null)
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null)
+  const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
   const resetBorders = () => {
-    const parent = InstanceBodyRef.current
-    const header = InstanceTableHeaderRef.current
+    const parent = tableBodyRef.current
+    const header = tableHeaderRef.current
     if (!parent?.children || !header?.children) return
 
     const rows = Array.from(parent.children)
@@ -72,9 +73,9 @@ const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstances
   }
 
   const setBorders = () => {
-    const row = InstanceTableRowRef.current
-    const parent = InstanceBodyRef.current
-    const header = InstanceTableHeaderRef.current
+    const row = tableBodyRowRef.current
+    const parent = tableBodyRef.current
+    const header = tableHeaderRef.current
     if (!row || !parent || !header) return
 
     const headerRow = row === parent?.firstChild ? header?.lastElementChild : null
@@ -99,13 +100,6 @@ const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstances
     setBorders()
   }, [selectedRow])
 
-  useEffect(() => {
-    resetBorders()
-    if (InstanceTableRowRef.current) {
-      setBorders()
-    }
-  }, [])
-
   const table = useReactTable<PLCInstance>({
     columns: columns,
     columnResizeMode: 'onChange',
@@ -129,7 +123,7 @@ const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstances
   })
   return (
     <Table context='Instances' className='mr-1'>
-      <TableHeader ref={InstanceTableHeaderRef}>
+      <TableHeader ref={tableHeaderRef}>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow className='select-none' key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
@@ -150,7 +144,7 @@ const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstances
           </TableRow>
         ))}
       </TableHeader>
-      <TableBody ref={InstanceBodyRef}>
+      <TableBody ref={tableBodyRef}>
         {table.getRowModel().rows.map((row) => (
           <TableRow
             id={row.id}
@@ -158,7 +152,7 @@ const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstances
             className='h-8 cursor-pointer'
             onClick={(e) => handleRowClick(e.currentTarget)}
             selected={selectedRow === parseInt(row.id)}
-            ref={selectedRow === parseInt(row.id) ? InstanceTableRowRef : null}
+            ref={selectedRow === parseInt(row.id) ? tableBodyRowRef : null}
           >
             {row.getVisibleCells().map((cell) => (
               <TableCell

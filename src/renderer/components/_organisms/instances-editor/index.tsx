@@ -26,6 +26,7 @@ const InstancesEditor = () => {
   } = useOpenPLCStore()
 
   const [instanceData, setInstanceData] = useState<PLCInstance[]>([])
+
   const [editorInstances, setEditorInstances] = useState<InstanceType>({
     selectedRow: ROWS_NOT_SELECTED.toString(),
     display: 'table',
@@ -117,23 +118,20 @@ const InstancesEditor = () => {
     if (editorInstances.display === 'code') return
 
     const selectedRow = parseInt(editorInstances.selectedRow)
-    if (selectedRow === ROWS_NOT_SELECTED) return
-
-    const instanceToDelete = instanceData[selectedRow]
-    if (!instanceToDelete) {
-      console.error('No instance found for the selectedRow:', selectedRow)
-      return
-    }
-
     deleteInstance({
       rowId: selectedRow,
     })
 
-    updateModelInstances({
-      display: 'table',
-      selectedRow: selectedRow - 1,
-    })
+    const instances = instanceData.filter((instance) => instance.name)
+
+    if (selectedRow === instances.length - 1) {
+      updateModelInstances({
+        display: 'table',
+        selectedRow: selectedRow - 1,
+      })
+    }
   }
+
   const handleRowClick = (row: HTMLTableRowElement) => {
     updateModelInstances({
       display: 'table',

@@ -126,22 +126,18 @@ const TaskEditor = () => {
     if (editorTasks.display === 'code') return
 
     const selectedRow = parseInt(editorTasks.selectedRow)
-    if (selectedRow === ROWS_NOT_SELECTED) return
-
-    const taskToDelete = taskData[selectedRow]
-    if (!taskToDelete) {
-      console.error('No task found for the selectedRow:', selectedRow)
-      return
-    }
-
     deleteTask({
       rowId: selectedRow,
     })
 
-    updateModelTasks({
-      display: 'table',
-      selectedRow: selectedRow - 1,
-    })
+    const instances = taskData.filter((instance) => instance.name)
+
+    if (selectedRow === instances.length - 1) {
+      updateModelTasks({
+        display: 'table',
+        selectedRow: selectedRow - 1,
+      })
+    }
   }
   const handleRowClick = (row: HTMLTableRowElement) => {
     updateModelTasks({
