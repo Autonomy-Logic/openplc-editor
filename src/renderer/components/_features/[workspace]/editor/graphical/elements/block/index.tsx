@@ -1,33 +1,76 @@
 import * as Switch from '@radix-ui/react-switch'
 import { InputWithRef } from '@root/renderer/components/_atoms'
-import { BlockNode, DEFAULT_BLOCK_TYPES } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
+import {
+  BlockNode,
+  BlockNodeData,
+  BlockNodeElement,
+  BlockVariant,
+  buildBlockNode,
+  DEFAULT_BLOCK_TYPE,
+} from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
 import {
   Modal,
   ModalContent,
   ModalTitle,
   // ModalTrigger,
 } from '@root/renderer/components/_molecules'
-import { Dispatch, SetStateAction, useState } from 'react'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 
 import ArrowButtonGroup from '../arrow-button-group'
 import { ModalBlockLibrary } from './library'
 
-type BlockElementProps = {
+type BlockElementProps<T> = {
   isOpen: boolean
   onOpenChange: Dispatch<SetStateAction<boolean>>
   onClose?: () => void
-  node?: BlockNode
+  selectedNode: BlockNode<T>
 }
 
-const BlockElement = ({ isOpen, onOpenChange, onClose, node }: BlockElementProps) => {
-  const [selectedFile, setSelectedFile] = useState<{ image: string; text: string } | null>(null)
+const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selectedNode }: BlockElementProps<T>) => {
+  const { libraries } = useOpenPLCStore()
+
+  const [node, setNode] = useState<BlockNode<T>>(selectedNode)
+  const blockVariant = node.data.variant as BlockVariant
+
+  const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<T | null>(null)
   const [formState, setFormState] = useState<{ name: string; inputs: string; executionOrder: string }>({
-    name: DEFAULT_BLOCK_TYPES[node?.data.variant || 'default'].name,
-    inputs: (node?.data.inputHandles.length || 0).toString(),
+    name: blockVariant?.name || DEFAULT_BLOCK_TYPE.name,
+    inputs: blockVariant?.variables.filter((variable) => variable.class === 'input').length.toString() || '0',
     executionOrder: '',
   })
 
   const isFormValid = Object.values(formState).every((value) => value !== '')
+
+  useEffect(() => {
+    const [type, selectedLibrary, selectedPou] = selectedFileKey?.split('/') || []
+    if (type === 'system' && selectedLibrary && selectedPou) {
+      const library = libraries.system.find((library) => library.name === selectedLibrary)
+      const pou = library?.pous.find((pou) => pou.name === selectedPou) as T
+      setSelectedFile(pou)
+      return
+    }
+    setSelectedFile(null)
+  }, [selectedFileKey])
+
+  useEffect(() => {
+    if (selectedFile) {
+      const newNode = buildBlockNode({
+        id: node.id,
+        posX: node.position.x,
+        posY: node.position.y,
+        handleX: node.data.inputConnector?.glbPosition.x || 0,
+        handleY: node.data.inputConnector?.glbPosition.y || 0,
+        variant: selectedFile,
+      })
+      setNode({ ...newNode, data: { ...newNode.data, variant: selectedFile } })
+      const newNodeDataVariant = newNode.data.variant as BlockVariant
+      const formName: string = newNodeDataVariant.name
+      const formInputs: string = newNodeDataVariant.variables.filter((variable) => variable.class === 'input').length.toString()
+      setFormState((prevState) => ({ ...prevState, name: formName, inputs: formInputs }))
+    }
+  }, [selectedFile])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target
@@ -36,6 +79,7 @@ const BlockElement = ({ isOpen, onOpenChange, onClose, node }: BlockElementProps
 
   const handleClearForm = () => {
     setFormState({ name: '', inputs: '', executionOrder: '' })
+    setSelectedFileKey(null)
     setSelectedFile(null)
   }
 
@@ -76,9 +120,14 @@ const BlockElement = ({ isOpen, onOpenChange, onClose, node }: BlockElementProps
           <div id='container-modifier-variable' className='h-full w-[236px]'>
             <div className='flex h-full w-full flex-col gap-2'>
               <label className={labelStyle}>Type:</label>
-              <ModalBlockLibrary />
+              <ModalBlockLibrary selectedFileKey={selectedFileKey} setSelectedFileKey={setSelectedFileKey} />
               <div className='border-neural-100 h-full max-h-[119px] overflow-hidden rounded-lg border px-2 py-4 text-xs font-normal text-neutral-950 dark:border-neutral-850 dark:text-neutral-100'>
-                <p className='h-full overflow-y-auto dark:text-neutral-100'>{selectedFile?.text}</p>
+                <p className='h-full overflow-y-auto dark:text-neutral-100'>
+                  {
+                    // @ts-expect-error - selectedFile is not null and it is a generic type of pous
+                    selectedFile ? selectedFile.documentation : null
+                  }
+                </p>
               </div>
             </div>
           </div>
@@ -144,11 +193,15 @@ const BlockElement = ({ isOpen, onOpenChange, onClose, node }: BlockElementProps
             </label>
             <div
               id='block-preview'
-              className='flex flex-grow items-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'
+              className='flex h-[330px] items-center justify-center rounded-lg border-[2px] border-brand-dark bg-transparent dark:border-neutral-850'
             >
-              {selectedFile?.image && (
-                <img draggable='false' className='h-fit w-full select-none' src={selectedFile.image} alt='' />
-              )}
+              <BlockNodeElement
+                data={node.data as BlockNodeData<object>}
+                height={node.height || 0}
+                selected={false}
+                disabled={true}
+                scale={310 / ((node.height || 310) <= 310 ? 310 : node.height || 310)}
+              />
             </div>
           </div>
         </div>

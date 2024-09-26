@@ -41,7 +41,9 @@ const getNodePositionBasedOnPreviousNode = (
       : previousElement.data.outputConnector
   ) as CustomHandleProps
   const previousElementStyle = getDefaultNodeStyle({ node: previousElement })
-  const newNodeStyle = getDefaultNodeStyle(typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement })
+  const newNodeStyle = getDefaultNodeStyle(
+    typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement },
+  )
 
   const gap = previousElementStyle.gap + newNodeStyle.gap
   const offsetY = newNodeStyle.handle.y
@@ -60,7 +62,9 @@ const getNodePositionBasedOnPreviousNode = (
 }
 
 const getNodePositionBasedOnPlaceholderNode = (placeholderNode: Node, newElement: string | Node) => {
-  const newNodeStyle = getDefaultNodeStyle(typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement })
+  const newNodeStyle = getDefaultNodeStyle(
+    typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement },
+  )
 
   const placeholderHandles = placeholderNode.data.handles as CustomHandleProps[]
   const placeholderHandle = placeholderHandles[0]
@@ -111,14 +115,19 @@ const getPlaceholderPositionBasedOnNode = (node: Node, side: 'left' | 'bottom' |
       }
     case 'bottom':
       return {
-        posX: node.position.x + getDefaultNodeStyle({ node }).width / 2 - getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
+        posX:
+          node.position.x +
+          getDefaultNodeStyle({ node }).width / 2 -
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         posY:
           node.position.y +
           (node?.height ?? 0) -
           getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
           getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
         handleX:
-          node.position.x + getDefaultNodeStyle({ node }).width / 2 - getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
+          node.position.x +
+          getDefaultNodeStyle({ node }).width / 2 -
+          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         handleY:
           node.position.y +
           (node?.height ?? 0) -
@@ -646,9 +655,9 @@ const removeEmptyParallelConnections = (rung: FlowState) => {
   return { nodes: newNodes, edges: newEdges }
 }
 
-const startParallelConnectionByNodeType = (
+const startParallelConnectionByNodeType = <T>(
   rung: FlowState,
-  newElementType: string,
+  node: { newElementType: string; blockType: T | undefined },
   placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
 ) => {
   const { selectedPlaceholder, selectedPlaceholderIndex } = placeholder
@@ -676,10 +685,11 @@ const startParallelConnectionByNodeType = (
   }) as ParallelNode
 
   // Build new element node
-  const newElementPosition = getNodePositionBasedOnPreviousNode(openParallelNode, newElementType, 'parallel')
+  const newElementPosition = getNodePositionBasedOnPreviousNode(openParallelNode, node.newElementType, 'parallel')
   const newElement = buildGenericNode({
-    nodeType: newElementType,
-    id: `${newElementType.toUpperCase()}_${uuidv4()}`,
+    nodeType: node.newElementType,
+    blockType: node.blockType,
+    id: `${node.newElementType.toUpperCase()}_${uuidv4()}`,
     ...newElementPosition,
   })
 
@@ -687,6 +697,7 @@ const startParallelConnectionByNodeType = (
   const newAboveNodePosition = getNodePositionBasedOnPreviousNode(openParallelNode, aboveNode, 'serial')
   const buildedAboveNode = buildGenericNode({
     nodeType: aboveNode.type ?? '',
+    blockType: aboveNode.data.variant,
     id: `${aboveNode.type?.toUpperCase()}_${uuidv4()}`,
     ...newAboveNodePosition,
   })
@@ -984,9 +995,9 @@ const startParallelConnectionKeepingTheNode = (
 /**
  * Serial functions
  */
-const appendSerialConnectionByNodeType = (
+const appendSerialConnectionByNodeType = <T>(
   rung: FlowState,
-  newElementType: string,
+  node: { newElementType: string; blockType: T | undefined },
   placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
 ) => {
   const { selectedPlaceholder, selectedPlaceholderIndex } = placeholder
@@ -994,10 +1005,11 @@ const appendSerialConnectionByNodeType = (
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
-  const newElelementPosition = getNodePositionBasedOnPlaceholderNode(selectedPlaceholder, newElementType)
+  const newElelementPosition = getNodePositionBasedOnPlaceholderNode(selectedPlaceholder, node.newElementType)
   const newElement = buildGenericNode({
-    nodeType: newElementType,
-    id: `${newElementType.toUpperCase()}_${uuidv4()}`,
+    nodeType: node.newElementType,
+    blockType: node.blockType,
+    id: `${node.newElementType.toUpperCase()}_${uuidv4()}`,
     ...newElelementPosition,
   })
   newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newElement)
@@ -1084,7 +1096,10 @@ const appendSerialConnectionKeepingTheNode = (
 /**
  * Exported functions to control the rung elements
  */
-export const addNewElement = (rung: FlowState, newElementType: string): { nodes: Node[]; edges: Edge[] } => {
+export const addNewElement = <T>(
+  rung: FlowState,
+  node: { newElementType: string; blockType: T | undefined },
+): { nodes: Node[]; edges: Edge[] } => {
   const [selectedPlaceholderIndex, selectedPlaceholder] =
     Object.entries(rung.nodes).find(
       (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
@@ -1095,14 +1110,14 @@ export const addNewElement = (rung: FlowState, newElementType: string): { nodes:
   let newEdges = [...rung.edges]
 
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
-    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnectionByNodeType(rung, newElementType, {
+    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnectionByNodeType(rung, node, {
       selectedPlaceholder,
       selectedPlaceholderIndex,
     })
     newEdges = parallelEdges
     newNodes = parallelNodes
   } else {
-    const { nodes: serialNodes, edges: serialEdges } = appendSerialConnectionByNodeType(rung, newElementType, {
+    const { nodes: serialNodes, edges: serialEdges } = appendSerialConnectionByNodeType(rung, node, {
       selectedPlaceholder,
       selectedPlaceholderIndex,
     })
@@ -1111,7 +1126,6 @@ export const addNewElement = (rung: FlowState, newElementType: string): { nodes:
   }
 
   newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
-
   return { nodes: newNodes, edges: newEdges }
 }
 
