@@ -51,7 +51,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
               className={`z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 ${
                 step >= 1
                   ? step === 2 || step === 3
-                    ? 'border-blue-200 bg-blue-300 font-bold text-white'
+                    ? 'border-blue-500 bg-blue-500 font-bold text-white'
                     : 'border-blue-500 bg-white text-blue-500'
                   : 'border-gray-500 bg-gray-200 text-gray-500'
               }`}
@@ -62,9 +62,9 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             <div
               className={`z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 ${
                 step === 2
-                  ? 'border-blue-500 bg-white font-bold text-blue-500'
+                      ? 'border-blue-500 bg-white font-bold text-blue-500'
                   : step === 3
-                    ? 'border-blue-200 bg-blue-300 font-bold text-white'
+                    ? 'border-blue-500 bg-blue-500 font-bold text-white'
                     : 'border-gray-500 bg-gray-200 text-gray-500'
               }`}
             >
@@ -93,8 +93,8 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
                 <button
                   className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
                     selected === 'project'
-                      ? 'border-blue-300 bg-blue-300 text-white'
-                      : 'border-transparent bg-gray-200 text-black hover:border-blue-500'
+                      ? 'border-blue-300 bg-blue-300 text-white dark:border-neutral-600 dark:bg-neutral-600'
+                      : 'border-transparent bg-gray-200 text-black hover:border-blue-500 hover:dark:border-neutral-600'
                   }`}
                   onClick={() => handleClick('project')}
                 >
@@ -103,8 +103,8 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
                 <button
                   className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
                     selected === 'library'
-                      ? 'border-blue-300 bg-blue-300 text-white'
-                      : 'border-transparent bg-gray-200 text-black hover:border-blue-500'
+                      ? 'border-blue-300 bg-blue-300 text-white dark:border-neutral-600 dark:bg-neutral-600'
+                      : 'border-transparent bg-gray-200 text-black hover:border-blue-500 hover:dark:border-neutral-600'
                   }`}
                   onClick={() => handleClick('library')}
                 >
@@ -147,7 +147,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
                 <h2 className='mb-2 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
                   Choose the language for the base program:{' '}
                 </h2>
-                <div id='pou-language-form-container' className='flex items-center w-full flex-col gap-[6px]'>
+                <div id='pou-language-form-container' className='flex w-full flex-col items-center gap-[6px]'>
                   <Controller
                     name='language'
                     control={control}
