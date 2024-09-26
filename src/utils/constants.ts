@@ -9,7 +9,7 @@ export const CONSTANTS = {
     MAIN: '/',
     PROJECT: 'project',
     EDITOR: 'editor',
-    RES: 'resources',
+    RES: 'resource',
   },
   types: {
     PROGRAM: 'program',

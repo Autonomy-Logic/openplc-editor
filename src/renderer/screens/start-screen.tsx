@@ -20,6 +20,7 @@ const StartScreen = () => {
 
   const retrieveNewProjectData = async () => {
     const { success, data, error } = await window.bridge.createProject()
+
     if (success && data) {
       setUserWorkspace({
         editingState: 'unsaved',

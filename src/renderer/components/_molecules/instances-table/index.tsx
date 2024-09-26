@@ -1,93 +1,53 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCInstance } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
-import {
-  ColumnFiltersState,
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  OnChangeFn,
-  useReactTable,
-} from '@tanstack/react-table'
+import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
+import { getFilteredRowModel } from '@tanstack/react-table'
 import { useEffect, useRef } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
-import { EditableDocumentationCell, EditableNameCell } from './editable-cell'
-import { SelectableClassCell, SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
+import EditableNameCell from './editable-cell'
+import { SelectableProgramCell, SelectableTaskCell } from './selectable-cell'
 
-const columnHelper = createColumnHelper<PLCVariable>()
 
+const columnHelper = createColumnHelper<PLCInstance>()
 const columns = [
-  columnHelper.accessor('id', {
-    header: '#',
-    size: 64,
-    minSize: 32,
-    maxSize: 64,
-    enableResizing: true,
-    cell: (props) => props.row.id,
-  }),
   columnHelper.accessor('name', {
     header: 'Name',
     enableResizing: true,
-    size: 300,
+    size: 150,
+    minSize: 100,
+    maxSize: 150,
+    cell: EditableNameCell,
+  }),
+  columnHelper.accessor('program', {
+    header: 'Program',
+    size: 768,
     minSize: 150,
-    maxSize: 300,
-    cell: EditableNameCell,
-  }),
-  columnHelper.accessor('class', {
-    header: 'Class',
+    maxSize: 768,
     enableResizing: true,
-    cell: SelectableClassCell,
+    cell: SelectableProgramCell,
   }),
-  columnHelper.accessor('type', {
-    header: 'Type',
+  columnHelper.accessor('task', {
+    header: ' Task',
     enableResizing: true,
-    size: 300,
-    minSize: 80,
-    maxSize: 300,
-    cell: SelectableTypeCell,
+    size: 768,
+    minSize: 150,
+    maxSize: 768,
+    cell: SelectableTaskCell,
   }),
-  columnHelper.accessor('location', {
-    header: 'Location',
-    enableResizing: true,
-    cell: EditableNameCell,
-  }),
-  columnHelper.accessor('documentation', {
-    header: 'Documentation',
-    enableResizing: true,
-    size: 568,
-    minSize: 198,
-    maxSize: 568,
-    cell: EditableDocumentationCell,
-  }),
-  columnHelper.accessor('debug', { header: 'Debug', size: 64, minSize: 64, maxSize: 64, cell: SelectableDebugCell }),
 ]
 
-type PLCVariablesTableProps = {
-  tableData: PLCVariable[]
-  filterValue?: string
-  columnFilters?: ColumnFiltersState
-  setColumnFilters?: OnChangeFn<ColumnFiltersState> | undefined
+type PLCInstancesTableProps = {
+  tableData: PLCInstance[]
   selectedRow: number
   handleRowClick: (row: HTMLTableRowElement) => void
 }
 
-const VariablesTable = ({
-  tableData,
-  filterValue,
-  columnFilters,
-  setColumnFilters,
-  selectedRow,
-  handleRowClick,
-}: PLCVariablesTableProps) => {
+const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstancesTableProps) => {
   const {
-    editor: {
-      meta: { name },
-    },
-    workspaceActions: { updateVariable },
+    workspaceActions: { updateInstance },
   } = useOpenPLCStore()
-
   const tableHeaderRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
@@ -140,14 +100,7 @@ const VariablesTable = ({
     setBorders()
   }, [selectedRow])
 
-  useEffect(() => {
-    resetBorders()
-    if (tableBodyRowRef.current) {
-      setBorders()
-    }
-  }, [filterValue])
-
-  const table = useReactTable({
+  const table = useReactTable<PLCInstance>({
     columns: columns,
     columnResizeMode: 'onChange',
     data: tableData,
@@ -159,30 +112,20 @@ const VariablesTable = ({
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    state: { columnFilters },
-    onColumnFiltersChange: setColumnFilters,
     meta: {
       updateData: (rowIndex, columnId, value) => {
-        if (columnId === 'class' && filterValue !== undefined && filterValue !== 'all' && filterValue !== value) {
-          resetBorders()
-        }
-        return updateVariable({
-          scope: 'local',
-          associatedPou: name,
+        return updateInstance({
           rowId: rowIndex,
-          data: {
-            [columnId]: value,
-          },
+          data: { [columnId]: value },
         })
       },
     },
   })
-
   return (
-    <Table context='Variables' className='mr-1'>
+    <Table context='Instances' className='mr-1 w-full'>
       <TableHeader ref={tableHeaderRef}>
         {table.getHeaderGroups().map((headerGroup) => (
-          <TableRow key={headerGroup.id}>
+          <TableRow className='select-none' key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
               <TableHead
                 resizable={header.column.columnDef.enableResizing}
@@ -233,4 +176,4 @@ const VariablesTable = ({
   )
 }
 
-export { VariablesTable }
+export { InstancesTable }

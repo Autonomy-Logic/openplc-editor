@@ -1,22 +1,20 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCGlobalVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import {
-  ColumnFiltersState,
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
-  OnChangeFn,
   useReactTable,
 } from '@tanstack/react-table'
 import { useEffect, useRef } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
 import { EditableDocumentationCell, EditableNameCell } from './editable-cell'
-import { SelectableClassCell, SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
+import { SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 
-const columnHelper = createColumnHelper<PLCVariable>()
+const columnHelper = createColumnHelper<PLCGlobalVariable >()
 
 const columns = [
   columnHelper.accessor('id', {
@@ -38,7 +36,10 @@ const columns = [
   columnHelper.accessor('class', {
     header: 'Class',
     enableResizing: true,
-    cell: SelectableClassCell,
+    size: 300,
+    minSize: 80,
+    maxSize: 300,
+    cell: "Global",
   }),
   columnHelper.accessor('type', {
     header: 'Type',
@@ -51,6 +52,9 @@ const columns = [
   columnHelper.accessor('location', {
     header: 'Location',
     enableResizing: true,
+    size: 300,
+    minSize: 80,
+    maxSize: 300,
     cell: EditableNameCell,
   }),
   columnHelper.accessor('documentation', {
@@ -65,26 +69,13 @@ const columns = [
 ]
 
 type PLCVariablesTableProps = {
-  tableData: PLCVariable[]
-  filterValue?: string
-  columnFilters?: ColumnFiltersState
-  setColumnFilters?: OnChangeFn<ColumnFiltersState> | undefined
+  tableData: PLCGlobalVariable[]
   selectedRow: number
   handleRowClick: (row: HTMLTableRowElement) => void
 }
 
-const VariablesTable = ({
-  tableData,
-  filterValue,
-  columnFilters,
-  setColumnFilters,
-  selectedRow,
-  handleRowClick,
-}: PLCVariablesTableProps) => {
+const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVariablesTableProps) => {
   const {
-    editor: {
-      meta: { name },
-    },
     workspaceActions: { updateVariable },
   } = useOpenPLCStore()
 
@@ -140,13 +131,6 @@ const VariablesTable = ({
     setBorders()
   }, [selectedRow])
 
-  useEffect(() => {
-    resetBorders()
-    if (tableBodyRowRef.current) {
-      setBorders()
-    }
-  }, [filterValue])
-
   const table = useReactTable({
     columns: columns,
     columnResizeMode: 'onChange',
@@ -159,16 +143,11 @@ const VariablesTable = ({
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    state: { columnFilters },
-    onColumnFiltersChange: setColumnFilters,
+
     meta: {
       updateData: (rowIndex, columnId, value) => {
-        if (columnId === 'class' && filterValue !== undefined && filterValue !== 'all' && filterValue !== value) {
-          resetBorders()
-        }
         return updateVariable({
-          scope: 'local',
-          associatedPou: name,
+          scope: 'global',
           rowId: rowIndex,
           data: {
             [columnId]: value,
@@ -179,10 +158,10 @@ const VariablesTable = ({
   })
 
   return (
-    <Table context='Variables' className='mr-1'>
+    <Table context='Variables' className='mr-1 w-full'>
       <TableHeader ref={tableHeaderRef}>
         {table.getHeaderGroups().map((headerGroup) => (
-          <TableRow key={headerGroup.id}>
+          <TableRow className='select-none' key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
               <TableHead
                 resizable={header.column.columnDef.enableResizing}
@@ -233,4 +212,4 @@ const VariablesTable = ({
   )
 }
 
-export { VariablesTable }
+export { GlobalVariablesTable }

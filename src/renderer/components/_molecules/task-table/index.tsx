@@ -1,100 +1,77 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCTask } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import {
-  ColumnFiltersState,
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
-  OnChangeFn,
   useReactTable,
 } from '@tanstack/react-table'
 import { useEffect, useRef } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
-import { EditableDocumentationCell, EditableNameCell } from './editable-cell'
-import { SelectableClassCell, SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
+import { EditableNameCell, EditablePriorityCell } from './editable-cell'
+import { SelectableIntervalCell, SelectableTriggerCell } from './selectable-cell'
 
-const columnHelper = createColumnHelper<PLCVariable>()
-
+const columnHelper = createColumnHelper<PLCTask>()
 const columns = [
-  columnHelper.accessor('id', {
-    header: '#',
-    size: 64,
-    minSize: 32,
-    maxSize: 64,
-    enableResizing: true,
-    cell: (props) => props.row.id,
-  }),
   columnHelper.accessor('name', {
     header: 'Name',
     enableResizing: true,
-    size: 300,
+    size: 150,
+    minSize: 100,
+    maxSize: 150,
+    cell: EditableNameCell,
+  }),
+  columnHelper.accessor('triggering', {
+    header: 'Triggering',
+    enableResizing: true,
+    size: 468,
     minSize: 150,
-    maxSize: 300,
-    cell: EditableNameCell,
+    maxSize: 468,
+    cell: SelectableTriggerCell,
   }),
-  columnHelper.accessor('class', {
-    header: 'Class',
+  columnHelper.accessor('interval', {
+    header: 'Interval',
+    size: 468,
+    minSize: 150,
+    maxSize: 468,
     enableResizing: true,
-    cell: SelectableClassCell,
+    cell: SelectableIntervalCell,
   }),
-  columnHelper.accessor('type', {
-    header: 'Type',
-    enableResizing: true,
-    size: 300,
-    minSize: 80,
-    maxSize: 300,
-    cell: SelectableTypeCell,
+  columnHelper.accessor('priority', {
+    header: 'Priority',
+    enableResizing: false,
+    size: 468,
+    minSize: 150,
+    maxSize: 468,
+    cell: EditablePriorityCell,
   }),
-  columnHelper.accessor('location', {
-    header: 'Location',
-    enableResizing: true,
-    cell: EditableNameCell,
-  }),
-  columnHelper.accessor('documentation', {
-    header: 'Documentation',
-    enableResizing: true,
-    size: 568,
-    minSize: 198,
-    maxSize: 568,
-    cell: EditableDocumentationCell,
-  }),
-  columnHelper.accessor('debug', { header: 'Debug', size: 64, minSize: 64, maxSize: 64, cell: SelectableDebugCell }),
 ]
 
-type PLCVariablesTableProps = {
-  tableData: PLCVariable[]
-  filterValue?: string
-  columnFilters?: ColumnFiltersState
-  setColumnFilters?: OnChangeFn<ColumnFiltersState> | undefined
+type PLCTaskTableProps = {
+  tableData: {
+    name: string
+    triggering: 'Cyclic' | 'Interrupt'
+    interval: string
+    priority: number
+  }[]
   selectedRow: number
   handleRowClick: (row: HTMLTableRowElement) => void
 }
 
-const VariablesTable = ({
-  tableData,
-  filterValue,
-  columnFilters,
-  setColumnFilters,
-  selectedRow,
-  handleRowClick,
-}: PLCVariablesTableProps) => {
+const TaskTable = ({ tableData, selectedRow, handleRowClick }: PLCTaskTableProps) => {
   const {
-    editor: {
-      meta: { name },
-    },
-    workspaceActions: { updateVariable },
+    workspaceActions: { updateTask },
   } = useOpenPLCStore()
-
-  const tableHeaderRef = useRef<HTMLTableSectionElement>(null)
-  const tableBodyRef = useRef<HTMLTableSectionElement>(null)
-  const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
+  const TaskBodyRef = useRef<HTMLTableSectionElement>(null)
+  const TaskTableRowRef = useRef<HTMLTableRowElement>(null)
+  const TaskTableHeaderRef = useRef<HTMLTableSectionElement>(null)
 
   const resetBorders = () => {
-    const parent = tableBodyRef.current
-    const header = tableHeaderRef.current
+    const parent = TaskBodyRef.current
+    const header = TaskTableHeaderRef.current
     if (!parent?.children || !header?.children) return
 
     const rows = Array.from(parent.children)
@@ -113,9 +90,9 @@ const VariablesTable = ({
   }
 
   const setBorders = () => {
-    const row = tableBodyRowRef.current
-    const parent = tableBodyRef.current
-    const header = tableHeaderRef.current
+    const row = TaskTableRowRef.current
+    const parent = TaskBodyRef.current
+    const header = TaskTableHeaderRef.current
     if (!row || !parent || !header) return
 
     const headerRow = row === parent?.firstChild ? header?.lastElementChild : null
@@ -142,10 +119,10 @@ const VariablesTable = ({
 
   useEffect(() => {
     resetBorders()
-    if (tableBodyRowRef.current) {
+    if (TaskTableRowRef.current) {
       setBorders()
     }
-  }, [filterValue])
+  }, [])
 
   const table = useReactTable({
     columns: columns,
@@ -159,16 +136,9 @@ const VariablesTable = ({
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    state: { columnFilters },
-    onColumnFiltersChange: setColumnFilters,
     meta: {
       updateData: (rowIndex, columnId, value) => {
-        if (columnId === 'class' && filterValue !== undefined && filterValue !== 'all' && filterValue !== value) {
-          resetBorders()
-        }
-        return updateVariable({
-          scope: 'local',
-          associatedPou: name,
+        return updateTask({
           rowId: rowIndex,
           data: {
             [columnId]: value,
@@ -177,12 +147,11 @@ const VariablesTable = ({
       },
     },
   })
-
   return (
-    <Table context='Variables' className='mr-1'>
-      <TableHeader ref={tableHeaderRef}>
+    <Table context='Tasks' className='mr-1 w-full'>
+      <TableHeader ref={TaskTableHeaderRef}>
         {table.getHeaderGroups().map((headerGroup) => (
-          <TableRow key={headerGroup.id}>
+          <TableRow className='select-none' key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
               <TableHead
                 resizable={header.column.columnDef.enableResizing}
@@ -201,7 +170,7 @@ const VariablesTable = ({
           </TableRow>
         ))}
       </TableHeader>
-      <TableBody ref={tableBodyRef}>
+      <TableBody ref={TaskBodyRef}>
         {table.getRowModel().rows.map((row) => (
           <TableRow
             id={row.id}
@@ -209,7 +178,7 @@ const VariablesTable = ({
             className='h-8 cursor-pointer'
             onClick={(e) => handleRowClick(e.currentTarget)}
             selected={selectedRow === parseInt(row.id)}
-            ref={selectedRow === parseInt(row.id) ? tableBodyRowRef : null}
+            ref={selectedRow === parseInt(row.id) ? TaskTableRowRef : null}
           >
             {row.getVisibleCells().map((cell) => (
               <TableCell
@@ -233,4 +202,4 @@ const VariablesTable = ({
   )
 }
 
-export { VariablesTable }
+export { TaskTable }
