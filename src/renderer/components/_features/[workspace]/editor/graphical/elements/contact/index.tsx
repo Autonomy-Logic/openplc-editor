@@ -20,7 +20,10 @@ type ContactElementProps = {
 
 const ContactElement = ({ isOpen, onOpenChange, onClose, node }: ContactElementProps) => {
   const [selectedModifier, setSelectedModifier] = useState<string | null>(node?.data.variant as string)
-  const contactModifiers = Object.entries(DEFAULT_CONTACT_TYPES).map(([label, contact]) => ({ label, contact }))
+  const contactModifiers = Object.entries(DEFAULT_CONTACT_TYPES).map(([label, contact]) => ({
+    label: label.replace(/([a-z])([A-Z])/g, '$1 $2'),
+    contact,
+  }))
 
   const getModifierContact = (label: string) => {
     const modifier = contactModifiers.find((modifier) => modifier.label === label)

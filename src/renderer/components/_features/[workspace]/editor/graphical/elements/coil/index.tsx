@@ -11,7 +11,10 @@ type CoilElementProps = {
 
 const CoilElement = ({ isOpen, onOpenChange, onClose, node }: CoilElementProps) => {
   const [selectedModifier, setSelectedModifier] = useState<string | null>(node?.data.variant as string)
-  const coilModifiers = Object.entries(DEFAULT_COIL_TYPES).map(([label, coil]) => ({ label, coil }))
+  const coilModifiers = Object.entries(DEFAULT_COIL_TYPES).map(([label, coil]) => ({
+    label: label.replace(/([a-z])([A-Z])/g, '$1 $2'),
+    coil,
+  }))
 
   const getModifierCoil = (label: string) => {
     const modifier = coilModifiers.find((modifier) => modifier.label === label)
