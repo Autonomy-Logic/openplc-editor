@@ -44,13 +44,15 @@ const SelectContent = ({
         side={side}
         {...res}
       >
-        <PrimitiveSelect.ScrollUpButton>
+        {/* <PrimitiveSelect.ScrollUpButton>
           <ArrowIcon direction='up' size='sm' className='stroke-brand' />
-        </PrimitiveSelect.ScrollUpButton>
-        <PrimitiveSelect.Viewport className='h-full w-full'>{children}</PrimitiveSelect.Viewport>
-        <PrimitiveSelect.ScrollDownButton>
+        </PrimitiveSelect.ScrollUpButton> */}
+        <PrimitiveSelect.Viewport className=' h-full w-full overflow-auto'>
+          {children}
+        </PrimitiveSelect.Viewport>
+        {/* <PrimitiveSelect.ScrollDownButton>
           <ArrowIcon direction='down' size='sm' className='stroke-brand' />
-        </PrimitiveSelect.ScrollDownButton>
+        </PrimitiveSelect.ScrollDownButton> */}
       </PrimitiveSelect.Content>
     </PrimitiveSelect.Portal>
   )
