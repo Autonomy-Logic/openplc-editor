@@ -1,6 +1,6 @@
 import { PouLanguageSources } from '@process:renderer/data'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@radix-ui/react-select'
-import { ArrowIcon, BookIcon, FolderIcon, PathIcon } from '@root/renderer/assets'
+import { ArrowIcon, BookIcon, FolderIcon, PathIcon, TimerIcon } from '@root/renderer/assets'
 import { Modal, ModalContent } from '@root/renderer/components/_molecules'
 import { cn, ConvertToLangShortenedFormat } from '@root/utils'
 import React, { useEffect, useState } from 'react'
@@ -62,7 +62,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
             <div
               className={`z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 ${
                 step === 2
-                      ? 'border-blue-500 bg-white font-bold text-blue-500'
+                  ? 'border-blue-500 bg-white font-bold text-blue-500'
                   : step === 3
                     ? 'border-blue-500 bg-blue-500 font-bold text-white'
                     : 'border-gray-500 bg-gray-200 text-gray-500'
@@ -129,15 +129,15 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
                   />
                 </div>
               </div>
-              <div className='mb-4'>
+              <div className='mb-4 flex flex-col items-center'>
                 <h2 className='mb-2 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
                   Choose an empty directory for your project:
                 </h2>
-                <div className='group flex h-10 w-full cursor-pointer items-center justify-center rounded-md border border-gray-300 p-2 hover:bg-gray-300 active:bg-gray-400'>
-                  <PathIcon className='mr-2 mt-2 flex-shrink-0' />
-                  <h2 className='text-sm font-medium text-gray-400 group-hover:text-neutral-1000 dark:text-white'>
-                    User/userName/data/plcproject
-                  </h2>
+                <div className='group flex h-10 w-64 cursor-pointer items-center justify-center rounded-md border border-gray-300 p-2 hover:bg-gray-300 active:bg-gray-400'>
+                  <PathIcon className='mr-2 mt-3 flex-shrink-0 text-gray-400 group-hover:text-neutral-1000 dark:text-white' />
+                  <span className='text-sm font-medium text-gray-400 group-hover:text-neutral-1000 dark:text-white'>
+                    . . .
+                  </span>
                 </div>
               </div>
             </>
@@ -200,10 +200,21 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
                   />
                 </div>
               </div>
-              <div>
-                <h2 className='mb-2 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
+              <div className='flex flex-col items-center justify-between gap-1'>
+                <h2 className=' select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
                   Define the time for the cyclic task:{' '}
                 </h2>
+                <button
+                  type='button'
+                  className={cn(
+                    'group flex h-10 w-64 cursor-pointer items-center justify-center rounded-md border border-gray-300 p-2 hover:bg-gray-300 active:bg-gray-400',
+                  )}
+                >
+                  <TimerIcon className='mr-2 mt-2' />
+                  <span className='text-sm font-medium text-gray-400 group-hover:text-neutral-1000 dark:text-white'>
+                    T#20ms
+                  </span>
+                </button>
               </div>
             </>
           )}
