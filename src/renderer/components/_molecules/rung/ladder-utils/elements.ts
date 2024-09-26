@@ -1343,7 +1343,7 @@ export const onDragElement = (
   return searchNearestPlaceholder(rung, reactFlowInstance, position)
 }
 
-export const onDragStopElement = (rung: FlowState, node: Node) => {
+export const onDragStopElement = (rung: FlowState, node: Node): { nodes: Node[]; edges: Edge[] } => {
   const [selectedPlaceholderIndex, selectedPlaceholder] =
     Object.entries(rung.nodes).find(
       (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
