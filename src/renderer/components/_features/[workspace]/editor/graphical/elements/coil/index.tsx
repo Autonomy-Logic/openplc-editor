@@ -34,7 +34,6 @@ const CoilElement = ({ isOpen, onOpenChange, onClose, node, rungId }: CoilElemen
   }
 
   const handleConfirmAlteration = () => {
-    console.log('selectedModifier', selectedModifier)
     updateNode({
       node: {
         ...node,
@@ -71,7 +70,7 @@ const CoilElement = ({ isOpen, onOpenChange, onClose, node, rungId }: CoilElemen
                     name='modifier'
                     className={`border-1 h-4 w-4 cursor-pointer appearance-none rounded-full border border-[#D1D5DB] ring-0 checked:border-[5px] checked:border-brand dark:border-neutral-850 dark:bg-neutral-300`}
                     id={modifier.label}
-                    checked={selectedModifier === modifier.label}
+                    checked={selectedModifier === modifier.value}
                     onChange={() => setSelectedModifier(modifier.value)}
                   />
                   <label className='cursor-pointer text-xs font-normal capitalize' htmlFor={modifier.label}>

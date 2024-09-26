@@ -78,7 +78,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   useEffect(() => {
     setRungLocal(rung)
-  }, [rung.nodes.length])
+  }, [rung.nodes])
 
   /**
    * Update the selected nodes array when the nodes array changes

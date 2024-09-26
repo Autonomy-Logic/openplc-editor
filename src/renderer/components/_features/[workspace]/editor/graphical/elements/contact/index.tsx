@@ -34,7 +34,6 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node, rungId }: Contact
   }
 
   const handleConfirmAlteration = () => {
-    console.log('selectedModifier', selectedModifier)
     updateNode({
       node: {
         ...node,
@@ -52,7 +51,6 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node, rungId }: Contact
     <Modal open={isOpen} onOpenChange={onOpenChange}>
       {/* <ModalTrigger>Open Contact</ModalTrigger> */}
       <ModalContent
-        onClose={handleCloseModal}
         onEscapeKeyDown={handleCloseModal}
         onInteractOutside={handleCloseModal}
         className='h-[400px] w-[468px] select-none flex-col justify-between px-8 py-4'
@@ -73,7 +71,7 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node, rungId }: Contact
                     name='modifier'
                     className={`border-1 h-4 w-4 cursor-pointer appearance-none rounded-full border border-[#D1D5DB] ring-0 checked:border-[5px] checked:border-brand dark:border-neutral-850 dark:bg-neutral-300`}
                     id={modifier.label}
-                    checked={selectedModifier === modifier.label}
+                    checked={selectedModifier === modifier.value}
                     onChange={() => setSelectedModifier(modifier.value)}
                   />
                   <label className='cursor-pointer text-xs font-normal capitalize' htmlFor={modifier.label}>
