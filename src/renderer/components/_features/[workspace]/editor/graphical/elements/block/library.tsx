@@ -4,13 +4,18 @@ import { LibraryFile, LibraryFolder, LibraryRoot } from '@root/renderer/componen
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useState } from 'react'
 
-export const ModalBlockLibrary = () => {
+export const ModalBlockLibrary = ({
+  selectedFileKey,
+  setSelectedFileKey,
+}: {
+  selectedFileKey: string | null
+  setSelectedFileKey: (string: string) => void
+}) => {
   const {
     libraries: { system },
   } = useOpenPLCStore()
 
   const [filterText, setFilterText] = useState('')
-  const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
 
   const filteredLibraries = system.filter((library) =>
     library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
@@ -55,10 +60,8 @@ export const ModalBlockLibrary = () => {
                       key={pou.name}
                       label={pou.name}
                       isSelected={selectedFileKey === pou.name}
-                      onSelect={() => setSelectedFileKey(pou.name)}
-                      onClick={() => {
-                        setSelectedFileKey(pou.name)
-                      }}
+                      onSelect={() => setSelectedFileKey(`system/${library.name}/${pou.name}`)}
+                      onClick={() => setSelectedFileKey(`system/${library.name}/${pou.name}`)}
                     />
                   ))}
               </LibraryFolder>

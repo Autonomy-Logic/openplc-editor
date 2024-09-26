@@ -65,7 +65,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
 }
 
 type IProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
-  branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'device'
+  branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'resource' | 'device'
   children?: ReactNode
 }
 
@@ -74,6 +74,7 @@ const BranchSources = {
   function: { BranchIcon: FunctionIcon, label: 'Functions' },
   'function-block': { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
   program: { BranchIcon: ProgramIcon, label: 'Programs' },
+  resource: { BranchIcon: ResourceIcon, label: 'Resource' },
   device: { BranchIcon: DeviceIcon, label: 'Device' },
 }
 const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranchProps) => {

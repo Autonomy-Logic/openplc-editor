@@ -2,8 +2,10 @@ import {
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
+  PLCInstanceSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
+  PLCTaskSchema,
   PLCVariableSchema,
 } from '@root/types/PLC/open-plc'
 import { z } from 'zod'
@@ -30,6 +32,17 @@ const pouDTOSchema = z.discriminatedUnion('type', [
   }),
 ])
 type PouDTO = z.infer<typeof pouDTOSchema>
+
+const taskDTOSchema = z.object({
+  data: PLCTaskSchema,
+})
+
+type TaskDTO = z.infer<typeof taskDTOSchema>
+
+const instanceDTOSchema = z.object({
+  data: PLCInstanceSchema,
+})
+type InstanceDTO = z.infer<typeof instanceDTOSchema>
 
 const systemConfigsSchema = z.object({
   OS: z.enum(['win32', 'linux', 'darwin', '']),
@@ -96,6 +109,38 @@ const workspaceActionsSchema = z.object({
     .returns(z.void()),
 
   createDatatype: z.function().args(PLCDataTypeSchema).returns(z.void()),
+  createTask: z
+    .function()
+    .args(taskDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
+    .returns(z.void()),
+  updateTask: z
+    .function()
+    .args(taskDTOSchema.merge(z.object({ rowId: z.number() })))
+    .returns(z.void()),
+  deleteTask: z
+    .function()
+    .args(z.object({ rowId: z.number() }))
+    .returns(z.void()),
+  rearrangeTasks: z
+    .function()
+    .args(z.object({ rowId: z.number(), newIndex: z.number() }))
+    .returns(z.void()),
+  createInstance: z
+    .function()
+    .args(instanceDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
+    .returns(z.void()),
+  updateInstance: z
+    .function()
+    .args(instanceDTOSchema.merge(z.object({ rowId: z.number() })))
+    .returns(z.void()),
+  deleteInstance: z
+    .function()
+    .args(z.object({ rowId: z.number() }))
+    .returns(z.void()),
+  rearrangeInstances: z
+    .function()
+    .args(z.object({ rowId: z.number(), newIndex: z.number() }))
+    .returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 
@@ -103,5 +148,23 @@ type WorkspaceSlice = WorkspaceState & {
   workspaceActions: WorkspaceActions
 }
 
-export { pouDTOSchema, systemConfigsSchema,variableDTOSchema, workspaceActionsSchema, workspaceResponseSchema, workspaceStateSchema }
-export type { PouDTO, SystemConfigs,VariableDTO, WorkspaceActions, WorkspaceResponse, WorkspaceSlice, WorkspaceState }
+export {
+  pouDTOSchema,
+  systemConfigsSchema,
+  taskDTOSchema,
+  variableDTOSchema,
+  workspaceActionsSchema,
+  workspaceResponseSchema,
+  workspaceStateSchema,
+}
+export type {
+  InstanceDTO,
+  PouDTO,
+  SystemConfigs,
+  TaskDTO,
+  VariableDTO,
+  WorkspaceActions,
+  WorkspaceResponse,
+  WorkspaceSlice,
+  WorkspaceState,
+}
