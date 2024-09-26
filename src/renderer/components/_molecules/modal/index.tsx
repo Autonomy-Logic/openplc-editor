@@ -41,14 +41,16 @@ const ModalContent = forwardRef<
       {...props}
     >
       {props.children}
-      <PrimitiveDialog.Close
-        onClick={() => {
-          if (onClose) onClose()
-        }}
-        className='absolute right-4 top-4 disabled:pointer-events-none'
-      >
-        <CloseIcon className='h-4 w-4 stroke-brand hover:cursor-pointer' />
-      </PrimitiveDialog.Close>
+      {onClose && (
+        <PrimitiveDialog.Close
+          onClick={() => {
+            if (onClose) onClose()
+          }}
+          className='absolute right-4 top-4 disabled:pointer-events-none'
+        >
+          <CloseIcon className='h-4 w-4 stroke-brand hover:cursor-pointer' />
+        </PrimitiveDialog.Close>
+      )}
     </PrimitiveDialog.Content>
   </ModalPortal>
 ))

@@ -39,17 +39,17 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node }: ContactElementP
         onClose={handleCloseModal}
         onEscapeKeyDown={handleCloseModal}
         onInteractOutside={handleCloseModal}
-        className='h-[498px] w-[468px] select-none flex-col justify-between px-8 py-4'
+        className='h-[400px] w-[468px] select-none flex-col justify-between px-8 py-4'
       >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Edit Contact Values</ModalTitle>
-        <div className='flex h-[316px] w-full gap-10'>
+        <div className='flex h-[260px] w-full gap-10'>
           <div className='relative h-full w-full text-base font-medium text-neutral-950'>
             <span className='dark:text-neutral-300'>Modifier</span>
-            <ul className='mt-4 flex flex-col gap-4 dark:text-neutral-300'>
+            <ul className='mt-4 flex flex-col gap-3 dark:text-neutral-300'>
               {contactModifiers.map((modifier, index) => (
                 <li
                   key={index}
-                  className='flex cursor-pointer items-center gap-2'
+                  className='flex cursor-pointer items-center gap-2 rounded-md border-0 p-1 hover:bg-slate-100 dark:hover:bg-neutral-900'
                   onClick={() => setSelectedModifier(modifier.label)}
                 >
                   <input
@@ -72,19 +72,19 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node }: ContactElementP
               Preview
             </label>
             <div className='flex h-full w-full items-center justify-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'>
-              {selectedModifier && getModifierContact(selectedModifier)}
+              <div className='scale-150'>{selectedModifier && getModifierContact(selectedModifier)}</div>
             </div>
           </div>
         </div>
         <div className='flex !h-8 w-full gap-6 '>
+          <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 hover:bg-neutral-300 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'>
+            Cancel
+          </button>
           <button
-            className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'
-            disabled={!selectedModifier}
+            className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white enabled:hover:bg-brand-medium-dark disabled:cursor-not-allowed disabled:opacity-50'
+            disabled={!selectedModifier || selectedModifier === node?.data.variant}
           >
             Confirm
-          </button>
-          <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
-            Cancel
           </button>
         </div>
       </ModalContent>
