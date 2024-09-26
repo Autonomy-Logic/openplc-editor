@@ -1,38 +1,51 @@
 import { ContactNode, DEFAULT_CONTACT_TYPES } from '@root/renderer/components/_atoms/react-flow/custom-nodes/contact'
-import {
-  Modal,
-  ModalContent,
-  ModalTitle,
-  // ModalTrigger
-} from '@root/renderer/components/_molecules'
+import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { Dispatch, SetStateAction, useState } from 'react'
-
-// import imageMock from '../mockImages/Group112.png'
-// import image1 from '../mockImages/image1.png'
-// import image2 from '../mockImages/image2.png'
 
 type ContactElementProps = {
   isOpen: boolean
   onOpenChange: Dispatch<SetStateAction<boolean>>
   onClose?: () => void
-  node?: ContactNode
+  node: ContactNode
+  rungId: string
 }
 
-const ContactElement = ({ isOpen, onOpenChange, onClose, node }: ContactElementProps) => {
+const ContactElement = ({ isOpen, onOpenChange, onClose, node, rungId }: ContactElementProps) => {
+  const {
+    flowActions: { updateNode },
+  } = useOpenPLCStore()
+
   const [selectedModifier, setSelectedModifier] = useState<string | null>(node?.data.variant as string)
   const contactModifiers = Object.entries(DEFAULT_CONTACT_TYPES).map(([label, contact]) => ({
     label: label.replace(/([a-z])([A-Z])/g, '$1 $2'),
+    value: label,
     contact,
   }))
 
-  const getModifierContact = (label: string) => {
-    const modifier = contactModifiers.find((modifier) => modifier.label === label)
+  const getModifierContact = (value: string) => {
+    const modifier = contactModifiers.find((modifier) => modifier.value === value)
     return modifier ? modifier.contact.svg : ''
   }
 
   const handleCloseModal = () => {
     setSelectedModifier(null)
     onClose && onClose()
+  }
+
+  const handleConfirmAlteration = () => {
+    console.log('selectedModifier', selectedModifier)
+    updateNode({
+      node: {
+        ...node,
+        data: {
+          ...node.data,
+          variant: selectedModifier,
+        },
+      },
+      rungId,
+    })
+    handleCloseModal()
   }
 
   return (
@@ -53,7 +66,7 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node }: ContactElementP
                 <li
                   key={index}
                   className='flex cursor-pointer items-center gap-2 rounded-md border-0 p-1 hover:bg-slate-100 dark:hover:bg-neutral-900'
-                  onClick={() => setSelectedModifier(modifier.label)}
+                  onClick={() => setSelectedModifier(modifier.value)}
                 >
                   <input
                     type='radio'
@@ -61,7 +74,7 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node }: ContactElementP
                     className={`border-1 h-4 w-4 cursor-pointer appearance-none rounded-full border border-[#D1D5DB] ring-0 checked:border-[5px] checked:border-brand dark:border-neutral-850 dark:bg-neutral-300`}
                     id={modifier.label}
                     checked={selectedModifier === modifier.label}
-                    onChange={() => setSelectedModifier(modifier.label)}
+                    onChange={() => setSelectedModifier(modifier.value)}
                   />
                   <label className='cursor-pointer text-xs font-normal capitalize' htmlFor={modifier.label}>
                     {modifier.label}
@@ -86,6 +99,7 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node }: ContactElementP
           <button
             className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white enabled:hover:bg-brand-medium-dark disabled:cursor-not-allowed disabled:opacity-50'
             disabled={!selectedModifier || selectedModifier === node?.data.variant}
+            onClick={handleConfirmAlteration}
           >
             Confirm
           </button>

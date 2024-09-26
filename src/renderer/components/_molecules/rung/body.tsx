@@ -83,6 +83,11 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     updateFlowStore()
   }, [rungLocal.nodes.length])
 
+  useEffect(() => {
+    console.log('rung', rung)
+    setRungLocal(rung)
+  }, [rung])
+
   /**
    * Update the selected nodes array when the nodes array changes
    */
@@ -357,6 +362,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
           <ContactElement
             onClose={handleModalClose}
             node={modalNode as ContactNode}
+            rungId={rungLocal.id}
             isOpen={modalOpen}
             onOpenChange={setModalOpen}
           />
@@ -365,6 +371,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
           <CoilElement
             onClose={handleModalClose}
             node={modalNode as CoilNode}
+            rungId={rungLocal.id}
             isOpen={modalOpen}
             onOpenChange={setModalOpen}
           />
