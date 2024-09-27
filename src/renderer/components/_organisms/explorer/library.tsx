@@ -125,8 +125,9 @@ const Library = () => {
                   <LibraryFile
                     key={pou.name}
                     label={pou.name}
-                    isSelected={selectedFileKey === pou.name}
+                    onClick={() => setSelectedFileKey(pou.name)}
                     onSelect={() => setSelectedFileKey(pou.name)}
+                    isSelected={selectedFileKey === pou.name}
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
