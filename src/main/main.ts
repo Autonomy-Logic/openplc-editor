@@ -19,7 +19,7 @@ import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { UserSettings } from './rw-utility'
+import { UserHistory, UserSettings } from './rw-utility'
 import { EditorService, ProjectService } from './services'
 // import {Service}
 
@@ -47,8 +47,10 @@ EditorService.createEditorFolder()
 
 EditorService.setBaseData()
 
-void UserSettings.checkIfUserBaseSettingsExists()
+//editorService to create history
 
+void UserSettings.checkIfUserBaseSettingsExists()
+void UserHistory.checkIfUserHistoryFolderExists()
 // Retrieves the system information
 const systemInfo = platform()
 // The options to use when creating the titlebar. Type comes from electron.

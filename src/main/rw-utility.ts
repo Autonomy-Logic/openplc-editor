@@ -91,4 +91,38 @@ const EditorSettings = {
   },
 }
 
-export { EditorSettings, UserSettings }
+const UserHistory = {
+  /**
+   * Checks if the user history folder exists and creates it if it doesn't.
+   * Also creates a user history file with default values if it doesn't exist.
+   *
+   * @returns {Promise<void>} Resolves when the user history folder and file are ready.
+   */
+  checkIfUserHistoryFolderExists: async function (): Promise<void> {
+    // Construct the user folder path.
+    const pathToUserFolder = join(app.getPath('userData'), 'User')
+    // Construct the user history folder path.
+    const pathToUserHistoryFolder = join(pathToUserFolder, 'History')
+
+    try {
+      // Check if the user history folder exists.
+      await access(pathToUserHistoryFolder, constants.F_OK)
+      console.log(`User history folder found at ${pathToUserHistoryFolder}`)
+    } catch (_err) {
+      // If the folder doesn't exist, create it.
+      try {
+        await mkdir(pathToUserHistoryFolder, { recursive: true })
+        console.log(`User history folder created at ${pathToUserHistoryFolder}`)
+      } catch (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        _err: any
+      ) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        console.error(`Error creating user history folder: ${_err.message}`)
+        return
+      }
+    }
+  },
+}
+
+export { EditorSettings, UserHistory, UserSettings }
