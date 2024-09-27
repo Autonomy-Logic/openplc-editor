@@ -1,5 +1,4 @@
 import { BookIcon, CloseIcon, MagnifierIcon } from '@root/renderer/assets'
-import { useOpenPLCStore } from '@root/renderer/store'
 import { ReactNode, useEffect, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
@@ -18,12 +17,13 @@ type ILibraryRootProps = {
   children: ReactNode
 }
 
-const Library = () => {
-  const {
-    libraries: { system },
-  } = useOpenPLCStore()
+type LibraryProps = {
+  filteredLibraries: { name: string; pous: { name: string }[] }[]
+  setSelectedFileKey: (key: string) => void
+  selectedFileKey: string | null
+}
 
-  const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
+const Library = ({filteredLibraries, setSelectedFileKey, selectedFileKey}: LibraryProps) => {
   const [isSearchActive, setIsSearchActive] = useState(false)
   const [filterText, setFilterText] = useState('')
   const [shouldRenderInput, setShouldRenderInput] = useState(false)
@@ -39,10 +39,6 @@ const Library = () => {
       return () => clearTimeout(timer)
     }
   }, [isSearchActive])
-
-  const filteredLibraries = system.filter((library) =>
-    library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
-  )
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFilterText(e.target.value.toLowerCase())
@@ -125,8 +121,9 @@ const Library = () => {
                   <LibraryFile
                     key={pou.name}
                     label={pou.name}
-                    isSelected={selectedFileKey === pou.name}
+                    onClick={() => setSelectedFileKey(pou.name)}
                     onSelect={() => setSelectedFileKey(pou.name)}
+                    isSelected={selectedFileKey === pou.name}
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')

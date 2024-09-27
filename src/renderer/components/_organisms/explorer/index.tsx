@@ -1,4 +1,5 @@
-import { LegacyRef, ReactElement } from 'react'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { LegacyRef, ReactElement, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../panel'
@@ -17,6 +18,21 @@ type explorerProps = {
 }
 
 const Explorer = ({ collapse }: explorerProps): ReactElement => {
+  const {
+    libraries: { system },
+  } = useOpenPLCStore()
+
+  const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
+
+  const filteredLibraries = system.filter((library: { pous: { name: string }[] }) =>
+    library.pous.some((pou) => pou.name.toLowerCase().includes('')),
+  )
+
+  const selectedPouDocumentation =
+    system
+      .flatMap((library: { pous: { name: string; documentation?: string }[] }) => library.pous)
+      .find((pou) => pou.name === selectedFileKey)?.documentation || null
+
   return (
     <ResizablePanel
       ref={collapse}
@@ -37,10 +53,14 @@ const Explorer = ({ collapse }: explorerProps): ReactElement => {
           className={`bg-neutral-200  transition-colors  duration-200  data-[resize-handle-active="pointer"]:bg-brand-light  data-[resize-handle-state="hover"]:bg-brand-light dark:bg-neutral-850 data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
         />
         <ResizablePanel id='libraryExplorerPanel' order={2} defaultSize={40} collapsible minSize={20}>
-          <Library />
+          <Library
+            filteredLibraries={filteredLibraries}
+            selectedFileKey={selectedFileKey}
+            setSelectedFileKey={setSelectedFileKey}
+          />
         </ResizablePanel>
       </ResizablePanelGroup>
-      <Info />
+      <Info selectedPouDocumentation={selectedPouDocumentation} />
     </ResizablePanel>
   )
 }

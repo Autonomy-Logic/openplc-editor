@@ -32,7 +32,7 @@ const LibraryFolder = ({ label, children, initiallyOpen, shouldBeOpen }: ILibrar
     }
   }, [shouldBeOpen])
 
-  const hasFilesAssociated = children && children.length > 0
+  const hasFilesAssociated = Array.isArray(children) && children.length > 0
 
   return (
     <li className='cursor-pointer aria-expanded:cursor-default'>
