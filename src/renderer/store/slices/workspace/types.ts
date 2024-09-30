@@ -1,5 +1,4 @@
 import {
-  baseTypeSchema,
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
@@ -31,14 +30,6 @@ const pouDTOSchema = z.discriminatedUnion('type', [
   }),
 ])
 type PouDTO = z.infer<typeof pouDTOSchema>
-
-const updateDataTypeDTO = z.object({
-  name: z.string().optional(),
-  derivation: z.literal('array').optional(),
-  baseType: baseTypeSchema.optional(),
-  initialValue: z.string().optional(),
-  dimensions: z.array(z.object({ dimension: z.string() })).optional(),
-})
 
 const systemConfigsSchema = z.object({
   OS: z.enum(['win32', 'linux', 'darwin', '']),
@@ -105,12 +96,11 @@ const workspaceActionsSchema = z.object({
     .returns(z.void()),
 
   createDatatype: z.function().args(PLCDataTypeSchema).returns(z.void()),
-  updateDatatype: z.function().args(z.object({
-    name: z.string(),
-    derivation: z.enum(['array', 'structure', 'enumerated']),
-    dataToUpdate: updateDataTypeDTO
-  })).returns(z.void()),
-  createArrayDimension: z.function().args(z.object({ name: z.string(), derivation: z.enum(['array', 'enumerated', 'structure'])})).returns(z.void())
+  updateDatatype: z.function().args(z.string(), PLCDataTypeSchema.optional()).returns(z.void()),
+  createArrayDimension: z
+    .function()
+    .args(z.object({ name: z.string(), derivation: z.enum(['array', 'enumerated', 'structure']) }))
+    .returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 
@@ -118,5 +108,12 @@ type WorkspaceSlice = WorkspaceState & {
   workspaceActions: WorkspaceActions
 }
 
-export { pouDTOSchema, systemConfigsSchema,variableDTOSchema, workspaceActionsSchema, workspaceResponseSchema, workspaceStateSchema }
-export type { PouDTO, SystemConfigs,VariableDTO, WorkspaceActions, WorkspaceResponse, WorkspaceSlice, WorkspaceState }
+export {
+  pouDTOSchema,
+  systemConfigsSchema,
+  variableDTOSchema,
+  workspaceActionsSchema,
+  workspaceResponseSchema,
+  workspaceStateSchema,
+}
+export type { PouDTO, SystemConfigs, VariableDTO, WorkspaceActions, WorkspaceResponse, WorkspaceSlice, WorkspaceState }
