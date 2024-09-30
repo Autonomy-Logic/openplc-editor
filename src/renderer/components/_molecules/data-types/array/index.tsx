@@ -2,7 +2,6 @@ import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '
 import { useOpenPLCStore } from '@root/renderer/store'
 import { baseTypeSchema, PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
-// import _ from 'lodash'
 import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
 import { DimensionsTable } from './table'
@@ -27,10 +26,11 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
     _.debounce(
-      () => updateDatatype({ name: data.name, derivation: 'array', dataToUpdate: { initialValue: e.target.value } }),
-      500,
+      () => updateDatatype(data.name, { initialValue: e.target.value } as PLCArrayDatatype),
+      1000,
     )()
   }
+
 
   return (
     <div aria-label='Array data type container' className='flex h-full w-full flex-col gap-4 bg-transparent' {...rest}>
