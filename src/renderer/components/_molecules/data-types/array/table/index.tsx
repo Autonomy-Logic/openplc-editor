@@ -7,22 +7,9 @@ import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils/cn'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useEffect, useRef, useState } from 'react'
+import React from 'react'
 
 import { DimensionCell } from './editable-cell'
-
-const columnHelper = createColumnHelper<{ dimension: string }>()
-const columns = [
-  columnHelper.accessor('dimension', {
-    header: '',
-    size: 300,
-    minSize: 150,
-    maxSize: 300,
-    enableResizing: true,
-    cell: (cellProps) => (
-      <DimensionCell {...cellProps} onInputChange={handleInputChange} />
-    ),
-  }),
-]
 
 type DataTypeDimensionsTableProps = {
   name: string
@@ -38,23 +25,53 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
       projectData: { dataTypes },
     },
   } = useOpenPLCStore()
+
+  const columnHelper = createColumnHelper<{ dimension: string }>()
+const columns = React.useMemo (() => [
+  columnHelper.accessor('dimension', {
+    header: '',
+    size: 300,
+    minSize: 150,
+    maxSize: 300,
+    enableResizing: true,
+    cell: (cellProps) => (
+      <DimensionCell {...cellProps} onInputChange={(value) => handleInputChange(value, cellProps.row.index)} onBlur={() => handleBlur(cellProps.row.index)}/>
+    ),  
+  }),
+], [])
+
+
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
   const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>(dimensions ? dimensions : [])
-  const [isButtonDisabled, setIsButtonDisabled] = useState(true);
+
+  const handleInputChange = (value: string, _rowIndex: number) => {
+    console.log("tableData -->", tableData)
+    console.log("value -->", value)
+    console.log("_rowIndex -->", _rowIndex)
+  };
+
+  const handleBlur = (rowIndex: number) => {
+    setTableData((prevData) => prevData.filter((_, index) => index !== rowIndex));
+  };
+
+  const addNewRow = () => {
+    setTableData([...tableData, { dimension: '' }])
+       return  createArrayDimension({
+    name: name,
+    derivation: 'array'
+  })
+  };
 
   useEffect(() => {
     const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype
     if (dimensionsToTable) setTableData(dimensionsToTable['dimensions'])
     }, [dataTypes])
 
-    const handleInputChange = (value) => {
-      setIsButtoDisabled(value.trim() === '');
-    };
 
   const resetBorders = () => {
-    const parent = tableBodyRef.current
+    const parent = tableBodyRef.current 
     if (!parent?.children) return
 
     const rows = Array.from(parent.children)
@@ -116,14 +133,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
         >
           <TableActionButton
             aria-label='Add table row button'
-            disabled={isButtonDisabled}
-            onClick={() =>
-              createArrayDimension({
-                name: name,
-                derivation: 'array',
-              })
-            }
- 
+            onClick={addNewRow}              
           >
             <PlusIcon className='!stroke-brand' />
           </TableActionButton>

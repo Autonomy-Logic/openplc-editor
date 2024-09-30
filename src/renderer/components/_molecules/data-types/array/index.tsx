@@ -31,7 +31,6 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     )()
   }
 
-
   return (
     <div aria-label='Array data type container' className='flex h-full w-full flex-col gap-4 bg-transparent' {...rest}>
       <div aria-label='Data type content actions container' className='flex h-fit w-full gap-8'>
