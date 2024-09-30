@@ -1,5 +1,5 @@
 import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
-import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
+import { MinusIcon,PlusIcon  } from '@radix-ui/react-icons'
 import { StickArrowIcon } from '@root/renderer/assets'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -18,7 +18,9 @@ const columns = [
     minSize: 150,
     maxSize: 300,
     enableResizing: true,
-    cell: DimensionCell,
+    cell: (cellProps) => (
+      <DimensionCell {...cellProps} onInputChange={handleInputChange} />
+    ),
   }),
 ]
 
@@ -40,16 +42,21 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
   const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>(dimensions ? dimensions : [])
-  
+  const [isButtonDisabled, setIsButtonDisabled] = useState(true);
+
   useEffect(() => {
     const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype
     if (dimensionsToTable) setTableData(dimensionsToTable['dimensions'])
     }, [dataTypes])
-  
+
+    const handleInputChange = (value) => {
+      setIsButtoDisabled(value.trim() === '');
+    };
+
   const resetBorders = () => {
     const parent = tableBodyRef.current
     if (!parent?.children) return
- 
+
     const rows = Array.from(parent.children)
     rows.forEach((row) => {
       row.className = cn(
@@ -109,12 +116,14 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
         >
           <TableActionButton
             aria-label='Add table row button'
+            disabled={isButtonDisabled}
             onClick={() =>
               createArrayDimension({
                 name: name,
                 derivation: 'array',
               })
             }
+ 
           >
             <PlusIcon className='!stroke-brand' />
           </TableActionButton>

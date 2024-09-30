@@ -3,25 +3,22 @@ import { cn } from '@root/utils/cn'
 import { CellContext } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
-type EditableCellProps = CellContext<{dimension: string}, unknown> & { editable?: boolean }
-const DimensionCell = ({ getValue, editable = true }: EditableCellProps) => {
+type EditableCellProps = CellContext<{dimension: string}, unknown> & { editable?: boolean }  & {onInputChange?: (value: string) => void}
+
+const DimensionCell = ({ getValue, editable = true, onInputChange  }: EditableCellProps) => {
   const initialValue = getValue<string>()
   const [cellValue, setCellValue] = useState(initialValue)
 
-  const onBlur = () => {
-    if (cellValue === initialValue) return
-    setCellValue(initialValue)
-  }
-
-  useEffect(() => {
-    setCellValue(initialValue)
-  }, [initialValue])
+  useEffect((e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setCellValue(newValue)
+    onInputChange(newValue)
+  }, [cellValue])
 
   return (
     <InputWithRef
       value={cellValue}
-      onChange={(e) => setCellValue(e.target.value)}
-      onBlur={onBlur}
+      onChange={handleChange}
       className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !editable,
       })}

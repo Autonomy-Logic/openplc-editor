@@ -28,9 +28,10 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
     _.debounce(
       () => updateDatatype({ name: data.name, derivation: 'array', dataToUpdate: { initialValue: e.target.value } }),
-      1000,
+      500,
     )()
   }
+
   return (
     <div aria-label='Array data type container' className='flex h-full w-full flex-col gap-4 bg-transparent' {...rest}>
       <div aria-label='Data type content actions container' className='flex h-fit w-full gap-8'>

@@ -328,7 +328,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           let dataTypeToBeUpdated = workspace.projectData.dataTypes[_dataTypeExists] as PLCArrayDatatype
           dataTypeToBeUpdated = { ...dataTypeToBeUpdated, ...filteredDataToUpdate }
           workspace.projectData.dataTypes[_dataTypeExists] = dataTypeToBeUpdated
-          console.log( "chegou aqui", name, derivation, dataToUpdate, dataTypeToBeUpdated)
+          console.log(name, derivation, dataToUpdate, dataTypeToBeUpdated)
         }),
       )
     },

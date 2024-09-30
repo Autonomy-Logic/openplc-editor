@@ -54,6 +54,7 @@ type DatatypeProps = {
 }
 
 const CreateDatatypeObject = (data: DatatypeProps): PLCDataType => {
+  console.log(data)
   switch (data.derivation) {
     case 'array':
       return {

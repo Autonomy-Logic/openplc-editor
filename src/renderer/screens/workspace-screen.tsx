@@ -89,8 +89,6 @@ const WorkspaceScreen = () => {
     })
   }, [collapseAll])
 
-  console.log('datatype ->', projectData.dataTypes)
-
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
@@ -145,7 +143,7 @@ const WorkspaceScreen = () => {
                       )}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
                         <ResizablePanelGroup
-                          id='editorContentPanelGroup'
+                          id='editorConte ntPanelGroup'
                           direction='vertical'
                           className='flex flex-1 flex-col gap-2'
                         >
