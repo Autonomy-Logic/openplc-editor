@@ -2,6 +2,7 @@ import { PouLanguageSources } from '@process:renderer/data'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@radix-ui/react-select'
 import { ArrowIcon, BookIcon, FolderIcon, PathIcon, TimerIcon } from '@root/renderer/assets'
 import { Modal, ModalContent } from '@root/renderer/components/_molecules'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, ConvertToLangShortenedFormat } from '@root/utils'
 import React, { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
@@ -27,6 +28,31 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
     }
   }, [isOpen])
 
+  const {
+    workspaceActions: { setUserWorkspace },
+  } = useOpenPLCStore()
+
+  const { control, handleSubmit,  reset } = useForm<CreatePouFormProps>({
+    defaultValues: {
+      type: 'function',
+      name: '',
+      language: 'il',
+    },
+  })
+
+  const _retrieveNewProjectData = async () => {
+    const { success, data } = await window.bridge.createProject()
+    if (success && data) {
+      setUserWorkspace({
+        editingState: 'unsaved',
+        projectPath: data.meta.path,
+        projectData: data.content,
+        projectName: projectName,
+      })
+
+    }
+  }
+
   const handleClick = (value: string) => {
     setSelected(value)
   }
@@ -36,13 +62,25 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
       setStep(step + 1)
     }
   }
-  const { control } = useForm<CreatePouFormProps>()
+
+  const onSubmit = (data: CreatePouFormProps) => {
+    console.log(data)
+  }
+
+  useEffect(() => {
+    if (!isOpen) {
+      reset()
+      setStep(1)
+    }
+  }, [isOpen, reset])
 
   const inputStyle =
     'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
 
   return (
     <Modal open={isOpen} onOpenChange={onClose}>
+      <form onSubmit={handleSubmit(onSubmit)}>
+
       <ModalContent onClose={onClose} className='flex h-[450px] flex-col justify-between p-6'>
         <div className='flex h-[60px] flex-shrink-0 select-none items-center justify-center'>
           {/* Progress Bar */}
@@ -287,6 +325,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
           )}
         </div>
       </ModalContent>
+      </form>
     </Modal>
   )
 }
