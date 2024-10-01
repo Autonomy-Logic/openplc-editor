@@ -1,80 +1,46 @@
 import { z } from 'zod'
 
-import { dataTypeSchema } from './data-type'
+import { PLCBasetypesSchema } from './base-types'
 
-const variableSchema = z.object({
-  id: z.number(),
+const PLCVariableSchema = z.object({
+  id: z.string().optional(),
   name: z.string(),
   class: z.enum(['input', 'output', 'inOut', 'external', 'local', 'temp']),
-  type: z.discriminatedUnion('scope', [
+  type: z.discriminatedUnion('definition', [
     z.object({
-      scope: z.literal('base-type'),
-      value: z.enum([
-        'bool',
-        'sint',
-        'int',
-        'dint',
-        'lint',
-        'usint',
-        'uint',
-        'udint',
-        'ulint',
-        'real',
-        'lreal',
-        'time',
-        'date',
-        'tod',
-        'dt',
-        'string',
-        'byte',
-        'word',
-        'dword',
-        'lword',
-        'loglevel',
-      ]),
+      definition: z.literal('base-type'),
+      value: PLCBasetypesSchema,
     }),
     z.object({
-      scope: z.literal('user-data-type'),
-      /** In fact this will be filled by the data types created by the user */
-      value: z.lazy(() => dataTypeSchema),
+      definition: z.literal('user-data-type'),
+      /** In fact this will be filled by the data types created by the user
+       *  This is a mock type just for a presentation.
+       * @deprecated
+       */
+      value: z.enum(['userDt1', 'userDt2', 'userDt3']),
     }),
     z.object({
-      scope: z.literal('array'),
-      value: z.object({
+      definition: z.literal('array'),
+      value: z.string(),
+      data: z.object({
         /** This must also include the data types created by the user */
-        baseType: z.enum([
-          'bool',
-          'sint',
-          'int',
-          'dint',
-          'lint',
-          'usint',
-          'uint',
-          'udint',
-          'ulint',
-          'real',
-          'lreal',
-          'time',
-          'date',
-          'tod',
-          'dt',
-          'string',
-          'byte',
-          'word',
-          'dword',
-          'lword',
-          'loglevel',
-        ]),
-        dimensions: z.string().regex(/^(\d+)\.\.(\d+)$/),
+        'base-type': PLCBasetypesSchema,
+        dimensions: z.array(z.string()),
       }),
     }),
   ]),
   location: z.string(),
-  // initialValue: z.string().optional(),
+  initialValue: z.string().optional(),
   documentation: z.string(),
   debug: z.boolean(),
 })
 
-type IVariable = z.infer<typeof variableSchema>
+type PLCVariable = z.infer<typeof PLCVariableSchema>
 
-export { IVariable, variableSchema }
+const PLCGlobalVariableSchema = PLCVariableSchema.extend({
+  class: z.literal('global'),
+})
+
+type PLCGlobalVariable = z.infer<typeof PLCGlobalVariableSchema>
+
+export { PLCGlobalVariable, PLCGlobalVariableSchema, PLCVariable, PLCVariableSchema }
