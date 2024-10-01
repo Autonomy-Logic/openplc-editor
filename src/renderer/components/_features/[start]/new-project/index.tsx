@@ -2,21 +2,24 @@ import { PouLanguageSources } from '@process:renderer/data'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@radix-ui/react-select'
 import { ArrowIcon, BookIcon, FolderIcon, PathIcon, TimerIcon } from '@root/renderer/assets'
 import { Modal, ModalContent } from '@root/renderer/components/_molecules'
-import { useOpenPLCStore } from '@root/renderer/store'
+// import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, ConvertToLangShortenedFormat } from '@root/utils'
-import React, { useEffect, useState } from 'react'
+import React, { ComponentPropsWithoutRef,useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 
-interface NewProjectModalProps {
+type NewProjectModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
   onClose: () => void
 }
-type CreatePouFormProps = {
-  type: 'function' | 'function-block' | 'program'
-  name: string
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+
+type CreateProjectForm = {
+  type: 'plc-project' | 'plc-library'
+  name: string,
+  path: string,
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd',
+  time: string
 }
-export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose }) => {
+export const NewProjectModal = ({ isOpen, onClose, ...res }: NewProjectModalProps) => {
   const [selected, setSelected] = useState<string | null>(null)
   const [step, setStep] = useState<number>(1)
   const [projectName, setProjectName] = useState('Project-name')
@@ -28,29 +31,29 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
     }
   }, [isOpen])
 
-  const {
-    workspaceActions: { setUserWorkspace },
-  } = useOpenPLCStore()
+  // const {
+  //   workspaceActions: { setUserWorkspace },
+  // } = useOpenPLCStore()
 
-  const { control, handleSubmit, reset } = useForm<CreatePouFormProps>({
+  const { control, handleSubmit, reset } = useForm<CreateProjectForm>({
     defaultValues: {
-      type: 'function',
+      type: 'plc-project',
       name: '',
       language: 'il',
     },
   })
 
-  const _retrieveNewProjectData = async () => {
-    const { success, data } = await window.bridge.createProject()
-    if (success && data) {
-      setUserWorkspace({
-        editingState: 'unsaved',
-        projectPath: data.meta.path,
-        projectData: data.content,
-        projectName: projectName,
-      })
-    }
-  }
+  // const _retrieveNewProjectData = async () => {
+  //   const { success, data } = await window.bridge.createProject()
+  //   if (success && data) {
+  //     setUserWorkspace({
+  //       editingState: 'unsaved',
+  //       projectPath: data.meta.path,
+  //       projectData: data.content,
+  //       projectName: projectName,
+  //     })
+  //   }
+  // }
 
   const handleClick = (value: string) => {
     setSelected(value)
@@ -62,7 +65,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
     }
   }
 
-  const onSubmit = (data: CreatePouFormProps) => {
+  const onSubmit = (data: CreateProjectForm) => {
     console.log(data)
   }
 
@@ -77,7 +80,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClos
     'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
 
   return (
-    <Modal open={isOpen} onOpenChange={onClose}>
+    <Modal open={isOpen} onOpenChange={onClose} {...res}>
       <form onSubmit={void handleSubmit( onSubmit)}>
         <ModalContent onClose={onClose} className='flex h-[450px] flex-col justify-between p-6'>
           <div className='flex h-[60px] flex-shrink-0 select-none items-center justify-center'>
