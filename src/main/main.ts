@@ -19,8 +19,8 @@ import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { UserHistory, UserSettings } from './rw-utility'
 import { EditorService, ProjectService } from './services'
+import { UserSettings } from './services/user-service'
 // import {Service}
 
 class AppUpdater {
@@ -43,14 +43,15 @@ if (process.env.NODE_ENV === 'production') {
   void loadSourceMapSupport()
 }
 
+//editorService to create history
 EditorService.createEditorFolder()
+
+EditorService.createHistoryFolder()
 
 EditorService.setBaseData()
 
-//editorService to create history
-
 void UserSettings.checkIfUserBaseSettingsExists()
-void UserHistory.checkIfUserHistoryFolderExists()
+// void UserService.checkIfUserHistoryFolderExists()
 // Retrieves the system information
 const systemInfo = platform()
 // The options to use when creating the titlebar. Type comes from electron.

@@ -91,7 +91,7 @@ const EditorSettings = {
   },
 }
 
-const UserHistory = {
+const UserService = {
   /**
    * Checks if the user history folder exists and creates it if it doesn't.
    * Also creates a user history file with default values if it doesn't exist.
@@ -103,26 +103,71 @@ const UserHistory = {
     const pathToUserFolder = join(app.getPath('userData'), 'User')
     // Construct the user history folder path.
     const pathToUserHistoryFolder = join(pathToUserFolder, 'History')
+    // Construct the user project history file path.
+    const pathToUserProjectInfoFile = join(pathToUserHistoryFolder, 'projects.json')
+    // Construct the user library history file path.
+    const pathToUserLibraryInfoFile = join(pathToUserHistoryFolder, 'libraries.json')
 
+    // Check if the user project history file exists. If not, create it.
     try {
-      // Check if the user history folder exists.
-      await access(pathToUserHistoryFolder, constants.F_OK)
-      console.log(`User history folder found at ${pathToUserHistoryFolder}`)
+      await access(pathToUserProjectInfoFile, constants.F_OK)
+      console.log(`User project history file found at ${pathToUserProjectInfoFile}`)
     } catch (_err) {
-      // If the folder doesn't exist, create it.
+      // If the file doesn't exist, create it.
       try {
-        await mkdir(pathToUserHistoryFolder, { recursive: true })
-        console.log(`User history folder created at ${pathToUserHistoryFolder}`)
+        await writeFile(
+          pathToUserProjectInfoFile,
+          JSON.stringify(
+            {
+              projects: [],
+            },
+            null,
+            2,
+          ),
+          // This flag opens the file to writing and creates if it doesn't exist, and fails if it already exists.
+          { flag: 'wx' },
+        )
+        console.log(`User project history file created at ${pathToUserProjectInfoFile}`)
       } catch (
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         _err: any
       ) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        console.error(`Error creating user history folder: ${_err.message}`)
+        console.error(`Error creating user project history file: ${_err.message}`)
+        return
+      }
+    }
+
+    // Check if the user library history file exists. If not, create it.
+    try {
+      await access(pathToUserLibraryInfoFile, constants.F_OK)
+      console.log(`User library history file found at ${pathToUserLibraryInfoFile}`)
+    } catch (_err) {
+      // If the file doesn't exist, create it.
+      try {
+        await writeFile(
+          pathToUserLibraryInfoFile,
+          JSON.stringify(
+            {
+              libraries: [],
+            },
+            null,
+            2,
+          ),
+          // This flag opens the file to writing and creates if it doesn't exist, and fails if it already exists.
+          { flag: 'wx' },
+        )
+        console.log(`User library history file created at ${pathToUserLibraryInfoFile}`)
+      } catch (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        _err: any
+      ) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        console.error(`Error creating user library history file: ${_err.message}`)
         return
       }
     }
   },
 }
 
-export { EditorSettings, UserHistory, UserSettings }
+export { EditorSettings, UserService, UserSettings }
