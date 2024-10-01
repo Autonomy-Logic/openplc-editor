@@ -56,18 +56,23 @@ const _rightPowerRailSchema = z.object({
       x: z.number(),
       y: z.number(),
     }),
-    connections: z.array(
-      z.object({
-        'local-id': z.string(),
-        'global-positions': z.array(
-          z.object({
-            'coordinate-reference': z.string(), // This could be unnecessary.
-            x: z.number(),
-            y: z.number(),
-          }),
-        ),
-      }),
-    ),
+    connection: z.object({
+      'local-id': z.string(),
+      positions: z.tuple([
+        // This is the reference for the input in the rail
+        z.object({
+          'element-reference': z.enum(['out', 'in']),
+          x: z.number(),
+          y: z.number(),
+        }),
+        // This is the reference for the element output
+        z.object({
+          'element-reference': z.enum(['out', 'in']),
+          x: z.number(),
+          y: z.number(),
+        }),
+      ]),
+    }),
   }),
 })
 
