@@ -1,5 +1,5 @@
 import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
-import { MinusIcon,PlusIcon  } from '@radix-ui/react-icons'
+import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
 import { StickArrowIcon } from '@root/renderer/assets'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -19,6 +19,8 @@ type DataTypeDimensionsTableProps = {
 }
 
 const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: DataTypeDimensionsTableProps) => {
+  const inputRef = useRef<{ focus: () => void }>(null)
+
   const {
     workspaceActions: { createArrayDimension },
     workspace: {
@@ -27,19 +29,26 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   } = useOpenPLCStore()
 
   const columnHelper = createColumnHelper<{ dimension: string }>()
-const columns = React.useMemo (() => [
-  columnHelper.accessor('dimension', {
-    header: '',
-    size: 300,
-    minSize: 150,
-    maxSize: 300,
-    enableResizing: true,
-    cell: (cellProps) => (
-      <DimensionCell {...cellProps} onInputChange={(value) => handleInputChange(value, cellProps.row.index)} onBlur={() => handleBlur(cellProps.row.index)}/>
-    ),  
-  }),
-], [])
-
+  const columns = React.useMemo(
+    () => [
+      columnHelper.accessor('dimension', {
+        header: '',
+        size: 300,
+        minSize: 150,
+        maxSize: 300,
+        enableResizing: true,
+        cell: (cellProps) => (
+          <DimensionCell
+            {...cellProps}
+            onInputChange={(value) => handleInputChange(value, cellProps.row.index)}
+            onBlur={() => handleBlur(cellProps.row.index)}
+            ref={cellProps.row.index === tableData.length - 1 ? inputRef : null}
+          />
+        ),
+      }),
+    ],
+    [],
+  )
 
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
@@ -47,31 +56,39 @@ const columns = React.useMemo (() => [
   const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>(dimensions ? dimensions : [])
 
   const handleInputChange = (value: string, _rowIndex: number) => {
-    console.log("tableData -->", tableData)
-    console.log("value -->", value)
-    console.log("_rowIndex -->", _rowIndex)
-  };
+    console.log('tableData -->', tableData)
+    console.log('value -->', value)
+    console.log('_rowIndex -->', _rowIndex)
+  }
 
   const handleBlur = (rowIndex: number) => {
-    setTableData((prevData) => prevData.filter((_, index) => index !== rowIndex));
-  };
+    setTableData((prevData) => prevData.filter((_, index) => index !== rowIndex))
+  }
 
   const addNewRow = () => {
-    setTableData([...tableData, { dimension: '' }])
-       return  createArrayDimension({
-    name: name,
-    derivation: 'array'
-  })
-  };
+    setTableData((prevTableData) => {
+      const newTableData = [...prevTableData, { dimension: '' }];
+      return newTableData;
+    });
+  
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 0);
 
+    return createArrayDimension({
+      name: name,
+      derivation: 'array'
+    });
+  };
   useEffect(() => {
     const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype
     if (dimensionsToTable) setTableData(dimensionsToTable['dimensions'])
-    }, [dataTypes])
-
+  }, [dataTypes])
 
   const resetBorders = () => {
-    const parent = tableBodyRef.current 
+    const parent = tableBodyRef.current
     if (!parent?.children) return
 
     const rows = Array.from(parent.children)
@@ -131,10 +148,7 @@ const columns = React.useMemo (() => [
           aria-label='Data type table actions buttons container'
           className='flex h-full w-fit items-center justify-evenly *:rounded-md *:p-1'
         >
-          <TableActionButton
-            aria-label='Add table row button'
-            onClick={addNewRow}              
-          >
+          <TableActionButton aria-label='Add table row button' onClick={addNewRow} id='add-new-row-button'>
             <PlusIcon className='!stroke-brand' />
           </TableActionButton>
           <TableActionButton aria-label='Remove table row button' onClick={() => console.log('Button clicked')}>
