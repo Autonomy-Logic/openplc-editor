@@ -45,7 +45,8 @@ const EditorService = {
     open(pathToUserHistoryFolder, 'r', (err, fd) => {
       // If the user history folder exists already terminate the process.
       if (err === null) {
-        console.log('User history folder already exist!', fd) // TODO: Remove log
+        console.log('User history folder already exist!', fd)
+        void UserService.checkIfUserHistoryFolderExists()
         return
       } else if (err.code === 'ENOENT') {
         // If the user history folder does not exist, create it.
