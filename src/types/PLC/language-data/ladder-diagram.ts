@@ -118,34 +118,35 @@ const _blockSchema = z.object({
    * 'inOut-variables' is an array of objects that represent the inOut variables of the block.
    * @wip This is a guess, we need to confirm this.
    */
-  'inOut-variables': z.array(
-    z.object({
-      'formal-parameter': z.string(),
-      'connection-point-in': z.object({
-        'relative-position': z.object({
-          x: z.number(),
-          y: z.number(),
-        }),
-        connections: z.array(
-          z.object({
-            'reference-to-local-id': z.string(), // was just local-id, but it seems to be a reference to other element local-id.
-            positions: z.array(
-              z.object({
-                x: z.number(),
-                y: z.number(),
-              }),
-            ),
-          }),
-        ),
-      }),
-      'connection-point-out': z.object({
-        'relative-position': z.object({
-          x: z.number(),
-          y: z.number(),
-        }),
-      }),
-    }),
-  ),
+  'inOut-variables': z.string(),
+  // 'inOut-variables': z.array(
+  //   z.object({
+  //     'formal-parameter': z.string(),
+  //     'connection-point-in': z.object({
+  //       'relative-position': z.object({
+  //         x: z.number(),
+  //         y: z.number(),
+  //       }),
+  //       connections: z.array(
+  //         z.object({
+  //           'reference-to-local-id': z.string(), // was just local-id, but it seems to be a reference to other element local-id.
+  //           positions: z.array(
+  //             z.object({
+  //               x: z.number(),
+  //               y: z.number(),
+  //             }),
+  //           ),
+  //         }),
+  //       ),
+  //     }),
+  //     'connection-point-out': z.object({
+  //       'relative-position': z.object({
+  //         x: z.number(),
+  //         y: z.number(),
+  //       }),
+  //     }),
+  //   }),
+  // ),
   'output-variables': z.array(
     z.object({
       'formal-parameter': z.string(),
