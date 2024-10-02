@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { access, constants, mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 
-const UserSettings = {
+const UserService = {
   /**
    * Checks if the user base settings folder exists and creates it if it doesn't.
    * Also creates a user settings file with default values if it doesn't exist.
@@ -60,38 +60,6 @@ const UserSettings = {
       }
     }
   },
-}
-
-const EditorSettings = {
-  /**
-   * Checks if the editor folder exists and creates it if it doesn't.
-   * Also creates an editor file with default values if it doesn't exist.
-   *
-   * @returns {Promise<void>} Resolves when the editor folder are ready.
-   */
-  checkIfEditorFolderExists: async function (): Promise<void> {
-    // Construct the editor folder path.
-    const pathToEditorFolder = join(app.getPath('userData'), 'Editor')
-    // Check if editor folder exists. If not, create it.
-    try {
-      await access(pathToEditorFolder, constants.F_OK)
-      console.log(`Editor folder found at ${pathToEditorFolder}`)
-    } catch (_err) {
-      try {
-        const editorFolder = await mkdir(pathToEditorFolder, { recursive: true })
-        console.log(`Editor folder created at ${editorFolder}`)
-        return
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (_err: any) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        console.error(`Error creating editor folder: ${_err.message}`)
-        return
-      }
-    }
-  },
-}
-
-const UserService = {
   /**
    * Checks if the user history folder exists and creates it if it doesn't.
    * Also creates a user history file with default values if it doesn't exist.
@@ -170,4 +138,4 @@ const UserService = {
   },
 }
 
-export { EditorSettings, UserService, UserSettings }
+export { UserService }

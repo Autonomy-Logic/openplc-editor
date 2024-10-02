@@ -19,9 +19,7 @@ import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { EditorService, ProjectService } from './services'
-import { UserSettings } from './services/user-service'
-// import {Service}
+import { ProjectService, UserService } from './services'
 
 class AppUpdater {
   constructor() {
@@ -43,14 +41,7 @@ if (process.env.NODE_ENV === 'production') {
   void loadSourceMapSupport()
 }
 
-//editorService to create history
-EditorService.createEditorFolder()
-
-EditorService.createHistoryFolder()
-
-EditorService.setBaseData()
-
-void UserSettings.checkIfUserBaseSettingsExists()
+void UserService.checkIfUserBaseSettingsExists()
 // void UserService.checkIfUserHistoryFolderExists()
 // Retrieves the system information
 const systemInfo = platform()

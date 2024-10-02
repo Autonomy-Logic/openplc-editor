@@ -1,13 +1,12 @@
-import { BrowserWindow, dialog } from 'electron'
+import { app, BrowserWindow, dialog } from 'electron'
 import { promises, readFile, writeFile } from 'fs'
 import { join } from 'path'
 
 // import { projectSchema } from '../../../types/PLC'
 import { PLCProjectData, PLCProjectDataSchema } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
-import { store } from '../../modules/store' // This must be refactored
+import { CreateJSONFile } from '../../utils'
 import { baseJsonStructure } from './data'
-import { CreateJSONFile } from './utils/json-creator'
 
 export type IProjectServiceResponse = {
   success: boolean
@@ -67,15 +66,62 @@ class ProjectService {
     CreateJSONFile(filePath, JSON.stringify(baseJsonStructure, null, 2), 'data')
 
     const projectPath = join(filePath, 'data.json')
+    /**
+     * First, read the content of the projects.json file in the History folder.
+     * Second, write that content into a JavaScript object.
+     * Third, concatenate the content of the file with the current path.
+     * Fourth, write the content of the JavaScript object back to the projects.json file.
+     */
+    const pathToUserDataFolder = join(app.getPath('userData'), 'User')
+    const historyFilePath = join(pathToUserDataFolder, 'History/projects.json')
 
-    // !Deprecated: Should be removed
-    const lastProjects = store.get('last_projects')
-    if (lastProjects.length === 10) {
-      lastProjects.splice(9, 1)
-      lastProjects.unshift(projectPath)
-      store.set('last_projects', lastProjects)
-    } else {
-      store.set('last_projects', [projectPath, ...lastProjects])
+    try {
+      const historyContent = await promises.readFile(historyFilePath, 'utf-8')
+      let historyData
+
+      // Try to parse the content. If it fails, initialize an empty array.
+      try {
+        historyData = JSON.parse(historyContent)
+      } catch (error) {
+        console.error(error)
+        historyData = []
+      }
+
+      // Check if historyData is an array.
+      if (!Array.isArray(historyData)) {
+        historyData = []
+      }
+
+      // Create an object with project information.
+      const projectInfo = {
+        path: projectPath,
+        createdAt: new Date().toISOString(), // creation date in ISO format.
+      }
+
+      // Add the object to the history.
+      historyData.push(projectInfo)
+
+      // Write the new content back to the projects.json file.
+      await promises.writeFile(historyFilePath, JSON.stringify(historyData, null, 2))
+    } catch (error) {
+      // If the file does not exist, initialize historyData as an empty array.
+      if (error.code === 'ENOENT') {
+        const initialData = [
+          {
+            path: projectPath,
+            createdAt: new Date().toISOString(),
+          },
+        ]
+        await promises.writeFile(historyFilePath, JSON.stringify(initialData, null, 2))
+      } else {
+        return {
+          success: false,
+          error: {
+            title: 'Error reading or writing to the history file',
+            description: 'An error occurred while reading or writing to the history file.',
+          },
+        }
+      }
     }
 
     return {
