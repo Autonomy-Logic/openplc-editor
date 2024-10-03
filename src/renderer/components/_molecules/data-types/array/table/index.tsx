@@ -19,10 +19,13 @@ type DataTypeDimensionsTableProps = {
 }
 
 const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: DataTypeDimensionsTableProps) => {
-  const inputRef = useRef<{ focus: () => void }>(null)
+  const [focusIndex, setFocusIndex] = useState<number | null>(null);
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null)
+  const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
+  const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>(dimensions ? dimensions : [])
 
   const {
-    workspaceActions: { createArrayDimension },
+    workspaceActions: { createArrayDimension }, 
     workspace: {
       projectData: { dataTypes },
     },
@@ -39,44 +42,46 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
         enableResizing: true,
         cell: (cellProps) => (
           <DimensionCell
-            {...cellProps}
+          {...cellProps}
             onInputChange={(value) => handleInputChange(value, cellProps.row.index)}
             onBlur={() => handleBlur(cellProps.row.index)}
-            ref={cellProps.row.index === tableData.length - 1 ? inputRef : null}
+            id={`${cellProps.row.index}`}
+            autoFocus={cellProps.row.index === focusIndex}
           />
         ),
       }),
+
     ],
-    [],
+    [focusIndex],
   )
 
-  const tableBodyRef = useRef<HTMLTableSectionElement>(null)
-  const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
+  // useEffect(() => {
+  //   if (focusIndex !== null) {
+  //     // setFocusIndex(null);
+  //   }
+  // }, [focusIndex]);
 
-  const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>(dimensions ? dimensions : [])
-
-  const handleInputChange = (value: string, _rowIndex: number) => {
-    console.log('tableData -->', tableData)
+  const handleInputChange = (value: string) => {
     console.log('value -->', value)
-    console.log('_rowIndex -->', _rowIndex)
   }
-
+  
   const handleBlur = (rowIndex: number) => {
-    setTableData((prevData) => prevData.filter((_, index) => index !== rowIndex))
+    setTableData((prevRows) => {
+      const newRows = prevRows.filter((_, index) => { 
+        const inputElement = document.getElementById(`dimension-input-${index}`) as HTMLInputElement;
+        return index !== rowIndex || (inputElement && inputElement.value.trim() !== '');
+      });
+      return newRows;
+    });
   }
 
   const addNewRow = () => {
-    setTableData((prevTableData) => {
-      const newTableData = [...prevTableData, { dimension: '' }];
-      return newTableData;
+    setTableData((prevRows) => {
+      const newRows = [...prevRows, prevRows.length];
+      setFocusIndex(newRows.length - 1);
+      return newRows;
     });
   
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-      }
-    }, 0);
-
     return createArrayDimension({
       name: name,
       derivation: 'array'
