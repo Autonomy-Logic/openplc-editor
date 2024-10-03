@@ -146,12 +146,14 @@ const Library = ({ filteredLibraries, setSelectedFileKey, selectedFileKey }: Lib
                     isSelected={selectedFileKey === pou.name}
                     draggable
                     onDragStart={(e) => {
-                      e.dataTransfer.setData(
-                        'text/plain',
-                        type === 'plc-textual' ? (meta.language === 'st' ? parsePouToStText(pou) : pou.body) : '',
-                      )
-                      e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
-                      e.dataTransfer.setData('application/library', `system/${library.name}/${pou.name}`)
+                      if (type === 'plc-textual')
+                        e.dataTransfer.setData('text/plain', meta.language === 'st' ? parsePouToStText(pou) : pou.body)
+                      else if (type === 'plc-graphical') {
+                        if (meta.language === 'ld') {
+                          e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
+                        }
+                        e.dataTransfer.setData('application/library', `system/${library.name}/${pou.name}`)
+                      }
                     }}
                   />
                 ))}
