@@ -42,7 +42,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 void UserService.checkIfUserBaseSettingsExists()
-// void UserService.checkIfUserHistoryFolderExists()
+void UserService.checkIfUserHistoryFolderExists()
 // Retrieves the system information
 const systemInfo = platform()
 // The options to use when creating the titlebar. Type comes from electron.

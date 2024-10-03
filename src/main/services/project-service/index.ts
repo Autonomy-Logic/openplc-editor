@@ -6,6 +6,7 @@ import { join } from 'path'
 import { PLCProjectData, PLCProjectDataSchema } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { CreateJSONFile } from '../../utils'
+import { UserService } from '../user-service'
 import { baseJsonStructure } from './data'
 
 export type IProjectServiceResponse = {
@@ -31,37 +32,38 @@ class ProjectService {
       title: i18n.t('createProject:dialog.title'),
       properties: ['openDirectory', 'createDirectory'],
     })
-
+    
     if (canceled)
       return {
-        success: false,
-        error: {
-          title: i18n.t('projectServiceResponses:createProject.errors.canceled.title'),
-          description: i18n.t('projectServiceResponses:createProject.errors.canceled.description'),
-        },
-      }
-    const [filePath] = filePaths
-
-    const isEmptyDir = async () => {
-      try {
-        const directory = await promises.opendir(filePath)
-        const entry = await directory.read()
-        await directory.close()
-        return entry === null
-      } catch (_error) {
-        return false
+    success: false,
+    error: {
+      title: i18n.t('projectServiceResponses:createProject.errors.canceled.title'),
+      description: i18n.t('projectServiceResponses:createProject.errors.canceled.description'),
+    },
+  }
+  const [filePath] = filePaths
+  
+  const isEmptyDir = async () => {
+    try {
+      const directory = await promises.opendir(filePath)
+      const entry = await directory.read()
+      await directory.close()
+      return entry === null
+    } catch (_error) {
+      return false
+    }
+  }
+  
+  if (!(await isEmptyDir())) {
+    return {
+      success: false,
+      error: {
+        title: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.title'),
+        description: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.description'),
+      },
       }
     }
-
-    if (!(await isEmptyDir())) {
-      return {
-        success: false,
-        error: {
-          title: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.title'),
-          description: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.description'),
-        },
-      }
-    }
+    await UserService.checkIfUserHistoryFolderExists(); 
 
     CreateJSONFile(filePath, JSON.stringify(baseJsonStructure, null, 2), 'data')
 
@@ -72,47 +74,43 @@ class ProjectService {
      * Third, concatenate the content of the file with the current path.
      * Fourth, write the content of the JavaScript object back to the projects.json file.
      */
-    const pathToUserDataFolder = join(app.getPath('userData'), 'User')
-    const historyFilePath = join(pathToUserDataFolder, 'History/projects.json')
 
+    const pathToUserDataFolder = join(app.getPath('userData'), 'User');
+    const pathToUserHistoryFolder = join(pathToUserDataFolder, 'History');
+    const projectsFilePath = join(pathToUserHistoryFolder, 'projects.json');
+  
     try {
-      const historyContent = await promises.readFile(historyFilePath, 'utf-8')
-      let historyData
-
-      // Try to parse the content. If it fails, initialize an empty array.
+      const historyContent = await promises.readFile(projectsFilePath, 'utf-8');
+      let historyData;
+  
       try {
-        historyData = JSON.parse(historyContent)
+        historyData = JSON.parse(historyContent);
       } catch (error) {
-        console.error(error)
-        historyData = []
+        console.error(error);
+        historyData = [];
       }
-
-      // Check if historyData is an array.
+  
       if (!Array.isArray(historyData)) {
-        historyData = []
+        historyData = [];
       }
-
-      // Create an object with project information.
+  
       const projectInfo = {
         path: projectPath,
-        createdAt: new Date().toISOString(), // creation date in ISO format.
-      }
-
-      // Add the object to the history.
-      historyData.push(projectInfo)
-
-      // Write the new content back to the projects.json file.
-      await promises.writeFile(historyFilePath, JSON.stringify(historyData, null, 2))
+        createdAt: new Date().toISOString(),
+      };
+  
+      historyData.push(projectInfo);
+  
+      await promises.writeFile(projectsFilePath, JSON.stringify(historyData, null, 2));
     } catch (error) {
-      // If the file does not exist, initialize historyData as an empty array.
       if (error.code === 'ENOENT') {
         const initialData = [
           {
             path: projectPath,
             createdAt: new Date().toISOString(),
           },
-        ]
-        await promises.writeFile(historyFilePath, JSON.stringify(initialData, null, 2))
+        ];
+        await promises.writeFile(projectsFilePath, JSON.stringify(initialData, null, 2));
       } else {
         return {
           success: false,
@@ -120,10 +118,10 @@ class ProjectService {
             title: 'Error reading or writing to the history file',
             description: 'An error occurred while reading or writing to the history file.',
           },
-        }
+        };
       }
     }
-
+  
     return {
       success: true,
       data: {
@@ -132,7 +130,7 @@ class ProjectService {
         },
         content: baseJsonStructure,
       },
-    }
+    };
   }
 
   async openProject(): Promise<IProjectServiceResponse> {
