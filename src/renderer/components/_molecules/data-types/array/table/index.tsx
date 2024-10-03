@@ -42,17 +42,20 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
         enableResizing: true,
         cell: (cellProps) => (
           <DimensionCell
-          {...cellProps}
+            {...cellProps}
             onInputChange={(value) => handleInputChange(value, cellProps.row.index)}
             onBlur={() => handleBlur(cellProps.row.index)}
             id={`${cellProps.row.index}`}
             autoFocus={cellProps.row.index === focusIndex}
+            name={name}
+            dimensions={dimensions}
+            selectedRow={selectedRow}
+            handleRowClick={handleRowClick}
           />
         ),
       }),
-
     ],
-    [focusIndex],
+    [focusIndex, name, dimensions, selectedRow, handleRowClick],
   )
 
   // useEffect(() => {
@@ -61,32 +64,34 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   //   }
   // }, [focusIndex]);
 
-  const handleInputChange = (value: string) => {
+  const handleInputChange = (value: string, index: number) => {
     console.log('value -->', value)
+    console.log(index)
   }
-  
+
   const handleBlur = (rowIndex: number) => {
     setTableData((prevRows) => {
-      const newRows = prevRows.filter((_, index) => { 
-        const inputElement = document.getElementById(`dimension-input-${index}`) as HTMLInputElement;
-        return index !== rowIndex || (inputElement && inputElement.value.trim() !== '');
-      });
-      return newRows;
-    });
+      const newRows = prevRows.filter((_, index) => {
+        const inputElement = document.getElementById(`dimension-input-${index}`) as HTMLInputElement
+        return index !== rowIndex || (inputElement && inputElement.value.trim() !== '')
+      })
+      return newRows
+    })
   }
 
   const addNewRow = () => {
     setTableData((prevRows) => {
-      const newRows = [...prevRows, prevRows.length];
-      setFocusIndex(newRows.length - 1);
-      return newRows;
-    });
-  
+      const newRows = [...prevRows, prevRows.length]
+      setFocusIndex(newRows.length - 1)
+      return newRows
+    })
+
     return createArrayDimension({
       name: name,
-      derivation: 'array'
-    });
-  };
+      derivation: 'array',
+    })
+  }
+
   useEffect(() => {
     const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype
     if (dimensionsToTable) setTableData(dimensionsToTable['dimensions'])
@@ -169,14 +174,14 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
       </div>
       <Table context='data-type-array'>
         <TableBody ref={tableBodyRef}>
-          {table.getRowModel().rows.map((row) => (
+          {table.getRowModel().rows.map((row, index) => (
             <TableRow
-              id={row.id}
-              key={row.id}
-              className='h-8'
-              selected={selectedRow === parseInt(row.id)}
-              ref={selectedRow === parseInt(row.id) ? tableBodyRowRef : null}
-              onClick={(e) => handleRowClick(e.currentTarget)}
+            id={`${index}`}
+            key={index}
+            className='h-8'
+            selected={selectedRow === index}
+            ref={selectedRow === index ? tableBodyRowRef : null}
+            onClick={(e) => handleRowClick(e.currentTarget)}
             >
               {row.getVisibleCells().map((cell) => (
                 <TableCell
@@ -185,7 +190,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
                 >
                   {flexRender(cell.column.columnDef.cell, {
                     ...cell.getContext(),
-                    editable: selectedRow === parseInt(row.id),
+                    editable: selectedRow === index,
                   })}
                 </TableCell>
               ))}
