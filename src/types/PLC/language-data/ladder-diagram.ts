@@ -16,7 +16,7 @@ import { z } from 'zod'
  * - 'global-position': an object that represents the global position of the left power rail. It includes x and y coordinates.
  * - 'connection-point-out': an object that represents the connection point out of the left power rail. It includes a 'relative-position' object with x and y coordinates.
  */
-const _leftPowerRailSchema = z.object({
+const leftPowerRailSchema = z.object({
   'local-id': z.string(),
   width: z.number(),
   height: z.number(),
@@ -42,7 +42,7 @@ const _leftPowerRailSchema = z.object({
  * - 'connection-point-in': an object that represents the connection point in of the right power rail. It includes a 'relative-position' object with x and y coordinates and an array of connections.
  * Each connection is an object that includes a 'reference-to-local-id' (reference to other block) and an array of 'positions'. Each position is an object that includes x and y coordinates representing the path of the connection.
  */
-const _rightPowerRailSchema = z.object({
+const rightPowerRailSchema = z.object({
   'local-id': z.string(),
   width: z.number(),
   height: z.number(),
@@ -82,7 +82,7 @@ const _rightPowerRailSchema = z.object({
  * Each 'connection-point-in' and 'connection-point-out' includes a 'relative-position' object with x and y coordinates and an array of connections.
  * Each connection is an object that includes a 'reference-to-local-id' and an array of 'positions'. Each 'position' is an object that includes x and y coordinates representing the path of the connection..
  */
-const _blockSchema = z.object({
+const blockSchema = z.object({
   'local-id': z.string(),
   'type-name': z.string(),
   'instance-name': z.string(),
@@ -174,10 +174,10 @@ const _blockSchema = z.object({
  * Each connection is an object that includes a 'reference-to-local-id' and an array of 'positions'. Each 'position' is an object that includes x and y coordinates representing the path of the connection.
  * - 'connection-point-out': an object that represents the connection point out of the contact. It includes a 'relative-position' object with x and y coordinates.
  */
-const _contactSchema = z.object({
+const contactSchema = z.object({
   'local-id': z.string(),
   negated: z.boolean(),
-  edges: z.enum(['rising', 'falling', '']),
+  edges: z.enum(['rising', 'falling']).optional(),
   width: z.number(),
   height: z.number(),
   position: z.object({
@@ -225,11 +225,11 @@ const _contactSchema = z.object({
  * Each connection is an object that includes a 'reference-to-local-id' and an array of 'positions'. Each 'position' is an object that includes x and y coordinates representing the path of the connection.
  * - 'connection-point-out': an object that represents the connection point out of the coil. It includes a 'relative-position' object with x and y coordinates.
  */
-const _coilSchema = z.object({
+const coilSchema = z.object({
   'local-id': z.string(),
   negated: z.boolean(),
-  edges: z.enum(['rising', 'falling', '']),
-  storage: z.enum(['set', 'reset', '']),
+  edges: z.enum(['rising', 'falling']).optional(),
+  storage: z.enum(['set', 'reset']).optional(),
   width: z.number(),
   height: z.number(),
   position: z.object({
@@ -267,7 +267,7 @@ const _coilSchema = z.object({
  * It includes the following properties:
  * - type: a string that represents the type of the variable (in, out, or inOut).
  */
-const _variableSchema = z.discriminatedUnion('type', [
+const variableSchema = z.discriminatedUnion('type', [
   /**
    * inSchema is a zod schema for the input variable element of the Ladder Diagram.
    * It includes the following properties:
@@ -392,3 +392,5 @@ const _variableSchema = z.discriminatedUnion('type', [
     expression: z.string(),
   }),
 ])
+
+export { blockSchema, coilSchema, contactSchema, leftPowerRailSchema, rightPowerRailSchema, variableSchema }
