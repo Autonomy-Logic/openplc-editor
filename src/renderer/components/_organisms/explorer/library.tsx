@@ -1,7 +1,9 @@
 import { BookIcon, CloseIcon, MagnifierIcon } from '@root/renderer/assets'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { ReactNode, useEffect, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
+import { parsePouToStText } from '../../_features/[workspace]/editor/monaco/drag-and-drop/st'
 import { LibraryFile, LibraryFolder, LibraryRoot } from '../../_molecules'
 
 type ILibraryFileProps = {
@@ -18,12 +20,30 @@ type ILibraryRootProps = {
 }
 
 type LibraryProps = {
-  filteredLibraries: { name: string; pous: { name: string }[] }[]
+  filteredLibraries: {
+    name: string
+    pous: {
+      name: string
+      language: string
+      type: string
+      body: string
+      documentation: string
+      variables: {
+        name: string
+        class: string
+        type: { definition: string; value: string }
+      }[]
+    }[]
+  }[]
   setSelectedFileKey: (key: string) => void
   selectedFileKey: string | null
 }
 
-const Library = ({filteredLibraries, setSelectedFileKey, selectedFileKey}: LibraryProps) => {
+const Library = ({ filteredLibraries, setSelectedFileKey, selectedFileKey }: LibraryProps) => {
+  const {
+    editor: { type, meta },
+  } = useOpenPLCStore()
+
   const [isSearchActive, setIsSearchActive] = useState(false)
   const [filterText, setFilterText] = useState('')
   const [shouldRenderInput, setShouldRenderInput] = useState(false)
@@ -77,7 +97,7 @@ const Library = ({filteredLibraries, setSelectedFileKey, selectedFileKey}: Libra
                 id='Search-File'
                 type='text'
                 placeholder='Search'
-                className='h-8 w-full px-2 bg-neutral-100 font-caption text-xs font-medium focus:outline-none dark:bg-brand-dark'
+                className='h-8 w-full bg-neutral-100 px-2 font-caption text-xs font-medium focus:outline-none dark:bg-brand-dark'
                 value={filterText}
                 onChange={handleFilterChange}
               />
@@ -126,8 +146,14 @@ const Library = ({filteredLibraries, setSelectedFileKey, selectedFileKey}: Libra
                     isSelected={selectedFileKey === pou.name}
                     draggable
                     onDragStart={(e) => {
-                      e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
-                    e.dataTransfer.setData('application/reactflow/ladder-blocks/library', `system/${library.name}/${pou.name}`)
+                      if (type === 'plc-textual')
+                        e.dataTransfer.setData('text/plain', meta.language === 'st' ? parsePouToStText(pou) : pou.body)
+                      else if (type === 'plc-graphical') {
+                        if (meta.language === 'ld') {
+                          e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
+                        }
+                        e.dataTransfer.setData('application/library', `system/${library.name}/${pou.name}`)
+                      }
                     }}
                   />
                 ))}
