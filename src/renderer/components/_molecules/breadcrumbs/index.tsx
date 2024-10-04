@@ -3,6 +3,7 @@
  */
 import { ArrowIcon, PLCIcon } from '@process:renderer/assets'
 import { LanguageIcon, LanguageIconType, PouIcon, PouIconType } from '@process:renderer/data'
+import { ArrayIcon, EnumIcon, StructureIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import _ from 'lodash'
 import { ComponentProps } from 'react'
@@ -26,45 +27,89 @@ const Breadcrumbs = () => {
     },
   } = useOpenPLCStore()
 
+  const derivationIcons = {
+    enumerated: EnumIcon,
+    structure: StructureIcon,
+    array: ArrayIcon,
+  }
+
+  const getPouTypeOrDataTypeOrResource = ():
+    | ['program' | 'function' | 'function-block' | 'resource' | 'data-type']
+    | null => {
+    if ('pouType' in meta) {
+      return [meta.pouType] as ['program' | 'function' | 'function-block']
+    } else if ('derivation' in meta) {
+      return ['data-type']
+    }
+    return ['resource']
+  }
+
+  const getIconOrLanguage = (): [React.ElementType, string] => {
+    if ('derivation' in meta) {
+      return [derivationIcons[meta.derivation], _.startCase(meta.derivation)]
+    }
+    if ('language' in meta) {
+      return [LanguageIcon[meta.language], meta.language]
+    }
+    return [LanguageIcon.st, 'st']
+  }
+
+  const typeOrIcon = getPouTypeOrDataTypeOrResource()
+  const [icon, text] = getIconOrLanguage()
+
   return (
     <NavigationPanelBreadcrumbs
       crumb={{
         project_name: projectName,
         pou_to_display: {
           name: meta.name,
-          type: ['pouType' in meta ? meta.pouType : 'data-type'],
-          language: 'language' in meta ? [meta.language] : ['st'],
+          type: Array.isArray(typeOrIcon) ? typeOrIcon : ['data-type'],
+          language: [text as 'st' | 'il' | 'ld' | 'fbd' | 'sfc'],
         },
       }}
+      typeIcon={icon}
     />
   )
 }
 
 export { Breadcrumbs }
 
-const BreadcrumbItem = ({ Icon, text }: { Icon: React.ElementType; text: string }) => (
+const BreadcrumbItem = ({ Icon, text, isLast }: { Icon: React.ElementType; text: string; isLast?: boolean }) => (
   <div className='flex items-center gap-1'>
     <Icon className='h-4 w-4 flex-shrink-0' aria-hidden='true' role='img' />
     <span className='font-caption text-[10px] font-medium text-neutral-850 dark:text-neutral-300'>{text}</span>
-    <ArrowIcon direction='right' className='h-3 w-3 flex-shrink-0 stroke-brand-light' aria-hidden='true' role='img' />
+    {!isLast && (
+      <ArrowIcon direction='right' className='h-3 w-3 flex-shrink-0 stroke-brand-light' aria-hidden='true' role='img' />
+    )}
   </div>
 )
 
-export const NavigationPanelBreadcrumbs = ({ crumb, ...res }: INavigationPanelBreadcrumbsProps) => {
+export const NavigationPanelBreadcrumbs = ({
+  crumb,
+  typeIcon,
+  ...res
+}: INavigationPanelBreadcrumbsProps & { typeIcon?: React.ElementType }) => {
   const { project_name, pou_to_display } = crumb
   const { name, type, language } = pou_to_display
+  const isResource = type[0] === 'resource'
 
   return (
     <ol className='flex h-1/2 cursor-default select-none items-center p-2' {...res}>
       <li>
-        <BreadcrumbItem Icon={PLCIcon} text={project_name} />
+        <BreadcrumbItem Icon={PLCIcon} text={project_name} isLast={false} />
       </li>
       <li>
-        <BreadcrumbItem Icon={PouIcon[type[0]]} text={_.startCase(type[0])} />
+        <BreadcrumbItem Icon={PouIcon[type[0]]} text={_.startCase(type[0])} isLast={isResource} />
       </li>
-      <li>
-        <BreadcrumbItem Icon={LanguageIcon[language[0]]} text={name} />
-      </li>
+      {!isResource && (
+        <li>
+          {typeIcon ? (
+            <BreadcrumbItem Icon={typeIcon} text={name} isLast={true} />
+          ) : (
+            <BreadcrumbItem Icon={LanguageIcon[language[0]]} text={name} isLast={true} />
+          )}
+        </li>
+      )}
     </ol>
   )
 }
