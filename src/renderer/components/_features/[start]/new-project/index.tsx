@@ -1,12 +1,11 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { PouLanguageSources } from '@process:renderer/data'
 import { BookIcon, FolderIcon, PathIcon } from '@root/renderer/assets'
-import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { InputWithRef,  } from '@root/renderer/components/_atoms'
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 // import { useOpenPLCStore } from '@root/renderer/store'
-import { cn, ConvertToLangShortenedFormat } from '@root/utils'
+import { cn,  } from '@root/utils'
 import React, { ComponentPropsWithoutRef, useEffect, useState } from 'react'
-import { Controller, SubmitHandler, useForm } from 'react-hook-form'
+import { SubmitHandler, useForm } from 'react-hook-form'
 
 type NewProjectModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
@@ -54,7 +53,6 @@ export const NewProjectModal = ({ isOpen, onClose, ...res }: NewProjectModalProp
       setStep(step + 1)
     }
   }
-  const { control } = useForm<CreateProjectForm>()
 
   const inputStyle =
     'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
@@ -91,7 +89,7 @@ export const NewProjectModal = ({ isOpen, onClose, ...res }: NewProjectModalProp
               {step === 1 ? (
                 <>
                   <h2 className='mb-2 select-none text-lg font-semibold text-neutral-1000 dark:text-white'>
-                  What type of project will you be working on?
+                    What type of project will you be working on?
                   </h2>
                   <div className='flex w-full justify-around'>
                     {/* Botão PLC Project */}
@@ -121,7 +119,7 @@ export const NewProjectModal = ({ isOpen, onClose, ...res }: NewProjectModalProp
                       htmlFor='project-name'
                       className='mb-2 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'
                     >
-                      What type of project will you be working on?
+                      Give a name for the project:
                     </label>
                     <InputWithRef
                       {...register('name', {
@@ -140,9 +138,15 @@ export const NewProjectModal = ({ isOpen, onClose, ...res }: NewProjectModalProp
                     </h2>
                     <div className='group flex h-10 w-64 cursor-pointer items-center justify-center rounded-md border border-gray-300 p-2 hover:bg-gray-300 active:bg-gray-400'>
                       <PathIcon className='mr-2 mt-3 flex-shrink-0 text-gray-400 group-hover:text-neutral-1000 dark:text-white' />
-                      <span className='text-sm font-medium text-gray-400 group-hover:text-neutral-1000 dark:text-white'>
-                        . . .
-                      </span>
+                      <InputWithRef
+                        {...register('path', {
+                          required: true,
+                        })}
+                        id='project-directory'
+                        type='text'
+                        placeholder='. . .'
+                        className={`text-sm font-medium text-gray-400 group-hover:text-neutral-1000 dark:text-white`}
+                      />
                     </div>
                   </div>
                 </>
@@ -160,45 +164,7 @@ export const NewProjectModal = ({ isOpen, onClose, ...res }: NewProjectModalProp
                       >
                         Language:
                       </label>
-                      <Controller
-                        name='language'
-                        control={control}
-                        rules={{ required: true }}
-                        render={({ field: { value, onChange } }) => {
-                          return (
-                            <Select value={value} onValueChange={onChange}>
-                              <SelectTrigger
-                                withIndicator
-                                aria-label='pou-language'
-                                placeholder='Select a language'
-                                className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
-                              />
-                              <SelectContent
-                                className='box h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
-                                sideOffset={5}
-                                alignOffset={5}
-                                position='popper'
-                                align='center'
-                                side='bottom'
-                              >
-                                {PouLanguageSources.map((lang) => {
-                                  return (
-                                    <SelectItem
-                                      key={lang.value}
-                                      className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 focus:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus:bg-neutral-900'
-                                      value={ConvertToLangShortenedFormat(lang.value)}
-                                    >
-                                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                                        {lang.icon} <span>{lang.value}</span>
-                                      </span>
-                                    </SelectItem>
-                                  )
-                                })}
-                              </SelectContent>
-                            </Select>
-                          )
-                        }}
-                      />
+
                     </div>
                   </div>
                   {/* <div className='flex flex-col items-center justify-between gap-1'>
