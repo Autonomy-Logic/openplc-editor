@@ -1,5 +1,5 @@
 import { BookIcon, CloseIcon, MagnifierIcon } from '@root/renderer/assets'
-import { ReactNode, useEffect, useState } from 'react'
+import { ReactNode, useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
 import { LibraryFile, LibraryFolder, LibraryRoot } from '../../_molecules'
@@ -18,19 +18,22 @@ type ILibraryRootProps = {
 }
 
 type LibraryProps = {
-  filteredLibraries: { name: string; pous: { name: string }[] }[]
   setSelectedFileKey: (key: string) => void
   selectedFileKey: string | null
+  filterText: string
+  setFilterText: (text: string) => void
+  filteredLibraries: Array<{ name: string; pous: Array<{ name: string }> }>
 }
 
-const Library = ({ filteredLibraries, setSelectedFileKey, selectedFileKey }: LibraryProps) => {
+const Library = ({ filterText, setFilterText, setSelectedFileKey, selectedFileKey, filteredLibraries }: LibraryProps) => {
   const [isSearchActive, setIsSearchActive] = useState(false)
-  const [filterText, setFilterText] = useState('')
   const [shouldRenderInput, setShouldRenderInput] = useState(false)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (isSearchActive) {
       setShouldRenderInput(true)
+      setTimeout(() => inputRef.current?.focus(), 0)
     } else {
       const timer = setTimeout(() => {
         setShouldRenderInput(false)
@@ -55,7 +58,7 @@ const Library = ({ filteredLibraries, setSelectedFileKey, selectedFileKey }: Lib
           <BookIcon size='sm' />
           <span
             id='project-name'
-            className={`overflow-hidden pl-1 font-caption text-xs font-medium text-neutral-1000 transition-[width,opacity, ml] duration-500 ease-in-out dark:text-neutral-50 ${
+            className={`transition-[width,opacity, ml] overflow-hidden pl-1 font-caption text-xs font-medium text-neutral-1000 duration-500 ease-in-out dark:text-neutral-50 ${
               isSearchActive ? 'ml-0 w-0 opacity-0' : 'ml-1 w-[60px] opacity-100'
             }`}
           >
@@ -82,6 +85,7 @@ const Library = ({ filteredLibraries, setSelectedFileKey, selectedFileKey }: Lib
                 className='h-8 w-full bg-neutral-100 px-2 font-caption text-xs font-medium focus:outline-none dark:bg-brand-dark'
                 value={filterText}
                 onChange={handleFilterChange}
+                ref={inputRef}
               />
             </div>
           )}

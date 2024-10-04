@@ -80,7 +80,7 @@ const Project = () => {
       </div>
 
       {/* Data display */}
-      <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto pr-1'>
+      <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto'>
         <ProjectTreeRoot label={projectName}>
           <ProjectTreeBranch branchTarget='function'>
             {pous
