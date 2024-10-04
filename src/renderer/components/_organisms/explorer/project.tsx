@@ -51,7 +51,7 @@ const Project = () => {
           onClick={() => setIsEditing(true)}
         >
           <div className='flex-shrink-0'>
-            <FolderIcon size='sm' className='h-4 w-4' style={{ minWidth: '16px', minHeight: '16px' }} />
+            <FolderIcon size='sm' className='h-5 w-5' style={{ minWidth: '16px', minHeight: '16px' }} />
           </div>
           {isEditing ? (
             <div className='h-5.5 flex w-full items-center border-none bg-transparent px-0 py-0'>
