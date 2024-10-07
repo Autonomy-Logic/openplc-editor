@@ -1,7 +1,9 @@
 import { BookIcon, CloseIcon, MagnifierIcon } from '@root/renderer/assets'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { ReactNode, useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
+import { parsePouToStText } from '../../_features/[workspace]/editor/monaco/drag-and-drop/st'
 import { LibraryFile, LibraryFolder, LibraryRoot } from '../../_molecules'
 
 type ILibraryFileProps = {
@@ -18,14 +20,32 @@ type ILibraryRootProps = {
 }
 
 type LibraryProps = {
+  filteredLibraries: {
+    name: string
+    pous: {
+      name: string
+      language: string
+      type: string
+      body: string
+      documentation: string
+      variables: {
+        name: string
+        class: string
+        type: { definition: string; value: string }
+      }[]
+    }[]
+  }[]
   setSelectedFileKey: (key: string) => void
   selectedFileKey: string | null
   filterText: string
   setFilterText: (text: string) => void
-  filteredLibraries: Array<{ name: string; pous: Array<{ name: string }> }>
 }
 
-const Library = ({ filterText, setFilterText, setSelectedFileKey, selectedFileKey, filteredLibraries }: LibraryProps) => {
+const Library = ({  filterText, setFilterText, setSelectedFileKey, selectedFileKey , filteredLibraries }: LibraryProps) => {
+  const {
+    editor: { type, meta },
+  } = useOpenPLCStore()
+
   const [isSearchActive, setIsSearchActive] = useState(false)
   const [shouldRenderInput, setShouldRenderInput] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -132,11 +152,14 @@ const Library = ({ filterText, setFilterText, setSelectedFileKey, selectedFileKe
                     isSelected={selectedFileKey === pou.name}
                     draggable
                     onDragStart={(e) => {
-                      e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
-                      e.dataTransfer.setData(
-                        'application/reactflow/ladder-blocks/library',
-                        `system/${library.name}/${pou.name}`,
-                      )
+                      if (type === 'plc-textual')
+                        e.dataTransfer.setData('text/plain', meta.language === 'st' ? parsePouToStText(pou) : pou.body)
+                      else if (type === 'plc-graphical') {
+                        if (meta.language === 'ld') {
+                          e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
+                        }
+                        e.dataTransfer.setData('application/library', `system/${library.name}/${pou.name}`)
+                      }
                     }}
                   />
                 ))}
