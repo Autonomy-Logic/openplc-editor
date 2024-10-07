@@ -12,7 +12,7 @@ type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
   data?: PLCDataType
 }
 
-const DataTypeEditor = ({ dataTypeName,data, ...rest }: DatatypeEditorProps) => {
+const DataTypeEditor = ({ dataTypeName, data, ...rest }: DatatypeEditorProps) => {
   const {
     workspace: {
       projectData: { dataTypes },

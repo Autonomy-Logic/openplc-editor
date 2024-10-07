@@ -62,7 +62,7 @@ const CreateDatatypeObject = (data: DatatypeProps): PLCDataType => {
         derivation: 'array',
         baseType: 'bool',
         initialValue: 'false',
-        dimensions: [{dimension: '1..2'}]
+        dimensions: [{dimension: ''}]
       }
     case 'enumerated':
       return {
