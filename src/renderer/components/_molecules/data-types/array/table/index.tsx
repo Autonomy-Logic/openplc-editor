@@ -3,7 +3,7 @@ import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
 import { StickArrowIcon } from '@root/renderer/assets'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
+import { PLCArrayDatatype, PLCDataType } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils/cn'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useEffect, useRef, useState } from 'react'
@@ -13,7 +13,7 @@ import { DimensionCell } from './editable-cell'
 
 type DataTypeDimensionsTableProps = {
   name: string
-  dimensions?: PLCArrayDatatype['dimensions']
+  dimensions: PLCArrayDatatype['dimensions']
   selectedRow: number
   handleRowClick: (row: HTMLTableRowElement) => void
 }
@@ -22,7 +22,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   const [focusIndex, setFocusIndex] = useState<number | null>(null)
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
-  const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>(dimensions ? dimensions : [])
+  const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>(dimensions)
 
   const {
     workspaceActions: { updateDatatype },
@@ -35,27 +35,23 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   const columns = React.useMemo(
     () => [
       columnHelper.accessor('dimension', {
-        header: '',
         size: 300,
         minSize: 150,
         maxSize: 300,
         enableResizing: true,
         cell: (cellProps) => (
           <DimensionCell
-            {...cellProps}
             onInputChange={(value) => handleInputChange(value, cellProps.row.index)}
             onBlur={() => handleBlur(cellProps.row.index)}
-            id={`${cellProps.row.index}`}
+            id={`dimension-input-${cellProps.row.index}`}
             autoFocus={cellProps.row.index === focusIndex}
-            name={name}
-            dimensions={dimensions}
-            selectedRow={selectedRow}
             handleRowClick={handleRowClick}
+            {...cellProps}
           />
         ),
       }),
     ],
-    [focusIndex, name, dimensions, selectedRow, handleRowClick],
+    [focusIndex, handleRowClick],
   )
 
   useEffect(() => {
@@ -72,32 +68,22 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   }
 
   const handleBlur = (rowIndex: number) => {
-    setTableData((prevRows) => {
-      const newRows = prevRows.filter((_, index) => {
-        const inputElement = document.getElementById(`dimension-input-${index}`) as HTMLInputElement
-        return !(index === rowIndex && (!inputElement || inputElement.value.trim() === ''))
-      })
-
-      if (newRows.length !== prevRows.length) {
-        return newRows
-      } else {
-        const inputElement = document.getElementById(`${rowIndex}`) as HTMLInputElement
-        if (inputElement && inputElement.value.trim() !== '') {
-          const newDataType = 'array'
-          const optionalSchema = {
-            name: inputElement.value.trim(),
-            dimensions: [{ dimension: inputElement.value.trim() }],
-          }
-          updateDatatype(newDataType, optionalSchema)
-        }
-        return prevRows
-      }
-    })
+    const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
+    const inputValue = inputElement ? inputElement.value?.trim() : '';
+    if (inputValue === '') {
+      setTableData((prevRows) => prevRows.filter((_, i) => i !== rowIndex));
+    }
+      const optionalSchema = {
+        name: name,
+        dimensions: [{ dimension: inputValue }],
+      };
+      updateDatatype(name, optionalSchema as PLCDataType);
   }
+  
 
   const addNewRow = () => {
     setTableData((prevRows) => {
-      const newRows = [...prevRows, { name: '', baseType: '', initialValue: '', dimensions: [{ dimension: '' }] }]
+      const newRows = [...prevRows, {dimensions: [{ dimension: '' }] }]
       setFocusIndex(newRows.length - 1)
       return newRows
     })

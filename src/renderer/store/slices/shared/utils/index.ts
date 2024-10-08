@@ -54,7 +54,6 @@ type DatatypeProps = {
 }
 
 const CreateDatatypeObject = (data: DatatypeProps): PLCDataType => {
-  console.log(data)
   switch (data.derivation) {
     case 'array':
       return {
@@ -62,7 +61,7 @@ const CreateDatatypeObject = (data: DatatypeProps): PLCDataType => {
         derivation: 'array',
         baseType: 'bool',
         initialValue: 'false',
-        dimensions: [{dimension: ''}]
+        dimensions: []
       }
     case 'enumerated':
       return {

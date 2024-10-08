@@ -9,22 +9,15 @@ import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
 type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
   dataTypeName: string
-  data?: PLCDataType
 }
 
-const DataTypeEditor = ({ dataTypeName, data, ...rest }: DatatypeEditorProps) => {
+const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   const {
     workspace: {
       projectData: { dataTypes },
     },
   } = useOpenPLCStore()
-  const [editorContent, setEditorContent] = useState<PLCDataType>({
-    name: '',
-    derivation: 'array',
-    baseType: 'bool',
-    dimensions: [{ dimension: '' }],
-    initialValue: '',
-  })
+  const [editorContent, setEditorContent] = useState<PLCDataType>()
 
   useEffect(() => {
     const dataTypeIndex = dataTypes.findIndex((dataType) => dataType.name === dataTypeName)
@@ -52,7 +45,7 @@ const DataTypeEditor = ({ dataTypeName, data, ...rest }: DatatypeEditorProps) =>
             className='h-[30px] w-full max-w-[385px] rounded-lg border border-neutral-400 bg-white focus-within:border-brand dark:border-neutral-800 dark:bg-neutral-950'
           >
             <InputWithRef
-              value={editorContent.name}
+              value={editorContent?.name}
               id='data-type-name'
               aria-label='data-type-name'
               className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
@@ -69,7 +62,7 @@ const DataTypeEditor = ({ dataTypeName, data, ...rest }: DatatypeEditorProps) =>
           <Select aria-label='data-type-derivation'>
             <SelectTrigger
               withIndicator
-              placeholder={editorContent.derivation}
+              placeholder={editorContent?.derivation}
               className='flex h-[30px] w-full max-w-[385px] items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
             />
             <SelectContent
@@ -107,8 +100,7 @@ const DataTypeEditor = ({ dataTypeName, data, ...rest }: DatatypeEditorProps) =>
         </div>
       </div>
       <div aria-label='Data type content container' className='h-full w-full'>
-        {editorContent.derivation === 'array' && <ArrayDataType data={editorContent} />}
-        {/* {data.derivation === 'enumerated' && <EnumeratorDataType />} */}
+        {editorContent?.derivation === 'array' && <ArrayDataType data={editorContent} />}
       </div>
     </div>
   )

@@ -10,7 +10,6 @@ type EditableCellProps = CellContext<{ dimension: string }, unknown> & { editabl
 const DimensionCell = ({ getValue, editable = true, onInputChange, onBlur, id, autoFocus }: EditableCellProps) => {
   const initialValue = getValue<string>()
   const [cellValue, setCellValue] = useState(initialValue)
-
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -24,14 +23,11 @@ const DimensionCell = ({ getValue, editable = true, onInputChange, onBlur, id, a
   }
 
   const handleBlur = () => {
-    if (cellValue?.trim() === undefined) {
-      setCellValue('')
-      onBlur()
-    }
+      onBlur()    
   }
   return (
     <InputWithRef
-      value={cellValue} 
+      value={cellValue || ''} 
       onChange={handleChange}
       className={cn(`flex w-full flex-1 bg-transparent p-2 text-center outline-none ${!editable ? 'pointer-events-none' : ''}`)}
       onBlur={handleBlur}
