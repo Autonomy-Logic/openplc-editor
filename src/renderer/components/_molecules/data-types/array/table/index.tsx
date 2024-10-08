@@ -24,7 +24,6 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
   const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>(dimensions ? dimensions : [])
 
-  console.log("table data -->", tableData)
   const {
     workspaceActions: { updateDatatype }, 
     workspace: {
@@ -61,7 +60,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
   useEffect(() => {
     if (focusIndex !== null) {
-      const inputElement = document.getElementById(`dimension-input-${focusIndex}`);
+      const inputElement = document.getElementById(`${focusIndex}`);
       if (inputElement) {
         inputElement.focus();
       }
@@ -77,39 +76,43 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     );  
   }
 
-  const handleBlur = (rowIndex) => {
+  const handleBlur = (rowIndex: number) => {
     setTableData((prevRows) => {
-      const newRows = prevRows.filter((row, index) => {
-        return !(index === rowIndex && row.dimension.trim() === '');
+      const newRows = prevRows.filter((_, index) => {
+        const inputElement = document.getElementById(`dimension-input-${index}`) as HTMLInputElement;
+        return !(index === rowIndex && (!inputElement || inputElement.value.trim() === ''));
       });
 
       if (newRows.length !== prevRows.length) {
         return newRows;
       } else {
-        const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
+        const inputElement = document.getElementById(`${rowIndex}`) as HTMLInputElement;
         if (inputElement && inputElement.value.trim() !== '') {
+          const newDataType = 'array'; 
           const optionalSchema = {
-            name: inputElement.value.trim(), 
+            name: inputElement.value.trim(),
             derivation: 'array',
-            baseType: 'sint', 
+            baseType: 'sint',
             initialValue: '',
-            dimensions: [{ dimension: inputElement.value.trim() }] 
+            dimensions: [{ dimension: inputElement.value.trim() }]
           };
-          updateDatatype('array', optionalSchema);
+          updateDatatype(newDataType, optionalSchema);
         }
         return prevRows;
       }
     });
-  };
+ }
+
+ console.log("tableData -->", tableData)
 
   const addNewRow = () => {
-  setTableData((prevRows) => {
-    const newRows = [...prevRows, { name: '', baseType: '', initialValue: '', dimensions: [{ dimension: '' }] }];
-    setFocusIndex(newRows.length - 1);
-    return newRows;
-  });
-  }
-
+    setTableData((prevRows) => {
+      const newRows = [...prevRows, { name: '', baseType: '', initialValue: '', dimensions: [{ dimension: '' }] }];
+      setFocusIndex(newRows.length - 1);
+      return newRows;
+    });
+  };
+  
   useEffect(() => {
     const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype
     if (dimensionsToTable) setTableData(dimensionsToTable['dimensions'])

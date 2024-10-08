@@ -24,7 +24,8 @@ const DimensionCell = ({ getValue, editable = true, onInputChange, onBlur, id, a
   }
 
   const handleBlur = () => {
-    if (cellValue?.trim() === '') {
+    if (cellValue?.trim() === undefined) {
+      setCellValue('')
       onBlur()
     }
   }
