@@ -1,0 +1,107 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
+import { BookIcon, FolderIcon } from '@root/renderer/assets'
+import { cn } from '@root/utils'
+import { useState } from 'react'
+import { SubmitHandler, useForm } from 'react-hook-form'
+
+import { NewProjectStore } from '../project-modal'
+
+const Step1 = ({ onNext }: { onNext: () => void }) => {
+  const { handleSubmit, setValue } = useForm<{ type: string }>()
+  const handleUpdateForm = NewProjectStore((state) => state.setFormData)
+
+  const [selected, setSelected] = useState<string>('')
+
+  const handleFormSubmit: SubmitHandler<{ type: string }> = (data) => {
+    handleUpdateForm({
+      type: data.type,
+      name: '',
+      path: '',
+      language: '',
+      time: '',
+    })
+    onNext()
+  }
+
+  const handleSelectType = (type: string) => {
+    setSelected(type)
+    setValue('type', type)
+  }
+
+  return (
+    <>
+      {/* Progress Bar */}
+      <div className='relative flex items-center justify-center pt-2 pb-20'>
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-blue-500 font-bold text-white'>
+          1
+        </div>
+        <div className='h-[2px] w-12 bg-gray-500'></div>
+
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-gray-500 bg-gray-200 text-gray-500'>
+          2
+        </div>
+        <div className='h-[2px] w-12 bg-gray-500'></div>
+
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-gray-500 bg-gray-200 text-gray-500'>
+          3
+        </div>
+      </div>
+
+      {/* Form Content */}
+      <form onSubmit={handleSubmit(handleFormSubmit)} className='flex flex-grow flex-col justify-between'>
+        <div>
+          <h2 className='mb-8 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
+            What type of project will you be working on?
+          </h2>
+          <div className='flex w-full justify-around'>
+            <button
+              type='button'
+              className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
+                selected === 'project'
+                  ? 'border-blue-300 bg-blue-300 text-white dark:border-neutral-600 dark:bg-neutral-600'
+                  : 'border-transparent bg-gray-200 text-black hover:border-blue-500 hover:dark:border-neutral-600'
+              }`}
+              onClick={() => handleSelectType('project')}
+            >
+              <FolderIcon className='mr-2' /> PLC Project
+            </button>
+            <button
+              type='button'
+              className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
+                selected === 'library'
+                  ? 'border-blue-300 bg-blue-300 text-white dark:border-neutral-600 dark:bg-neutral-600'
+                  : 'border-transparent bg-gray-200 text-black hover:border-blue-500 hover:dark:border-neutral-600'
+              }`}
+              onClick={() => handleSelectType('library')}
+            >
+              <BookIcon className='mr-2' /> Library
+            </button>
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div className=' flex flex-row justify-center space-x-4'>
+          <button
+            type='button'
+            className={cn(
+              'h-8 w-52 items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100',
+            )}
+          >
+            Cancel
+          </button>
+          <button
+            type='submit'
+            className={`h-8 w-52 items-center rounded-lg text-center font-medium text-white ${
+              selected ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'
+            }`}
+            disabled={!selected}
+          >
+            Next
+          </button>
+        </div>
+      </form>
+    </>
+  )
+}
+
+export { Step1 }
