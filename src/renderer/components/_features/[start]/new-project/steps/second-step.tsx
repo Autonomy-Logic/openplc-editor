@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+
 import { PathIcon } from '@root/renderer/assets'
 import { SubmitHandler, useForm } from 'react-hook-form'
 
