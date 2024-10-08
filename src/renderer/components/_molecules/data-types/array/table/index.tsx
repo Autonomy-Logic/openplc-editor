@@ -19,13 +19,13 @@ type DataTypeDimensionsTableProps = {
 }
 
 const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: DataTypeDimensionsTableProps) => {
-  const [focusIndex, setFocusIndex] = useState<number | null>(null);
+  const [focusIndex, setFocusIndex] = useState<number | null>(null)
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
   const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>(dimensions ? dimensions : [])
 
   const {
-    workspaceActions: { updateDatatype }, 
+    workspaceActions: { updateDatatype },
     workspace: {
       projectData: { dataTypes },
     },
@@ -60,59 +60,49 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
   useEffect(() => {
     if (focusIndex !== null) {
-      const inputElement = document.getElementById(`${focusIndex}`);
+      const inputElement = document.getElementById(`${focusIndex}`)
       if (inputElement) {
-        inputElement.focus();
+        inputElement.focus()
       }
     }
-  }, [focusIndex]);
-
+  }, [focusIndex])
 
   const handleInputChange = (value: string, index: number) => {
-    setTableData((prevRows) =>
-      prevRows.map((row, i) =>
-        i === index ? { ...row, dimension: value } : row
-      )
-    );  
+    setTableData((prevRows) => prevRows.map((row, i) => (i === index ? { ...row, dimension: value } : row)))
   }
 
   const handleBlur = (rowIndex: number) => {
     setTableData((prevRows) => {
       const newRows = prevRows.filter((_, index) => {
-        const inputElement = document.getElementById(`dimension-input-${index}`) as HTMLInputElement;
-        return !(index === rowIndex && (!inputElement || inputElement.value.trim() === ''));
-      });
+        const inputElement = document.getElementById(`dimension-input-${index}`) as HTMLInputElement
+        return !(index === rowIndex && (!inputElement || inputElement.value.trim() === ''))
+      })
 
       if (newRows.length !== prevRows.length) {
-        return newRows;
+        return newRows
       } else {
-        const inputElement = document.getElementById(`${rowIndex}`) as HTMLInputElement;
+        const inputElement = document.getElementById(`${rowIndex}`) as HTMLInputElement
         if (inputElement && inputElement.value.trim() !== '') {
-          const newDataType = 'array'; 
+          const newDataType = 'array'
           const optionalSchema = {
             name: inputElement.value.trim(),
-            derivation: 'array',
-            baseType: 'sint',
-            initialValue: '',
-            dimensions: [{ dimension: inputElement.value.trim() }]
-          };
-          updateDatatype(newDataType, optionalSchema);
+            dimensions: [{ dimension: inputElement.value.trim() }],
+          }
+          updateDatatype(newDataType, optionalSchema)
         }
-        return prevRows;
+        return prevRows
       }
-    });
- }
-
- console.log("tableData -->", tableData)
+    })
+  }
 
   const addNewRow = () => {
     setTableData((prevRows) => {
-      const newRows = [...prevRows, { name: '', baseType: '', initialValue: '', dimensions: [{ dimension: '' }] }];
-      setFocusIndex(newRows.length - 1);
-      return newRows;
-    });
-  };
-  
+      const newRows = [...prevRows, { name: '', baseType: '', initialValue: '', dimensions: [{ dimension: '' }] }]
+      setFocusIndex(newRows.length - 1)
+      return newRows
+    })
+  }
+
   useEffect(() => {
     const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype
     if (dimensionsToTable) setTableData(dimensionsToTable['dimensions'])
@@ -197,12 +187,12 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
         <TableBody ref={tableBodyRef}>
           {table.getRowModel().rows.map((row, index) => (
             <TableRow
-            id={`${index}`}
-            key={index}
-            className='h-8'
-            selected={selectedRow === index}
-            ref={selectedRow === index ? tableBodyRowRef : null}
-            onClick={(e) => handleRowClick(e.currentTarget)}
+              id={`${index}`}
+              key={index}
+              className='h-8'
+              selected={selectedRow === index}
+              ref={selectedRow === index ? tableBodyRowRef : null}
+              onClick={(e) => handleRowClick(e.currentTarget)}
             >
               {row.getVisibleCells().map((cell) => (
                 <TableCell
@@ -224,5 +214,3 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 }
 
 export { DimensionsTable }
-
-
