@@ -127,6 +127,8 @@ class ProjectService {
 
     const parsedFile = newPLCProjectSchema.safeParse(JSON.parse(file as string))
 
+    console.log('PARSED FILE', parsedFile)
+
     if (!parsedFile.success) {
       return {
         success: false,

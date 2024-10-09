@@ -17,12 +17,14 @@ const StartScreen = () => {
   const {
     workspaceActions: { setEditingState },
     projectActions: { setProject },
+    tabsActions: { clearTabs },
   } = useOpenPLCStore()
 
   const retrieveNewProjectData = async () => {
     const { success, data, error } = await window.bridge.createProject()
 
     if (success && data) {
+      clearTabs()
       setEditingState('unsaved')
       setProject({
         meta: {
@@ -54,6 +56,7 @@ const StartScreen = () => {
   const retrieveOpenProjectData = async () => {
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
+      clearTabs()
       setEditingState('unsaved')
       setProject({
         meta: {
@@ -87,6 +90,7 @@ const StartScreen = () => {
       window.bridge.createProjectAccelerator((_event, response: IProjectServiceResponse) => {
         const { data, error } = response
         if (data) {
+          clearTabs()
           setEditingState('unsaved')
           setProject({
             meta: {
@@ -115,6 +119,7 @@ const StartScreen = () => {
       window.bridge.openProjectAccelerator((_event, response: IProjectServiceResponse) => {
         const { data, error } = response
         if (data) {
+          clearTabs()
           setEditingState('unsaved')
           setProject({
             meta: {

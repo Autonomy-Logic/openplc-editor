@@ -21,6 +21,8 @@ export const FileMenu = () => {
   const handleCreateProject = async () => {
     const { success, data, error } = await window.bridge.createProject()
     if (success && data) {
+      clearEditor()
+      clearTabs()
       setEditingState('unsaved')
       setProject({
         meta: {
@@ -30,8 +32,6 @@ export const FileMenu = () => {
         },
         data: data.content.data,
       })
-      clearEditor()
-      clearTabs()
       toast({
         title: 'The project was created successfully!',
         description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
@@ -49,6 +49,8 @@ export const FileMenu = () => {
   const handleOpenProject = async () => {
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
+      clearEditor()
+      clearTabs()
       setEditingState('unsaved')
       setProject({
         meta: {
@@ -58,8 +60,6 @@ export const FileMenu = () => {
         },
         data: data.content.data,
       })
-      clearEditor()
-      clearTabs()
       toast({
         title: 'Project opened!',
         description: 'Your project was opened, and loaded.',
