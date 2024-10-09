@@ -1,7 +1,6 @@
 import { CreateRung } from '@root/renderer/components/_molecules/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 export default function LadderEditor() {
@@ -19,11 +18,6 @@ export default function LadderEditor() {
       flowViewport: defaultViewport,
     })
   }
-
-  useEffect(() => {
-    console.log('FLOWS')
-    console.log(flows)
-  }, [flows])
 
   return (
     <div className='h-full w-full overflow-y-auto' style={{ scrollbarGutter: 'stable' }}>

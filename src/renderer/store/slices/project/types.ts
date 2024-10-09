@@ -166,7 +166,7 @@ const projectActionsSchema = z.object({
   createTask: z
     .function()
     .args(taskDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
-    .returns(z.void()),
+    .returns(projectResponseSchema),
   updateTask: z
     .function()
     .args(taskDTOSchema.merge(z.object({ rowId: z.number() })))
@@ -186,11 +186,11 @@ const projectActionsSchema = z.object({
   createInstance: z
     .function()
     .args(instanceDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
-    .returns(z.void()),
+    .returns(projectResponseSchema),
   updateInstance: z
     .function()
     .args(instanceDTOSchema.merge(z.object({ rowId: z.number() })))
-    .returns(z.void()),
+    .returns(projectResponseSchema),
   deleteInstance: z
     .function()
     .args(z.object({ rowId: z.number() }))
