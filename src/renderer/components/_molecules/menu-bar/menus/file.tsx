@@ -1,6 +1,7 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { newPLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
 
@@ -8,10 +9,11 @@ import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
   const {
-    workspace: { projectData, projectPath },
     editorActions: { clearEditor },
-    workspaceActions: { setUserWorkspace, setEditingState },
+    workspaceActions: { setEditingState },
+    projectActions: { setProject },
     tabsActions: { clearTabs },
+    project,
   } = useOpenPLCStore()
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
@@ -19,11 +21,14 @@ export const FileMenu = () => {
   const handleCreateProject = async () => {
     const { success, data, error } = await window.bridge.createProject()
     if (success && data) {
-      setUserWorkspace({
-        editingState: 'unsaved',
-        projectPath: data.meta.path,
-        projectData: data.content,
-        projectName: 'new-project',
+      setEditingState('unsaved')
+      setProject({
+        meta: {
+          name: 'new-project',
+          type: 'plc-project',
+          path: data.meta.path,
+        },
+        data: data.content.data,
       })
       clearEditor()
       clearTabs()
@@ -44,11 +49,14 @@ export const FileMenu = () => {
   const handleOpenProject = async () => {
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
-      setUserWorkspace({
-        editingState: 'unsaved',
-        projectPath: data.meta.path,
-        projectData: data.content,
-        projectName: 'new-project',
+      setEditingState('unsaved')
+      setProject({
+        meta: {
+          name: data.content.meta.name,
+          type: data.content.meta.type,
+          path: data.meta.path,
+        },
+        data: data.content.data,
       })
       clearEditor()
       clearTabs()
@@ -67,7 +75,21 @@ export const FileMenu = () => {
   }
 
   const handleSaveProject = async () => {
-    const { success, reason } = await window.bridge.saveProject({ projectPath, projectData })
+    const projectData = newPLCProjectSchema.safeParse(project)
+    if (!projectData.success) {
+      toast({
+        title: 'Error in the save request!',
+        description: 'The project data is not valid.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    const { success, reason } = await window.bridge.saveProject({
+      projectPath: project.meta.path,
+      projectData: projectData.data,
+    })
+
     if (success) {
       _.debounce(() => setEditingState('saved'), 1000)()
       toast({

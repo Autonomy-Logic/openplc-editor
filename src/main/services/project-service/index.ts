@@ -3,7 +3,7 @@ import { promises, readFile, writeFile } from 'fs'
 import { join } from 'path'
 
 // import { projectSchema } from '../../../types/PLC'
-import { PLCProjectData, PLCProjectDataSchema } from '../../../types/PLC/open-plc'
+import { newPLCProject, newPLCProjectSchema } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { store } from '../../modules/store' // This must be refactored
 import { baseJsonStructure } from './data'
@@ -20,7 +20,7 @@ export type IProjectServiceResponse = {
     meta: {
       path: string
     }
-    content: PLCProjectData
+    content: newPLCProject
   }
 }
 
@@ -125,7 +125,7 @@ class ProjectService {
       }
     }
 
-    const parsedFile = PLCProjectDataSchema.safeParse(JSON.parse(file as string))
+    const parsedFile = newPLCProjectSchema.safeParse(JSON.parse(file as string))
 
     if (!parsedFile.success) {
       return {
@@ -147,7 +147,7 @@ class ProjectService {
     }
   }
 
-  saveProject(data: { projectPath: string; projectData: PLCProjectData }): IProjectServiceResponse {
+  saveProject(data: { projectPath: string; projectData: newPLCProject }): IProjectServiceResponse {
     const { projectPath, projectData } = data
     if (!projectPath || !projectData)
       return {

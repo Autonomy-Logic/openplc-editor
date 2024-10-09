@@ -1,15 +1,20 @@
 // import { IProject } from '../../../../types/PLC'
-import { PLCProjectData } from '../../../../types/PLC/open-plc'
+import { newPLCProject } from '../../../../types/PLC/open-plc'
 
-export const baseJsonStructure: PLCProjectData = {
-  projectName:"new-project",
-  pous: [],
-  dataTypes: [],
-  configuration: {
-    resource: {
-      tasks: [],
-      instances: [],
-      globalVariables: [],
+export const baseJsonStructure: newPLCProject = {
+  meta: {
+    name: 'new-project',
+    type: 'plc-project',
+  },
+  data: {
+    pous: [],
+    dataTypes: [],
+    configuration: {
+      resource: {
+        tasks: [],
+        instances: [],
+        globalVariables: [],
+      },
     },
   },
 }

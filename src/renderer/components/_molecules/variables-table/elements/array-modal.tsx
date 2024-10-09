@@ -36,10 +36,10 @@ export const ArrayModal = ({
     editor: {
       meta: { name },
     },
-    workspace: {
-      projectData: { pous },
+    project: {
+      data: { pous },
     },
-    workspaceActions: { updateVariable },
+    projectActions: { updateVariable },
   } = useOpenPLCStore()
 
   const types = baseTypeSchema.options

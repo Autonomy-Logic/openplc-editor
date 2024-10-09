@@ -115,6 +115,17 @@ type ProjectResponse = z.infer<typeof projectResponseSchema>
  */
 const projectActionsSchema = z.object({
   /**
+   * Update/Set Project state
+   */
+  setProject: z.function().args(projectStateSchema).returns(z.void()),
+
+  /**
+   * Meta Actions
+   */
+  updateMetaName: z.function().args(z.string()).returns(z.void()),
+  updateMetaPath: z.function().args(z.string()).returns(z.void()),
+
+  /**
    * POU Actions
    */
   createPou: z.function().args(pouDTOSchema).returns(projectResponseSchema),
@@ -159,7 +170,7 @@ const projectActionsSchema = z.object({
   updateTask: z
     .function()
     .args(taskDTOSchema.merge(z.object({ rowId: z.number() })))
-    .returns(z.void()),
+    .returns(projectResponseSchema),
   deleteTask: z
     .function()
     .args(z.object({ rowId: z.number() }))

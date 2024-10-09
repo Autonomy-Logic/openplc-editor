@@ -3,16 +3,17 @@ import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
 import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
-import React, { useState } from 'react'
+import { useState } from 'react'
 
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
 const Project = () => {
   const {
-    workspace: {
-      projectData: { pous, dataTypes, projectName, configuration },
+    project: {
+      meta: { name: projectName },
+      data: { pous, dataTypes, configuration },
     },
-    workspaceActions: { updateProjectName },
+    projectActions: { updateMetaName },
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
@@ -37,7 +38,7 @@ const Project = () => {
   const handleBlur = () => {
     setIsEditing(false)
     if (inputValue !== projectName) {
-      updateProjectName(inputValue)
+      updateMetaName(inputValue)
     }
   }
 

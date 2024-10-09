@@ -1,6 +1,7 @@
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
+import { ProjectSlice } from '../project'
 import { TabsSlice } from '../tabs'
 import { WorkspaceSlice } from '../workspace'
 import { CreateDatatypeObject, CreateEditorObject, CreatePouObject } from './utils'
@@ -25,7 +26,7 @@ export type ISharedSlice = {
   }
 }
 
-export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & WorkspaceSlice, [], [], ISharedSlice> = (
+export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & WorkspaceSlice & ProjectSlice, [], [], ISharedSlice> = (
   _setState,
   getState,
 ) => ({
@@ -33,7 +34,7 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
     create: {
       pou: (propsToCreatePou: PropsToCreatePou) => {
         if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
-          const res = getState().workspaceActions.createPou(CreatePouObject(propsToCreatePou))
+          const res = getState().projectActions.createPou(CreatePouObject(propsToCreatePou))
           if (!res.ok) throw new Error()
           const data = CreateEditorObject({
             type: 'plc-textual',
@@ -67,7 +68,7 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
           propsToCreatePou.language === 'sfc' ||
           propsToCreatePou.language === 'fbd'
         ) {
-          const res = getState().workspaceActions.createPou(CreatePouObject(propsToCreatePou))
+          const res = getState().projectActions.createPou(CreatePouObject(propsToCreatePou))
           if (!res.ok) throw new Error()
           const data = CreateEditorObject({
             type: 'plc-graphical',
@@ -101,7 +102,7 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
         /**
          * This is a temporary solution to create a datatype
          **/
-        getState().workspaceActions.createDatatype(CreateDatatypeObject(derivation))
+        getState().projectActions.createDatatype(CreateDatatypeObject(derivation))
         const data = CreateEditorObject({
           type: 'plc-datatype',
           meta: { name: '', derivation },

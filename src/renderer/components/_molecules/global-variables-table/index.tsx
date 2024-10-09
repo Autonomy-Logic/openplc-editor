@@ -76,7 +76,7 @@ type PLCVariablesTableProps = {
 
 const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVariablesTableProps) => {
   const {
-    workspaceActions: { updateVariable },
+    projectActions: { updateVariable },
   } = useOpenPLCStore()
 
   const tableHeaderRef = useRef<HTMLTableSectionElement>(null)

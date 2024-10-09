@@ -15,18 +15,22 @@ const StartScreen = () => {
   const { toast } = useToast()
   const navigate = useNavigate()
   const {
-    workspaceActions: { setUserWorkspace },
+    workspaceActions: { setEditingState },
+    projectActions: { setProject },
   } = useOpenPLCStore()
 
   const retrieveNewProjectData = async () => {
     const { success, data, error } = await window.bridge.createProject()
 
     if (success && data) {
-      setUserWorkspace({
-        editingState: 'unsaved',
-        projectPath: data.meta.path,
-        projectData: data.content,
-        projectName: 'new-project',
+      setEditingState('unsaved')
+      setProject({
+        meta: {
+          name: 'new-project',
+          type: 'plc-project',
+          path: data.meta.path,
+        },
+        data: data.content.data,
       })
       navigate('/workspace')
       toast({
@@ -50,11 +54,14 @@ const StartScreen = () => {
   const retrieveOpenProjectData = async () => {
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
-      setUserWorkspace({
-        editingState: 'unsaved',
-        projectPath: data.meta.path,
-        projectData: data.content,
-        projectName: 'new-project',
+      setEditingState('unsaved')
+      setProject({
+        meta: {
+          name: data.content.meta.name,
+          type: data.content.meta.type,
+          path: data.meta.path,
+        },
+        data: data.content.data,
       })
       navigate('/workspace')
       toast({
@@ -80,11 +87,14 @@ const StartScreen = () => {
       window.bridge.createProjectAccelerator((_event, response: IProjectServiceResponse) => {
         const { data, error } = response
         if (data) {
-          setUserWorkspace({
-            editingState: 'unsaved',
-            projectPath: data.meta.path,
-            projectData: data.content,
-            projectName: 'new-project',
+          setEditingState('unsaved')
+          setProject({
+            meta: {
+              name: 'new-project',
+              type: 'plc-project',
+              path: data.meta.path,
+            },
+            data: data.content.data,
           })
           navigate('/workspace')
           toast({
@@ -105,11 +115,14 @@ const StartScreen = () => {
       window.bridge.openProjectAccelerator((_event, response: IProjectServiceResponse) => {
         const { data, error } = response
         if (data) {
-          setUserWorkspace({
-            editingState: 'unsaved',
-            projectPath: data.meta.path,
-            projectData: data.content,
-            projectName: 'new-project',
+          setEditingState('unsaved')
+          setProject({
+            meta: {
+              name: data.content.meta.name,
+              type: data.content.meta.type,
+              path: data.meta.path,
+            },
+            data: data.content.data,
           })
           navigate('/workspace')
           toast({

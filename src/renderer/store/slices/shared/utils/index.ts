@@ -53,7 +53,7 @@ const CreateDatatypeObject = (derivation: 'enumerated' | 'structure' | 'array'):
   switch (derivation) {
     case 'array':
       return {
-        id: 0,
+        id: '0',
         name: 'New array datatype',
         derivation: {
           type: 'array',
@@ -61,12 +61,13 @@ const CreateDatatypeObject = (derivation: 'enumerated' | 'structure' | 'array'):
           data: {
             baseType: 'bool',
             dimensions: [],
-          }
+          },
+          initialValue: 'ARRAY [] OF BOOL',
         },
       }
     case 'enumerated':
       return {
-        id: 0,
+        id: '0',
         name: 'New enum datatype',
         derivation: {
           type: 'enumerated',
@@ -76,7 +77,7 @@ const CreateDatatypeObject = (derivation: 'enumerated' | 'structure' | 'array'):
       }
     case 'structure':
       return {
-        id: 0,
+        id: '0',
         name: 'New structure datatype',
         derivation: {
           type: 'structure',

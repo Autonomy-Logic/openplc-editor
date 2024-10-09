@@ -37,7 +37,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   } = useForm<CreatePouFormProps>()
   const {
     pouActions: { create },
-    workspaceActions: { createDatatype },
+    projectActions: { createDatatype },
   } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
 

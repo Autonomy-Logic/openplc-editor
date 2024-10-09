@@ -33,6 +33,36 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
   projectActions: {
     /**
+     * Update/Set Project state
+     */
+    setProject: (projectState): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          project.meta = projectState.meta
+          project.data = projectState.data
+        }),
+      )
+    },
+
+    /**
+     * Meta Actions
+     */
+    updateMetaName: (name: string): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          project.meta.name = name
+        }),
+      )
+    },
+    updateMetaPath: (path: string): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          project.meta.path = path
+        }),
+      )
+    },
+
+    /**
      * POU Actions
      */
     createPou: (pouToBeCreated): ProjectResponse => {
@@ -294,7 +324,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
       return response
     },
-
     deleteTask: (taskToBeDeleted: { rowId: number }): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
@@ -309,7 +338,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
-
     updateTask: (dataToBeUpdated): ProjectResponse => {
       let response: ProjectResponse = { ok: true }
       setState(
@@ -346,7 +374,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
       return response
     },
-
     rearrangeTasks: (taskToBeRearranged): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
@@ -389,7 +416,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
       return response
     },
-
     deleteInstance: (instanceToBeDeleted: { rowId: number }): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
@@ -404,7 +430,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
-
     updateInstance: (dataToBeUpdated): ProjectResponse => {
       let response: ProjectResponse = { ok: true }
       setState(
@@ -441,7 +466,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
       return response
     },
-
     rearrangeInstances: (instanceToBeRearranged): void => {
       setState(
         produce(({ project }: ProjectSlice) => {

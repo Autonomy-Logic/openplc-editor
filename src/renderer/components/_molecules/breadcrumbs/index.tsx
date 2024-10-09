@@ -22,8 +22,8 @@ type INavigationPanelBreadcrumbsProps = ComponentProps<'ol'> & {
 const Breadcrumbs = () => {
   const {
     editor: { meta },
-    workspace: {
-      projectData: { projectName },
+    project: {
+      meta: { name: projectName },
     },
   } = useOpenPLCStore()
 

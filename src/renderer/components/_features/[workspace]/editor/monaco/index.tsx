@@ -21,9 +21,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     // editor: { path, language, name },
     workspace: {
       systemConfigs: { shouldUseDarkMode },
-      projectData: { pous },
     },
-    workspaceActions: { updatePou },
+    project: {
+      data: { pous },
+    },
+    projectActions: { updatePou },
   } = useOpenPLCStore()
 
   function handleEditorDidMount(
@@ -49,8 +51,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       enabled: false,
     },
     dropIntoEditor: {
-      enabled: true
-    }
+      enabled: true,
+    },
   }
 
   window.addEventListener('onDropIntoEditor', (event) => {
