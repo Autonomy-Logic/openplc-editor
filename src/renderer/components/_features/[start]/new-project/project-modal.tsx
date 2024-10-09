@@ -5,7 +5,7 @@ import { create } from 'zustand'
 
 import { Step1 } from './steps/first-step'
 import { Step2 } from './steps/second-step'
-// import { Step3 } from './steps/third-step'
+import { Step3 } from './steps/third-step'
 
 export type NewProjectStoreProps = {
   formData: {
@@ -46,6 +46,11 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   const handlePrev = () => {
     setCurrentStep((prevStep) => (prevStep > 1 ? prevStep - 1 : prevStep))
   }
+  const handleFinish = () => {
+    console.log('PREENCHEU TUDO', formCurrentState)
+    onClose()
+  }
+  console.log('State ->', formCurrentState)
 
   const renderStep = () => {
     switch (currentStep) {
@@ -53,14 +58,12 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
         return <Step1 onNext={handleNext} />
       case 2:
         return <Step2 onNext={handleNext} onPrev={handlePrev} />
-      // case 3:
-      //   return <Step3 onPrev={handlePrev} onPrev={handlePrev} />
+      case 3:
+        return <Step3 onPrev={handlePrev} onFinish={handleFinish} onClose={onClose} />
       default:
         return null
     }
   }
-
-  console.log('State ->', formCurrentState)
 
   return (
     <Modal open={isOpen} onOpenChange={onClose}>
