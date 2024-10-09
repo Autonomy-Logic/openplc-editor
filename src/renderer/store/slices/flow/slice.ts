@@ -3,15 +3,25 @@ import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import { FlowSlice, RungsState } from './types'
+import { FlowSlice, FlowState } from './types'
 
 export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setState) => ({
-  rungs: [],
+  flows: [],
 
   flowActions: {
-    startLadderRung: ({ rungId, defaultBounds, flowViewport }) => {
+    startLadderRung: ({ editorName, rungId, defaultBounds, flowViewport }) => {
       setState(
-        produce((state: RungsState) => {
+        produce(({ flows }: FlowState) => {
+          if (!flows.find((flow) => flow.name === editorName)) {
+            flows.push({
+              name: editorName,
+              rungs: [],
+            })
+          }
+
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
           const { powerRail } = defaultCustomNodesStyles
           const railNodes = [
             nodesBuilder.powerRail({
@@ -31,7 +41,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
               handleY: powerRail.height / 2,
             }),
           ]
-          state.rungs.push({
+          flow.rungs.push({
             id: rungId,
             defaultBounds,
             flowViewport: flowViewport ?? defaultBounds,
@@ -50,96 +60,136 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         }),
       )
     },
-    addRung: (rung) => {
+    addRung: (editorName, rung) => {
       setState(
-        produce((state: RungsState) => {
-          state.rungs.push(rung)
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          flow.rungs.push(rung)
         }),
       )
     },
-    removeRung: (rungId) => {
+    removeRung: (editorName, rungId) => {
       setState(
-        produce((state: RungsState) => {
-          state.rungs = state.rungs.filter((rung) => rung.id !== rungId)
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          flow.rungs = flow.rungs.filter((rung) => rung.id !== rungId)
         }),
       )
     },
 
-    onNodesChange: ({ changes, rungId }) => {
+    onNodesChange: ({ changes, editorName, rungId }) => {
       setState(
-        produce((state: RungsState) => {
-          const rung = state.rungs.find((rung) => rung.id === rungId)
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
+
           rung.nodes = applyNodeChanges(changes, rung.nodes)
         }),
       )
     },
-    onEdgesChange: ({ changes, rungId }) => {
+    onEdgesChange: ({ changes, editorName, rungId }) => {
       setState(
-        produce((state: RungsState) => {
-          const rung = state.rungs.find((rung) => rung.id === rungId)
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
+
           rung.edges = applyEdgeChanges(changes, rung.edges)
         }),
       )
     },
-    onConnect: ({ changes, rungId }) => {
+    onConnect: ({ changes, editorName, rungId }) => {
       setState(
-        produce((state: RungsState) => {
-          const rung = state.rungs.find((rung) => rung.id === rungId)
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
+
           rung.edges = addEdge(changes, rung.edges)
         }),
       )
     },
 
-    setNodes: ({ nodes, rungId }) => {
+    setNodes: ({ editorName, nodes, rungId }) => {
       setState(
-        produce((state: RungsState) => {
-          const rung = state.rungs.find((rung) => rung.id === rungId)
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
+
           rung.nodes = nodes
         }),
       )
     },
-    updateNode({ node, rungId }) {
+    updateNode({ editorName, node, rungId }) {
       setState(
-        produce((state: RungsState) => {
-          const rung = state.rungs.find((rung) => rung.id === rungId)
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
+
           const nodeIndex = rung.nodes.findIndex((n) => n.id === node.id)
           if (nodeIndex === -1) return
+
           rung.nodes[nodeIndex] = node
         }),
       )
     },
 
-    setEdges({ edges, rungId }) {
+    setEdges({ edges, editorName, rungId }) {
       setState(
-        produce((state: RungsState) => {
-          const rung = state.rungs.find((rung) => rung.id === rungId)
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
+
           rung.edges = edges
         }),
       )
     },
-    updateEdge({ edge, rungId }) {
+    updateEdge({ edge, editorName, rungId }) {
       setState(
-        produce((state: RungsState) => {
-          const rung = state.rungs.find((rung) => rung.id === rungId)
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
+
           const edgeIndex = rung.edges.findIndex((e) => e.id === edge.id)
           if (edgeIndex === -1) return
+
           rung.edges[edgeIndex] = edge
         }),
       )
     },
 
-    updateFlowViewport({ flowViewport, rungId }) {
+    updateFlowViewport({ editorName, flowViewport, rungId }) {
       setState(
-        produce((state: RungsState) => {
-          const rung = state.rungs.find((rung) => rung.id === rungId)
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
+
           rung.flowViewport = flowViewport
         }),
       )

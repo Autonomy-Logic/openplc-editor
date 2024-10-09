@@ -13,6 +13,7 @@ type ContactElementProps = {
 
 const ContactElement = ({ isOpen, onOpenChange, onClose, node, rungId }: ContactElementProps) => {
   const {
+    editor,
     flowActions: { updateNode },
   } = useOpenPLCStore()
 
@@ -43,6 +44,7 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node, rungId }: Contact
         },
       },
       rungId,
+      editorName: editor.meta.name,
     })
     handleCloseModal()
   }

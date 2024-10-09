@@ -1,11 +1,11 @@
 import { RungBody, RungHeader } from '@root/renderer/components/_molecules/rung'
-import { FlowState } from '@root/renderer/store/slices'
+import { RungState } from '@root/renderer/store/slices'
 import { useState } from 'react'
 
 
 type RungProps = {
   id: string
-  rung: FlowState
+  rung: RungState
 }
 
 export const Rung = ({ id, rung }: RungProps) => {
