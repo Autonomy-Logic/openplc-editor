@@ -24,13 +24,14 @@ const Step3 = ({ onPrev, onClose }: { onPrev: () => void; onClose: () => void })
   const [intervalValue, setIntervalValue] = useState('T#20ms')
 
   const handleFormSubmit: SubmitHandler<FormData> = (data) => {
+
     const allData = {
       ...projectData,
       language: data.language,
       time: intervalValue,
     }
     handleUpdateForm(allData)
-    console.log('All Data 3:', allData)
+    console.log('Formulario finalizado', allData)
     onClose()
   }
 

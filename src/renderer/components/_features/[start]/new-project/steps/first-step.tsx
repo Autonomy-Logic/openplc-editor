@@ -1,28 +1,32 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
+
 import { BookIcon, FolderIcon } from '@root/renderer/assets'
 import { cn } from '@root/utils'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SubmitHandler, useForm } from 'react-hook-form'
 
 import { NewProjectStore } from '../project-modal'
 
-const Step1 = ({ onNext }: { onNext: () => void }) => {
-  const { handleSubmit, setValue, reset } = useForm<{ type: string }>()
+const Step1 = ({ onNext, onClose }: { onNext: () => void; onClose: () => void }) => {
+  const { handleSubmit, setValue } = useForm<{ type: string }>()
 
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)
-
+  const projectData = NewProjectStore((state) => state.formData)
   const [selected, setSelected] = useState<string>('')
+
+  useEffect(() => {
+    if (projectData.type) {
+      setSelected(projectData.type)
+      setValue('type', projectData.type)
+    }
+  }, [projectData, setValue])
 
   const handleFormSubmit: SubmitHandler<{ type: string }> = (data) => {
     handleUpdateForm({
+      ...projectData,
       type: data.type,
-      name: '',
-      path: '',
-      language: '',
-      time: '',
     })
     onNext()
-    console.log('All Data 1', data.type)
   }
 
   const handleSelectType = (type: string) => {
@@ -31,13 +35,12 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
   }
 
   const handleCancel = () => {
-    reset()
-    setSelected('')
+    onClose()
   }
 
   return (
     <>
-      <div className='relative flex items-center justify-center pt-2 pb-20 select-none'>
+      <div className='relative flex select-none items-center justify-center pb-20 pt-2'>
         <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-blue-500 font-bold text-white'>
           1
         </div>
@@ -73,15 +76,15 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
               <FolderIcon className='mr-2' /> PLC Project
             </button>
 
-            <div className='relative group'>
+            <div className='group relative'>
               <button
                 type='button'
-                className='flex h-10 w-40 items-center justify-center rounded-md border-2 border-transparent bg-gray-200 text-black opacity-50 cursor-not-allowed'
+                className='flex h-10 w-40 cursor-not-allowed items-center justify-center rounded-md border-2 border-transparent bg-gray-200 text-black opacity-50'
                 disabled
               >
                 <BookIcon className='mr-2' /> Library
               </button>
-              <span className='absolute left-1/2 -translate-x-1/2 bottom-12 mb-1 hidden w-40 rounded bg-gray-800 p-2 text-center text-white text-xs opacity-0 group-hover:block group-hover:opacity-100'>
+              <span className='absolute bottom-12 left-1/2 mb-1 hidden w-40 -translate-x-1/2 rounded bg-gray-800 p-2 text-center text-xs text-white opacity-0 group-hover:block group-hover:opacity-100'>
                 Feature in development
               </span>
             </div>

@@ -1,15 +1,21 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 
 import { PathIcon } from '@root/renderer/assets'
-import { cn } from '@root/utils';
+import { cn } from '@root/utils'
+import { useEffect } from 'react'
 import { SubmitHandler, useForm } from 'react-hook-form'
 
 import { NewProjectStore } from '../project-modal'
 
 const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) => {
-  const { register, handleSubmit } = useForm<{ name: string; path: string }>()
+  const { register, handleSubmit, setValue } = useForm<{ name: string; path: string }>()
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)
   const projectData = NewProjectStore((state) => state.formData)
+
+  useEffect(() => {
+    if (projectData.name) setValue('name', projectData.name)
+    if (projectData.path) setValue('path', projectData.path)
+  }, [projectData, setValue])
 
   const handleFormSubmit: SubmitHandler<{ name: string; path: string }> = (data) => {
     const allData = {
@@ -19,7 +25,6 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
     }
 
     handleUpdateForm(allData)
-    console.log('All Data 2 :', allData)
     onNext()
   }
 
@@ -28,7 +33,7 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
 
   return (
     <>
-      <div className='relative flex items-center justify-center pt-2 select-none'>
+      <div className='relative flex select-none items-center justify-center pt-2'>
         <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white text-blue-500'>
           1
         </div>
@@ -76,7 +81,7 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
         </div>
 
         <div className='mt-4 flex flex-row justify-center space-x-4'>
-        <button
+          <button
             type='button'
             className={cn(
               'h-8 w-52 items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100',
@@ -90,7 +95,6 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
           </button>
         </div>
       </form>
-
     </>
   )
 }
