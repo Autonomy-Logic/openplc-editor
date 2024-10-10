@@ -1,17 +1,17 @@
+import { baseTypes, PLCLanguagesShortenedForm } from '@root/shared/data'
 import { z } from 'zod'
 
-import { variableSchema } from './variable'
+import { PLCVariableSchema } from "./variable";
 
-const functionSchema = z.object({
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']).default('il'),
+const PLCFunctionSchema = z.object({
+  language: z.enum(PLCLanguagesShortenedForm),
   name: z.string(),
-  returnType: z.enum(['BOOL', 'INT', 'DINT']),
-  /** Array of variable - will be implemented */
-  variables: z.array(z.lazy(() => variableSchema)),
+  returnType: z.enum(baseTypes),
+  variables: z.array(PLCVariableSchema),
   body: z.string(),
   documentation: z.string(),
 })
 
-type IFunction = z.infer<typeof functionSchema>
+type PLCFunction = z.infer<typeof PLCFunctionSchema>
 
-export { functionSchema, IFunction }
+export { PLCFunction, PLCFunctionSchema }

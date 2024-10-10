@@ -3,7 +3,7 @@ import {
   BaseLibrarySchema,
   BaseLibraryVariableSchema,
   baseTypeSchema,
-} from '@root/types/PLC/library'
+} from '@root/types/PLC'
 import { z } from 'zod'
 
 const StandardFunctionBlocksVariablesSchema = BaseLibraryVariableSchema.extend({

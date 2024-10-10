@@ -2,7 +2,7 @@ import {
   BaseLibraryPouSchema,
   BaseLibrarySchema,
   BaseLibraryVariableSchema,
-} from '@root/types/PLC/library'
+} from '@root/types/PLC'
 import { z } from 'zod'
 
 const CommunicationBlocksVariableSchema = BaseLibraryVariableSchema

@@ -1,9 +1,4 @@
-import {
-  BaseLibraryPouSchema,
-  BaseLibrarySchema,
-  BaseLibraryVariableSchema,
-  baseTypeSchema,
-} from '@root/types/PLC/library'
+import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema, baseTypeSchema } from '@root/types/PLC'
 import { z } from 'zod'
 
 const AdditionalFunctionBlocksVariablesSchema = BaseLibraryVariableSchema.extend({
@@ -276,7 +271,7 @@ const AdditionalFunctionBlocks: AdditionalFunctionBlocksLibrary = {
       ],
       body: `BUSY := RUN ;
 IF RUN THEN
-  IF T >= TR THEN 
+  IF T >= TR THEN
     BUSY := 0;
     XOUT := X1;
   ELSE XOUT := XI + (X1-XI) * TIME_TO_REAL(T)
@@ -317,7 +312,7 @@ END_IF;`,
         },
       ],
       body: `IF Q THEN
-  IF XIN1 < (XIN2 - EPS) THEN 
+  IF XIN1 < (XIN2 - EPS) THEN
     Q := 0;
   END_IF;
 ELSIF XIN1 > (XIN2 + EPS) THEN

@@ -1,4 +1,4 @@
-import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema } from '@root/types/PLC/library'
+import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema } from '@root/types/PLC'
 import { z } from 'zod'
 
 const ArduinoFunctionBlocksVariableSchema = BaseLibraryVariableSchema
