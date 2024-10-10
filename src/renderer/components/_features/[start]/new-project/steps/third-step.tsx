@@ -36,7 +36,7 @@ const Step3 = ({ onPrev, onClose }: { onPrev: () => void; onClose: () => void })
 
   return (
     <>
-      <div className='relative flex items-center justify-center pt-2'>
+      <div className='relative flex items-center justify-center pt-2 select-none'>
         <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white text-blue-500'>
           1
         </div>
@@ -141,7 +141,7 @@ const Step3 = ({ onPrev, onClose }: { onPrev: () => void; onClose: () => void })
             type='submit'
             className={cn('h-8 w-52 items-center rounded-lg bg-blue-500 text-center font-medium text-white')}
           >
-            Next
+            Create Project
           </button>
         </div>
       </form>

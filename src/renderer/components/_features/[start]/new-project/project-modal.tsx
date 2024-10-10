@@ -16,6 +16,7 @@ export type NewProjectStoreProps = {
     time: string
   }
   setFormData: (form: NewProjectStoreProps['formData']) => void
+  resetFormData: () => void
 }
 
 const NewProjectStore = create<NewProjectStoreProps>((setState) => ({
@@ -33,10 +34,24 @@ const NewProjectStore = create<NewProjectStoreProps>((setState) => ({
       }),
     )
   },
+  resetFormData: () => {
+    setState(
+      produce((state: NewProjectStoreProps) => {
+        state.formData = {
+          type: '',
+          name: '',
+          path: '',
+          language: '',
+          time: '',
+        }
+      }),
+    )
+  },
 }))
 
 const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const formCurrentState = NewProjectStore((state) => state.formData)
+  const resetFormData = NewProjectStore((state) => state.resetFormData)
   const [currentStep, setCurrentStep] = useState(1)
 
   const handleNext = () => {
@@ -45,6 +60,12 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
 
   const handlePrev = () => {
     setCurrentStep((prevStep) => (prevStep > 1 ? prevStep - 1 : prevStep))
+  }
+
+  const handleClose = () => {
+    resetFormData()
+    setCurrentStep(1)
+    onClose()
   }
 
   console.log('Dados preenchidos:', formCurrentState)
@@ -56,15 +77,15 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
       case 2:
         return <Step2 onNext={handleNext} onPrev={handlePrev} />
       case 3:
-        return <Step3 onPrev={handlePrev} onClose={onClose} />
+        return <Step3 onPrev={handlePrev} onClose={handleClose} />
       default:
         return null
     }
   }
 
   return (
-    <Modal open={isOpen} onOpenChange={onClose}>
-      <ModalContent onClose={onClose} className='flex h-[450px] flex-col justify-between p-6'>
+    <Modal open={isOpen} onOpenChange={handleClose}>
+      <ModalContent onClose={handleClose} className='flex h-[450px] flex-col justify-between p-6'>
         <ModalTitle className='absolute -top-10 opacity-0' />
         {renderStep()}
       </ModalContent>

@@ -23,7 +23,6 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
     })
     onNext()
     console.log('All Data 1', data.type)
-
   }
 
   const handleSelectType = (type: string) => {
@@ -38,7 +37,7 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
 
   return (
     <>
-      <div className='relative flex items-center justify-center pt-2 pb-20'>
+      <div className='relative flex items-center justify-center pt-2 pb-20 select-none'>
         <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-blue-500 font-bold text-white'>
           1
         </div>
@@ -61,6 +60,7 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
           </h2>
 
           <div className='flex w-full justify-around'>
+            {/* PLC Project Button */}
             <button
               type='button'
               className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
@@ -73,17 +73,18 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
               <FolderIcon className='mr-2' /> PLC Project
             </button>
 
-            <button
-              type='button'
-              className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
-                selected === 'library'
-                  ? 'border-blue-300 bg-blue-300 text-white dark:border-neutral-600 dark:bg-neutral-600'
-                  : 'border-transparent bg-gray-200 text-black hover:border-blue-500 hover:dark:border-neutral-600'
-              }`}
-              onClick={() => handleSelectType('library')}
-            >
-              <BookIcon className='mr-2' /> Library
-            </button>
+            <div className='relative group'>
+              <button
+                type='button'
+                className='flex h-10 w-40 items-center justify-center rounded-md border-2 border-transparent bg-gray-200 text-black opacity-50 cursor-not-allowed'
+                disabled
+              >
+                <BookIcon className='mr-2' /> Library
+              </button>
+              <span className='absolute left-1/2 -translate-x-1/2 bottom-12 mb-1 hidden w-40 rounded bg-gray-800 p-2 text-center text-white text-xs opacity-0 group-hover:block group-hover:opacity-100'>
+                Feature in development
+              </span>
+            </div>
           </div>
         </div>
 
@@ -98,7 +99,6 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
             Cancel
           </button>
 
-          {/* Botão Next */}
           <button
             type='submit'
             className={`h-8 w-52 items-center rounded-lg text-center font-medium text-white ${
