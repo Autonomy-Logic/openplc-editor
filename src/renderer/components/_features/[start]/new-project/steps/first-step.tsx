@@ -22,7 +22,7 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
       time: '',
     })
     onNext()
-    console.log('Selected type 1:', data.type)
+    console.log('All Data 1', data.type)
 
   }
 

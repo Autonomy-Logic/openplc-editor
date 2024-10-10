@@ -46,10 +46,8 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   const handlePrev = () => {
     setCurrentStep((prevStep) => (prevStep > 1 ? prevStep - 1 : prevStep))
   }
-  const handleFinish = () => {
-    console.log('PREENCHEU TUDO', formCurrentState)
-    onClose()
-  }
+
+  console.log('Dados preenchidos:', formCurrentState)
 
   const renderStep = () => {
     switch (currentStep) {
@@ -58,7 +56,7 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
       case 2:
         return <Step2 onNext={handleNext} onPrev={handlePrev} />
       case 3:
-        return <Step3 onPrev={handlePrev} onFinish={handleFinish} onClose={onClose} />
+        return <Step3 onPrev={handlePrev} onClose={onClose} />
       default:
         return null
     }

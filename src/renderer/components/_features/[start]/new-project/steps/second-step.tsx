@@ -18,12 +18,12 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
     }
 
     handleUpdateForm(allData)
-    console.log('All Data:', allData)
+    console.log('All Data 2 :', allData)
     onNext()
   }
 
   const inputStyle =
-    'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
+    'border h-[40px] dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
 
   return (
     <>
@@ -63,7 +63,7 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
           <h2 className='mb-2 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
             Choose an empty directory for your project:
           </h2>
-          <div className='group flex h-10 w-64 cursor-pointer items-center justify-center rounded-md border border-gray-300 p-2 hover:bg-gray-300 active:bg-gray-400'>
+          <div className='group flex h-10 w-64 cursor-pointer items-center justify-center rounded-md border border-gray-300 p-2 '>
             <PathIcon className='mr-2 mt-3 flex-shrink-0 text-gray-400 group-hover:text-neutral-1000 dark:text-white' />
             <input
               id='project-path'
