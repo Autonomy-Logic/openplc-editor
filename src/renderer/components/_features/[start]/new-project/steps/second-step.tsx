@@ -8,29 +8,22 @@ import { NewProjectStore } from '../project-modal'
 const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) => {
   const { register, handleSubmit } = useForm<{ name: string; path: string }>()
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)
+  const projectData = NewProjectStore((state) => state.formData)   // Obtendo dados do Step 1
 
   const handleFormSubmit: SubmitHandler<{ name: string; path: string }> = (data) => {
-    handleUpdateForm({
+    const allData = {
+      ...projectData, // Inclui dados do Step 1
       name: data.name,
       path: data.path,
-      type: '',
-      language: '',
-      time: '',
-    })
+    }
+
+    handleUpdateForm(allData)
+    console.log('All Data:', allData) // Exibe todos os dados no console
     onNext()
   }
-  // const handleFormSubmit: SubmitHandler<{ name: string; path: string }> = (data) => {
-  //   handleUpdateForm((prevState: unknown) => ({
-  //     ...prevState,
-  //     name: data.name,
-  //     path: data.path,
-  //   }))
-  //   onNext()
-  // }
 
   const inputStyle =
     'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
-
 
   return (
     <>
@@ -94,6 +87,7 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
           </button>
         </div>
       </form>
+
     </>
   )
 }

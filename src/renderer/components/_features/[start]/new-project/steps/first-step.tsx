@@ -7,7 +7,8 @@ import { SubmitHandler, useForm } from 'react-hook-form'
 import { NewProjectStore } from '../project-modal'
 
 const Step1 = ({ onNext }: { onNext: () => void }) => {
-  const { handleSubmit, setValue } = useForm<{ type: string }>()
+  const { handleSubmit, setValue, reset } = useForm<{ type: string }>()
+
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)
 
   const [selected, setSelected] = useState<string>('')
@@ -21,6 +22,8 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
       time: '',
     })
     onNext()
+    console.log('Selected type 1:', data.type)
+
   }
 
   const handleSelectType = (type: string) => {
@@ -28,9 +31,13 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
     setValue('type', type)
   }
 
+  const handleCancel = () => {
+    reset()
+    setSelected('')
+  }
+
   return (
     <>
-      {/* Progress Bar */}
       <div className='relative flex items-center justify-center pt-2 pb-20'>
         <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-blue-500 font-bold text-white'>
           1
@@ -47,12 +54,12 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
         </div>
       </div>
 
-      {/* Form Content */}
       <form onSubmit={handleSubmit(handleFormSubmit)} className='flex flex-grow flex-col justify-between'>
         <div>
           <h2 className='mb-8 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
             What type of project will you be working on?
           </h2>
+
           <div className='flex w-full justify-around'>
             <button
               type='button'
@@ -65,6 +72,7 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
             >
               <FolderIcon className='mr-2' /> PLC Project
             </button>
+
             <button
               type='button'
               className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
@@ -79,16 +87,18 @@ const Step1 = ({ onNext }: { onNext: () => void }) => {
           </div>
         </div>
 
-        {/* Buttons */}
-        <div className=' flex flex-row justify-center space-x-4'>
+        <div className='flex flex-row justify-center space-x-4'>
           <button
             type='button'
+            onClick={handleCancel}
             className={cn(
               'h-8 w-52 items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100',
             )}
           >
             Cancel
           </button>
+
+          {/* Botão Next */}
           <button
             type='submit'
             className={`h-8 w-52 items-center rounded-lg text-center font-medium text-white ${
