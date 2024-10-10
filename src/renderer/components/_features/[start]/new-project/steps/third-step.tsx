@@ -47,13 +47,13 @@ const Step3 = ({ onFinish, onPrev, onClose }: { onFinish: () => void; onPrev: ()
       </div>
 
       <form onSubmit={handleSubmit(handleFormSubmit)} className='flex flex-grow flex-col justify-between'>
-        <div>
-          <h2 className='mb-2 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
+        <div className=" flex flex-col items-center justify-center">
+          <h2 className=' select-none text-center text-lg font-semibold text-neutral-900 dark:text-white'>
             Choose the language for the base program:
           </h2>
           <div
             id='pou-language-form-container'
-            className='absolute flex w-full flex-col items-center gap-[6px]'
+            className='flex w-full max-w-sm flex-col items-center rounded-md  p-4 dark:bg-neutral-800'
           >
             <Controller
               name='language'
@@ -66,12 +66,10 @@ const Step3 = ({ onFinish, onPrev, onClose }: { onFinish: () => void; onPrev: ()
                       withIndicator
                       aria-label='pou-language'
                       placeholder='Select a language'
-                      className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
+                      className='flex h-[35px] w-64 items-center justify-between gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 font-medium text-neutral-700 shadow-sm outline-none transition-colors duration-200 ease-in-out hover:border-neutral-400 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-300'
                     />
                     <SelectContent
-                      className='box z-[100] h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
-                      sideOffset={5}
-                      alignOffset={5}
+                      className='z-50 w-64 rounded-md bg-white shadow-lg dark:bg-neutral-900'
                       position='popper'
                       align='center'
                       side='bottom'
@@ -80,11 +78,11 @@ const Step3 = ({ onFinish, onPrev, onClose }: { onFinish: () => void; onPrev: ()
                         return (
                           <SelectItem
                             key={lang.value}
-                            className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 focus:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus:bg-neutral-900'
+                            className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                             value={ConvertToLangShortenedFormat(lang.value)}
                           >
-                            <span>
-                              {lang.icon} <span>{lang.value}</span>
+                            <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                              {lang.icon} {lang.value}
                             </span>
                           </SelectItem>
                         )
