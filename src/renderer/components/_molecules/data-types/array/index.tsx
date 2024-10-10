@@ -31,6 +31,17 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     )()
   }
 
+
+  const onValueChange = (value: string) => {
+    const optionalSchema = {
+      name: data.name,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      baseType: value,
+    };
+    updateDatatype(data?.name, optionalSchema)
+    console.log("optionalSchema", optionalSchema)
+  }
+
   return (
     <div aria-label='Array data type container' className='flex h-full w-full flex-col gap-4 bg-transparent' {...rest}>
       <div aria-label='Data type content actions container' className='flex h-fit w-full gap-8'>
@@ -39,7 +50,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
             <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
               Base type
             </label>
-            <Select aria-label='Array data type base type select'>
+            <Select aria-label='Array data type base type select' onValueChange={(value) => onValueChange(value)}>
               <SelectTrigger
                 withIndicator
                 placeholder='Base type'
@@ -54,7 +65,6 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
                 {baseTypes.map((type) => {
                   return (
                     <SelectItem
-                      onClick={() => console.log('Clicked')}
                       value={type}
                       className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
                     >
