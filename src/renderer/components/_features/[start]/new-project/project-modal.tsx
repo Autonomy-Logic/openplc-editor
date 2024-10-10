@@ -1,3 +1,4 @@
+/* eslint-disable no-duplicate-case */
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { produce } from 'immer'
 import { useState } from 'react'
@@ -50,7 +51,7 @@ const NewProjectStore = create<NewProjectStoreProps>((setState) => ({
 }))
 
 const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
-  const formCurrentState = NewProjectStore((state) => state.formData)
+  const _formCurrentState = NewProjectStore((state) => state.formData)
   const resetFormData = NewProjectStore((state) => state.resetFormData)
   const [currentStep, setCurrentStep] = useState(1)
 
@@ -68,12 +69,10 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
     onClose()
   }
 
-  console.log('Dados preenchidos:', formCurrentState)
-
   const renderStep = () => {
     switch (currentStep) {
       case 1:
-        return <Step1 onNext={handleNext} />
+        return <Step1 onClose={handleClose} onNext={handleNext} />
       case 2:
         return <Step2 onNext={handleNext} onPrev={handlePrev} />
       case 3:
