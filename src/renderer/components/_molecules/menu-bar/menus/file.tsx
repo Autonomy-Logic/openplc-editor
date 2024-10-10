@@ -24,6 +24,7 @@ export const FileMenu = () => {
         projectPath: data.meta.path,
         projectData: data.content,
         projectName: 'new-project',
+        recents: [],
       })
       clearEditor()
       clearTabs()
@@ -49,6 +50,7 @@ export const FileMenu = () => {
         projectPath: data.meta.path,
         projectData: data.content,
         projectName: 'new-project',
+        recents: [],
       })
       clearEditor()
       clearTabs()
