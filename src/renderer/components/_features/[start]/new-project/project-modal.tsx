@@ -50,7 +50,6 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
     console.log('PREENCHEU TUDO', formCurrentState)
     onClose()
   }
-  console.log('State ->', formCurrentState)
 
   const renderStep = () => {
     switch (currentStep) {

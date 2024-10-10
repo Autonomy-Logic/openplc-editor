@@ -8,17 +8,17 @@ import { NewProjectStore } from '../project-modal'
 const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) => {
   const { register, handleSubmit } = useForm<{ name: string; path: string }>()
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)
-  const projectData = NewProjectStore((state) => state.formData)   // Obtendo dados do Step 1
+  const projectData = NewProjectStore((state) => state.formData)
 
   const handleFormSubmit: SubmitHandler<{ name: string; path: string }> = (data) => {
     const allData = {
-      ...projectData, // Inclui dados do Step 1
+      ...projectData,
       name: data.name,
       path: data.path,
     }
 
     handleUpdateForm(allData)
-    console.log('All Data:', allData) // Exibe todos os dados no console
+    console.log('All Data:', allData)
     onNext()
   }
 
