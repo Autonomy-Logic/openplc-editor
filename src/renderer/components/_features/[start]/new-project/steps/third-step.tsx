@@ -3,11 +3,13 @@ import { PouLanguageSources } from '@process:renderer/data'
 import { TimerIcon } from '@root/renderer/assets'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { cn, ConvertToLangShortenedFormat } from '@root/utils'
+import { useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
+import { IntervalModal } from '../interval-model'
 import { NewProjectStore } from '../project-modal'
 
-const Step3 = ({ onFinish, onPrev, onClose }: { onFinish: () => void; onPrev: () => void; onClose: () => void }) => {
+const Step3 = ({ onPrev, onClose }: { onPrev: () => void; onClose: () => void }) => {
   type FormData = {
     name: string
     path: string
@@ -18,15 +20,17 @@ const Step3 = ({ onFinish, onPrev, onClose }: { onFinish: () => void; onPrev: ()
   const { handleSubmit, control } = useForm<FormData>()
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)
   const projectData = NewProjectStore((state) => state.formData)
+  const [isModalOpen, setModalOpen] = useState(false)
+  const [intervalValue, setIntervalValue] = useState('T#20ms')
 
   const handleFormSubmit: SubmitHandler<FormData> = (data) => {
     const allData = {
       ...projectData,
       language: data.language,
+      time: intervalValue,
     }
     handleUpdateForm(allData)
-    console.log('All Data:', allData)
-    onFinish()
+    console.log('All Data 3:', allData)
     onClose()
   }
 
@@ -47,13 +51,13 @@ const Step3 = ({ onFinish, onPrev, onClose }: { onFinish: () => void; onPrev: ()
       </div>
 
       <form onSubmit={handleSubmit(handleFormSubmit)} className='flex flex-grow flex-col justify-between'>
-        <div className=" flex flex-col items-center justify-center">
+        <div className=' flex flex-col items-center justify-center'>
           <h2 className=' select-none text-center text-lg font-semibold text-neutral-900 dark:text-white'>
             Choose the language for the base program:
           </h2>
           <div
             id='pou-language-form-container'
-            className='flex w-full max-w-sm flex-col items-center rounded-md  p-4 dark:bg-neutral-800'
+            className='flex w-full max-w-sm flex-col items-center rounded-md  p-4 '
           >
             <Controller
               name='language'
@@ -66,7 +70,7 @@ const Step3 = ({ onFinish, onPrev, onClose }: { onFinish: () => void; onPrev: ()
                       withIndicator
                       aria-label='pou-language'
                       placeholder='Select a language'
-                      className='flex h-[35px] w-64 items-center justify-between gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 font-medium text-neutral-700 shadow-sm outline-none transition-colors duration-200 ease-in-out hover:border-neutral-400 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-300'
+                      className='flex h-[40px] w-64 items-center justify-between gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 font-medium text-neutral-700 shadow-sm outline-none transition-colors duration-200 ease-in-out hover:border-neutral-400 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-300'
                     />
                     <SelectContent
                       className='z-50 w-64 rounded-md bg-white shadow-lg dark:bg-neutral-900'
@@ -104,12 +108,23 @@ const Step3 = ({ onFinish, onPrev, onClose }: { onFinish: () => void; onPrev: ()
             className={cn(
               'group flex h-10 w-64 cursor-pointer items-center justify-center rounded-md border border-gray-300 p-2 hover:bg-gray-300 active:bg-gray-400',
             )}
+            onClick={() => setModalOpen(true)}
           >
             <TimerIcon className='mr-2 mt-2' />
             <span className='text-sm font-medium text-gray-400 group-hover:text-neutral-1000 dark:text-white'>
-              T#20ms
+              {intervalValue}
             </span>
           </button>
+          {isModalOpen && (
+            <IntervalModal
+              initialValue={intervalValue}
+              onValueChange={(value) => {
+                setIntervalValue(value)
+              }}
+              onClose={() => setModalOpen(false)}
+              open={isModalOpen}
+            />
+          )}
         </div>
 
         <div className='mt-4 flex flex-row justify-center space-x-4'>

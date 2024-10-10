@@ -35,9 +35,9 @@ const IntervalModal = ({ initialValue, onValueChange, onClose, open }: IntervalM
   }, [initialValue])
 
   const formattedInterval = useMemo(() => {
-    const { day, hour, min, sec, ms, µs } = values
+    const { day, hour, min, sec, ms, µs } = tempValues
     return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}min` : ''}${sec > 0 ? `${sec}s` : ''}${ms > 0 ? `${ms}ms` : ''}${µs > 0 ? `${µs}µs` : ''}`
-  }, [values])
+  }, [tempValues])
 
   const handleSave = () => {
     onValueChange(formattedInterval)
@@ -85,7 +85,7 @@ const IntervalModal = ({ initialValue, onValueChange, onClose, open }: IntervalM
                   onChange={(e) =>
                     setTempValues((prev) => ({
                       ...prev,
-                      [interval]: e.target.value ? Number(e.target.value) : 0, // Prevenindo NaN
+                      [interval]: e.target.value ? Number(e.target.value) : 0,
                     }))
                   }
                 />
