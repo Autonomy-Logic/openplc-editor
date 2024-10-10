@@ -62,10 +62,13 @@ const rendererProcessBridge = {
     prefersDarkMode: boolean
     isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
+  retrieveRecents: (): Promise<{ path: string; lastOpenedAt: string; createdAt: string }[]> =>
+    ipcRenderer.invoke('app:store-retrieve-recents'),
   closeWindow: () => ipcRenderer.send('window-controls:close'),
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
-  isMaximizedWindow: (callback: IpcRendererCallbacks) => ipcRenderer.on('window-controls:toggle-maximized', (_event) => callback(_event)),
+  isMaximizedWindow: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('window-controls:toggle-maximized', (_event) => callback(_event)),
   reloadWindow: () => ipcRenderer.send('window:reload'),
   handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
   winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),

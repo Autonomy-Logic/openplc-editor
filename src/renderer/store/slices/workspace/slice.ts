@@ -25,7 +25,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           globalVariables: [],
         },
       },
-      projectName: ''
+      projectName: '',
     },
     systemConfigs: {
       OS: '',
@@ -33,7 +33,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       shouldUseDarkMode: false,
       isWindowMaximized: false,
     },
-    projectName: ''
+    recents: [],
+    projectName: '',
   },
 
   workspaceActions: {
@@ -504,6 +505,14 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
 
           const [removed] = workspace.projectData.configuration.resource.instances.splice(rowId, 1)
           workspace.projectData.configuration.resource.instances.splice(newIndex, 0, removed)
+        }),
+      )
+    },
+
+    setRecents: (recents): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.recents = recents
         }),
       )
     },

@@ -1,5 +1,6 @@
 import { TStoreType } from '@root/main/contracts/types/modules/store'
-import { Event, nativeTheme } from 'electron'
+import { app, Event, nativeTheme } from 'electron'
+import { join } from 'path'
 import { platform } from 'process'
 
 import { PLCProjectData } from '../../../types/PLC/open-plc'
@@ -41,6 +42,18 @@ class MainProcessBridge implements MainIpcModule {
         architecture: 'x64',
         prefersDarkMode: nativeTheme.shouldUseDarkColors,
         isWindowMaximized: this.mainWindow?.isMaximized(),
+      }
+    })
+    this.ipcMain.handle('app:store-retrieve-recents', async () => {
+      const pathToUserDataFolder = join(app.getPath('userData'), 'User')
+      const pathToUserHistoryFolder = join(pathToUserDataFolder, 'History')
+      const projectsFilePath = join(pathToUserHistoryFolder, 'projects.json')
+      const response = await this.projectService.readProjectHistory(projectsFilePath)
+      try {
+        return response
+      } catch (error) {
+        console.error('Error reading history file:', error)
+        return []
       }
     })
     this.ipcMain.on('window-controls:close', () => this.mainWindow?.close())

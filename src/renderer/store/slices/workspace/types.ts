@@ -59,6 +59,7 @@ const workspaceStateSchema = z.object({
     projectData: PLCProjectDataSchema,
     editingState: z.enum(['save-request', 'saved', 'unsaved']),
     systemConfigs: systemConfigsSchema,
+    recents: z.array(z.object({ lastOpenedAt: z.string(), createdAt: z.string(), path: z.string() })),
   }),
 })
 type WorkspaceState = z.infer<typeof workspaceStateSchema>
@@ -72,6 +73,7 @@ type WorkspaceResponse = z.infer<typeof workspaceResponseSchema>
 
 const workspaceActionsSchema = z.object({
   setEditingState: z.function().args(workspaceStateSchema.shape.workspace.shape.editingState).returns(z.void()),
+  setRecents: z.function().args(workspaceStateSchema.shape.workspace.shape.recents).returns(z.void()),
   setUserWorkspace: z
     .function()
     .args(workspaceStateSchema.shape.workspace.omit({ systemConfigs: true }))

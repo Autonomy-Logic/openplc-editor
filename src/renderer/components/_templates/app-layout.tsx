@@ -10,12 +10,16 @@ import Toaster from '../_features/[app]/toast/toaster'
 const AppLayout = (): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
-    workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow },
+    workspace: { recents: recentsToLog },
+    workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecents },
   } = useOpenPLCStore()
 
   useEffect(() => {
     const getUserSystemProps = async () => {
       const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
+      const recents = await window.bridge.retrieveRecents()
+
+      setRecents(recents)
       setSystemConfigs({
         OS,
         arch: architecture,
@@ -40,7 +44,7 @@ const AppLayout = (): ReactNode => {
       switchAppTheme()
     })
   }, [])
-
+  console.log('workspace layout', recentsToLog)
   return (
     <>
       {!isLinux && <TitleBar />}
