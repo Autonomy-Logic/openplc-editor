@@ -43,7 +43,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   function handleWriteInPou(value: string | undefined) {
     if (!value) return
-    updatePou({ name, content: value })
+    updatePou({ name, content: { language, value } })
   }
 
   const monacoEditorUserOptions: monacoEditorOptionsType = {
@@ -71,7 +71,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       path={path}
       language={language}
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      defaultValue={pous.find((pou) => pou.data.name === name)?.data.body}
+      defaultValue={pous.find((pou) => pou.data.name === name)?.data.body.value as string}
       onMount={handleEditorDidMount}
       onChange={handleWriteInPou}
       theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}

@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { zodFlowSchema } from '../../renderer/store/slices/flow/types'
+
 const baseTypeSchema = z.enum([
   'bool',
   'sint',
@@ -139,13 +141,36 @@ const PLCTaskSchema = z.object({
 
 type PLCTask = z.infer<typeof PLCTaskSchema>
 
+const bodySchema = z.discriminatedUnion('language', [
+  z.object({
+    language: z.literal('il'),
+    value: z.string(),
+  }),
+  z.object({
+    language: z.literal('st'),
+    value: z.string(),
+  }),
+  z.object({
+    language: z.literal('ld'),
+    value: zodFlowSchema,
+  }),
+  z.object({
+    language: z.literal('sfc'),
+    value: z.string(),
+  }),
+  z.object({
+    language: z.literal('fbd'),
+    value: z.string(),
+  }),
+])
+
 const PLCFunctionSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
   name: z.string(),
   returnType: z.enum(['BOOL', 'INT', 'DINT']),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
-  body: z.string(),
+  body: bodySchema,
   documentation: z.string(),
 })
 
@@ -156,7 +181,7 @@ const PLCProgramSchema = z.object({
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
-  body: z.string(),
+  body: bodySchema,
   documentation: z.string(),
 })
 
@@ -176,41 +201,11 @@ const PLCFunctionBlockSchema = z.object({
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
-  body: z.string(),
+  body: bodySchema,
   documentation: z.string(),
 })
 
 type PLCFunctionBlock = z.infer<typeof PLCFunctionBlockSchema>
-
-const PLCProjectDataSchema = z.object({
-  projectName: z.string(),
-  dataTypes: z.array(PLCDataTypeSchema),
-  pous: z.array(
-    z.discriminatedUnion('type', [
-      z.object({
-        type: z.literal('program'),
-        data: PLCProgramSchema,
-      }),
-      z.object({
-        type: z.literal('function'),
-        data: PLCFunctionSchema,
-      }),
-      z.object({
-        type: z.literal('function-block'),
-        data: PLCFunctionBlockSchema,
-      }),
-    ]),
-  ),
-  configuration: z.object({
-    resource: z.object({
-      tasks: z.array(PLCTaskSchema),
-      instances: z.array(PLCInstanceSchema),
-      globalVariables: z.array(PLCVariableSchema.omit({ class: true })),
-    }),
-  }),
-})
-
-type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
 const newPLCProjectDataSchema = z.object({
   dataTypes: z.array(PLCDataTypeSchema),
@@ -239,7 +234,7 @@ const newPLCProjectDataSchema = z.object({
   }),
 })
 
-type newPLCProjectData = z.infer<typeof PLCProjectDataSchema>
+type newPLCProjectData = z.infer<typeof newPLCProjectDataSchema>
 
 const newPLCProjectMetaSchema = z.object({
   name: z.string(),
@@ -257,6 +252,7 @@ type newPLCProject = z.infer<typeof newPLCProjectSchema>
 
 export {
   baseTypeSchema,
+  bodySchema,
   newPLCProjectDataSchema,
   newPLCProjectMetaSchema,
   newPLCProjectSchema,
@@ -268,7 +264,6 @@ export {
   PLCGlobalVariableSchema,
   PLCInstanceSchema,
   PLCProgramSchema,
-  PLCProjectDataSchema,
   PLCTaskSchema,
   PLCVariableSchema,
 }
@@ -285,7 +280,6 @@ export type {
   PLCGlobalVariable,
   PLCInstance,
   PLCProgram,
-  PLCProjectData,
   PLCTask,
   PLCVariable,
 }

@@ -2,7 +2,7 @@ import { PLCDataType } from '@root/types/PLC/open-plc'
 
 import type { EditorModel } from '../../editor'
 import { editorModelSchema } from '../../editor'
-import type { PouDTO } from '../../workspace/types'
+import type { PouDTO } from '../../project/types'
 
 type PouProps = {
   type: 'program' | 'function' | 'function-block'
@@ -18,7 +18,10 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
         data: {
           name: name,
           language,
-          body: `This is the body of ${name}`,
+          body: {
+            language,
+            value: (language === 'ld') ? { name, rungs: []}: 'This is the body of function',
+          },
           returnType: 'BOOL',
           variables: [],
           documentation: 'Doc for function',
@@ -30,7 +33,10 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
         data: {
           name: name,
           language,
-          body: `This is the body of ${name}`,
+          body: {
+            language,
+            value: (language === 'ld') ? { name, rungs: []}: 'This is the body of function',
+          },
           variables: [],
           documentation: 'Doc for function block',
         },
@@ -41,7 +47,10 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
         data: {
           name: name,
           language,
-          body: `This is the body of ${name}`,
+          body: {
+            language,
+            value: (language === 'ld') ? { name, rungs: []}: 'This is the body of function',
+          },
           variables: [],
           documentation: 'Doc for program',
         },

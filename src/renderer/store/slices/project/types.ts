@@ -1,4 +1,5 @@
 import {
+  bodySchema,
   newPLCProjectDataSchema,
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
@@ -26,7 +27,7 @@ const variableDTOSchema = z.object({
   associatedPou: z.string().optional(),
   data: PLCVariableSchema,
 })
-type _VariableDTO = z.infer<typeof variableDTOSchema>
+type VariableDTO = z.infer<typeof variableDTOSchema>
 
 /**
  * pouDTOSchema
@@ -48,7 +49,7 @@ const pouDTOSchema = z.discriminatedUnion('type', [
     data: PLCFunctionBlockSchema,
   }),
 ])
-type _PouDTO = z.infer<typeof pouDTOSchema>
+type PouDTO = z.infer<typeof pouDTOSchema>
 
 /**
  * taskDTOSchema
@@ -58,7 +59,7 @@ const taskDTOSchema = z.object({
   data: PLCTaskSchema,
 })
 
-type _TaskDTO = z.infer<typeof taskDTOSchema>
+type TaskDTO = z.infer<typeof taskDTOSchema>
 
 /**
  * instanceDTOSchema
@@ -67,7 +68,7 @@ type _TaskDTO = z.infer<typeof taskDTOSchema>
 const instanceDTOSchema = z.object({
   data: PLCInstanceSchema,
 })
-type _InstanceDTO = z.infer<typeof instanceDTOSchema>
+type InstanceDTO = z.infer<typeof instanceDTOSchema>
 
 /**
  * =====================================
@@ -131,7 +132,7 @@ const projectActionsSchema = z.object({
   createPou: z.function().args(pouDTOSchema).returns(projectResponseSchema),
   updatePou: z
     .function()
-    .args(z.object({ name: z.string(), content: z.string() }))
+    .args(z.object({ name: z.string(), content: bodySchema }))
     .returns(z.void()),
   deletePou: z.function().args(z.string()).returns(z.void()),
 
@@ -213,4 +214,4 @@ type ProjectSlice = {
 
 export { projectMetaSchema, projectResponseSchema, projectStateSchema }
 
-export { ProjectMeta, ProjectResponse, ProjectSlice, ProjectState }
+export { InstanceDTO, PouDTO, ProjectMeta, ProjectResponse, ProjectSlice, ProjectState, TaskDTO, VariableDTO }

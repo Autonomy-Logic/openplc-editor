@@ -1,4 +1,60 @@
 import { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
+import { z } from 'zod'
+
+/**
+ * Types used to save at the json
+ */
+const nodeSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  position: z.object({
+    x: z.number(),
+    y: z.number(),
+  }),
+  height: z.number(),
+  width: z.number(),
+  measured: z.object({
+    width: z.number(),
+    height: z.number(),
+  }),
+  draggable: z.boolean(),
+  selectable: z.boolean(),
+  data: z.any(),
+})
+type NodeType = z.infer<typeof nodeSchema>
+
+const edgeSchema = z.object({
+  id: z.string(),
+  source: z.string(),
+  sourceHandle: z.string(),
+  target: z.string(),
+  targetHandle: z.string(),
+})
+type EdgeType = z.infer<typeof edgeSchema>
+
+const zodRungStateSchema = z.object({
+  id: z.string(),
+  defaultBounds: z.array(z.number()),
+  flowViewport: z.array(z.number()).optional(),
+  nodes: z.array(nodeSchema),
+  edges: z.array(edgeSchema),
+})
+type ZodRungType = z.infer<typeof zodRungStateSchema>
+
+const zodFlowSchema = z.object({
+  name: z.string(),
+  rungs: z.array(zodRungStateSchema).optional(),
+})
+type ZodFlowType = z.infer<typeof zodFlowSchema>
+
+const zodFlowStateSchema = z.object({
+  flows: z.array(zodFlowSchema),
+})
+type ZodFlowState = z.infer<typeof zodFlowStateSchema>
+
+/**
+ * Types used at the slice
+ */
 
 type RungState = {
   id: string
@@ -32,17 +88,41 @@ type FlowActions = {
   addRung: (editorName: string, rung: RungState) => void
   removeRung: (editorName: string, rungId: string) => void
 
-  onNodesChange: ({ changes, rungId, editorName }: { changes: NodeChange<Node>[]; rungId: string, editorName: string }) => void
-  onEdgesChange: ({ changes, rungId, editorName }: { changes: EdgeChange<Edge>[]; rungId: string, editorName: string }) => void
-  onConnect: ({ changes, rungId, editorName }: { changes: Connection; rungId: string, editorName: string }) => void
+  onNodesChange: ({
+    changes,
+    rungId,
+    editorName,
+  }: {
+    changes: NodeChange<Node>[]
+    rungId: string
+    editorName: string
+  }) => void
+  onEdgesChange: ({
+    changes,
+    rungId,
+    editorName,
+  }: {
+    changes: EdgeChange<Edge>[]
+    rungId: string
+    editorName: string
+  }) => void
+  onConnect: ({ changes, rungId, editorName }: { changes: Connection; rungId: string; editorName: string }) => void
 
-  setNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string, editorName: string }) => void
-  updateNode: ({ node, rungId, editorName }: { node: Node; rungId: string, editorName: string }) => void
+  setNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
+  updateNode: ({ node, rungId, editorName }: { node: Node; rungId: string; editorName: string }) => void
 
-  setEdges: ({ edges, rungId, editorName }: { edges: Edge[]; rungId: string, editorName: string }) => void
-  updateEdge: ({ edge, rungId, editorName }: { edge: Edge; rungId: string, editorName: string }) => void
+  setEdges: ({ edges, rungId, editorName }: { edges: Edge[]; rungId: string; editorName: string }) => void
+  updateEdge: ({ edge, rungId, editorName }: { edge: Edge; rungId: string; editorName: string }) => void
 
-  updateFlowViewport: ({ flowViewport, rungId, editorName }: { flowViewport: [number, number]; rungId: string, editorName: string }) => void
+  updateFlowViewport: ({
+    flowViewport,
+    rungId,
+    editorName,
+  }: {
+    flowViewport: [number, number]
+    rungId: string
+    editorName: string
+  }) => void
 }
 
 /** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */
@@ -51,3 +131,10 @@ type FlowSlice = FlowState & {
 }
 
 export { FlowActions, FlowSlice, FlowState, RungState }
+
+/**
+ * Zod exports
+ */
+export { edgeSchema, nodeSchema, zodFlowSchema, zodFlowStateSchema, zodRungStateSchema }
+
+export type { EdgeType, NodeType, ZodFlowState, ZodFlowType, ZodRungType }
