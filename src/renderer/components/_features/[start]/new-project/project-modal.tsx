@@ -1,4 +1,3 @@
-/* eslint-disable no-duplicate-case */
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { produce } from 'immer'
 import { useState } from 'react'

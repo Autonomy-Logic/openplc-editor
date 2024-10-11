@@ -63,7 +63,6 @@ const Step1 = ({ onNext, onClose }: { onNext: () => void; onClose: () => void })
           </h2>
 
           <div className='flex w-full justify-around'>
-            {/* PLC Project Button */}
             <button
               type='button'
               className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
