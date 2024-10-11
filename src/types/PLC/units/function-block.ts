@@ -1,16 +1,16 @@
-import { z } from 'zod'
+import { PLCLanguagesShortenedForm} from '@root/shared/data'
+import { z } from "zod";
 
-import { variableSchema } from './variable'
+import { PLCVariableSchema } from "./variable";
 
-const functionBlockSchema = z.object({
-  language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']).default('il'),
+const PLCFunctionBlockSchema = z.object({
+  language: z.enum(PLCLanguagesShortenedForm),
   name: z.string(),
-  /** Array of variable - will be implemented */
-  variables: z.array(z.lazy(() => variableSchema)),
+  variables: z.array(PLCVariableSchema),
   body: z.string(),
   documentation: z.string(),
 })
 
-type IFunctionBlock = z.infer<typeof functionBlockSchema>
+type PLCFunctionBlock = z.infer<typeof PLCFunctionBlockSchema>
 
-export { functionBlockSchema, IFunctionBlock }
+export { PLCFunctionBlock, PLCFunctionBlockSchema }

@@ -1,11 +1,11 @@
 import { IProjectServiceResponse } from '@root/main/services/project-service'
-import { NewProjectModal } from '@root/renderer/components/_features/[start]/new-project'
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'
 import { useToast } from '../components/_features/[app]/toast/use-toast'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
+import { ProjectModal } from '../components/_features/[start]/new-project/project-modal'
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
 import { StartMainContent, StartSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
@@ -192,7 +192,7 @@ const StartScreen = () => {
       <StartMainContent>
         <ProjectFilterBar />
       </StartMainContent>
-      <NewProjectModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <ProjectModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </>
   )
 }
