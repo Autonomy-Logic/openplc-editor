@@ -127,6 +127,10 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
     },
     width: DEFAULT_PARALLEL_WIDTH,
     height: DEFAULT_PARALLEL_HEIGHT,
+    measured: {
+      width: DEFAULT_PARALLEL_WIDTH,
+      height: DEFAULT_PARALLEL_HEIGHT,
+    },
     draggable: false,
     selectable: false,
     selected: false,

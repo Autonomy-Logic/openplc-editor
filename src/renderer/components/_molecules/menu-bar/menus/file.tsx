@@ -75,9 +75,7 @@ export const FileMenu = () => {
   }
 
   const handleSaveProject = async () => {
-    console.log('PROJECT', project)
     const projectData = newPLCProjectSchema.safeParse(project)
-    console.log('SAVE PROJECT', projectData)
     if (!projectData.success) {
       toast({
         title: 'Error in the save request!',

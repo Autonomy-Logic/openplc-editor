@@ -1,16 +1,39 @@
 import { CreateRung } from '@root/renderer/components/_molecules/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { zodFlowSchema } from '@root/renderer/store/slices'
+import { useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 export default function LadderEditor() {
-  const { flows, editor, flowActions } = useOpenPLCStore()
+  const {
+    flows,
+    editor,
+    flowActions,
+    projectActions: { updatePou },
+  } = useOpenPLCStore()
+
+  /**
+   * Update the flow state to project JSON
+   */
+  useEffect(() => {
+    const flow = flows.find((flow) => flow.name === editor.meta.name)
+    if (!flow) return
+
+    const flowSchema = zodFlowSchema.safeParse(flow)
+    if (!flowSchema.success) return
+
+    updatePou({
+      name: editor.meta.name,
+      content: {
+        language: 'ld',
+        value: flowSchema.data,
+      },
+    })
+  }, [flows.find((flow) => flow.name === editor.meta.name)])
 
   const handleAddNewRung = () => {
     const defaultViewport: [number, number] = [1530, 250]
-
-    console.log('editor.meta.name', editor.meta.name)
-
     flowActions.startLadderRung({
       editorName: editor.meta.name,
       rungId: `rung_${editor.meta.name}_${uuidv4()}`,

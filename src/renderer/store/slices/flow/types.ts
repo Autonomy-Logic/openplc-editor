@@ -13,10 +13,12 @@ const nodeSchema = z.object({
   }),
   height: z.number(),
   width: z.number(),
-  measured: z.object({
-    width: z.number(),
-    height: z.number(),
-  }),
+  measured: z
+    .object({
+      width: z.number(),
+      height: z.number(),
+    })
+    .optional(),
   draggable: z.boolean(),
   selectable: z.boolean(),
   data: z.any(),
