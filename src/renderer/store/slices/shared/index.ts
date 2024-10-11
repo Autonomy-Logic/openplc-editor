@@ -26,10 +26,12 @@ export type ISharedSlice = {
   }
 }
 
-export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & WorkspaceSlice & ProjectSlice, [], [], ISharedSlice> = (
-  _setState,
-  getState,
-) => ({
+export const createSharedSlice: StateCreator<
+  EditorSlice & TabsSlice & WorkspaceSlice & ProjectSlice,
+  [],
+  [],
+  ISharedSlice
+> = (_setState, getState) => ({
   pouActions: {
     create: {
       pou: (propsToCreatePou: PropsToCreatePou) => {
@@ -84,6 +86,10 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
               classFilter: 'All',
               selectedRow: '-1',
             },
+            graphical:
+              propsToCreatePou.language === 'ld'
+                ? { language: propsToCreatePou.language, openedRungs: [] }
+                : { language: propsToCreatePou.language },
           })
           getState().editorActions.addModel(data)
           getState().editorActions.setEditor(data)

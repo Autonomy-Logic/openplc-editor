@@ -38,6 +38,25 @@ const instaceSchema = z.discriminatedUnion('display', [
   }),
   z.object({ display: z.literal('code') }),
 ])
+
+/**
+ * This is a zod schema for the graphical schema.
+ * It is used to validate the graphical schema if needed,
+ * in most cases you can use the type inferred from it.
+ */
+const editorGraphicalSchema = z.discriminatedUnion('language', [
+  z.object({
+    language: z.literal('ld'),
+    openedRungs: z.array(z.object({ rungId: z.string(), open: z.boolean() })),
+  }),
+  z.object({
+    language: z.literal('sfc'),
+  }),
+  z.object({
+    language: z.literal('fbd'),
+  }),
+])
+
 /** This is a zod schema for the model.
  * It is used to validate the model if needed,
  * in most cases you can use the type inferred from it.
@@ -68,6 +87,7 @@ const editorModelSchema = z.discriminatedUnion('type', [
       pouType: z.enum(['program', 'function', 'function-block']),
     }),
     variable: editorVariablesSchema,
+    graphical: editorGraphicalSchema,
   }),
   z.object({
     type: z.literal('plc-datatype'),
@@ -104,6 +124,7 @@ const editorStateSchema = z.object({
 const editorActionsSchema = z.object({
   addModel: z.function().args(editorModelSchema).returns(z.void()),
   removeModel: z.function().args(z.string()).returns(z.void()),
+
   updateModelVariables: z
     .function()
     .args(
@@ -115,7 +136,6 @@ const editorActionsSchema = z.object({
       }),
     )
     .returns(z.void()),
-  setEditor: z.function().args(editorModelSchema).returns(z.void()),
   updateModelTasks: z
     .function()
     .args(z.object({ selectedRow: z.number(), display: z.enum(['code', 'table']) }))
@@ -124,6 +144,16 @@ const editorActionsSchema = z.object({
     .function()
     .args(z.object({ selectedRow: z.number(), display: z.enum(['code', 'table']) }))
     .returns(z.void()),
+  updateModelLadder: z
+    .function()
+    .args(z.object({ openRung: z.object({ rungId: z.string(), open: z.boolean() }).optional() }))
+    .returns(z.void()),
+  getIsRungOpen: z
+    .function()
+    .args(z.object({ rungId: z.string() }))
+    .returns(z.boolean()),
+
+  setEditor: z.function().args(editorModelSchema).returns(z.void()),
   clearEditor: z.function().returns(z.void()),
   getEditorFromEditors: z.function().args(z.string()).returns(editorModelSchema.or(z.null())),
 })
@@ -133,6 +163,8 @@ type VariablesTable = z.infer<typeof editorVariablesSchema>
 type GlobalVariablesTableType = z.infer<typeof editorGlobalVariablesSchema>
 type TaskType = z.infer<typeof taskSchema>
 type InstanceType = z.infer<typeof instaceSchema>
+/** Graphical */
+type GraphicalType = z.infer<typeof editorGraphicalSchema>
 /** The model, the data that we display in the app. */
 type EditorModel = z.infer<typeof editorModelSchema>
 /** The state, the source of truth that drives our app. - Concept based on Redux */
@@ -151,6 +183,7 @@ export type {
   EditorSlice,
   EditorState,
   GlobalVariablesTableType,
+  GraphicalType,
   InstanceType,
   TaskType,
   VariablesTable,

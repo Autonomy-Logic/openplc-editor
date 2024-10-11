@@ -44,6 +44,7 @@ const CreatePLCGraphicalObject = (
       classFilter: 'All',
       selectedRow: '-1',
     },
+    graphical: language === 'ld' ? { language, openedRungs: [] } : { language },
   })
   return editor
 }

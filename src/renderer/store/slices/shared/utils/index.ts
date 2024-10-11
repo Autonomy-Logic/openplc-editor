@@ -114,6 +114,7 @@ const CreateEditorObject = (props: EditorModel): EditorModel => {
         type,
         meta,
         variable: model.variable,
+        graphical: model.graphical,
       }
     case 'plc-datatype':
       return {
@@ -125,6 +126,8 @@ const CreateEditorObject = (props: EditorModel): EditorModel => {
         type,
         meta,
         variable: model.variable,
+        task: model.task,
+        instance: model.instance,
       }
     default:
       return {
