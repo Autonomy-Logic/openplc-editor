@@ -41,7 +41,7 @@ const Step1 = ({ onNext, onClose }: { onNext: () => void; onClose: () => void })
   return (
     <>
       <div className='relative flex select-none items-center justify-center pb-20 pt-2'>
-        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-blue-500 font-bold text-white'>
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white text-blue-500'>
           1
         </div>
         <div className='h-[2px] w-12 bg-gray-500'></div>

@@ -34,11 +34,11 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
   return (
     <>
       <div className='relative flex select-none items-center justify-center pt-2'>
-        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white text-blue-500'>
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-blue-500 font-bold text-white'>
           1
         </div>
         <div className='h-[2px] w-12 bg-blue-300'></div>
-        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-blue-500 font-bold text-white'>
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white text-blue-500'>
           2
         </div>
         <div className='h-[2px] w-12 bg-gray-500'></div>
