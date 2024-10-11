@@ -44,6 +44,22 @@ class MainProcessBridge implements MainIpcModule {
         isWindowMaximized: this.mainWindow?.isMaximized(),
       }
     })
+    this.ipcMain.handle('project:open-by-path', async (_event, projectPath: string) => {
+      try {
+        const response = await this.projectService.openProjectByPath(projectPath)
+
+        return response
+      } catch (error) {
+        console.error('Error opening project:', error)
+        return {
+          success: false,
+          error: {
+            title: 'Errror opening project',
+            description: 'Please try again',
+          },
+        }
+      }
+    })
     this.ipcMain.handle('app:store-retrieve-recents', async () => {
       const pathToUserDataFolder = join(app.getPath('userData'), 'User')
       const pathToUserHistoryFolder = join(pathToUserDataFolder, 'History')

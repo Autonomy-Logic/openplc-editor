@@ -1,5 +1,6 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import RecentProjectIcon from '@root/renderer/assets/icons/interface/Recent'
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import _ from 'lodash'
@@ -10,6 +11,9 @@ import { MenuClasses } from '../constants'
 export const RecentMenu = () => {
   const {
     workspace: { recents },
+    editorActions: { clearEditor },
+    workspaceActions: { setUserWorkspace },
+    tabsActions: { clearTabs },
   } = useOpenPLCStore()
   const { TRIGGER, CONTENT, ITEM } = MenuClasses
   const [recentProjects, setRecentProjects] = useState(recents)
@@ -23,6 +27,31 @@ export const RecentMenu = () => {
     void getUserRecentProjects()
   }, [recents])
 
+  const handleOpenProject = async (projectPath: string) => {
+    const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
+    if (success && data) {
+      setUserWorkspace({
+        editingState: 'unsaved',
+        projectPath: data.meta.path,
+        projectData: data.content,
+        projectName: 'new-project',
+        recents: [],
+      })
+      clearEditor()
+      clearTabs()
+      toast({
+        title: 'Project opened!',
+        description: 'Your project was opened, and loaded.',
+        variant: 'default',
+      })
+    } else {
+      toast({
+        title: 'Cannot open the project.',
+        description: error?.description,
+        variant: 'fail',
+      })
+    }
+  }
   return (
     <MenuPrimitive.Menu>
       <MenuPrimitive.Trigger className={TRIGGER}>recent</MenuPrimitive.Trigger>
@@ -30,6 +59,7 @@ export const RecentMenu = () => {
         <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
           {recentProjects.map((project) => (
             <MenuPrimitive.Item
+              onClick={() => void handleOpenProject(project.path)}
               key={project.path}
               className={cn(
                 ITEM,

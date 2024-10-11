@@ -32,6 +32,40 @@ interface IProjectHistoryEntry {
 
 class ProjectService {
   constructor(private serviceManager: InstanceType<typeof BrowserWindow>) {}
+  async openProjectByPath(projectPath: string): Promise<IProjectServiceResponse> {
+    try {
+      const fileContent = await promises.readFile(projectPath, 'utf-8')
+
+      const parsedFile = PLCProjectDataSchema.safeParse(JSON.parse(fileContent))
+      if (!parsedFile.success) {
+        return {
+          success: false,
+          error: {
+            title: 'Error reading project file',
+            description: 'Error parsing project file.',
+          },
+        }
+      }
+
+      await this.updateProjectHistory(projectPath)
+
+      return {
+        success: true,
+        data: {
+          meta: { path: projectPath },
+          content: parsedFile.data,
+        },
+      }
+    } catch (_error) {
+      return {
+        success: false,
+        error: {
+          title: 'Error reading project file',
+          description: 'Error reading project file. ',
+        },
+      }
+    }
+  }
 
   async readProjectHistory(projectsFilePath: string): Promise<IProjectHistoryEntry[]> {
     try {
