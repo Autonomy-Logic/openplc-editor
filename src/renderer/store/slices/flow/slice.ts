@@ -9,6 +9,22 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
   flows: [],
 
   flowActions: {
+    addFlow: (flow) => {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flowIndex = flows.findIndex((f) => f.name === flow.name)
+          if (flowIndex === -1) {
+            flows.push(flow)
+          } else {
+            flows[flowIndex] = flow
+          }
+        }),
+      )
+    },
+
+    /**
+     * Controll the rungs of the flow
+     */
     startLadderRung: ({ editorName, rungId, defaultBounds, flowViewport }) => {
       setState(
         produce(({ flows }: FlowState) => {
@@ -60,16 +76,6 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         }),
       )
     },
-    addRung: (editorName, rung) => {
-      setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
-          if (!flow) return
-
-          flow.rungs.push(rung)
-        }),
-      )
-    },
     removeRung: (editorName, rungId) => {
       setState(
         produce(({ flows }: FlowState) => {
@@ -80,7 +86,23 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         }),
       )
     },
+    addComment({ editorName, rungId, comment }) {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
 
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+
+          rung.comment = comment
+        }),
+      )
+    },
+
+    /**
+     * Controll the rungs transactions
+     */
     onNodesChange: ({ changes, editorName, rungId }) => {
       setState(
         produce(({ flows }: FlowState) => {
@@ -181,6 +203,9 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
       )
     },
 
+    /**
+     * Controll the flow viewport of the rung
+     */
     updateFlowViewport({ editorName, flowViewport, rungId }) {
       setState(
         produce(({ flows }: FlowState) => {

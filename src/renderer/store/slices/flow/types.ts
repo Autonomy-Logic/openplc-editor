@@ -36,8 +36,9 @@ type EdgeType = z.infer<typeof edgeSchema>
 
 const zodRungStateSchema = z.object({
   id: z.string(),
+  comment: z.string().optional(),
   defaultBounds: z.array(z.number()),
-  flowViewport: z.array(z.number()).optional(),
+  flowViewport: z.array(z.number()),
   nodes: z.array(nodeSchema),
   edges: z.array(edgeSchema),
 })
@@ -45,7 +46,7 @@ type ZodRungType = z.infer<typeof zodRungStateSchema>
 
 const zodFlowSchema = z.object({
   name: z.string(),
-  rungs: z.array(zodRungStateSchema).optional(),
+  rungs: z.array(zodRungStateSchema).default([]),
 })
 type ZodFlowType = z.infer<typeof zodFlowSchema>
 
@@ -60,8 +61,9 @@ type ZodFlowState = z.infer<typeof zodFlowStateSchema>
 
 type RungState = {
   id: string
-  defaultBounds: [number, number]
-  flowViewport?: [number, number]
+  comment?: string
+  defaultBounds: number[]
+  flowViewport?: number[]
   nodes: Node[]
   edges: Edge[]
 }
@@ -76,6 +78,11 @@ type FlowState = {
 }
 
 type FlowActions = {
+  addFlow: (flow: FlowType) => void
+
+  /**
+   * Controll the rungs of the flow
+   */
   startLadderRung: ({
     editorName,
     rungId,
@@ -87,9 +94,12 @@ type FlowActions = {
     defaultBounds: [number, number]
     flowViewport?: [number, number]
   }) => void
-  addRung: (editorName: string, rung: RungState) => void
   removeRung: (editorName: string, rungId: string) => void
+  addComment: ({ editorName, rungId, comment }: { editorName: string; rungId: string; comment: string }) => void
 
+  /**
+   * Controll the rungs transactions
+   */
   onNodesChange: ({
     changes,
     rungId,
@@ -116,6 +126,9 @@ type FlowActions = {
   setEdges: ({ edges, rungId, editorName }: { edges: Edge[]; rungId: string; editorName: string }) => void
   updateEdge: ({ edge, rungId, editorName }: { edge: Edge; rungId: string; editorName: string }) => void
 
+  /**
+   * Controll the flow viewport of the rung
+   */
   updateFlowViewport: ({
     flowViewport,
     rungId,
@@ -132,7 +145,7 @@ type FlowSlice = FlowState & {
   flowActions: FlowActions
 }
 
-export { FlowActions, FlowSlice, FlowState, RungState }
+export { FlowActions, FlowSlice, FlowState, FlowType,RungState }
 
 /**
  * Zod exports

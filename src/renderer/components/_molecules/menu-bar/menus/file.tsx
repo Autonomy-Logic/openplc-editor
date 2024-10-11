@@ -1,6 +1,7 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { FlowType } from '@root/renderer/store/slices/flow/types'
 import { newPLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
@@ -13,6 +14,7 @@ export const FileMenu = () => {
     workspaceActions: { setEditingState },
     projectActions: { setProject },
     tabsActions: { clearTabs },
+    flowActions: { addFlow },
     project,
   } = useOpenPLCStore()
 
@@ -60,6 +62,14 @@ export const FileMenu = () => {
         },
         data: data.content.data,
       })
+
+      const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
+      if (ladderPous.length) {
+        ladderPous.forEach((pou) => {
+          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+        })
+      }
+
       toast({
         title: 'Project opened!',
         description: 'Your project was opened, and loaded.',

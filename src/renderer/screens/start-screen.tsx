@@ -9,6 +9,7 @@ import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_fea
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
 import { StartMainContent, StartSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
+import { FlowType } from '../store/slices/flow/types'
 
 const StartScreen = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -18,6 +19,7 @@ const StartScreen = () => {
     workspaceActions: { setEditingState },
     projectActions: { setProject },
     tabsActions: { clearTabs },
+    flowActions: { addFlow },
   } = useOpenPLCStore()
 
   const retrieveNewProjectData = async () => {
@@ -66,6 +68,14 @@ const StartScreen = () => {
         },
         data: data.content.data,
       })
+
+      const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
+      if (ladderPous.length) {
+        ladderPous.forEach((pou) => {
+          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+        })
+      }
+
       navigate('/workspace')
       toast({
         title: 'Project opened!',
@@ -129,6 +139,14 @@ const StartScreen = () => {
             },
             data: data.content.data,
           })
+
+          const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
+          if (ladderPous.length) {
+            ladderPous.forEach((pou) => {
+              if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+            })
+          }
+
           navigate('/workspace')
           toast({
             title: 'Project opened!',

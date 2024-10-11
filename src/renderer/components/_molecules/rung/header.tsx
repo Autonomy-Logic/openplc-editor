@@ -1,15 +1,25 @@
 import { StickArrowIcon } from '@root/renderer/assets/icons/interface/StickArrow'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { RungState } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
 
 type RungHeaderProps = {
+  rung: RungState
   isOpen: boolean
   onClick: () => void
 }
 
-export const RungHeader = ({ isOpen, onClick }: RungHeaderProps) => {
+export const RungHeader = ({ rung, isOpen, onClick }: RungHeaderProps) => {
+  const {
+    editor: {
+      meta: { name: editorName },
+    },
+    flowActions: { addComment },
+  } = useOpenPLCStore()
+
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
-  const [textAreaValue, setTextAreaValue] = useState<string>('')
+  const [textAreaValue, setTextAreaValue] = useState<string>(rung.comment ?? '')
   const onTextAreaChange = (value: string) => {
     setTextAreaValue(value)
   }
@@ -31,7 +41,7 @@ export const RungHeader = ({ isOpen, onClick }: RungHeaderProps) => {
         },
       )}
     >
-      <div className='flex w-full items-center rounded-lg px-1 border border-transparent'>
+      <div className='flex w-full items-center rounded-lg border border-transparent px-1'>
         <textarea
           aria-label='Rung name and description'
           className='w-full resize-none overflow-hidden bg-transparent text-xs opacity-50 outline-none focus:opacity-100'
@@ -40,6 +50,7 @@ export const RungHeader = ({ isOpen, onClick }: RungHeaderProps) => {
           rows={1}
           onChange={(e) => onTextAreaChange(e.currentTarget.value)}
           value={textAreaValue}
+          onBlur={() => addComment({ editorName, rungId: rung.id, comment: textAreaValue })}
         />
       </div>
       <div>

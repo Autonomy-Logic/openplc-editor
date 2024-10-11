@@ -2,7 +2,6 @@ import { RungBody, RungHeader } from '@root/renderer/components/_molecules/rung'
 import { RungState } from '@root/renderer/store/slices'
 import { useState } from 'react'
 
-
 type RungProps = {
   id: string
   rung: RungState
@@ -17,7 +16,7 @@ export const Rung = ({ id, rung }: RungProps) => {
 
   return (
     <div aria-label='Rung container' className='overflow w-full' id={id}>
-      <RungHeader onClick={handleOpenSection} isOpen={isOpen} />
+      <RungHeader onClick={handleOpenSection} isOpen={isOpen} rung={rung} />
       {isOpen && <RungBody rung={rung} />}
     </div>
   )
