@@ -31,6 +31,10 @@ export const RungHeader = ({ rung, isOpen, onClick }: RungHeaderProps) => {
     }
   }, [textAreaValue])
 
+  useEffect(() => {
+    setTextAreaValue(rung.comment ?? '')
+  }, [rung.comment])
+
   return (
     <div
       aria-label='Rung header'

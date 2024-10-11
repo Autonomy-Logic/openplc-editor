@@ -36,7 +36,7 @@ type EdgeType = z.infer<typeof edgeSchema>
 
 const zodRungStateSchema = z.object({
   id: z.string(),
-  comment: z.string().optional(),
+  comment: z.string().default(''),
   defaultBounds: z.array(z.number()),
   flowViewport: z.array(z.number()),
   nodes: z.array(nodeSchema),
@@ -61,9 +61,9 @@ type ZodFlowState = z.infer<typeof zodFlowStateSchema>
 
 type RungState = {
   id: string
-  comment?: string
+  comment: string
   defaultBounds: number[]
-  flowViewport?: number[]
+  flowViewport: number[]
   nodes: Node[]
   edges: Edge[]
 }

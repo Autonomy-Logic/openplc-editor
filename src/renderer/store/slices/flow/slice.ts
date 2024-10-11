@@ -59,6 +59,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           ]
           flow.rungs.push({
             id: rungId,
+            comment: '',
             defaultBounds,
             flowViewport: flowViewport ?? defaultBounds,
             nodes: [...railNodes],
