@@ -2,7 +2,6 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { promises, readFile, writeFile } from 'fs'
 import { join } from 'path'
 
-// import { projectSchema } from '../../../types/PLC'
 import { PLCProjectData, PLCProjectDataSchema } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { CreateJSONFile } from '../../utils'
@@ -32,78 +31,87 @@ interface IProjectHistoryEntry {
 
 class ProjectService {
   constructor(private serviceManager: InstanceType<typeof BrowserWindow>) {}
-  async openProjectByPath(projectPath: string): Promise<IProjectServiceResponse> {
-    try {
-      const fileContent = await promises.readFile(projectPath, 'utf-8')
 
-      const parsedFile = PLCProjectDataSchema.safeParse(JSON.parse(fileContent))
-      if (!parsedFile.success) {
-        return {
-          success: false,
-          error: {
-            title: 'Error reading project file',
-            description: 'Error parsing project file.',
-          },
-        }
-      }
+  private getProjectsFilePath(): string {
+    const pathToUserDataFolder = join(app.getPath('userData'), 'User')
+    const pathToUserHistoryFolder = join(pathToUserDataFolder, 'History')
 
-      await this.updateProjectHistory(projectPath)
-
-      return {
-        success: true,
-        data: {
-          meta: { path: projectPath },
-          content: parsedFile.data,
-        },
-      }
-    } catch (_error) {
-      return {
-        success: false,
-        error: {
-          title: 'Error reading project file',
-          description: 'Error reading project file. ',
-        },
-      }
-    }
+    return join(pathToUserHistoryFolder, 'projects.json')
   }
 
-  async readProjectHistory(projectsFilePath: string): Promise<IProjectHistoryEntry[]> {
+  private async readProjectHistory(projectsFilePath: string): Promise<IProjectHistoryEntry[]> {
     try {
       const historyContent = await promises.readFile(projectsFilePath, 'utf-8')
-      const historyData = JSON.parse(historyContent) as IProjectHistoryEntry[]
-      return Array.isArray(historyData) ? historyData : []
+      return (JSON.parse(historyContent) as IProjectHistoryEntry[]) || []
     } catch (error) {
       console.error('Error reading history file:', error)
       return []
     }
   }
 
-  async writeProjectHistory(projectsFilePath: string, historyData: IProjectHistoryEntry[]): Promise<void> {
+  private async writeProjectHistory(projectsFilePath: string, historyData: IProjectHistoryEntry[]): Promise<void> {
     await promises.writeFile(projectsFilePath, JSON.stringify(historyData, null, 2))
   }
 
-  async updateProjectHistory(projectPath: string): Promise<void> {
-    const pathToUserDataFolder = join(app.getPath('userData'), 'User')
-    const pathToUserHistoryFolder = join(pathToUserDataFolder, 'History')
-    const projectsFilePath = join(pathToUserHistoryFolder, 'projects.json')
-
+  private async updateProjectHistory(projectPath: string): Promise<void> {
+    const projectsFilePath = this.getProjectsFilePath()
     const historyData = await this.readProjectHistory(projectsFilePath)
     const lastOpenedAt = new Date().toISOString()
 
     const existingProjectIndex = historyData.findIndex((proj) => proj.path === projectPath)
-
     if (existingProjectIndex > -1) {
       historyData[existingProjectIndex].lastOpenedAt = lastOpenedAt
     } else {
-      historyData.push({
-        path: projectPath,
-        createdAt: lastOpenedAt,
-        lastOpenedAt: lastOpenedAt,
-      })
+      historyData.push({ path: projectPath, createdAt: lastOpenedAt, lastOpenedAt })
     }
 
     historyData.sort((a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime())
     await this.writeProjectHistory(projectsFilePath, historyData)
+  }
+
+  async removeProjectFromHistory(projectPath: string): Promise<void> {
+    const projectsFilePath = this.getProjectsFilePath()
+    const historyData = await this.readProjectHistory(projectsFilePath)
+    const updatedHistory = historyData.filter((project) => project.path !== projectPath)
+    await this.writeProjectHistory(projectsFilePath, updatedHistory)
+  }
+
+  async openProjectByPath(projectPath: string): Promise<IProjectServiceResponse> {
+    try {
+      await promises.access(projectPath)
+      const fileContent = await promises.readFile(projectPath, 'utf-8')
+      const parsedFile = PLCProjectDataSchema.safeParse(JSON.parse(fileContent))
+
+      if (!parsedFile.success) {
+        return this.createErrorResponse('Error parsing project file.')
+      }
+
+      await this.updateProjectHistory(projectPath)
+      return this.createSuccessResponse(projectPath, parsedFile.data)
+    } catch (_error) {
+      await this.removeProjectFromHistory(projectPath)
+      return this.createErrorResponse('Error reading project file.')
+    }
+  }
+
+  private createErrorResponse(description: string): IProjectServiceResponse {
+    return {
+      success: false,
+      error: {
+        title: 'Error reading project file',
+        description,
+      },
+    }
+  }
+
+  private createSuccessResponse(projectPath: string, content: PLCProjectData): IProjectServiceResponse {
+    return {
+      success: true,
+      data: {
+        meta: { path: projectPath },
+        content,
+      },
+    }
   }
 
   async createProject(): Promise<IProjectServiceResponse> {

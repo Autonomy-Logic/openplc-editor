@@ -29,6 +29,7 @@ export const RecentMenu = () => {
 
   const handleOpenProject = async (projectPath: string) => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
+
     if (success && data) {
       setUserWorkspace({
         editingState: 'unsaved',
@@ -41,15 +42,25 @@ export const RecentMenu = () => {
       clearTabs()
       toast({
         title: 'Project opened!',
-        description: 'Your project was opened, and loaded.',
+        description: 'Your project was opened and loaded.',
         variant: 'default',
       })
     } else {
-      toast({
-        title: 'Cannot open the project.',
-        description: error?.description,
-        variant: 'fail',
-      })
+      if (error?.description.includes('Error reading project file.')) {
+        void getUserRecentProjects()
+        toast({
+          title: 'Path does not exist.',
+          description: `The path ${projectPath} does not exist on this computer.`,
+          variant: 'fail',
+        })
+      } else {
+        void getUserRecentProjects(),
+          toast({
+            title: 'Cannot open the project.',
+            description: error?.description,
+            variant: 'fail',
+          })
+      }
     }
   }
   return (
