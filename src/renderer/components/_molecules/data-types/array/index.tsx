@@ -32,12 +32,13 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   }
 
 
+  console.log("data -->", data)
   const onValueChange = (value: string) => {
     const optionalSchema = {
       name: data.name,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       baseType: value,
-    };
+      dimensions: {dimensions: [{ dimension: data.dimensions  }]}}
+    ;
     updateDatatype(data?.name, optionalSchema)
     console.log("optionalSchema", optionalSchema)
   }
@@ -98,6 +99,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       <DimensionsTable
         name={data.name}
         dimensions={data.dimensions}
+        baseType={data.baseType}
         handleRowClick={(row) => setArrayTable({ selectedRow: row.id })}
         selectedRow={parseInt(arrayTable.selectedRow)}
       />
