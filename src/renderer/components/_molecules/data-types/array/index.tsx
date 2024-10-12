@@ -31,16 +31,11 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     )()
   }
 
-
-  console.log("data -->", data)
   const onValueChange = (value: string) => {
-    const optionalSchema = {
-      name: data.name,
-      baseType: value,
-      dimensions: {dimensions: [{ dimension: data.dimensions  }]}}
-    ;
-    updateDatatype(data?.name, optionalSchema)
-    console.log("optionalSchema", optionalSchema)
+    _.debounce(
+      () => updateDatatype(data.name, { baseType: value } as PLCArrayDatatype),
+      1000,
+    )()
   }
 
   return (
