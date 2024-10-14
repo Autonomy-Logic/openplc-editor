@@ -32,7 +32,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick, baseTy
     },
   } = useOpenPLCStore()
 
-  const columnHelper = createColumnHelper<{ dimension: string }>()
+  const columnHelper = createColumnHelper<{ dimension: unknown }>()
   const columns = React.useMemo(
     () => [
       columnHelper.accessor('dimension', {
@@ -75,36 +75,52 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick, baseTy
     );  
   }
 
+  console.log("table data -->", tableData)
   const handleBlur = (rowIndex: number) => {
     setTableData((prevRows) => {
-      const newRows = prevRows.filter((row, index) => {
-        return !(index === rowIndex && row.dimension?.trim() === '');
+      const newRows = prevRows.filter((_row, index) => {
+        const inputElement = document.getElementById(`dimension-input-${index}`) as HTMLInputElement;
+        return !(index === rowIndex && (!inputElement || inputElement.value?.trim() === ''));
       });
+  
       if (newRows.length !== prevRows.length) {
         return newRows;
       } else {
         const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
-        if (inputElement && inputElement.value?.trim() !== '') {
-          const optionalSchema = {
-            name: name, 
-            derivation: 'array',
-            baseType: baseType, 
-            initialValue: '',
-            dimensions: [{ dimension: inputElement.value?.trim() }] 
-          };
-          updateDatatype('array', optionalSchema as PLCDataType);
-        }}
-        return prevRows;
+      if (inputElement && inputElement.value?.trim() !== '') {
+        const inputValue = inputElement.value?.trim();
+        const existingDimensions = prevRows
+          .filter((_, i) => i !== rowIndex) // Exclui a linha atual
+          .map(row => ({ dimension: row.dimension })); // Mapeia as dimensões existentes
+        const optionalSchema = {
+          name: name,
+          derivation: 'array',
+          baseType: baseType,
+          initialValue: 'false',
+          dimensions: [...existingDimensions, { dimension: inputValue }],
+        };
+        updateDatatype(name, optionalSchema as PLCDataType);
+
+        return prevRows.map((row, i) =>
+          i === rowIndex
+            ? { ...row, dimension: inputValue }
+            : row
+        );
+        }
+      }
+      return prevRows;
     });
   };
-
   const addNewRow = () => {
     setTableData((prevRows) => {
-      const newRows = [...prevRows, { name: '', baseType: baseType, initialValue: '', dimensions: [{ dimension: '' }] }];
+      const newRows = [
+        ...prevRows,
+        { name: name, baseType: baseType, dimension: '' },
+      ];
       setFocusIndex(newRows.length - 1);
       return newRows;
     });
-    }
+  };
 
   useEffect(() => {
     const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype
