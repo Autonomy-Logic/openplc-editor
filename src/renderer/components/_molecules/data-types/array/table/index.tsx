@@ -41,15 +41,15 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
         enableResizing: true,
         cell: (cellProps) => (
           <DimensionCell
-          onInputChange={(value) => handleInputChange(value, cellProps.row.index)}
-          onBlur={() => handleBlur(cellProps.row.index)}
-          id={`dimension-input-${cellProps.row.index}`}
-          autoFocus={cellProps.row.index === focusIndex}
-          name={name}
-          dimensions={dimensions}
-          selectedRow={selectedRow}
-          handleRowClick={handleRowClick}
-          {...cellProps}
+            onInputChange={(value) => handleInputChange(value, cellProps.row.index)}
+            onBlur={() => handleBlur(cellProps.row.index)}
+            id={`dimension-input-${cellProps.row.index}`}
+            autoFocus={cellProps.row.index === focusIndex}
+            name={name}
+            dimensions={dimensions}
+            selectedRow={selectedRow}
+            handleRowClick={handleRowClick}
+            {...cellProps}
           />
         ),
       }),
@@ -89,7 +89,6 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
           const optionalSchema = {
             dimensions: [...existingDimensions, { dimension: inputValue }],
           }
-          console.log("name -->", name)
           updateDatatype(name, optionalSchema as PLCDataType)
 
           return prevRows.map((row, i) => (i === rowIndex ? { ...row, dimension: inputValue } : row))
@@ -100,7 +99,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   }
   const addNewRow = () => {
     setTableData((prevRows) => {
-      const newRows = [...prevRows, {dimension: ''}]
+      const newRows = [...prevRows, { dimension: '' }]
       setFocusIndex(newRows.length - 1)
       return newRows
     })
@@ -170,7 +169,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
         </p>
         <div
           aria-label='Data type table actions buttons container'
-          className='flex h-full w-2/5 flex-start *:rounded-md *:p-1'
+          className='flex-start flex h-full w-2/5 *:rounded-md *:p-1'
         >
           <TableActionButton aria-label='Add table row button' onClick={addNewRow} id='add-new-row-button'>
             <PlusIcon className='!stroke-brand' />

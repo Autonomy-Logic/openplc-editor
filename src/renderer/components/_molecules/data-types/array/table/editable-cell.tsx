@@ -23,13 +23,15 @@ const DimensionCell = ({ getValue, editable = true, onInputChange, onBlur, id, a
   }
 
   const handleBlur = () => {
-      onBlur()    
+    onBlur()
   }
   return (
     <InputWithRef
-      value={cellValue || ''} 
+      value={cellValue || ''}
       onChange={handleChange}
-      className={cn(`flex w-full flex-1 bg-transparent p-2 text-center outline-none ${!editable ? 'pointer-events-none' : ''}`)}
+      className={cn(
+        `flex w-full flex-1 bg-transparent p-2 text-center outline-none ${!editable ? 'pointer-events-none' : ''}`,
+      )}
       onBlur={handleBlur}
       id={id}
       ref={inputRef}
