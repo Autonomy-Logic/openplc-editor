@@ -1,4 +1,4 @@
-import { ProjectResponse } from '@root/renderer/store/slices/project'
+import type { ProjectResponse } from '@root/renderer/store/slices/project'
 import type { PLCTask } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'

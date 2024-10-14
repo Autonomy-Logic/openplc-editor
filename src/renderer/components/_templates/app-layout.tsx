@@ -11,7 +11,6 @@ const AppLayout = (): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
     workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow },
-    project,
   } = useOpenPLCStore()
 
   useEffect(() => {
@@ -41,11 +40,6 @@ const AppLayout = (): ReactNode => {
       switchAppTheme()
     })
   }, [])
-
-  useEffect(() => {
-    console.log('PROJETOS')
-    console.log(project)
-  }, [project])
 
   return (
     <>

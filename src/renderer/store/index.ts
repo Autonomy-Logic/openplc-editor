@@ -1,7 +1,15 @@
 import { createSelectorHooks } from 'auto-zustand-selectors-hook'
 import { create } from 'zustand'
 
-import type { EditorSlice, FlowSlice, ISharedSlice, LibrarySlice,TabsSlice, WorkspaceSlice } from './slices'
+import type {
+  EditorSlice,
+  FlowSlice,
+  ISharedSlice,
+  LibrarySlice,
+  ProjectSlice,
+  TabsSlice,
+  WorkspaceSlice,
+} from './slices'
 /**
  * Import all slices to create the store.
  */
@@ -9,11 +17,11 @@ import {
   createEditorSlice,
   createFlowSlice,
   createLibrarySlice,
+  createProjectSlice,
   createSharedSlice,
   createTabsSlice,
   createWorkspaceSlice,
 } from './slices'
-import { createProjectSlice, ProjectSlice } from './slices/project'
 
 /**
  * Create the base store to be exported as a hook.
