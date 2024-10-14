@@ -69,8 +69,8 @@ const UserService = {
     const pathToUserLibraryInfoFile = join(pathToUserHistoryFolder, 'libraries.json')
 
     await createDirectoryIfNotExists(pathToUserHistoryFolder)
-    await createFileIfNotExists(pathToUserProjectInfoFile, DEFAULT_HISTORY)
-    await createFileIfNotExists(pathToUserLibraryInfoFile, DEFAULT_HISTORY)
+    await createFileIfNotExists(pathToUserProjectInfoFile, DEFAULT_HISTORY.projects)
+    await createFileIfNotExists(pathToUserLibraryInfoFile, DEFAULT_HISTORY.libraries)
   },
 }
 
