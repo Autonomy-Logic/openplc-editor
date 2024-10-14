@@ -27,6 +27,14 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     }
   }, [dataTypes, dataTypeName])
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { value } = e.target;
+    setEditorContent((prevContent) => ({
+      ...prevContent,
+      name: value,
+    }));
+  };
+
   return (
     <div aria-label='Data type editor container' className='flex h-full w-full flex-col items-center p-2' {...rest}>
       <div
@@ -46,6 +54,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
           >
             <InputWithRef
               value={editorContent?.name}
+              onChange={handleChange}
               id='data-type-name'
               aria-label='data-type-name'
               className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'

@@ -95,7 +95,6 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       <DimensionsTable
         name={data.name}
         dimensions={data.dimensions}
-        baseType={data.baseType}
         handleRowClick={(row) => setArrayTable({ selectedRow: row.id })}
         selectedRow={parseInt(arrayTable.selectedRow)}
       />
