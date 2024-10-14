@@ -75,7 +75,6 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick, baseTy
     );  
   }
 
-  console.log("table data -->", tableData)
   const handleBlur = (rowIndex: number) => {
     setTableData((prevRows) => {
       const newRows = prevRows.filter((_row, index) => {
@@ -90,13 +89,11 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick, baseTy
       if (inputElement && inputElement.value?.trim() !== '') {
         const inputValue = inputElement.value?.trim();
         const existingDimensions = prevRows
-          .filter((_, i) => i !== rowIndex) // Exclui a linha atual
-          .map(row => ({ dimension: row.dimension })); // Mapeia as dimensões existentes
+          .filter((_, i) => i !== rowIndex) 
+          .map(row => ({ dimension: row.dimension })); 
         const optionalSchema = {
           name: name,
-          derivation: 'array',
           baseType: baseType,
-          initialValue: 'false',
           dimensions: [...existingDimensions, { dimension: inputValue }],
         };
         updateDatatype(name, optionalSchema as PLCDataType);
