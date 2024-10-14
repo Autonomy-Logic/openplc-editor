@@ -42,12 +42,15 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick, baseTy
         enableResizing: true,
         cell: (cellProps) => (
           <DimensionCell
-            onInputChange={(value) => handleInputChange(value, cellProps.row.index)}
-            onBlur={() => handleBlur(cellProps.row.index)}
-            id={`dimension-input-${cellProps.row.index}`}
-            autoFocus={cellProps.row.index === focusIndex}
-            handleRowClick={handleRowClick}
-            {...cellProps}
+          onInputChange={(value) => handleInputChange(value, cellProps.row.index)}
+          onBlur={() => handleBlur(cellProps.row.index)}
+          id={`dimension-input-${cellProps.row.index}`}
+          autoFocus={cellProps.row.index === focusIndex}
+          name={name}
+          dimensions={dimensions}
+          selectedRow={selectedRow}
+          handleRowClick={handleRowClick}
+          {...cellProps}
           />
         ),
       }),
@@ -57,55 +60,51 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick, baseTy
 
   useEffect(() => {
     if (focusIndex !== null) {
-      const inputElement = document.getElementById(`${focusIndex}`)
+      const inputElement = document.getElementById(`dimension-input-${focusIndex}`);
       if (inputElement) {
-        inputElement.focus()
+        inputElement.focus();
       }
     }
-  }, [focusIndex])
+  }, [focusIndex]);
 
   const handleInputChange = (value: string, index: number) => {
-    setTableData((prevRows) => 
-      prevRows.map((row, i) => 
-        i === index ? { ...row, dimensions: [...(row.dimension || []), { dimension: value }], baseType: baseType } : row
+    setTableData((prevRows) =>
+      prevRows.map((row, i) =>
+        i === index ? { ...row, dimension: value } : row
       )
-    );
-  };
+    );  
+  }
 
   const handleBlur = (rowIndex: number) => {
-    const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
-    const inputValue = inputElement ? inputElement.value?.trim() : '';
-    if (inputValue === '') {
-      setTableData((prevRows) => prevRows.filter((_, i) => i !== rowIndex));
-    } else {
-      const optionalSchema = {
-        name: name,
-        dimensions: [{ dimension: inputValue }],
-        baseType: baseType
-      };
-      updateDatatype(name, optionalSchema as PLCDataType);
-
-      setTableData((prevRows) =>
-        prevRows.map((row, i) =>
-          i === rowIndex ? { ...row, name: name, dimensions: [...(row.dimension || []), { dimension: inputValue }], baseType: baseType } : row
-        )
-      );
-    }
+    setTableData((prevRows) => {
+      const newRows = prevRows.filter((row, index) => {
+        return !(index === rowIndex && row.dimension?.trim() === '');
+      });
+      if (newRows.length !== prevRows.length) {
+        return newRows;
+      } else {
+        const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
+        if (inputElement && inputElement.value?.trim() !== '') {
+          const optionalSchema = {
+            name: name, 
+            derivation: 'array',
+            baseType: baseType, 
+            initialValue: '',
+            dimensions: [{ dimension: inputElement.value?.trim() }] 
+          };
+          updateDatatype('array', optionalSchema as PLCDataType);
+        }}
+        return prevRows;
+    });
   };
 
   const addNewRow = () => {
     setTableData((prevRows) => {
-      if (!Array.isArray(prevRows)) {
-        prevRows = [];
-      }
-      const newRows = [
-        ...prevRows,
-        { name: '', dimensions: [{ dimension: '' }], baseType: baseType }
-      ];
+      const newRows = [...prevRows, { name: '', baseType: baseType, initialValue: '', dimensions: [{ dimension: '' }] }];
       setFocusIndex(newRows.length - 1);
       return newRows;
     });
-  };
+    }
 
   useEffect(() => {
     const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype

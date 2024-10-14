@@ -13,6 +13,7 @@ type ArrayDatatypeProps = ComponentPropsWithoutRef<'div'> & {
 const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const baseTypes = baseTypeSchema.options
 
+  console.log("data -->", data)
   const {
     workspaceActions: { updateDatatype },
   } = useOpenPLCStore()
@@ -44,19 +45,19 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         <div aria-label='Array base type container' className='flex w-1/2 flex-col gap-3'>
           <div aria-label='Array base type content' className='flex h-fit w-full items-center justify-between'>
             <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
-              Base type
+              Base Type
             </label>
             <Select aria-label='Array data type base type select' onValueChange={(value) => onValueChange(value)}>
               <SelectTrigger
                 withIndicator
-                placeholder='Base type'
+                placeholder='BOOL'
                 className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
               />
               <SelectContent
                 position='popper'
                 side='bottom'
                 sideOffset={-28}
-                className='box h-fit w-[--radix-select-trigger-width] overflow-hidden overflow-y-scroll rounded-lg bg-white outline-none dark:bg-neutral-950'
+                className='box h-fit w-[--radix-select-trigger-width] rounded-lg bg-white outline-none dark:bg-neutral-950'
               >
                 {baseTypes.map((type) => {
                   return (
