@@ -48,7 +48,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     minimap: {
       enabled: false,
     },
+    dropIntoEditor: {
+      enabled: true
+    }
   }
+
+  window.addEventListener('onDropIntoEditor', (event) => {
+    console.log('onDropIntoEditor', event)
+  })
 
   // console.log('Editor instance: ', editorRef.current?.getModel()?.uri.path)
   // console.log('Monaco instance: ', monacoRef.current?.editor.getEditors())

@@ -21,6 +21,7 @@ type ILibraryFolderProps = ComponentPropsWithoutRef<'li'> & {
   initiallyOpen?: boolean
   shouldBeOpen?: boolean
 }
+
 const LibraryFolder = ({ label, children, initiallyOpen, shouldBeOpen }: ILibraryFolderProps) => {
   const [folderIsOpen, setFolderIsOpen] = useState(initiallyOpen || false)
 
@@ -32,25 +33,35 @@ const LibraryFolder = ({ label, children, initiallyOpen, shouldBeOpen }: ILibrar
     }
   }, [shouldBeOpen])
 
-  const hasFilesAssociated = children && children.length > 0
+  const hasFilesAssociated = Array.isArray(children) && children.length > 0
 
   return (
     <li className='cursor-pointer aria-expanded:cursor-default'>
       <div
-        className='flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
+        className='flex w-full cursor-pointer flex-row items-center gap-1 py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
         onClick={hasFilesAssociated ? handleFolderVisibility : undefined}
       >
         {hasFilesAssociated ? (
-          <ArrowIcon
-            direction='right'
-            className={`mr-[6px] h-4 w-4 stroke-brand-light transition-all ${folderIsOpen ? 'rotate-270 stroke-brand' : ''}`}
-          />
+          <div className='h-4 w-4'>
+            <ArrowIcon
+              direction='right'
+              className={`h-4 w-4 stroke-brand-light transition-all ${folderIsOpen ? 'rotate-270 stroke-brand' : ''}`}
+            />
+          </div>
         ) : (
-          <div className='w-[22px]' />
+          <div className='h-5 w-5' />
         )}
-        {folderIsOpen ? <LibraryOpenFolderIcon size='sm' /> : <LibraryCloseFolderIcon size='sm' />}
+        {folderIsOpen ? (
+          <div className='h-5 w-5'>
+            <LibraryOpenFolderIcon size='sm' />
+          </div>
+        ) : (
+          <div className='h-5 w-5'>
+            <LibraryCloseFolderIcon size='sm' />
+          </div>
+        )}
         <p
-          className={`ml-1 w-full truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ${folderIsOpen && 'font-medium text-neutral-1000 dark:text-white'}`}
+          className={`w-full truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300 ${folderIsOpen && 'font-medium text-neutral-1000 dark:text-white'}`}
         >
           {label}
         </p>
@@ -77,7 +88,9 @@ const LibraryFile = ({ label, isSelected, onSelect, ...res }: ILibraryFileProps)
       {...res}
     >
       <div className='flex flex-row items-center gap-[6px] py-1 pl-6 '>
-        <LibraryFileIcon size='sm' />
+        <div className='h-5 w-5'>
+          <LibraryFileIcon size='sm' />
+        </div>
         <p
           className={cn(
             'ml-1 w-full truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',

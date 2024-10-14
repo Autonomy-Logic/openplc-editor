@@ -261,7 +261,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         setRungLocal((rung) => ({ ...rung, nodes }))
         return
       }
-      const library = event.dataTransfer.getData('application/reactflow/ladder-blocks/library') ?? undefined
+      const library = event.dataTransfer.getData('application/library') ?? undefined
       handleAddNode(type, library)
     },
     [rungLocal],

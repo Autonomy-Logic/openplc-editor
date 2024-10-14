@@ -1,4 +1,4 @@
-import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema, baseTypeSchema, genericTypeSchema } from '@root/types/PLC/library'
+import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema, baseTypeSchema, genericTypeSchema } from '@root/types/PLC'
 import { z } from 'zod'
 
 const NumericalVariableSchema = BaseLibraryVariableSchema.extend({

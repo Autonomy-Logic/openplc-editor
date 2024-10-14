@@ -1,8 +1,9 @@
 import { BookIcon, CloseIcon, MagnifierIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { ReactNode, useEffect, useState } from 'react'
+import { ReactNode, useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
+import { parsePouToStText } from '../../_features/[workspace]/editor/monaco/drag-and-drop/st'
 import { LibraryFile, LibraryFolder, LibraryRoot } from '../../_molecules'
 
 type ILibraryFileProps = {
@@ -18,19 +19,41 @@ type ILibraryRootProps = {
   children: ReactNode
 }
 
-const Library = () => {
+type LibraryProps = {
+  filteredLibraries: {
+    name: string
+    pous: {
+      name: string
+      language: string
+      type: string
+      body: string
+      documentation: string
+      variables: {
+        name: string
+        class: string
+        type: { definition: string; value: string }
+      }[]
+    }[]
+  }[]
+  setSelectedFileKey: (key: string) => void
+  selectedFileKey: string | null
+  filterText: string
+  setFilterText: (text: string) => void
+}
+
+const Library = ({  filterText, setFilterText, setSelectedFileKey, selectedFileKey , filteredLibraries }: LibraryProps) => {
   const {
-    libraries: { system },
+    editor: { type, meta },
   } = useOpenPLCStore()
 
-  const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [isSearchActive, setIsSearchActive] = useState(false)
-  const [filterText, setFilterText] = useState('')
   const [shouldRenderInput, setShouldRenderInput] = useState(false)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (isSearchActive) {
       setShouldRenderInput(true)
+      setTimeout(() => inputRef.current?.focus(), 0)
     } else {
       const timer = setTimeout(() => {
         setShouldRenderInput(false)
@@ -39,10 +62,6 @@ const Library = () => {
       return () => clearTimeout(timer)
     }
   }, [isSearchActive])
-
-  const filteredLibraries = system.filter((library) =>
-    library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
-  )
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFilterText(e.target.value.toLowerCase())
@@ -54,26 +73,28 @@ const Library = () => {
       <div id='library-actions-container' className='relative z-10 my-3 flex w-full justify-normal gap-2 pl-2'>
         <div
           id='library-name-container'
-          className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 dark:bg-brand-dark'
+          className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start rounded-lg bg-neutral-100 px-1.5 dark:bg-brand-dark'
         >
           <BookIcon size='sm' />
-          {!isSearchActive && (
-            <span
-              id='project-name'
-              className='pl-1 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-50'
-            >
-              Library
-            </span>
-          )}
+          <span
+            id='project-name'
+            className={`transition-[width,opacity, ml] overflow-hidden pl-1 font-caption text-xs font-medium text-neutral-1000 duration-500 ease-in-out dark:text-neutral-50 ${
+              isSearchActive ? 'ml-0 w-0 opacity-0' : 'ml-1 w-[60px] opacity-100'
+            }`}
+          >
+            Library
+          </span>
         </div>
 
         <div
           id='search-container'
-          className={`relative flex h-8 items-center justify-start overflow-hidden rounded-lg transition-all duration-500 ease-in-out ${isSearchActive ? 'w-full' : 'w-10'}`}
+          className={`relative flex h-8 items-center justify-start overflow-hidden rounded-lg transition-all duration-500 ease-in-out ${
+            isSearchActive ? 'w-full' : 'w-10'
+          }`}
         >
           {shouldRenderInput && (
             <div
-              className={`absolute left-0 flex w-full items-center justify-between bg-neutral-100 transition-all duration-500 ease-in-out dark:bg-brand-dark ${
+              className={`absolute left-0 flex w-full items-center justify-between bg-neutral-100 transition-opacity duration-500 ease-in-out dark:bg-brand-dark ${
                 isSearchActive ? 'opacity-100' : 'opacity-0'
               }`}
             >
@@ -81,9 +102,10 @@ const Library = () => {
                 id='Search-File'
                 type='text'
                 placeholder='Search'
-                className='h-8 w-full px-2 bg-neutral-100 font-caption text-xs font-medium focus:outline-none dark:bg-brand-dark'
+                className='h-8 w-full bg-neutral-100 px-2 font-caption text-xs font-medium focus:outline-none dark:bg-brand-dark'
                 value={filterText}
                 onChange={handleFilterChange}
+                ref={inputRef}
               />
             </div>
           )}
@@ -125,12 +147,19 @@ const Library = () => {
                   <LibraryFile
                     key={pou.name}
                     label={pou.name}
-                    isSelected={selectedFileKey === pou.name}
+                    onClick={() => setSelectedFileKey(pou.name)}
                     onSelect={() => setSelectedFileKey(pou.name)}
+                    isSelected={selectedFileKey === pou.name}
                     draggable
                     onDragStart={(e) => {
-                      e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
-                    e.dataTransfer.setData('application/reactflow/ladder-blocks/library', `system/${library.name}/${pou.name}`)
+                      if (type === 'plc-textual')
+                        e.dataTransfer.setData('text/plain', meta.language === 'st' ? parsePouToStText(pou) : pou.body)
+                      else if (type === 'plc-graphical') {
+                        if (meta.language === 'ld') {
+                          e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
+                        }
+                        e.dataTransfer.setData('application/library', `system/${library.name}/${pou.name}`)
+                      }
                     }}
                   />
                 ))}
