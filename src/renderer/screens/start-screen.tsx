@@ -8,6 +8,7 @@ import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_fea
 import { ProjectModal } from '../components/_features/[start]/new-project/project-modal'
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
 import { StartMainContent, StartSideContent } from '../components/_templates'
+import DisplayRecentProjects from '../components/refactor/display-recent-projects'
 import { useOpenPLCStore } from '../store'
 
 const StartScreen = () => {
@@ -155,6 +156,7 @@ const StartScreen = () => {
       </StartSideContent>
       <StartMainContent>
         <ProjectFilterBar />
+        <DisplayRecentProjects />
       </StartMainContent>
       <ProjectModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </>

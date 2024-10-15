@@ -9,13 +9,13 @@ export default function Label({ projectName, lastModified, ...props }: FolderLab
   return (
     <p
       id={projectName}
-      className='absolute bottom-4 left-3 flex cursor-pointer flex-col gap-[1px] text-xs text-white'
+      className='absolute bottom-4  flex cursor-pointer flex-col gap-[1px] text-xs text-white overflow-hidden w-full px-3'
       {...props}
     >
-      <span id={projectName} className='overflow-hidden overflow-ellipsis whitespace-nowrap'>
+      <span id={projectName} className='overflow-hidden overflow-ellipsis whitespace-nowrap '>
         {projectName}
       </span>
-      <span id={lastModified} className='overflow-hidden overflow-ellipsis whitespace-nowrap text-[10px] opacity-40'>
+      <span id={lastModified} className='overflow-hidden overflow-ellipsis whitespace-nowrap text-[10px] opacity-40 '>
         {lastModified}
       </span>
     </p>

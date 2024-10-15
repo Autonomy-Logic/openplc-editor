@@ -39,7 +39,7 @@ class ProjectService {
     return join(pathToUserHistoryFolder, 'projects.json')
   }
 
-  private async readProjectHistory(projectsFilePath: string): Promise<IProjectHistoryEntry[]> {
+   async readProjectHistory(projectsFilePath: string): Promise<IProjectHistoryEntry[]> {
     try {
       const historyContent = await promises.readFile(projectsFilePath, 'utf-8')
       return (JSON.parse(historyContent) as IProjectHistoryEntry[]) || []
