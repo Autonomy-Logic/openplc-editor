@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import * as Tabs from '@radix-ui/react-tabs'
+// import { PLCDataType } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
@@ -67,7 +68,6 @@ const WorkspaceScreen = () => {
     { name: 'c', type: 'false' },
     { name: 'd', type: 'false' },
   ]
-
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
   const [collapseAll, setCollapseAll] = useState(false)
@@ -75,6 +75,7 @@ const WorkspaceScreen = () => {
   const explorerPanelRef = useRef(null)
   const workspacePanelRef = useRef(null)
   const consolePanelRef = useRef(null)
+
 
   const togglePanel = () => {
     if (panelRef.current) {
@@ -139,12 +140,12 @@ const WorkspaceScreen = () => {
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
-                          <DataTypeEditor derivation={editor['meta']['derivation']} />{' '}
+                          <DataTypeEditor dataTypeName={editor.meta.name}  />{' '}
                         </div>
                       )}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
                         <ResizablePanelGroup
-                          id='editorContentPanelGroup'
+                          id='editorConte ntPanelGroup'
                           direction='vertical'
                           className='flex flex-1 flex-col gap-2'
                         >

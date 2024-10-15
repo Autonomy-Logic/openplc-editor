@@ -111,6 +111,10 @@ const workspaceActionsSchema = z.object({
     .returns(z.void()),
 
   createDatatype: z.function().args(PLCDataTypeSchema).returns(z.void()),
+  updateDatatype: z.function().args(z.string(), PLCDataTypeSchema.optional()).returns(z.void()),
+  createArrayDimension: z
+    .function()
+    .args(z.object({ name: z.string(), derivation: z.enum(['array', 'enumerated', 'structure']) }))
   createTask: z
     .function()
     .args(taskDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))

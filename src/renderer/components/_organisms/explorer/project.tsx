@@ -153,11 +153,11 @@ const Project = () => {
           </ProjectTreeBranch>
           <ProjectTreeBranch branchTarget='data-type'>
             {dataTypes
-              ?.filter(({ derivation }) => derivation.type === 'array')
-              .map(({ id, name }) => (
+              ?.filter(({ derivation }) => derivation === 'array')
+              .map(({ name }) => (
                 <ProjectTreeLeaf
                   nested
-                  key={id}
+                  key={name}
                   leafLang='arr'
                   label={name}
                   onClick={() =>
@@ -171,11 +171,11 @@ const Project = () => {
               ))}
 
             {dataTypes
-              ?.filter(({ derivation }) => derivation.type === 'enumerated')
-              .map(({ id, name }) => (
+              ?.filter(({ derivation }) => derivation === 'enumerated')
+              .map(({  name }) => (
                 <ProjectTreeLeaf
                   nested
-                  key={id}
+                  key={name}
                   leafLang='enum'
                   label={name}
                   /** Todo: Update the tab state */
@@ -190,11 +190,11 @@ const Project = () => {
               ))}
 
             {dataTypes
-              ?.filter(({ derivation }) => derivation.type === 'structure')
-              .map(({ id, name }) => (
+              ?.filter(({ derivation }) => derivation === 'structure')
+              .map(({ name }) => (
                 <ProjectTreeLeaf
                   nested
-                  key={id}
+                  key={name}
                   leafLang='str'
                   label={name}
                   /** Todo: Update the tab state */

@@ -1,3 +1,4 @@
+import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -320,7 +321,35 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-
+    // TODO: Review requirements.
+    /**
+     * Function to update a unique data type.
+     * @param name - Data type name to be updated.
+     * @param dataToUpdate - Object contain data to update a data type.
+     */
+    updateDatatype: (name, dataToUpdate) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const datatypeToUpdateIndex = workspace.projectData.dataTypes.findIndex((datatype) => datatype.name === name)
+          if (datatypeToUpdateIndex === -1) return
+          Object.assign(workspace.projectData.dataTypes[datatypeToUpdateIndex], dataToUpdate)
+        }),
+      )
+    },
+    createArrayDimension: (dataToCreateDimension) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { name, derivation } = dataToCreateDimension
+          const dataExists = workspace.projectData.dataTypes.find(
+            (datatype) => datatype.name === name,
+          ) as PLCArrayDatatype
+          if (!dataExists) return
+          if (dataExists && derivation === 'array') {
+            dataExists.dimensions.push({ dimension: '' })
+          }
+        }),
+      )
+    },
     createTask: (taskToCreate): WorkspaceResponse => {
       const response: WorkspaceResponse = { ok: true }
 
