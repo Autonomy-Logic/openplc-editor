@@ -1,13 +1,12 @@
-import { BrowserWindow, dialog } from 'electron'
+import { app, BrowserWindow, dialog } from 'electron'
 import { promises, readFile, writeFile } from 'fs'
 import { join } from 'path'
 
-// import { projectSchema } from '../../../types/PLC'
 import { newPLCProject, newPLCProjectSchema } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
-import { store } from '../../modules/store' // This must be refactored
+import { CreateJSONFile } from '../../utils'
+import { UserService } from '../user-service'
 import { baseJsonStructure } from './data'
-import { CreateJSONFile } from './utils/json-creator'
 
 export type IProjectServiceResponse = {
   success: boolean
@@ -24,8 +23,96 @@ export type IProjectServiceResponse = {
   }
 }
 
+interface IProjectHistoryEntry {
+  path: string
+  createdAt: string
+  lastOpenedAt: string
+}
+
 class ProjectService {
   constructor(private serviceManager: InstanceType<typeof BrowserWindow>) {}
+
+  private getProjectsFilePath(): string {
+    const pathToUserDataFolder = join(app.getPath('userData'), 'User')
+    const pathToUserHistoryFolder = join(pathToUserDataFolder, 'History')
+
+    return join(pathToUserHistoryFolder, 'projects.json')
+  }
+
+  private async readProjectHistory(projectsFilePath: string): Promise<IProjectHistoryEntry[]> {
+    try {
+      const historyContent = await promises.readFile(projectsFilePath, 'utf-8')
+      return (JSON.parse(historyContent) as IProjectHistoryEntry[]) || []
+    } catch (error) {
+      console.error('Error reading history file:', error)
+      return []
+    }
+  }
+
+  private async writeProjectHistory(projectsFilePath: string, historyData: IProjectHistoryEntry[]): Promise<void> {
+    await promises.writeFile(projectsFilePath, JSON.stringify(historyData, null, 2))
+  }
+
+  private async updateProjectHistory(projectPath: string): Promise<void> {
+    const projectsFilePath = this.getProjectsFilePath()
+    const historyData = await this.readProjectHistory(projectsFilePath)
+    const lastOpenedAt = new Date().toISOString()
+
+    const existingProjectIndex = historyData.findIndex((proj) => proj.path === projectPath)
+    if (existingProjectIndex > -1) {
+      historyData[existingProjectIndex].lastOpenedAt = lastOpenedAt
+    } else {
+      historyData.push({ path: projectPath, createdAt: lastOpenedAt, lastOpenedAt })
+    }
+
+    historyData.sort((a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime())
+    await this.writeProjectHistory(projectsFilePath, historyData)
+  }
+
+  async removeProjectFromHistory(projectPath: string): Promise<void> {
+    const projectsFilePath = this.getProjectsFilePath()
+    const historyData = await this.readProjectHistory(projectsFilePath)
+    const updatedHistory = historyData.filter((project) => project.path !== projectPath)
+    await this.writeProjectHistory(projectsFilePath, updatedHistory)
+  }
+
+  async openProjectByPath(projectPath: string): Promise<IProjectServiceResponse> {
+    try {
+      await promises.access(projectPath)
+      const fileContent = await promises.readFile(projectPath, 'utf-8')
+      const parsedFile = PLCProjectDataSchema.safeParse(JSON.parse(fileContent))
+
+      if (!parsedFile.success) {
+        return this.createErrorResponse('Error parsing project file.')
+      }
+
+      await this.updateProjectHistory(projectPath)
+      return this.createSuccessResponse(projectPath, parsedFile.data)
+    } catch (_error) {
+      await this.removeProjectFromHistory(projectPath)
+      return this.createErrorResponse('Error reading project file.')
+    }
+  }
+
+  private createErrorResponse(description: string): IProjectServiceResponse {
+    return {
+      success: false,
+      error: {
+        title: 'Error reading project file',
+        description,
+      },
+    }
+  }
+
+  private createSuccessResponse(projectPath: string, content: PLCProjectData): IProjectServiceResponse {
+    return {
+      success: true,
+      data: {
+        meta: { path: projectPath },
+        content,
+      },
+    }
+  }
 
   async createProject(): Promise<IProjectServiceResponse> {
     const { canceled, filePaths } = await dialog.showOpenDialog(this.serviceManager, {
@@ -33,7 +120,7 @@ class ProjectService {
       properties: ['openDirectory', 'createDirectory'],
     })
 
-    if (canceled)
+    if (canceled) {
       return {
         success: false,
         error: {
@@ -41,6 +128,8 @@ class ProjectService {
           description: i18n.t('projectServiceResponses:createProject.errors.canceled.description'),
         },
       }
+    }
+
     const [filePath] = filePaths
 
     const isEmptyDir = async () => {
@@ -64,19 +153,11 @@ class ProjectService {
       }
     }
 
+    await UserService.checkIfUserHistoryFolderExists()
     CreateJSONFile(filePath, JSON.stringify(baseJsonStructure, null, 2), 'data')
 
     const projectPath = join(filePath, 'data.json')
-
-    // !Deprecated: Should be removed
-    const lastProjects = store.get('last_projects')
-    if (lastProjects.length === 10) {
-      lastProjects.splice(9, 1)
-      lastProjects.unshift(projectPath)
-      store.set('last_projects', lastProjects)
-    } else {
-      store.set('last_projects', [projectPath, ...lastProjects])
-    }
+    await this.updateProjectHistory(projectPath)
 
     return {
       success: true,
@@ -96,7 +177,7 @@ class ProjectService {
       filters: [{ name: 'JSON', extensions: ['json'] }],
     })
 
-    if (canceled)
+    if (canceled) {
       return {
         success: false,
         error: {
@@ -104,9 +185,11 @@ class ProjectService {
           description: i18n.t('projectServiceResponses:openProject.errors.canceled.description'),
         },
       }
-    const [filePath] = filePaths
+    }
 
-    const file = await new Promise((resolve, reject) => {
+    const filePath = filePaths[0]
+
+    const file = await new Promise<string>((resolve, reject) => {
       readFile(filePath, 'utf-8', (error, data) => {
         if (error) return reject(error)
         return resolve(data)
@@ -124,11 +207,7 @@ class ProjectService {
         },
       }
     }
-
     const parsedFile = newPLCProjectSchema.safeParse(JSON.parse(file as string))
-
-    console.log('PARSED FILE', parsedFile)
-
     if (!parsedFile.success) {
       return {
         success: false,
@@ -138,11 +217,15 @@ class ProjectService {
         },
       }
     }
+
+    const projectPath = filePath
+    await this.updateProjectHistory(projectPath)
+
     return {
       success: true,
       data: {
         meta: {
-          path: filePath,
+          path: projectPath,
         },
         content: parsedFile.data,
       },
@@ -151,7 +234,7 @@ class ProjectService {
 
   saveProject(data: { projectPath: string; projectData: newPLCProject }): IProjectServiceResponse {
     const { projectPath, projectData } = data
-    if (!projectPath || !projectData)
+    if (!projectPath || !projectData) {
       return {
         success: false,
         error: {
@@ -159,17 +242,14 @@ class ProjectService {
           description: i18n.t('projectServiceResponses:saveProject.errors.missingParams.description'),
         },
       }
+    }
 
     const normalizedDataToWrite = JSON.stringify(projectData, null, 2)
 
     writeFile(projectPath, normalizedDataToWrite, (error) => {
-      if (error) throw error
-      return {
-        success: false,
-        error: {
-          title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
-          description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description'),
-        },
+      if (error) {
+        console.error(error)
+        throw error
       }
     })
 

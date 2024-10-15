@@ -3,7 +3,7 @@ import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
 import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
-import { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
@@ -42,6 +42,9 @@ const Project = () => {
       updateMetaName(inputValue)
     }
   }
+  useEffect(() => {
+    setInputValue(projectName)
+  }, [projectName])
 
   return (
     <div id='project-container' className='flex h-full w-full flex-col pr-2'>

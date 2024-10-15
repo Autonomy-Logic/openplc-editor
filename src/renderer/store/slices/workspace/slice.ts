@@ -12,6 +12,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       shouldUseDarkMode: false,
       isWindowMaximized: false,
     },
+    recents: [],
   },
 
   workspaceActions: {
@@ -29,6 +30,14 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    setRecents: (recents): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.recents = recents
+          console.log(workspace.recents)
+        }),
+      )
+    },  
 
     switchAppTheme: (): void => {
       setState(
@@ -44,7 +53,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-  },
+    
+   },
 })
 
 export { createWorkspaceSlice }
