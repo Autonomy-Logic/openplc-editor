@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
-import { newPLCProject } from '../../../types/PLC/open-plc'
+import { PLCProject } from '../../../types/PLC/open-plc'
 import { IProjectServiceResponse } from '../../services/project-service'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
 type IDataToWrite = {
   projectPath: string
-  projectData: newPLCProject
+  projectData: PLCProject
 }
 
 type ISaveDataResponse = {

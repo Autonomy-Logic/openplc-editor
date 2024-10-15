@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import * as Tabs from '@radix-ui/react-tabs'
-import { newPLCProjectSchema } from '@root/types/PLC/open-plc'
+import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
@@ -31,7 +31,7 @@ const WorkspaceScreen = () => {
   } = useOpenPLCStore()
   useEffect(() => {
     const handleSaveProject = async () => {
-      const projectData = newPLCProjectSchema.safeParse(project)
+      const projectData = PLCProjectSchema.safeParse(project)
       if (!projectData.success) {
         toast({
           title: 'Error in the save request!',

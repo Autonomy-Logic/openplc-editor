@@ -1,7 +1,7 @@
 // import { IProject } from '../../../../types/PLC'
-import { newPLCProject } from '../../../../types/PLC/open-plc'
+import { PLCProject } from '../../../../types/PLC/open-plc'
 
-export const baseJsonStructure: newPLCProject = {
+export const baseJsonStructure: PLCProject = {
   meta: {
     name: 'new-project',
     type: 'plc-project',

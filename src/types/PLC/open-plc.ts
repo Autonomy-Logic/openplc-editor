@@ -207,7 +207,7 @@ const PLCFunctionBlockSchema = z.object({
 
 type PLCFunctionBlock = z.infer<typeof PLCFunctionBlockSchema>
 
-const newPLCProjectDataSchema = z.object({
+const PLCProjectDataSchema = z.object({
   dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(
     z.discriminatedUnion('type', [
@@ -234,28 +234,25 @@ const newPLCProjectDataSchema = z.object({
   }),
 })
 
-type newPLCProjectData = z.infer<typeof newPLCProjectDataSchema>
+type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
-const newPLCProjectMetaSchema = z.object({
+const PLCProjectMetaSchema = z.object({
   name: z.string(),
   type: z.enum(['plc-project']),
 })
 
-type newPLCProjectMeta = z.infer<typeof newPLCProjectMetaSchema>
+type PLCProjectMeta = z.infer<typeof PLCProjectMetaSchema>
 
-const newPLCProjectSchema = z.object({
-  meta: newPLCProjectMetaSchema,
-  data: newPLCProjectDataSchema,
+const PLCProjectSchema = z.object({
+  meta: PLCProjectMetaSchema,
+  data: PLCProjectDataSchema,
 })
 
-type newPLCProject = z.infer<typeof newPLCProjectSchema>
+type PLCProject = z.infer<typeof PLCProjectSchema>
 
 export {
   baseTypeSchema,
   bodySchema,
-  newPLCProjectDataSchema,
-  newPLCProjectMetaSchema,
-  newPLCProjectSchema,
   PLCDataTypeDerivationSchema,
   PLCDataTypeSchema,
   PLCDataTypeStructureElementSchema,
@@ -264,15 +261,15 @@ export {
   PLCGlobalVariableSchema,
   PLCInstanceSchema,
   PLCProgramSchema,
+  PLCProjectDataSchema,
+  PLCProjectMetaSchema,
+  PLCProjectSchema,
   PLCTaskSchema,
   PLCVariableSchema,
 }
 
 export type {
   BaseType,
-  newPLCProject,
-  newPLCProjectData,
-  newPLCProjectMeta,
   PLCDataType,
   PLCDataTypeStructureElement,
   PLCFunction,
@@ -280,6 +277,9 @@ export type {
   PLCGlobalVariable,
   PLCInstance,
   PLCProgram,
+  PLCProject,
+  PLCProjectData,
+  PLCProjectMeta,
   PLCTask,
   PLCVariable,
 }

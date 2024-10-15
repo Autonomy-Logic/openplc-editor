@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { promises, readFile, writeFile } from 'fs'
 import { join } from 'path'
 
-import { newPLCProject, newPLCProjectSchema } from '../../../types/PLC/open-plc'
+import { PLCProject, PLCProjectSchema } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { CreateJSONFile } from '../../utils'
 import { UserService } from '../user-service'
@@ -19,7 +19,7 @@ export type IProjectServiceResponse = {
     meta: {
       path: string
     }
-    content: newPLCProject
+    content: PLCProject
   }
 }
 
@@ -80,7 +80,7 @@ class ProjectService {
     try {
       await promises.access(projectPath)
       const fileContent = await promises.readFile(projectPath, 'utf-8')
-      const parsedFile = newPLCProjectSchema.safeParse(JSON.parse(fileContent))
+      const parsedFile = PLCProjectSchema.safeParse(JSON.parse(fileContent))
 
       if (!parsedFile.success) {
         return this.createErrorResponse('Error parsing project file.')
@@ -104,7 +104,7 @@ class ProjectService {
     }
   }
 
-  private createSuccessResponse(projectPath: string, content: newPLCProject): IProjectServiceResponse {
+  private createSuccessResponse(projectPath: string, content: PLCProject): IProjectServiceResponse {
     return {
       success: true,
       data: {
@@ -207,7 +207,7 @@ class ProjectService {
         },
       }
     }
-    const parsedFile = newPLCProjectSchema.safeParse(JSON.parse(file))
+    const parsedFile = PLCProjectSchema.safeParse(JSON.parse(file))
     if (!parsedFile.success) {
       return {
         success: false,
@@ -232,7 +232,7 @@ class ProjectService {
     }
   }
 
-  saveProject(data: { projectPath: string; projectData: newPLCProject }): IProjectServiceResponse {
+  saveProject(data: { projectPath: string; projectData: PLCProject }): IProjectServiceResponse {
     const { projectPath, projectData } = data
     if (!projectPath || !projectData) {
       return {

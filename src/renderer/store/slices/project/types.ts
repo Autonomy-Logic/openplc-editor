@@ -1,6 +1,6 @@
 import {
   bodySchema,
-  newPLCProjectDataSchema,
+  PLCProjectDataSchema,
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
@@ -90,12 +90,12 @@ type ProjectMeta = z.infer<typeof projectMetaSchema>
  * Project State Schema
  * - This schema is used to define the state of the project slice
  * - It contains the meta information of the project and the project data
- * - The project data is defined by the newPLCProjectDataSchema
+ * - The project data is defined by the PLCProjectDataSchema
  *   - The project data contains the data types, pous, and configuration
  */
 const projectStateSchema = z.object({
   meta: projectMetaSchema,
-  data: newPLCProjectDataSchema,
+  data: PLCProjectDataSchema,
 })
 type ProjectState = z.infer<typeof projectStateSchema>
 

@@ -2,7 +2,7 @@ import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowType } from '@root/renderer/store/slices/flow/types'
-import { newPLCProjectSchema } from '@root/types/PLC/open-plc'
+import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
 
@@ -88,7 +88,7 @@ export const FileMenu = () => {
   }
 
   const handleSaveProject = async () => {
-    const projectData = newPLCProjectSchema.safeParse(project)
+    const projectData = PLCProjectSchema.safeParse(project)
     if (!projectData.success) {
       toast({
         title: 'Error in the save request!',
