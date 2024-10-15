@@ -78,6 +78,30 @@ const CreateEditorModelObject = (
   }
 }
 
+const CreateResourceEditor = (name = 'resource'): EditorModel => {
+  console.log('Creating resource editor for: ' + name)
+  const editor = CreateEditorObject({
+    type: 'plc-resource',
+    meta: {
+      name,
+      path: `/data/configuration/resource`,
+    },
+    variable: {
+      display: 'table',
+      description: '',
+      selectedRow: '-1',
+    },
+    task: {
+      display: 'table',
+      selectedRow: '-1',
+    },
+    instance: {
+      display: 'table',
+      selectedRow: '-1',
+    },
+  })
+  return editor
+}
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
   switch (elementType.type) {
@@ -89,6 +113,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateEditorModelObject(name, elementType.language, 'function-block')
     case 'data-type':
       return CreateEditorModelObject(name, null, null, elementType.derivation)
+    case 'resource':
+      return CreateResourceEditor(name)
   }
 }
 

@@ -2,17 +2,14 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { EditorSlice, EditorState } from './types'
-
 export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> = (setState, getState) => ({
   editors: [],
-
   editor: {
     type: 'available',
     meta: {
       name: 'available',
     },
   },
-
   editorActions: {
     addModel: (editor) =>
       setState(
@@ -28,32 +25,94 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           state.editors = state.editors.filter((model) => model.meta.name !== name)
         }),
       ),
-
     updateModelVariables: (variables) =>
       setState(
         produce((state: EditorState) => {
           const { editor } = state
-          if (!editor || !(editor.type === 'plc-textual' || editor.type === 'plc-graphical')) return
 
-          if (variables.display === 'table')
-            if (editor.variable.display === 'table')
-              editor.variable = {
-                display: 'table',
-                selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow,
-                classFilter: variables.classFilter ?? editor.variable.classFilter,
-                description: variables.description ?? editor.variable.description,
+          if (editor.type === 'plc-resource') {
+            if (variables.display === 'table') {
+              if (editor.variable.display === 'table') {
+                editor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow ?? '-1',
+                  description: variables.description ?? editor.variable.description ?? '',
+                }
+              } else {
+                editor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? '-1',
+                  description: variables.description ?? '',
+                }
               }
-            else
+            } else {
               editor.variable = {
-                display: 'table',
-                selectedRow: variables.selectedRow?.toString() ?? '-1',
-                classFilter: variables.classFilter ?? 'All',
-                description: variables.description ?? '',
+                display: 'code',
               }
-          else
-            editor.variable = {
-              display: 'code',
             }
+          } else if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+            if (variables.display === 'table') {
+              if (editor.variable.display === 'table') {
+                editor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? editor.variable.selectedRow ?? '-1',
+                  classFilter: variables.classFilter ?? editor.variable.classFilter ?? 'All',
+                  description: variables.description ?? editor.variable.description ?? '',
+                }
+              } else {
+                editor.variable = {
+                  display: 'table',
+                  selectedRow: variables.selectedRow?.toString() ?? '-1',
+                  classFilter: variables.classFilter ?? 'All',
+                  description: variables.description ?? '',
+                }
+              }
+            } else {
+              editor.variable = {
+                display: 'code',
+              }
+            }
+          }
+        }),
+      ),
+
+    updateModelTasks: (tasks: { selectedRow: number; display: 'code' | 'table' }) =>
+      setState(
+        produce((state: EditorState) => {
+          const { editor } = state
+          if (editor.type === 'plc-resource') {
+            if (tasks.display === 'table') {
+              editor.task = {
+                ...editor.task,
+                display: 'table',
+                selectedRow: tasks.selectedRow.toString(),
+              }
+            } else {
+              editor.variable = {
+                display: 'code',
+              }
+            }
+          }
+        }),
+      ),
+
+    updateModelInstances: (instances: { selectedRow: number; display: 'code' | 'table' }) =>
+      setState(
+        produce((state: EditorState) => {
+          const { editor } = state
+          if (editor.type === 'plc-resource') {
+            if (instances.display === 'table') {
+              editor.instance = {
+                ...editor.instance,
+                display: 'table',
+                selectedRow: instances.selectedRow.toString(),
+              }
+            } else {
+              editor.variable = {
+                display: 'code',
+              }
+            }
+          }
         }),
       ),
 
@@ -88,7 +147,6 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           }
         }),
       ),
-
     getEditorFromEditors: (name) => {
       const { editor, editors } = getState()
       if (name === editor.meta.name) return editor

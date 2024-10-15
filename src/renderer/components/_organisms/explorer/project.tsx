@@ -3,22 +3,23 @@ import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
 import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
 const Project = () => {
   const {
     workspace: {
-      projectData: { pous, dataTypes, projectName },
+      projectData: { pous, dataTypes, projectName, configuration },
     },
-    workspaceActions:{updateProjectName},
+    workspaceActions: { updateProjectName },
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
   const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
     const tabToBeCreated = { name, path, elementType }
     updateTabs(tabToBeCreated)
+
     const editor = getEditorFromEditors(tabToBeCreated.name)
     if (!editor) {
       const model = CreateEditorObjectFromTab(tabToBeCreated)
@@ -31,7 +32,7 @@ const Project = () => {
   }
 
   const [isEditing, setIsEditing] = useState(false)
-  const [inputValue, setInputValue] = useState(projectName)
+  const [inputValue, setInputValue] = useState<string>(projectName)
 
   const handleBlur = () => {
     setIsEditing(false)
@@ -39,6 +40,9 @@ const Project = () => {
       updateProjectName(inputValue)
     }
   }
+  useEffect(() => {
+    setInputValue(projectName)
+  }, [projectName])
 
   return (
     <div id='project-container' className='flex h-full w-full flex-col pr-2'>
@@ -50,15 +54,15 @@ const Project = () => {
           onClick={() => setIsEditing(true)}
         >
           <div className='flex-shrink-0'>
-            <FolderIcon size='sm' className='h-4 w-4' style={{ minWidth: '16px', minHeight: '16px' }} />
+            <FolderIcon size='sm' className='h-5 w-5' style={{ minWidth: '16px', minHeight: '16px' }} />
           </div>
           {isEditing ? (
-            <div className='flex h-5.5 w-full items-center border-none bg-transparent px-0 py-0'>
+            <div className='h-5.5 flex w-full items-center border-none bg-transparent px-0 py-0'>
               <input
                 id='project-name'
                 className={`box-border h-full w-full cursor-text bg-transparent px-2 py-0 text-xs font-medium text-neutral-1000 outline-none dark:text-neutral-50`}
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={(e) => setInputValue(e.target.value as unknown as string)}
                 onBlur={handleBlur}
                 autoFocus
               />
@@ -79,7 +83,7 @@ const Project = () => {
       </div>
 
       {/* Data display */}
-      <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto pr-1'>
+      <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto'>
         <ProjectTreeRoot label={projectName}>
           <ProjectTreeBranch branchTarget='function'>
             {pous
@@ -89,7 +93,7 @@ const Project = () => {
                   key={data.name}
                   leafLang={data.language}
                   label={data.name}
-                    onClick={() =>
+                  onClick={() =>
                     handleCreateTab({
                       name: data.name,
                       path: `/data/pous/function/${data.name}`,
@@ -107,7 +111,7 @@ const Project = () => {
                   key={data.name}
                   leafLang={data.language}
                   label={data.name}
-                    onClick={() =>
+                  onClick={() =>
                     handleCreateTab({
                       name: data.name,
                       path: `/data/pous/function-block/${data.name}`,
@@ -117,6 +121,18 @@ const Project = () => {
                 />
               ))}
           </ProjectTreeBranch>
+          <ProjectTreeBranch
+            branchTarget='resource'
+            onClick={() =>
+              handleCreateTab({
+                configuration: configuration,
+                name: 'resource',
+                path: `/data/configuration/resource`,
+                elementType: { type: 'resource' },
+              })
+            }
+          />
+
           <ProjectTreeBranch branchTarget='program'>
             {pous
               ?.filter(({ type }) => type === 'program')
@@ -125,7 +141,7 @@ const Project = () => {
                   key={data.name}
                   leafLang={data.language}
                   label={data.name}
-                    onClick={() =>
+                  onClick={() =>
                     handleCreateTab({
                       name: data.name,
                       path: `/data/pous/program/${data.name}`,
@@ -144,7 +160,7 @@ const Project = () => {
                   key={name}
                   leafLang='arr'
                   label={name}
-                    onClick={() =>
+                  onClick={() =>
                     handleCreateTab({
                       name,
                       path: `/data/data-types/array/${name}`,

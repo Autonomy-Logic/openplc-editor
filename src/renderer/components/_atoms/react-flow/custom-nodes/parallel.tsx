@@ -17,12 +17,12 @@ export type ParallelNode = Node<
 type ParallelProps = NodeProps<ParallelNode>
 type ParallelBuilderProps = BuilderBasicProps & { type: 'open' | 'close' }
 
-export const PARALLEL_WIDTH = 30
-export const PARALLEL_HEIGHT = 2
+export const DEFAULT_PARALLEL_WIDTH = 30
+export const DEFAULT_PARALLEL_HEIGHT = 2
 
 export const GAP = 50
 
-export const PARALLEL_CONNECTOR_Y = PARALLEL_HEIGHT / 2
+export const DEFAULT_PARALLEL_CONNECTOR_Y = DEFAULT_PARALLEL_HEIGHT / 2
 
 export const Parallel = ({ selected, data }: ParallelProps) => {
   return (
@@ -32,19 +32,19 @@ export const Parallel = ({ selected, data }: ParallelProps) => {
           'ring-2 ring-brand': selected,
         })}
         style={{
-          width: PARALLEL_WIDTH,
-          height: PARALLEL_HEIGHT,
+          width: DEFAULT_PARALLEL_WIDTH,
+          height: DEFAULT_PARALLEL_HEIGHT,
         }}
       >
         <svg
           style={{
-            width: PARALLEL_WIDTH,
-            height: PARALLEL_HEIGHT,
+            width: DEFAULT_PARALLEL_WIDTH,
+            height: DEFAULT_PARALLEL_HEIGHT,
           }}
         >
           <rect
-            width={PARALLEL_WIDTH}
-            height={PARALLEL_HEIGHT}
+            width={DEFAULT_PARALLEL_WIDTH}
+            height={DEFAULT_PARALLEL_HEIGHT}
             className='stroke-[--xy-edge-stroke-default]'
             fill='none'
           />
@@ -67,7 +67,7 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       glbX: handleX,
       glbY: handleY,
       relX: 0,
-      relY: PARALLEL_CONNECTOR_Y,
+      relY: DEFAULT_PARALLEL_CONNECTOR_Y,
       style: {
         visibility: 'hidden',
         left: 3,
@@ -78,10 +78,10 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       position: Position.Right,
       type: 'source',
       isConnectable: false,
-      glbX: handleX + PARALLEL_WIDTH,
+      glbX: handleX + DEFAULT_PARALLEL_WIDTH,
       glbY: handleY,
-      relX: PARALLEL_WIDTH,
-      relY: PARALLEL_CONNECTOR_Y,
+      relX: DEFAULT_PARALLEL_WIDTH,
+      relY: DEFAULT_PARALLEL_CONNECTOR_Y,
       style: {
         visibility: 'hidden',
         right: 3,
@@ -92,22 +92,31 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       position: Position.Bottom,
       type: type === 'open' ? 'source' : 'target',
       isConnectable: false,
-      glbX: handleX + PARALLEL_WIDTH / 2,
+      glbX: handleX + DEFAULT_PARALLEL_WIDTH / 2,
       glbY: handleY,
-      relX: PARALLEL_WIDTH / 2,
-      relY: PARALLEL_CONNECTOR_Y,
+      relX: DEFAULT_PARALLEL_WIDTH / 2,
+      relY: DEFAULT_PARALLEL_CONNECTOR_Y,
       style: {
         // visibility: 'hidden',
-        bottom: PARALLEL_CONNECTOR_Y,
+        bottom: DEFAULT_PARALLEL_CONNECTOR_Y,
       },
     }),
   ]
+
+  const inputHandles = [handles[0]]
+  type !== 'open' && inputHandles.push(handles[2])
+
+  const outputHandles = [handles[1]]
+  type === 'open' && outputHandles.push(handles[2])
+
   return {
     id,
     type: 'parallel',
     position: { x: posX, y: posY },
     data: {
       handles,
+      inputHandles: inputHandles,
+      outputHandles: outputHandles,
       inputConnector: handles[0],
       outputConnector: handles[1],
       parallelInputConnector: type === 'close' ? handles[2] : undefined,
@@ -116,10 +125,10 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       parallelCloseReference: undefined,
       type,
     },
-    width: PARALLEL_WIDTH,
-    height: PARALLEL_HEIGHT,
+    width: DEFAULT_PARALLEL_WIDTH,
+    height: DEFAULT_PARALLEL_HEIGHT,
     draggable: false,
     selectable: false,
-    selected: false
+    selected: false,
   }
 }

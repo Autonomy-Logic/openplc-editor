@@ -9,6 +9,7 @@ import { ExitIcon } from '../assets'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
+import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { Console } from '../components/_molecules/console'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Debugger } from '../components/_organisms/debugger'
@@ -136,6 +137,7 @@ const WorkspaceScreen = () => {
                    */}
                   {tabs.length > 0 ? (
                     <>
+                      {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
                           <DataTypeEditor dataTypeName={editor.meta.name}  />{' '}

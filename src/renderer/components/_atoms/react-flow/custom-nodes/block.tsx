@@ -7,31 +7,30 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../
 import { buildHandle, CustomHandle } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-type BlockNode = Node<BasicNodeData & { variant: 'default' | 'TON' }>
-type BlockProps = NodeProps<BlockNode>
-type BlockBuilderProps = BuilderBasicProps & { variant: 'default' | 'TON' }
-
-export const BLOCK_WIDTH = 96
-export const BLOCK_HEIGHT = 128
-
-export const BLOCK_CONNECTOR_X = BLOCK_WIDTH
-export const BLOCK_CONNECTOR_Y = 40
-export const BLOCK_CONNECTOR_Y_OFFSET = 32
-
-type BlockTypes = {
-  [key: string]: {
-    name: string
-    leftConnectors: string[]
-    rightConnectors: string[]
-    tooltipContent: string
-  }
+export type BlockVariant = {
+  name: string
+  variables: { name: string; class: string; type: { definition: string; value: string } }[]
+  documentation: string
 }
-const BLOCK_TYPES: BlockTypes = {
-  default: {
-    name: '???',
-    leftConnectors: ['???', '???'],
-    rightConnectors: ['???'],
-    tooltipContent: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam aliquam tristique tincidunt. Duis elementum
+export type BlockNodeData<T> = BasicNodeData & { variant: T }
+export type BlockNode<T> = Node<BlockNodeData<T>>
+type BlockProps<T> = NodeProps<BlockNode<T>>
+type BlockBuilderProps<T> = BuilderBasicProps & { variant: T }
+
+export const DEFAULT_BLOCK_WIDTH = 216
+export const DEFAULT_BLOCK_HEIGHT = 128
+
+export const DEFAULT_BLOCK_CONNECTOR_X = DEFAULT_BLOCK_WIDTH
+export const DEFAULT_BLOCK_CONNECTOR_Y = 40
+export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 32
+
+export const DEFAULT_BLOCK_TYPE = {
+  name: '???',
+  variables: [
+    { name: '???', class: 'input', type: { definition: 'base-type', value: 'BOOL' } },
+    { name: '???', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
+  ],
+  documentation: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam aliquam tristique tincidunt. Duis elementum
             tortor sem, non convallis orci facilisis at. Suspendisse id bibendum nisl. Mauris ac massa diam. Mauris
             ultrices massa justo, sed vehicula tellus rhoncus eget. Suspendisse lacinia nec dolor vitae sollicitudin.
             Interdum et malesuada fames ac ante ipsum primis in faucibus. Quisque rutrum, tellus eu maximus cursus,
@@ -39,18 +38,80 @@ const BLOCK_TYPES: BlockTypes = {
             eget mauris. Aenean aliquet, justo id tempor placerat, ipsum purus molestie justo, sed euismod est arcu
             fermentum odio. Nullam et mauris leo. Aenean magna ex, sollicitudin at consequat non, cursus nec elit. Morbi
             sodales porta elementum.`,
-  },
-  TON: {
-    name: 'TON',
-    leftConnectors: ['EN', 'IN', 'PT'],
-    rightConnectors: ['EN0', 'Q', 'ET'],
-    tooltipContent: `The TON block is a timer block that can be used to trigger an event after a certain amount of time has passed.`,
-  },
 }
 
-export const Block = ({ selected, data, id, dragging }: BlockProps) => {
+export const BlockNodeElement = <T extends object>({
+  data,
+  disabled = false,
+  height,
+  selected,
+  scale = 1,
+  blockNameValue,
+  setBlockNameValue,
+}: {
+  data: BlockNodeData<T>
+  height: number
+  selected: boolean
+  disabled?: boolean
+  scale?: number
+  blockNameValue?: string
+  setBlockNameValue?: (value: string) => void
+}) => {
+  const { name, variables } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+
+  const inputConnectors = variables.filter((variable) => variable.class === 'input').map((variable) => variable.name)
+  const outputConnectors = variables.filter((variable) => variable.class === 'output').map((variable) => variable.name)
+
+  return (
+    <div
+      className={cn(
+        'relative flex flex-col rounded-md border border-neutral-850 bg-white text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
+        {
+          'hover:border-transparent hover:ring-2 hover:ring-brand': !disabled,
+          'border-transparent ring-2 ring-brand': selected,
+        },
+      )}
+      style={{
+        width: DEFAULT_BLOCK_WIDTH,
+        height: height,
+        transform: `scale(${scale})`,
+      }}
+    >
+      <InputWithRef
+        value={blockNameValue ?? name}
+        onChange={(e) => setBlockNameValue && setBlockNameValue(e.target.value)}
+        maxLength={20}
+        placeholder='???'
+        className='w-full bg-transparent p-1 text-center text-sm outline-none'
+        disabled={!setBlockNameValue}
+      />
+      {inputConnectors.map((connector, index) => (
+        <div
+          key={index}
+          className='absolute text-sm'
+          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 11, left: 7 }}
+        >
+          {connector}
+        </div>
+      ))}
+      {outputConnectors.map((connector, index) => (
+        <div
+          key={index}
+          className='absolute text-sm'
+          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 11, right: 7 }}
+        >
+          {connector}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export const Block = <T extends object>({ data, dragging, height, selected, id }: BlockProps<T>) => {
+  const { name, documentation } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+
   const [blockLabelValue, setBlockLabelValue] = useState<string>('')
-  const { name, leftConnectors, rightConnectors, tooltipContent } = BLOCK_TYPES[data.variant]
+  const [blockNameValue, setBlockNameValue] = useState<string>(name)
 
   return (
     <div
@@ -61,46 +122,21 @@ export const Block = ({ selected, data, id, dragging }: BlockProps) => {
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger>
-            <div
-              className={cn(
-                'relative flex flex-col rounded-md border border-neutral-850 bg-white hover:border-transparent hover:ring-2 hover:ring-brand dark:bg-neutral-900',
-                {
-                  'ring-2 ring-brand': selected,
-                },
-              )}
-              style={{
-                width: BLOCK_WIDTH,
-                height: BLOCK_HEIGHT,
-              }}
-            >
-              <div className='flex h-fit w-full justify-center py-1 text-sm'>{name}</div>
-              {leftConnectors.map((connector, index) => (
-                <div
-                  key={index}
-                  className='absolute text-sm'
-                  style={{ top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET - 11, left: 7 }}
-                >
-                  {connector}
-                </div>
-              ))}
-              {rightConnectors.map((connector, index) => (
-                <div
-                  key={index}
-                  className='absolute text-sm'
-                  style={{ top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET - 11, right: 7 }}
-                >
-                  {connector}
-                </div>
-              ))}
-            </div>
+            <BlockNodeElement
+              data={data}
+              height={height ?? DEFAULT_BLOCK_HEIGHT}
+              selected={selected ?? false}
+              blockNameValue={blockNameValue}
+              setBlockNameValue={setBlockNameValue}
+            />
           </TooltipTrigger>
-          {!dragging && <TooltipContent side='right'>{tooltipContent}</TooltipContent>}
+          {!dragging && <TooltipContent side='right'>{documentation}</TooltipContent>}
         </Tooltip>
       </TooltipProvider>
       <div
         className='absolute -top-7'
         style={{
-          width: BLOCK_WIDTH,
+          width: DEFAULT_BLOCK_WIDTH,
         }}
       >
         <InputWithRef
@@ -127,40 +163,51 @@ export const Block = ({ selected, data, id, dragging }: BlockProps) => {
  * @param blockType: 'template' - The type of the block node
  * @returns BlockNode
  */
-export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: BlockBuilderProps) => {
-  const type = BLOCK_TYPES[variant]
-  const leftConnectors = type.leftConnectors
-  const rightConnectors = type.rightConnectors
+export const buildBlockNode = <T extends object | undefined>({
+  id,
+  posX,
+  posY,
+  handleX,
+  handleY,
+  variant,
+}: BlockBuilderProps<T>) => {
+  const type = (variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const inputConnectors = type.variables
+    .filter((variable) => variable.class === 'input')
+    .map((variable) => variable.name)
+  const outputConnectors = type.variables
+    .filter((variable) => variable.class === 'output')
+    .map((variable) => variable.name)
 
-  const leftHandles = leftConnectors.map((connector, index) =>
+  const leftHandles = inputConnectors.map((connector, index) =>
     buildHandle({
       id: `${connector}`,
       position: Position.Left,
       type: 'target',
       isConnectable: false,
       glbX: handleX,
-      glbY: handleY + index * BLOCK_CONNECTOR_Y_OFFSET,
+      glbY: handleY + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
       relX: 0,
-      relY: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
+      relY: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
       style: {
-        top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
+        top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
         left: 0,
       },
     }),
   )
 
-  const rightHandles = rightConnectors.map((connector, index) =>
+  const rightHandles = outputConnectors.map((connector, index) =>
     buildHandle({
       id: `${connector}`,
       position: Position.Right,
       type: 'source',
       isConnectable: false,
-      glbX: handleX + BLOCK_CONNECTOR_X,
-      glbY: handleY + index * BLOCK_CONNECTOR_Y_OFFSET,
-      relX: BLOCK_CONNECTOR_X,
-      relY: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
+      glbX: handleX + DEFAULT_BLOCK_CONNECTOR_X,
+      glbY: handleY + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
+      relX: DEFAULT_BLOCK_CONNECTOR_X,
+      relY: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
       style: {
-        top: BLOCK_CONNECTOR_Y + index * BLOCK_CONNECTOR_Y_OFFSET,
+        top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
         right: 0,
       },
     }),
@@ -168,18 +215,24 @@ export const buildBlockNode = ({ id, posX, posY, handleX, handleY, variant }: Bl
 
   const handles = [...leftHandles, ...rightHandles]
 
+  const blocKHeight =
+    DEFAULT_BLOCK_CONNECTOR_Y +
+    Math.max(inputConnectors.length, outputConnectors.length) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
+
   return {
     id,
     type: 'block',
     position: { x: posX, y: posY },
     data: {
-      variant,
+      variant: variant ?? DEFAULT_BLOCK_TYPE,
       handles,
+      inputHandles: leftHandles,
+      outputHandles: rightHandles,
       inputConnector: leftHandles[0],
       outputConnector: rightHandles[0],
     },
-    width: BLOCK_WIDTH,
-    height: BLOCK_HEIGHT,
+    width: DEFAULT_BLOCK_WIDTH,
+    height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
     draggable: true,
     selectable: true,
     selected: false,

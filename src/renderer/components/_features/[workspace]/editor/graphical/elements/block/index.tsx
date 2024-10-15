@@ -1,197 +1,86 @@
 import * as Switch from '@radix-ui/react-switch'
-import { LibraryCloseFolderIcon, LibraryFileIcon, MagnifierIcon } from '@root/renderer/assets'
 import { InputWithRef } from '@root/renderer/components/_atoms'
 import {
-  LibraryFile,
-  LibraryFolder,
-  LibraryRoot,
+  BlockNode,
+  BlockNodeData,
+  BlockNodeElement,
+  BlockVariant,
+  buildBlockNode,
+  DEFAULT_BLOCK_TYPE,
+} from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
+import {
   Modal,
   ModalContent,
   ModalTitle,
-  ModalTrigger,
+  // ModalTrigger,
 } from '@root/renderer/components/_molecules'
-import { ReactElement, useState } from 'react'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 
 import ArrowButtonGroup from '../arrow-button-group'
-import imageMock from '../mockImages/Group112.png'
-import image1 from '../mockImages/image1.png'
-import image2 from '../mockImages/image2.png'
+import { ModalBlockLibrary } from './library'
 
-type TreeDataChildren = {
-  key: string
-  label: string
-  icon: ReactElement
-  title: string
-  children: string
-  image: string
+type BlockElementProps<T> = {
+  isOpen: boolean
+  onOpenChange: Dispatch<SetStateAction<boolean>>
+  onClose?: () => void
+  selectedNode: BlockNode<T>
 }
 
-const lorem =
-  ' Lorem ipsum dolor sit amet consectetur adipisicing elit. Autem blanditiis voluptates eius quasi quam illum deserunt perspiciatis magnam, corrupti vel! Nesciunt nostrum maxime aliquid amet asperiores quibusdam ipsam impedit corporis?'
+const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selectedNode }: BlockElementProps<T>) => {
+  const { libraries } = useOpenPLCStore()
 
-const treeData: Array<{
-  key: string
-  label: string
-  icon: ReactElement
-  title: string
-  children: TreeDataChildren[]
-}> = [
-  {
-    key: '0',
-    label: 'P1AM_Modules',
-    icon: <LibraryCloseFolderIcon size='sm' />,
-    title: 'Module Tree',
-    children: [
-      {
-        key: '0.1',
-        label: 'P1AM_INIT',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: 1 + lorem,
-        image: imageMock,
-      },
-      {
-        key: '0.2',
-        label: 'P1_16CDR',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: 2 + lorem,
-        image: image1,
-      },
-      {
-        key: '0.3',
-        label: 'P1_08N',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: 3 + lorem,
-        image: image2,
-      },
-      {
-        key: '0.4',
-        label: 'P1_16N',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: lorem,
-        image: imageMock,
-      },
-      {
-        key: '0.5',
-        label: 'P1_16N',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: lorem,
-        image: image1,
-      },
-      {
-        key: '0.6',
-        label: 'P1_08T',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: lorem,
-        image: image2,
-      },
-      {
-        key: '0.7',
-        label: 'P1_16TR',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: lorem,
-        image: imageMock,
-      },
-      {
-        key: '0.8',
-        label: 'P1_04AD',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        children: lorem,
-        image: image1,
-      },
-    ],
-  },
-  {
-    key: '1',
-    label: 'Jaguar',
-    icon: <LibraryCloseFolderIcon size='sm' />,
-    title: 'Module Tree',
-    children: [],
-  },
-  {
-    key: '2',
-    label: 'Arduino',
-    icon: <LibraryCloseFolderIcon size='sm' />,
-    title: 'Module Tree',
-    children: [],
-  },
-  {
-    key: '3',
-    label: 'Communication',
-    icon: <LibraryCloseFolderIcon size='sm' />,
-    title: 'Module Tree',
-    children: [],
-  },
-  {
-    key: '4',
-    label: 'Sequent Microsystems',
-    icon: <LibraryCloseFolderIcon size='sm' />,
-    title: 'Module Tree',
-    children: [
-      {
-        key: '0.1',
-        label: 'P12AM_INIT',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        image: imageMock,
-        children: '',
-      },
-      {
-        key: '0.2',
-        label: 'P13_16CDR',
-        icon: <LibraryFileIcon />,
-        title: 'Module Leaf',
-        image: image1,
-        children: '',
-      },
-    ],
-  },
-]
-const filterTreeData = (filterText: string) => {
-  return treeData.reduce(
-    //acc - accumulator
-    (acc, folder) => {
-      const filteredChildren = folder.children.filter((child) => child.label.toLowerCase().includes(filterText))
-      if (filteredChildren.length > 0 || folder.label.toLowerCase().includes(filterText)) {
-        acc.push({
-          ...folder,
-          children: filteredChildren,
-        })
-      }
-      return acc
-    },
-    [] as typeof treeData,
-  )
-}
-const BlockElement = () => {
+  const [node, setNode] = useState<BlockNode<T>>(selectedNode)
+  const blockVariant = node.data.variant as BlockVariant
+
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
-  const [selectedFile, setSelectedFile] = useState<{ image: string; text: string } | null>(null)
-  const [formState, setFormState] = useState({ name: '', inputs: '', executionOrder: '' })
-  const [filterText, setFilterText] = useState('')
+  const [selectedFile, setSelectedFile] = useState<T | null>(null)
+  const [formState, setFormState] = useState<{ name: string; inputs: string; executionOrder: string }>({
+    name: blockVariant?.name || DEFAULT_BLOCK_TYPE.name,
+    inputs: blockVariant?.variables.filter((variable) => variable.class === 'input').length.toString() || '0',
+    executionOrder: '',
+  })
 
   const isFormValid = Object.values(formState).every((value) => value !== '')
+
+  useEffect(() => {
+    const [type, selectedLibrary, selectedPou] = selectedFileKey?.split('/') || []
+    if (type === 'system' && selectedLibrary && selectedPou) {
+      const library = libraries.system.find((library) => library.name === selectedLibrary)
+      const pou = library?.pous.find((pou) => pou.name === selectedPou) as T
+      setSelectedFile(pou)
+      return
+    }
+    setSelectedFile(null)
+  }, [selectedFileKey])
+
+  useEffect(() => {
+    if (selectedFile) {
+      const newNode = buildBlockNode({
+        id: node.id,
+        posX: node.position.x,
+        posY: node.position.y,
+        handleX: node.data.inputConnector?.glbPosition.x || 0,
+        handleY: node.data.inputConnector?.glbPosition.y || 0,
+        variant: selectedFile,
+      })
+      setNode({ ...newNode, data: { ...newNode.data, variant: selectedFile } })
+      const newNodeDataVariant = newNode.data.variant as BlockVariant
+      const formName: string = newNodeDataVariant.name
+      const formInputs: string = newNodeDataVariant.variables.filter((variable) => variable.class === 'input').length.toString()
+      setFormState((prevState) => ({ ...prevState, name: formName, inputs: formInputs }))
+    }
+  }, [selectedFile])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target
     setFormState((prevState) => ({ ...prevState, [id]: value }))
   }
 
-  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFilterText(e.target.value.toLowerCase())
-  }
-
   const handleClearForm = () => {
     setFormState({ name: '', inputs: '', executionOrder: '' })
     setSelectedFileKey(null)
     setSelectedFile(null)
-    setFilterText('')
   }
 
   const handleIncrement = (field: 'inputs' | 'executionOrder') => {
@@ -208,63 +97,37 @@ const BlockElement = () => {
     }))
   }
 
-  const filteredTreeData = filterTreeData(filterText)
+  const handleCloseModal = () => {
+    handleClearForm()
+    onClose && onClose()
+  }
 
   const labelStyle = 'text-sm font-medium text-neutral-950 dark:text-white'
   const inputStyle =
     'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
 
   return (
-    <Modal>
-      <ModalTrigger>Open</ModalTrigger>
-      <ModalContent onClose={handleClearForm} className='h-[739px] w-[625px] select-none flex-col gap-8 px-14 py-4'>
+    <Modal open={isOpen} onOpenChange={onOpenChange}>
+      {/* <ModalTrigger>Open</ModalTrigger> */}
+      <ModalContent
+        onClose={handleCloseModal}
+        onEscapeKeyDown={handleCloseModal}
+        onInteractOutside={handleCloseModal}
+        className='h-[739px] w-[625px] select-none flex-col gap-8 px-14 py-4'
+      >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</ModalTitle>
         <div className='flex h-[587px] w-full justify-between'>
           <div id='container-modifier-variable' className='h-full w-[236px]'>
             <div className='flex h-full w-full flex-col gap-2'>
               <label className={labelStyle}>Type:</label>
-              <div className={`relative flex items-center focus-within:border-brand ${inputStyle}`}>
-                <InputWithRef
-                  className='h-full w-full bg-inherit outline-none'
-                  id='Search-File'
-                  placeholder='Search'
-                  type='text'
-                  value={filterText}
-                  onChange={handleFilterChange}
-                />
-                <label className='relative right-0 stroke-brand' htmlFor='Search-File'>
-                  <MagnifierIcon size='sm' className='stroke-brand' />
-                </label>
-              </div>
-              <div className='border-neural-100 h-[388px] w-full rounded-lg border px-1 py-4 dark:border-neutral-850'>
-                <div className='h-full w-full overflow-auto'>
-                  <LibraryRoot>
-                    {filteredTreeData.map((data) => (
-                      <LibraryFolder
-                        key={data.key}
-                        label={data.label}
-                        initiallyOpen={false}
-                        shouldBeOpen={filterText.length > 0}
-                      >
-                        {data.children.map((child) => (
-                          <LibraryFile
-                            key={child.key}
-                            label={child.label}
-                            isSelected={selectedFileKey === `${data.key}-${child.key}`}
-                            onSelect={() => setSelectedFileKey(`${data.key}-${child.key}`)}
-                            onClick={() => {
-                              setSelectedFileKey(`${data.key}-${child.key}`)
-                              setSelectedFile({ image: child.image, text: child.children })
-                            }}
-                          />
-                        ))}
-                      </LibraryFolder>
-                    ))}
-                  </LibraryRoot>
-                </div>
-              </div>
+              <ModalBlockLibrary selectedFileKey={selectedFileKey} setSelectedFileKey={setSelectedFileKey} />
               <div className='border-neural-100 h-full max-h-[119px] overflow-hidden rounded-lg border px-2 py-4 text-xs font-normal text-neutral-950 dark:border-neutral-850 dark:text-neutral-100'>
-                <p className='h-full overflow-y-auto dark:text-neutral-100'>{selectedFile?.text}</p>
+                <p className='h-full overflow-y-auto dark:text-neutral-100'>
+                  {
+                    // @ts-expect-error - selectedFile is not null and it is a generic type of pous
+                    selectedFile ? selectedFile.documentation : null
+                  }
+                </p>
               </div>
             </div>
           </div>
@@ -330,15 +193,19 @@ const BlockElement = () => {
             </label>
             <div
               id='block-preview'
-              className='flex flex-grow items-center -center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'
+              className='flex h-[330px] items-center justify-center rounded-lg border-[2px] border-brand-dark bg-transparent dark:border-neutral-850'
             >
-              {selectedFile?.image && (
-                <img draggable='false' className='h-fit w-full select-none' src={selectedFile.image} alt='' />
-              )}
+              <BlockNodeElement
+                data={node.data as BlockNodeData<object>}
+                height={node.height || 0}
+                selected={false}
+                disabled={true}
+                scale={310 / ((node.height || 310) <= 310 ? 310 : node.height || 310)}
+              />
             </div>
           </div>
         </div>
-        <div className='flex !h-8 w-full gap-7 justify-evenly'>
+        <div className='flex !h-8 w-full justify-evenly gap-7'>
           <button
             className={`h-full w-[236px] items-center rounded-lg text-center font-medium text-white ${isFormValid ? 'bg-brand' : 'cursor-not-allowed bg-brand opacity-50'}`}
             disabled={!isFormValid}

@@ -57,7 +57,7 @@ type PLCDataType = z.infer<typeof PLCDataTypeSchema>
 const PLCVariableSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
-  class: z.enum(['input', 'output', 'inOut', 'external', 'local', 'temp', 'global']),
+  class: z.enum(['input', 'output', 'inOut', 'external', 'local', 'temp', 'global']).optional(),
   type: z.discriminatedUnion('definition', [
     z.object({
       definition: z.literal('base-type'),
@@ -88,6 +88,19 @@ const PLCVariableSchema = z.object({
 })
 
 type PLCVariable = z.infer<typeof PLCVariableSchema>
+const PLCGlobalVariableSchema = PLCVariableSchema
+type PLCGlobalVariable = z.infer<typeof PLCGlobalVariableSchema>
+
+const PLCTaskSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the task object.
+  triggering: z.enum(['Cyclic', 'Interrupt']),
+  interval: z.string(), // TODO: Must have a regex validation for this. Probably a new modal must be created to handle this.
+  priority: z.number(), // TODO: implement this validation. This must be a positive integer from 0 to 100
+})
+
+type PLCTask = z.infer<typeof PLCTaskSchema>
+
 
 const PLCFunctionSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
@@ -111,6 +124,15 @@ const PLCProgramSchema = z.object({
 })
 
 type PLCProgram = z.infer<typeof PLCProgramSchema>
+
+const PLCInstanceSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the instance object.
+  task: z.string(), // TODO: Implement this validation. This task must be one of the objects in the "tasks" array defined right above.
+  program: z.string(), // TODO: Implement this validation. This program must be one of the user's defined pou of program type.
+})
+
+type PLCInstance = z.infer<typeof PLCInstanceSchema>
 
 const PLCFunctionBlockSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
@@ -142,7 +164,13 @@ const PLCProjectDataSchema = z.object({
       }),
     ]),
   ),
-  globalVariables: z.array(PLCVariableSchema),
+  configuration: z.object({
+    resource: z.object({
+      tasks: z.array(PLCTaskSchema),
+      instances: z.array(PLCInstanceSchema),
+      globalVariables: z.array(PLCVariableSchema.omit({ class: true })),
+    }),
+  }),
 })
 
 type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
@@ -153,8 +181,11 @@ export {
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
+  PLCGlobalVariableSchema,
+  PLCInstanceSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
+  PLCTaskSchema,
   PLCVariableSchema,
 }
 
@@ -164,7 +195,10 @@ export type {
   PLCDataType,
   PLCFunction,
   PLCFunctionBlock,
+  PLCGlobalVariable,
+  PLCInstance,
   PLCProgram,
   PLCProjectData,
+  PLCTask,
   PLCVariable,
 }

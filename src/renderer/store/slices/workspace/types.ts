@@ -2,8 +2,10 @@ import {
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
+  PLCInstanceSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
+  PLCTaskSchema,
   PLCVariableSchema,
 } from '@root/types/PLC/open-plc'
 import { z } from 'zod'
@@ -31,6 +33,17 @@ const pouDTOSchema = z.discriminatedUnion('type', [
 ])
 type PouDTO = z.infer<typeof pouDTOSchema>
 
+const taskDTOSchema = z.object({
+  data: PLCTaskSchema,
+})
+
+type TaskDTO = z.infer<typeof taskDTOSchema>
+
+const instanceDTOSchema = z.object({
+  data: PLCInstanceSchema,
+})
+type InstanceDTO = z.infer<typeof instanceDTOSchema>
+
 const systemConfigsSchema = z.object({
   OS: z.enum(['win32', 'linux', 'darwin', '']),
   arch: z.enum(['x64', 'arm', '']),
@@ -46,6 +59,7 @@ const workspaceStateSchema = z.object({
     projectData: PLCProjectDataSchema,
     editingState: z.enum(['save-request', 'saved', 'unsaved']),
     systemConfigs: systemConfigsSchema,
+    recents: z.array(z.object({ lastOpenedAt: z.string(), createdAt: z.string(), path: z.string() })),
   }),
 })
 type WorkspaceState = z.infer<typeof workspaceStateSchema>
@@ -59,6 +73,7 @@ type WorkspaceResponse = z.infer<typeof workspaceResponseSchema>
 
 const workspaceActionsSchema = z.object({
   setEditingState: z.function().args(workspaceStateSchema.shape.workspace.shape.editingState).returns(z.void()),
+  setRecents: z.function().args(workspaceStateSchema.shape.workspace.shape.recents).returns(z.void()),
   setUserWorkspace: z
     .function()
     .args(workspaceStateSchema.shape.workspace.omit({ systemConfigs: true }))
@@ -100,6 +115,37 @@ const workspaceActionsSchema = z.object({
   createArrayDimension: z
     .function()
     .args(z.object({ name: z.string(), derivation: z.enum(['array', 'enumerated', 'structure']) }))
+  createTask: z
+    .function()
+    .args(taskDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
+    .returns(z.void()),
+  updateTask: z
+    .function()
+    .args(taskDTOSchema.merge(z.object({ rowId: z.number() })))
+    .returns(z.void()),
+  deleteTask: z
+    .function()
+    .args(z.object({ rowId: z.number() }))
+    .returns(z.void()),
+  rearrangeTasks: z
+    .function()
+    .args(z.object({ rowId: z.number(), newIndex: z.number() }))
+    .returns(z.void()),
+  createInstance: z
+    .function()
+    .args(instanceDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
+    .returns(z.void()),
+  updateInstance: z
+    .function()
+    .args(instanceDTOSchema.merge(z.object({ rowId: z.number() })))
+    .returns(z.void()),
+  deleteInstance: z
+    .function()
+    .args(z.object({ rowId: z.number() }))
+    .returns(z.void()),
+  rearrangeInstances: z
+    .function()
+    .args(z.object({ rowId: z.number(), newIndex: z.number() }))
     .returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
@@ -111,9 +157,20 @@ type WorkspaceSlice = WorkspaceState & {
 export {
   pouDTOSchema,
   systemConfigsSchema,
+  taskDTOSchema,
   variableDTOSchema,
   workspaceActionsSchema,
   workspaceResponseSchema,
   workspaceStateSchema,
 }
-export type { PouDTO, SystemConfigs, VariableDTO, WorkspaceActions, WorkspaceResponse, WorkspaceSlice, WorkspaceState }
+export type {
+  InstanceDTO,
+  PouDTO,
+  SystemConfigs,
+  TaskDTO,
+  VariableDTO,
+  WorkspaceActions,
+  WorkspaceResponse,
+  WorkspaceSlice,
+  WorkspaceState,
+}

@@ -1,4 +1,4 @@
-import { PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCGlobalVariable, PLCVariable } from '@root/types/PLC/open-plc'
 
 import { WorkspaceResponse } from '../types'
 
@@ -6,6 +6,9 @@ import { WorkspaceResponse } from '../types'
  * This is a validation to check if the variable name already exists.
  **/
 const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
+  return variables.some((variable) => variable.name === name)
+}
+const checkIfGlobalVariableExists = (variables: PLCGlobalVariable[], name: string) => {
   return variables.some((variable) => variable.name === name)
 }
 /**
@@ -130,5 +133,73 @@ const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Par
 
   return response
 }
+const createGlobalVariableValidation = (variables: PLCGlobalVariable[], variableName: string) => {
+  if (checkIfGlobalVariableExists(variables, variableName)) {
+    const regex = /_\d+$/
+    const filteredVariables = variables.filter((variable: PLCVariable) =>
+      variable.name.includes(variableName.replace(regex, '')),
+    )
+    const sortedVariables = filteredVariables.sort((a, b) => {
+      const matchA = a.name.match(regex)
+      const matchB = b.name.match(regex)
+      if (matchA && matchB) {
+        return parseInt(matchA[0].slice(1)) - parseInt(matchB[0].slice(1))
+      }
+      return 0
+    })
+    const biggestVariable = sortedVariables[sortedVariables.length - 1].name.match(regex)
+    let number = biggestVariable ? parseInt(biggestVariable[0].slice(1)) : 0
+    for (let i = sortedVariables.length - 1; i >= 1; i--) {
+      const previousVariable = sortedVariables[i].name.match(regex)
+      const previousNumber = previousVariable ? parseInt(previousVariable[0].slice(1)) : 0
+      const currentVariable = sortedVariables[i - 1].name.match(regex)
+      const currentNumber = currentVariable ? parseInt(currentVariable[0].slice(1)) : 0
+      if (currentNumber !== previousNumber - 1) {
+        number = currentNumber
+      }
+    }
+    const newVariableName = `${variableName.replace(regex, '')}_${number + 1}`
+    return newVariableName
+  }
+  return variableName
+}
 
-export { arrayValidation, createVariableValidation, updateVariableValidation }
+const updateGlobalVariableValidation = (
+  variables: PLCGlobalVariable[],
+  dataToBeUpdated: Partial<PLCGlobalVariable>,
+) => {
+  let response: WorkspaceResponse = { ok: true }
+
+  if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
+    const { name } = dataToBeUpdated
+    if (name === '') {
+      console.error('Global Variable name is empty')
+      response = {
+        ok: false,
+        title: 'Global Variable name is empty.',
+        message: 'Please make sure that the name is not empty.',
+      }
+      return response
+    }
+
+    if (checkIfGlobalVariableExists(variables, name)) {
+      console.error(`Global Variable "${name}" already exists`)
+      response = {
+        ok: false,
+        title: 'Global Variable already exists',
+        message: 'Please make sure that the name is unique.',
+      }
+      return response
+    }
+  }
+
+  return response
+}
+
+export {
+  arrayValidation,
+  createGlobalVariableValidation,
+  createVariableValidation,
+  updateGlobalVariableValidation,
+  updateVariableValidation,
+}

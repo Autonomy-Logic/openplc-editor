@@ -5,6 +5,7 @@ import {
   FBDIcon,
   ILIcon,
   LDIcon,
+  ResourceIcon,
   SFCIcon,
   STIcon,
   StructureIcon,
@@ -30,11 +31,13 @@ const TabIcons = {
   enumerated: <EnumIcon className='h-4 w-4 flex-shrink-0' />,
   structure: <StructureIcon className='h-4 w-4 flex-shrink-0' />,
   array: <ArrayIcon className='h-4 w-4 flex-shrink-0' />,
+  resource: <ResourceIcon className='h-4 w-4 flex-shrink-0' />,
 }
 
 const Tab = (props: ITabProps) => {
   const { fileName, fileDerivation, currentTab, handleDeleteTab, handleClickedTab, ...res } = props
-  let languageOrDerivation: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'array' | 'enumerated' | 'structure' = 'il'
+  let languageOrDerivation: 'il' | 'st' | 'resource' | 'ld' | 'sfc' | 'fbd' | 'array' | 'enumerated' | 'structure' =
+    'il'
 
   if (fileDerivation?.type === 'data-type') {
     languageOrDerivation = fileDerivation?.derivation
@@ -45,6 +48,9 @@ const Tab = (props: ITabProps) => {
     fileDerivation?.type === 'function-block'
   ) {
     languageOrDerivation = fileDerivation?.language
+  }
+  if (fileDerivation?.type === 'resource') {
+    languageOrDerivation = 'resource'
   }
   return (
     <div
@@ -58,9 +64,9 @@ const Tab = (props: ITabProps) => {
       aria-current={currentTab ? 'page' : undefined}
       {...res}
     >
-      <div className='flex gap-1 items-center h-full w-full px-3 py-2 ' onClick={() => handleClickedTab()}>
+      <div className='flex h-full w-full items-center gap-1 px-3 py-2 ' onClick={() => handleClickedTab()}>
         {TabIcons[languageOrDerivation]}
-        <span className='overflow-hidden text-ellipsis whitespace-nowrap flex-grow'>{fileName}</span>
+        <span className='flex-grow overflow-hidden text-ellipsis whitespace-nowrap'>{fileName}</span>
         <span
           aria-hidden='true'
           className={cn(currentTab ? 'bg-brand' : 'bg-transparent', 'absolute inset-x-0 top-0 z-50 h-[3px]')}

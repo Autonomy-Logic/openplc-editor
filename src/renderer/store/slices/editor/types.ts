@@ -14,6 +14,30 @@ const editorVariablesSchema = z.discriminatedUnion('display', [
   z.object({ display: z.literal('code') }),
 ])
 
+const editorGlobalVariablesSchema = z.discriminatedUnion('display', [
+  z.object({
+    display: z.literal('table'),
+    description: z.string(),
+    selectedRow: z.string(),
+  }),
+  z.object({ display: z.literal('code') }),
+])
+
+const taskSchema = z.discriminatedUnion('display', [
+  z.object({
+    display: z.literal('table'),
+    selectedRow: z.string(),
+  }),
+  z.object({ display: z.literal('code') }),
+])
+
+const instaceSchema = z.discriminatedUnion('display', [
+  z.object({
+    display: z.literal('table'),
+    selectedRow: z.string(),
+  }),
+  z.object({ display: z.literal('code') }),
+])
 /** This is a zod schema for the model.
  * It is used to validate the model if needed,
  * in most cases you can use the type inferred from it.
@@ -52,14 +76,15 @@ const editorModelSchema = z.discriminatedUnion('type', [
       derivation: z.enum(['enumerated', 'structure', 'array']),
     }),
   }),
-  /**
-   * This must be reviewed in the future to fit the resource requirements
-   */
   z.object({
     type: z.literal('plc-resource'),
     meta: z.object({
       name: z.string(),
+      path: z.string(),
     }),
+    variable: editorGlobalVariablesSchema,
+    task: taskSchema,
+    instance: instaceSchema,
   }),
 ])
 
@@ -79,19 +104,35 @@ const editorStateSchema = z.object({
 const editorActionsSchema = z.object({
   addModel: z.function().args(editorModelSchema).returns(z.void()),
   removeModel: z.function().args(z.string()).returns(z.void()),
-  updateModelVariables: z.function().args(z.object({
-    display: z.enum(['code', 'table']),
-    selectedRow: z.number().optional(),
-    classFilter: z.enum(['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']).optional(),
-    description: z.string().optional(),
-  })).returns(z.void()),
+  updateModelVariables: z
+    .function()
+    .args(
+      z.object({
+        display: z.enum(['code', 'table']),
+        selectedRow: z.number().optional(),
+        classFilter: z.enum(['All', 'Local', 'Input', 'Output', 'InOut', 'External', 'Temp']).optional(),
+        description: z.string().optional(),
+      }),
+    )
+    .returns(z.void()),
   setEditor: z.function().args(editorModelSchema).returns(z.void()),
+  updateModelTasks: z
+    .function()
+    .args(z.object({ selectedRow: z.number(), display: z.enum(['code', 'table']) }))
+    .returns(z.void()),
+  updateModelInstances: z
+    .function()
+    .args(z.object({ selectedRow: z.number(), display: z.enum(['code', 'table']) }))
+    .returns(z.void()),
   clearEditor: z.function().returns(z.void()),
   getEditorFromEditors: z.function().args(z.string()).returns(editorModelSchema.or(z.null())),
 })
 
 /** The variables, the data that we display in the app. */
 type VariablesTable = z.infer<typeof editorVariablesSchema>
+type GlobalVariablesTableType = z.infer<typeof editorGlobalVariablesSchema>
+type TaskType = z.infer<typeof taskSchema>
+type InstanceType = z.infer<typeof instaceSchema>
 /** The model, the data that we display in the app. */
 type EditorModel = z.infer<typeof editorModelSchema>
 /** The state, the source of truth that drives our app. - Concept based on Redux */
@@ -104,4 +145,13 @@ type EditorSlice = EditorState & {
 
 export { editorModelSchema, editorStateSchema }
 
-export type { EditorActions, EditorModel, EditorSlice, EditorState, VariablesTable }
+export type {
+  EditorActions,
+  EditorModel,
+  EditorSlice,
+  EditorState,
+  GlobalVariablesTableType,
+  InstanceType,
+  TaskType,
+  VariablesTable,
+}

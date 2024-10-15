@@ -104,6 +104,7 @@ const CreateEditorObject = (props: EditorModel): EditorModel => {
       return {
         type,
         meta,
+        variable: model.variable,
       }
     default:
       return {

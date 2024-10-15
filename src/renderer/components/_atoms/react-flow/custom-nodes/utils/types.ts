@@ -10,6 +10,8 @@ export type BuilderBasicProps = {
 
 export type BasicNodeData = {
   handles: CustomHandleProps[]
+  inputHandles: CustomHandleProps[]
+  outputHandles: CustomHandleProps[]
   inputConnector: CustomHandleProps | undefined
   outputConnector: CustomHandleProps | undefined
 }

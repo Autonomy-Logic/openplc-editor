@@ -1,4 +1,4 @@
-import { customNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
+import { defaultCustomNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
 import type { BuilderBasicProps } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 import { FlowState } from '@root/renderer/store/slices'
 import type { Node } from '@xyflow/react'
@@ -18,12 +18,13 @@ export const isNodeOfType = (node: Node, nodeType: string): boolean => {
   return node.type === nodeType
 }
 
-export const getNodeStyle = ({ node, nodeType }: { node?: Node; nodeType?: string }) => {
-  return customNodesStyles[node?.type ?? nodeType ?? 'mockNode']
+export const getDefaultNodeStyle = ({ node, nodeType }: { node?: Node; nodeType?: string }) => {
+  return defaultCustomNodesStyles[node?.type ?? nodeType ?? 'mockNode']
 }
 
-export const buildGenericNode = ({
+export const buildGenericNode = <T> ({
   nodeType,
+  blockType,
   id,
   posX,
   posY,
@@ -31,6 +32,7 @@ export const buildGenericNode = ({
   handleY,
 }: BuilderBasicProps & {
   nodeType: string
+  blockType?: T | undefined
 }) => {
   switch (nodeType) {
     case 'block':
@@ -40,7 +42,7 @@ export const buildGenericNode = ({
         posY,
         handleX,
         handleY,
-        variant: 'default',
+        variant: blockType ?? undefined,
       })
     case 'coil':
       return nodesBuilder.coil({

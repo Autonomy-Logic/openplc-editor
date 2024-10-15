@@ -1,12 +1,21 @@
 import {
   AdditionalFunctionBlocksLibrarySchema,
   ArduinoFunctionBlocksLibrarySchema,
+  ArithmeticLibrarySchema,
+  BitShiftLibrarySchema,
+  BitwiseLibrarySchema,
+  CharacterStringLibrarySchema,
   CommunicationBlocksLibrarySchema,
+  ComparisonLibrarySchema,
   JaguarLibrarySchema,
   MQTTLibrarySchema,
+  NumericalLibrarySchema,
   P1AMLibrarySchema,
+  SelectionLibrarySchema,
   SequentMicrosystemsModulesLibrarySchema,
   StandardFunctionBlocksLibrarySchema,
+  TimeLibrarySchema,
+  TypeConversionLibrarySchema,
 } from '@process:renderer/data/library'
 import { z } from 'zod'
 
@@ -21,6 +30,15 @@ const libraryStateSchema = z.object({
       P1AMLibrarySchema,
       SequentMicrosystemsModulesLibrarySchema,
       StandardFunctionBlocksLibrarySchema,
+      ArithmeticLibrarySchema,
+      BitShiftLibrarySchema,
+      BitwiseLibrarySchema,
+      CharacterStringLibrarySchema,
+      ComparisonLibrarySchema,
+      NumericalLibrarySchema,
+      SelectionLibrarySchema,
+      TimeLibrarySchema,
+      TypeConversionLibrarySchema,
     ]), // This is the libraries that are built-in to the system
     user: z.array(z.string()), // This is the libraries that the user has installed
   }),

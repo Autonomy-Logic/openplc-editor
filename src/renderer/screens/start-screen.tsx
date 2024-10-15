@@ -1,15 +1,17 @@
 import { IProjectServiceResponse } from '@root/main/services/project-service'
-import { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'
 import { useToast } from '../components/_features/[app]/toast/use-toast'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
+import { ProjectModal } from '../components/_features/[start]/new-project/project-modal'
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
 import { StartMainContent, StartSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
 
 const StartScreen = () => {
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const { toast } = useToast()
   const navigate = useNavigate()
   const {
@@ -18,6 +20,7 @@ const StartScreen = () => {
 
   const retrieveNewProjectData = async () => {
     const { success, data, error } = await window.bridge.createProject()
+
     if (success && data) {
       setUserWorkspace({
         editingState: 'unsaved',
@@ -39,6 +42,7 @@ const StartScreen = () => {
       })
     }
   }
+
   const handleCreateProject = () => {
     void retrieveNewProjectData()
   }
@@ -137,8 +141,8 @@ const StartScreen = () => {
             <MenuItem ghosted onClick={handleOpenProject}>
               <FolderIcon /> Open
             </MenuItem>
-            <MenuItem ghosted>
-              <VideoIcon /> Tutorials{' '}
+            <MenuItem ghosted onClick={() => setIsModalOpen(true)}>
+              <VideoIcon /> Tutorials
             </MenuItem>
           </MenuSection>
           <MenuDivider />
@@ -152,7 +156,9 @@ const StartScreen = () => {
       <StartMainContent>
         <ProjectFilterBar />
       </StartMainContent>
+      <ProjectModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </>
   )
 }
+
 export { StartScreen }

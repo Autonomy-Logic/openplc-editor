@@ -1,3 +1,4 @@
+import * as Portal from '@radix-ui/react-portal'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowState } from '@root/renderer/store/slices'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
@@ -6,6 +7,12 @@ import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, 
 
 import { FlowPanel } from '../../_atoms/react-flow'
 import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
+import { BlockNode } from '../../_atoms/react-flow/custom-nodes/block'
+import { CoilNode } from '../../_atoms/react-flow/custom-nodes/coil'
+import { ContactNode } from '../../_atoms/react-flow/custom-nodes/contact'
+import BlockElement from '../../_features/[workspace]/editor/graphical/elements/block'
+import CoilElement from '../../_features/[workspace]/editor/graphical/elements/coil'
+import ContactElement from '../../_features/[workspace]/editor/graphical/elements/contact'
 import {
   addNewElement,
   onDragElement,
@@ -22,12 +29,16 @@ type RungBodyProps = {
 }
 
 export const RungBody = ({ rung }: RungBodyProps) => {
-  const { flowActions } = useOpenPLCStore()
+  const { flowActions, libraries } = useOpenPLCStore()
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
   const [rungLocal, setRungLocal] = useState<FlowState>(rung)
   const [selectedNodes, setSelectedNodes] = useState<FlowNode[]>([])
+
+  const [modalNode, setModalNode] = useState<FlowNode | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const flowRef = useRef<HTMLDivElement>(null)
 
@@ -66,14 +77,24 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
-    updateFlowStore()
-  }, [rungLocal.nodes.length])
+    setRungLocal(rung)
+  }, [rung.nodes])
 
+  /**
+   * Update the selected nodes array when the nodes array changes
+   */
   useEffect(() => {
     const selectedNodes = rungLocal.nodes.filter((node) => node.selected)
     setSelectedNodes(selectedNodes)
-  }, [rungLocal.nodes.filter((node) => node.selected)])
+  }, [
+    rungLocal.nodes.filter(
+      (node) => node.selected && node.type !== 'placeholder' && node.type !== 'parallelPlaceholder',
+    ).length > 0,
+  ])
 
+  /**
+   * Disable dragging for all nodes when multiple nodes are selected
+   */
   useEffect(() => {
     if (selectedNodes.length > 1) {
       setRungLocal((rung) => ({
@@ -99,33 +120,23 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     }))
   }, [selectedNodes.length])
 
-  const updateFlowStore = () => {
-    if (reactFlowInstance) {
-      const flow = reactFlowInstance.toObject()
-      flowActions.setNodes({ rungId: rungLocal.id, nodes: flow.nodes })
-      flowActions.setEdges({ rungId: rungLocal.id, edges: flow.edges })
+  const handleAddNode = (newNodeType: string = 'mockNode', blockType: string | undefined) => {
+    let pou = undefined
+    if (blockType) {
+      const [type, library, pouName] = blockType.split('/')
+      if (type === 'system')
+        pou = libraries.system.find((lib) => lib.name === library)?.pous.find((p) => p.name === pouName)
     }
-  }
-
-  const handleAddNode = (newNodeType: string = 'mockNode') => {
-    const { nodes, edges } = addNewElement(rungLocal, newNodeType)
-    setRungLocal((rung) => ({ ...rung, nodes, edges }))
+    const { nodes, edges } = addNewElement(rungLocal, { newElementType: newNodeType, blockType: pou })
+    flowActions.setNodes({ rungId: rungLocal.id, nodes })
+    flowActions.setEdges({ rungId: rungLocal.id, edges })
   }
 
   const handleRemoveNode = (nodes: FlowNode[]) => {
     const { nodes: newNodes, edges: newEdges } = removeElements(rungLocal, nodes)
-    setRungLocal((rung) => ({ ...rung, nodes: newNodes, edges: newEdges }))
+    flowActions.setNodes({ rungId: rungLocal.id, nodes: newNodes })
+    flowActions.setEdges({ rungId: rungLocal.id, edges: newEdges })
   }
-
-  const onNodesChange: OnNodesChange<FlowNode> = useCallback(
-    (changes) => {
-      setRungLocal((rung) => ({
-        ...rung,
-        nodes: applyNodeChanges(changes, rung.nodes),
-      }))
-    },
-    [rungLocal],
-  )
 
   const handleNodeStartDrag = (node: FlowNode) => {
     const result = onDragStartElement(rungLocal, node)
@@ -158,6 +169,26 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     const result = onDragStopElement(rungLocal, node)
     setRungLocal((rung) => ({ ...rung, nodes: result.nodes, edges: result.edges }))
   }
+
+  const handleNodeDoubleClick = (node: FlowNode) => {
+    setModalNode(node)
+    setModalOpen(true)
+  }
+
+  const handleModalClose = () => {
+    setModalNode(null)
+    setModalOpen(false)
+  }
+
+  const onNodesChange: OnNodesChange<FlowNode> = useCallback(
+    (changes) => {
+      setRungLocal((rung) => ({
+        ...rung,
+        nodes: applyNodeChanges(changes, rung.nodes),
+      }))
+    },
+    [rungLocal],
+  )
 
   const onDragEnterViewport = useCallback<DragEventHandler>(
     (event) => {
@@ -230,7 +261,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         setRungLocal((rung) => ({ ...rung, nodes }))
         return
       }
-      handleAddNode(type)
+      const library = event.dataTransfer.getData('application/library') ?? undefined
+      handleAddNode(type, library)
     },
     [rungLocal],
   )
@@ -273,8 +305,9 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               onNodeDragStop: (_event, node) => {
                 handleNodeDragStop(node)
               },
-
-              onConnectEnd: updateFlowStore,
+              onNodeDoubleClick: (_event, node) => {
+                handleNodeDoubleClick(node)
+              },
 
               onDragEnter: onDragEnterViewport,
               onDragLeave: onDragLeaveViewport,
@@ -291,6 +324,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               zoomOnPinch: false,
               zoomOnScroll: false,
               preventScrolling: false,
+              nodeDragThreshold: 15,
 
               proOptions: {
                 hideAttribution: true,
@@ -299,6 +333,34 @@ export const RungBody = ({ rung }: RungBodyProps) => {
           />
         </div>
       </div>
+      <Portal.Root>
+        {modalNode?.type === 'block' && (
+          <BlockElement
+            onClose={handleModalClose}
+            selectedNode={modalNode as BlockNode<object>}
+            isOpen={modalOpen}
+            onOpenChange={setModalOpen}
+          />
+        )}
+        {modalNode?.type === 'contact' && (
+          <ContactElement
+            onClose={handleModalClose}
+            node={modalNode as ContactNode}
+            rungId={rungLocal.id}
+            isOpen={modalOpen}
+            onOpenChange={setModalOpen}
+          />
+        )}
+        {modalNode?.type === 'coil' && (
+          <CoilElement
+            onClose={handleModalClose}
+            node={modalNode as CoilNode}
+            rungId={rungLocal.id}
+            isOpen={modalOpen}
+            onOpenChange={setModalOpen}
+          />
+        )}
+      </Portal.Root>
     </div>
   )
 }

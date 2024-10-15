@@ -3,7 +3,14 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { WorkspaceResponse, WorkspaceSlice } from './types'
-import { createVariableValidation, updateVariableValidation } from './utils/variables'
+import { createInstanceValidation, updateInstancevalidation } from './utils/instances'
+import { createTaskValidation, updateTaskValidation } from './utils/tasks'
+import {
+  createGlobalVariableValidation,
+  createVariableValidation,
+  updateGlobalVariableValidation,
+  updateVariableValidation,
+} from './utils/variables'
 
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   workspace: {
@@ -12,7 +19,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     projectData: {
       dataTypes: [],
       pous: [],
-      globalVariables: [],
+      configuration: {
+        resource: {
+          tasks: [],
+          instances: [],
+          globalVariables: [],
+        },
+      },
       projectName: '',
     },
     systemConfigs: {
@@ -21,6 +34,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       shouldUseDarkMode: false,
       isWindowMaximized: false,
     },
+    recents: [],
     projectName: '',
   },
 
@@ -122,19 +136,19 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           const { scope } = variableToBeCreated
           switch (scope) {
             case 'global': {
-              variableToBeCreated.data.name = createVariableValidation(
-                workspace.projectData.globalVariables,
+              variableToBeCreated.data.name = createGlobalVariableValidation(
+                workspace.projectData.configuration.resource.globalVariables,
                 variableToBeCreated.data.name,
               )
               if (variableToBeCreated.rowToInsert !== undefined) {
-                workspace.projectData.globalVariables.splice(
+                workspace.projectData.configuration.resource.globalVariables.splice(
                   variableToBeCreated.rowToInsert,
                   0,
                   variableToBeCreated.data,
                 )
                 break
               }
-              workspace.projectData.globalVariables.push(variableToBeCreated.data)
+              workspace.projectData.configuration.resource.globalVariables.push(variableToBeCreated.data)
               break
             }
             case 'local': {
@@ -178,8 +192,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           const { scope } = dataToBeUpdated
           switch (scope) {
             case 'global': {
-              const validationResponse = updateVariableValidation(
-                workspace.projectData.globalVariables,
+              const validationResponse = updateGlobalVariableValidation(
+                workspace.projectData.configuration.resource.globalVariables,
                 dataToBeUpdated.data,
               )
               if (!validationResponse.ok) {
@@ -188,8 +202,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
               }
               const index = dataToBeUpdated.rowId
               if (index === -1) response = { ok: false, title: 'Variable not found', message: 'Internal error' }
-              workspace.projectData.globalVariables[index] = {
-                ...workspace.projectData.globalVariables[index],
+              workspace.projectData.configuration.resource.globalVariables[index] = {
+                ...workspace.projectData.configuration.resource.globalVariables[index],
                 ...dataToBeUpdated.data,
               }
               break
@@ -235,7 +249,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
                 console.error('Variable not found')
                 break
               }
-              workspace.projectData.globalVariables.splice(variableToBeDeleted.rowId, 1)
+              workspace.projectData.configuration.resource.globalVariables.splice(variableToBeDeleted.rowId, 1)
               break
             }
             case 'local': {
@@ -268,8 +282,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           switch (scope) {
             case 'global': {
               const { rowId, newIndex } = variableToBeRearranged
-              const [removed] = workspace.projectData.globalVariables.splice(rowId, 1)
-              workspace.projectData.globalVariables.splice(newIndex, 0, removed)
+              const [removed] = workspace.projectData.configuration.resource.globalVariables.splice(rowId, 1)
+              workspace.projectData.configuration.resource.globalVariables.splice(newIndex, 0, removed)
               break
             }
             case 'local': {
@@ -333,6 +347,202 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           if (dataExists && derivation === 'array') {
             dataExists.dimensions.push({ dimension: '' })
           }
+        }),
+      )
+    },
+    createTask: (taskToCreate): WorkspaceResponse => {
+      const response: WorkspaceResponse = { ok: true }
+
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { data, rowToInsert } = taskToCreate
+
+          data.name = createTaskValidation(workspace.projectData.configuration.resource.tasks, data.name)
+
+          if (rowToInsert !== undefined) {
+            if (rowToInsert >= 0 && rowToInsert <= workspace.projectData.configuration.resource.tasks.length) {
+              workspace.projectData.configuration.resource.tasks.splice(rowToInsert, 0, data)
+            } else {
+              console.error('Invalid row index:', rowToInsert)
+              response.ok = false
+            }
+          } else {
+            workspace.projectData.configuration.resource.tasks.push(data)
+          }
+        }),
+      )
+
+      return response
+    },
+
+    deleteTask: (taskToBeDeleted: { rowId: number }): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { rowId } = taskToBeDeleted
+
+          if (rowId < 0 || rowId >= workspace.projectData.configuration.resource.tasks.length) {
+            console.error('Invalid rowId')
+            return
+          }
+
+          workspace.projectData.configuration.resource.tasks.splice(rowId, 1)
+        }),
+      )
+    },
+
+    updateTask: (dataToBeUpdated): WorkspaceResponse => {
+      let response: WorkspaceResponse = { ok: true }
+
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { rowId } = dataToBeUpdated
+          switch (rowId) {
+            case rowId: {
+              const validationResponse = updateTaskValidation(
+                workspace.projectData.configuration.resource.tasks,
+                dataToBeUpdated.data,
+              )
+              if (!validationResponse.ok) {
+                response = validationResponse
+                break
+              }
+              const index = dataToBeUpdated.rowId
+              if (index === -1) response = { ok: false, title: 'Task not found', message: 'Internal error' }
+
+              workspace.projectData.configuration.resource.tasks[index] = {
+                ...workspace.projectData.configuration.resource.tasks[index],
+                ...dataToBeUpdated.data,
+              }
+
+              break
+            }
+            default: {
+              console.error(` ${rowId ? rowId : ''} not found or invalid params`)
+              response = { ok: false, title: 'Task not found', message: 'Task not found or invalid params' }
+              break
+            }
+          }
+        }),
+      )
+
+      return response
+    },
+
+    rearrangeTasks: (taskToBeRearranged): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { rowId, newIndex } = taskToBeRearranged
+
+          if (rowId < 0 || newIndex < 0 || rowId >= workspace.projectData.configuration.resource.tasks.length) {
+            console.error('Invalid rowId or newIndex')
+            return
+          }
+
+          const [removed] = workspace.projectData.configuration.resource.tasks.splice(rowId, 1)
+          workspace.projectData.configuration.resource.tasks.splice(newIndex, 0, removed)
+        }),
+      )
+    },
+
+    createInstance: (instanceToCreate): WorkspaceResponse => {
+      const response: WorkspaceResponse = { ok: true }
+
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { data, rowToInsert } = instanceToCreate
+
+          data.name = createInstanceValidation(workspace.projectData.configuration.resource.instances, data.name)
+
+          if (rowToInsert !== undefined) {
+            if (rowToInsert >= 0 && rowToInsert <= workspace.projectData.configuration.resource.instances.length) {
+              workspace.projectData.configuration.resource.instances.splice(rowToInsert, 0, data)
+            } else {
+              console.error('Invalid row index:', rowToInsert)
+              response.ok = false
+            }
+          } else {
+            workspace.projectData.configuration.resource.instances.push(data)
+          }
+        }),
+      )
+
+      return response
+    },
+
+    deleteInstance: (instanceToBeDeleted: { rowId: number }): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { rowId } = instanceToBeDeleted
+
+          if (rowId < 0 || rowId >= workspace.projectData.configuration.resource.instances.length) {
+            console.error('Invalid rowId')
+            return
+          }
+
+          workspace.projectData.configuration.resource.instances.splice(rowId, 1)
+        }),
+      )
+    },
+
+    updateInstance: (dataToBeUpdated): WorkspaceResponse => {
+      let response: WorkspaceResponse = { ok: true }
+
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { rowId } = dataToBeUpdated
+          switch (rowId) {
+            case rowId: {
+              const validationResponse = updateInstancevalidation(
+                workspace.projectData.configuration.resource.instances,
+                dataToBeUpdated.data,
+              )
+              if (!validationResponse.ok) {
+                response = validationResponse
+                break
+              }
+              const index = dataToBeUpdated.rowId
+              if (index === -1) response = { ok: false, title: 'Instance not found', message: 'Internal error' }
+
+              workspace.projectData.configuration.resource.instances[index] = {
+                ...workspace.projectData.configuration.resource.instances[index],
+                ...dataToBeUpdated.data,
+              }
+
+              break
+            }
+            default: {
+              console.error(` ${rowId ? rowId : ''} not found or invalid params`)
+              response = { ok: false, title: 'Instance not found', message: 'Instance not found or invalid params' }
+              break
+            }
+          }
+        }),
+      )
+
+      return response
+    },
+
+    rearrangeInstances: (instanceToBeRearranged): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const { rowId, newIndex } = instanceToBeRearranged
+
+          if (rowId < 0 || newIndex < 0 || rowId >= workspace.projectData.configuration.resource.instances.length) {
+            console.error('Invalid rowId or newIndex')
+            return
+          }
+
+          const [removed] = workspace.projectData.configuration.resource.instances.splice(rowId, 1)
+          workspace.projectData.configuration.resource.instances.splice(newIndex, 0, removed)
+        }),
+      )
+    },
+
+    setRecents: (recents): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.recents = recents
+          console.log(workspace.recents)
         }),
       )
     },

@@ -1,14 +1,14 @@
-import * as Checkbox from '@radix-ui/react-checkbox';
-import { CheckIcon } from '@radix-ui/react-icons';
-import { InputWithRef } from '@root/renderer/components/_atoms';
-import { useEffect, useState } from 'react';
+import * as Checkbox from '@radix-ui/react-checkbox'
+import { CheckIcon } from '@radix-ui/react-icons'
+import { InputWithRef } from '@root/renderer/components/_atoms'
+import { useEffect, useState } from 'react'
 
 type OptionProps = {
-  id: string;
-  label: string;
-};
+  id: string
+  label: string
+}
 
-const scopeElements = [{ value: 'whole project' }, { value: 'only elements' }];
+const scopeElements = [{ value: 'whole project' }, { value: 'only elements' }]
 
 const scopeElementsOptions = [
   { value: 'data type' },
@@ -16,7 +16,7 @@ const scopeElementsOptions = [
   { value: 'function block' },
   { value: 'program' },
   { value: 'configuration' },
-];
+]
 
 const CheckboxOption = ({
   id,
@@ -27,7 +27,7 @@ const CheckboxOption = ({
 }: OptionProps & { disabled?: boolean; checked?: boolean; onChange?: () => void }) => (
   <div className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
     <Checkbox.Root
-      className={`flex ${disabled ? 'cursor-not-allowed' : ''} h-4 w-4 appearance-none items-center justify-center rounded-sm border border-neutral-300 outline-none dark:border-neutral-850 dark:bg-neutral-400`}
+      className={`flex ${disabled ? 'cursor-not-allowed' : ''} h-4 w-4 appearance-none items-center justify-center rounded-[4px] border ${checked ? 'border-brand' : 'border-neutral-300 dark:border-neutral-850'} outline-none bg-white`}
       id={id}
       disabled={disabled}
       checked={checked}
@@ -44,9 +44,15 @@ const CheckboxOption = ({
       {label}
     </label>
   </div>
-);
+)
 
-const RadioOption = ({ id, label, name, checked, onChange }: OptionProps & { name: string; checked: boolean; onChange: () => void }) => (
+const RadioOption = ({
+  id,
+  label,
+  name,
+  checked,
+  onChange,
+}: OptionProps & { name: string; checked: boolean; onChange: () => void }) => (
   <div className='flex items-center gap-2'>
     <input
       type='radio'
@@ -60,86 +66,86 @@ const RadioOption = ({ id, label, name, checked, onChange }: OptionProps & { nam
       {label}
     </label>
   </div>
-);
+)
 
 export default function SearchInProject() {
-  const [selectedScope, setSelectedScope] = useState('whole project');
-  const [checkedOptions, setCheckedOptions] = useState<{ [key: string]: boolean }>({});
-  const [sensitiveCase, setSensitiveCase] = useState(false);
-  const [regularExpression, setRegularExpression] = useState(false);
+  const [selectedScope, setSelectedScope] = useState('whole project')
+  const [checkedOptions, setCheckedOptions] = useState<{ [key: string]: boolean }>({})
+  const [sensitiveCase, setSensitiveCase] = useState(false)
+  const [regularExpression, setRegularExpression] = useState(false)
 
   useEffect(() => {
     if (selectedScope === 'whole project') {
       const newCheckedOptions = scopeElementsOptions.reduce(
         (acc, option) => {
-          acc[option.value] = false;
-          return acc;
+          acc[option.value] = false
+          return acc
         },
         {} as { [key: string]: boolean },
-      );
-      setCheckedOptions(newCheckedOptions);
+      )
+      setCheckedOptions(newCheckedOptions)
     } else {
       const newCheckedOptions = scopeElementsOptions.reduce(
         (acc, option) => {
-          acc[option.value] = false;
-          return acc;
+          acc[option.value] = false
+          return acc
         },
         {} as { [key: string]: boolean },
-      );
-      setCheckedOptions(newCheckedOptions);
+      )
+      setCheckedOptions(newCheckedOptions)
     }
-  }, [selectedScope]);
+  }, [selectedScope])
 
   useEffect(() => {
     if (selectedScope === 'only elements') {
-      const allSelected = scopeElementsOptions.every(option => checkedOptions[option.value]);
+      const allSelected = scopeElementsOptions.every((option) => checkedOptions[option.value])
       if (allSelected) {
-        setSelectedScope('whole project');
+        setSelectedScope('whole project')
       }
     }
-  }, [checkedOptions]);
+  }, [checkedOptions])
 
   const handleCheckboxChange = (option: string) => {
     setCheckedOptions((prev) => {
-      const newCheckedOptions = { ...prev, [option]: !prev[option] };
-      return newCheckedOptions;
-    });
-  };
+      const newCheckedOptions = { ...prev, [option]: !prev[option] }
+      return newCheckedOptions
+    })
+  }
 
   const handleScopeChange = (scope: string) => {
     if (scope === 'whole project') {
       const newCheckedOptions = scopeElementsOptions.reduce(
         (acc, option) => {
-          acc[option.value] = false;
-          return acc;
+          acc[option.value] = false
+          return acc
         },
         {} as { [key: string]: boolean },
-      );
-      setCheckedOptions(newCheckedOptions);
+      )
+      setCheckedOptions(newCheckedOptions)
     } else {
       const newCheckedOptions = scopeElementsOptions.reduce(
         (acc, option) => {
-          acc[option.value] = false;
-          return acc;
+          acc[option.value] = false
+          return acc
         },
         {} as { [key: string]: boolean },
-      );
-      setCheckedOptions(newCheckedOptions);
+      )
+      setCheckedOptions(newCheckedOptions)
     }
-    setSelectedScope(scope);
-  };
+    setSelectedScope(scope)
+  }
 
   return (
     <div className='flex h-full w-full flex-col gap-8'>
       <div className='flex h-[57px] w-full gap-6'>
         <div className='flex w-full flex-col justify-between'>
-          <p className='text-cp-base font-medium text-neutral-950 dark:text-white'>Pattern to Search</p>
+          <p className='text-base font-medium text-neutral-950 dark:text-white'>Pattern to Search</p>
           <InputWithRef className='h-[30px] w-full rounded-lg border border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-100' />
         </div>
         <div className='flex flex-col justify-between'>
           <CheckboxOption
-            id='sensitive-case'
-            label='Sensitive case'
+            id='case-sensitive'
+            label='Case Sensitive'
             checked={sensitiveCase}
             onChange={() => setSensitiveCase(!sensitiveCase)}
           />
@@ -185,13 +191,13 @@ export default function SearchInProject() {
         </div>
       </div>
       <div className='flex !h-8 w-full gap-6'>
-        <button className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'>
-          Locate
-        </button>
         <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
           Close
         </button>
+        <button className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'>
+          Find
+        </button>
       </div>
     </div>
-  );
+  )
 }

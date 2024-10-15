@@ -1,4 +1,4 @@
-import { TitleBar } from '@root/renderer/components/_organisms/titlebar'
+import { TitleBar } from '@root/renderer/components/_organisms/title-bar'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { ReactNode, useEffect, useState } from 'react'
@@ -10,12 +10,15 @@ import Toaster from '../_features/[app]/toast/toaster'
 const AppLayout = (): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
-    workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow },
+    workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecents },
   } = useOpenPLCStore()
 
   useEffect(() => {
     const getUserSystemProps = async () => {
       const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
+      const recents = await window.bridge.retrieveRecents()
+
+      setRecents(recents)
       setSystemConfigs({
         OS,
         arch: architecture,

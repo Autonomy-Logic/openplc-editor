@@ -65,7 +65,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
 }
 
 type IProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
-  branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'device'
+  branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'resource' | 'device'
   children?: ReactNode
 }
 
@@ -74,6 +74,7 @@ const BranchSources = {
   function: { BranchIcon: FunctionIcon, label: 'Functions' },
   'function-block': { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
   program: { BranchIcon: ProgramIcon, label: 'Programs' },
+  resource: { BranchIcon: ResourceIcon, label: 'Resource' },
   device: { BranchIcon: DeviceIcon, label: 'Device' },
 }
 const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranchProps) => {
@@ -92,7 +93,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
   return (
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
       <div
-        className='flex w-full cursor-pointer flex-row items-center py-1 pl-[20px] hover:bg-slate-50 dark:hover:bg-neutral-900'
+        className='flex w-full cursor-pointer flex-row items-center gap-1 py-1 pl-[18px] hover:bg-slate-50 dark:hover:bg-neutral-900'
         onClick={hasAssociatedPou ? handleBranchVisibility : undefined}
       >
         {hasAssociatedPou ? (
@@ -105,10 +106,12 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
         ) : (
           <div className='w-[22px]' />
         )}
-        <BranchIcon />
+        <div className='h-5 w-5'>
+          <BranchIcon size='sm' />
+        </div>
         <span
           className={cn(
-            'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+            'truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
         >
