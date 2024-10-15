@@ -13,6 +13,7 @@ type CoilElementProps = {
 
 const CoilElement = ({ isOpen, onOpenChange, onClose, node, rungId }: CoilElementProps) => {
   const {
+    editor,
     flowActions: { updateNode },
   } = useOpenPLCStore()
 
@@ -43,6 +44,7 @@ const CoilElement = ({ isOpen, onOpenChange, onClose, node, rungId }: CoilElemen
         },
       },
       rungId,
+      editorName: editor.meta.name,
     })
     handleCloseModal()
   }

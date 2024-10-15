@@ -1,5 +1,5 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
-import { WorkspaceResponse } from '@root/renderer/store/slices/workspace/types'
+import { ProjectResponse } from '@root/renderer/store/slices/project'
 import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'
@@ -12,7 +12,7 @@ declare module '@tanstack/react-table' {
   // This is a helper interface that adds the `updateData` property to the table meta.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface TableMeta<TData extends RowData> {
-    updateData: (rowIndex: number, columnId: string, value: unknown) => WorkspaceResponse
+    updateData: (rowIndex: number, columnId: string, value: unknown) => ProjectResponse
   }
 }
 

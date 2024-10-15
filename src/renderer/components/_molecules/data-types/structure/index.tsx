@@ -45,8 +45,8 @@ const columns = [
 
 const StructureDataType = () => {
   const {
-    workspace: {
-      projectData: { dataTypes },
+    project: {
+      data: { dataTypes },
     },
   } = useOpenPLCStore()
 

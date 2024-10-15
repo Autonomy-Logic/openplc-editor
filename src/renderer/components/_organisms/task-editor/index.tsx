@@ -14,15 +14,15 @@ const TaskEditor = () => {
   const ROWS_NOT_SELECTED = -1
   const {
     editor,
-    workspace: {
-      projectData: {
+    project: {
+      data: {
         configuration: {
           resource: { tasks },
         },
-      },
+      }
     },
     editorActions: { updateModelTasks },
-    workspaceActions: { createTask, rearrangeTasks, deleteTask },
+    projectActions: { createTask, rearrangeTasks, deleteTask },
   } = useOpenPLCStore()
 
   const [taskData, setTaskData] = useState<PLCTask[]>([])

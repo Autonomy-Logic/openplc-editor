@@ -9,10 +9,11 @@ import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
 const Project = () => {
   const {
-    workspace: {
-      projectData: { pous, dataTypes, projectName, configuration },
+    project: {
+      meta: { name: projectName },
+      data: { pous, dataTypes, configuration },
     },
-    workspaceActions: { updateProjectName },
+    projectActions: { updateMetaName },
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
@@ -21,6 +22,7 @@ const Project = () => {
     updateTabs(tabToBeCreated)
 
     const editor = getEditorFromEditors(tabToBeCreated.name)
+    console.log(editor)
     if (!editor) {
       const model = CreateEditorObjectFromTab(tabToBeCreated)
       addModel(model)
@@ -37,7 +39,7 @@ const Project = () => {
   const handleBlur = () => {
     setIsEditing(false)
     if (inputValue !== projectName) {
-      updateProjectName(inputValue)
+      updateMetaName(inputValue)
     }
   }
   useEffect(() => {

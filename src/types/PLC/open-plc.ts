@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { zodFlowSchema } from '../../renderer/store/slices/flow/types'
+
 const baseTypeSchema = z.enum([
   'bool',
   'sint',
@@ -123,7 +125,6 @@ const PLCVariableSchema = z.object({
 //   debug: false,
 // };
 
-
 // PLCVariableSchema.parse(variable);
 
 type PLCVariable = z.infer<typeof PLCVariableSchema>
@@ -140,6 +141,28 @@ const PLCTaskSchema = z.object({
 
 type PLCTask = z.infer<typeof PLCTaskSchema>
 
+const bodySchema = z.discriminatedUnion('language', [
+  z.object({
+    language: z.literal('il'),
+    value: z.string(),
+  }),
+  z.object({
+    language: z.literal('st'),
+    value: z.string(),
+  }),
+  z.object({
+    language: z.literal('ld'),
+    value: zodFlowSchema,
+  }),
+  z.object({
+    language: z.literal('sfc'),
+    value: z.string(),
+  }),
+  z.object({
+    language: z.literal('fbd'),
+    value: z.string(),
+  }),
+])
 
 const PLCFunctionSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
@@ -147,7 +170,7 @@ const PLCFunctionSchema = z.object({
   returnType: z.enum(['BOOL', 'INT', 'DINT']),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
-  body: z.string(),
+  body: bodySchema,
   documentation: z.string(),
 })
 
@@ -158,7 +181,7 @@ const PLCProgramSchema = z.object({
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
-  body: z.string(),
+  body: bodySchema,
   documentation: z.string(),
 })
 
@@ -178,14 +201,13 @@ const PLCFunctionBlockSchema = z.object({
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
-  body: z.string(),
+  body: bodySchema,
   documentation: z.string(),
 })
 
 type PLCFunctionBlock = z.infer<typeof PLCFunctionBlockSchema>
 
 const PLCProjectDataSchema = z.object({
-  projectName: z.string(),
   dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(
     z.discriminatedUnion('type', [
@@ -214,8 +236,23 @@ const PLCProjectDataSchema = z.object({
 
 type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
+const PLCProjectMetaSchema = z.object({
+  name: z.string(),
+  type: z.enum(['plc-project']),
+})
+
+type PLCProjectMeta = z.infer<typeof PLCProjectMetaSchema>
+
+const PLCProjectSchema = z.object({
+  meta: PLCProjectMetaSchema,
+  data: PLCProjectDataSchema,
+})
+
+type PLCProject = z.infer<typeof PLCProjectSchema>
+
 export {
   baseTypeSchema,
+  bodySchema,
   PLCDataTypeDerivationSchema,
   PLCDataTypeSchema,
   PLCDataTypeStructureElementSchema,
@@ -225,6 +262,8 @@ export {
   PLCInstanceSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
+  PLCProjectMetaSchema,
+  PLCProjectSchema,
   PLCTaskSchema,
   PLCVariableSchema,
 }
@@ -238,7 +277,9 @@ export type {
   PLCGlobalVariable,
   PLCInstance,
   PLCProgram,
+  PLCProject,
   PLCProjectData,
+  PLCProjectMeta,
   PLCTask,
   PLCVariable,
 }

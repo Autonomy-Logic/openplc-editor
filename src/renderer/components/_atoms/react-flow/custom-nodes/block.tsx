@@ -233,6 +233,10 @@ export const buildBlockNode = <T extends object | undefined>({
     },
     width: DEFAULT_BLOCK_WIDTH,
     height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
+    measured: {
+      width: DEFAULT_BLOCK_WIDTH,
+      height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT
+    },
     draggable: true,
     selectable: true,
     selected: false,

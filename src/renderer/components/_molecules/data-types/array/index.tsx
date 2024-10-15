@@ -10,8 +10,8 @@ import { ArrayDTInitialValueContainer } from './initial-value'
 
 const ArrayDataType = () => {
   const {
-    workspace: {
-      projectData: { dataTypes },
+    project: {
+      data: { dataTypes },
     },
   } = useOpenPLCStore()
 

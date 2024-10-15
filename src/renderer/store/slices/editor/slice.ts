@@ -25,6 +25,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           state.editors = state.editors.filter((model) => model.meta.name !== name)
         }),
       ),
+
     updateModelVariables: (variables) =>
       setState(
         produce((state: EditorState) => {
@@ -115,6 +116,42 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           }
         }),
       ),
+
+    updateModelLadder: ({ openRung }) =>
+      setState(
+        produce((state: EditorState) => {
+          const { editor } = state
+          if (editor.type === 'plc-graphical' && editor.graphical.language === 'ld') {
+            if (openRung) {
+              const { rungId, open } = openRung
+              const rung = editor.graphical.openedRungs.find((rung) => rung.rungId === rungId)
+              if (rung) {
+                editor.graphical.openedRungs = editor.graphical.openedRungs.map((rung) => {
+                  if (rung.rungId === rungId) {
+                    return {
+                      ...rung,
+                      open,
+                    }
+                  }
+                  return rung
+                })
+              }
+              editor.graphical.openedRungs.push({
+                rungId,
+                open,
+              })
+            }
+          }
+        }),
+      ),
+    getIsRungOpen: ({ rungId }) => {
+      const { editor } = getState()
+      if (editor.type === 'plc-graphical' && editor.graphical.language === 'ld') {
+        const rung = editor.graphical.openedRungs.find((rung) => rung.rungId === rungId)
+        if (rung) return rung.open
+      }
+      return false
+    },
 
     setEditor: (newEditor) =>
       setState(
