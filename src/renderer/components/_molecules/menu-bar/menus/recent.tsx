@@ -16,7 +16,9 @@ export const RecentMenu = () => {
     tabsActions: { clearTabs },
   } = useOpenPLCStore()
   const { TRIGGER, CONTENT, ITEM } = MenuClasses
+
   const [recentProjects, setRecentProjects] = useState(recents)
+  const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
 
   const getUserRecentProjects = async () => {
     const recentProjects = await window.bridge.retrieveRecents()
@@ -26,6 +28,63 @@ export const RecentMenu = () => {
   useEffect(() => {
     void getUserRecentProjects()
   }, [recents])
+
+  const compareLastOpened = (lastOpenedAt: string) => {
+    const currentTime = new Date()
+    const lastOpenedDate = new Date(lastOpenedAt)
+
+    const differenceInMs = currentTime.getTime() - lastOpenedDate.getTime()
+
+    const differenceInMinutes = Math.floor(differenceInMs / (1000 * 60))
+    const differenceInHours = Math.floor(differenceInMs / (1000 * 60 * 60))
+    const differenceInDays = Math.floor(differenceInMs / (1000 * 60 * 60 * 24))
+
+    if (differenceInMinutes < 60) {
+      return `${differenceInMinutes} minutes ago`
+    } else if (differenceInHours < 24) {
+      return `${differenceInHours} hours ago`
+    } else {
+      return `${differenceInDays} days ago`
+    }
+  }
+
+  const updateProjectTimes = () => {
+    const updatedTimes = recentProjects.reduce(
+      (acc, project) => {
+        acc[project.path] = compareLastOpened(project.lastOpenedAt)
+        return acc
+      },
+      {} as { [key: string]: string },
+    )
+
+    setProjectTimes(updatedTimes)
+  }
+
+  useEffect(() => {
+    updateProjectTimes()
+
+    const timers = recentProjects.map((project) => {
+      const lastOpenedDate = new Date(project.lastOpenedAt)
+      const now = new Date()
+
+      const timeSinceLastOpened = now.getTime() - lastOpenedDate.getTime()
+      const timeUntilNextMinute = 60000 - (timeSinceLastOpened % 60000)
+
+      const timerId = setTimeout(() => {
+        updateProjectTimes()
+
+        setInterval(() => {
+          updateProjectTimes()
+        }, 60000)
+      }, timeUntilNextMinute)
+
+      return timerId
+    })
+
+    return () => {
+      timers.forEach((timerId) => clearTimeout(timerId))
+    }
+  }, [recentProjects])
 
   const handleOpenProject = async (projectPath: string) => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
@@ -79,7 +138,7 @@ export const RecentMenu = () => {
             >
               <RecentProjectIcon />
               <span className='flex-1 overflow-hidden capitalize'>{project.path}</span>
-              <span className='text-cp-sm font-normal text-neutral-400'>edited 0 minute ago</span>
+              <span className='text-cp-sm font-normal text-neutral-400'>{projectTimes[project.path]}</span>
             </MenuPrimitive.Item>
           ))}
         </MenuPrimitive.Content>
