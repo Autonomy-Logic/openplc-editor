@@ -16,7 +16,7 @@ const StartScreen = () => {
   const { toast } = useToast()
   const navigate = useNavigate()
   const {
-    workspaceActions: { setEditingState, setRecents },
+    workspaceActions: { setEditingState },
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
@@ -28,7 +28,6 @@ const StartScreen = () => {
     if (success && data) {
       clearTabs()
       setEditingState('unsaved')
-      setRecents([])
       setProject({
         meta: {
           name: data.content.meta.name,
@@ -61,7 +60,6 @@ const StartScreen = () => {
     if (success && data) {
       clearTabs()
       setEditingState('unsaved')
-      setRecents([])
       setProject({
         meta: {
           name: data.content.meta.name,
@@ -104,7 +102,6 @@ const StartScreen = () => {
         if (data) {
           clearTabs()
           setEditingState('unsaved')
-          setRecents([])
           setProject({
             meta: {
               name: data.content.meta.name,
@@ -134,7 +131,6 @@ const StartScreen = () => {
         if (data) {
           clearTabs()
           setEditingState('unsaved')
-          setRecents([])
           setProject({
             meta: {
               name: data.content.meta.name,
