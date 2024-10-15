@@ -10,7 +10,8 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
   const {
     workspace: { recents },
     editorActions: { clearEditor },
-    workspaceActions: { setUserWorkspace },
+    workspaceActions: { setEditingState, setRecents },
+    projectActions: { setProject },
     tabsActions: { clearTabs },
   } = useOpenPLCStore()
   const navigate = useNavigate()
@@ -88,12 +89,15 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
 
     if (success && data) {
-      setUserWorkspace({
-        editingState: 'unsaved',
-        projectPath: data.meta.path,
-        projectData: data.content,
-        projectName: 'new-project',
-        recents: [],
+      setEditingState('unsaved')
+      setRecents([])
+      setProject({
+        meta: {
+          name: data.content.meta.name,
+          type: data.content.meta.type,
+          path: data.meta.path,
+        },
+        data: data.content.data,
       })
       clearEditor()
       clearTabs()
