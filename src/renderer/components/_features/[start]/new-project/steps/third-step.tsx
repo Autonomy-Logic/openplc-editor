@@ -24,7 +24,6 @@ const Step3 = ({ onPrev, onClose }: { onPrev: () => void; onClose: () => void })
   const [intervalValue, setIntervalValue] = useState('T#20ms')
 
   const handleFormSubmit: SubmitHandler<FormData> = (data) => {
-
     const allData = {
       ...projectData,
       language: data.language,
@@ -37,16 +36,16 @@ const Step3 = ({ onPrev, onClose }: { onPrev: () => void; onClose: () => void })
 
   return (
     <>
-      <div className='relative flex items-center justify-center pt-2 select-none'>
-        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white text-blue-500'>
+      <div className='relative flex select-none items-center justify-center pt-2'>
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-blue-500 font-bold text-white'>
           1
         </div>
         <div className='h-[2px] w-12 bg-blue-300'></div>
-        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white text-blue-500'>
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-blue-500 font-bold text-white'>
           2
         </div>
         <div className='h-[2px] w-12 bg-blue-300'></div>
-        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-blue-500 font-bold text-white'>
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white dark:bg-neutral-950 text-blue-500'>
           3
         </div>
       </div>
@@ -56,10 +55,7 @@ const Step3 = ({ onPrev, onClose }: { onPrev: () => void; onClose: () => void })
           <h2 className=' select-none text-center text-lg font-semibold text-neutral-900 dark:text-white'>
             Choose the language for the base program:
           </h2>
-          <div
-            id='pou-language-form-container'
-            className='flex w-full max-w-sm flex-col items-center rounded-md  p-4 '
-          >
+          <div id='pou-language-form-container' className='flex w-full max-w-sm flex-col items-center rounded-md  p-4 '>
             <Controller
               name='language'
               control={control}

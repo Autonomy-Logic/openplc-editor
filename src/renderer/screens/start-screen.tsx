@@ -10,24 +10,32 @@ import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
 import { StartMainContent, StartSideContent } from '../components/_templates'
 import DisplayRecentProjects from '../components/refactor/display-recent-projects'
 import { useOpenPLCStore } from '../store'
+import { FlowType } from '../store/slices/flow/types'
 
 const StartScreen = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const { toast } = useToast()
   const navigate = useNavigate()
   const {
-    workspaceActions: { setUserWorkspace },
+    workspaceActions: { setEditingState },
+    projectActions: { setProject },
+    tabsActions: { clearTabs },
+    flowActions: { addFlow },
   } = useOpenPLCStore()
 
   const retrieveNewProjectData = async () => {
     const { success, data, error } = await window.bridge.createProject()
 
     if (success && data) {
-      setUserWorkspace({
-        editingState: 'unsaved',
-        projectPath: data.meta.path,
-        projectData: data.content,
-        projectName: 'new-project',
+      clearTabs()
+      setEditingState('unsaved')
+      setProject({
+        meta: {
+          name: data.content.meta.name,
+          type: data.content.meta.type,
+          path: data.meta.path,
+        },
+        data: data.content.data,
       })
       navigate('/workspace')
       toast({
@@ -51,12 +59,24 @@ const StartScreen = () => {
   const retrieveOpenProjectData = async () => {
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
-      setUserWorkspace({
-        editingState: 'unsaved',
-        projectPath: data.meta.path,
-        projectData: data.content,
-        projectName: 'new-project',
+      clearTabs()
+      setEditingState('unsaved')
+      setProject({
+        meta: {
+          name: data.content.meta.name,
+          type: data.content.meta.type,
+          path: data.meta.path,
+        },
+        data: data.content.data,
       })
+
+      const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
+      if (ladderPous.length) {
+        ladderPous.forEach((pou) => {
+          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+        })
+      }
+
       navigate('/workspace')
       toast({
         title: 'Project opened!',
@@ -81,11 +101,15 @@ const StartScreen = () => {
       window.bridge.createProjectAccelerator((_event, response: IProjectServiceResponse) => {
         const { data, error } = response
         if (data) {
-          setUserWorkspace({
-            editingState: 'unsaved',
-            projectPath: data.meta.path,
-            projectData: data.content,
-            projectName: 'new-project',
+          clearTabs()
+          setEditingState('unsaved')
+          setProject({
+            meta: {
+              name: data.content.meta.name,
+              type: data.content.meta.type,
+              path: data.meta.path,
+            },
+            data: data.content.data,
           })
           navigate('/workspace')
           toast({
@@ -106,12 +130,24 @@ const StartScreen = () => {
       window.bridge.openProjectAccelerator((_event, response: IProjectServiceResponse) => {
         const { data, error } = response
         if (data) {
-          setUserWorkspace({
-            editingState: 'unsaved',
-            projectPath: data.meta.path,
-            projectData: data.content,
-            projectName: 'new-project',
+          clearTabs()
+          setEditingState('unsaved')
+          setProject({
+            meta: {
+              name: data.content.meta.name,
+              type: data.content.meta.type,
+              path: data.meta.path,
+            },
+            data: data.content.data,
           })
+
+          const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
+          if (ladderPous.length) {
+            ladderPous.forEach((pou) => {
+              if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+            })
+          }
+
           navigate('/workspace')
           toast({
             title: 'Project opened!',

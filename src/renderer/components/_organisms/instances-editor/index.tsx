@@ -14,15 +14,15 @@ const InstancesEditor = () => {
   const ROWS_NOT_SELECTED = -1
   const {
     editor,
-    workspace: {
-      projectData: {
+    project: {
+      data: {
         configuration: {
           resource: { instances },
         },
       },
     },
     editorActions: { updateModelInstances },
-    workspaceActions: { createInstance, rearrangeInstances, deleteInstance },
+    projectActions: { createInstance, rearrangeInstances, deleteInstance },
   } = useOpenPLCStore()
 
   const [instanceData, setInstanceData] = useState<PLCInstance[]>([])

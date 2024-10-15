@@ -99,6 +99,10 @@ export const builderPlaceholderNode = ({
       width: DEFAULT_PLACEHOLDER_WIDTH,
       height: DEFAULT_PLACEHOLDER_HEIGHT,
     },
+    measured: {
+      width: DEFAULT_PLACEHOLDER_WIDTH,
+      height: DEFAULT_PLACEHOLDER_HEIGHT,
+    },
     draggable: false,
     selectable: true,
     selected: false

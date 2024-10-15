@@ -36,12 +36,13 @@ const Card = (props: ICardProps): ReactNode => {
   } = useForm<IPouFormProps>()
   const {
     pouActions: { create },
-    workspaceActions: { createDatatype },
+    projectActions: { createDatatype },
   } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
+
   const submitData: SubmitHandler<IPouFormProps> = (data) => {
     try {
-      const pouWasCreated = create(data)
+      const pouWasCreated = create.pou(data)
       if (!pouWasCreated) throw new TypeError()
       toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
       closeContainer((prev) => !prev)
@@ -97,7 +98,7 @@ const Card = (props: ICardProps): ReactNode => {
                   </p>
                 </div>
                 <div
-                  onClick={() => handleCreateDatatype('enum')}
+                  onClick={() => handleCreateDatatype('enumerated')}
                   className='relative flex h-7 w-full cursor-pointer select-none items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 dark:hover:bg-neutral-900'
                 >
                   <EnumIcon />
@@ -106,7 +107,7 @@ const Card = (props: ICardProps): ReactNode => {
                   </p>
                 </div>
                 <div
-                  onClick={() => handleCreateDatatype('struct')}
+                  onClick={() => handleCreateDatatype('structure')}
                   className='relative flex h-7 w-full cursor-pointer select-none items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 dark:hover:bg-neutral-900'
                 >
                   <StructureIcon />

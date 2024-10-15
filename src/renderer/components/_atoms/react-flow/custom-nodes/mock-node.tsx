@@ -141,6 +141,10 @@ export const buildMockNode = ({
   },
   width: 150,
   height: 40,
+  measured: {
+    width: 150,
+    height: 40,
+  },
   draggable: false,
   selectable: true,
 })

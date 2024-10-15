@@ -12,8 +12,9 @@ export const RecentMenu = () => {
   const {
     workspace: { recents },
     editorActions: { clearEditor },
-    workspaceActions: { setUserWorkspace },
+    workspaceActions: { setEditingState, setRecents },
     tabsActions: { clearTabs },
+    projectActions: { setProject },
   } = useOpenPLCStore()
   const { TRIGGER, CONTENT, ITEM } = MenuClasses
 
@@ -90,15 +91,18 @@ export const RecentMenu = () => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
 
     if (success && data) {
-      setUserWorkspace({
-        editingState: 'unsaved',
-        projectPath: data.meta.path,
-        projectData: data.content,
-        projectName: 'new-project',
-        recents: [],
-      })
       clearEditor()
       clearTabs()
+      setEditingState('unsaved')
+      setRecents([])
+      setProject({
+        meta: {
+          name: data.content.meta.name,
+          type: data.content.meta.type,
+          path: data.meta.path,
+        },
+        data: data.content.data,
+      })
       toast({
         title: 'Project opened!',
         description: 'Your project was opened and loaded.',

@@ -1,6 +1,6 @@
 import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
 import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
-import type { FlowState } from '@root/renderer/store/slices'
+import type { RungState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
 import { isNodeOfType } from './nodes'
@@ -11,7 +11,7 @@ type ConnectionOptions = {
 }
 
 export const checkIfConnectedInParallel = (
-  rung: FlowState,
+  rung: RungState,
   node: Node,
 ): { parentNode: Node; connectedInParallel: boolean } => {
   const connectedInParallel = rung.edges.filter((edge) => edge.target === node.id)
@@ -34,7 +34,7 @@ export const removeEdge = (edges: Edge[], edgeId: string): Edge[] => {
 }
 
 export const connectNodes = (
-  rung: FlowState,
+  rung: RungState,
   sourceNodeId: string,
   targetNodeId: string,
   type: 'serial' | 'parallel',
@@ -86,7 +86,7 @@ export const connectNodes = (
 }
 
 export const disconnectNodes = (
-  rung: FlowState,
+  rung: RungState,
   sourceNodeId: string,
   targetNodeId: string,
   _options?: ConnectionOptions,

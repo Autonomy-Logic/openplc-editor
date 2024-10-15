@@ -68,6 +68,10 @@ export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY
     },
     width: DEFAULT_POWER_RAIL_WIDTH,
     height: DEFAULT_POWER_RAIL_HEIGHT,
+    measured: {
+      width: DEFAULT_POWER_RAIL_WIDTH,
+      height: DEFAULT_POWER_RAIL_HEIGHT,
+    },
     draggable: false,
     selectable: false,
     selected: false,

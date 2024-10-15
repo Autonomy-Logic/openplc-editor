@@ -2,7 +2,7 @@ import { nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom
 import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
 import { PlaceholderNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/placeholder'
 import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
-import type { FlowState } from '@root/renderer/store/slices'
+import type { RungState } from '@root/renderer/store/slices'
 import type { Edge, Node, ReactFlowInstance } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 import { toInteger } from 'lodash'
@@ -20,7 +20,7 @@ const getPreviousElement = (nodes: Node[], nodeIndex?: number) => {
 }
 
 const getPreviousElementsByEdges = (
-  rung: FlowState,
+  rung: RungState,
   node: Node,
 ): { nodes: Node[] | undefined; edges: Edge[] | undefined } => {
   const edges = rung.edges.filter((edge) => edge.target === node.id)
@@ -182,7 +182,7 @@ const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: [number
   return newRail
 }
 
-const updateDiagramElementsPosition = (rung: FlowState, defaultBounds: [number, number]) => {
+const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [number, number]) => {
   const { nodes } = rung
   const newNodes: Node[] = []
 
@@ -363,7 +363,7 @@ const updateDiagramElementsPosition = (rung: FlowState, defaultBounds: [number, 
 /**
  * Parallel functions
  */
-const findParallelsInRung = (rung: FlowState) => {
+const findParallelsInRung = (rung: RungState) => {
   const parallels: Node[] = []
   let isAnotherParallel = true
   let parallel: ParallelNode | undefined = undefined
@@ -385,7 +385,7 @@ const findParallelsInRung = (rung: FlowState) => {
   return parallels as ParallelNode[]
 }
 
-const findDeepestParallelInsideParallel = (rung: FlowState, parallel: Node) => {
+const findDeepestParallelInsideParallel = (rung: RungState, parallel: Node) => {
   const parallelIndex = rung.nodes.findIndex((node) => node.id === parallel.id)
   for (let i = parallelIndex; i < rung.nodes.length; i++) {
     const node = rung.nodes[i]
@@ -397,7 +397,7 @@ const findDeepestParallelInsideParallel = (rung: FlowState, parallel: Node) => {
 }
 
 const findAllParallelsDepthAndNodes = (
-  rung: FlowState,
+  rung: RungState,
   openParallel: ParallelNode,
   depth: number = 0,
   parentNode: ParallelNode | undefined = undefined,
@@ -477,7 +477,7 @@ const findAllParallelsDepthAndNodes = (
   return objectParallel
 }
 
-const getDeepestNodesInsideParallels = (rung: FlowState) => {
+const getDeepestNodesInsideParallels = (rung: RungState) => {
   const parallels = findParallelsInRung(rung)
   const nodes: Node[] = []
   parallels.forEach((parallel) => {
@@ -488,7 +488,7 @@ const getDeepestNodesInsideParallels = (rung: FlowState) => {
   return nodes
 }
 
-const getNodesInsideAllParallels = (rung: FlowState) => {
+const getNodesInsideAllParallels = (rung: RungState) => {
   const closeParallels = rung.nodes.filter(
     (node) => node.type === 'parallel' && (node as ParallelNode).data.type === 'close',
   )
@@ -500,7 +500,7 @@ const getNodesInsideAllParallels = (rung: FlowState) => {
   return nodes
 }
 
-const getNodesInsideParallel = (rung: FlowState, closeParallelNode: Node) => {
+const getNodesInsideParallel = (rung: RungState, closeParallelNode: Node) => {
   const openParallelNode = rung.nodes.find(
     (node) => node.id === closeParallelNode.data.parallelOpenReference,
   ) as ParallelNode
@@ -524,7 +524,7 @@ const getNodesInsideParallel = (rung: FlowState, closeParallelNode: Node) => {
   return { serial, parallel }
 }
 
-const removeEmptyParallelConnections = (rung: FlowState) => {
+const removeEmptyParallelConnections = (rung: RungState) => {
   const { nodes, edges } = rung
 
   let newNodes = [...nodes]
@@ -656,7 +656,7 @@ const removeEmptyParallelConnections = (rung: FlowState) => {
 }
 
 const startParallelConnectionByNodeType = <T>(
-  rung: FlowState,
+  rung: RungState,
   node: { newElementType: string; blockType: T | undefined },
   placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
 ) => {
@@ -828,7 +828,7 @@ const startParallelConnectionByNodeType = <T>(
 }
 
 const startParallelConnectionKeepingTheNode = (
-  rung: FlowState,
+  rung: RungState,
   node: Node,
   placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
 ) => {
@@ -996,7 +996,7 @@ const startParallelConnectionKeepingTheNode = (
  * Serial functions
  */
 const appendSerialConnectionByNodeType = <T>(
-  rung: FlowState,
+  rung: RungState,
   node: { newElementType: string; blockType: T | undefined },
   placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
 ) => {
@@ -1048,7 +1048,7 @@ const appendSerialConnectionByNodeType = <T>(
 }
 
 const appendSerialConnectionKeepingTheNode = (
-  rung: FlowState,
+  rung: RungState,
   node: Node,
   placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
 ) => {
@@ -1097,7 +1097,7 @@ const appendSerialConnectionKeepingTheNode = (
  * Exported functions to control the rung elements
  */
 export const addNewElement = <T>(
-  rung: FlowState,
+  rung: RungState,
   node: { newElementType: string; blockType: T | undefined },
 ): { nodes: Node[]; edges: Edge[] } => {
   const [selectedPlaceholderIndex, selectedPlaceholder] =
@@ -1129,7 +1129,7 @@ export const addNewElement = <T>(
   return { nodes: newNodes, edges: newEdges }
 }
 
-export const removeElement = (rung: FlowState, element: Node) => {
+export const removeElement = (rung: RungState, element: Node) => {
   const rails = rung.nodes.filter((node) => node.type === 'powerRail')
   const nodes = rung.nodes.filter((node) => node.type !== 'powerRail')
 
@@ -1158,7 +1158,7 @@ export const removeElement = (rung: FlowState, element: Node) => {
   }
 }
 
-export const removeElements = (rungLocal: FlowState, nodes: Node[]): { nodes: Node[]; edges: Edge[] } => {
+export const removeElements = (rungLocal: RungState, nodes: Node[]): { nodes: Node[]; edges: Edge[] } => {
   if (!nodes) return { nodes: rungLocal.nodes, edges: rungLocal.edges }
   const rungState = rungLocal
 
@@ -1174,7 +1174,7 @@ export const removeElements = (rungLocal: FlowState, nodes: Node[]): { nodes: No
 /**
  * TODO: Refactor this function to make only one placeholder beetween nodes
  */
-export const renderPlaceholderNodes = (rung: FlowState): Node[] => {
+export const renderPlaceholderNodes = (rung: RungState): Node[] => {
   const { nodes } = rung
   const placeholderNodes: Node[] = []
   const nodesInsideParallels = getNodesInsideAllParallels(rung)
@@ -1289,7 +1289,7 @@ export const removePlaceholderNodes = (nodes: Node[]): Node[] => {
 }
 
 export const searchNearestPlaceholder = (
-  rung: FlowState,
+  rung: RungState,
   reactFlowInstance: ReactFlowInstance,
   position: { x: number; y: number },
 ) => {
@@ -1311,7 +1311,7 @@ export const searchNearestPlaceholder = (
   return closestPlaceholder
 }
 
-export const onDragStartElement = (rung: FlowState, node: Node) => {
+export const onDragStartElement = (rung: RungState, node: Node) => {
   if (!node.draggable) return rung
 
   // Set a new node at the correct place and disconnect the node from the previous one
@@ -1336,14 +1336,14 @@ export const onDragStartElement = (rung: FlowState, node: Node) => {
 }
 
 export const onDragElement = (
-  rung: FlowState,
+  rung: RungState,
   reactFlowInstance: ReactFlowInstance,
   position: { x: number; y: number },
 ) => {
   return searchNearestPlaceholder(rung, reactFlowInstance, position)
 }
 
-export const onDragStopElement = (rung: FlowState, node: Node): { nodes: Node[]; edges: Edge[] } => {
+export const onDragStopElement = (rung: RungState, node: Node): { nodes: Node[]; edges: Edge[] } => {
   const [selectedPlaceholderIndex, selectedPlaceholder] =
     Object.entries(rung.nodes).find(
       (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,

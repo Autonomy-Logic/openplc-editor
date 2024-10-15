@@ -3,12 +3,12 @@ import { app, Event, nativeTheme } from 'electron'
 import { join } from 'path'
 import { platform } from 'process'
 
-import { PLCProjectData } from '../../../types/PLC/open-plc'
+import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 
 type IDataToWrite = {
   projectPath: string
-  projectData: PLCProjectData
+  projectData: PLCProject
 }
 
 class MainProcessBridge implements MainIpcModule {
