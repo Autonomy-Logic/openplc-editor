@@ -80,7 +80,7 @@ class ProjectService {
     try {
       await promises.access(projectPath)
       const fileContent = await promises.readFile(projectPath, 'utf-8')
-      const parsedFile = PLCProjectDataSchema.safeParse(JSON.parse(fileContent))
+      const parsedFile = newPLCProjectSchema.safeParse(JSON.parse(fileContent))
 
       if (!parsedFile.success) {
         return this.createErrorResponse('Error parsing project file.')
@@ -104,7 +104,7 @@ class ProjectService {
     }
   }
 
-  private createSuccessResponse(projectPath: string, content: PLCProjectData): IProjectServiceResponse {
+  private createSuccessResponse(projectPath: string, content: newPLCProject): IProjectServiceResponse {
     return {
       success: true,
       data: {
@@ -207,7 +207,7 @@ class ProjectService {
         },
       }
     }
-    const parsedFile = newPLCProjectSchema.safeParse(JSON.parse(file as string))
+    const parsedFile = newPLCProjectSchema.safeParse(JSON.parse(file))
     if (!parsedFile.success) {
       return {
         success: false,
