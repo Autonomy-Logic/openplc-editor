@@ -11,7 +11,7 @@ import { MenuClasses } from '../constants'
 export const FileMenu = () => {
   const {
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState },
+    workspaceActions: { setEditingState, setRecents },
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
@@ -26,6 +26,7 @@ export const FileMenu = () => {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
+      setRecents([])
       setProject({
         meta: {
           name: 'new-project',
@@ -34,6 +35,7 @@ export const FileMenu = () => {
         },
         data: data.content.data,
       })
+
       toast({
         title: 'The project was created successfully!',
         description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
@@ -54,6 +56,7 @@ export const FileMenu = () => {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
+      setRecents([])
       setProject({
         meta: {
           name: data.content.meta.name,
