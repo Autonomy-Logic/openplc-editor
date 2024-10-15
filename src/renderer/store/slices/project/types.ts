@@ -1,11 +1,11 @@
 import {
   bodySchema,
-  PLCProjectDataSchema,
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
   PLCInstanceSchema,
   PLCProgramSchema,
+  PLCProjectDataSchema,
   PLCTaskSchema,
   PLCVariableSchema,
 } from '@root/types/PLC/open-plc'
