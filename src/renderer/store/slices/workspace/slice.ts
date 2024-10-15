@@ -37,7 +37,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           console.log(workspace.recents)
         }),
       )
-    },  
+    },
 
     switchAppTheme: (): void => {
       setState(
@@ -53,7 +53,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    
+
    },
 })
 
