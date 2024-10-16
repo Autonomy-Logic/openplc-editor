@@ -131,77 +131,7 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
       <h2 className='mb-6 flex  cursor-default justify-start font-caption text-xl font-medium text-neutral-1000 dark:text-white'>
         Projects
       </h2>
-      <div className='scroll-area flex h-auto w-full gap-[25px]  flex-wrap overflow-y-auto'>
-        {recentProjects.map((project) => (
-          <FileElement.Root
-            onClick={() => void handleOpenProject(project.path)}
-            className='overflow-hidden '
-            key={project.path}
-          >
-            <FileElement.Label projectName={project.path} lastModified={projectTimes[project.path]} />
-            <FileElement.Shape />
-          </FileElement.Root>
-        ))}
-        {recentProjects.map((project) => (
-          <FileElement.Root
-            onClick={() => void handleOpenProject(project.path)}
-            className='overflow-hidden '
-            key={project.path}
-          >
-            <FileElement.Label projectName={project.path} lastModified={projectTimes[project.path]} />
-            <FileElement.Shape />
-          </FileElement.Root>
-        ))}
-        {recentProjects.map((project) => (
-          <FileElement.Root
-            onClick={() => void handleOpenProject(project.path)}
-            className='overflow-hidden '
-            key={project.path}
-          >
-            <FileElement.Label projectName={project.path} lastModified={projectTimes[project.path]} />
-            <FileElement.Shape />
-          </FileElement.Root>
-        ))}
-        {recentProjects.map((project) => (
-          <FileElement.Root
-            onClick={() => void handleOpenProject(project.path)}
-            className='overflow-hidden '
-            key={project.path}
-          >
-            <FileElement.Label projectName={project.path} lastModified={projectTimes[project.path]} />
-            <FileElement.Shape />
-          </FileElement.Root>
-        ))}
-        {recentProjects.map((project) => (
-          <FileElement.Root
-            onClick={() => void handleOpenProject(project.path)}
-            className='overflow-hidden '
-            key={project.path}
-          >
-            <FileElement.Label projectName={project.path} lastModified={projectTimes[project.path]} />
-            <FileElement.Shape />
-          </FileElement.Root>
-        ))}
-        {recentProjects.map((project) => (
-          <FileElement.Root
-            onClick={() => void handleOpenProject(project.path)}
-            className='overflow-hidden '
-            key={project.path}
-          >
-            <FileElement.Label projectName={project.path} lastModified={projectTimes[project.path]} />
-            <FileElement.Shape />
-          </FileElement.Root>
-        ))}
-        {recentProjects.map((project) => (
-          <FileElement.Root
-            onClick={() => void handleOpenProject(project.path)}
-            className='overflow-hidden '
-            key={project.path}
-          >
-            <FileElement.Label projectName={project.path} lastModified={projectTimes[project.path]} />
-            <FileElement.Shape />
-          </FileElement.Root>
-        ))}
+      <div className='scroll-area flex h-auto w-full flex-wrap  gap-[25px] overflow-y-auto'>
         {recentProjects.map((project) => (
           <FileElement.Root
             onClick={() => void handleOpenProject(project.path)}
