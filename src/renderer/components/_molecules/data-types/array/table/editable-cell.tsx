@@ -21,8 +21,6 @@ const DimensionCell = ({ getValue, editable = true, onInputChange, onBlur, id, a
     if (inputRef.current?.id === selectedRow.toString() && autoFocus) inputRef.current.focus()
   }, [autoFocus])
 
-  console.log("selectedRow -->", selectedRow)
-  console.log("inputRef.current -->", inputRef.current)
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value
     setCellValue(newValue)

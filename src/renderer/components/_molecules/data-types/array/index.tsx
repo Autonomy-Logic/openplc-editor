@@ -11,6 +11,7 @@ type ArrayDatatypeProps = ComponentPropsWithoutRef<'div'> & {
 }
 
 const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
+  console.log("data -->", data)
   const baseTypes = baseTypeSchema.options
 
   const {

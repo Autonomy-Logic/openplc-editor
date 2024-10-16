@@ -27,7 +27,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   const {
     workspaceActions: { updateDatatype },
     workspace: {
-      projectData: { dataTypes },
+      projectData: { _dataTypes },
     },
   } = useOpenPLCStore()
 
@@ -77,7 +77,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
         return !(index === rowIndex && (!inputElement || inputElement.value?.trim() === ''))
       })
 
-      if (newRows.length !== prevRows.length) {
+      if (newRows?.length !== prevRows?.length) {
         return newRows
       } else {
         const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement
@@ -100,15 +100,32 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   const addNewRow = () => {
     setTableData((prevRows) => {
       const newRows = [...prevRows, { dimension: '' }]
-      setFocusIndex(newRows.length - 1)
+      setFocusIndex(newRows?.length - 1)
       return newRows
     })
   }
 
-  useEffect(() => {
-    const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype
-    if (dimensionsToTable) setTableData(dimensionsToTable['dimensions'])
-  }, [dataTypes])
+  const moveRowUp = () => {
+    setTableData((prevRows) => {
+      if (focusIndex) {
+        const newRows = [...prevRows];
+        const temp = newRows[focusIndex];
+        newRows[focusIndex] = newRows[focusIndex - 1];
+        newRows[focusIndex - 1] = temp;
+        console.log("newRows -->", newRows)
+        return newRows;
+      }
+      console.log("prevRows -->", prevRows)
+      // return prevRows;
+    });
+    console.log("tableData ", tableData)
+    setFocusIndex((prevIndex) => (prevIndex > 0 ? prevIndex - 1 : prevIndex));
+  };
+
+  // useEffect(() => {
+  //   const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype
+  //   if (dimensionsToTable) setTableData(dimensionsToTable['dimensions'])
+  // }, [dataTypes])
 
   const resetBorders = () => {
     const parent = tableBodyRef.current
@@ -181,7 +198,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
           <TableActionButton aria-label='Remove table row button' onClick={() => console.log('Button clicked')}>
             <MinusIcon />
           </TableActionButton>
-          <TableActionButton aria-label='Move table row up button' onClick={() => console.log('Button clicked')}>
+          <TableActionButton aria-label='Move table row up button' onClick={moveRowUp}>
             <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
           </TableActionButton>
           <TableActionButton aria-label='Move table row down button' onClick={() => console.log('Button clicked')}>
