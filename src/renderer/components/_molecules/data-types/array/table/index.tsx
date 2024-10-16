@@ -119,7 +119,9 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
       row.className = cn(
         row.className,
         '[&:last-child>td]:border-b-neutral-500 [&>td:first-child]:border-l-neutral-500 [&>td:last-child]:border-r-neutral-500 [&>td]:border-b-neutral-300',
+        '[&>td]:border-t-neutral-500', 
         'dark:[&>td:first-child]:border-l-neutral-500 dark:[&>td:last-child]:border-r-neutral-500 dark:[&>td]:border-b-neutral-800',
+        'dark:[&>td]:border-t-neutral-500',
         'shadow-none dark:shadow-none',
       )
     })
@@ -142,7 +144,9 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     row.className = cn(
       row.className,
       '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand',
+      '[&>td]:border-t-brand',
       'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand',
+      'dark:[&>td]:border-t-brand',
     )
   }
 
