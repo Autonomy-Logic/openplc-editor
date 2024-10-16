@@ -8,17 +8,52 @@ import { Node } from '@xyflow/react'
 /**
  * Find the connections of a node in a rung.
  */
-const findNodeBasedOnParallelOpen = (node: Node<BasicNodeData>, rung: RungState, path: ParallelNode[] = []) => {
+const findNodeBasedOnParallelOpen = (parallelNode: ParallelNode, rung: RungState, path: ParallelNode[] = []) => {
   const { nodes: rungNodes, edges: rungEdges } = rung
 
-  const edgeToParallelNode = rungEdges.find((edge) => edge.target === node.id)?.source
+  const edgeToParallelNode = rungEdges.find((edge) => edge.target === parallelNode.id)?.source
   const sourceNodeOfParallelNode = rungNodes.find((node) => node.id === edgeToParallelNode) as Node<BasicNodeData>
-  path.push(node as ParallelNode)
+  path.push(parallelNode)
 
   if (sourceNodeOfParallelNode.type !== 'parallel') return { node: sourceNodeOfParallelNode, path: path }
   else {
-    return findNodeBasedOnParallelOpen(sourceNodeOfParallelNode, rung, path)
+    return findNodeBasedOnParallelOpen(sourceNodeOfParallelNode as ParallelNode, rung, path)
   }
+}
+
+const findNodesBasedOnParallelClose = (
+  parallelNode: ParallelNode,
+  rung: RungState,
+  path: {
+    nodes: Node<BasicNodeData>[]
+    parallels: ParallelNode[]
+  } = { nodes: [], parallels: [] },
+) => {
+  const { nodes: rungNodes, edges: rungEdges } = rung
+
+  const edgesToParallelNode = rungEdges.filter((edge) => edge.target === parallelNode.id)
+  const serialNode = rungNodes.find((node) =>
+    edgesToParallelNode.find(
+      (edge) => edge.source === node.id && edge.targetHandle === parallelNode.data.inputConnector?.id,
+    ),
+  ) as Node<BasicNodeData>
+
+  if (!path.nodes.includes(serialNode)) path.nodes.push(serialNode)
+
+  const bottomNode = rungNodes.find((node) =>
+    edgesToParallelNode.find(
+      (edge) => edge.source === node.id && edge.targetHandle === parallelNode.data.parallelInputConnector?.id,
+    ),
+  ) as Node<BasicNodeData>
+
+  path.parallels.push(parallelNode)
+
+  if (bottomNode.type !== 'parallel') {
+    path.nodes.push(bottomNode)
+    return path
+  }
+
+  return findNodesBasedOnParallelClose(bottomNode as ParallelNode, rung, path)
 }
 
 const findConnections = (node: Node<BasicNodeData>, rung: RungState) => {
@@ -60,8 +95,6 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungState) => {
         (edge) =>
           edge.source === lastParallelNode.id && edge.sourceHandle === lastParallelNode.data.outputConnector?.id,
       )
-      console.log('node', node)
-      console.log('lastParallelSerialEdge', lastParallelSerialEdge)
 
       // If the node is connected serially to the parallel node
       if (lastParallelSerialEdge && lastParallelSerialEdge.target === node.id) {
@@ -107,6 +140,49 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungState) => {
     }
 
     // If the parallel node is closing the connection
+    const { nodes, parallels } = findNodesBasedOnParallelClose(parallelNode, rung)
+    const actualNode = node
+
+    const firstParallelNode = parallels[0]
+    const closeConnections = nodes.map((node, index) => {
+      return {
+        'reference-to-local-id': node.id,
+        positions:
+          index === 0
+            ? [
+                // Final edge destination
+                {
+                  ...actualNode.data.inputConnector?.glbPosition,
+                },
+                // Initial edge source
+                {
+                  ...firstParallelNode.data.inputConnector?.glbPosition,
+                },
+              ]
+            : [
+                // Final edge destination
+                {
+                  ...actualNode.data.inputConnector?.glbPosition,
+                },
+                // Final position of parallel
+                {
+                  x: firstParallelNode.data.parallelInputConnector?.glbPosition.x,
+                  y: actualNode.data.inputConnector?.glbPosition.y,
+                },
+                // Initial position of parallel
+                {
+                  x: firstParallelNode.data.parallelInputConnector?.glbPosition.x,
+                  y: node.data.outputConnector?.glbPosition.y,
+                },
+                // Initial edge source
+                {
+                  ...node.data.outputConnector?.glbPosition,
+                },
+              ],
+      }
+    })
+
+    return closeConnections
   })
 
   return connections.filter(
