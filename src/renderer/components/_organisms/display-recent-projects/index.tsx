@@ -39,11 +39,13 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
     const differenceInDays = Math.floor(differenceInMs / (1000 * 60 * 60 * 24))
 
     if (differenceInMinutes < 60) {
-      return differenceInMinutes === 1 ? `${differenceInMinutes} minute ago` : `${differenceInMinutes} minutes ago`
+      return differenceInMinutes === 1
+        ? `modified ${differenceInMinutes} minute ago`
+        : `modified ${differenceInMinutes} minutes ago`
     } else if (differenceInHours < 24) {
-      return differenceInHours === 1 ? `${differenceInHours} hour ago` : `${differenceInHours} hours ago`
+      return differenceInHours === 1 ? `modified ${differenceInHours} hour ago` : `modified ${differenceInHours} hours ago`
     } else {
-      return differenceInDays === 1 ? `${differenceInDays} day ago` : `${differenceInDays} days ago`
+      return differenceInDays === 1 ? `modified ${differenceInDays} day ago` : `modified ${differenceInDays} days ago`
     }
   }
 
