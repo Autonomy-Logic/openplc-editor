@@ -3,19 +3,26 @@ import { cn } from '@root/utils/cn'
 import { CellContext } from '@tanstack/react-table'
 import { useEffect, useRef, useState } from 'react'
 
-type EditableCellProps = CellContext<{ dimension: string }, unknown> & { editable?: boolean } & {
-  onInputChange: (value: string) => void
-} & { onBlur: () => void } & { id: string } & { autoFocus: boolean }
+type EditableCellProps = CellContext<{ dimension: string }, unknown> & {
+  editable?: boolean;
+  onInputChange: (value: string) => void;
+  onBlur: () => void;
+  id: string;
+  autoFocus: boolean;
+  selectedRow: number;
+}
 
-const DimensionCell = ({ getValue, editable = true, onInputChange, onBlur, id, autoFocus }: EditableCellProps) => {
+const DimensionCell = ({ getValue, editable = true, onInputChange, onBlur, id, autoFocus, selectedRow}: EditableCellProps) => {
   const initialValue = getValue<string>()
   const [cellValue, setCellValue] = useState(initialValue)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (inputRef.current && autoFocus) inputRef.current.focus()
+    if (inputRef.current?.id === selectedRow.toString() && autoFocus) inputRef.current.focus()
   }, [autoFocus])
 
+  console.log("selectedRow -->", selectedRow)
+  console.log("inputRef.current -->", inputRef.current)
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value
     setCellValue(newValue)

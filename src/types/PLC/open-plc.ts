@@ -25,17 +25,6 @@ const baseTypeSchema = z.enum([
 ])
 type BaseType = z.infer<typeof baseTypeSchema>
 
-const _PLCTesting = z.map(
-  z.union([
-    z.literal('name'),
-    z.literal('derivation'),
-    z.literal('baseType'),
-    z.literal('initialValue'),
-    z.literal('dimensions'),
-  ]),
-  z.union([z.string(), z.literal('array'), baseTypeSchema, z.string(), z.array(z.object({ dimension: z.string() }))]),
-)
-
 const PLCArrayDatatypeSchema = z.object({
   name: z.string(),
   derivation: z.literal('array'),
@@ -43,7 +32,7 @@ const PLCArrayDatatypeSchema = z.object({
   initialValue: z.string(),
   dimensions: z.array(z.object({ dimension: z.string() })),
 })
-
+ 
 type PLCArrayDatatype = z.infer<typeof PLCArrayDatatypeSchema>
 
 const PLCDataTypeSchema = z.discriminatedUnion('derivation', [

@@ -145,7 +145,7 @@ const WorkspaceScreen = () => {
                       )}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
                         <ResizablePanelGroup
-                          id='editorConte ntPanelGroup'
+                          id='editorContentPanelGroup'
                           direction='vertical'
                           className='flex flex-1 flex-col gap-2'
                         >
