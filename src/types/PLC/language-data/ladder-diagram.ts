@@ -262,6 +262,7 @@ const coilSchema = z.object({
     }),
   }),
 })
+type CoilLadderXML = z.infer<typeof coilSchema>
 
 /**
  * variableSchema is a zod schema for the variable element of the Ladder Diagram.
@@ -395,4 +396,4 @@ const variableSchema = z.discriminatedUnion('type', [
 ])
 
 export { blockSchema, coilSchema, contactSchema, leftPowerRailSchema, rightPowerRailSchema, variableSchema }
-export { ContactLadderXML }
+export { CoilLadderXML, ContactLadderXML }

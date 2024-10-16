@@ -1,8 +1,9 @@
+import { CoilNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/coil'
 import { ContactNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/contact'
 import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
 import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 import { RungState } from '@root/renderer/store/slices'
-import { ContactLadderXML } from '@root/types/PLC/language-data/ladder-diagram'
+import { CoilLadderXML, ContactLadderXML } from '@root/types/PLC/language-data/ladder-diagram'
 import { Node } from '@xyflow/react'
 
 /**
@@ -219,6 +220,32 @@ const contactToXML = (contact: ContactNode, rung: RungState): ContactLadderXML =
   }
 }
 
+const coilToXml = (coil: CoilNode, rung: RungState): CoilLadderXML => {
+  const connections = findConnections(coil, rung)
+
+  return {
+    'local-id': coil.id,
+    negated: coil.data.variant === 'negated',
+    edges: coil.data.variant === 'risingEdge' ? 'rising' : coil.data.variant === 'fallingEdge' ? 'falling' : undefined,
+    storage: coil.data.variant === 'set' ? 'set' : coil.data.variant === 'reset' ? 'reset' : undefined,
+    width: coil.width as number,
+    height: coil.height as number,
+    position: coil.position,
+    variable: '',
+    'connection-point-in': {
+      'relative-position': {
+        ...(coil.data.inputConnector?.relPosition || { x: 0, y: 0 }),
+      },
+      connections,
+    },
+    'connection-point-out': {
+      'relative-position': {
+        ...(coil.data.outputConnector?.relPosition || { x: 0, y: 0 }),
+      },
+    },
+  }
+}
+
 /**
  * Entry point to parse nodes to XML
  */
@@ -228,8 +255,15 @@ const nodesToXML = (rungs: RungState[]) => {
   rungs.forEach((rung) => {
     const { nodes } = rung
     nodes.forEach((node) => {
-      if (node.type === 'contact') {
-        xml.push(contactToXML(node as ContactNode, rung))
+      switch (node.type) {
+        case 'contact':
+          xml.push(contactToXML(node as ContactNode, rung))
+          break
+        case 'coil':
+          xml.push(coilToXml(node as CoilNode, rung))
+          break
+        default:
+          break
       }
     })
   })
