@@ -1,9 +1,15 @@
 import { CoilNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/coil'
 import { ContactNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/contact'
 import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
+import { PowerRailNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/power-rail'
 import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 import { RungState } from '@root/renderer/store/slices'
-import { CoilLadderXML, ContactLadderXML } from '@root/types/PLC/language-data/ladder-diagram'
+import {
+  CoilLadderXML,
+  ContactLadderXML,
+  LeftPowerRailLadderXML,
+  RightPowerRailLadderXML,
+} from '@root/types/PLC/language-data/ladder-diagram'
 import { Node } from '@xyflow/react'
 
 /**
@@ -204,6 +210,43 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungState, offsetY: nu
 /**
  * Parse nodes to XML
  */
+const leftRailToXML = (leftRail: PowerRailNode, offsetY: number = 0): LeftPowerRailLadderXML => {
+  return {
+    'local-id': leftRail.id,
+    width: leftRail.width as number,
+    height: leftRail.height as number,
+    position: {
+      x: leftRail.position.x,
+      y: (leftRail.position.y ?? 0) + offsetY,
+    },
+    'connection-point-out': {
+      'relative-position': {
+        ...(leftRail.data.outputConnector?.relPosition || { x: 0, y: 0 }),
+      },
+    },
+  }
+}
+
+const rightRailToXML = (rightRail: PowerRailNode, rung: RungState, offsetY: number = 0): RightPowerRailLadderXML => {
+  const connections = findConnections(rightRail, rung, offsetY)
+
+  return {
+    'local-id': rightRail.id,
+    width: rightRail.width as number,
+    height: rightRail.height as number,
+    position: {
+      x: rightRail.position.x,
+      y: (rightRail.position.y ?? 0) + offsetY,
+    },
+    'connection-point-in': {
+      'relative-position': {
+        ...(rightRail.data.inputConnector?.relPosition || { x: 0, y: 0 }),
+      },
+      connections,
+    },
+  }
+}
+
 const contactToXML = (contact: ContactNode, rung: RungState, offsetY: number = 0): ContactLadderXML => {
   const connections = findConnections(contact, rung, offsetY)
 
@@ -273,6 +316,10 @@ const nodesToXML = (rungs: RungState[]) => {
     const { nodes } = rung
     nodes.forEach((node) => {
       switch (node.type) {
+        case 'powerRail':
+          if (node.data.variant === 'left') xml.push(leftRailToXML(node as PowerRailNode, offsetY))
+          else xml.push(rightRailToXML(node as PowerRailNode, rung, offsetY))
+          break
         case 'contact':
           xml.push(contactToXML(node as ContactNode, rung, offsetY))
           break

@@ -31,6 +31,7 @@ const leftPowerRailSchema = z.object({
     }),
   }),
 })
+type LeftPowerRailLadderXML = z.infer<typeof leftPowerRailSchema>
 
 /**
  * rightPowerRailSchema is a zod schema for the right power rail of the Ladder Diagram.
@@ -56,17 +57,20 @@ const rightPowerRailSchema = z.object({
       x: z.number(),
       y: z.number(),
     }),
-    connection: z.object({
-      'reference-to-local-id': z.string(), // was just local-id, but it seems to be a reference to other element local-id.
-      positions: z.array(
-        z.object({
-          x: z.number(),
-          y: z.number(),
-        }),
-      ),
-    }),
+    connections: z.array(
+      z.object({
+        'reference-to-local-id': z.string(), // was just local-id, but it seems to be a reference to other element local-id.
+        positions: z.array(
+          z.object({
+            x: z.number(),
+            y: z.number(),
+          }),
+        ),
+      }),
+    ),
   }),
 })
+type RightPowerRailLadderXML = z.infer<typeof rightPowerRailSchema>
 
 /**
  * blockSchema is a zod schema for the block element of the Ladder Diagram.
@@ -396,4 +400,4 @@ const variableSchema = z.discriminatedUnion('type', [
 ])
 
 export { blockSchema, coilSchema, contactSchema, leftPowerRailSchema, rightPowerRailSchema, variableSchema }
-export { CoilLadderXML, ContactLadderXML }
+export { CoilLadderXML, ContactLadderXML, LeftPowerRailLadderXML, RightPowerRailLadderXML }
