@@ -1125,7 +1125,7 @@ export const addNewElement = <T>(
     newNodes = serialNodes
   }
 
-  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
+  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds as [number, number])
   return { nodes: newNodes, edges: newEdges }
 }
 
@@ -1134,7 +1134,7 @@ export const removeElement = (rung: RungState, element: Node) => {
   const nodes = rung.nodes.filter((node) => node.type !== 'powerRail')
 
   let newNodes = nodes.filter((n) => n.id !== element.id)
-  const newRails = changeRailBounds(rails[1], [rails[0], ...newNodes], rung.defaultBounds)
+  const newRails = changeRailBounds(rails[1], [rails[0], ...newNodes], rung.defaultBounds as [number, number])
 
   newNodes = [rails[0], ...newNodes, newRails]
 
@@ -1150,7 +1150,7 @@ export const removeElement = (rung: RungState, element: Node) => {
   newNodes = auxNodes
   newEdges = auxEdges
 
-  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
+  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds as [number, number])
 
   return {
     nodes: newNodes,
@@ -1377,7 +1377,7 @@ export const onDragStopElement = (rung: RungState, node: Node): { nodes: Node[];
       }
     })
     newNodes = removePlaceholderNodes(newNodes)
-    newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds)
+    newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds as [number, number])
     return { nodes: newNodes, edges: newEdges }
   }
 

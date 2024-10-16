@@ -7,10 +7,14 @@ import { RungState } from '@root/renderer/store/slices'
 import {
   CoilLadderXML,
   ContactLadderXML,
+  InOutVariableLadderXML,
+  InVariableLadderXML,
   LeftPowerRailLadderXML,
+  OutVariableLadderXML,
   RightPowerRailLadderXML,
 } from '@root/types/PLC/language-data/ladder-diagram'
 import { Node } from '@xyflow/react'
+import { create } from 'xmlbuilder2'
 
 /**
  * Find the connections of a node in a rung.
@@ -76,17 +80,17 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungState, offsetY: nu
     // Node is not a parallel node
     if (sourceNode.type !== 'parallel')
       return {
-        'reference-to-local-id': sourceNode.id,
-        positions: [
+        '@refLocalId': sourceNode.data.numericId,
+        position: [
           // Final edge destination
           {
-            x: node.data.inputConnector?.glbPosition.x,
-            y: (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
+            '@x': node.data.inputConnector?.glbPosition.x,
+            '@y': (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
           },
           // Initial edge source
           {
-            x: sourceNode.data.outputConnector?.glbPosition.x,
-            y: (sourceNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
+            '@x': sourceNode.data.outputConnector?.glbPosition.x,
+            '@y': (sourceNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
           },
         ],
       }
@@ -108,17 +112,17 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungState, offsetY: nu
       // If the node is connected serially to the parallel node
       if (lastParallelSerialEdge && lastParallelSerialEdge.target === node.id) {
         return {
-          'reference-to-local-id': sourceNodeOfParallelNode.id,
-          positions: [
+          '@refLocalId': sourceNodeOfParallelNode.data.numericId,
+          position: [
             // Final edge destination
             {
-              x: node.data.inputConnector?.glbPosition.x,
-              y: (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
+              '@x': node.data.inputConnector?.glbPosition.x,
+              '@y': (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
             },
             // Initial edge source
             {
-              x: lastParallelNode.data.outputConnector?.glbPosition.x,
-              y: (lastParallelNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
+              '@x': lastParallelNode.data.outputConnector?.glbPosition.x,
+              '@y': (lastParallelNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
             },
           ],
         }
@@ -126,27 +130,27 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungState, offsetY: nu
 
       // If the node is connected in parallel to the parallel node
       return {
-        'reference-to-local-id': sourceNodeOfParallelNode.id,
-        positions: [
+        '@refLocalId': sourceNodeOfParallelNode.data.numericId,
+        position: [
           // Final edge destination
           {
-            x: node.data.inputConnector?.glbPosition.x,
-            y: (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
+            '@x': node.data.inputConnector?.glbPosition.x,
+            '@y': (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
           },
           // Final position of parallel
           {
-            x: lastParallelNode.data.parallelOutputConnector?.glbPosition.x,
-            y: (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
+            '@x': lastParallelNode.data.parallelOutputConnector?.glbPosition.x,
+            '@y': (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
           },
           // Initial position of parallel
           {
-            x: lastParallelNode.data.parallelOutputConnector?.glbPosition.x,
-            y: (sourceNodeOfParallelNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
+            '@x': lastParallelNode.data.parallelOutputConnector?.glbPosition.x,
+            '@y': (sourceNodeOfParallelNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
           },
           // Initial edge source
           {
-            x: sourceNodeOfParallelNode.data.outputConnector?.glbPosition.x,
-            y: (sourceNodeOfParallelNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
+            '@x': sourceNodeOfParallelNode.data.outputConnector?.glbPosition.x,
+            '@y': (sourceNodeOfParallelNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
           },
         ],
       }
@@ -159,41 +163,41 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungState, offsetY: nu
     const firstParallelNode = parallels[0]
     const closeConnections = nodes.map((node, index) => {
       return {
-        'reference-to-local-id': node.id,
-        positions:
+        '@refLocalId': node.data.numericId,
+        position:
           index === 0
             ? [
                 // Final edge destination
                 {
-                  x: actualNode.data.inputConnector?.glbPosition.x,
-                  y: (actualNode.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
+                  '@x': actualNode.data.inputConnector?.glbPosition.x,
+                  '@y': (actualNode.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
                 },
                 // Initial edge source
                 {
-                  x: node.data.outputConnector?.glbPosition.x,
-                  y: (node.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
+                  '@x': node.data.outputConnector?.glbPosition.x,
+                  '@y': (node.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
                 },
               ]
             : [
                 // Final edge destination
                 {
-                  x: actualNode.data.inputConnector?.glbPosition.x,
-                  y: (actualNode.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
+                  '@x': actualNode.data.inputConnector?.glbPosition.x,
+                  '@y': (actualNode.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
                 },
                 // Final position of parallel
                 {
-                  x: firstParallelNode.data.parallelInputConnector?.glbPosition.x,
-                  y: (actualNode.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
+                  '@x': firstParallelNode.data.parallelInputConnector?.glbPosition.x,
+                  '@y': (actualNode.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
                 },
                 // Initial position of parallel
                 {
-                  x: firstParallelNode.data.parallelInputConnector?.glbPosition.x,
-                  y: (node.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
+                  '@x': firstParallelNode.data.parallelInputConnector?.glbPosition.x,
+                  '@y': (node.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
                 },
                 // Initial edge source
                 {
-                  x: node.data.outputConnector?.glbPosition.x,
-                  y: (node.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
+                  '@x': node.data.outputConnector?.glbPosition.x,
+                  '@y': (node.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
                 },
               ],
       }
@@ -204,7 +208,7 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungState, offsetY: nu
 
   return connections.filter(
     (connection) => connection !== undefined,
-  ) as ContactLadderXML['connection-point-in']['connections']
+  ) as ContactLadderXML['connectionPointIn']['connection']
 }
 
 /**
@@ -212,16 +216,18 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungState, offsetY: nu
  */
 const leftRailToXML = (leftRail: PowerRailNode, offsetY: number = 0): LeftPowerRailLadderXML => {
   return {
-    'local-id': leftRail.id,
-    width: leftRail.width as number,
-    height: leftRail.height as number,
+    '@localId': leftRail.data.numericId,
+    '@width': leftRail.width as number,
+    '@height': leftRail.height as number,
     position: {
-      x: leftRail.position.x,
-      y: (leftRail.position.y ?? 0) + offsetY,
+      '@x': leftRail.position.x,
+      '@y': (leftRail.position.y ?? 0) + offsetY,
     },
-    'connection-point-out': {
-      'relative-position': {
-        ...(leftRail.data.outputConnector?.relPosition || { x: 0, y: 0 }),
+    connectionPointOut: {
+      '@formalParameter': '',
+      relPosition: {
+        '@x': leftRail.data.outputConnector?.relPosition.x || 0,
+        '@y': leftRail.data.outputConnector?.relPosition.y || 0,
       },
     },
   }
@@ -231,18 +237,19 @@ const rightRailToXML = (rightRail: PowerRailNode, rung: RungState, offsetY: numb
   const connections = findConnections(rightRail, rung, offsetY)
 
   return {
-    'local-id': rightRail.id,
-    width: rightRail.width as number,
-    height: rightRail.height as number,
+    '@localId': rightRail.data.numericId,
+    '@width': rightRail.width as number,
+    '@height': rightRail.height as number,
     position: {
-      x: rightRail.position.x,
-      y: (rightRail.position.y ?? 0) + offsetY,
+      '@x': rightRail.position.x,
+      '@y': (rightRail.position.y ?? 0) + offsetY,
     },
-    'connection-point-in': {
-      'relative-position': {
-        ...(rightRail.data.inputConnector?.relPosition || { x: 0, y: 0 }),
+    connectionPointIn: {
+      relPosition: {
+        '@x': rightRail.data.inputConnector?.relPosition.x || 0,
+        '@y': rightRail.data.inputConnector?.relPosition.y || 0,
       },
-      connections,
+      connection: connections,
     },
   }
 }
@@ -251,26 +258,28 @@ const contactToXML = (contact: ContactNode, rung: RungState, offsetY: number = 0
   const connections = findConnections(contact, rung, offsetY)
 
   return {
-    'local-id': contact.id,
-    negated: contact.data.variant === 'negated',
-    edges:
+    '@localId': contact.data.numericId,
+    '@negated': contact.data.variant === 'negated',
+    '@edge':
       contact.data.variant === 'risingEdge' ? 'rising' : contact.data.variant === 'fallingEdge' ? 'falling' : undefined,
-    width: contact.width as number,
-    height: contact.height as number,
+    '@width': contact.width as number,
+    '@height': contact.height as number,
     position: {
-      x: contact.position.x,
-      y: (contact.position.y ?? 0) + offsetY,
+      '@x': contact.position.x,
+      '@y': (contact.position.y ?? 0) + offsetY,
     },
     variable: '',
-    'connection-point-in': {
-      'relative-position': {
-        ...(contact.data.inputConnector?.relPosition || { x: 0, y: 0 }),
+    connectionPointIn: {
+      relPosition: {
+        '@x': contact.data.inputConnector?.relPosition.x || 0,
+        '@y': contact.data.inputConnector?.relPosition.y || 0,
       },
-      connections,
+      connection: connections,
     },
-    'connection-point-out': {
-      'relative-position': {
-        ...(contact.data.outputConnector?.relPosition || { x: 0, y: 0 }),
+    connectionPointOut: {
+      relPosition: {
+        '@x': contact.data.outputConnector?.relPosition.x || 0,
+        '@y': contact.data.outputConnector?.relPosition.y || 0,
       },
     },
   }
@@ -279,27 +288,32 @@ const contactToXML = (contact: ContactNode, rung: RungState, offsetY: number = 0
 const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLadderXML => {
   const connections = findConnections(coil, rung, offsetY)
 
+  console.log(coil.id.split('_'))
+
   return {
-    'local-id': coil.id,
-    negated: coil.data.variant === 'negated',
-    edges: coil.data.variant === 'risingEdge' ? 'rising' : coil.data.variant === 'fallingEdge' ? 'falling' : undefined,
-    storage: coil.data.variant === 'set' ? 'set' : coil.data.variant === 'reset' ? 'reset' : undefined,
-    width: coil.width as number,
-    height: coil.height as number,
+    '@localId': coil.data.numericId,
+    '@negated': coil.data.variant === 'negated',
+    '@edge':
+      coil.data.variant === 'risingEdge' ? 'rising' : coil.data.variant === 'fallingEdge' ? 'falling' : undefined,
+    '@storage': coil.data.variant === 'set' ? 'set' : coil.data.variant === 'reset' ? 'reset' : undefined,
+    '@width': coil.width as number,
+    '@height': coil.height as number,
     position: {
-      x: coil.position.x,
-      y: (coil.position.y ?? 0) + offsetY,
+      '@x': coil.position.x,
+      '@y': (coil.position.y ?? 0) + offsetY,
     },
     variable: '',
-    'connection-point-in': {
-      'relative-position': {
-        ...(coil.data.inputConnector?.relPosition || { x: 0, y: 0 }),
+    connectionPointIn: {
+      relPosition: {
+        '@x': coil.data.inputConnector?.relPosition.x || 0,
+        '@y': coil.data.inputConnector?.relPosition.y || 0,
       },
-      connections,
+      connection: connections,
     },
-    'connection-point-out': {
-      'relative-position': {
-        ...(coil.data.outputConnector?.relPosition || { x: 0, y: 0 }),
+    connectionPointOut: {
+      relPosition: {
+        '@x': coil.data.outputConnector?.relPosition.x || 0,
+        '@y': coil.data.outputConnector?.relPosition.y || 0,
       },
     },
   }
@@ -309,22 +323,47 @@ const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLa
  * Entry point to parse nodes to XML
  */
 const nodesToXML = (rungs: RungState[]) => {
-  console.log('PARSING TO XML')
-  const xml: unknown[] = []
+  console.log('=-=-=-= PARSING TO XML =-=-=-=')
+  const LadderXML: {
+    body: {
+      LD: {
+        leftPowerRail: LeftPowerRailLadderXML[]
+        rightPowerRail: RightPowerRailLadderXML[]
+        contact: ContactLadderXML[]
+        coil: CoilLadderXML[]
+        inVariable: InVariableLadderXML[]
+        inOutVariable: InOutVariableLadderXML[]
+        outVariable: OutVariableLadderXML[]
+      }
+    }
+  } = {
+    body: {
+      LD: {
+        leftPowerRail: [],
+        rightPowerRail: [],
+        contact: [],
+        coil: [],
+        inVariable: [],
+        inOutVariable: [],
+        outVariable: [],
+      },
+    },
+  }
   let offsetY = 0
   rungs.forEach((rung, _index) => {
     const { nodes } = rung
     nodes.forEach((node) => {
       switch (node.type) {
         case 'powerRail':
-          if (node.data.variant === 'left') xml.push(leftRailToXML(node as PowerRailNode, offsetY))
-          else xml.push(rightRailToXML(node as PowerRailNode, rung, offsetY))
+          if ((node as PowerRailNode).data.variant === 'left')
+            LadderXML.body.LD.leftPowerRail.push(leftRailToXML(node as PowerRailNode, offsetY))
+          else LadderXML.body.LD.rightPowerRail.push(rightRailToXML(node as PowerRailNode, rung, offsetY))
           break
         case 'contact':
-          xml.push(contactToXML(node as ContactNode, rung, offsetY))
+          LadderXML.body.LD.contact.push(contactToXML(node as ContactNode, rung, offsetY))
           break
         case 'coil':
-          xml.push(coilToXml(node as CoilNode, rung, offsetY))
+          LadderXML.body.LD.coil.push(coilToXml(node as CoilNode, rung, offsetY))
           break
         default:
           break
@@ -332,6 +371,11 @@ const nodesToXML = (rungs: RungState[]) => {
     })
     offsetY += rung.flowViewport[1]
   })
+  console.log('XML RESULT')
+  console.log(LadderXML)
+  const doc = create(LadderXML)
+  const xml = doc.end({ prettyPrint: true })
+  console.log('XML')
   console.log(xml)
 }
 
