@@ -9,7 +9,15 @@ import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 import { IntervalModal } from '../interval-model'
 import { NewProjectStore } from '../project-modal'
 
-const Step3 = ({ onPrev, onClose }: { onPrev: () => void; onClose: () => void }) => {
+type CreateProjectFileProps = {
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd',
+  time: string,
+  type: 'plc-project' | 'plc-library',
+  name: string,
+  path: string
+}
+
+const Step3 = ({ onPrev, onClose: _onClose }: { onPrev: () => void; onClose: () => void }) => {
   type FormData = {
     name: string
     path: string
@@ -23,15 +31,19 @@ const Step3 = ({ onPrev, onClose }: { onPrev: () => void; onClose: () => void })
   const [isModalOpen, setModalOpen] = useState(false)
   const [intervalValue, setIntervalValue] = useState('T#20ms')
 
-  const handleFormSubmit: SubmitHandler<FormData> = (data) => {
+  const handleFormSubmit: SubmitHandler<FormData> = async (data) => {
     const allData = {
       ...projectData,
       language: data.language,
       time: intervalValue,
     }
     handleUpdateForm(allData)
-    console.log('Formulario finalizado', allData)
-    onClose()
+    try {
+      const result = await window.bridge.createProjectFile(projectData as CreateProjectFileProps)
+      console.log('Formulario finalizado', result)
+    } catch (error) {
+      console.error(error)
+    }
   }
 
   return (

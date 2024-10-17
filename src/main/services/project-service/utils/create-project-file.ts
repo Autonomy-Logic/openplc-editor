@@ -57,10 +57,17 @@ const CreateProjectFile = (dataToCreateProjectFile: CreateProjectFileProps) => {
     },
   }
 
-  CreateJSONFile(dataToCreateProjectFile.path, JSON.stringify(_projectJSONStructure, null, 2), 'project')
+  const success = CreateJSONFile(dataToCreateProjectFile.path, JSON.stringify(_projectJSONStructure, null, 2), 'project')
+
+  if (!success) {
+    return {
+      success: false,
+      data: undefined,
+    }
+  }
 
   return {
-    success: true,
+    success: success,
     data: {
       meta: {
         path: dataToCreateProjectFile.path,

@@ -37,6 +37,7 @@ const StartScreen = () => {
         data: data.content.data,
       })
       navigate('/workspace')
+      console.log(data.meta.path)
       toast({
         title: 'The project was created successfully!',
         description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
