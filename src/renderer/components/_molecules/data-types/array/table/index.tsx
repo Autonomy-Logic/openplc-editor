@@ -116,21 +116,20 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
         const temp = newRows[selectedRow];
         newRows[selectedRow] = newRows[selectedRow - 1];
         newRows[selectedRow - 1] = temp;
-        setFocusIndex(selectedRow);
+        setFocusIndex(selectedRow + 1);
         prevRows = newRows
       }
      
-       prevRows.map((item) => {
+      prevRows.map((item) => {
         const optionalSchema = {
           dimensions: [...prevRows, { dimension: item.dimension }],
         }
 
         return updateDatatype(name, optionalSchema as PLCArrayDatatype)
-       })
+       }) 
       return prevRows;
     }
   );
-    // setFocusIndex((prevIndex) => (prevIndex && prevIndex > 0  ? prevIndex - 1 : prevIndex));
   };
 
   // useEffect(() => {
