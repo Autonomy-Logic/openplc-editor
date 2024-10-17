@@ -1,0 +1,46 @@
+{
+  "meta": {
+    "name": "voltaremosdepsdoalmoco",
+    "type": "project"
+  },
+  "data": {
+    "pous": [
+      {
+        "type": "program",
+        "data": {
+          "name": "main",
+          "language": "",
+          "variables": [],
+          "documentation": "",
+          "body": {
+            "language": "",
+            "value": ""
+          }
+        }
+      }
+    ],
+    "dataTypes": [],
+    "configuration": {
+      "resource": {
+        "tasks": [
+          {
+            "name": "task0",
+            "triggering": "Cyclic",
+            "interval": "",
+            "priority": 1,
+            "id": "0"
+          }
+        ],
+        "instances": [
+          {
+            "name": "instance0",
+            "program": "main",
+            "task": "task0",
+            "id": "0"
+          }
+        ],
+        "globalVariables": []
+      }
+    }
+  }
+}
