@@ -1,11 +1,16 @@
 import * as Checkbox from '@radix-ui/react-checkbox'
 import { CheckIcon } from '@radix-ui/react-icons'
 import { InputWithRef } from '@root/renderer/components/_atoms'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { useEffect, useState } from 'react'
 
 type OptionProps = {
   id: string
   label: string
+}
+
+interface SearchInProjectModalProps {
+  onClose: () => void
 }
 
 const scopeElements = [{ value: 'whole project' }, { value: 'only elements' }]
@@ -27,7 +32,7 @@ const CheckboxOption = ({
 }: OptionProps & { disabled?: boolean; checked?: boolean; onChange?: () => void }) => (
   <div className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
     <Checkbox.Root
-      className={`flex ${disabled ? 'cursor-not-allowed' : ''} h-4 w-4 appearance-none items-center justify-center rounded-[4px] border ${checked ? 'border-brand' : 'border-neutral-300 dark:border-neutral-850'} outline-none bg-white`}
+      className={`flex ${disabled ? 'cursor-not-allowed' : ''} h-4 w-4 appearance-none items-center justify-center rounded-[4px] border ${checked ? 'border-brand' : 'border-neutral-300 dark:border-neutral-850'} bg-white outline-none`}
       id={id}
       disabled={disabled}
       checked={checked}
@@ -68,11 +73,19 @@ const RadioOption = ({
   </div>
 )
 
-export default function SearchInProject() {
+export default function SearchInProject({ onClose }: SearchInProjectModalProps) {
   const [selectedScope, setSelectedScope] = useState('whole project')
   const [checkedOptions, setCheckedOptions] = useState<{ [key: string]: boolean }>({})
   const [sensitiveCase, setSensitiveCase] = useState(false)
   const [regularExpression, setRegularExpression] = useState(false)
+  const [disabledSensitiveCase, setDisabledSensitiveCase] = useState(false)
+  const [disabledRegularExpression, setDisabledRegularExpression] = useState(false)
+
+  const {
+    workspace: { projectData },
+    searchQuery,
+    searchActions: { setSearchQuery, setSearchResults },
+  } = useOpenPLCStore()
 
   useEffect(() => {
     if (selectedScope === 'whole project') {
@@ -135,25 +148,96 @@ export default function SearchInProject() {
     setSelectedScope(scope)
   }
 
+  const handleSearch = () => {
+    const formattedResults = {
+      searchQuery,
+      projectName: projectData.projectName,
+      functions: projectData.pous
+        .filter((pou) => {
+          const pouMatches = pou.data.name.toLowerCase().includes(searchQuery.toLowerCase())
+          const variableMatches = pou.data.variables.some((variable) =>
+            variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
+          )
+
+          return pouMatches || variableMatches
+        })
+        .map((pou) => {
+          let generalType: 'plc-graphical' | 'plc-datatype' | 'plc-resource' | 'plc-function' = 'plc-resource'
+          switch (pou.type) {
+            case 'function':
+              generalType = 'plc-function'
+              break
+            case 'program':
+              generalType = 'plc-graphical'
+              break
+            case 'function-block':
+              generalType = 'plc-datatype'
+              break
+            default:
+              generalType = 'plc-resource'
+              break
+          }
+
+          return {
+            type: generalType,
+            pou: {
+              name: pou.data.name,
+              language: pou.data.language,
+              pouType: pou.type,
+              variable: pou.data.variables
+                .filter((variable) => variable.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map((variable) => variable.name)
+                .join(', '),
+            },
+          }
+        }),
+    }
+
+    setSearchResults(formattedResults)
+    console.log('Search Results:', formattedResults)
+    setSearchQuery('')
+    onClose()
+  }
+
+  const handleSearchQueryChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(event.target.value)
+  }
+
+  const handleClose = () => {
+    onClose()
+  }
+
   return (
     <div className='flex h-full w-full flex-col gap-8'>
       <div className='flex h-[57px] w-full gap-6'>
         <div className='flex w-full flex-col justify-between'>
           <p className='text-base font-medium text-neutral-950 dark:text-white'>Pattern to Search</p>
-          <InputWithRef className='h-[30px] w-full rounded-lg border border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-100' />
+          <InputWithRef
+            className='h-[30px] w-full rounded-lg border border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-100'
+            value={searchQuery}
+            onChange={handleSearchQueryChange}
+          />
         </div>
         <div className='flex flex-col justify-between'>
           <CheckboxOption
             id='case-sensitive'
             label='Case Sensitive'
             checked={sensitiveCase}
-            onChange={() => setSensitiveCase(!sensitiveCase)}
+            onChange={() => {
+              setSensitiveCase(!sensitiveCase)
+              setDisabledRegularExpression(!disabledRegularExpression)
+            }}
+            disabled={disabledSensitiveCase}
           />
           <CheckboxOption
             id='regular-expression'
             label='Regular Expression'
             checked={regularExpression}
-            onChange={() => setRegularExpression(!regularExpression)}
+            onChange={() => {
+              setRegularExpression(!regularExpression)
+              setDisabledSensitiveCase(!disabledSensitiveCase)
+            }}
+            disabled={disabledRegularExpression}
           />
         </div>
       </div>
@@ -191,10 +275,16 @@ export default function SearchInProject() {
         </div>
       </div>
       <div className='flex !h-8 w-full gap-6'>
-        <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
+        <button
+          className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+          onClick={handleClose}
+        >
           Close
         </button>
-        <button className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'>
+        <button
+          className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'
+          onClick={handleSearch}
+        >
           Find
         </button>
       </div>

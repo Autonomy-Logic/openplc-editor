@@ -1,6 +1,7 @@
 export * from './editor'
 export * from './flow'
 export * from './library'
+export * from './search'
 export * from './shared'
 export * from './tabs'
 export * from './workspace'

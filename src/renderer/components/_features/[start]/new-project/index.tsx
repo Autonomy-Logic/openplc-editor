@@ -10,11 +10,13 @@ interface NewProjectModalProps {
   isOpen: boolean
   onClose: () => void
 }
+
 type CreatePouFormProps = {
   type: 'function' | 'function-block' | 'program'
   name: string
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
 }
+
 export const NewProjectModal: React.FC<NewProjectModalProps> = ({ isOpen, onClose }) => {
   const [selected, setSelected] = useState<string | null>(null)
   const [step, setStep] = useState<number>(1)
