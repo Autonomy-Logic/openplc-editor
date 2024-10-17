@@ -66,6 +66,10 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     }
   }, [focusIndex])
 
+  useEffect(() => {
+    setFocusIndex(selectedRow);
+  }, [selectedRow]);
+
   const handleInputChange = (value: string, index: number) => {
     setTableData((prevRows) => prevRows.map((row, i) => (i === index ? { ...row, dimension: value } : row)))
   }
@@ -107,19 +111,26 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
   const moveRowUp = () => {
     setTableData((prevRows) => {
-      if (focusIndex) {
+      if (selectedRow) {
         const newRows = [...prevRows];
-        const temp = newRows[focusIndex];
-        newRows[focusIndex] = newRows[focusIndex - 1];
-        newRows[focusIndex - 1] = temp;
-        console.log("newRows -->", newRows)
-        return newRows;
+        const temp = newRows[selectedRow];
+        newRows[selectedRow] = newRows[selectedRow - 1];
+        newRows[selectedRow - 1] = temp;
+        setFocusIndex(selectedRow);
+        prevRows = newRows
       }
-      console.log("prevRows -->", prevRows)
-      // return prevRows;
-    });
-    console.log("tableData ", tableData)
-    setFocusIndex((prevIndex) => (prevIndex > 0 ? prevIndex - 1 : prevIndex));
+     
+       prevRows.map((item) => {
+        const optionalSchema = {
+          dimensions: [...prevRows, { dimension: item.dimension }],
+        }
+
+        return updateDatatype(name, optionalSchema as PLCArrayDatatype)
+       })
+      return prevRows;
+    }
+  );
+    // setFocusIndex((prevIndex) => (prevIndex && prevIndex > 0  ? prevIndex - 1 : prevIndex));
   };
 
   // useEffect(() => {

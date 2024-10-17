@@ -81,7 +81,7 @@ export const FileMenu = () => {
       _.debounce(() => setEditingState('unsaved'), 1000)()
       toast({
         title: 'Error in the save request!',
-        description: reason.description,
+        description: reason?.description,
         variant: 'fail',
       })
     }
