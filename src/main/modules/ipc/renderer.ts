@@ -27,7 +27,7 @@ type CreateProjectFileProps = {
   name: string
   path: string
 }
-type CreateProjectFileResponse =  ReturnType<typeof CreateProjectFile>
+type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
 
 const rendererProcessBridge = {
   /**
@@ -39,24 +39,28 @@ const rendererProcessBridge = {
     ipcRenderer.on('project:create-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
 
   createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
-  createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> => ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
+  createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> =>
+    ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
 
   /**
    * Path picker
    */
 
-  pathPicker: (): Promise<{
-    success: boolean;
-    error: {
-        title: string;
-        description: string;
-    };
-    path?: undefined;
-} | {
-    success: boolean;
-    path: string;
-    error?: undefined;
-}> => ipcRenderer.invoke('project:path-picker'),
+  pathPicker: (): Promise<
+    | {
+        success: boolean
+        error: {
+          title: string
+          description: string
+        }
+        path?: undefined
+      }
+    | {
+        success: boolean
+        path: string
+        error?: undefined
+      }
+  > => ipcRenderer.invoke('project:path-picker'),
 
   /**
    * Handlers for opening projects.
@@ -66,7 +70,8 @@ const rendererProcessBridge = {
     ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
 
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
-  openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open-by-path', projectPath),
+  openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
+    ipcRenderer.invoke('project:open-by-path', projectPath),
   /**
    * Handlers for opening projects.
    * As for the click and for the accelerator type.

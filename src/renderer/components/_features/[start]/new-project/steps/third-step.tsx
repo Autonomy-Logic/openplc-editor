@@ -37,12 +37,18 @@ const Step3 = ({ onPrev, onClose: _onClose }: { onPrev: () => void; onClose: () 
       language: data.language,
       time: intervalValue,
     }
+
     handleUpdateForm(allData)
+
     try {
-      const result = await window.bridge.createProjectFile(projectData as CreateProjectFileProps)
-      console.log('Formulario finalizado', result)
+      const result = await window.bridge.createProjectFile({
+        ...projectData,
+        path: projectData.path,
+      } as CreateProjectFileProps)
+
+      console.log('Arquivo criado com sucesso', result)
     } catch (error) {
-      console.error(error)
+      console.error('Erro ao criar o arquivo:', error)
     }
   }
 

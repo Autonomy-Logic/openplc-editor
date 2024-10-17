@@ -33,6 +33,7 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
     const res = await window.bridge.pathPicker()
     if (res.success && res.path) {
       setPath(res.path)
+      handleUpdateForm({ ...projectData, path: res.path })
     }
   }
 
@@ -56,12 +57,12 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
       </div>
 
       <form onSubmit={handleSubmit(handleFormSubmit)} className='flex flex-grow flex-col justify-between'>
-        <div className=' flex flex-col items-center justify-center'>
+        <div className='flex flex-col items-center justify-center'>
           <h2 className='mb-2 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
             Give a name for the project:
           </h2>
-          <div className='relative h-10 w-64 '>
-            <div className={`relative flex items-center ${inputStyle} `}>
+          <div className='relative h-10 w-64'>
+            <div className={`relative flex items-center ${inputStyle}`}>
               <input
                 id='project-name'
                 className='flex w-64 truncate bg-inherit px-2 py-0 text-sm font-medium leading-tight text-neutral-950 outline-none dark:text-white'
@@ -77,14 +78,19 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
           <h2 className='mb-2 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
             Choose an empty directory for your project:
           </h2>
-          <div className='group flex h-10 w-64 cursor-pointer items-center justify-center rounded-md border border-gray-300 p-2 '>
-            <PathIcon className='mr-2 mt-3 flex-shrink-0 text-gray-400 group-hover:text-neutral-1000 dark:text-white' />
-            <input type='text' id='project-path' value={path} {...register('path')} />
-            <button
-              type='button'
-              onClick={ () => handlePathPicker()}
-              className='h-full w-full truncate bg-inherit px-2 py-0 text-sm font-medium leading-tight text-neutral-950 outline-none dark:text-white'
-            >Aqui</button>
+          <div
+            className='group cursor-pointer flex h-10 w-64  items-center justify-center rounded-md border border-gray-300 p-2'
+            onClick={handlePathPicker}
+          >
+            <PathIcon className='mr-2 mt-3 cursor-pointer flex-shrink-0 text-gray-400 group-hover:text-neutral-1000 dark:text-white' />
+            <input
+              type='text'
+              id='project-path'
+              className='flex w-full cursor-pointer truncate bg-inherit px-2 py-0 text-sm font-medium leading-tight text-neutral-950 outline-none dark:text-white'
+              placeholder={path || 'Choose path'}
+              {...register('path')}
+              readOnly
+            />
           </div>
         </div>
 
