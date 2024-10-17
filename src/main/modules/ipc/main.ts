@@ -5,12 +5,19 @@ import { platform } from 'process'
 
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
+import { CreateProjectFile,GetProjectPath } from '../../services/project-service/utils'
 
 type IDataToWrite = {
   projectPath: string
   projectData: PLCProject
 }
-
+type CreateProjectFileProps = {
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+  time: string
+  type: 'plc-project' | 'plc-library'
+  name: string
+  path: string
+}
 class MainProcessBridge implements MainIpcModule {
   ipcMain
   mainWindow
@@ -30,6 +37,28 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('project:open', async () => {
       const response = await this.projectService.openProject()
       return response
+    })
+
+    /**
+     * BAD CODE!!!!
+     * We define two handles for one flow
+     */
+
+    this.ipcMain.handle('project:path-picker', async (_event) => {
+      const windowManager = this.mainWindow
+      try {
+        if (windowManager) {
+          const res = await GetProjectPath(windowManager)
+          return res
+        }
+        console.log('Window object not defined')
+      } catch (error) {
+        console.error('Error getting project path:', error)
+      }
+    })
+    this.ipcMain.handle('project:create-project-file', (_event, dataToCreateProjectFile: CreateProjectFileProps) => {
+      const res = CreateProjectFile(dataToCreateProjectFile)
+      return res
     })
 
     this.ipcMain.handle('project:save', (_event, { projectPath, projectData }: IDataToWrite) =>
