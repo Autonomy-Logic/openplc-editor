@@ -67,8 +67,8 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   }, [focusIndex])
 
   useEffect(() => {
-    setFocusIndex(selectedRow);
-  }, [selectedRow]);
+    setFocusIndex(selectedRow)
+  }, [selectedRow])
 
   const handleInputChange = (value: string, index: number) => {
     setTableData((prevRows) => prevRows.map((row, i) => (i === index ? { ...row, dimension: value } : row)))
@@ -100,6 +100,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
       }
       return prevRows
     })
+    setFocusIndex(null)
   }
   const addNewRow = () => {
     setTableData((prevRows) => {
@@ -112,26 +113,45 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   const moveRowUp = () => {
     setTableData((prevRows) => {
       if (selectedRow) {
-        const newRows = [...prevRows];
-        const temp = newRows[selectedRow];
-        newRows[selectedRow] = newRows[selectedRow - 1];
-        newRows[selectedRow - 1] = temp;
-        setFocusIndex(selectedRow + 1);
+        const newRows = [...prevRows]
+        const temp = newRows[selectedRow]
+        newRows[selectedRow] = newRows[selectedRow - 1]
+        newRows[selectedRow - 1] = temp
+        setFocusIndex(selectedRow - 1)
         prevRows = newRows
       }
-     
+
       prevRows.map((item) => {
         const optionalSchema = {
           dimensions: [...prevRows, { dimension: item.dimension }],
         }
 
         return updateDatatype(name, optionalSchema as PLCArrayDatatype)
-       }) 
-      return prevRows;
-    }
-  );
-  };
+      })
+      return prevRows
+    })
+  }
 
+  const moveRowDown = () => {
+    setTableData((prevRows) => {
+      if (selectedRow !== null && selectedRow < prevRows.length - 1) {
+        const newRows = [...prevRows]
+        const temp = newRows[selectedRow]
+        newRows[selectedRow] = newRows[selectedRow + 1]
+        newRows[selectedRow + 1] = temp
+        setFocusIndex(selectedRow + 1)
+        prevRows = newRows
+      }
+      prevRows.map((item) => {
+        const optionalSchema = {
+          dimensions: [...prevRows, { dimension: item.dimension }],
+        }
+
+        return updateDatatype(name, optionalSchema as PLCArrayDatatype)
+      })
+      return prevRows
+    })
+  }
   // useEffect(() => {
   //   const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype
   //   if (dimensionsToTable) setTableData(dimensionsToTable['dimensions'])
@@ -146,7 +166,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
       row.className = cn(
         row.className,
         '[&:last-child>td]:border-b-neutral-500 [&>td:first-child]:border-l-neutral-500 [&>td:last-child]:border-r-neutral-500 [&>td]:border-b-neutral-300',
-        '[&>td]:border-t-neutral-500', 
+        '[&>td]:border-t-neutral-500',
         'dark:[&>td:first-child]:border-l-neutral-500 dark:[&>td:last-child]:border-r-neutral-500 dark:[&>td]:border-b-neutral-800',
         'dark:[&>td]:border-t-neutral-500',
         'shadow-none dark:shadow-none',
@@ -211,7 +231,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
           <TableActionButton aria-label='Move table row up button' onClick={moveRowUp}>
             <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
           </TableActionButton>
-          <TableActionButton aria-label='Move table row down button' onClick={() => console.log('Button clicked')}>
+          <TableActionButton aria-label='Move table row down button' onClick={moveRowDown}>
             <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
           </TableActionButton>
         </div>
