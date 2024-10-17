@@ -4,7 +4,7 @@ import {
   NegatedContact,
   RisingEdgeContact,
 } from '@root/renderer/assets/icons/flow/Contact'
-import { cn } from '@root/utils'
+import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
@@ -140,6 +140,7 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
       outputHandles: [outputHandle],
       inputConnector: inputHandle,
       outputConnector: outputHandle,
+      numericId: generateNumericUUID(),
     },
     width: DEFAULT_CONTACT_BLOCK_WIDTH,
     height: DEFAULT_CONTACT_BLOCK_HEIGHT,

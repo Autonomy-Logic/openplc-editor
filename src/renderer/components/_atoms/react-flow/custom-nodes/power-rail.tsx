@@ -1,9 +1,10 @@
+import { generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 
 import { buildHandle, CustomHandle } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-type PowerRailNode = Node<BasicNodeData>
+export type PowerRailNode = Node<BasicNodeData & { variant: 'left' | 'right' }>
 type PowerRailProps = NodeProps<PowerRailNode>
 type PowerRailBuilderProps = BuilderBasicProps & { connector: 'left' | 'right' }
 
@@ -65,6 +66,8 @@ export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY
       outputHandles: connector === 'right' ? handles : [],
       inputConnector: connector === 'left' ? handles[0] : undefined,
       outputConnector: connector === 'right' ? handles[0] : undefined,
+      numericId: generateNumericUUID(),
+      variant: connector === 'right' ? 'left' : 'right',
     },
     width: DEFAULT_POWER_RAIL_WIDTH,
     height: DEFAULT_POWER_RAIL_HEIGHT,

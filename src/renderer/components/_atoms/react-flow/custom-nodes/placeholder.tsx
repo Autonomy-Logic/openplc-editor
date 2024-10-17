@@ -1,5 +1,5 @@
 import { PlaceholderNode, PlaceholderNodeFilled } from '@root/renderer/assets/icons/flow/Placeholder'
-import { cn } from '@root/utils'
+import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 
 import { buildHandle, CustomHandle } from './handle'
@@ -88,6 +88,7 @@ export const builderPlaceholderNode = ({
       outputHandles: [handles[1]],
       inputConnector: handles[0],
       outputConnector: handles[1],
+      numericId: generateNumericUUID(),
       position,
       relatedNode,
     },
