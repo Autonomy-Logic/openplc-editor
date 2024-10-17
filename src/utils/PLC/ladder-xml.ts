@@ -7,12 +7,10 @@ import { RungState } from '@root/renderer/store/slices'
 import {
   CoilLadderXML,
   ContactLadderXML,
-  InOutVariableLadderXML,
-  InVariableLadderXML,
+  LadderXML,
   LeftPowerRailLadderXML,
-  OutVariableLadderXML,
   RightPowerRailLadderXML,
-} from '@root/types/PLC/language-data/ladder-diagram'
+} from '@root/types/PLC/xml-data/pous/languages/ladder-diagram'
 import { Node } from '@xyflow/react'
 import { create } from 'xmlbuilder2'
 
@@ -326,15 +324,7 @@ const nodesToXML = (rungs: RungState[]) => {
   console.log('=-=-=-= PARSING TO XML =-=-=-=')
   const LadderXML: {
     body: {
-      LD: {
-        leftPowerRail: LeftPowerRailLadderXML[]
-        rightPowerRail: RightPowerRailLadderXML[]
-        contact: ContactLadderXML[]
-        coil: CoilLadderXML[]
-        inVariable: InVariableLadderXML[]
-        inOutVariable: InOutVariableLadderXML[]
-        outVariable: OutVariableLadderXML[]
-      }
+      LD: LadderXML
     }
   } = {
     body: {
