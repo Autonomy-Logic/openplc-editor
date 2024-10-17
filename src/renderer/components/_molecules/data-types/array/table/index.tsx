@@ -110,6 +110,24 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     })
   }
 
+  const removeRow = () => {
+   setTableData((prevRows) => {
+    if (selectedRow !== null) {
+      const newRows = prevRows.filter((_, index) => index !== selectedRow);
+      prevRows = newRows;
+    }
+    
+    prevRows.map((item) => {
+      const optionalSchema = {
+        dimensions: [...prevRows, { dimension: item.dimension }],
+      }
+
+      return updateDatatype(name, optionalSchema as PLCArrayDatatype)
+    })
+    return prevRows;
+  });
+  };
+
   const moveRowUp = () => {
     setTableData((prevRows) => {
       if (selectedRow) {
@@ -152,10 +170,6 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
       return prevRows
     })
   }
-  // useEffect(() => {
-  //   const dimensionsToTable = dataTypes.find((datatype) => datatype['name'] === name) as PLCArrayDatatype
-  //   if (dimensionsToTable) setTableData(dimensionsToTable['dimensions'])
-  // }, [dataTypes])
 
   const resetBorders = () => {
     const parent = tableBodyRef.current
@@ -225,7 +239,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
           <TableActionButton aria-label='Add table row button' onClick={addNewRow} id='add-new-row-button'>
             <PlusIcon className='!stroke-brand' />
           </TableActionButton>
-          <TableActionButton aria-label='Remove table row button' onClick={() => console.log('Button clicked')}>
+          <TableActionButton aria-label='Remove table row button' onClick={removeRow}>
             <MinusIcon />
           </TableActionButton>
           <TableActionButton aria-label='Move table row up button' onClick={moveRowUp}>
