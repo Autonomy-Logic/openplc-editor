@@ -76,31 +76,23 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   }
 
   const handleBlur = (rowIndex: number) => {
-    setTableData((prevRows) => {
-      const newRows = prevRows.filter((_row, index) => {
-        const inputElement = document.getElementById(`dimension-input-${index}`) as HTMLInputElement
-        return !(index === rowIndex && (!inputElement || inputElement.value?.trim() === ''))
-      })
-
-      if (newRows?.length !== prevRows?.length) {
-        return newRows
-      } else {
-        const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement
-        const inputValue = inputElement.value?.trim()
-        if (inputElement && inputValue !== '') {
-          const existingDimensions = prevRows
-            .filter((_, i) => i !== rowIndex)
-            .map((row) => ({ dimension: row.dimension }))
+      setTableData((prevRows) => {
+        const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
+        if (inputElement && inputElement.value?.trim() !== '') {
+          const inputValue = inputElement.value?.trim();
           const optionalSchema = {
-            dimensions: [...existingDimensions, { dimension: inputValue }],
-          }
-          updateDatatype(name, optionalSchema as PLCDataType)
-
-          return prevRows.map((row, i) => (i === rowIndex ? { ...row, dimension: inputValue } : row))
+            dimensions: prevRows.map((row, index) => ({ dimension: index === rowIndex ? inputValue : row.dimension })),
+          };
+          updateDatatype(name, optionalSchema as PLCDataType);
+    
+          return prevRows.map((row, i) =>
+            i === rowIndex
+              ? { ...row, dimension: inputValue }
+              : row
+          );
         }
-      }
-      return prevRows
-    })
+        return prevRows;
+      });    
   }
   const addNewRow = () => {
     setTableData((prevRows) => {
