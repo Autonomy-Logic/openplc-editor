@@ -20,6 +20,7 @@ import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
 import { ProjectService, UserService } from './services'
+import { CompilerService } from './services/compiler-service'
 
 class AppUpdater {
   constructor() {
@@ -220,6 +221,7 @@ const createMainWindow = async () => {
     mainWindow,
     ipcMain,
     projectService,
+    compilerService: CompilerService,
     store,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()

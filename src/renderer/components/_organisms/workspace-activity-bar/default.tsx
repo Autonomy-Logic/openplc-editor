@@ -3,7 +3,6 @@ import {
   DownloadButton,
   PlayButton,
   SearchButton,
-  TransferButton,
   ZoomButton,
 } from '../../_molecules/workspace-activity-bar/default'
 
@@ -19,7 +18,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       <SearchButton />
       <ZoomButton {...zoom} />
       <DownloadButton />
-      <TransferButton />
       <PlayButton />
       <DebuggerButton />
     </>
