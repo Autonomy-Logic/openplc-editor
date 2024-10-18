@@ -6,7 +6,7 @@ import formatDate from '../formatDate'
 import { instanceToXml } from './instances-xml'
 import { parsePousToXML } from './pou-xml'
 
-export const baseXmlStructure: BaseXml = {
+const baseXmlStructure = (): BaseXml => ({
   project: {
     '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
     '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema-instance',
@@ -63,12 +63,12 @@ export const baseXmlStructure: BaseXml = {
       },
     },
   },
-}
+})
 
 export const parseProjectToXML = (project: ProjectState) => {
   console.log('=-=-=-= PARSING TO XML =-=-=-=')
   console.log('Project:', project)
-  let xmlResult = baseXmlStructure
+  let xmlResult = baseXmlStructure()
 
   /**
    * Parse POUs
@@ -82,10 +82,22 @@ export const parseProjectToXML = (project: ProjectState) => {
   const configuration = project.data.configuration
   xmlResult = instanceToXml(xmlResult, configuration)
 
-
   const doc = create(xmlResult)
   const xml = doc.end({ prettyPrint: true })
   console.log('xml as object', xmlResult)
   console.log(xml)
   console.log('=-=-=-= FINISHED PARSE TO XML =-=-=-=')
+  console.log('=-=-=-= SAVING XML =-=-=-=')
+  window.bridge
+    .writeXMLFile(project.meta.path.replace('data.json', ''), xml, 'plc')
+    .then((res) => {
+      if (res) {
+        console.log('File saved', project.meta.path.replace('data.json', 'plc.xml'))
+        console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
+      }
+    })
+    .catch((err) => {
+      console.error('Error saving project:', err)
+      console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
+    })
 }
