@@ -156,12 +156,12 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                         })}
                         id='data-type-name'
                         type='text'
-                        placeholder='data-type name'
+                        placeholder='Data type name'
                         className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
                       />
                       {datatypeErrors.name?.type === 'already-exists' && (
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
-                          * data-type name already exists
+                          * data type name already exists
                         </span>
                       )}
                       <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>

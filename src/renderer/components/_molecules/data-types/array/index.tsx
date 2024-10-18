@@ -11,7 +11,6 @@ type ArrayDatatypeProps = ComponentPropsWithoutRef<'div'> & {
 }
 
 const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
-  console.log("data -->", data)
   const baseTypes = baseTypeSchema.options
 
   const {
@@ -80,13 +79,13 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
             aria-label='Array data type initial value container'
             className='flex h-fit w-full items-center justify-end'
           >
-            <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
+            <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100 '>
               Initial Value
             </label>
             <InputWithRef
               onChange={handleInitialValueChange}
               defaultValue={initialValueData}
-              className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
+              className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 focus:outline-none focus:border-brand focus-within:border-brand dark:border-neutral-800 dark:bg-neutral-950'
             />
           </div>
         </div>

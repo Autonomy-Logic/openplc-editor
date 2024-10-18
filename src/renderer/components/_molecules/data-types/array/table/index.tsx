@@ -235,7 +235,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
             <PlusIcon className='!stroke-brand' />
           </TableActionButton>
           <TableActionButton aria-label='Remove table row button' onClick={removeRow}>
-            <MinusIcon />
+            <MinusIcon className='stroke-[#0464FB]'/>
           </TableActionButton>
           <TableActionButton aria-label='Move table row up button' onClick={moveRowUp}>
             <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
