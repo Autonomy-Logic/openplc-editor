@@ -2,6 +2,7 @@ import { formatDate } from '@root/utils'
 import { z } from 'zod'
 
 import { pousSchema } from './pous/pous-diagram'
+import { taskXMLSchema } from './task/task-diagram'
 import { variableXMLSchema } from './variable/variable-diagram'
 
 const baseXmlSchema = z.object({
@@ -59,7 +60,7 @@ const baseXmlSchema = z.object({
           resource: z.object({
             '@name': z.string().default('Res0'),
             globalVars: z.array(variableXMLSchema),
-            task: z.array(z.object({})),
+            task: z.array(taskXMLSchema),
           }),
         }),
       }),

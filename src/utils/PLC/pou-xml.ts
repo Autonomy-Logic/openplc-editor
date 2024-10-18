@@ -5,9 +5,9 @@ import { BaseXml } from '@root/types/PLC/xml-data'
 import { InterfaceXML } from '@root/types/PLC/xml-data/pous/interface/interface-diagram'
 import { VariableXML } from '@root/types/PLC/xml-data/variable/variable-diagram'
 
-import { ilToXML } from './il-xml'
-import { ladderToXml } from './ladder-xml'
-import { stToXML } from './st-xml'
+import { ilToXML } from './language/il-xml'
+import { ladderToXml } from './language/ladder-xml'
+import { stToXML } from './language/st-xml'
 
 export const parseInterface = (pou: PLCPou) => {
   const variables = pou.data.variables
@@ -16,16 +16,18 @@ export const parseInterface = (pou: PLCPou) => {
   const xml: InterfaceXML = {}
   variables.forEach((variable) => {
     const v: VariableXML = {
-      '@name': variable.name,
-      '@address': variable.location,
-      type: {
-        // !BAD CODE
-        [variable.type.value.toUpperCase()]: '',
-      },
-      initialValue: variable.initialValue,
-      documentation: {
-        'xhtml:p': {
-          $: variable.documentation,
+      variable: {
+        '@name': variable.name,
+        '@address': variable.location,
+        type: {
+          // !BAD CODE
+          [variable.type.value.toUpperCase()]: '',
+        },
+        initialValue: variable.initialValue,
+        documentation: {
+          'xhtml:p': {
+            $: variable.documentation,
+          },
         },
       },
     }
@@ -78,7 +80,6 @@ export const parseInterface = (pou: PLCPou) => {
 
 export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
   pous.forEach((pou) => {
-
     const interfaceResult = parseInterface(pou)
 
     switch (pou.data.body.language) {
@@ -132,4 +133,6 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
         return
     }
   })
+
+  return xml
 }

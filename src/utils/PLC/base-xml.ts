@@ -3,6 +3,7 @@ import { BaseXml } from '@root/types/PLC/xml-data/base-diagram'
 import { create } from 'xmlbuilder2'
 
 import formatDate from '../formatDate'
+import { instanceToXml } from './instances-xml'
 import { parsePousToXML } from './pou-xml'
 
 export const baseXmlStructure: BaseXml = {
@@ -67,18 +68,24 @@ export const baseXmlStructure: BaseXml = {
 export const parseProjectToXML = (project: ProjectState) => {
   console.log('=-=-=-= PARSING TO XML =-=-=-=')
   console.log('Project:', project)
-  const xmlResult = baseXmlStructure
+  let xmlResult = baseXmlStructure
 
   /**
    * Parse POUs
    */
   const pous = project.data.pous
-  parsePousToXML(xmlResult, pous)
+  xmlResult = parsePousToXML(xmlResult, pous)
+
+  /**
+   * Parse instances
+   */
+  const configuration = project.data.configuration
+  xmlResult = instanceToXml(xmlResult, configuration)
 
 
   const doc = create(xmlResult)
   const xml = doc.end({ prettyPrint: true })
-  console.log('=-=-=-= FINISHED PARSE TO XML =-=-=-=')
   console.log('xml as object', xmlResult)
   console.log(xml)
+  console.log('=-=-=-= FINISHED PARSE TO XML =-=-=-=')
 }
