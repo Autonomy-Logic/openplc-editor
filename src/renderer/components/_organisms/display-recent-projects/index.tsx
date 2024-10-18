@@ -43,7 +43,9 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
         ? `modified ${differenceInMinutes} minute ago`
         : `modified ${differenceInMinutes} minutes ago`
     } else if (differenceInHours < 24) {
-      return differenceInHours === 1 ? `modified ${differenceInHours} hour ago` : `modified ${differenceInHours} hours ago`
+      return differenceInHours === 1
+        ? `modified ${differenceInHours} hour ago`
+        : `modified ${differenceInHours} hours ago`
     } else {
       return differenceInDays === 1 ? `modified ${differenceInDays} day ago` : `modified ${differenceInDays} days ago`
     }
