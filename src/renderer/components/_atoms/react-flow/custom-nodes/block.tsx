@@ -1,4 +1,4 @@
-import { cn } from '@root/utils'
+import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useState } from 'react'
 
@@ -230,6 +230,7 @@ export const buildBlockNode = <T extends object | undefined>({
       outputHandles: rightHandles,
       inputConnector: leftHandles[0],
       outputConnector: rightHandles[0],
+      numericId: generateNumericUUID(),
     },
     width: DEFAULT_BLOCK_WIDTH,
     height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,

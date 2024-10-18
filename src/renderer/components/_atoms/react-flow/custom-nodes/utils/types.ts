@@ -14,4 +14,5 @@ export type BasicNodeData = {
   outputHandles: CustomHandleProps[]
   inputConnector: CustomHandleProps | undefined
   outputConnector: CustomHandleProps | undefined
+  numericId: string
 }
