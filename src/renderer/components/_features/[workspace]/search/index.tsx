@@ -1,9 +1,14 @@
 import { CloseIcon } from '@root/renderer/assets'
-import ZapIcon from '@root/renderer/assets/icons/interface/Zap'
 import { Accordion } from '@root/renderer/components/_atoms/accordion'
 import { useOpenPLCStore } from '@root/renderer/store'
 
-import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from './display/tree-view'
+import {
+  ProjectSearchTreeBranch,
+  ProjectSearchTreeLeaf,
+  ProjectSearchTreeRoot,
+  ProjectSearchTreeVariableBranch,
+  ProjectSearchTreeVariableLeaf,
+} from './display/tree-view'
 
 interface SearchResult {
   searchQuery: string
@@ -14,7 +19,7 @@ interface SearchResult {
       name: string
       language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st'
       pouType: 'program' | 'function' | 'function-block'
-      variable: string
+      variable: string | null
     }
   }[]
 }
@@ -25,6 +30,8 @@ interface SearchProps {
 
 const Search = ({ items }: SearchProps) => {
   const { searchActions } = useOpenPLCStore()
+
+  console.log(items.map((item) => item.functions.map((func) => func.pou.variable)))
 
   const handleRemoveSearchResult = (index: number) => {
     searchActions.removeSearchResult(index)
@@ -49,24 +56,23 @@ const Search = ({ items }: SearchProps) => {
                     </div>
                   ),
                   content: (
-                    <ProjectTreeRoot label={item.projectName}>
+                    <ProjectSearchTreeRoot label={item.projectName}>
                       {item.functions.map((func, funcIndex) => (
                         <div key={funcIndex}>
-                          <ProjectTreeBranch branchTarget={func.pou.pouType}>
-                            <div className='flex items-start gap-1'>
-                              <ProjectTreeLeaf label={func.pou.name} leafLang={func.pou.language} />
-                              {func.pou.variable && (
-                                <div className='flex h-7 w-full select-none items-center gap-1 rounded-lg p-1 text-cp-sm'>
-                                  <p> - </p>
-                                  <ZapIcon className='h-4 w-4' />
-                                  <p>{func.pou.variable}</p>
-                                </div>
-                              )}
-                            </div>
-                          </ProjectTreeBranch>
+                          <ProjectSearchTreeBranch branchTarget={func.pou.pouType}>
+                            {func.pou.variable ? (
+                              <ProjectSearchTreeVariableBranch label={func.pou.name} leafLang={func.pou.language}>
+                                {func.pou.variable.split(', ').map((variable, variableIndex) => (
+                                  <ProjectSearchTreeVariableLeaf key={variableIndex} label={variable} />
+                                ))}
+                              </ProjectSearchTreeVariableBranch>
+                            ) : (
+                              <ProjectSearchTreeLeaf label={func.pou.name} leafLang={func.pou.language} />
+                            )}
+                          </ProjectSearchTreeBranch>
                         </div>
                       ))}
-                    </ProjectTreeRoot>
+                    </ProjectSearchTreeRoot>
                   ),
                 },
               ]}

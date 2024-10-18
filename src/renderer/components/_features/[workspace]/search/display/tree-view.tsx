@@ -15,25 +15,25 @@ import {
   SFCIcon,
   STIcon,
   StructureIcon,
-  // ZapIcon,
 } from '@root/renderer/assets'
+import ZapIcon from '@root/renderer/assets/icons/interface/Zap'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
-type IProjectTreeRootProps = ComponentPropsWithoutRef<'ul'> & {
+type IProjectSearchTreeRootProps = ComponentPropsWithoutRef<'ul'> & {
   label: string
   children: ReactNode
 }
 
-const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => {
+const ProjectSearchTreeRoot = ({ children, label, ...res }: IProjectSearchTreeRootProps) => {
   const [isOpen, setIsOpen] = useState(true)
   const handleVisibility = useCallback(() => setIsOpen(!isOpen), [isOpen])
   return (
     <div className='select-none'>
       <ul className='list-none p-0' {...res}>
         <li
-          className=' flex cursor-pointer flex-row items-center py-1 pl-3 hover:bg-slate-50 dark:hover:bg-neutral-900'
+          className=' flex cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
           onClick={handleVisibility}
         >
           <ArrowIcon
@@ -66,7 +66,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
   )
 }
 
-type IProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
+type IProjectSearchTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
   branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'resource' | 'device'
   children?: ReactNode
 }
@@ -80,7 +80,7 @@ const BranchSources = {
   device: { BranchIcon: DeviceIcon, label: 'Device' },
 }
 
-const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranchProps) => {
+const ProjectSearchTreeBranch = ({ branchTarget, children, ...res }: IProjectSearchTreeBranchProps) => {
   const {
     workspace: {
       projectData: { pous, dataTypes },
@@ -96,7 +96,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
   return (
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
       <div
-        className='flex w-full cursor-pointer flex-row items-center gap-1 py-1 pl-[18px] hover:bg-slate-50 dark:hover:bg-neutral-900'
+        className='flex w-full cursor-pointer flex-row items-center py-1 pl-4 hover:bg-slate-50 dark:hover:bg-neutral-900'
         onClick={hasAssociatedPou ? handleBranchVisibility : undefined}
       >
         {hasAssociatedPou ? (
@@ -114,7 +114,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
         </div>
         <span
           className={cn(
-            'truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+            'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
         >
@@ -137,7 +137,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
   )
 }
 
-type IProjectTreeNestedBranchProps = ComponentPropsWithoutRef<'li'> & {
+type IProjectSearchTreeNestedBranchProps = ComponentPropsWithoutRef<'li'> & {
   nestedBranchTarget: 'array' | 'enumerated' | 'structure'
   children?: ReactNode
 }
@@ -147,7 +147,12 @@ const NestedBranchSources = {
   enumerated: { BranchIcon: EnumIcon, label: 'Enums' },
   structure: { BranchIcon: StructureIcon, label: 'Structures' },
 }
-const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProjectTreeNestedBranchProps) => {
+
+const ProjectSearchTreeNestedBranch = ({
+  nestedBranchTarget,
+  children,
+  ...res
+}: IProjectSearchTreeNestedBranchProps) => {
   const {
     workspace: {
       projectData: { dataTypes },
@@ -201,10 +206,11 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
   )
 }
 
-type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
+type IProjectSearchTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
   nested?: boolean
   leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res'
   label?: string
+  children?: ReactNode
 }
 
 const LeafSources = {
@@ -219,7 +225,7 @@ const LeafSources = {
   res: { LeafIcon: ResourceIcon },
 }
 
-const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => {
+const ProjectSearchTreeLeaf = ({ leafLang, label, ...res }: IProjectSearchTreeLeafProps) => {
   const {
     editor: {
       meta: { name },
@@ -233,7 +239,7 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
   return (
     <li
       className={cn(
-        ' flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
+        'flex w-full cursor-pointer flex-row items-center py-1 pl-[45px] hover:bg-slate-50 dark:hover:bg-neutral-900',
 
         name === label && 'bg-slate-50 dark:bg-neutral-900',
       )}
@@ -243,8 +249,7 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
       <LeafIcon className='flex-shrink-0' />
       <span
         className={cn(
-          'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
-          name === label && 'font-medium text-neutral-1000 dark:text-white',
+          'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-medium text-neutral-1000 dark:text-white',
         )}
       >
         {label}
@@ -252,4 +257,88 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
     </li>
   )
 }
-export { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeNestedBranch, ProjectTreeRoot }
+
+const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: IProjectSearchTreeLeafProps) => {
+  const {
+    workspace: {
+      projectData: { pous },
+    },
+  } = useOpenPLCStore()
+  const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)
+  const { LeafIcon } = LeafSources[leafLang]
+  const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
+  const hasVariable = pous.some((pou) => pou.data.variables.length > 0)
+  useEffect(() => setBranchIsOpen(hasVariable), [hasVariable])
+
+  return (
+    <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
+      <div
+        className='flex w-full cursor-pointer flex-row items-center py-1 pl-6 hover:bg-slate-50 dark:hover:bg-neutral-900'
+        onClick={hasVariable ? handleBranchVisibility : undefined}
+      >
+        {hasVariable ? (
+          <ArrowIcon
+            direction='right'
+            className={cn(
+              `mr-[6px] h-4 w-4 stroke-brand-light transition-all ${branchIsOpen && 'rotate-270 stroke-brand'}`,
+            )}
+          />
+        ) : (
+          <div className='w-[22px]' />
+        )}
+        <LeafIcon />
+        <span
+          className={cn(
+            'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+            branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
+          )}
+        >
+          {label}
+        </span>
+      </div>
+
+      {branchIsOpen && (
+        <div>
+          <ul>
+            <div>
+              <ul className='list-none p-0'>{children}</ul>
+            </div>
+          </ul>
+        </div>
+      )}
+    </li>
+  )
+}
+
+type IProjectSearchTreeVariableLeafProps = ComponentPropsWithoutRef<'li'> & {
+  label?: string
+}
+
+const ProjectSearchTreeVariableLeaf = ({ label, ...res }: IProjectSearchTreeVariableLeafProps) => {
+  return (
+    <li
+      className={cn(
+        'flex w-full cursor-pointer flex-row items-center py-1 pl-[50px] hover:bg-slate-50 dark:hover:bg-neutral-900',
+      )}
+      {...res}
+    >
+      <ZapIcon className='flex-shrink-0' />
+      <span
+        className={cn(
+          'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-medium text-neutral-1000 dark:text-white',
+        )}
+      >
+        {label}
+      </span>
+    </li>
+  )
+}
+
+export {
+  ProjectSearchTreeBranch,
+  ProjectSearchTreeLeaf,
+  ProjectSearchTreeNestedBranch,
+  ProjectSearchTreeRoot,
+  ProjectSearchTreeVariableBranch,
+  ProjectSearchTreeVariableLeaf,
+}

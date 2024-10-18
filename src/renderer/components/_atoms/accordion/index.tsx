@@ -12,7 +12,6 @@ interface AccordionProps {
   items: AccordionItemProps[]
   defaultValue?: string
   type?: 'single' | 'multiple'
-  onOpenChange?: (value: string) => void
   collapsible?: boolean
 }
 
@@ -57,7 +56,7 @@ const AccordionContent = forwardRef<HTMLDivElement, AccordionPrimitive.Accordion
   ({ children, className, ...props }, forwardedRef) => (
     <AccordionPrimitive.Content
       className={cn(
-        'data-[state=open]:animate-slideDown data-[state=closed]:animate-slideUp overflow-hidden bg-neutral-950 transition-all duration-300 ease-in-out',
+        'overflow-hidden bg-neutral-950 transition-all duration-300 ease-in-out data-[state=closed]:animate-slideUp data-[state=open]:animate-slideDown',
         className,
       )}
       {...props}
@@ -74,11 +73,15 @@ const Accordion = ({ items, defaultValue, type = 'single', collapsible = true }:
   const [openItem, setOpenItem] = useState<string | null>(defaultValue || null)
 
   const handleOpenChange = (value: string) => {
-    setOpenItem(value === openItem ? null : value); // Alterna o estado do Accordion
+    setOpenItem(value === openItem ? null : value)
   }
 
   return (
-    <AccordionPrimitive.Root type={type} collapsible={collapsible} className='w-full'>
+    <AccordionPrimitive.Root
+      type={type}
+      collapsible={collapsible}
+      className='w-full'
+    >
       {items.map((item, index) => (
         <AccordionItem key={index} value={item.title as string}>
           <AccordionTrigger
