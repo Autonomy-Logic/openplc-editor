@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowType } from '@root/renderer/store/slices/flow/types'
-import { PLCProjectSchema } from '@root/types/PLC/open-plc'
+import { PLCProjectSchema} from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
 
@@ -10,7 +12,7 @@ import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
   const {
-    project: { data, meta:{ path } },
+     project,
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setRecents },
     projectActions: { setProject },
@@ -29,7 +31,7 @@ export const FileMenu = () => {
           name: 'new-project',
           type: 'plc-project',
         },
-        data: data.content,
+        data: data.content.data,
       })
       setEditingState('unsaved')
       clearEditor()
@@ -68,7 +70,7 @@ export const FileMenu = () => {
           name: 'new-project',
           type: 'plc-project',
         },
-        data: data.content,
+        data: data.content.data,
       })
       setEditingState('unsaved')
       clearEditor()
@@ -118,7 +120,8 @@ export const FileMenu = () => {
 
     const { success, reason } = await window.bridge.saveProject({
       projectPath: project.meta.path,
-      projectData: projectData.data,
+      //@ts-expect-error overlap
+      projectData: project.data,
     })
 
     if (success) {
