@@ -76,23 +76,28 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   }
 
   const handleBlur = (rowIndex: number) => {
-      setTableData((prevRows) => {
-        const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
-        if (inputElement && inputElement.value?.trim() !== '') {
-          const inputValue = inputElement.value?.trim();
-          const optionalSchema = {
-            dimensions: prevRows.map((row, index) => ({ dimension: index === rowIndex ? inputValue : row.dimension })),
-          };
-          updateDatatype(name, optionalSchema as PLCDataType);
-    
-          return prevRows.map((row, i) =>
-            i === rowIndex
-              ? { ...row, dimension: inputValue }
-              : row
-          );
-        }
-        return prevRows;
-      });    
+    setTableData((prevRows) => {
+      const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
+      if (inputElement && inputElement.value?.trim() === '') {
+        const newRows = prevRows.filter((_, index) => index !== rowIndex);
+        setFocusIndex(null);
+        return newRows;
+      } else if (inputElement && inputElement.value?.trim() !== '') {
+        const inputValue = inputElement.value?.trim();
+        const optionalSchema = {
+          name: name,
+          dimensions: prevRows.map((row, index) => ({ dimension: index === rowIndex ? inputValue : row.dimension })),
+        };
+        updateDatatype(name, optionalSchema as PLCDataType);
+  
+        return prevRows.map((row, i) =>
+          i === rowIndex
+            ? { ...row, dimension: inputValue }
+            : row
+        );
+      }
+      return prevRows;
+    });
   }
   const addNewRow = () => {
     setTableData((prevRows) => {
