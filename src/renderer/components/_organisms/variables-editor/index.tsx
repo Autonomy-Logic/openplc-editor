@@ -17,11 +17,11 @@ const VariablesEditor = () => {
   const ROWS_NOT_SELECTED = -1
   const {
     editor,
-    workspace: {
-      projectData: { pous },
+    project: {
+      data: { pous },
     },
     editorActions: { updateModelVariables },
-    workspaceActions: { createVariable, deleteVariable, rearrangeVariables },
+    projectActions: { createVariable, deleteVariable, rearrangeVariables },
   } = useOpenPLCStore()
 
   /**

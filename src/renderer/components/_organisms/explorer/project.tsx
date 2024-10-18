@@ -9,8 +9,9 @@ import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
 const Project = () => {
   const {
-    workspace: {
-      projectData: { pous, dataTypes, projectName, configuration },
+    project: {
+      data: { pous, dataTypes, configuration },
+      meta: {name}
     },
     workspaceActions: { updateProjectName },
     tabsActions: { updateTabs },
@@ -32,17 +33,17 @@ const Project = () => {
   }
 
   const [isEditing, setIsEditing] = useState(false)
-  const [inputValue, setInputValue] = useState<string>(projectName)
+  const [inputValue, setInputValue] = useState<string>(name)
 
   const handleBlur = () => {
     setIsEditing(false)
-    if (inputValue !== projectName) {
+    if (inputValue !== name) {
       updateProjectName(inputValue)
     }
   }
   useEffect(() => {
-    setInputValue(projectName)
-  }, [projectName])
+    setInputValue(name)
+  }, [name])
 
   return (
     <div id='project-container' className='flex h-full w-full flex-col pr-2'>
@@ -73,7 +74,7 @@ const Project = () => {
               className={`w-full cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap rounded-lg px-2 py-1 text-xs font-medium text-neutral-1000 dark:text-neutral-50`}
               title='Edit name project'
             >
-              {projectName}
+              {name}
             </span>
           )}
         </div>
@@ -84,7 +85,7 @@ const Project = () => {
 
       {/* Data display */}
       <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto'>
-        <ProjectTreeRoot label={projectName}>
+        <ProjectTreeRoot label={name}>
           <ProjectTreeBranch branchTarget='function'>
             {pous
               ?.filter(({ type }) => type === 'function')

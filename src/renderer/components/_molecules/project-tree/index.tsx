@@ -79,8 +79,8 @@ const BranchSources = {
 }
 const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranchProps) => {
   const {
-    workspace: {
-      projectData: { pous, dataTypes },
+    project: {
+      data: { pous, dataTypes },
     },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState(false)
@@ -148,8 +148,8 @@ const NestedBranchSources = {
 }
 const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProjectTreeNestedBranchProps) => {
   const {
-    workspace: {
-      projectData: { dataTypes },
+    project: {
+      data: { dataTypes },
     },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)

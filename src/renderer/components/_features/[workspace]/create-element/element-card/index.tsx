@@ -7,6 +7,7 @@ import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '
 import { DatatypeDerivationSources } from '@root/renderer/data/sources/data-type'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { CreateDatatypeObject } from '@root/renderer/store/slices/shared/utils'
+import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { cn, ConvertToLangShortenedFormat } from '@root/utils'
 import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
@@ -56,7 +57,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
 
   const {
     pouActions: { create },
-    datatypeActions: {create: createDatatype},
+    projectActions: { createDatatype },
     // workspaceActions: { createDatatype },
   } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
@@ -81,8 +82,14 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   }
 
   const handleCreateDatatype: SubmitHandler<CreateDataTypeFormProps> = (data) => {
-    const res = createDatatype(data)
-    if (res) console.log('Created!!')
+    const draft = {
+      name: data.name,
+      derivation: data.derivation,
+      baseType: 'bool',
+      initialValue: '',
+      dimensions: []
+    } as PLCArrayDatatype
+    const res = createDatatype(draft)
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }

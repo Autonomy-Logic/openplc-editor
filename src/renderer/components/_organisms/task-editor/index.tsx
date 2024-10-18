@@ -14,8 +14,8 @@ const TaskEditor = () => {
   const ROWS_NOT_SELECTED = -1
   const {
     editor,
-    workspace: {
-      projectData: {
+    project: {
+      data: {
         configuration: {
           resource: { tasks },
         },

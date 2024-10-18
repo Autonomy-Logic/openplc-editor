@@ -30,6 +30,7 @@ const DimensionCell = ({ getValue, editable = true, onInputChange, onBlur, id, a
   const handleBlur = () => {
     onBlur()
   }
+  
   return (
     <InputWithRef
       value={cellValue || ''}

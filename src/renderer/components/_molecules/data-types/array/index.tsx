@@ -15,7 +15,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const baseTypes = baseTypeSchema.options
 
   const {
-    workspaceActions: { updateDatatype },
+    projectActions: { updateDatatype },
   } = useOpenPLCStore()
   const ROWS_NOT_SELECTED = -1
   const [arrayTable, setArrayTable] = useState<{ selectedRow: string }>({ selectedRow: ROWS_NOT_SELECTED.toString() })

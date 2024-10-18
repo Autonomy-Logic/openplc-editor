@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { zodFlowSchema } from '../../renderer/store/slices/flow/types'
+
 const baseTypeSchema = z.enum([
   'bool',
   'sint',
@@ -90,6 +92,28 @@ const PLCTaskSchema = z.object({
 
 type PLCTask = z.infer<typeof PLCTaskSchema>
 
+const bodySchema = z.discriminatedUnion('language', [
+  z.object({
+    language: z.literal('il'),
+    value: z.string(),
+  }),
+  z.object({
+    language: z.literal('st'),
+    value: z.string(),
+  }),
+  z.object({
+    language: z.literal('ld'),
+    value: zodFlowSchema,
+  }),
+  z.object({
+    language: z.literal('sfc'),
+    value: z.string(),
+  }),
+  z.object({
+    language: z.literal('fbd'),
+    value: z.string(),
+  }),
+])
 
 const PLCFunctionSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
@@ -135,7 +159,6 @@ const PLCFunctionBlockSchema = z.object({
 type PLCFunctionBlock = z.infer<typeof PLCFunctionBlockSchema>
 
 const PLCProjectDataSchema = z.object({
-  projectName: z.string(),
   dataTypes: z.array(PLCDataTypeSchema),
   pous: z.array(
     z.discriminatedUnion('type', [
@@ -166,6 +189,7 @@ type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
 export {
   baseTypeSchema,
+  bodySchema,
   PLCArrayDatatypeSchema,
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,

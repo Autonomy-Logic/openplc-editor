@@ -8,9 +8,10 @@ import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
   const {
-    workspace: { projectData, projectPath },
+    project: { data, meta:{ path } },
     editorActions: { clearEditor },
-    workspaceActions: { setUserWorkspace, setEditingState },
+    workspaceActions: { setEditingState },
+    projectActions: { setProject },
     tabsActions: { clearTabs },
   } = useOpenPLCStore()
 
@@ -19,13 +20,15 @@ export const FileMenu = () => {
   const handleCreateProject = async () => {
     const { success, data, error } = await window.bridge.createProject()
     if (success && data) {
-      setUserWorkspace({
-        editingState: 'unsaved',
-        projectPath: data.meta.path,
-        projectData: data.content,
-        projectName: 'new-project',
-        recents: [],
+      setProject({
+        meta: {
+          path: data.meta.path,
+          name: 'new-project',
+          type: 'plc-project',
+        },
+        data: data.content,
       })
+      setEditingState('unsaved')
       clearEditor()
       clearTabs()
       toast({
@@ -45,13 +48,15 @@ export const FileMenu = () => {
   const handleOpenProject = async () => {
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
-      setUserWorkspace({
-        editingState: 'unsaved',
-        projectPath: data.meta.path,
-        projectData: data.content,
-        projectName: 'new-project',
-        recents: [],
+      setProject({
+        meta: {
+          path: data.meta.path,
+          name: 'new-project',
+          type: 'plc-project',
+        },
+        data: data.content,
       })
+      setEditingState('unsaved')
       clearEditor()
       clearTabs()
       toast({
@@ -69,7 +74,7 @@ export const FileMenu = () => {
   }
 
   const handleSaveProject = async () => {
-    const { success, reason } = await window.bridge.saveProject({ projectPath, projectData })
+    const { success, reason } = await window.bridge.saveProject({projectPath: path, projectData: data})
     if (success) {
       _.debounce(() => setEditingState('saved'), 1000)()
       toast({

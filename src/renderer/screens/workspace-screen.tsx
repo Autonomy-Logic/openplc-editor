@@ -24,13 +24,14 @@ import { useOpenPLCStore } from '../store'
 const WorkspaceScreen = () => {
   const {
     tabs,
-    workspace: { projectData, projectPath, editingState },
+    project: { data, meta: {path} },
+    workspace: {editingState},
     editor,
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()
   useEffect(() => {
     const handleSaveProject = async () => {
-      const { success, reason } = await window.bridge.saveProject({ projectPath, projectData })
+      const { success, reason } = await window.bridge.saveProject({ projectPath: path, projectData: data })
       if (success) {
         _.debounce(() => setEditingState('saved'), 1000)()
         toast({

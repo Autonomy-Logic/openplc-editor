@@ -13,8 +13,8 @@ type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
 
 const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   const {
-    workspace: {
-      projectData: { dataTypes },
+    project: {
+      data: { dataTypes },
     },
   } = useOpenPLCStore()
   const [editorContent, setEditorContent] = useState<PLCDataType>()

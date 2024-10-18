@@ -25,10 +25,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>(dimensions)
 
   const {
-    workspaceActions: { updateDatatype },
-    workspace: {
-      projectData: { _dataTypes },
-    },
+    projectActions: { updateDatatype },
   } = useOpenPLCStore()
 
   const columnHelper = createColumnHelper<{ dimension: unknown }>()
