@@ -319,7 +319,7 @@ const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLa
  */
 const ladderToXml = (rungs: RungState[]) => {
   console.log('=-= PARSING LADDER TO XML =-=')
-  const LadderXML: {
+  const ladderXML: {
     body: {
       LD: LadderXML
     }
@@ -343,14 +343,14 @@ const ladderToXml = (rungs: RungState[]) => {
       switch (node.type) {
         case 'powerRail':
           if ((node as PowerRailNode).data.variant === 'left')
-            LadderXML.body.LD.leftPowerRail.push(leftRailToXML(node as PowerRailNode, offsetY))
-          else LadderXML.body.LD.rightPowerRail.push(rightRailToXML(node as PowerRailNode, rung, offsetY))
+            ladderXML.body.LD.leftPowerRail.push(leftRailToXML(node as PowerRailNode, offsetY))
+          else ladderXML.body.LD.rightPowerRail.push(rightRailToXML(node as PowerRailNode, rung, offsetY))
           break
         case 'contact':
-          LadderXML.body.LD.contact.push(contactToXML(node as ContactNode, rung, offsetY))
+          ladderXML.body.LD.contact.push(contactToXML(node as ContactNode, rung, offsetY))
           break
         case 'coil':
-          LadderXML.body.LD.coil.push(coilToXml(node as CoilNode, rung, offsetY))
+          ladderXML.body.LD.coil.push(coilToXml(node as CoilNode, rung, offsetY))
           break
         default:
           break
@@ -359,7 +359,7 @@ const ladderToXml = (rungs: RungState[]) => {
     offsetY += rung.flowViewport[1]
   })
 
-  return LadderXML
+  return ladderXML
 }
 
 export { ladderToXml }

@@ -3,7 +3,9 @@ import { BaseXml } from '@root/types/PLC/xml-data/base-diagram'
 import { create } from 'xmlbuilder2'
 
 import formatDate from '../formatDate'
+import { ilToXML } from './il-xml'
 import { ladderToXml } from './ladder-xml'
+import { stToXML } from './st-xml'
 
 export const baseXmlStructure: BaseXml = {
   project: {
@@ -11,7 +13,6 @@ export const baseXmlStructure: BaseXml = {
     '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema-instance',
     '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
     '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6.xsd',
-    '@xsi:schemaLocation': 'http://www.plcopen.org/xml/tc6_0200 http://www.plcopen.org/xml/tc6_0200',
     fileHeader: {
       '@companyName': 'Unknown',
       '@productName': 'Unnamed',
@@ -44,7 +45,7 @@ export const baseXmlStructure: BaseXml = {
     },
 
     types: {
-      dataTypes: [],
+      dataTypes: '',
       pous: {
         pou: [],
       },
@@ -67,6 +68,7 @@ export const baseXmlStructure: BaseXml = {
 
 export const parseProjectToXML = (project: ProjectState) => {
   console.log('=-=-=-= PARSING TO XML =-=-=-=')
+  console.log('Project:', project)
   const xmlResult = baseXmlStructure
 
   /**
@@ -75,12 +77,36 @@ export const parseProjectToXML = (project: ProjectState) => {
   const pous = project.data.pous
   pous.forEach((pou) => {
     switch (pou.data.body.language) {
-      case 'il':
-        // parseIL(pou.data.body, xmlResult.project.types.pous.pou)
-        break
-      case 'st':
-        // parseST(pou.data.st, xmlResult.project.types.pous.pou)
-        break
+      case 'il': {
+        const result = ilToXML(pou.data.body.value)
+        xmlResult.project.types.pous.pou.push({
+          '@name': pou.data.name,
+          '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
+          interface: {},
+          body: result.body,
+          documentation: {
+            'xhtml:p': {
+              $: pou.data.documentation,
+            },
+          },
+        })
+        return
+      }
+      case 'st': {
+        const result = stToXML(pou.data.body.value)
+        xmlResult.project.types.pous.pou.push({
+          '@name': pou.data.name,
+          '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
+          interface: {},
+          body: result.body,
+          documentation: {
+            'xhtml:p': {
+              $: pou.data.documentation,
+            },
+          },
+        })
+        return
+      }
       case 'ld': {
         const rungs = pou.data.body.value.rungs
         const result = ladderToXml(rungs as RungState[])
@@ -88,24 +114,23 @@ export const parseProjectToXML = (project: ProjectState) => {
           '@name': pou.data.name,
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
           interface: {},
-          body: {
-            LD: result.body.LD,
-          },
+          body: result.body,
           documentation: {
             'xhtml:p': {
               $: pou.data.documentation,
             },
           },
         })
-        break
+        return
       }
       default:
-        break
+        return
     }
   })
 
   const doc = create(xmlResult)
   const xml = doc.end({ prettyPrint: true })
   console.log('=-=-=-= FINISHED PARSE TO XML =-=-=-=')
+  console.log(xmlResult)
   console.log(xml)
 }

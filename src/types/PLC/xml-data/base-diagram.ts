@@ -12,7 +12,8 @@ const baseXmlSchema = z.object({
     '@xmlns:ns1': z.string().default('http://www.plcopen.org/xml/tc6.xsd'),
     '@xsi:schemaLocation': z
       .string()
-      .default('http://www.plcopen.org/xml/tc6_0200 http://www.plcopen.org/xml/tc6_0200'),
+      .default('http://www.plcopen.org/xml/tc6_0200 http://www.plcopen.org/xml/tc6_0200')
+      .optional(),
 
     fileHeader: z.object({
       '@companyName': z.string().default('Unknown'),
@@ -47,7 +48,7 @@ const baseXmlSchema = z.object({
     }),
 
     types: z.object({
-      dataTypes: z.array(z.object({})),
+      dataTypes: z.string(),
       pous: pousSchema,
     }),
 
