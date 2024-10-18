@@ -1,22 +1,15 @@
 import { TransferIcon } from '@root/renderer/assets'
 import { ActivityBarButton } from '@root/renderer/components/_atoms/buttons'
 import { useOpenPLCStore } from '@root/renderer/store'
-// import { startParseXML } from '@root/utils/PLC/base-xml'
-import { nodesToXML } from '@root/utils/PLC/ladder-xml'
+import { parseProjectToXML } from '@root/utils/PLC/base-xml'
 
 export const TransferButton = () => {
   const {
-    editor: {
-      meta: { name },
-    },
-    flows,
+    project
   } = useOpenPLCStore()
 
   const buttonClick = () => {
-    const rungs = flows.find((flow) => flow.name === name)?.rungs
-    if (!rungs) return
-    nodesToXML(rungs)
-    // startParseXML()
+    parseProjectToXML(project)
   }
 
   return (

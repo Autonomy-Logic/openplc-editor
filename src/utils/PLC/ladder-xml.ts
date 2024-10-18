@@ -12,7 +12,6 @@ import {
   RightPowerRailLadderXML,
 } from '@root/types/PLC/xml-data/pous/languages/ladder-diagram'
 import { Node } from '@xyflow/react'
-import { create } from 'xmlbuilder2'
 
 /**
  * Find the connections of a node in a rung.
@@ -286,8 +285,6 @@ const contactToXML = (contact: ContactNode, rung: RungState, offsetY: number = 0
 const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLadderXML => {
   const connections = findConnections(coil, rung, offsetY)
 
-  console.log(coil.id.split('_'))
-
   return {
     '@localId': coil.data.numericId,
     '@negated': coil.data.variant === 'negated',
@@ -320,8 +317,8 @@ const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLa
 /**
  * Entry point to parse nodes to XML
  */
-const nodesToXML = (rungs: RungState[]) => {
-  console.log('=-=-=-= PARSING TO XML =-=-=-=')
+const ladderToXml = (rungs: RungState[]) => {
+  console.log('=-= PARSING LADDER TO XML =-=')
   const LadderXML: {
     body: {
       LD: LadderXML
@@ -361,12 +358,8 @@ const nodesToXML = (rungs: RungState[]) => {
     })
     offsetY += rung.flowViewport[1]
   })
-  console.log('XML RESULT')
-  console.log(LadderXML)
-  const doc = create(LadderXML)
-  const xml = doc.end({ prettyPrint: true })
-  console.log('XML')
-  console.log(xml)
+
+  return LadderXML
 }
 
-export { nodesToXML }
+export { ladderToXml }

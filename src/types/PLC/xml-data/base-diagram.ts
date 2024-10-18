@@ -47,7 +47,7 @@ const baseXmlSchema = z.object({
     }),
 
     types: z.object({
-      dataTypes: z.object({}),
+      dataTypes: z.array(z.object({})),
       pous: pousSchema,
     }),
 
