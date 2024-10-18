@@ -5,6 +5,7 @@ import { create } from 'xmlbuilder2'
 import formatDate from '../formatDate'
 import { ilToXML } from './il-xml'
 import { ladderToXml } from './ladder-xml'
+import { parseInterface } from './pou-interface-xml'
 import { stToXML } from './st-xml'
 
 export const baseXmlStructure: BaseXml = {
@@ -76,13 +77,16 @@ export const parseProjectToXML = (project: ProjectState) => {
    */
   const pous = project.data.pous
   pous.forEach((pou) => {
+
+    const interfaceResult = parseInterface(pou)
+
     switch (pou.data.body.language) {
       case 'il': {
         const result = ilToXML(pou.data.body.value)
         xmlResult.project.types.pous.pou.push({
           '@name': pou.data.name,
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
-          interface: {},
+          interface: interfaceResult,
           body: result.body,
           documentation: {
             'xhtml:p': {
@@ -97,7 +101,7 @@ export const parseProjectToXML = (project: ProjectState) => {
         xmlResult.project.types.pous.pou.push({
           '@name': pou.data.name,
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
-          interface: {},
+          interface: interfaceResult,
           body: result.body,
           documentation: {
             'xhtml:p': {
@@ -113,7 +117,7 @@ export const parseProjectToXML = (project: ProjectState) => {
         xmlResult.project.types.pous.pou.push({
           '@name': pou.data.name,
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
-          interface: {},
+          interface: interfaceResult,
           body: result.body,
           documentation: {
             'xhtml:p': {
@@ -131,6 +135,6 @@ export const parseProjectToXML = (project: ProjectState) => {
   const doc = create(xmlResult)
   const xml = doc.end({ prettyPrint: true })
   console.log('=-=-=-= FINISHED PARSE TO XML =-=-=-=')
-  console.log(xmlResult)
+  console.log('xml as object', xmlResult)
   console.log(xml)
 }

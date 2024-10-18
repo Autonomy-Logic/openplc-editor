@@ -108,7 +108,7 @@ const PLCVariableSchema = z.object({
     }),
   ]),
   location: z.string(),
-  // initialValue: z.string().optional(),
+  initialValue: z.string().optional(),
   documentation: z.string(),
   debug: z.boolean(),
 })
@@ -207,24 +207,25 @@ const PLCFunctionBlockSchema = z.object({
 
 type PLCFunctionBlock = z.infer<typeof PLCFunctionBlockSchema>
 
+const PLCPouSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('program'),
+    data: PLCProgramSchema,
+  }),
+  z.object({
+    type: z.literal('function'),
+    data: PLCFunctionSchema,
+  }),
+  z.object({
+    type: z.literal('function-block'),
+    data: PLCFunctionBlockSchema,
+  }),
+])
+type PLCPou = z.infer<typeof PLCPouSchema>
+
 const PLCProjectDataSchema = z.object({
   dataTypes: z.array(PLCDataTypeSchema),
-  pous: z.array(
-    z.discriminatedUnion('type', [
-      z.object({
-        type: z.literal('program'),
-        data: PLCProgramSchema,
-      }),
-      z.object({
-        type: z.literal('function'),
-        data: PLCFunctionSchema,
-      }),
-      z.object({
-        type: z.literal('function-block'),
-        data: PLCFunctionBlockSchema,
-      }),
-    ]),
-  ),
+  pous: z.array(PLCPouSchema),
   configuration: z.object({
     resource: z.object({
       tasks: z.array(PLCTaskSchema),
@@ -260,6 +261,7 @@ export {
   PLCFunctionSchema,
   PLCGlobalVariableSchema,
   PLCInstanceSchema,
+  PLCPouSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
   PLCProjectMetaSchema,
@@ -276,6 +278,7 @@ export type {
   PLCFunctionBlock,
   PLCGlobalVariable,
   PLCInstance,
+  PLCPou,
   PLCProgram,
   PLCProject,
   PLCProjectData,
