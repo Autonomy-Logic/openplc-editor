@@ -1,6 +1,6 @@
 import * as Portal from '@radix-ui/react-portal'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { FlowState } from '@root/renderer/store/slices'
+import { RungState } from '@root/renderer/store/slices'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
 import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -25,15 +25,15 @@ import {
 } from './ladder-utils/elements'
 
 type RungBodyProps = {
-  rung: FlowState
+  rung: RungState
 }
 
 export const RungBody = ({ rung }: RungBodyProps) => {
-  const { flowActions, libraries } = useOpenPLCStore()
+  const { flowActions, libraries, editor } = useOpenPLCStore()
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
-  const [rungLocal, setRungLocal] = useState<FlowState>(rung)
+  const [rungLocal, setRungLocal] = useState<RungState>(rung)
   const [selectedNodes, setSelectedNodes] = useState<FlowNode[]>([])
 
   const [modalNode, setModalNode] = useState<FlowNode | null>(null)
@@ -73,7 +73,11 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       [0, 0],
       [bounds.width, bounds.height + 20],
     ])
-    flowActions.updateFlowViewport({ rungId: rungLocal.id, flowViewport: [bounds.width, bounds.height + 20] })
+    flowActions.updateFlowViewport({
+      editorName: editor.meta.name,
+      rungId: rungLocal.id,
+      flowViewport: [bounds.width, bounds.height + 20],
+    })
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
@@ -128,14 +132,14 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         pou = libraries.system.find((lib) => lib.name === library)?.pous.find((p) => p.name === pouName)
     }
     const { nodes, edges } = addNewElement(rungLocal, { newElementType: newNodeType, blockType: pou })
-    flowActions.setNodes({ rungId: rungLocal.id, nodes })
-    flowActions.setEdges({ rungId: rungLocal.id, edges })
+    flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes })
+    flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges })
   }
 
   const handleRemoveNode = (nodes: FlowNode[]) => {
     const { nodes: newNodes, edges: newEdges } = removeElements(rungLocal, nodes)
-    flowActions.setNodes({ rungId: rungLocal.id, nodes: newNodes })
-    flowActions.setEdges({ rungId: rungLocal.id, edges: newEdges })
+    flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: newNodes })
+    flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: newEdges })
   }
 
   const handleNodeStartDrag = (node: FlowNode) => {

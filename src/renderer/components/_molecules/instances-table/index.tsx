@@ -46,7 +46,7 @@ type PLCInstancesTableProps = {
 
 const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstancesTableProps) => {
   const {
-    workspaceActions: { updateInstance },
+    projectActions: { updateInstance },
   } = useOpenPLCStore()
   const tableHeaderRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)

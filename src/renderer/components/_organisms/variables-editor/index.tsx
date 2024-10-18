@@ -74,7 +74,6 @@ const VariablesEditor = () => {
         setEditorVariables({
           display: editor.variable.display,
         })
-
   }, [editor])
 
   const handleVisualizationTypeChange = (value: 'code' | 'table') => {

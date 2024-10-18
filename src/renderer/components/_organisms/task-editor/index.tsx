@@ -19,10 +19,10 @@ const TaskEditor = () => {
         configuration: {
           resource: { tasks },
         },
-      },
+      }
     },
     editorActions: { updateModelTasks },
-    workspaceActions: { createTask, rearrangeTasks, deleteTask },
+    projectActions: { createTask, rearrangeTasks, deleteTask },
   } = useOpenPLCStore()
 
   const [taskData, setTaskData] = useState<PLCTask[]>([])

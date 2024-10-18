@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import * as Tabs from '@radix-ui/react-tabs'
-// import { PLCDataType } from '@root/types/PLC/open-plc'
+import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
@@ -24,14 +24,27 @@ import { useOpenPLCStore } from '../store'
 const WorkspaceScreen = () => {
   const {
     tabs,
-    project: { data, meta: {path} },
-    workspace: {editingState},
+    workspace: { editingState },
+    project,
     editor,
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()
   useEffect(() => {
     const handleSaveProject = async () => {
-      const { success, reason } = await window.bridge.saveProject({ projectPath: path, projectData: data })
+      const projectData = PLCProjectSchema.safeParse(project)
+      if (!projectData.success) {
+        toast({
+          title: 'Error in the save request!',
+          description: 'The project data is not valid.',
+          variant: 'fail',
+        })
+        return
+      }
+
+      const { success, reason } = await window.bridge.saveProject({
+        projectPath: project.meta.path,
+        projectData: projectData.data,
+      })
       if (success) {
         _.debounce(() => setEditingState('saved'), 1000)()
         toast({

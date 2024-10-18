@@ -1,7 +1,15 @@
 import { createSelectorHooks } from 'auto-zustand-selectors-hook'
 import { create } from 'zustand'
 
-import type { EditorSlice, FlowSlice, LibrarySlice,ProjectSlice,SharedSlice, TabsSlice, WorkspaceSlice} from './slices'
+import type {
+  EditorSlice,
+  FlowSlice,
+  LibrarySlice,
+  ProjectSlice,
+  SharedSlice,
+  TabsSlice,
+  WorkspaceSlice,
+} from './slices'
 /**
  * Import all slices to create the store.
  */

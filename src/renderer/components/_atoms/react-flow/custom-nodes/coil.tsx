@@ -6,7 +6,7 @@ import {
   RisingEdgeCoil,
   SetCoil,
 } from '@root/renderer/assets/icons/flow/Coil'
-import { cn } from '@root/utils'
+import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
@@ -166,9 +166,14 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
       outputHandles: [outputHandle],
       inputConnector: inputHandle,
       outputConnector: outputHandle,
+      numericId: generateNumericUUID(),
     },
     width: DEFAULT_COIL_BLOCK_WIDTH,
     height: DEFAULT_COIL_BLOCK_HEIGHT,
+    measured: {
+      width: DEFAULT_COIL_BLOCK_WIDTH,
+      height: DEFAULT_COIL_BLOCK_HEIGHT,
+    },
     draggable: true,
     selectable: true,
     selected: false,

@@ -9,8 +9,8 @@ import { EnumeratorDTInitialValueContainer } from './initial-value'
 
 const EnumeratorDataType = () => {
   const {
-    workspace: {
-      projectData: { dataTypes },
+    project: {
+      data: { dataTypes },
     },
   } = useOpenPLCStore()
 

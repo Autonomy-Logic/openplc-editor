@@ -13,7 +13,7 @@ const Project = () => {
       data: { pous, dataTypes, configuration },
       meta: {name}
     },
-    workspaceActions: { updateProjectName },
+    projectActions: { updateMetaName },
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
@@ -22,6 +22,7 @@ const Project = () => {
     updateTabs(tabToBeCreated)
 
     const editor = getEditorFromEditors(tabToBeCreated.name)
+    console.log(editor)
     if (!editor) {
       const model = CreateEditorObjectFromTab(tabToBeCreated)
       addModel(model)
@@ -38,7 +39,7 @@ const Project = () => {
   const handleBlur = () => {
     setIsEditing(false)
     if (inputValue !== name) {
-      updateProjectName(inputValue)
+      updateMetaName(inputValue)
     }
   }
   useEffect(() => {

@@ -1,8 +1,8 @@
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
+import { ProjectSlice } from '../project'
 import { TabsSlice } from '../tabs'
-import { WorkspaceSlice } from '../workspace'
 import { CreateDatatypeObject, CreateEditorObject, CreatePouObject } from './utils'
 
 type PropsToCreatePou = {
@@ -28,14 +28,14 @@ export type SharedSlice = {
   }
 }
 
-export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & WorkspaceSlice, [], [], SharedSlice> = (
+export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSlice, [], [], SharedSlice> = (
   _setState,
   getState,
 ) => ({
   pouActions: {
     create: (propsToCreatePou: PropsToCreatePou) => {
         if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
-          const res = getState().workspaceActions.createPou(CreatePouObject(propsToCreatePou))
+          const res = getState().projectActions.createPou(CreatePouObject(propsToCreatePou))
           if (!res.ok) throw new Error()
           const data = CreateEditorObject({
             type: 'plc-textual',
@@ -69,7 +69,7 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
           propsToCreatePou.language === 'sfc' ||
           propsToCreatePou.language === 'fbd'
         ) {
-          const res = getState().workspaceActions.createPou(CreatePouObject(propsToCreatePou))
+          const res = getState().projectActions.createPou(CreatePouObject(propsToCreatePou))
           if (!res.ok) throw new Error()
           const data = CreateEditorObject({
             type: 'plc-graphical',
@@ -85,6 +85,10 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
               classFilter: 'All',
               selectedRow: '-1',
             },
+            graphical:
+              propsToCreatePou.language === 'ld'
+                ? { language: propsToCreatePou.language, openedRungs: [] }
+                : { language: propsToCreatePou.language },
           })
           getState().editorActions.addModel(data)
           getState().editorActions.setEditor(data)

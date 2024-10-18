@@ -9,27 +9,32 @@ import { ProjectModal } from '../components/_features/[start]/new-project/projec
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
 import { StartMainContent, StartSideContent } from '../components/_templates'
 import { useOpenPLCStore } from '../store'
+import { FlowType } from '../store/slices/flow/types'
 
 const StartScreen = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const { toast } = useToast()
   const navigate = useNavigate()
   const {
-    projectActions: { setProject },
     workspaceActions: { setEditingState },
+    projectActions: { setProject },
+    tabsActions: { clearTabs },
+    flowActions: { addFlow },
   } = useOpenPLCStore()
 
   const retrieveNewProjectData = async () => {
     const { success, data, error } = await window.bridge.createProject()
 
     if (success && data) {
+      clearTabs()
+      setEditingState('unsaved')
       setProject({
         meta: {
+          name: data.content.meta.name,
+          type: data.content.meta.type,
           path: data.meta.path,
-          name: 'new-project',
-          type: 'plc-project',
         },
-        data: data.content,
+        data: data.content.data,
       })
       setEditingState('unsaved')
       navigate('/workspace')
@@ -54,15 +59,24 @@ const StartScreen = () => {
   const retrieveOpenProjectData = async () => {
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
+      clearTabs()
+      setEditingState('unsaved')
       setProject({
         meta: {
+          name: data.content.meta.name,
+          type: data.content.meta.type,
           path: data.meta.path,
-          name: 'new-project',
-          type: 'plc-project',
         },
-        data: data.content,
+        data: data.content.data,
       })
-      setEditingState('unsaved')
+
+      const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
+      if (ladderPous.length) {
+        ladderPous.forEach((pou) => {
+          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+        })
+      }
+
       navigate('/workspace')
       toast({
         title: 'Project opened!',
@@ -87,13 +101,15 @@ const StartScreen = () => {
       window.bridge.createProjectAccelerator((_event, response: IProjectServiceResponse) => {
         const { data, error } = response
         if (data) {
+          clearTabs()
+          setEditingState('unsaved')
           setProject({
             meta: {
+              name: data.content.meta.name,
+              type: data.content.meta.type,
               path: data.meta.path,
-              name: 'new-project',
-              type: 'plc-project',
             },
-            data: data.content,
+            data: data.content.data,
           })
           setEditingState('unsaved')
           navigate('/workspace')
@@ -115,15 +131,24 @@ const StartScreen = () => {
       window.bridge.openProjectAccelerator((_event, response: IProjectServiceResponse) => {
         const { data, error } = response
         if (data) {
+          clearTabs()
+          setEditingState('unsaved')
           setProject({
             meta: {
+              name: data.content.meta.name,
+              type: data.content.meta.type,
               path: data.meta.path,
-              name: 'new-project',
-              type: 'plc-project',
             },
-            data: data.content,
+            data: data.content.data,
           })
-          setEditingState('unsaved')
+
+          const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
+          if (ladderPous.length) {
+            ladderPous.forEach((pou) => {
+              if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+            })
+          }
+
           navigate('/workspace')
           toast({
             title: 'Project opened!',

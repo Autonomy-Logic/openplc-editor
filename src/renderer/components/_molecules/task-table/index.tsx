@@ -63,7 +63,7 @@ type PLCTaskTableProps = {
 
 const TaskTable = ({ tableData, selectedRow, handleRowClick }: PLCTaskTableProps) => {
   const {
-    workspaceActions: { updateTask },
+    projectActions: { updateTask },
   } = useOpenPLCStore()
   const TaskBodyRef = useRef<HTMLTableSectionElement>(null)
   const TaskTableRowRef = useRef<HTMLTableRowElement>(null)

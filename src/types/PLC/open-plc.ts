@@ -121,7 +121,7 @@ const PLCFunctionSchema = z.object({
   returnType: z.enum(['BOOL', 'INT', 'DINT']),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
-  body: z.string(),
+  body: bodySchema,
   documentation: z.string(),
 })
 
@@ -132,7 +132,7 @@ const PLCProgramSchema = z.object({
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
-  body: z.string(),
+  body: bodySchema,
   documentation: z.string(),
 })
 
@@ -152,7 +152,7 @@ const PLCFunctionBlockSchema = z.object({
   name: z.string(),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
-  body: z.string(),
+  body: bodySchema,
   documentation: z.string(),
 })
 
@@ -187,6 +187,20 @@ const PLCProjectDataSchema = z.object({
 
 type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
+const PLCProjectMetaSchema = z.object({
+  name: z.string(),
+  type: z.enum(['plc-project']),
+})
+
+type PLCProjectMeta = z.infer<typeof PLCProjectMetaSchema>
+
+const PLCProjectSchema = z.object({
+  meta: PLCProjectMetaSchema,
+  data: PLCProjectDataSchema,
+})
+
+type PLCProject = z.infer<typeof PLCProjectSchema>
+
 export {
   baseTypeSchema,
   bodySchema,
@@ -198,6 +212,8 @@ export {
   PLCInstanceSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
+  PLCProjectMetaSchema,
+  PLCProjectSchema,
   PLCTaskSchema,
   PLCVariableSchema,
 }
@@ -211,7 +227,9 @@ export type {
   PLCGlobalVariable,
   PLCInstance,
   PLCProgram,
+  PLCProject,
   PLCProjectData,
+  PLCProjectMeta,
   PLCTask,
   PLCVariable,
 }
