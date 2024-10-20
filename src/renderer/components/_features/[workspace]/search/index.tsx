@@ -14,14 +14,17 @@ interface SearchResult {
   searchQuery: string
   projectName: string
   functions: {
-    type: 'plc-function' | 'plc-graphical' | 'plc-datatype' | 'plc-resource'
-    pou: {
+    pous: {
       name: string
       language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st'
       pouType: 'program' | 'function' | 'function-block'
       variable: string | null
-    }
-  }[]
+    }[]
+    dataTypes: {
+      name: string
+      type: 'array' | 'structure' | 'enumerated'
+    }[]
+  }
 }
 
 interface SearchProps {
@@ -31,10 +34,21 @@ interface SearchProps {
 const Search = ({ items }: SearchProps) => {
   const { searchActions } = useOpenPLCStore()
 
-  console.log(items.map((item) => item.functions.map((func) => func.pou.variable)))
-
   const handleRemoveSearchResult = (index: number) => {
     searchActions.removeSearchResult(index)
+  }
+
+  const mapDataTypeToLeafLang = (type: 'array' | 'structure' | 'enumerated'): 'arr' | 'str' | 'enum' => {
+    switch (type) {
+      case 'array':
+        return 'arr'
+      case 'structure':
+        return 'str'
+      case 'enumerated':
+        return 'enum'
+      default:
+        return 'arr'
+    }
   }
 
   return (
@@ -57,21 +71,30 @@ const Search = ({ items }: SearchProps) => {
                   ),
                   content: (
                     <ProjectSearchTreeRoot label={item.projectName}>
-                      {item.functions.map((func, funcIndex) => (
-                        <div key={funcIndex}>
-                          <ProjectSearchTreeBranch branchTarget={func.pou.pouType}>
-                            {func.pou.variable ? (
-                              <ProjectSearchTreeVariableBranch label={func.pou.name} leafLang={func.pou.language}>
-                                {func.pou.variable.split(', ').map((variable, variableIndex) => (
-                                  <ProjectSearchTreeVariableLeaf key={variableIndex} label={variable} />
-                                ))}
-                              </ProjectSearchTreeVariableBranch>
-                            ) : (
-                              <ProjectSearchTreeLeaf label={func.pou.name} leafLang={func.pou.language} />
-                            )}
-                          </ProjectSearchTreeBranch>
-                        </div>
+                      {item.functions.pous.map((pou, pouIndex) => (
+                        <ProjectSearchTreeBranch key={pouIndex} branchTarget={pou.pouType}>
+                          {pou.variable ? (
+                            <ProjectSearchTreeVariableBranch label={pou.name} leafLang={pou.language}>
+                              {pou.variable.split(', ').map((variable, variableIndex) => (
+                                <ProjectSearchTreeVariableLeaf key={variableIndex} label={variable} />
+                              ))}
+                            </ProjectSearchTreeVariableBranch>
+                          ) : (
+                            <ProjectSearchTreeLeaf label={pou.name} leafLang={pou.language} />
+                          )}
+                        </ProjectSearchTreeBranch>
                       ))}
+                      {item.functions.dataTypes.length > 0 && (
+                        <ProjectSearchTreeBranch branchTarget='data-type'>
+                          {item.functions.dataTypes.map((dataType, dataTypeIndex) => (
+                            <ProjectSearchTreeLeaf
+                              key={dataTypeIndex}
+                              label={dataType.name}
+                              leafLang={mapDataTypeToLeafLang(dataType.type)}
+                            />
+                          ))}
+                        </ProjectSearchTreeBranch>
+                      )}
                     </ProjectSearchTreeRoot>
                   ),
                 },

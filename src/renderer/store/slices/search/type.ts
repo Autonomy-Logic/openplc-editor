@@ -1,15 +1,17 @@
 import { z } from 'zod'
 
-// project -> function -> pou -> variable
-
 const searchModelSchema = z.object({
-  type: z.enum(['plc-function', 'plc-graphical', 'plc-datatype', 'plc-resource']),
   pou: z.object({
     name: z.string(),
     language: z.enum(['ld', 'sfc', 'fbd', 'il', 'st']),
     pouType: z.enum(['program', 'function', 'function-block']),
     variable: z.string(),
   }),
+  dataType: z.object({
+    name: z.string(),
+    type: z.enum(['array', 'structure', 'enumerated']),
+  }),
+  // resource: z.object({
 })
 
 const projectSchema = z.object({

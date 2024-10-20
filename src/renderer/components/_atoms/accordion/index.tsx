@@ -34,7 +34,7 @@ const AccordionTrigger = forwardRef<HTMLButtonElement, AccordionPrimitive.Accord
     <AccordionPrimitive.Header className='flex'>
       <AccordionPrimitive.Trigger
         className={cn(
-          'group flex w-full items-center justify-between overflow-hidden p-2 text-left transition-all duration-300 hover:bg-neutral-950',
+          'group flex w-full items-center justify-between overflow-hidden bg-slate-50 p-2 text-left transition-all duration-300 hover:bg-slate-100 dark:bg-neutral-1000 dark:hover:bg-neutral-950',
           className,
         )}
         {...props}
@@ -56,7 +56,7 @@ const AccordionContent = forwardRef<HTMLDivElement, AccordionPrimitive.Accordion
   ({ children, className, ...props }, forwardedRef) => (
     <AccordionPrimitive.Content
       className={cn(
-        'overflow-hidden bg-neutral-950 transition-all duration-300 ease-in-out data-[state=closed]:animate-slideUp data-[state=open]:animate-slideDown',
+        'overflow-hidden border-t border-slate-200 dark:border-neutral-900 bg-slate-50 transition-all duration-300 ease-in-out data-[state=closed]:animate-slideUp data-[state=open]:animate-slideDown dark:bg-neutral-950',
         className,
       )}
       {...props}
@@ -77,19 +77,10 @@ const Accordion = ({ items, defaultValue, type = 'single', collapsible = true }:
   }
 
   return (
-    <AccordionPrimitive.Root
-      type={type}
-      collapsible={collapsible}
-      className='w-full'
-    >
+    <AccordionPrimitive.Root type={type} collapsible={collapsible} className='w-full'>
       {items.map((item, index) => (
         <AccordionItem key={index} value={item.title as string}>
-          <AccordionTrigger
-            onClick={() => handleOpenChange(item.title as string)}
-            className={openItem === item.title ? 'bg-neutral-950' : ''}
-          >
-            {item.title}
-          </AccordionTrigger>
+          <AccordionTrigger onClick={() => handleOpenChange(item.title as string)}>{item.title}</AccordionTrigger>
           <AccordionContent>{item.content}</AccordionContent>
         </AccordionItem>
       ))}

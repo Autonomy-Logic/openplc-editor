@@ -33,7 +33,7 @@ const ProjectSearchTreeRoot = ({ children, label, ...res }: IProjectSearchTreeRo
     <div className='select-none'>
       <ul className='list-none p-0' {...res}>
         <li
-          className=' flex cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
+          className=' flex cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-100 dark:hover:bg-neutral-900'
           onClick={handleVisibility}
         >
           <ArrowIcon
@@ -73,11 +73,11 @@ type IProjectSearchTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
 
 const BranchSources = {
   'data-type': { BranchIcon: DataTypeIcon, label: 'Data Types' },
-  function: { BranchIcon: FunctionIcon, label: 'Functions' },
+  'function': { BranchIcon: FunctionIcon, label: 'Functions' },
   'function-block': { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
-  program: { BranchIcon: ProgramIcon, label: 'Programs' },
-  resource: { BranchIcon: ResourceIcon, label: 'Resource' },
-  device: { BranchIcon: DeviceIcon, label: 'Device' },
+  'program': { BranchIcon: ProgramIcon, label: 'Programs' },
+  'resource': { BranchIcon: ResourceIcon, label: 'Resource' },
+  'device': { BranchIcon: DeviceIcon, label: 'Device' },
 }
 
 const ProjectSearchTreeBranch = ({ branchTarget, children, ...res }: IProjectSearchTreeBranchProps) => {
@@ -96,7 +96,7 @@ const ProjectSearchTreeBranch = ({ branchTarget, children, ...res }: IProjectSea
   return (
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
       <div
-        className='flex w-full cursor-pointer flex-row items-center py-1 pl-4 hover:bg-slate-50 dark:hover:bg-neutral-900'
+        className='flex w-full cursor-pointer flex-row items-center py-1 pl-4 hover:bg-slate-100 dark:hover:bg-neutral-900'
         onClick={hasAssociatedPou ? handleBranchVisibility : undefined}
       >
         {hasAssociatedPou ? (
@@ -167,7 +167,7 @@ const ProjectSearchTreeNestedBranch = ({
   return (
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
       <div
-        className='ml-4 flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900'
+        className='ml-4 flex w-full cursor-pointer flex-row items-center py-1 pl-2 hover:bg-slate-100 dark:hover:bg-neutral-900'
         onClick={hasAssociatedDataType ? handleBranchVisibility : undefined}
       >
         {hasAssociatedDataType ? (
@@ -239,7 +239,7 @@ const ProjectSearchTreeLeaf = ({ leafLang, label, ...res }: IProjectSearchTreeLe
   return (
     <li
       className={cn(
-        'flex w-full cursor-pointer flex-row items-center py-1 pl-[45px] hover:bg-slate-50 dark:hover:bg-neutral-900',
+        'flex w-full cursor-pointer flex-row items-center py-1 pl-[45px] hover:bg-slate-100 dark:hover:bg-neutral-900',
 
         name === label && 'bg-slate-50 dark:bg-neutral-900',
       )}
@@ -273,7 +273,7 @@ const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: 
   return (
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
       <div
-        className='flex w-full cursor-pointer flex-row items-center py-1 pl-6 hover:bg-slate-50 dark:hover:bg-neutral-900'
+        className='flex w-full cursor-pointer flex-row items-center py-1 pl-6 hover:bg-slate-100 dark:hover:bg-neutral-900'
         onClick={hasVariable ? handleBranchVisibility : undefined}
       >
         {hasVariable ? (
@@ -318,7 +318,7 @@ const ProjectSearchTreeVariableLeaf = ({ label, ...res }: IProjectSearchTreeVari
   return (
     <li
       className={cn(
-        'flex w-full cursor-pointer flex-row items-center py-1 pl-[50px] hover:bg-slate-50 dark:hover:bg-neutral-900',
+        'flex w-full cursor-pointer flex-row items-center py-1 pl-[50px] hover:bg-slate-100 dark:hover:bg-neutral-900',
       )}
       {...res}
     >

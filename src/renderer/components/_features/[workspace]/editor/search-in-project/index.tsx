@@ -149,52 +149,43 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
   }
 
   const handleSearch = () => {
+    const pous = projectData.pous
+      .filter((pou) => {
+        const pouMatches = pou.data.name.toLowerCase().includes(searchQuery.toLowerCase())
+        const variableMatches = pou.data.variables.some((variable) =>
+          variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
+        )
+
+        return pouMatches || variableMatches
+      })
+      .map((pou) => ({
+        name: pou.data.name,
+        language: pou.data.language,
+        pouType: pou.type,
+        variable: pou.data.variables
+          .filter((variable) => variable.name.toLowerCase().includes(searchQuery.toLowerCase()))
+          .map((variable) => variable.name)
+          .join(', '),
+      }))
+
+    const dataTypes = projectData.dataTypes
+      .filter((dataType) => dataType.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      .map((dataType) => ({
+        name: dataType.name,
+        type: dataType.derivation.type,
+      }))
+
     const formattedResults = {
       searchQuery,
       projectName: projectData.projectName,
-      functions: projectData.pous
-        .filter((pou) => {
-          const pouMatches = pou.data.name.toLowerCase().includes(searchQuery.toLowerCase())
-          const variableMatches = pou.data.variables.some((variable) =>
-            variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
-          )
-
-          return pouMatches || variableMatches
-        })
-        .map((pou) => {
-          let generalType: 'plc-graphical' | 'plc-datatype' | 'plc-resource' | 'plc-function' = 'plc-resource'
-          switch (pou.type) {
-            case 'function':
-              generalType = 'plc-function'
-              break
-            case 'program':
-              generalType = 'plc-graphical'
-              break
-            case 'function-block':
-              generalType = 'plc-datatype'
-              break
-            default:
-              generalType = 'plc-resource'
-              break
-          }
-
-          return {
-            type: generalType,
-            pou: {
-              name: pou.data.name,
-              language: pou.data.language,
-              pouType: pou.type,
-              variable: pou.data.variables
-                .filter((variable) => variable.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                .map((variable) => variable.name)
-                .join(', '),
-            },
-          }
-        }),
+      functions: {
+        pous,
+        dataTypes,
+      },
     }
 
     setSearchResults(formattedResults)
-    console.log('Search Results:', formattedResults)
+    console.log(formattedResults)
     setSearchQuery('')
     onClose()
   }
