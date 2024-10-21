@@ -7,6 +7,7 @@ import { cn, ConvertToLangShortenedFormat } from '@root/utils'
 import { useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
+import { useToast } from '../../../[app]/toast/use-toast'
 import { IntervalModal } from '../interval-model'
 import { NewProjectStore } from '../project-modal'
 
@@ -25,7 +26,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
     language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
     time: string
   }
-
+  const { toast } = useToast()
   const { handleSubmit, control } = useForm<FormData>()
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)
   const projectData = NewProjectStore((state) => state.formData)
@@ -36,7 +37,6 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
     workspaceActions: { setEditingState },
     tabsActions: { clearTabs },
   } = useOpenPLCStore()
-
 
   const handleFormSubmit: SubmitHandler<FormData> = async (data) => {
     const allData = {
@@ -49,11 +49,9 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
 
     try {
       const result = await window.bridge.createProjectFile({
-        ...projectData,
+        ...allData,
         path: projectData.path,
       } as CreateProjectFileProps)
-
-      console.log('Arquivo criado com sucesso', result)
       if (result.data) {
         clearTabs()
         setEditingState('unsaved')
@@ -68,8 +66,17 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
       }
       onClose()
       onFinish()
-    } catch (error) {
-      console.error('Erro ao criar o arquivo:', error)
+      toast({
+        title: 'The project was created successfully!',
+        description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
+        variant: 'default',
+      })
+    } catch (_error) {
+      toast({
+        title: 'Cannot create a project!',
+        description: 'Failed to create the project. ',
+        variant: 'fail',
+      })
     }
   }
 

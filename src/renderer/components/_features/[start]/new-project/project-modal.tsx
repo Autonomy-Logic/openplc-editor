@@ -53,7 +53,6 @@ const NewProjectStore = create<NewProjectStoreProps>((setState) => ({
 const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const navigate = useNavigate()
 
-  const formCurrentState = NewProjectStore((state) => state.formData)
   const resetFormData = NewProjectStore((state) => state.resetFormData)
   const [currentStep, setCurrentStep] = useState(1)
   const handleNext = () => {
@@ -75,7 +74,6 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
     setCurrentStep(1)
     onClose()
     navigate('/workspace')
-    console.log('AQUI O FORM', formCurrentState)
   }
 
   const renderStep = () => {
