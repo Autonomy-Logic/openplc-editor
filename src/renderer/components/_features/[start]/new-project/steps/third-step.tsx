@@ -2,34 +2,43 @@
 import { PouLanguageSources } from '@process:renderer/data'
 import { TimerIcon } from '@root/renderer/assets'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, ConvertToLangShortenedFormat } from '@root/utils'
 import { useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
+import { useNavigate } from 'react-router-dom'
 
 import { IntervalModal } from '../interval-model'
 import { NewProjectStore } from '../project-modal'
 
 type CreateProjectFileProps = {
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd',
-  time: string,
-  type: 'plc-project' | 'plc-library',
-  name: string,
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+  time: string
+  type: 'plc-project' | 'plc-library'
+  name: string
   path: string
 }
 
-const Step3 = ({ onPrev, onClose: _onClose }: { onPrev: () => void; onClose: () => void }) => {
+const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: () => void; onClose: () => void }) => {
   type FormData = {
     name: string
     path: string
     language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
     time: string
   }
+  const navigate = useNavigate()
 
   const { handleSubmit, control } = useForm<FormData>()
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)
   const projectData = NewProjectStore((state) => state.formData)
   const [isModalOpen, setModalOpen] = useState(false)
   const [intervalValue, setIntervalValue] = useState('T#20ms')
+  const {
+    projectActions: { setProject },
+    workspaceActions: { setEditingState },
+    tabsActions: { clearTabs },
+  } = useOpenPLCStore()
+
 
   const handleFormSubmit: SubmitHandler<FormData> = async (data) => {
     const allData = {
@@ -47,6 +56,21 @@ const Step3 = ({ onPrev, onClose: _onClose }: { onPrev: () => void; onClose: () 
       } as CreateProjectFileProps)
 
       console.log('Arquivo criado com sucesso', result)
+      if (result.data) {
+        clearTabs()
+        setEditingState('unsaved')
+        setProject({
+          meta: {
+            name: allData.name,
+            type: allData.type,
+            path: allData.path,
+          },
+          data: result.data.content.data,
+        })
+      }
+      onClose()
+      navigate('/workspace')
+      onFinish()
     } catch (error) {
       console.error('Erro ao criar o arquivo:', error)
     }
@@ -63,7 +87,7 @@ const Step3 = ({ onPrev, onClose: _onClose }: { onPrev: () => void; onClose: () 
           2
         </div>
         <div className='h-[2px] w-12 bg-blue-300'></div>
-        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white dark:bg-neutral-950 text-blue-500'>
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white text-blue-500 dark:bg-neutral-950'>
           3
         </div>
       </div>

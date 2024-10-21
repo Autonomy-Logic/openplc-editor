@@ -50,10 +50,10 @@ const NewProjectStore = create<NewProjectStoreProps>((setState) => ({
 }))
 
 const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
-  const _formCurrentState = NewProjectStore((state) => state.formData)
+
+  const formCurrentState = NewProjectStore((state) => state.formData)
   const resetFormData = NewProjectStore((state) => state.resetFormData)
   const [currentStep, setCurrentStep] = useState(1)
-
   const handleNext = () => {
     setCurrentStep((prevStep) => (prevStep < 3 ? prevStep + 1 : prevStep))
   }
@@ -68,6 +68,14 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
     onClose()
   }
 
+  const handleFinishForm = () => {
+
+    resetFormData()
+    setCurrentStep(1)
+    onClose()
+    console.log('AQUI O FORM', formCurrentState)
+  }
+
   const renderStep = () => {
     switch (currentStep) {
       case 1:
@@ -75,7 +83,7 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
       case 2:
         return <Step2 onNext={handleNext} onPrev={handlePrev} />
       case 3:
-        return <Step3 onPrev={handlePrev} onClose={handleClose} />
+        return <Step3 onPrev={handlePrev} onFinish={handleFinishForm} onClose={handleClose} />
       default:
         return null
     }
