@@ -11,7 +11,7 @@ const baseXmlStructure = (): BaseXml => ({
     '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
     '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema-instance',
     '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
-    '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6.xsd',
+    '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6_0201',
     fileHeader: {
       '@companyName': 'Unknown',
       '@productName': 'Unnamed',
@@ -57,7 +57,6 @@ const baseXmlStructure = (): BaseXml => ({
           resource: {
             '@name': 'Res0',
             task: [],
-            globalVars: [],
           },
         },
       },
@@ -83,6 +82,7 @@ export const parseProjectToXML = (project: ProjectState) => {
   xmlResult = instanceToXml(xmlResult, configuration)
 
   const doc = create(xmlResult)
+  doc.dec({ version: '1.0', encoding: 'utf-8' })
   const xml = doc.end({ prettyPrint: true })
   console.log('xml as object', xmlResult)
   console.log(xml)

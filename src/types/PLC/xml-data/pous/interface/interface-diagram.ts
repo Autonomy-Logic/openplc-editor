@@ -5,12 +5,24 @@ import { variableXMLSchema } from '../../variable/variable-diagram'
 
 const interfaceXMLSchema = z.object({
   returnType: z.object(baseTypes.reduce((acc, type) => ({ ...acc, [type]: z.string().optional() }), {})).optional(),
-  inputVars: z.array(variableXMLSchema).optional(),
-  outputVars: z.array(variableXMLSchema).optional(),
-  inOutVars: z.array(variableXMLSchema).optional(),
-  externalVars: z.array(variableXMLSchema).optional(),
-  localVars: z.array(variableXMLSchema).optional(),
-  tempVars: z.array(variableXMLSchema).optional(),
+  inputVars: z.object({
+    variable: z.array(variableXMLSchema).optional(),
+  }).optional(),
+  outputVars: z.object({
+    variable: z.array(variableXMLSchema).optional(),
+  }).optional(),
+  inOutVars: z.object({
+    variable: z.array(variableXMLSchema).optional(),
+  }).optional(),
+  externalVars: z.object({
+    variable: z.array(variableXMLSchema).optional(),
+  }).optional(),
+  localVars: z.object({
+    variable: z.array(variableXMLSchema).optional(),
+  }).optional(),
+  tempVars: z.object({
+    variable: z.array(variableXMLSchema).optional(),
+  }).optional(),
 })
 type InterfaceXML = z.infer<typeof interfaceXMLSchema>
 

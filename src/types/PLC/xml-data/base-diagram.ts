@@ -10,7 +10,7 @@ const baseXmlSchema = z.object({
     '@xmlns': z.string().default('http://www.plcopen.org/xml/tc6_0201'),
     '@xmlns:xsd': z.string().default('http://www.w3.org/2001/XMLSchema-instance'),
     '@xmlns:xhtml': z.string().default('http://www.w3.org/1999/xhtml'),
-    '@xmlns:ns1': z.string().default('http://www.plcopen.org/xml/tc6.xsd'),
+    '@xmlns:ns1': z.string().default('http://www.plcopen.org/xml/tc6_0201'),
     '@xsi:schemaLocation': z
       .string()
       .default('http://www.plcopen.org/xml/tc6_0200 http://www.plcopen.org/xml/tc6_0200')
@@ -59,7 +59,9 @@ const baseXmlSchema = z.object({
           '@name': z.string().default('Config0'),
           resource: z.object({
             '@name': z.string().default('Res0'),
-            globalVars: z.array(variableXMLSchema),
+            globalVars: z.object({
+              variable: z.array(variableXMLSchema).optional(),
+            }).optional(),
             task: z.array(taskXMLSchema),
           }),
         }),

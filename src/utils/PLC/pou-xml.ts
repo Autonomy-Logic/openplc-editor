@@ -16,51 +16,61 @@ export const parseInterface = (pou: PLCPou) => {
   const xml: InterfaceXML = {}
   variables.forEach((variable) => {
     const v: VariableXML = {
-      variable: {
-        '@name': variable.name,
-        '@address': variable.location,
-        type: {
-          // !BAD CODE
-          [variable.type.value.toUpperCase()]: '',
-        },
-        initialValue: variable.initialValue,
-        documentation: {
-          'xhtml:p': {
-            $: variable.documentation,
-          },
-        },
+      '@name': variable.name,
+      type: {
+        // !BAD CODE
+        [variable.type.value.toUpperCase()]: '',
       },
     }
 
+    if (variable.location)
+      v['@address'] = variable.location
+
+    if (variable.initialValue)
+      v.initialValue = variable.initialValue
+
+    if (variable.documentation)
+      v.documentation = {
+        'xhtml:p': {
+          $: variable.documentation,
+        },
+      }
+
     switch (variable.class) {
       case 'input': {
-        if (!xml.inputVars) xml.inputVars = []
-        xml.inputVars.push(v)
+        if (!xml.inputVars) xml.inputVars = { variable: [] }
+        if (!xml.inputVars.variable) xml.inputVars.variable = []
+        xml.inputVars.variable.push(v)
         return
       }
       case 'output': {
-        if (!xml.outputVars) xml.outputVars = []
-        xml.outputVars.push(v)
+        if (!xml.outputVars) xml.outputVars = { variable: [] }
+        if (!xml.outputVars.variable) xml.outputVars.variable = []
+        xml.outputVars.variable.push(v)
         return
       }
       case 'inOut': {
-        if (!xml.inOutVars) xml.inOutVars = []
-        xml.inOutVars.push(v)
+        if (!xml.inOutVars) xml.inOutVars = { variable: [] }
+        if (!xml.inOutVars.variable) xml.inOutVars.variable = []
+        xml.inOutVars.variable.push(v)
         return
       }
       case 'external': {
-        if (!xml.externalVars) xml.externalVars = []
-        xml.externalVars.push(v)
+        if (!xml.externalVars) xml.externalVars = { variable: [] }
+        if (!xml.externalVars.variable) xml.externalVars.variable = []
+        xml.externalVars.variable.push(v)
         return
       }
       case 'local': {
-        if (!xml.localVars) xml.localVars = []
-        xml.localVars.push(v)
+        if (!xml.localVars) xml.localVars = { variable: [] }
+        if (!xml.localVars.variable) xml.localVars.variable = []
+        xml.localVars.variable.push(v)
         return
       }
       case 'temp': {
-        if (!xml.tempVars) xml.tempVars = []
-        xml.tempVars.push(v)
+        if (!xml.tempVars) xml.tempVars = { variable: [] }
+        if (!xml.tempVars.variable) xml.tempVars.variable = []
+        xml.tempVars.variable.push(v)
         return
       }
       default:

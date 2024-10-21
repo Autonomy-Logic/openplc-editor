@@ -34,25 +34,28 @@ export const instanceToXml = (xml: BaseXml, configuration: PLCConfiguration) => 
 
   globalVariables.forEach((variable) => {
     const v = {
-      variable: {
-        '@name': variable.name,
-        '@address': variable.location,
-        type: {
-          [variable.type.value.toUpperCase()]: '',
-        },
-        initialValue: variable.initialValue,
-        documentation: {
-          'xhtml:p': {
-            $: variable.documentation,
-          },
+      '@name': variable.name,
+      '@address': variable.location,
+      type: {
+        [variable.type.value.toUpperCase()]: '',
+      },
+      initialValue: variable.initialValue,
+      documentation: {
+        'xhtml:p': {
+          $: variable.documentation,
         },
       },
     }
 
     if (!xml.project.instances.configurations.configuration.resource.globalVars) {
-      xml.project.instances.configurations.configuration.resource.globalVars = []
+      xml.project.instances.configurations.configuration.resource.globalVars = {
+        variable: [],
+      }
     }
-    xml.project.instances.configurations.configuration.resource.globalVars.push(v)
+    if (!xml.project.instances.configurations.configuration.resource.globalVars.variable) {
+      xml.project.instances.configurations.configuration.resource.globalVars.variable = []
+    }
+    xml.project.instances.configurations.configuration.resource.globalVars.variable.push(v)
   })
 
   return xml
