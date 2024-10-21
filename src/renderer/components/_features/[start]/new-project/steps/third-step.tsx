@@ -6,7 +6,6 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, ConvertToLangShortenedFormat } from '@root/utils'
 import { useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
-import { useNavigate } from 'react-router-dom'
 
 import { IntervalModal } from '../interval-model'
 import { NewProjectStore } from '../project-modal'
@@ -26,7 +25,6 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
     language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
     time: string
   }
-  const navigate = useNavigate()
 
   const { handleSubmit, control } = useForm<FormData>()
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)
@@ -69,7 +67,6 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
         })
       }
       onClose()
-      navigate('/workspace')
       onFinish()
     } catch (error) {
       console.error('Erro ao criar o arquivo:', error)

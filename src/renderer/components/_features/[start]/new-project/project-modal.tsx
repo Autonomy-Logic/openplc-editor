@@ -1,6 +1,7 @@
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { produce } from 'immer'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { create } from 'zustand'
 
 import { Step1 } from './steps/first-step'
@@ -50,6 +51,7 @@ const NewProjectStore = create<NewProjectStoreProps>((setState) => ({
 }))
 
 const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  const navigate = useNavigate()
 
   const formCurrentState = NewProjectStore((state) => state.formData)
   const resetFormData = NewProjectStore((state) => state.resetFormData)
@@ -69,10 +71,10 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   }
 
   const handleFinishForm = () => {
-
     resetFormData()
     setCurrentStep(1)
     onClose()
+    navigate('/workspace')
     console.log('AQUI O FORM', formCurrentState)
   }
 
