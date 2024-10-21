@@ -149,24 +149,50 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
   }
 
   const handleSearch = () => {
-    const pous = projectData.pous
+    const groupedPous = projectData.pous
       .filter((pou) => {
         const pouMatches = pou.data.name.toLowerCase().includes(searchQuery.toLowerCase())
         const variableMatches = pou.data.variables.some((variable) =>
           variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
         )
+        const bodyMatches = ['st', 'il'].includes(pou.data.language)
+          ? pou.data.body.toLowerCase().includes(searchQuery.toLowerCase())
+          : false
 
-        return pouMatches || variableMatches
+        return pouMatches || variableMatches || bodyMatches
       })
-      .map((pou) => ({
-        name: pou.data.name,
-        language: pou.data.language,
-        pouType: pou.type,
-        variable: pou.data.variables
-          .filter((variable) => variable.name.toLowerCase().includes(searchQuery.toLowerCase()))
-          .map((variable) => variable.name)
-          .join(', '),
-      }))
+      .reduce(
+        (acc, pou) => {
+          const pouType = pou.type
+
+          if (!acc[pouType]) {
+            acc[pouType] = []
+          }
+
+          acc[pouType].push({
+            name: pou.data.name,
+            language: pou.data.language,
+            pouType: pou.type,
+            body: pou.data.body,
+            variable: pou.data.variables
+              .filter((variable) => variable.name.toLowerCase().includes(searchQuery.toLowerCase()))
+              .map((variable) => variable.name)
+              .join(', '),
+          })
+
+          return acc
+        },
+        {} as Record<
+          string,
+          Array<{
+            name: string
+            language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st'
+            pouType: 'function' | 'function-block' | 'program'
+            body: string
+            variable: string
+          }>
+        >,
+      )
 
     const dataTypes = projectData.dataTypes
       .filter((dataType) => dataType.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -175,12 +201,26 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
         type: dataType.derivation.type,
       }))
 
+    const resourceGlobalVar = projectData.configuration.resource.globalVariables.filter((variable) =>
+      variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
+    )
+
+    const resourceTasks = projectData.configuration.resource.tasks.filter((task) =>
+      task.name.toLowerCase().includes(searchQuery.toLowerCase()),
+    )
+
+    const resource = {
+      globalVariable: resourceGlobalVar.map((variable) => variable.name).join(', '),
+      task: resourceTasks.map((task) => task.name).join(', '),
+    }
+
     const formattedResults = {
       searchQuery,
       projectName: projectData.projectName,
       functions: {
-        pous,
+        pous: groupedPous,
         dataTypes,
+        resource,
       },
     }
 

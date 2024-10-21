@@ -83,14 +83,14 @@ const BranchSources = {
 const ProjectSearchTreeBranch = ({ branchTarget, children, ...res }: IProjectSearchTreeBranchProps) => {
   const {
     workspace: {
-      projectData: { pous, dataTypes },
+      projectData: { pous, dataTypes, configuration },
     },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState(false)
   const { BranchIcon, label } = BranchSources[branchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
   const hasAssociatedPou =
-    pous.some((pou) => pou.type === branchTarget) || (branchTarget === 'data-type' && dataTypes.length > 0)
+    pous.some((pou) => pou.type === branchTarget) || (branchTarget === 'data-type' && dataTypes.length > 0) || (branchTarget === 'resource' && configuration !== null)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
 
   return (
@@ -261,13 +261,13 @@ const ProjectSearchTreeLeaf = ({ leafLang, label, ...res }: IProjectSearchTreeLe
 const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: IProjectSearchTreeLeafProps) => {
   const {
     workspace: {
-      projectData: { pous },
+      projectData: { pous, configuration },
     },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)
   const { LeafIcon } = LeafSources[leafLang]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-  const hasVariable = pous.some((pou) => pou.data.variables.length > 0)
+  const hasVariable = pous.some((pou) => pou.data.variables.length > 0) || (configuration !== null)
   useEffect(() => setBranchIsOpen(hasVariable), [hasVariable])
 
   return (
@@ -312,9 +312,10 @@ const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: 
 
 type IProjectSearchTreeVariableLeafProps = ComponentPropsWithoutRef<'li'> & {
   label?: string
+  hasVariable?: boolean
 }
 
-const ProjectSearchTreeVariableLeaf = ({ label, ...res }: IProjectSearchTreeVariableLeafProps) => {
+const ProjectSearchTreeVariableLeaf = ({ label, hasVariable, ...res }: IProjectSearchTreeVariableLeafProps) => {
   return (
     <li
       className={cn(
@@ -322,7 +323,7 @@ const ProjectSearchTreeVariableLeaf = ({ label, ...res }: IProjectSearchTreeVari
       )}
       {...res}
     >
-      <ZapIcon className='flex-shrink-0' />
+      {hasVariable ? <ZapIcon className='flex-shrink-0' /> : <div className='w-5' />}
       <span
         className={cn(
           'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-medium text-neutral-1000 dark:text-white',

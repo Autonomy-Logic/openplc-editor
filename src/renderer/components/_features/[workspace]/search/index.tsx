@@ -14,16 +14,24 @@ interface SearchResult {
   searchQuery: string
   projectName: string
   functions: {
-    pous: {
-      name: string
-      language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st'
-      pouType: 'program' | 'function' | 'function-block'
-      variable: string | null
-    }[]
+    pous: Record<
+      'program' | 'function' | 'function-block',
+      Array<{
+        name: string
+        language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st'
+        pouType: 'program' | 'function' | 'function-block'
+        body: string
+        variable: string | null
+      }>
+    >
     dataTypes: {
       name: string
       type: 'array' | 'structure' | 'enumerated'
     }[]
+    resource: {
+      globalVariable: string
+      task: string
+    }
   }
 }
 
@@ -51,6 +59,12 @@ const Search = ({ items }: SearchProps) => {
     }
   }
 
+  const extractSearchQuery = (body: string, searchQuery: string) => {
+    const regex = new RegExp(`(${searchQuery})`, 'gi')
+    const match = body.match(regex)
+    return match ? match[0] : undefined
+  }
+
   return (
     <div className='h-full w-full text-cp-sm'>
       <div className='flex h-full w-full flex-col gap-1 rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
@@ -71,19 +85,42 @@ const Search = ({ items }: SearchProps) => {
                   ),
                   content: (
                     <ProjectSearchTreeRoot label={item.projectName}>
-                      {item.functions.pous.map((pou, pouIndex) => (
-                        <ProjectSearchTreeBranch key={pouIndex} branchTarget={pou.pouType}>
-                          {pou.variable ? (
-                            <ProjectSearchTreeVariableBranch label={pou.name} leafLang={pou.language}>
-                              {pou.variable.split(', ').map((variable, variableIndex) => (
-                                <ProjectSearchTreeVariableLeaf key={variableIndex} label={variable} />
-                              ))}
-                            </ProjectSearchTreeVariableBranch>
-                          ) : (
-                            <ProjectSearchTreeLeaf label={pou.name} leafLang={pou.language} />
+                      {Object.keys(item.functions.pous).map((pouType) => (
+                        <ProjectSearchTreeBranch
+                          key={pouType}
+                          branchTarget={pouType as 'function' | 'program' | 'function-block'}
+                        >
+                          {item.functions.pous[pouType as 'function' | 'program' | 'function-block'].map(
+                            (pou, pouIndex) =>
+                              pou.variable || pou.language === 'st' || pou.language === 'il' ? (
+                                <ProjectSearchTreeVariableBranch
+                                  key={pouIndex}
+                                  label={pou.name}
+                                  leafLang={pou.language}
+                                >
+                                  {pou.variable &&
+                                    pou.variable
+                                      .split(', ')
+                                      .map((variable, variableIndex) => (
+                                        <ProjectSearchTreeVariableLeaf
+                                          key={variableIndex}
+                                          label={variable}
+                                          hasVariable
+                                        />
+                                      ))}
+                                  {(pou.language === 'st' || pou.language === 'il') && (
+                                    <ProjectSearchTreeVariableLeaf
+                                      label={extractSearchQuery(pou.body, item.searchQuery)}
+                                    />
+                                  )}
+                                </ProjectSearchTreeVariableBranch>
+                              ) : (
+                                <ProjectSearchTreeLeaf label={pou.name} leafLang={pou.language} />
+                              ),
                           )}
                         </ProjectSearchTreeBranch>
                       ))}
+
                       {item.functions.dataTypes.length > 0 && (
                         <ProjectSearchTreeBranch branchTarget='data-type'>
                           {item.functions.dataTypes.map((dataType, dataTypeIndex) => (
@@ -93,6 +130,25 @@ const Search = ({ items }: SearchProps) => {
                               leafLang={mapDataTypeToLeafLang(dataType.type)}
                             />
                           ))}
+                        </ProjectSearchTreeBranch>
+                      )}
+
+                      {(item.functions.resource.globalVariable || item.functions.resource.task) && (
+                        <ProjectSearchTreeBranch branchTarget='resource'>
+                          {item.functions.resource.globalVariable && (
+                            <ProjectSearchTreeVariableBranch label='Global Variables' leafLang='res'>
+                              {item.functions.resource.globalVariable.split(', ').map((variable, variableIndex) => (
+                                <ProjectSearchTreeVariableLeaf key={variableIndex} label={variable} hasVariable />
+                              ))}
+                            </ProjectSearchTreeVariableBranch>
+                          )}
+                          {item.functions.resource.task && (
+                            <ProjectSearchTreeVariableBranch label='Tasks' leafLang='res'>
+                              {item.functions.resource.task.split(', ').map((task, taskIndex) => (
+                                <ProjectSearchTreeVariableLeaf key={taskIndex} label={task} hasVariable />
+                              ))}
+                            </ProjectSearchTreeVariableBranch>
+                          )}
                         </ProjectSearchTreeBranch>
                       )}
                     </ProjectSearchTreeRoot>

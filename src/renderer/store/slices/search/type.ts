@@ -1,39 +1,50 @@
 import { z } from 'zod'
 
+const pouSchema = z.object({
+  name: z.string(),
+  language: z.enum(['ld', 'sfc', 'fbd', 'il', 'st']),
+  pouType: z.enum(['program', 'function', 'function-block']),
+  body: z.string(),
+  variable: z.string().nullable(),
+});
+
 const searchModelSchema = z.object({
-  pou: z.object({
-    name: z.string(),
-    language: z.enum(['ld', 'sfc', 'fbd', 'il', 'st']),
-    pouType: z.enum(['program', 'function', 'function-block']),
-    variable: z.string(),
+  pous: z.record(
+    z.enum(['program', 'function', 'function-block']),
+    z.array(pouSchema)
+  ),
+  dataTypes: z.array(
+    z.object({
+      name: z.string(),
+      type: z.enum(['array', 'structure', 'enumerated']),
+    })
+  ),
+  resource: z.object({
+    globalVariable: z.string(),
+    task: z.string(),
   }),
-  dataType: z.object({
-    name: z.string(),
-    type: z.enum(['array', 'structure', 'enumerated']),
-  }),
-  // resource: z.object({
-})
+});
 
 const projectSchema = z.object({
   searchQuery: z.string(),
   projectName: z.string(),
-  functions: z.array(searchModelSchema),
-})
+  functions: searchModelSchema,
+});
 type Project = z.infer<typeof projectSchema>
 
 const searchStateSchema = z.object({
   searchQuery: z.string(),
   searchResults: z.array(projectSchema),
-})
-type SearchState = z.infer<typeof searchStateSchema>
+});
+type SearchState = z.infer<typeof searchStateSchema>;
 
 const searchActionsSchema = z.object({
   setSearchQuery: z.function().args(z.string()).returns(z.void()),
   setSearchResults: z.function().args(projectSchema).returns(z.void()),
   removeSearchResult: z.function().args(z.number()).returns(z.void()),
-})
-type SearchActions = z.infer<typeof searchActionsSchema>
+});
+type SearchActions = z.infer<typeof searchActionsSchema>;
 
-type SearchSlice = SearchState & { searchActions: SearchActions }
+type SearchSlice = SearchState & { searchActions: SearchActions };
 
-export type { Project, SearchSlice, SearchState }
+export type { Project, SearchSlice, SearchState };
