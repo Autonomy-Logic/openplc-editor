@@ -54,6 +54,10 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     [focusIndex, handleRowClick],
   )
 
+   useEffect(() => {
+    setTableData([...dimensions]);
+  }, [dimensions, name]);
+
   useEffect(() => {
     if (focusIndex !== null) {
       const inputElement = document.getElementById(`dimension-input-${focusIndex}`)

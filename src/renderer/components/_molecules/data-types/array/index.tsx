@@ -20,17 +20,28 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const [arrayTable, setArrayTable] = useState<{ selectedRow: string }>({ selectedRow: ROWS_NOT_SELECTED.toString() })
   const [initialValueData, setInitialValueData] = useState<string>('')
 
+
   useEffect(() => {
-    setInitialValueData(data.initialValue)
-  }, [data])
+    setInitialValueData(data.initialValue);
+  }, [data.initialValue, data.name]);
+  
+  
+  // useEffect(() => {
+  //   setBaseType(structuredClone(data.baseType)); // Garante que os dados sejam independentes
+  // }, [data.baseType]);
+  
 
   const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
-    _.debounce(
-      () => updateDatatype(data.name, { initialValue: e.target.value } as PLCArrayDatatype),
-      1000,
-    )()
-  }
-
+    setInitialValueData(e.target.value); // Atualiza o estado localmente
+    const { name } = data;
+    _.debounce(() => {
+      const updatedData = { ...data }; // Garante que os dados sejam únicos
+      updatedData.initialValue = e.target.value;
+      updateDatatype(name, updatedData as PLCArrayDatatype);
+    }, 1000)();
+  };
+  
+  
   const onValueChange = (value: string) => {
     _.debounce(
       () => updateDatatype(data.name, { baseType: value } as PLCArrayDatatype),
@@ -84,8 +95,8 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
             </label>
             <InputWithRef
               onChange={handleInitialValueChange}
-              defaultValue={initialValueData}
-              className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 focus:outline-none focus:border-brand focus-within:border-brand dark:border-neutral-800 dark:bg-neutral-950'
+              value={initialValueData}
+              className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 focus-within:border-brand focus:border-brand focus:outline-none dark:border-neutral-800 dark:border-neutral-800 dark:bg-neutral-950 dark:bg-neutral-950 dark:text-neutral-100'
             />
           </div>
         </div>
