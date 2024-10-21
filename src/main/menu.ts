@@ -284,6 +284,10 @@ export default class MenuBuilder {
       ],
     }
 
+    const subMenuRecent: DarwinMenuItemConstructorOptions = {
+      label: i18n.t('menu:recents'),
+    }
+
     const subMenuHelp: DarwinMenuItemConstructorOptions = {
       label: i18n.t('menu:help.label'),
       submenu: [
@@ -297,7 +301,7 @@ export default class MenuBuilder {
       ],
     }
 
-    return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp]
+    return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
   }
 
   // Wip: Constructing a default machines menu.
