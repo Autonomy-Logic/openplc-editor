@@ -111,7 +111,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
       newRows.forEach(() => {
         const optionalSchema = {
-          dimensions: newRows.map(row => ({ dimension: row.dimension })),
+          dimensions: newRows.map(row => ({ dimension: row?.dimension })),
         };
         updateDatatype(name, optionalSchema as PLCArrayDatatype);
       });
@@ -132,7 +132,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   
         newRows.forEach(() => {
           const optionalSchema = {
-            dimensions: newRows.map(row => ({ dimension: row.dimension })),
+            dimensions: newRows.map(row => ({ dimension: row?.dimension })),
           };
           updateDatatype(name, optionalSchema as PLCArrayDatatype);
         });
@@ -155,7 +155,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
         newRows.forEach(() => {
           const optionalSchema = {
-            dimensions: newRows.map(row => ({ dimension: row.dimension })),
+            dimensions: newRows.map(row => ({ dimension: row?.dimension })),
           };
           updateDatatype(name, optionalSchema as PLCArrayDatatype);
         });
