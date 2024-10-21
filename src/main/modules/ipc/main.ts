@@ -47,7 +47,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('project:open-by-path', async (_event, projectPath: string) => {
       try {
         const response = await this.projectService.openProjectByPath(projectPath)
-
+        console.log(response)
         return response
       } catch (error) {
         console.error('Error opening project:', error)

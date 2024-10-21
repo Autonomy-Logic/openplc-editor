@@ -2,7 +2,7 @@
 import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme } from 'electron'
 
 import { i18n } from '../utils/i18n'
-import { ProjectService } from './services'
+import { _ProjectService, ProjectService } from './services'
 
 /**
  * Wip: Interface for mac machines menu.
@@ -19,7 +19,7 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 export default class MenuBuilder {
   mainWindow: BrowserWindow
 
-  projectService: InstanceType<typeof ProjectService>
+  projectService: typeof _ProjectService
 
   developOptions: MenuItemConstructorOptions[] = [
     { type: 'separator' },
@@ -33,13 +33,13 @@ export default class MenuBuilder {
     this.projectService = new ProjectService(mainWindow)
   }
 
-  buildMenu(): Menu {
+  async buildMenu(): Promise<Menu> {
     if (process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true') {
       this.setupDevelopmentEnvironment()
     }
 
     // Todo: Can be used to construct a different menu for mac machines.
-    const template = process.platform === 'darwin' ? this.buildDarwinTemplate() : this.buildDefaultTemplate()
+    const template = process.platform === 'darwin' ? this.buildDarwinTemplate() : await this.buildDefaultTemplate()
 
     const menu = Menu.buildFromTemplate(template)
     Menu.setApplicationMenu(menu)
@@ -59,6 +59,17 @@ export default class MenuBuilder {
 
   handleSaveProject() {
     this.mainWindow.webContents.send('project:save-accelerator')
+  }
+
+   async handleGetRecents() {
+   const response =  await this.projectService.readProjectHistory(this.projectService.getProjectsFilePath())
+   return response
+  }
+  
+  async handleOpenProjectByPath(projectPath:string){
+
+    const response = await this.projectService.openProjectByPath(projectPath)
+    this.mainWindow.webContents.send('project:open-recent-accelerator', response)
   }
 
   setupDevelopmentEnvironment(): void {
@@ -304,9 +315,14 @@ export default class MenuBuilder {
     return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
   }
 
+ 
+
   // Wip: Constructing a default machines menu.
-  buildDefaultTemplate() {
+   async buildDefaultTemplate() {
+ const recents = await  this.handleGetRecents()
+
     const templateDefault: MenuItemConstructorOptions[] = [
+   
       {
         label: i18n.t('menu:file.label'),
         visible: false,
@@ -524,6 +540,13 @@ export default class MenuBuilder {
             role: 'about',
           },
         ],
+      },
+      {label: i18n.t('menu:recents'),
+      submenu: recents.map((projectEntry) => ({
+        label: projectEntry.path, 
+        click: () => this.handleOpenProjectByPath(projectEntry.path)
+      })),
+    
       },
     ]
 
