@@ -168,7 +168,6 @@ const contactSchema = z.object({
     '@x': z.number(),
     '@y': z.number(),
   }),
-  variable: z.string(),
   connectionPointIn: z.object({
     relPosition: z.object({
       '@x': z.number(),
@@ -192,6 +191,7 @@ const contactSchema = z.object({
       '@y': z.number(),
     }),
   }),
+  variable: z.string(),
 })
 type ContactLadderXML = z.infer<typeof contactSchema>
 
@@ -222,7 +222,6 @@ const coilSchema = z.object({
     '@x': z.number(),
     '@y': z.number(),
   }),
-  variable: z.string(),
   connectionPointIn: z.object({
     relPosition: z.object({
       '@x': z.number(),
@@ -246,6 +245,7 @@ const coilSchema = z.object({
       '@y': z.number(),
     }),
   }),
+  variable: z.string(),
 })
 type CoilLadderXML = z.infer<typeof coilSchema>
 

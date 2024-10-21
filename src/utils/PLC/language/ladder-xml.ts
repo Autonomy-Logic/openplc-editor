@@ -265,7 +265,6 @@ const contactToXML = (contact: ContactNode, rung: RungState, offsetY: number = 0
       '@x': contact.position.x,
       '@y': (contact.position.y ?? 0) + offsetY,
     },
-    variable: 'A',
     connectionPointIn: {
       relPosition: {
         '@x': contact.data.inputConnector?.relPosition.x || 0,
@@ -279,6 +278,7 @@ const contactToXML = (contact: ContactNode, rung: RungState, offsetY: number = 0
         '@y': contact.data.outputConnector?.relPosition.y || 0,
       },
     },
+    variable: 'A',
   }
 }
 
@@ -297,7 +297,6 @@ const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLa
       '@x': coil.position.x,
       '@y': (coil.position.y ?? 0) + offsetY,
     },
-    variable: 'A',
     connectionPointIn: {
       relPosition: {
         '@x': coil.data.inputConnector?.relPosition.x || 0,
@@ -311,6 +310,7 @@ const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLa
         '@y': coil.data.outputConnector?.relPosition.y || 0,
       },
     },
+    variable: 'A',
   }
 }
 

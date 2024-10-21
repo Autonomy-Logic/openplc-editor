@@ -23,11 +23,9 @@ export const parseInterface = (pou: PLCPou) => {
       },
     }
 
-    if (variable.location)
-      v['@address'] = variable.location
+    if (variable.location) v['@address'] = variable.location
 
-    if (variable.initialValue)
-      v.initialValue = variable.initialValue
+    if (variable.initialValue) v.initialValue = variable.initialValue
 
     if (variable.documentation)
       v.documentation = {
@@ -35,6 +33,13 @@ export const parseInterface = (pou: PLCPou) => {
           $: variable.documentation,
         },
       }
+
+    if (returnType) {
+      if (!xml.returnType) xml.returnType
+      xml.returnType = {
+        [returnType]: '',
+      }
+    }
 
     switch (variable.class) {
       case 'input': {
@@ -77,13 +82,6 @@ export const parseInterface = (pou: PLCPou) => {
         return
     }
   })
-
-  if (returnType) {
-    if (!xml.returnType) xml.returnType
-    xml.returnType = {
-      [returnType]: '',
-    }
-  }
 
   return xml
 }
