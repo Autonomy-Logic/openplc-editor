@@ -3,6 +3,7 @@ import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme } from 'el
 
 import { i18n } from '../utils/i18n'
 import { _ProjectService, ProjectService } from './services'
+import path from 'path'
 
 /**
  * Wip: Interface for mac machines menu.
@@ -95,6 +96,7 @@ export default class MenuBuilder {
   // Wip: Constructing a mac machines menu.
   async buildDarwinTemplate(): Promise<MenuItemConstructorOptions[]> {
     const recents = await this.handleGetRecents()
+    const homeDir = process.env.HOME || ''
     const defaultDarwinMenu: MenuItemConstructorOptions = {
       role: 'appMenu',
     }
@@ -296,11 +298,22 @@ export default class MenuBuilder {
     }
 
     const subMenuRecent: DarwinMenuItemConstructorOptions = {
-      label: i18n.t('menu:recents'),
-      submenu: recents.map((projectEntry) => ({
-        label: projectEntry.path,
-        click: () => this.handleOpenProjectByPath(projectEntry.path),
-      })),
+      
+        label: i18n.t('menu:recents'),
+        submenu: recents.map((projectEntry) => {
+          let projectPath = projectEntry.path.startsWith(homeDir)
+            ? projectEntry.path.replace(homeDir, '~')  
+            : projectEntry.path;
+    
+          return {
+            label: projectPath,  
+            click: () => {
+              this.handleOpenProjectByPath(projectEntry.path);
+              console.log('Opened project from path:', projectEntry.path);
+            },
+          };
+        }),
+      
     }
 
     const subMenuHelp: DarwinMenuItemConstructorOptions = {
@@ -322,7 +335,7 @@ export default class MenuBuilder {
   // Wip: Constructing a default machines menu.
   async buildDefaultTemplate() {
     const recents = await this.handleGetRecents()
-
+    const homeDir = process.env.HOME || ''
     const templateDefault: MenuItemConstructorOptions[] = [
       {
         label: i18n.t('menu:file.label'),
@@ -542,12 +555,22 @@ export default class MenuBuilder {
           },
         ],
       },
+      
       {
         label: i18n.t('menu:recents'),
-        submenu: recents.map((projectEntry) => ({
-          label: projectEntry.path,
-          click: () => this.handleOpenProjectByPath(projectEntry.path),
-        })),
+        submenu: recents.map((projectEntry) => {
+          let projectPath = projectEntry.path.startsWith(homeDir)
+            ? projectEntry.path.replace(homeDir, '~')  
+            : projectEntry.path;
+    
+          return {
+            label: projectPath,  
+            click: () => {
+              this.handleOpenProjectByPath(projectEntry.path);
+              console.log('Opened project from path:', projectEntry.path);
+            },
+          };
+        }),
       },
     ]
 
