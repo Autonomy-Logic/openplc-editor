@@ -1,4 +1,4 @@
-import { generateNumericUUID } from '@root/utils';
+import { generateNumericUUID } from '@root/utils'
 import { Node, NodeProps } from '@xyflow/react'
 
 import { CustomHandle, CustomHandleProps } from './handle'
@@ -140,6 +140,7 @@ export const buildMockNode = ({
       },
     },
     numericId: generateNumericUUID(),
+    variable: '',
   },
   width: 150,
   height: 40,

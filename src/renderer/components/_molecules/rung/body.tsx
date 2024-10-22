@@ -47,7 +47,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    * minX: 0    | minY: 0
    * maxX: 1530 | maxY: 200
    */
-  const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([[0, 0], rung?.flowViewport ?? [1530, 200]])
+  const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([[0, 0], (rung?.flowViewport as [number, number]) ?? [1530, 200]])
 
   /**
    * Update flow panel extent based on the bounds of the nodes
@@ -81,6 +81,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
+    console.log('RUNG', rung)
     setRungLocal(rung)
   }, [rung.nodes])
 

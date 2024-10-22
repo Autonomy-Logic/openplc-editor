@@ -4,6 +4,9 @@ import {
   NegatedContact,
   RisingEdgeContact,
 } from '@root/renderer/assets/icons/flow/Contact'
+import { useOpenPLCStore } from '@root/renderer/store'
+import type { RungState } from '@root/renderer/store/slices'
+import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
@@ -69,8 +72,52 @@ export const DEFAULT_CONTACT_TYPES: ContactType = {
 }
 
 export const Contact = ({ selected, data, id }: ContactProps) => {
-  const [contactLabelValue, setContactLabelValue] = useState<string>('')
+  const {
+    editor,
+    project: {
+      data: { pous },
+    },
+    flowActions: { updateNode },
+  } = useOpenPLCStore()
+
+  const [contactVariableValue, setContactVariableValue] = useState<string>('')
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
+
+  const handleVariableInputOnBlur = () => {
+    let variables: PLCVariable[] = []
+    let rung: RungState | undefined = undefined
+    let node: Node | undefined = undefined
+
+    pous.forEach((pou) => {
+      if (pou.data.name === editor.meta.name) {
+        variables = pou.data.variables as PLCVariable[]
+        rung =
+          pou.data.body.language === 'ld'
+            ? (pou.data.body.value.rungs.find((rung) =>
+                rung.nodes.some((node) => node.id === id) ? rung : undefined,
+              ) as RungState)
+            : undefined
+      }
+    })
+
+    if (!variables.some((variable) => variable.name === contactVariableValue)) return
+    if (!rung) return
+
+    node = (rung as RungState).nodes.find((node) => node.id === id)
+    if (!node) return
+
+    updateNode({
+      rungId: (rung as RungState).id,
+      node: {
+        ...node,
+        data: {
+          ...node.data,
+          variable: contactVariableValue,
+        },
+      },
+      editorName: editor.meta.name,
+    })
+  }
 
   return (
     <div
@@ -91,10 +138,11 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       </div>
       <div className='absolute -left-[34px] -top-7 w-24'>
         <InputWithRef
-          value={contactLabelValue}
-          onChange={(e) => setContactLabelValue(e.target.value)}
+          value={contactVariableValue}
+          onChange={(e) => setContactVariableValue(e.target.value)}
           placeholder='???'
           className='w-full bg-transparent text-center text-sm outline-none'
+          onBlur={handleVariableInputOnBlur}
         />
       </div>
       {data.handles.map((handle, index) => (

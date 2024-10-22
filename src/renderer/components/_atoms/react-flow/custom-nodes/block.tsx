@@ -1,3 +1,6 @@
+import { useOpenPLCStore } from '@root/renderer/store'
+import type { RungState } from '@root/renderer/store/slices'
+import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useState } from 'react'
@@ -108,10 +111,54 @@ export const BlockNodeElement = <T extends object>({
 }
 
 export const Block = <T extends object>({ data, dragging, height, selected, id }: BlockProps<T>) => {
+  const {
+    editor,
+    project: {
+      data: { pous },
+    },
+    flowActions: { updateNode },
+  } = useOpenPLCStore()
+
   const { name, documentation } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
 
-  const [blockLabelValue, setBlockLabelValue] = useState<string>('')
+  const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [blockNameValue, setBlockNameValue] = useState<string>(name)
+
+  const handleVariableInputOnBlur = () => {
+    let variables: PLCVariable[] = []
+    let rung: RungState | undefined = undefined
+    let node: Node | undefined = undefined
+
+    pous.forEach((pou) => {
+      if (pou.data.name === editor.meta.name) {
+        variables = pou.data.variables as PLCVariable[]
+        rung =
+          pou.data.body.language === 'ld'
+            ? (pou.data.body.value.rungs.find((rung) =>
+                rung.nodes.some((node) => node.id === id) ? rung : undefined,
+              ) as RungState)
+            : undefined
+      }
+    })
+
+    if (!variables.some((variable) => variable.name === blockVariableValue)) return
+    if (!rung) return
+
+    node = (rung as RungState).nodes.find((node) => node.id === id)
+    if (!node) return
+
+    updateNode({
+      rungId: (rung as RungState).id,
+      node: {
+        ...node,
+        data: {
+          ...node.data,
+          variable: blockVariableValue,
+        },
+      },
+      editorName: editor.meta.name,
+    })
+  }
 
   return (
     <div
@@ -140,10 +187,11 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
         }}
       >
         <InputWithRef
-          value={blockLabelValue}
-          onChange={(e) => setBlockLabelValue(e.target.value)}
+          value={blockVariableValue}
+          onChange={(e) => setBlockVariableValue(e.target.value)}
           placeholder='???'
           className='w-full bg-transparent text-center text-sm outline-none'
+          onBlur={handleVariableInputOnBlur}
         />
       </div>
       {data.handles.map((handle, index) => (
@@ -231,12 +279,13 @@ export const buildBlockNode = <T extends object | undefined>({
       inputConnector: leftHandles[0],
       outputConnector: rightHandles[0],
       numericId: generateNumericUUID(),
+      variable: '',
     },
     width: DEFAULT_BLOCK_WIDTH,
     height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
     measured: {
       width: DEFAULT_BLOCK_WIDTH,
-      height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT
+      height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
     },
     draggable: true,
     selectable: true,

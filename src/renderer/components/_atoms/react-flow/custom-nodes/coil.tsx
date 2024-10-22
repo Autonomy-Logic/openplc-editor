@@ -6,6 +6,9 @@ import {
   RisingEdgeCoil,
   SetCoil,
 } from '@root/renderer/assets/icons/flow/Coil'
+import { useOpenPLCStore } from '@root/renderer/store'
+import type { RungState } from '@root/renderer/store/slices'
+import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
@@ -95,8 +98,52 @@ export const DEFAULT_COIL_TYPES: CoilType = {
 }
 
 export const Coil = ({ selected, data, id }: CoilProps) => {
-  const [coilLabelValue, setCoilLabelValue] = useState<string>('')
+  const {
+    editor,
+    project: {
+      data: { pous },
+    },
+    flowActions: { updateNode },
+  } = useOpenPLCStore()
+
+  const [coilVariableValue, setCoilVariableValue] = useState<string>('')
   const coil = DEFAULT_COIL_TYPES[data.variant]
+
+  const handleVariableInputOnBlur = () => {
+    let variables: PLCVariable[] = []
+    let rung: RungState | undefined = undefined
+    let node: Node | undefined = undefined
+
+    pous.forEach((pou) => {
+      if (pou.data.name === editor.meta.name) {
+        variables = pou.data.variables as PLCVariable[]
+        rung =
+          pou.data.body.language === 'ld'
+            ? (pou.data.body.value.rungs.find((rung) =>
+                rung.nodes.some((node) => node.id === id) ? rung : undefined,
+              ) as RungState)
+            : undefined
+      }
+    })
+
+    if (!variables.some((variable) => variable.name === coilVariableValue)) return
+    if (!rung) return
+
+    node = (rung as RungState).nodes.find((node) => node.id === id)
+    if (!node) return
+
+    updateNode({
+      rungId: (rung as RungState).id,
+      node: {
+        ...node,
+        data: {
+          ...node.data,
+          variable: coilVariableValue,
+        },
+      },
+      editorName: editor.meta.name,
+    })
+  }
 
   return (
     <div
@@ -117,10 +164,11 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       </div>
       <div className='absolute -left-[31px] -top-7 w-24'>
         <InputWithRef
-          value={coilLabelValue}
-          onChange={(e) => setCoilLabelValue(e.target.value)}
+          value={coilVariableValue}
+          onChange={(e) => setCoilVariableValue(e.target.value)}
           placeholder='???'
           className='w-full bg-transparent text-center text-sm outline-none'
+          onBlur={handleVariableInputOnBlur}
         />
       </div>
       {data.handles.map((handle, index) => (
