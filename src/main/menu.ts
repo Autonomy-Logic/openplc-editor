@@ -39,7 +39,7 @@ export default class MenuBuilder {
     }
 
     // Todo: Can be used to construct a different menu for mac machines.
-    const template = process.platform === 'darwin' ? this.buildDarwinTemplate() : await this.buildDefaultTemplate()
+    const template = process.platform === 'darwin' ? await this.buildDarwinTemplate() : await this.buildDefaultTemplate()
 
     const menu = Menu.buildFromTemplate(template)
     Menu.setApplicationMenu(menu)
@@ -61,13 +61,12 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-accelerator')
   }
 
-   async handleGetRecents() {
-   const response =  await this.projectService.readProjectHistory(this.projectService.getProjectsFilePath())
-   return response
+  async handleGetRecents() {
+    const response = await this.projectService.readProjectHistory(this.projectService.getProjectsFilePath())
+    return response
   }
-  
-  async handleOpenProjectByPath(projectPath:string){
 
+  async handleOpenProjectByPath(projectPath: string) {
     const response = await this.projectService.openProjectByPath(projectPath)
     this.mainWindow.webContents.send('project:open-recent-accelerator', response)
   }
@@ -94,7 +93,8 @@ export default class MenuBuilder {
   }
 
   // Wip: Constructing a mac machines menu.
-  buildDarwinTemplate(): MenuItemConstructorOptions[] {
+  async buildDarwinTemplate(): Promise<MenuItemConstructorOptions[]> {
+    const recents = await this.handleGetRecents()
     const defaultDarwinMenu: MenuItemConstructorOptions = {
       role: 'appMenu',
     }
@@ -297,6 +297,10 @@ export default class MenuBuilder {
 
     const subMenuRecent: DarwinMenuItemConstructorOptions = {
       label: i18n.t('menu:recents'),
+      submenu: recents.map((projectEntry) => ({
+        label: projectEntry.path,
+        click: () => this.handleOpenProjectByPath(projectEntry.path),
+      })),
     }
 
     const subMenuHelp: DarwinMenuItemConstructorOptions = {
@@ -315,14 +319,11 @@ export default class MenuBuilder {
     return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
   }
 
- 
-
   // Wip: Constructing a default machines menu.
-   async buildDefaultTemplate() {
- const recents = await  this.handleGetRecents()
+  async buildDefaultTemplate() {
+    const recents = await this.handleGetRecents()
 
     const templateDefault: MenuItemConstructorOptions[] = [
-   
       {
         label: i18n.t('menu:file.label'),
         visible: false,
@@ -541,12 +542,12 @@ export default class MenuBuilder {
           },
         ],
       },
-      {label: i18n.t('menu:recents'),
-      submenu: recents.map((projectEntry) => ({
-        label: projectEntry.path, 
-        click: () => this.handleOpenProjectByPath(projectEntry.path)
-      })),
-    
+      {
+        label: i18n.t('menu:recents'),
+        submenu: recents.map((projectEntry) => ({
+          label: projectEntry.path,
+          click: () => this.handleOpenProjectByPath(projectEntry.path),
+        })),
       },
     ]
 
