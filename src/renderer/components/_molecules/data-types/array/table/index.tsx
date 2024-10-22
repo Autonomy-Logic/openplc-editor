@@ -54,9 +54,9 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     [focusIndex, handleRowClick],
   )
 
-   useEffect(() => {
-    setTableData([...dimensions]);
-  }, [dimensions, name]);
+  useEffect(() => {
+    setTableData([...dimensions])
+  }, [dimensions, name])
 
   useEffect(() => {
     if (focusIndex !== null) {
@@ -78,27 +78,23 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
   const handleBlur = (rowIndex: number) => {
     setTableData((prevRows) => {
-      const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
+      const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement
       if (inputElement && inputElement.value?.trim() === '') {
-        const newRows = prevRows.filter((_, index) => index !== rowIndex);
-        setFocusIndex(null);
-        return newRows;
+        const newRows = prevRows.filter((_, index) => index !== rowIndex)
+        setFocusIndex(null)
+        return newRows
       } else if (inputElement && inputElement.value?.trim() !== '') {
-        const inputValue = inputElement.value?.trim();
+        const inputValue = inputElement.value?.trim()
         const optionalSchema = {
           name: name,
           dimensions: prevRows.map((row, index) => ({ dimension: index === rowIndex ? inputValue : row.dimension })),
-        };
-        updateDatatype(name, optionalSchema as PLCDataType);
-  
-        return prevRows.map((row, i) =>
-          i === rowIndex
-            ? { ...row, dimension: inputValue }
-            : row
-        );
+        }
+        updateDatatype(name, optionalSchema as PLCDataType)
+
+        return prevRows.map((row, i) => (i === rowIndex ? { ...row, dimension: inputValue } : row))
       }
-      return prevRows;
-    });
+      return prevRows
+    })
   }
   const addNewRow = () => {
     setTableData((prevRows) => {
@@ -109,44 +105,43 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   }
 
   const removeRow = () => {
-   setTableData((prevRows) => {
-    if (selectedRow !== null) {
-      const newRows = prevRows.filter((_, index) => index !== selectedRow);
+    setTableData((prevRows) => {
+      if (selectedRow !== null) {
+        const newRows = prevRows.filter((_, index) => index !== selectedRow)
 
-      newRows.forEach(() => {
-        const optionalSchema = {
-          dimensions: newRows.map(row => ({ dimension: row?.dimension })),
-        };
-        updateDatatype(name, optionalSchema as PLCArrayDatatype);
-      });
-      prevRows = newRows;
-    }
-    return prevRows;
-  });
-  };
+        newRows.forEach(() => {
+          const optionalSchema = {
+            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
+          }
+          updateDatatype(name, optionalSchema as PLCArrayDatatype)
+        })
+        prevRows = newRows
+      }
+      return prevRows
+    })
+  }
 
   const moveRowUp = () => {
     setTableData((prevRows) => {
       if (selectedRow !== null && selectedRow > 0) {
-        const newRows = [...prevRows];
-        const temp = newRows[selectedRow];
-        newRows[selectedRow] = newRows[selectedRow - 1];
-        newRows[selectedRow - 1] = temp;
-        setFocusIndex(selectedRow - 1);
-  
+        const newRows = [...prevRows]
+        const temp = newRows[selectedRow]
+        newRows[selectedRow] = newRows[selectedRow - 1]
+        newRows[selectedRow - 1] = temp
+        setFocusIndex(selectedRow - 1)
+
         newRows.forEach(() => {
           const optionalSchema = {
-            dimensions: newRows.map(row => ({ dimension: row?.dimension })),
-          };
-          updateDatatype(name, optionalSchema as PLCArrayDatatype);
-        });
-  
-  
-        prevRows = newRows;
+            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
+          }
+          updateDatatype(name, optionalSchema as PLCArrayDatatype)
+        })
+
+        prevRows = newRows
       }
-      return prevRows;
-    });
-  };
+      return prevRows
+    })
+  }
 
   const moveRowDown = () => {
     setTableData((prevRows) => {
@@ -159,10 +154,10 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
         newRows.forEach(() => {
           const optionalSchema = {
-            dimensions: newRows.map(row => ({ dimension: row?.dimension })),
-          };
-          updateDatatype(name, optionalSchema as PLCArrayDatatype);
-        });
+            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
+          }
+          updateDatatype(name, optionalSchema as PLCArrayDatatype)
+        })
 
         prevRows = newRows
       }
@@ -239,7 +234,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
             <PlusIcon className='!stroke-brand' />
           </TableActionButton>
           <TableActionButton aria-label='Remove table row button' onClick={removeRow}>
-            <MinusIcon className='stroke-[#0464FB]'/>
+            <MinusIcon className='stroke-[#0464FB]' />
           </TableActionButton>
           <TableActionButton aria-label='Move table row up button' onClick={moveRowUp}>
             <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
