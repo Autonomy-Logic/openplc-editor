@@ -290,7 +290,8 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce(({ project }: ProjectSlice) => {
           const { name } = dataToCreate
           const dataExists = project.data.dataTypes.find((datatype) => datatype.name === name)
-          if (!dataExists) {
+          const pouExists = project.data.pous.find((datatype) => datatype.data.name === name)
+          if (!dataExists && !pouExists) {
             project.data.dataTypes.push(dataToCreate)
           } else {
             console.error(`Datatype ${name} already exists`)
