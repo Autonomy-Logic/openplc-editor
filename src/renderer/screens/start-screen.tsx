@@ -58,36 +58,51 @@ const StartScreen = () => {
   }
 
   const retrieveOpenProjectData = async () => {
-    const { success, data, error } = await window.bridge.openProject()
-    if (success && data) {
-      clearTabs()
-      setEditingState('unsaved')
-      setProject({
-        meta: {
+    try {
+      const { success, data, error } = await window.bridge.openProject()
+      if (success && data) {
+        clearTabs()
+        setEditingState('unsaved')
+
+        const projectMeta = {
           name: data.content.meta.name,
           type: data.content.meta.type,
           path: data.meta.path,
-        },
-        data: data.content.data,
-      })
+        }
 
-      const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
-      if (ladderPous.length) {
-        ladderPous.forEach((pou) => {
-          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+        const projectData = data.content.data
+
+        setProject({
+          meta: projectMeta,
+          data: projectData,
+        })
+
+        const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
+        if (ladderPous.length) {
+          ladderPous.forEach((pou) => {
+            if (pou.data.body.language === 'ld') {
+              addFlow(pou.data.body.value as FlowType)
+            }
+          })
+        }
+
+        navigate('/workspace')
+        toast({
+          title: 'Project opened!',
+          description: 'Your project was opened and loaded successfully.',
+          variant: 'default',
+        })
+      } else {
+        toast({
+          title: 'Cannot open the project.',
+          description: error?.description || 'Failed to open the project.',
+          variant: 'fail',
         })
       }
-
-      navigate('/workspace')
+    } catch (_error) {
       toast({
-        title: 'Project opened!',
-        description: 'Your project was opened, and loaded.',
-        variant: 'default',
-      })
-    } else {
-      toast({
-        title: 'Cannot open the project.',
-        description: error?.description,
+        title: 'An error occurred.',
+        description: 'There was a problem opening the project.',
         variant: 'fail',
       })
     }
