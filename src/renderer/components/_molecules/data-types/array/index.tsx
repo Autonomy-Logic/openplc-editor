@@ -25,17 +25,12 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     setInitialValueData(data.initialValue);
   }, [data.initialValue, data.name]);
   
-  
-  // useEffect(() => {
-  //   setBaseType(structuredClone(data.baseType)); // Garante que os dados sejam independentes
-  // }, [data.baseType]);
-  
 
   const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setInitialValueData(e.target.value); // Atualiza o estado localmente
+    setInitialValueData(e.target.value);
     const { name } = data;
     _.debounce(() => {
-      const updatedData = { ...data }; // Garante que os dados sejam únicos
+      const updatedData = { ...data };
       updatedData.initialValue = e.target.value;
       updateDatatype(name, updatedData as PLCArrayDatatype);
     }, 1000)();
