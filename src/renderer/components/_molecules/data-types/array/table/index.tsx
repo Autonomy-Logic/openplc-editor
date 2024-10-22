@@ -80,37 +80,35 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   }
 
   const updateDimensions = (newDimensions) => {
-     newDimensions.map(row => ({ dimension: row.dimension }));
-  };
-  
+    newDimensions.map((row) => ({ dimension: row.dimension }))
+  }
 
   const handleBlur = (rowIndex: number) => {
     setTableData((prevRows) => {
-      const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
+      const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement
       if (inputElement && inputElement.value?.trim() === '') {
-        // Remove a linha se o valor estiver vazio
-        const newRows = prevRows.filter((_, index) => index !== rowIndex);
-        updateDimensions(newRows); // Atualiza os dados imediatamente
-        setFocusIndex(null);
-        return newRows;
+        const newRows = prevRows.filter((_, index) => index !== rowIndex)
+        updateDimensions(newRows)
+        setFocusIndex(null)
+        return newRows
       } else if (inputElement && inputElement.value?.trim() !== '') {
-        const inputValue = inputElement.value?.trim();
+        const inputValue = inputElement.value?.trim()
         const newRows = prevRows.map((row, index) => ({
           ...row,
-          dimension: index === rowIndex ? inputValue : row.dimension
-        }));
+          dimension: index === rowIndex ? inputValue : row.dimension,
+        }))
         const optionalSchema = {
           name: name,
-          dimensions: newRows.map(row => ({ dimension: row.dimension })),
-        };
-        updateDatatype(name, optionalSchema as PLCDataType);
-        updateDimensions(newRows); // Atualiza os dados imediatamente
-        return newRows;
+          dimensions: newRows.map((row) => ({ dimension: row.dimension })),
+        }
+        updateDatatype(name, optionalSchema as PLCDataType)
+        updateDimensions(newRows)
+        return newRows
       }
-      return prevRows;
-    });
-  };
-  
+      return prevRows
+    })
+  }
+
   const addNewRow = () => {
     setTableData((prevRows) => {
       const newRows = [...prevRows, { dimension: '' }]
