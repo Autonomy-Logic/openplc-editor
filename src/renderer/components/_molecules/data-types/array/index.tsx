@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { baseTypeSchema, PLCArrayDatatype } from '@root/types/PLC/open-plc'
@@ -19,29 +21,31 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const ROWS_NOT_SELECTED = -1
   const [arrayTable, setArrayTable] = useState<{ selectedRow: string }>({ selectedRow: ROWS_NOT_SELECTED.toString() })
   const [initialValueData, setInitialValueData] = useState<string>('')
-
+  const [baseType, setBaseType] = useState<string>(data.baseType)
 
   useEffect(() => {
-    setInitialValueData(data.initialValue);
-  }, [data.initialValue, data.name]);
-  
+    setInitialValueData(data.initialValue)
+  }, [data.initialValue, data.name])
+
+  useEffect(() => {
+    setBaseType(data.baseType)
+  }, [data.baseType, data.name])
 
   const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setInitialValueData(e.target.value);
-    const { name } = data;
+    setInitialValueData(e.target.value)
     _.debounce(() => {
-      const updatedData = { ...data };
-      updatedData.initialValue = e.target.value;
-      updateDatatype(name, updatedData as PLCArrayDatatype);
-    }, 1000)();
-  };
-  
-  
-  const onValueChange = (value: string) => {
-    _.debounce(
-      () => updateDatatype(data.name, { baseType: value } as PLCArrayDatatype),
-      1000,
-    )()
+      const updatedData = { ...data }
+      updatedData.initialValue = e.target.value
+      updateDatatype(data.name, updatedData as PLCArrayDatatype)
+    }, 1000)()
+  }
+
+  const onSelectValueChange = (selectedValue: string) => {
+    setBaseType(selectedValue)
+    _.debounce(() => {
+      const updatedData = { ...data, baseType: selectedValue }
+      updateDatatype(data.name, updatedData as PLCArrayDatatype)
+    }, 1000)()
   }
 
   return (
@@ -52,7 +56,11 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
             <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
               Base Type
             </label>
-            <Select aria-label='Array data type base type select' onValueChange={(value) => onValueChange(value)}>
+            <Select
+              aria-label='Array data type base type select'
+              onValueChange={(e) => onSelectValueChange(e)}
+              value={baseType}
+            >
               <SelectTrigger
                 withIndicator
                 placeholder='BOOL'
