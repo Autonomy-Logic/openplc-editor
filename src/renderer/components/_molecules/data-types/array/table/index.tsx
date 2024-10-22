@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
 import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
 import { StickArrowIcon } from '@root/renderer/assets'
@@ -76,26 +79,38 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     setFocusIndex(index)
   }
 
+  const updateDimensions = (newDimensions) => {
+     newDimensions.map(row => ({ dimension: row.dimension }));
+  };
+  
+
   const handleBlur = (rowIndex: number) => {
     setTableData((prevRows) => {
-      const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement
+      const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
       if (inputElement && inputElement.value?.trim() === '') {
-        const newRows = prevRows.filter((_, index) => index !== rowIndex)
-        setFocusIndex(null)
-        return newRows
+        // Remove a linha se o valor estiver vazio
+        const newRows = prevRows.filter((_, index) => index !== rowIndex);
+        updateDimensions(newRows); // Atualiza os dados imediatamente
+        setFocusIndex(null);
+        return newRows;
       } else if (inputElement && inputElement.value?.trim() !== '') {
-        const inputValue = inputElement.value?.trim()
+        const inputValue = inputElement.value?.trim();
+        const newRows = prevRows.map((row, index) => ({
+          ...row,
+          dimension: index === rowIndex ? inputValue : row.dimension
+        }));
         const optionalSchema = {
           name: name,
-          dimensions: prevRows.map((row, index) => ({ dimension: index === rowIndex ? inputValue : row.dimension })),
-        }
-        updateDatatype(name, optionalSchema as PLCDataType)
-
-        return prevRows.map((row, i) => (i === rowIndex ? { ...row, dimension: inputValue } : row))
+          dimensions: newRows.map(row => ({ dimension: row.dimension })),
+        };
+        updateDatatype(name, optionalSchema as PLCDataType);
+        updateDimensions(newRows); // Atualiza os dados imediatamente
+        return newRows;
       }
-      return prevRows
-    })
-  }
+      return prevRows;
+    });
+  };
+  
   const addNewRow = () => {
     setTableData((prevRows) => {
       const newRows = [...prevRows, { dimension: '' }]

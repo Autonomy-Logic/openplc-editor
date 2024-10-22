@@ -14,7 +14,7 @@ type ArrayDatatypeProps = ComponentPropsWithoutRef<'div'> & {
 
 const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const baseTypes = baseTypeSchema.options
-
+  console.log("data -->", data)
   const {
     projectActions: { updateDatatype },
   } = useOpenPLCStore()
