@@ -38,7 +38,8 @@ const rendererProcessBridge = {
     ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
 
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
-  openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open-by-path', projectPath),
+  openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
+    ipcRenderer.invoke('project:open-by-path', projectPath),
   /**
    * Handlers for opening projects.
    * As for the click and for the accelerator type.
@@ -76,5 +77,11 @@ const rendererProcessBridge = {
   // WIP: Refactoring
   // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),
   // createPou: (callback: any) => ipcRenderer.on('pou:create', callback),
+
+  /**
+   * Compiler Service
+   */
+  writeXMLFile: (path: string, data: string, fileName: string) =>
+    ipcRenderer.invoke('compiler:write-xml-file', { path, data, fileName }),
 }
 export default rendererProcessBridge
