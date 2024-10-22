@@ -16,10 +16,13 @@ class MainProcessBridge implements MainIpcModule {
   mainWindow
   projectService
   store
-  constructor({ ipcMain, mainWindow, projectService, store }: MainIpcModuleConstructor) {
+  compilerService
+
+  constructor({ ipcMain, mainWindow, projectService, store, compilerService }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
     this.projectService = projectService
+    this.compilerService = compilerService
     this.store = store
   }
   setupMainIpcListener() {
@@ -84,6 +87,13 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
     this.ipcMain.on('system:update-theme', () => this.mainIpcEventHandlers.handleUpdateTheme())
     this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
+
+    /**
+     * Compiler Service
+     */
+    this.ipcMain.handle('compiler:write-xml-file', (_event, arg: { path: string; data: string; fileName: string }) => {
+      return this.compilerService.writeXMLFile(arg.path, arg.data, arg.fileName)
+    })
   }
 
   mainIpcEventHandlers = {

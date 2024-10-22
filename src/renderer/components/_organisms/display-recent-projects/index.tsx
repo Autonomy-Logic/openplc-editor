@@ -1,22 +1,20 @@
-import * as MenuPrimitive from '@radix-ui/react-menubar'
-import RecentProjectIcon from '@root/renderer/assets/icons/interface/Recent'
+import { FileElement } from '@components/elements'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { cn } from '@root/utils'
-import _ from 'lodash'
-import { useEffect, useState } from 'react'
+import { ComponentProps, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
-import { MenuClasses } from '../constants'
+export type IDisplayRecentProjectProps = ComponentProps<'section'>
 
-export const RecentMenu = () => {
+const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
   const {
     workspace: { recents },
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setRecents },
-    tabsActions: { clearTabs },
     projectActions: { setProject },
+    tabsActions: { clearTabs },
   } = useOpenPLCStore()
-  const { TRIGGER, CONTENT, ITEM } = MenuClasses
+  const navigate = useNavigate()
 
   const [recentProjects, setRecentProjects] = useState(recents)
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
@@ -41,11 +39,15 @@ export const RecentMenu = () => {
     const differenceInDays = Math.floor(differenceInMs / (1000 * 60 * 60 * 24))
 
     if (differenceInMinutes < 60) {
-      return `${differenceInMinutes} minutes ago`
+      return differenceInMinutes === 1
+        ? `modified ${differenceInMinutes} minute ago`
+        : `modified ${differenceInMinutes} minutes ago`
     } else if (differenceInHours < 24) {
-      return `${differenceInHours} hours ago`
+      return differenceInHours === 1
+        ? `modified ${differenceInHours} hour ago`
+        : `modified ${differenceInHours} hours ago`
     } else {
-      return `${differenceInDays} days ago`
+      return differenceInDays === 1 ? `modified ${differenceInDays} day ago` : `modified ${differenceInDays} days ago`
     }
   }
 
@@ -91,8 +93,6 @@ export const RecentMenu = () => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
 
     if (success && data) {
-      clearEditor()
-      clearTabs()
       setEditingState('unsaved')
       setRecents([])
       setProject({
@@ -103,6 +103,9 @@ export const RecentMenu = () => {
         },
         data: data.content.data,
       })
+      clearEditor()
+      clearTabs()
+      navigate('/workspace')
       toast({
         title: 'Project opened!',
         description: 'Your project was opened and loaded.',
@@ -126,27 +129,28 @@ export const RecentMenu = () => {
       }
     }
   }
+
   return (
-    <MenuPrimitive.Menu>
-      <MenuPrimitive.Trigger className={TRIGGER}>recent</MenuPrimitive.Trigger>
-      <MenuPrimitive.Portal>
-        <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
-          {recentProjects.map((project) => (
-            <MenuPrimitive.Item
-              onClick={() => void handleOpenProject(project.path)}
-              key={project.path}
-              className={cn(
-                ITEM,
-                'flex items-center justify-normal gap-2 !overflow-hidden text-xs font-medium text-neutral-900 dark:text-neutral-50',
-              )}
-            >
-              <RecentProjectIcon />
-              <span className='flex-1 overflow-hidden capitalize'>{project.path}</span>
-              <span className='text-cp-sm font-normal text-neutral-400'>{projectTimes[project.path]}</span>
-            </MenuPrimitive.Item>
-          ))}
-        </MenuPrimitive.Content>
-      </MenuPrimitive.Portal>
-    </MenuPrimitive.Menu>
+    <section className='flex h-[52%] w-full flex-col pr-9 2xl:h-3/5 3xl:h-3/4 4xl:h-4/5 4xl:pr-0' {...props}>
+      <h2 className='mb-6 flex  cursor-default justify-start font-caption text-xl font-medium text-neutral-1000 dark:text-white'>
+        Projects
+      </h2>
+      <div className='scroll-area flex h-auto w-full flex-wrap  gap-[25px] overflow-y-auto'>
+        {recentProjects.map((project) => (
+          <FileElement.Root
+            onClick={() => void handleOpenProject(project.path)}
+            className='overflow-hidden '
+            key={project.path}
+          >
+            <FileElement.Label projectName={project.path} lastModified={projectTimes[project.path]} />
+            <FileElement.Shape />
+          </FileElement.Root>
+        ))}
+      </div>
+    </section>
   )
 }
+
+export default DisplayRecentProjects
+
+export type DisplayRecentProjectsComponent = typeof DisplayRecentProjects
