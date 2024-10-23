@@ -59,7 +59,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
           meta: {
             name: allData.name,
             type: allData.type,
-            path: allData.path,
+            path: allData.path + '/project.json',
           },
           data: result.data.content.data,
         })
@@ -71,6 +71,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
         description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
         variant: 'default',
       })
+      console.log()
     } catch (_error) {
       toast({
         title: 'Cannot create a project!',
