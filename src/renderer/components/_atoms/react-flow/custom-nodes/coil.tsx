@@ -149,8 +149,14 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     setInputFocus(false)
 
     let variables: PLCVariable[] = []
-    let rung: RungState | undefined = undefined
-    let node: Node | undefined = undefined
+
+    const rung: RungState | undefined = flows
+      .find((flow) => flow.name === editor.meta.name)
+      ?.rungs.find((rung) => rung.nodes.some((node) => node.id === id))
+    if (!rung) return
+
+    const node: Node<BasicNodeData> | undefined = rung.nodes.find((node) => node.id === id) as Node<BasicNodeData> | undefined
+    if (!node) return
 
     pous.forEach((pou) => {
       if (pou.data.name === editor.meta.name) {
@@ -158,16 +164,16 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       }
     })
 
-    if (!variables.some((variable) => variable.name === coilVariableValue && variable.type.definition !== 'derived')) {
+    const variable = variables.find(
+      (variable) => variable.name === coilVariableValue && variable.type.definition !== 'derived',
+    )
+
+    if (!variable) {
       setWrongVariable(true)
+      const variableName = node.data.variable.name
+      setCoilVariableValue(variableName)
       return
     }
-
-    rung = flows.find((flow) => flow.name === editor.meta.name)?.rungs.find((rung) => rung.id === id)
-    if (!rung) return
-
-    node = rung.nodes.find((node) => node.id === id)
-    if (!node) return
 
     updateNode({
       rungId: rung.id,
@@ -175,7 +181,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
         ...node,
         data: {
           ...node.data,
-          variable: coilVariableValue,
+          variable,
         },
       },
       editorName: editor.meta.name,
@@ -256,6 +262,7 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
       inputConnector: inputHandle,
       outputConnector: outputHandle,
       numericId: generateNumericUUID(),
+      variable: { name: '' },
     },
     width: DEFAULT_COIL_BLOCK_WIDTH,
     height: DEFAULT_COIL_BLOCK_HEIGHT,

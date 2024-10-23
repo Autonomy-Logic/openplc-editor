@@ -132,6 +132,7 @@ const VariablesEditor = () => {
         associatedPou: editor.meta.name,
         data: {
           ...variable,
+          id: '',
           type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
         },
       })
@@ -146,6 +147,7 @@ const VariablesEditor = () => {
       associatedPou: editor.meta.name,
       data: {
         ...variable,
+        id: '',
         type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
       },
       rowToInsert: selectedRow + 1,
@@ -257,7 +259,11 @@ const VariablesEditor = () => {
               </TableActionButton>
               <TableActionButton
                 aria-label='Remove table row button'
-                disabled={parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED}
+                disabled={
+                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
+                  parseInt(editorVariables.selectedRow) ===
+                    tableData.findIndex((variable) => variable.type.definition === 'derived')
+                }
                 onClick={handleRemoveVariable}
               >
                 <MinusIcon />

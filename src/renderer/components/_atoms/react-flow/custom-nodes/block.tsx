@@ -195,13 +195,14 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
      * Check if the variable exists in the table of variables
      * If exists, update the node variable
      */
-    let variable: PLCVariable | undefined = variables.find(
-      (variable) =>
-        variable.name === node.data.variable && variable.type.definition === 'derived' && variable.id === node.id,
-    )
+    let variable: PLCVariable | undefined = variables.find((variable) => variable.id === node.id)
+
+    console.log('\nvariable', variable)
 
     if (variable) {
-      updateVariable({
+      if (variable.name === blockVariableValue) return
+
+      const res = updateVariable({
         data: {
           ...variable,
           name: blockVariableValue,
@@ -217,6 +218,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
         scope: 'local',
         associatedPou: editor.meta.name,
       })
+      variable = res.data as PLCVariable
     } else {
       const res = createVariable({
         data: {

@@ -125,7 +125,7 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       parallelOpenReference: undefined,
       parallelCloseReference: undefined,
       type,
-      variable: '',
+      variable: { name: '' },
     },
     width: DEFAULT_PARALLEL_WIDTH,
     height: DEFAULT_PARALLEL_HEIGHT,

@@ -1,8 +1,10 @@
 import * as Portal from '@radix-ui/react-portal'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungState } from '@root/renderer/store/slices'
+import type { PLCVariable } from '@root/types/PLC'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
+import { parseInt } from 'lodash'
 import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
@@ -29,7 +31,16 @@ type RungBodyProps = {
 }
 
 export const RungBody = ({ rung }: RungBodyProps) => {
-  const { flowActions, libraries, editor } = useOpenPLCStore()
+  const {
+    flowActions,
+    libraries,
+    editor,
+    editorActions: { updateModelVariables },
+    project: {
+      data: { pous },
+    },
+    projectActions: { deleteVariable },
+  } = useOpenPLCStore()
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
@@ -47,7 +58,10 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    * minX: 0    | minY: 0
    * maxX: 1530 | maxY: 200
    */
-  const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([[0, 0], (rung?.flowViewport as [number, number]) ?? [1530, 200]])
+  const [flowPanelExtent, setFlowPanelExtent] = useState<CoordinateExtent>([
+    [0, 0],
+    (rung?.flowViewport as [number, number]) ?? [1530, 200],
+  ])
 
   /**
    * Update flow panel extent based on the bounds of the nodes
@@ -141,6 +155,33 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     const { nodes: newNodes, edges: newEdges } = removeElements(rungLocal, nodes)
     flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: newNodes })
     flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: newEdges })
+
+    const blockNodes = nodes.filter((node) => node.type === 'block')
+    if (blockNodes.length > 0) {
+      let variables: PLCVariable[] = []
+      pous.forEach((pou) => {
+        if (pou.data.name === editor.meta.name) {
+          variables = pou.data.variables as PLCVariable[]
+        }
+      })
+
+      blockNodes.forEach((blockNode) => {
+        const variableIndex = variables.findIndex((variable) => variable.id === blockNode.id)
+        if (variableIndex !== -1)
+          deleteVariable({
+            rowId: variableIndex,
+            scope: 'local',
+            associatedPou: editor.meta.name,
+          })
+        if (
+          editor.type === 'plc-graphical' &&
+          editor.variable.display === 'table' &&
+          parseInt(editor.variable.selectedRow) === variableIndex
+        ) {
+          updateModelVariables({ display: 'table', selectedRow: -1 })
+        }
+      })
+    }
   }
 
   const handleNodeStartDrag = (node: FlowNode) => {

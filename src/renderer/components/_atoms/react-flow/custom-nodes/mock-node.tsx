@@ -140,7 +140,7 @@ export const buildMockNode = ({
       },
     },
     numericId: generateNumericUUID(),
-    variable: '',
+    variable: { name: '' },
   },
   width: 150,
   height: 40,

@@ -91,7 +91,7 @@ export const builderPlaceholderNode = ({
       numericId: generateNumericUUID(),
       position,
       relatedNode,
-      variable: ''
+      variable: { name: '' },
     },
     position: {
       x: posX,
