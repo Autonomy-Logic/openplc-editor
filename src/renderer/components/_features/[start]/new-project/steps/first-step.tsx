@@ -59,7 +59,7 @@ const Step1 = ({ onNext, onClose }: { onNext: () => void; onClose: () => void })
       <form onSubmit={handleSubmit(handleFormSubmit)} className='flex flex-grow flex-col justify-between'>
         <div>
           <h2 className='mb-8 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
-            What type of project will you be working on?
+            What type of project will you be working on? *
           </h2>
 
           <div className='flex w-full justify-around'>
