@@ -27,7 +27,8 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
     time: string
   }
   const { toast } = useToast()
-  const { handleSubmit, control } = useForm<FormData>()
+  const { handleSubmit, control, watch } = useForm<FormData>()
+  const language = watch('language')
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)
   const projectData = NewProjectStore((state) => state.formData)
   const [isModalOpen, setModalOpen] = useState(false)
@@ -54,7 +55,6 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
       } as CreateProjectFileProps)
 
       if (result.data) {
-
         clearTabs()
         setEditingState('unsaved')
         setProject({
@@ -191,7 +191,11 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
           </button>
           <button
             type='submit'
-            className={cn('h-8 w-52 items-center rounded-lg bg-blue-500 text-center font-medium text-white')}
+            className={cn(
+              'h-8 w-52 items-center rounded-lg bg-blue-500 text-center font-medium text-white',
+              { 'cursor-not-allowed opacity-50': !language },
+            )}
+            disabled={!language}
           >
             Create Project
           </button>
