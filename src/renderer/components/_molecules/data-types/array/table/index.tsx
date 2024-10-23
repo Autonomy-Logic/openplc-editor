@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -114,17 +115,15 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     setTableData((prevRows) => {
       const newRows = [...prevRows, { dimension: '' }]
       setFocusIndex(newRows?.length - 1)
-      setBorders()
       resetBorders()
-
       return newRows
     })
   }
 
   const removeRow = () => {
     setTableData((prevRows) => {
-      if (selectedRow !== null) {
-        const newRows = prevRows.filter((_, index) => index !== selectedRow)
+      if (focusIndex !== null) {
+        const newRows = prevRows.filter((_, index) => index !== focusIndex)
 
         newRows.forEach(() => {
           const optionalSchema = {
@@ -140,12 +139,14 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
   const moveRowUp = () => {
     setTableData((prevRows) => {
-      if (selectedRow !== null && selectedRow > 0) {
+      if (focusIndex !== null && focusIndex > 0) {
         const newRows = [...prevRows]
-        const temp = newRows[selectedRow]
-        newRows[selectedRow] = newRows[selectedRow - 1]
-        newRows[selectedRow - 1] = temp
-        setFocusIndex(selectedRow - 1)
+        const temp = newRows[focusIndex]
+        newRows[focusIndex] = newRows[focusIndex - 1]
+        newRows[focusIndex - 1] = temp
+
+        const newFocusIndex = focusIndex - 1
+        setFocusIndex(newFocusIndex)
 
         newRows.forEach(() => {
           const optionalSchema = {
@@ -154,9 +155,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
           updateDatatype(name, optionalSchema as PLCArrayDatatype)
         })
 
-        setBorders(focusIndex && focusIndex + 1)
-        resetBorders()
-
+        setBorders(newFocusIndex)
         prevRows = newRows
       }
       return prevRows
@@ -165,12 +164,14 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
   const moveRowDown = () => {
     setTableData((prevRows) => {
-      if (selectedRow !== null && selectedRow < prevRows.length - 1) {
+      if (focusIndex !== null && focusIndex < prevRows.length - 1) {
         const newRows = [...prevRows]
-        const temp = newRows[selectedRow]
-        newRows[selectedRow] = newRows[selectedRow + 1]
-        newRows[selectedRow + 1] = temp
-        setFocusIndex(selectedRow + 1)
+        const temp = newRows[focusIndex]
+        newRows[focusIndex] = newRows[focusIndex + 1]
+        newRows[focusIndex + 1] = temp
+
+        const newFocusIndex = focusIndex + 1
+        setFocusIndex(newFocusIndex)
 
         newRows.forEach(() => {
           const optionalSchema = {
@@ -178,8 +179,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
           }
           updateDatatype(name, optionalSchema as PLCArrayDatatype)
         })
-        setBorders(focusIndex && focusIndex + 1)
-        resetBorders()
+        setBorders(newFocusIndex)
         prevRows = newRows
       }
       return prevRows
@@ -203,18 +203,17 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     })
   }
 
-  const setBorders = (focusIndex) => {
-    const row = tableBodyRowRef.current
+  const setBorders = (indexFocus) => {
     const parent = tableBodyRef.current
-    if (!row || !parent) return
-    if (focusIndex !== null && focusIndex >= 0 && focusIndex < parent.children.length) {
-      const prevRow = parent.children[focusIndex]
-      if (prevRow) {
-        prevRow.className = cn(prevRow.className, '[&>td]:border-neutral-500 dark:[&>td]:border-neutral-500')
-      }
-    }
+    if (!parent) return
 
-    const currentRow = parent.children[focusIndex]
+    ;[...parent.children].forEach((child, index) => {
+      if (index !== indexFocus) {
+        child.className = cn(child.className, '[&>td]:border-neutral-500 dark:[&>td]:border-neutral-500')
+      }
+    })
+
+    const currentRow = parent.children[indexFocus]
     if (currentRow) {
       currentRow.className = cn(
         currentRow.className,
@@ -225,6 +224,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
       )
     }
   }
+
   useEffect(() => {
     const parent = tableBodyRef.current
     if (!parent) return
@@ -240,8 +240,8 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
   useEffect(() => {
     resetBorders()
-    setBorders(selectedRow)
-  }, [selectedRow])
+    setBorders(focusIndex)
+  }, [focusIndex, tableBodyRef, tableBodyRowRef])
 
   const table = useReactTable({
     columns: columns,
