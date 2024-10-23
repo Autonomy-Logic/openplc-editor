@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
@@ -109,6 +110,7 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSl
   datatypeActions: {
     create: (propsToCreateDatatype: PropsToCreateDatatype) => {
       const normalizedDatatypeObj = CreateDatatypeObject(propsToCreateDatatype)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       getState().workspaceActions.createDatatype(normalizedDatatypeObj)
       getState().editorActions.addModel({type: 'plc-datatype', meta: {name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation}})
       getState().editorActions.setEditor({type: 'plc-datatype', meta: {name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation}})

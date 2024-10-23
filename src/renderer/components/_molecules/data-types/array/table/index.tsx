@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -113,6 +114,9 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     setTableData((prevRows) => {
       const newRows = [...prevRows, { dimension: '' }]
       setFocusIndex(newRows?.length - 1)
+      setBorders()
+      resetBorders()
+
       return newRows
     })
   }
@@ -150,6 +154,9 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
           updateDatatype(name, optionalSchema as PLCArrayDatatype)
         })
 
+        setBorders(focusIndex && focusIndex + 1)
+        resetBorders()
+
         prevRows = newRows
       }
       return prevRows
@@ -171,7 +178,8 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
           }
           updateDatatype(name, optionalSchema as PLCArrayDatatype)
         })
-
+        setBorders(focusIndex && focusIndex + 1)
+        resetBorders()
         prevRows = newRows
       }
       return prevRows
@@ -195,32 +203,44 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     })
   }
 
-  const setBorders = () => {
+  const setBorders = (focusIndex) => {
     const row = tableBodyRowRef.current
     const parent = tableBodyRef.current
     if (!row || !parent) return
+    if (focusIndex !== null && focusIndex >= 0 && focusIndex < parent.children.length) {
+      const prevRow = parent.children[focusIndex]
+      if (prevRow) {
+        prevRow.className = cn(prevRow.className, '[&>td]:border-neutral-500 dark:[&>td]:border-neutral-500')
+      }
+    }
 
-    const element = row?.previousElementSibling
-
-    if (element) {
-      element.className = cn(
-        element.className,
-        '[&>td]:border-b-brand dark:[&>td]:border-b-brand',
-        '[&>th]:border-b-brand dark:[&>th]:border-b-brand',
+    const currentRow = parent.children[focusIndex]
+    if (currentRow) {
+      currentRow.className = cn(
+        currentRow.className,
+        '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand',
+        '[&>td]:border-t-brand',
+        'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand',
+        'dark:[&>td]:border-t-brand',
       )
     }
-    row.className = cn(
-      row.className,
-      '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand',
-      '[&>td]:border-t-brand',
-      'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand',
-      'dark:[&>td]:border-t-brand',
-    )
   }
+  useEffect(() => {
+    const parent = tableBodyRef.current
+    if (!parent) return
+
+    if (parent.children[0]) {
+      parent.children[0].className = cn(
+        parent.children[0].className,
+        '[&>td:first-child]:rounded-tl-md [&>td:last-child]:rounded-tr-md',
+        '[&>td]:border-t-neutral-500 dark:[&>td]:border-t-neutral-500',
+      )
+    }
+  }, [tableBodyRef, tableBodyRowRef, tableData])
 
   useEffect(() => {
     resetBorders()
-    setBorders()
+    setBorders(selectedRow)
   }, [selectedRow])
 
   const table = useReactTable({
