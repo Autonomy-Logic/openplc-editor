@@ -52,7 +52,9 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
         ...allData,
         path: projectData.path,
       } as CreateProjectFileProps)
+
       if (result.data) {
+
         clearTabs()
         setEditingState('unsaved')
         setProject({
@@ -63,21 +65,27 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
           },
           data: result.data.content.data,
         })
+        toast({
+          title: 'The project was created successfully!',
+          description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
+          variant: 'default',
+        })
+      } else {
+        toast({
+          title: 'Cannot create a project!',
+          description: 'Failed to create the project. No data returned.',
+          variant: 'fail',
+        })
       }
-      onClose()
-      onFinish()
-      toast({
-        title: 'The project was created successfully!',
-        description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
-        variant: 'default',
-      })
-      console.log()
     } catch (_error) {
       toast({
         title: 'Cannot create a project!',
-        description: 'Failed to create the project. ',
+        description: 'Failed to create the project.',
         variant: 'fail',
       })
+    } finally {
+      onClose()
+      onFinish()
     }
   }
 
