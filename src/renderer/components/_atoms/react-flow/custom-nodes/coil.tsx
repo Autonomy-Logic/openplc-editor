@@ -13,7 +13,7 @@ import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../input'
 import { buildHandle, CustomHandle } from './handle'
@@ -103,13 +103,51 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     project: {
       data: { pous },
     },
+    flows,
     flowActions: { updateNode },
   } = useOpenPLCStore()
 
-  const [coilVariableValue, setCoilVariableValue] = useState<string>('')
   const coil = DEFAULT_COIL_TYPES[data.variant]
+  const [coilVariableValue, setCoilVariableValue] = useState<string>('')
+  const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
+  const inputVariableRef = useRef<HTMLInputElement>(null)
+  const [inputFocus, setInputFocus] = useState<boolean>(true)
+
+  /**
+   * useEffect to focus the variable input when the block is selected
+   */
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.focus()
+    }
+  }, [])
+
+  /**
+   * Update wrongVariable state when the table of variables is updated
+   */
+  useEffect(() => {
+    let variables: PLCVariable[] = []
+
+    pous.forEach((pou) => {
+      if (pou.data.name === editor.meta.name) {
+        variables = pou.data.variables as PLCVariable[]
+      }
+    })
+
+    if (!variables.some((variable) => variable.name === coilVariableValue) && !inputFocus) {
+      setWrongVariable(true)
+    } else {
+      setWrongVariable(false)
+    }
+  }, [pous])
+
+  /**
+   * Handle with the variable input onBlur event
+   */
   const handleVariableInputOnBlur = () => {
+    setInputFocus(false)
+
     let variables: PLCVariable[] = []
     let rung: RungState | undefined = undefined
     let node: Node | undefined = undefined
@@ -117,23 +155,22 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     pous.forEach((pou) => {
       if (pou.data.name === editor.meta.name) {
         variables = pou.data.variables as PLCVariable[]
-        rung =
-          pou.data.body.language === 'ld'
-            ? (pou.data.body.value.rungs.find((rung) =>
-                rung.nodes.some((node) => node.id === id) ? rung : undefined,
-              ) as RungState)
-            : undefined
       }
     })
 
-    if (!variables.some((variable) => variable.name === coilVariableValue)) return
+    if (!variables.some((variable) => variable.name === coilVariableValue)) {
+      setWrongVariable(true)
+      return
+    }
+
+    rung = flows.find((flow) => flow.name === editor.meta.name)?.rungs.find((rung) => rung.id === id)
     if (!rung) return
 
-    node = (rung as RungState).nodes.find((node) => node.id === id)
+    node = rung.nodes.find((node) => node.id === id)
     if (!node) return
 
     updateNode({
-      rungId: (rung as RungState).id,
+      rungId: rung.id,
       node: {
         ...node,
         data: {
@@ -143,6 +180,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       },
       editorName: editor.meta.name,
     })
+    setWrongVariable(false)
   }
 
   return (
@@ -156,6 +194,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
           'rounded-[1px] border border-transparent hover:outline hover:outline-2 hover:outline-offset-[5px] hover:outline-brand',
           {
             'outline outline-2 outline-offset-[5px] outline-brand': selected,
+            'outline outline-2 outline-offset-[5px] outline-red-500': wrongVariable,
           },
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
@@ -168,7 +207,9 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
           onChange={(e) => setCoilVariableValue(e.target.value)}
           placeholder='???'
           className='w-full bg-transparent text-center text-sm outline-none'
+          onFocus={() => setInputFocus(true)}
           onBlur={handleVariableInputOnBlur}
+          ref={inputVariableRef}
         />
       </div>
       {data.handles.map((handle, index) => (

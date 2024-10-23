@@ -3,7 +3,7 @@ import type { RungState } from '@root/renderer/store/slices'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
@@ -48,6 +48,7 @@ export const BlockNodeElement = <T extends object>({
   disabled = false,
   height,
   selected,
+  wrongVariable = false,
   scale = 1,
   blockNameValue,
   setBlockNameValue,
@@ -56,6 +57,7 @@ export const BlockNodeElement = <T extends object>({
   height: number
   selected: boolean
   disabled?: boolean
+  wrongVariable?: boolean
   scale?: number
   blockNameValue?: string
   setBlockNameValue?: (value: string) => void
@@ -72,6 +74,7 @@ export const BlockNodeElement = <T extends object>({
         {
           'hover:border-transparent hover:ring-2 hover:ring-brand': !disabled,
           'border-transparent ring-2 ring-brand': selected,
+          'border-transparent ring-2 ring-red-500': wrongVariable,
         },
       )}
       style={{
@@ -116,6 +119,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     project: {
       data: { pous },
     },
+    flows,
     flowActions: { updateNode },
   } = useOpenPLCStore()
 
@@ -123,8 +127,46 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [blockNameValue, setBlockNameValue] = useState<string>(name)
+  const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
+  const inputVariableRef = useRef<HTMLInputElement>(null)
+  const [inputFocus, setInputFocus] = useState<boolean>(true)
+
+  /**
+   * useEffect to focus the variable input when the block is selected
+   */
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.focus()
+    }
+  }, [])
+
+  /**
+   * Update wrongVariable state when the table of variables is updated
+   */
+  useEffect(() => {
+    let variables: PLCVariable[] = []
+
+    pous.forEach((pou) => {
+      if (pou.data.name === editor.meta.name) {
+        variables = pou.data.variables as PLCVariable[]
+      }
+    })
+
+    if (!variables.some((variable) => variable.name === blockVariableValue) && !inputFocus) {
+      setWrongVariable(true)
+    } else {
+      setWrongVariable(false)
+    }
+  }, [pous])
+
+  /**
+   * Handle with the variable input onBlur event
+   */
   const handleVariableInputOnBlur = () => {
+
+    setInputFocus(false)
+
     let variables: PLCVariable[] = []
     let rung: RungState | undefined = undefined
     let node: Node | undefined = undefined
@@ -132,23 +174,22 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     pous.forEach((pou) => {
       if (pou.data.name === editor.meta.name) {
         variables = pou.data.variables as PLCVariable[]
-        rung =
-          pou.data.body.language === 'ld'
-            ? (pou.data.body.value.rungs.find((rung) =>
-                rung.nodes.some((node) => node.id === id) ? rung : undefined,
-              ) as RungState)
-            : undefined
       }
     })
 
-    if (!variables.some((variable) => variable.name === blockVariableValue)) return
+    if (!variables.some((variable) => variable.name === blockVariableValue)) {
+      setWrongVariable(true)
+      return
+    }
+
+    rung = flows.find((flow) => flow.name === editor.meta.name)?.rungs.find((rung) => rung.id === id)
     if (!rung) return
 
-    node = (rung as RungState).nodes.find((node) => node.id === id)
+    node = rung.nodes.find((node) => node.id === id)
     if (!node) return
 
     updateNode({
-      rungId: (rung as RungState).id,
+      rungId: rung.id,
       node: {
         ...node,
         data: {
@@ -158,6 +199,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
       },
       editorName: editor.meta.name,
     })
+    setWrongVariable(false)
   }
 
   return (
@@ -173,6 +215,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
               data={data}
               height={height ?? DEFAULT_BLOCK_HEIGHT}
               selected={selected ?? false}
+              wrongVariable={wrongVariable}
               blockNameValue={blockNameValue}
               setBlockNameValue={setBlockNameValue}
             />
@@ -191,7 +234,9 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
           onChange={(e) => setBlockVariableValue(e.target.value)}
           placeholder='???'
           className='w-full bg-transparent text-center text-sm outline-none'
+          onFocus={() => setInputFocus(true)}
           onBlur={handleVariableInputOnBlur}
+          ref={inputVariableRef}
         />
       </div>
       {data.handles.map((handle, index) => (
@@ -289,6 +334,6 @@ export const buildBlockNode = <T extends object | undefined>({
     },
     draggable: true,
     selectable: true,
-    selected: false,
+    selected: true,
   }
 }
