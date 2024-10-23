@@ -181,7 +181,6 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     const variable = variables.find(
       (variable) => variable.name === coilVariableValue && variable.type.definition !== 'derived',
     )
-    console.log(variable)
 
     if (!variable) {
       const variableName = node.data.variable.name

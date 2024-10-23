@@ -46,28 +46,133 @@ export const DEFAULT_BLOCK_TYPE = {
 }
 
 export const BlockNodeElement = <T extends object>({
+  nodeId,
   data,
   disabled = false,
   height,
   selected,
   wrongVariable = false,
   scale = 1,
-  blockNameValue,
-  setBlockNameValue,
 }: {
+  nodeId?: string
   data: BlockNodeData<T>
   height: number
   selected: boolean
   disabled?: boolean
   wrongVariable?: boolean
   scale?: number
-  blockNameValue?: string
-  setBlockNameValue?: (value: string) => void
 }) => {
-  const { name, variables } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const {
+    editor,
+    libraries,
+    flows,
+    flowActions: { updateNode },
+    project: {
+      data: { pous },
+    },
+    projectActions: { updateVariable },
+  } = useOpenPLCStore()
+
+  const { name, variables, type } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
 
   const inputConnectors = variables.filter((variable) => variable.class === 'input').map((variable) => variable.name)
   const outputConnectors = variables.filter((variable) => variable.class === 'output').map((variable) => variable.name)
+
+  const [blockNameValue, setBlockNameValue] = useState<string>(type === 'generic' ? '' : name)
+  const [wrongName, setWrongName] = useState<boolean>(false)
+
+  const inputNameRef = useRef<HTMLInputElement>(null)
+  const [_inputNameFocus, setInputNameFocus] = useState<boolean>(true)
+
+  /**
+   * useEffect to focus the name input when the correct block type is selected
+   */
+  useEffect(() => {
+    if (inputNameRef.current) {
+      switch ((data.variant as BlockVariant).type) {
+        case 'function-block':
+          break
+        case 'function':
+          break
+        default:
+          inputNameRef.current.focus()
+      }
+    }
+  }, [])
+
+  const handleNameInputOnBlur = () => {
+    setInputNameFocus(false)
+
+    if (blockNameValue === '') {
+      return
+    }
+
+    const rung: RungState | undefined = flows
+      .find((flow) => flow.name === editor.meta.name)
+      ?.rungs.find((rung) => rung.nodes.some((node) => node.id === nodeId))
+    if (!rung) return
+
+    const node: Node | undefined = rung.nodes.find((node) => node.id === nodeId)
+    if (!node) return
+
+    if (blockNameValue === name) return
+
+    let libraryBlock: unknown = undefined
+    libraries.system.find((block) =>
+      block.pous.find((pou) => {
+        if (pou.name === blockNameValue) {
+          libraryBlock = pou
+          return true
+        }
+        return
+      }),
+    ) || undefined
+
+    if (!libraryBlock) {
+      setWrongName(true)
+      return
+    }
+
+    let pousVariables: PLCVariable[] = []
+
+    pous.forEach((pou) => {
+      if (pou.data.name === editor.meta.name) {
+        pousVariables = pou.data.variables as PLCVariable[]
+      }
+    })
+
+    let variable = pousVariables.find((variable) => variable.id === nodeId)
+    if (variable) {
+      const res = updateVariable({
+        data: {
+          type: {
+            definition: 'derived',
+            value: blockNameValue,
+          },
+        },
+        rowId: pousVariables.indexOf(variable),
+        scope: 'local',
+        associatedPou: editor.meta.name,
+      })
+      if (res.ok && res.data) variable = res.data as PLCVariable
+    }
+
+    console.log('variable', variable)
+
+    updateNode({
+      rungId: rung.id,
+      node: {
+        ...node,
+        data: {
+          ...node.data,
+          variant: libraryBlock,
+          variable: variable ?? { name: '' },
+        },
+      },
+      editorName: editor.meta.name,
+    })
+    setWrongName(false)
+  }
 
   return (
     <div
@@ -76,7 +181,7 @@ export const BlockNodeElement = <T extends object>({
         {
           'hover:border-transparent hover:ring-2 hover:ring-brand': !disabled,
           'border-transparent ring-2 ring-brand': selected,
-          'border-transparent ring-2 ring-red-500': wrongVariable,
+          'border-transparent ring-2 ring-red-500': wrongVariable || wrongName,
         },
       )}
       style={{
@@ -86,12 +191,15 @@ export const BlockNodeElement = <T extends object>({
       }}
     >
       <InputWithRef
-        value={blockNameValue ?? name}
-        onChange={(e) => setBlockNameValue && setBlockNameValue(e.target.value)}
+        value={blockNameValue}
+        onChange={(e) => setBlockNameValue(e.target.value)}
         maxLength={20}
         placeholder='???'
         className='w-full bg-transparent p-1 text-center text-sm outline-none'
         disabled={!setBlockNameValue}
+        onFocus={() => setInputNameFocus(true)}
+        onBlur={handleNameInputOnBlur}
+        ref={inputNameRef}
       />
       {inputConnectors.map((connector, index) => (
         <div
@@ -126,23 +234,29 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     flowActions: { updateNode },
   } = useOpenPLCStore()
 
-  const { name, documentation } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const { documentation } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
-  const [blockNameValue, setBlockNameValue] = useState<string>(name)
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
   const inputVariableRef = useRef<HTMLInputElement>(null)
-  const [inputFocus, setInputFocus] = useState<boolean>(true)
+  const [inputVariableFocus, setInputVariableFocus] = useState<boolean>(true)
 
   /**
-   * useEffect to focus the variable input when the block is selected
+   * useEffect to focus the variable input when the correct block type is selected
    */
   useEffect(() => {
-    if (inputVariableRef.current && (data.variant as BlockVariant).type !== 'function') {
-      inputVariableRef.current.focus()
+    if (inputVariableRef.current) {
+      switch ((data.variant as BlockVariant).type) {
+        case 'function':
+          break
+        case 'generic':
+          break
+        default:
+          inputVariableRef.current.focus()
+      }
     }
-  }, [])
+  }, [data])
 
   /**
    * Update wrongVariable state when the table of variables is updated
@@ -158,7 +272,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
 
     const variable = variables.find((variable) => variable.id === id)
 
-    if (!variable && !inputFocus) {
+    if (!variable && !inputVariableFocus) {
       setWrongVariable(true)
     } else {
       if (variable && variable.name !== blockVariableValue) setBlockVariableValue(variable.name ?? '')
@@ -170,7 +284,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
    * Handle with the variable input onBlur event
    */
   const handleVariableInputOnBlur = () => {
-    setInputFocus(false)
+    setInputVariableFocus(false)
 
     if (blockVariableValue === '') {
       setWrongVariable(true)
@@ -198,9 +312,6 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
      * If exists, update the node variable
      */
     let variable: PLCVariable | undefined = variables.find((variable) => variable.id === node.id)
-
-    console.log('\nvariable', variable)
-
     if (variable) {
       if (variable.name === blockVariableValue) return
 
@@ -210,10 +321,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
           name: blockVariableValue,
           type: {
             definition: 'derived',
-            value:
-              (node.data as BlockNodeData<BlockVariant>).variant.name === '???'
-                ? 'GENERIC'
-                : (node.data as BlockNodeData<BlockVariant>).variant.name,
+            value: (node.data as BlockNodeData<BlockVariant>).variant.name,
           },
         },
         rowId: variables.indexOf(variable),
@@ -228,10 +336,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
           name: blockVariableValue,
           type: {
             definition: 'derived',
-            value:
-              (node.data as BlockNodeData<BlockVariant>).variant.name === '???'
-                ? 'GENERIC'
-                : (node.data as BlockNodeData<BlockVariant>).variant.name,
+            value: (node.data as BlockNodeData<BlockVariant>).variant.name,
           },
           class: 'local',
           location: '',
@@ -242,7 +347,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
         associatedPou: editor.meta.name,
       })
       variable = res.data as PLCVariable
-      if (res.ok && variable.name !== blockNameValue) {
+      if (res.ok && variable.name !== blockVariableValue) {
         setBlockVariableValue(variable.name)
       }
     }
@@ -271,12 +376,11 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
         <Tooltip>
           <TooltipTrigger>
             <BlockNodeElement
+              nodeId={id}
               data={data}
               height={height ?? DEFAULT_BLOCK_HEIGHT}
               selected={selected ?? false}
               wrongVariable={wrongVariable}
-              blockNameValue={blockNameValue}
-              setBlockNameValue={setBlockNameValue}
             />
           </TooltipTrigger>
           {!dragging && <TooltipContent side='right'>{documentation}</TooltipContent>}
@@ -288,13 +392,13 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
           width: DEFAULT_BLOCK_WIDTH,
         }}
       >
-        {(data.variant as BlockVariant).type !== 'function' && (
+        {(data.variant as BlockVariant).type !== 'function' && (data.variant as BlockVariant).type !== 'generic' && (
           <InputWithRef
             value={blockVariableValue}
             onChange={(e) => setBlockVariableValue(e.target.value)}
             placeholder='???'
             className='w-full bg-transparent text-center text-sm outline-none'
-            onFocus={() => setInputFocus(true)}
+            onFocus={() => setInputVariableFocus(true)}
             onBlur={handleVariableInputOnBlur}
             ref={inputVariableRef}
           />
