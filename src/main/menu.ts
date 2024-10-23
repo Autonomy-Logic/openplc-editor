@@ -354,6 +354,9 @@ export default class MenuBuilder {
             accelerator: 'Ctrl+O',
             click: () => void this.handleOpenProject(),
           },
+             {
+            type: 'separator',
+          },
           {
             label: i18n.t('menu:file.submenu.save'),
             accelerator: 'Ctrl+S',
@@ -367,9 +370,9 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
-            enabled: false,
+            
             accelerator: 'Ctrl+W',
-            click: () => console.warn('Menu button clicked! This is not working yet.'),
+            click: () => this.handleCloseTab(),
           },
           {
             label: i18n.t('menu:file.submenu.closeProject'),
