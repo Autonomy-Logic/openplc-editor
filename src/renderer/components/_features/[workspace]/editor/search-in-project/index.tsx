@@ -149,8 +149,21 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
   }
 
   const handleSearch = () => {
+    const filterMap = {
+      'data type': 'data-type',
+      function: 'function',
+      'function block': 'function-block',
+      program: 'program',
+      configuration: 'configuration',
+    }
+
+    const activeFilters = Object.keys(checkedOptions)
+      .filter((key) => checkedOptions[key])
+      .map((key) => filterMap[key as keyof typeof filterMap])
+
     const groupedPous = projectData.pous
       .filter((pou) => {
+        const pouTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes(pou.type)
         const pouMatches = pou.data.name.toLowerCase().includes(searchQuery.toLowerCase())
         const variableMatches = pou.data.variables.some((variable) =>
           variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -159,7 +172,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
           ? pou.data.body.toLowerCase().includes(searchQuery.toLowerCase())
           : false
 
-        return pouMatches || variableMatches || bodyMatches
+        return pouTypeMatchesFilter && (pouMatches || variableMatches || bodyMatches)
       })
       .reduce(
         (acc, pou) => {
@@ -194,20 +207,25 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
         >,
       )
 
-    const dataTypes = projectData.dataTypes
-      .filter((dataType) => dataType.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    const filteredDataTypes = projectData.dataTypes
+      .filter((dataType) => {
+        const dataTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes('data-type')
+        return dataTypeMatchesFilter && dataType.name.toLowerCase().includes(searchQuery.toLowerCase())
+      })
       .map((dataType) => ({
         name: dataType.name,
         type: dataType.derivation.type,
       }))
 
-    const resourceGlobalVar = projectData.configuration.resource.globalVariables.filter((variable) =>
-      variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
-    )
+    const resourceGlobalVar = projectData.configuration.resource.globalVariables.filter((variable) => {
+      const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
+      return resourceMatchesFilter && variable.name.toLowerCase().includes(searchQuery.toLowerCase())
+    })
 
-    const resourceTasks = projectData.configuration.resource.tasks.filter((task) =>
-      task.name.toLowerCase().includes(searchQuery.toLowerCase()),
-    )
+    const resourceTasks = projectData.configuration.resource.tasks.filter((task) => {
+      const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
+      return resourceMatchesFilter && task.name.toLowerCase().includes(searchQuery.toLowerCase())
+    })
 
     const resource = {
       globalVariable: resourceGlobalVar.map((variable) => variable.name).join(', '),
@@ -219,7 +237,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       projectName: projectData.projectName,
       functions: {
         pous: groupedPous,
-        dataTypes,
+        dataTypes: filteredDataTypes,
         resource,
       },
     }

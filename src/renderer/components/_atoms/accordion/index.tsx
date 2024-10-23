@@ -34,7 +34,7 @@ const AccordionTrigger = forwardRef<HTMLButtonElement, AccordionPrimitive.Accord
     <AccordionPrimitive.Header className='flex'>
       <AccordionPrimitive.Trigger
         className={cn(
-          'group flex w-full items-center justify-between overflow-hidden bg-slate-50 p-2 text-left transition-all duration-300 hover:bg-slate-100 dark:bg-neutral-1000 dark:hover:bg-neutral-950',
+          'group flex w-full items-center justify-between overflow-hidden bg-slate-100 p-2 text-left transition-all duration-300 hover:bg-slate-200 dark:bg-neutral-900 dark:hover:bg-neutral-850',
           className,
         )}
         {...props}
@@ -56,7 +56,7 @@ const AccordionContent = forwardRef<HTMLDivElement, AccordionPrimitive.Accordion
   ({ children, className, ...props }, forwardedRef) => (
     <AccordionPrimitive.Content
       className={cn(
-        'overflow-hidden border-t border-slate-200 dark:border-neutral-900 bg-slate-50 transition-all duration-300 ease-in-out data-[state=closed]:animate-slideUp data-[state=open]:animate-slideDown dark:bg-neutral-950',
+        'overflow-hidden border-t border-slate-200 dark:border-neutral-950 bg-slate-100 transition-all duration-300 ease-in-out data-[state=closed]:animate-slideUp data-[state=open]:animate-slideDown dark:bg-neutral-900',
         className,
       )}
       {...props}

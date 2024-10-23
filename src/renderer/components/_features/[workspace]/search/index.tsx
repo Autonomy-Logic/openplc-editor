@@ -67,7 +67,7 @@ const Search = ({ items }: SearchProps) => {
 
   return (
     <div className='h-full w-full text-cp-sm'>
-      <div className='flex h-full w-full flex-col gap-1 rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-900'>
+      <div className='flex h-full w-full flex-col gap-1 rounded-lg border-[0.75px] border-neutral-200 p-2 dark:border-neutral-800 dark:bg-neutral-950'>
         <div className='header relative flex flex-col overflow-auto pr-1'>
           {items.map((item, index) => (
             <Accordion
@@ -78,7 +78,7 @@ const Search = ({ items }: SearchProps) => {
                     <div className='flex w-full items-center justify-between'>
                       <span className='text-sm font-medium text-neutral-950 dark:text-white'>{item.searchQuery}</span>
                       <CloseIcon
-                        className='ml-2 w-4 cursor-pointer stroke-white hover:stroke-red-500'
+                        className='ml-2 w-4 cursor-pointer stroke-brand dark:stroke-white hover:stroke-red-500'
                         onClick={() => handleRemoveSearchResult(index)}
                       />
                     </div>
