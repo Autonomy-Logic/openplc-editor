@@ -95,7 +95,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }, [rungLocal.nodes.length])
 
   useEffect(() => {
-    console.log('RUNG', rung)
     setRungLocal(rung)
   }, [rung.nodes])
 

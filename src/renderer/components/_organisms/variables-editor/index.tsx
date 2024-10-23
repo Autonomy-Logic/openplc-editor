@@ -48,7 +48,6 @@ const VariablesEditor = () => {
    */
   useEffect(() => {
     const variablesToTable = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
-    console.log('variablesToTable', variablesToTable)
     setTableData(variablesToTable)
   }, [editor, pous])
 

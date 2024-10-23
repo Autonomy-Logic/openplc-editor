@@ -29,43 +29,51 @@ export const DEFAULT_CONTACT_CONNECTOR_Y = DEFAULT_CONTACT_BLOCK_HEIGHT / 2
 
 type ContactType = {
   [key in ContactNode['data']['variant']]: {
-    svg: ReactNode
+    svg: (wrongVariable: boolean) => ReactNode
   }
 }
 export const DEFAULT_CONTACT_TYPES: ContactType = {
   default: {
-    svg: (
+    svg: (wrongVariable): ReactNode => (
       <DefaultContact
         width={DEFAULT_CONTACT_BLOCK_WIDTH}
         height={DEFAULT_CONTACT_BLOCK_HEIGHT}
-        strokeClassName='stroke-neutral-1000 dark:stroke-neutral-100'
+        strokeClassName={cn('stroke-neutral-1000 dark:stroke-neutral-100', {
+          'stroke-red-500 dark:stroke-red-500': wrongVariable,
+        })}
       />
     ),
   },
   negated: {
-    svg: (
+    svg: (wrongVariable): ReactNode => (
       <NegatedContact
         width={DEFAULT_CONTACT_BLOCK_WIDTH}
         height={DEFAULT_CONTACT_BLOCK_HEIGHT}
-        strokeClassName='stroke-neutral-1000 dark:stroke-neutral-100'
+        strokeClassName={cn('stroke-neutral-1000 dark:stroke-neutral-100', {
+          'stroke-red-500 dark:stroke-red-500': wrongVariable,
+        })}
       />
     ),
   },
   risingEdge: {
-    svg: (
+    svg: (wrongVariable): ReactNode => (
       <RisingEdgeContact
         width={DEFAULT_CONTACT_BLOCK_WIDTH}
         height={DEFAULT_CONTACT_BLOCK_HEIGHT}
-        strokeClassName='stroke-neutral-1000 dark:stroke-neutral-100'
+        strokeClassName={cn('stroke-neutral-1000 dark:stroke-neutral-100', {
+          'stroke-red-500 dark:stroke-red-500': wrongVariable,
+        })}
       />
     ),
   },
   fallingEdge: {
-    svg: (
+    svg: (wrongVariable): ReactNode => (
       <FallingEdgeContact
         width={DEFAULT_CONTACT_BLOCK_WIDTH}
         height={DEFAULT_CONTACT_BLOCK_HEIGHT}
-        strokeClassName='stroke-neutral-1000 dark:stroke-neutral-100'
+        strokeClassName={cn('stroke-neutral-1000 dark:stroke-neutral-100', {
+          'stroke-red-500 dark:stroke-red-500': wrongVariable,
+        })}
       />
     ),
   },
@@ -129,7 +137,9 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       ?.rungs.find((rung) => rung.nodes.some((node) => node.id === id))
     if (!rung) return
 
-    const node: Node<BasicNodeData> | undefined = rung.nodes.find((node) => node.id === id) as Node<BasicNodeData> | undefined
+    const node: Node<BasicNodeData> | undefined = rung.nodes.find((node) => node.id === id) as
+      | Node<BasicNodeData>
+      | undefined
     if (!node) return
 
     pous.forEach((pou) => {
@@ -143,9 +153,19 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     )
 
     if (!variable) {
-      setWrongVariable(true)
       const variableName = node.data.variable.name
+      if (variableName === '' || !variables.some((variable) => variable.name === variableName)) {
+        setWrongVariable(true)
+      }
       setContactVariableValue(variableName)
+      return
+    }
+
+    if (
+      variable.type.definition !== 'base-type' ||
+      (variable.type.definition === 'base-type' && variable.type.value !== 'BOOL')
+    ) {
+      setWrongVariable(true)
       return
     }
 
@@ -174,12 +194,11 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
           'rounded-[1px] border border-transparent hover:outline hover:outline-2 hover:outline-offset-[5px] hover:outline-brand',
           {
             'outline outline-2 outline-offset-[5px] outline-brand': selected,
-            'outline outline-2 outline-offset-[5px] outline-red-500': wrongVariable,
           },
         )}
         style={{ width: DEFAULT_CONTACT_BLOCK_WIDTH, height: DEFAULT_CONTACT_BLOCK_HEIGHT }}
       >
-        {contact.svg}
+        {contact.svg(wrongVariable)}
       </div>
       <div className='absolute -left-[34px] -top-7 w-24'>
         <InputWithRef

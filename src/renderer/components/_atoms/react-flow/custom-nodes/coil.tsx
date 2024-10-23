@@ -37,61 +37,73 @@ export const DEFAULT_COIL_CONNECTOR_Y = DEFAULT_COIL_BLOCK_HEIGHT / 2
 
 type CoilType = {
   [key in CoilNode['data']['variant']]: {
-    svg: ReactNode
+    svg: (wrongVariable: boolean) => ReactNode
   }
 }
 export const DEFAULT_COIL_TYPES: CoilType = {
   default: {
-    svg: (
+    svg: (wrongVariable) => (
       <DefaultCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
-        parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
+        parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
+          'fill-red-500 dark:fill-red-500': wrongVariable,
+        })}
       />
     ),
   },
   negated: {
-    svg: (
+    svg: (wrongVariable) => (
       <NegatedCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
-        parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
+        parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
+          'fill-red-500 dark:fill-red-500': wrongVariable,
+        })}
       />
     ),
   },
   risingEdge: {
-    svg: (
+    svg: (wrongVariable) => (
       <RisingEdgeCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
-        parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
+        parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
+          'fill-red-500 dark:fill-red-500': wrongVariable,
+        })}
       />
     ),
   },
   fallingEdge: {
-    svg: (
+    svg: (wrongVariable) => (
       <FallingEdgeCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
-        parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
+        parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
+          'fill-red-500 dark:fill-red-500': wrongVariable,
+        })}
       />
     ),
   },
   set: {
-    svg: (
+    svg: (wrongVariable) => (
       <SetCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
-        parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
+        parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
+          'fill-red-500 dark:fill-red-500': wrongVariable,
+        })}
       />
     ),
   },
   reset: {
-    svg: (
+    svg: (wrongVariable) => (
       <ResetCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
-        parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
+        parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
+          'fill-red-500 dark:fill-red-500': wrongVariable,
+        })}
       />
     ),
   },
@@ -155,7 +167,9 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       ?.rungs.find((rung) => rung.nodes.some((node) => node.id === id))
     if (!rung) return
 
-    const node: Node<BasicNodeData> | undefined = rung.nodes.find((node) => node.id === id) as Node<BasicNodeData> | undefined
+    const node: Node<BasicNodeData> | undefined = rung.nodes.find((node) => node.id === id) as
+      | Node<BasicNodeData>
+      | undefined
     if (!node) return
 
     pous.forEach((pou) => {
@@ -167,10 +181,13 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     const variable = variables.find(
       (variable) => variable.name === coilVariableValue && variable.type.definition !== 'derived',
     )
+    console.log(variable)
 
     if (!variable) {
-      setWrongVariable(true)
       const variableName = node.data.variable.name
+      if (variableName === '' || !variables.some((variable) => variable.name === variableName)) {
+        setWrongVariable(true)
+      }
       setCoilVariableValue(variableName)
       return
     }
@@ -200,12 +217,11 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
           'rounded-[1px] border border-transparent hover:outline hover:outline-2 hover:outline-offset-[5px] hover:outline-brand',
           {
             'outline outline-2 outline-offset-[5px] outline-brand': selected,
-            'outline outline-2 outline-offset-[5px] outline-red-500': wrongVariable,
           },
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
       >
-        {coil.svg}
+        {coil.svg(wrongVariable)}
       </div>
       <div className='absolute -left-[31px] -top-7 w-24'>
         <InputWithRef
