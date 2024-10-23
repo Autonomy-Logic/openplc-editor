@@ -64,13 +64,14 @@ export const BlockNodeElement = <T extends object>({
 }) => {
   const {
     editor,
+    editorActions: { updateModelVariables },
     libraries,
     flows,
     flowActions: { updateNode },
     project: {
       data: { pous },
     },
-    projectActions: { updateVariable },
+    projectActions: { updateVariable, deleteVariable },
   } = useOpenPLCStore()
 
   const { name, variables, type } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
@@ -141,23 +142,45 @@ export const BlockNodeElement = <T extends object>({
       }
     })
 
-    let variable = pousVariables.find((variable) => variable.id === nodeId)
+    let variable = pousVariables.find((variable) => variable.id === node.id)
     if (variable) {
-      const res = updateVariable({
-        data: {
-          type: {
-            definition: 'derived',
-            value: blockNameValue,
-          },
-        },
-        rowId: pousVariables.indexOf(variable),
-        scope: 'local',
-        associatedPou: editor.meta.name,
-      })
-      if (res.ok && res.data) variable = res.data as PLCVariable
-    }
+      let res: { ok: boolean; data?: unknown; message?: string; title?: string } = {
+        ok: true,
+        data: undefined,
+        message: '',
+        title: '',
+      }
+      const variableIndex = pousVariables.indexOf(variable)
 
-    console.log('variable', variable)
+      if ((libraryBlock as BlockVariant).type !== 'function-block') {
+        deleteVariable({
+          rowId: variableIndex,
+          scope: 'local',
+          associatedPou: editor.meta.name,
+        })
+        if (
+          editor.type === 'plc-graphical' &&
+          editor.variable.display === 'table' &&
+          parseInt(editor.variable.selectedRow) === variableIndex
+        ) {
+          updateModelVariables({ display: 'table', selectedRow: -1 })
+        }
+        variable = undefined
+      } else {
+        res = updateVariable({
+          data: {
+            type: {
+              definition: 'derived',
+              value: blockNameValue,
+            },
+          },
+          rowId: variableIndex,
+          scope: 'local',
+          associatedPou: editor.meta.name,
+        })
+        if (res.ok && res.data) variable = res.data as PLCVariable
+      }
+    }
 
     updateNode({
       rungId: rung.id,
@@ -165,6 +188,7 @@ export const BlockNodeElement = <T extends object>({
         ...node,
         data: {
           ...node.data,
+          name: blockNameValue,
           variant: libraryBlock,
           variable: variable ?? { name: '' },
         },
@@ -172,6 +196,13 @@ export const BlockNodeElement = <T extends object>({
       editorName: editor.meta.name,
     })
     setWrongName(false)
+
+    console.log('Variable', variable)
+    console.log('Wrong Name', wrongName)
+    console.log('Block changed to:', {
+      ...node,
+      data: { ...node.data, name: blockNameValue, variant: libraryBlock, variable: variable ?? { name: '' } },
+    })
   }
 
   return (
@@ -264,20 +295,33 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
   useEffect(() => {
     let variables: PLCVariable[] = []
 
+    const rung: RungState | undefined = flows
+      .find((flow) => flow.name === editor.meta.name)
+      ?.rungs.find((rung) => rung.nodes.some((node) => node.id === id))
+    if (!rung) return
+
+    const node: Node | undefined = rung.nodes.find((node) => node.id === id)
+    if (!node) return
+
+    if ((node.data as BlockNodeData<BlockVariant>).variant.type !== 'function-block') {
+      setWrongVariable(false)
+      return
+    }
+
     pous.forEach((pou) => {
       if (pou.data.name === editor.meta.name) {
         variables = pou.data.variables as PLCVariable[]
       }
     })
-
     const variable = variables.find((variable) => variable.id === id)
 
     if (!variable && !inputVariableFocus) {
       setWrongVariable(true)
-    } else {
-      if (variable && variable.name !== blockVariableValue) setBlockVariableValue(variable.name ?? '')
-      setWrongVariable(false)
+      return
     }
+
+    if (variable && variable.name !== blockVariableValue) setBlockVariableValue(variable.name ?? '')
+    setWrongVariable(false)
   }, [pous])
 
   /**
@@ -499,6 +543,6 @@ export const buildBlockNode = <T extends object | undefined>({
     },
     draggable: true,
     selectable: true,
-    selected: type.type !== 'function' ? true : false,
+    selected: type.type === 'function' ? false : true,
   }
 }
