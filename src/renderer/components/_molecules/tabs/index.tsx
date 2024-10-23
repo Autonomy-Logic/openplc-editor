@@ -75,6 +75,9 @@ const Tabs = () => {
     setSelectedTab(editor.meta.name)
   }, [editor.meta.name])
 
+  useEffect(() => {
+    window.bridge.closeTabAccelerator((_event) => handleRemoveTab(editor.meta.name))
+  }, [])
   return (
     <TabList>
       {hasTabs &&

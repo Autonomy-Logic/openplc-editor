@@ -40,7 +40,8 @@ export default class MenuBuilder {
     }
 
     // Todo: Can be used to construct a different menu for mac machines.
-    const template = process.platform === 'darwin' ? await this.buildDarwinTemplate() : await this.buildDefaultTemplate()
+    const template =
+      process.platform === 'darwin' ? await this.buildDarwinTemplate() : await this.buildDefaultTemplate()
 
     const menu = Menu.buildFromTemplate(template)
     Menu.setApplicationMenu(menu)
@@ -70,6 +71,10 @@ export default class MenuBuilder {
   async handleOpenProjectByPath(projectPath: string) {
     const response = await this.projectService.openProjectByPath(projectPath)
     this.mainWindow.webContents.send('project:open-recent-accelerator', response)
+  }
+
+  handleCloseTab() {
+    this.mainWindow.webContents.send('workspace:close-tab-accelerator')
   }
 
   setupDevelopmentEnvironment(): void {
@@ -128,7 +133,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.closeTab'),
           accelerator: 'Cmd+W',
-          click: () => console.warn('Close tab button clicked! This is not working yet.'),
+          click: () => this.handleCloseTab(),
         },
         {
           label: i18n.t('menu:file.submenu.closeProject'),
@@ -298,22 +303,20 @@ export default class MenuBuilder {
     }
 
     const subMenuRecent: DarwinMenuItemConstructorOptions = {
-      
-        label: i18n.t('menu:recents'),
-        submenu: recents.map((projectEntry) => {
-          let projectPath = projectEntry.path.startsWith(homeDir)
-            ? projectEntry.path.replace(homeDir, '~')  
-            : projectEntry.path;
-    
-          return {
-            label: projectPath,  
-            click: () => {
-              this.handleOpenProjectByPath(projectEntry.path);
-              console.log('Opened project from path:', projectEntry.path);
-            },
-          };
-        }),
-      
+      label: i18n.t('menu:recents'),
+      submenu: recents.map((projectEntry) => {
+        let projectPath = projectEntry.path.startsWith(homeDir)
+          ? projectEntry.path.replace(homeDir, '~')
+          : projectEntry.path
+
+        return {
+          label: projectPath,
+          click: () => {
+            this.handleOpenProjectByPath(projectEntry.path)
+            console.log('Opened project from path:', projectEntry.path)
+          },
+        }
+      }),
     }
 
     const subMenuHelp: DarwinMenuItemConstructorOptions = {
@@ -555,21 +558,21 @@ export default class MenuBuilder {
           },
         ],
       },
-      
+
       {
         label: i18n.t('menu:recents'),
         submenu: recents.map((projectEntry) => {
           let projectPath = projectEntry.path.startsWith(homeDir)
-            ? projectEntry.path.replace(homeDir, '~')  
-            : projectEntry.path;
-    
+            ? projectEntry.path.replace(homeDir, '~')
+            : projectEntry.path
+
           return {
-            label: projectPath,  
+            label: projectPath,
             click: () => {
-              this.handleOpenProjectByPath(projectEntry.path);
-              console.log('Opened project from path:', projectEntry.path);
+              this.handleOpenProjectByPath(projectEntry.path)
+              console.log('Opened project from path:', projectEntry.path)
             },
-          };
+          }
         }),
       },
     ]

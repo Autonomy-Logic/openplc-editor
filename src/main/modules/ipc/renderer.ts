@@ -38,8 +38,9 @@ const rendererProcessBridge = {
     ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
 
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
-  openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open-by-path', projectPath),
-  openRecentAccelerator:(callback: IpcRendererCallbacks) =>
+  openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
+    ipcRenderer.invoke('project:open-by-path', projectPath),
+  openRecentAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
   /**
    * Handlers for opening projects.
@@ -48,6 +49,7 @@ const rendererProcessBridge = {
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
   saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
     ipcRenderer.invoke('project:save', dataToWrite),
+  closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
 
   /** -------------------------------------------------------------------------------------------- */
   // saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
