@@ -124,6 +124,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 break
               }
               project.data.configuration.resource.globalVariables.push(variableToBeCreated.data)
+              response.data = variableToBeCreated.data
               break
             }
             case 'local': {
@@ -144,6 +145,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 break
               }
               pou.data.variables.push(variableToBeCreated.data)
+              response.data = variableToBeCreated.data
               break
             }
             default: {
@@ -181,6 +183,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 ...project.data.configuration.resource.globalVariables[index],
                 ...dataToBeUpdated.data,
               }
+              response.data = project.data.configuration.resource.globalVariables[index]
               break
             }
 
@@ -201,6 +204,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               const index = dataToBeUpdated.rowId
               if (index === -1) response = { ok: false, title: 'Variable not found', message: 'Internal error' }
               pou.data.variables[index] = { ...pou.data.variables[index], ...dataToBeUpdated.data }
+              response.data = pou.data.variables[index]
               break
             }
 

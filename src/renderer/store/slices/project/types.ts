@@ -107,6 +107,7 @@ const projectResponseSchema = z.object({
   ok: z.boolean(),
   title: z.string().optional(),
   message: z.string().optional(),
+  data: z.unknown().optional(),
 })
 type ProjectResponse = z.infer<typeof projectResponseSchema>
 

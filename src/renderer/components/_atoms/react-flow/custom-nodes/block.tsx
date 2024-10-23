@@ -119,6 +119,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     project: {
       data: { pous },
     },
+    projectActions: { createVariable, updateVariable },
     flows,
     flowActions: { updateNode },
   } = useOpenPLCStore()
@@ -153,9 +154,12 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
       }
     })
 
-    if (!variables.some((variable) => variable.name === blockVariableValue) && !inputFocus) {
+    const variable = variables.find((variable) => variable.id === id)
+
+    if (!variable && !inputFocus) {
       setWrongVariable(true)
     } else {
+      if (variable && variable.name !== blockVariableValue) setBlockVariableValue(variable.name ?? '')
       setWrongVariable(false)
     }
   }, [pous])
@@ -164,12 +168,22 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
    * Handle with the variable input onBlur event
    */
   const handleVariableInputOnBlur = () => {
-
     setInputFocus(false)
 
+    if (blockVariableValue === '') {
+      setWrongVariable(true)
+      return
+    }
+
     let variables: PLCVariable[] = []
-    let rung: RungState | undefined = undefined
-    let node: Node | undefined = undefined
+
+    const rung: RungState | undefined = flows
+      .find((flow) => flow.name === editor.meta.name)
+      ?.rungs.find((rung) => rung.nodes.some((node) => node.id === id))
+    if (!rung) return
+
+    const node: Node | undefined = rung.nodes.find((node) => node.id === id)
+    if (!node) return
 
     pous.forEach((pou) => {
       if (pou.data.name === editor.meta.name) {
@@ -177,16 +191,57 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
       }
     })
 
-    if (!variables.some((variable) => variable.name === blockVariableValue)) {
-      setWrongVariable(true)
-      return
+    /**
+     * Check if the variable exists in the table of variables
+     * If exists, update the node variable
+     */
+    let variable: PLCVariable | undefined = variables.find(
+      (variable) =>
+        variable.name === node.data.variable && variable.type.definition === 'derived' && variable.id === node.id,
+    )
+
+    if (variable) {
+      updateVariable({
+        data: {
+          ...variable,
+          name: blockVariableValue,
+          type: {
+            definition: 'derived',
+            value:
+              (node.data as BlockNodeData<BlockVariant>).variant.name === '???'
+                ? 'GENERIC'
+                : (node.data as BlockNodeData<BlockVariant>).variant.name,
+          },
+        },
+        rowId: variables.indexOf(variable),
+        scope: 'local',
+        associatedPou: editor.meta.name,
+      })
+    } else {
+      const res = createVariable({
+        data: {
+          id: node.id,
+          name: blockVariableValue,
+          type: {
+            definition: 'derived',
+            value:
+              (node.data as BlockNodeData<BlockVariant>).variant.name === '???'
+                ? 'GENERIC'
+                : (node.data as BlockNodeData<BlockVariant>).variant.name,
+          },
+          class: 'local',
+          location: '',
+          documentation: '',
+          debug: false,
+        },
+        scope: 'local',
+        associatedPou: editor.meta.name,
+      })
+      variable = res.data as PLCVariable
+      if (res.ok && variable.name !== blockNameValue) {
+        setBlockVariableValue(variable.name)
+      }
     }
-
-    rung = flows.find((flow) => flow.name === editor.meta.name)?.rungs.find((rung) => rung.id === id)
-    if (!rung) return
-
-    node = rung.nodes.find((node) => node.id === id)
-    if (!node) return
 
     updateNode({
       rungId: rung.id,
@@ -194,7 +249,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
         ...node,
         data: {
           ...node.data,
-          variable: blockVariableValue,
+          variable,
         },
       },
       editorName: editor.meta.name,
@@ -324,7 +379,7 @@ export const buildBlockNode = <T extends object | undefined>({
       inputConnector: leftHandles[0],
       outputConnector: rightHandles[0],
       numericId: generateNumericUUID(),
-      variable: '',
+      variable: { name: '' },
     },
     width: DEFAULT_BLOCK_WIDTH,
     height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,

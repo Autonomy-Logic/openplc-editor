@@ -48,6 +48,7 @@ const VariablesEditor = () => {
    */
   useEffect(() => {
     const variablesToTable = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
+    console.log('variablesToTable', variablesToTable)
     setTableData(variablesToTable)
   }, [editor, pous])
 
@@ -126,7 +127,14 @@ const VariablesEditor = () => {
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createVariable({ scope: 'local', associatedPou: editor.meta.name, data: { ...variable } })
+      createVariable({
+        scope: 'local',
+        associatedPou: editor.meta.name,
+        data: {
+          ...variable,
+          type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
+        },
+      })
       updateModelVariables({
         display: 'table',
         selectedRow: variables.length,
@@ -136,7 +144,10 @@ const VariablesEditor = () => {
     createVariable({
       scope: 'local',
       associatedPou: editor.meta.name,
-      data: { ...variable },
+      data: {
+        ...variable,
+        type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
+      },
       rowToInsert: selectedRow + 1,
     })
     updateModelVariables({

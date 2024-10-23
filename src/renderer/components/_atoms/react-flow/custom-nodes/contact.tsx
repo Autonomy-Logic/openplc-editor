@@ -132,7 +132,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       }
     })
 
-    if (!variables.some((variable) => variable.name === contactVariableValue)) {
+    if (!variables.some((variable) => variable.name === contactVariableValue && variable.type.definition !== 'derived')) {
       setWrongVariable(true)
       return
     }

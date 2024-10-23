@@ -158,7 +158,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       }
     })
 
-    if (!variables.some((variable) => variable.name === coilVariableValue)) {
+    if (!variables.some((variable) => variable.name === coilVariableValue && variable.type.definition !== 'derived')) {
       setWrongVariable(true)
       return
     }

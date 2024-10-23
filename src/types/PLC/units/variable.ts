@@ -28,6 +28,13 @@ const PLCVariableSchema = z.object({
         dimensions: z.array(z.string()),
       }),
     }),
+    z.object({
+      /**
+       * This should be ommited at variable table type options
+       */
+      definition: z.literal('derived'),
+      value: z.string(),
+    }),
   ]),
   location: z.string(),
   initialValue: z.string().optional(),
