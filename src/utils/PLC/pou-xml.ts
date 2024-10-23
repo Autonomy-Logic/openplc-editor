@@ -19,7 +19,8 @@ export const parseInterface = (pou: PLCPou) => {
       '@name': variable.name,
       type: {
         // !BAD CODE
-        [variable.type.value.toUpperCase()]: '',
+        [variable.type.definition === 'derived' ? 'derived' : variable.type.value.toUpperCase()]:
+          variable.type.definition === 'derived' ? { '@name': variable.type.value } : '',
       },
     }
 

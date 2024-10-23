@@ -12,6 +12,7 @@ import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
 export type BlockVariant = {
   name: string
+  type: string
   variables: { name: string; class: string; type: { definition: string; value: string } }[]
   documentation: string
 }
@@ -29,6 +30,7 @@ export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 32
 
 export const DEFAULT_BLOCK_TYPE = {
   name: '???',
+  type: 'generic',
   variables: [
     { name: '???', class: 'input', type: { definition: 'base-type', value: 'BOOL' } },
     { name: '???', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
@@ -137,7 +139,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
    * useEffect to focus the variable input when the block is selected
    */
   useEffect(() => {
-    if (inputVariableRef.current) {
+    if (inputVariableRef.current && (data.variant as BlockVariant).type !== 'function') {
       inputVariableRef.current.focus()
     }
   }, [])
@@ -286,15 +288,17 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
           width: DEFAULT_BLOCK_WIDTH,
         }}
       >
-        <InputWithRef
-          value={blockVariableValue}
-          onChange={(e) => setBlockVariableValue(e.target.value)}
-          placeholder='???'
-          className='w-full bg-transparent text-center text-sm outline-none'
-          onFocus={() => setInputFocus(true)}
-          onBlur={handleVariableInputOnBlur}
-          ref={inputVariableRef}
-        />
+        {(data.variant as BlockVariant).type !== 'function' && (
+          <InputWithRef
+            value={blockVariableValue}
+            onChange={(e) => setBlockVariableValue(e.target.value)}
+            placeholder='???'
+            className='w-full bg-transparent text-center text-sm outline-none'
+            onFocus={() => setInputFocus(true)}
+            onBlur={handleVariableInputOnBlur}
+            ref={inputVariableRef}
+          />
+        )}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
@@ -391,6 +395,6 @@ export const buildBlockNode = <T extends object | undefined>({
     },
     draggable: true,
     selectable: true,
-    selected: true,
+    selected: type.type !== 'function' ? true : false,
   }
 }

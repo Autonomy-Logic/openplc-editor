@@ -152,7 +152,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }
 
   const handleRemoveNode = (nodes: FlowNode[]) => {
-    const { nodes: newNodes, edges: newEdges } = removeElements(rungLocal, nodes)
+    const { nodes: newNodes, edges: newEdges } = removeElements({ ...rungLocal }, nodes)
     flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: newNodes })
     flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: newEdges })
 

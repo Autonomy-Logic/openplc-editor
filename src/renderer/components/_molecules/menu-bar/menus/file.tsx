@@ -1,7 +1,7 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { FlowType } from '@root/renderer/store/slices/flow/types'
+import type { FlowType } from '@root/renderer/store/slices/flow/types'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
@@ -67,7 +67,7 @@ export const FileMenu = () => {
       })
 
       const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
-      if (ladderPous.length) {
+      if (ladderPous.length > 0) {
         ladderPous.forEach((pou) => {
           if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
         })
