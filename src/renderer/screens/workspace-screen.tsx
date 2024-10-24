@@ -4,6 +4,7 @@ import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { ExitIcon } from '../assets'
 import { toast } from '../components/_features/[app]/toast/use-toast'
@@ -22,6 +23,7 @@ import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templ
 import { useOpenPLCStore } from '../store'
 
 const WorkspaceScreen = () => {
+  const navigate = useNavigate()
   const {
     tabs,
     workspace: { editingState },
@@ -103,6 +105,10 @@ const WorkspaceScreen = () => {
       if (ref.current) ref.current[action]()
     })
   }, [collapseAll])
+
+  useEffect(()=>{
+    window.bridge.closeProjectAccelerator((_event)=> navigate('/'))
+  },[])
 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>

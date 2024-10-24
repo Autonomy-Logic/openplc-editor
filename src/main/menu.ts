@@ -77,6 +77,10 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('workspace:close-tab-accelerator')
   }
 
+  handleCloseProject(){
+    this.mainWindow.webContents.send('workspace:close-project-accelerator')
+  }
+
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -128,7 +132,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.saveAs'),
           accelerator: 'Cmd+Shift+S',
-          click: () => console.warn('Save as button clicked! This is not working yet.'),
+          click: () => {},
         },
         {
           label: i18n.t('menu:file.submenu.closeTab'),
@@ -364,9 +368,8 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.saveAs'),
-            enabled: false,
             accelerator: 'Ctrl+Shift+S',
-            click: () => console.warn('Menu button clicked! This is not working yet.'),
+            click: () => {},
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
@@ -376,9 +379,11 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.closeProject'),
-            enabled: false,
             accelerator: 'Ctrl+Shift+W',
-            click: () => console.warn('Menu button clicked! This is not working yet.'),
+            click: () => this.handleCloseProject(),
+          },
+          {
+            type: 'separator',
           },
           {
             label: i18n.t('menu:file.submenu.pageSetup'),

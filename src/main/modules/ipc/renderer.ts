@@ -50,7 +50,7 @@ const rendererProcessBridge = {
   saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
     ipcRenderer.invoke('project:save', dataToWrite),
   closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
-
+  closeProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-project-accelerator', callback),
   /** -------------------------------------------------------------------------------------------- */
   // saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
