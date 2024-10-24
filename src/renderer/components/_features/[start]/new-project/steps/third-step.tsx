@@ -89,6 +89,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
     }
   }
 
+
   return (
     <>
       <div className='relative flex select-none items-center justify-center pt-2'>

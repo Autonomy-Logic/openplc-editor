@@ -5,7 +5,7 @@ import { platform } from 'process'
 
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
-import { CreateProjectFile,GetProjectPath } from '../../services/project-service/utils'
+import { CreateProjectFile, GetProjectPath } from '../../services/project-service/utils'
 
 type IDataToWrite = {
   projectPath: string
@@ -58,6 +58,9 @@ class MainProcessBridge implements MainIpcModule {
     })
     this.ipcMain.handle('project:create-project-file', (_event, dataToCreateProjectFile: CreateProjectFileProps) => {
       const res = CreateProjectFile(dataToCreateProjectFile)
+      if (res.success) {
+        void this.projectService.updateProjectHistory(dataToCreateProjectFile.path)
+      }
       return res
     })
 
