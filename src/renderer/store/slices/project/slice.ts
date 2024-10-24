@@ -1,3 +1,4 @@
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
@@ -294,7 +295,11 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (!dataExists && !pouExists) {
             project.data.dataTypes.push(dataToCreate)
           } else {
-            console.error(`Datatype ${name} already exists`)
+            toast({
+              title: 'Invalid array',
+              description: `You can't create a Function or Data type with the same name`,
+              variant: 'fail',
+            })
           }
         }),
       )

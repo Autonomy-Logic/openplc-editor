@@ -7,7 +7,9 @@ import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
 import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
 import { StickArrowIcon } from '@root/renderer/assets'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { arrayValidation } from '@root/renderer/store/slices/project/utils/variables'
 import { PLCArrayDatatype, PLCDataType } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils/cn'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
@@ -81,35 +83,45 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     setFocusIndex(index)
   }
 
-  const updateDimensions = (newDimensions) => {
+  const updateDimensions = (newDimensions: unknown[]) => {
     newDimensions.map((row) => ({ dimension: row.dimension }))
   }
 
   const handleBlur = (rowIndex: number) => {
     setTableData((prevRows) => {
-      const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement
-      if (inputElement && inputElement.value?.trim() === '') {
-        const newRows = prevRows.filter((_, index) => index !== rowIndex)
-        updateDimensions(newRows)
-        setFocusIndex(null)
-        return newRows
-      } else if (inputElement && inputElement.value?.trim() !== '') {
-        const inputValue = inputElement.value?.trim()
-        const newRows = prevRows.map((row, index) => ({
-          ...row,
-          dimension: index === rowIndex ? inputValue : row.dimension,
-        }))
-        const optionalSchema = {
-          name: name,
-          dimensions: newRows.map((row) => ({ dimension: row.dimension })),
+      const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
+      if (inputElement) {
+        const inputValue = inputElement.value.trim();
+        const validation = arrayValidation({ value: inputValue });
+  
+        if (!validation.ok || inputValue === '') {
+          const newRows = prevRows.filter((_, index) => index !== rowIndex);
+          updateDimensions(newRows);
+          setFocusIndex(null);
+          toast({
+            title: 'Invalid array',
+            description: `The array value is invalid. Pattern: "LEFT_number..RIGHT_number" and RIGHT must be GREATER than LEFT. Example: 0..10.`,
+            variant: 'fail',
+          })
+          return newRows;
+        } else {
+          const newRows = prevRows.map((row, index) => ({
+            ...row,
+            dimension: index === rowIndex ? inputValue : row.dimension,
+          }));
+          const optionalSchema = {
+            name: name,
+            dimensions: newRows.map((row) => ({ dimension: row.dimension })),
+          };
+          updateDatatype(name, optionalSchema as PLCDataType);
+          updateDimensions(newRows);
+          return newRows;
         }
-        updateDatatype(name, optionalSchema as PLCDataType)
-        updateDimensions(newRows)
-        return newRows
       }
-      return prevRows
-    })
-  }
+      return prevRows;
+    });
+  };
+  
 
   const addNewRow = () => {
     setTableData((prevRows) => {
@@ -203,7 +215,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     })
   }
 
-  const setBorders = (indexFocus) => {
+  const setBorders = (indexFocus: number | null) => {
     const parent = tableBodyRef.current
     if (!parent) return
 
