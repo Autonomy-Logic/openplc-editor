@@ -3,6 +3,7 @@ import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { IProjectServiceResponse } from '../../services/project-service'
+import { CreateProjectFile } from '../../services/project-service/utils'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
@@ -19,6 +20,15 @@ type ISaveDataResponse = {
   }
 }
 
+type CreateProjectFileProps = {
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+  time: string
+  type: 'plc-project' | 'plc-library'
+  name: string
+  path: string
+}
+type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
+
 const rendererProcessBridge = {
   /**
    * Handlers for creating projects.
@@ -29,6 +39,28 @@ const rendererProcessBridge = {
     ipcRenderer.on('project:create-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
 
   createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
+  createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> =>
+    ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
+
+  /**
+   * Path picker
+   */
+
+  pathPicker: (): Promise<
+    | {
+        success: boolean
+        error: {
+          title: string
+          description: string
+        }
+        path?: undefined
+      }
+    | {
+        success: boolean
+        path: string
+        error?: undefined
+      }
+  > => ipcRenderer.invoke('project:path-picker'),
 
   /**
    * Handlers for opening projects.
