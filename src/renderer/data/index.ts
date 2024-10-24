@@ -1,4 +1,5 @@
 export * from './constants/icon-styles'
 export * from './constants/language-icons'
 export * from './constants/pou-icons'
+export * from './sources/data-type'
 export * from './sources/POU'

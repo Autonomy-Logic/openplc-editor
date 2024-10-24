@@ -24,3 +24,4 @@ const CreateDataType = (props: CreateDataTypeProps) => {
 }
 
 export { CreateDataType }
+ 
