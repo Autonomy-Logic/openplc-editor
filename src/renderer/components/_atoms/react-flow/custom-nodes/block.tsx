@@ -188,6 +188,7 @@ export const BlockNodeElement = <T extends object>({
 
     updateNode({
       rungId: rung.id,
+      nodeId: node.id,
       node: {
         ...node,
         data: {
@@ -398,7 +399,9 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     }
 
     updateNode({
+      editorName: editor.meta.name,
       rungId: rung.id,
+      nodeId: node.id,
       node: {
         ...node,
         data: {
@@ -406,7 +409,6 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
           variable: variable ?? { name: '' },
         },
       },
-      editorName: editor.meta.name,
     })
     setWrongVariable(false)
   }

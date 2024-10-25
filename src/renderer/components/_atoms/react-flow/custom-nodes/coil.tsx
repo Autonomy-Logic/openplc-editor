@@ -175,7 +175,9 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     }
 
     updateNode({
+      editorName: editor.meta.name,
       rungId: rung.id,
+      nodeId: node.id,
       node: {
         ...node,
         data: {
@@ -183,7 +185,6 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
           variable: variable,
         },
       },
-      editorName: editor.meta.name,
     })
     setWrongVariable(false)
   }

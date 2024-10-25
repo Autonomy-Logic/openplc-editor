@@ -154,7 +154,9 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     }
 
     updateNode({
+      editorName: editor.meta.name,
       rungId: rung.id,
+      nodeId: node.id,
       node: {
         ...node,
         data: {
@@ -162,7 +164,6 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
           variable,
         },
       },
-      editorName: editor.meta.name,
     })
     setWrongVariable(false)
   }

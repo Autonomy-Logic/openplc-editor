@@ -36,6 +36,9 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node, rungId }: Contact
 
   const handleConfirmAlteration = () => {
     updateNode({
+      editorName: editor.meta.name,
+      rungId,
+      nodeId: node.id,
       node: {
         ...node,
         data: {
@@ -43,8 +46,6 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node, rungId }: Contact
           variant: selectedModifier,
         },
       },
-      rungId,
-      editorName: editor.meta.name,
     })
     handleCloseModal()
   }

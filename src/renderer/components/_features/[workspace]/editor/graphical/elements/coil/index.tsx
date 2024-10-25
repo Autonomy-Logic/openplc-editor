@@ -36,6 +36,9 @@ const CoilElement = ({ isOpen, onOpenChange, onClose, node, rungId }: CoilElemen
 
   const handleConfirmAlteration = () => {
     updateNode({
+      editorName: editor.meta.name,
+      rungId,
+      nodeId: node.id,
       node: {
         ...node,
         data: {
@@ -43,8 +46,6 @@ const CoilElement = ({ isOpen, onOpenChange, onClose, node, rungId }: CoilElemen
           variant: selectedModifier,
         },
       },
-      rungId,
-      editorName: editor.meta.name,
     })
     handleCloseModal()
   }
