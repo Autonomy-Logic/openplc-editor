@@ -24,6 +24,7 @@ import {
   removePlaceholderNodes,
   renderPlaceholderNodes,
   searchNearestPlaceholder,
+  updateDiagramElementsPosition,
 } from './ladder-utils/elements'
 
 type RungBodyProps = {
@@ -102,8 +103,10 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    setRungLocal(rung)
-    udpateFlowPanelExtent(rung)
+    const result = updateDiagramElementsPosition(rung, rung.defaultBounds as [number, number])
+    const updatedPositionRung = { ...rung, nodes: result }
+    setRungLocal(updatedPositionRung)
+    udpateFlowPanelExtent(updatedPositionRung)
   }, [rung.nodes])
 
   /**
@@ -220,7 +223,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const handleNodeDragStop = (node: FlowNode) => {
     const result = onDragStopElement(rungLocal, node)
-    setRungLocal((rung) => ({ ...rung, nodes: result.nodes, edges: result.edges }))
+    flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: result.nodes })
+    flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: result.edges })
   }
 
   const handleNodeDoubleClick = (node: FlowNode) => {

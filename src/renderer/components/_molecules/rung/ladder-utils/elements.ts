@@ -182,7 +182,7 @@ const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: [number
   return newRail
 }
 
-const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [number, number]) => {
+export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [number, number]) => {
   const { nodes } = rung
   const newNodes: Node[] = []
 
@@ -863,6 +863,7 @@ const startParallelConnectionKeepingTheNode = (
   const newAboveNodePosition = getNodePositionBasedOnPreviousNode(openParallelNode, aboveNode, 'serial')
   const buildedAboveNode = buildGenericNode({
     nodeType: aboveNode.type ?? '',
+    blockType: aboveNode.data.variant,
     id: `${aboveNode.type?.toUpperCase()}_${uuidv4()}`,
     ...newAboveNodePosition,
   })
@@ -1125,7 +1126,10 @@ export const addNewElement = <T>(
     newNodes = serialNodes
   }
 
-  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds as [number, number])
+  newNodes = updateDiagramElementsPosition(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    rung.defaultBounds as [number, number],
+  )
   return { nodes: newNodes, edges: newEdges }
 }
 
@@ -1150,7 +1154,10 @@ export const removeElement = (rung: RungState, element: Node) => {
   newNodes = auxNodes
   newEdges = auxEdges
 
-  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds as [number, number])
+  newNodes = updateDiagramElementsPosition(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    rung.defaultBounds as [number, number],
+  )
 
   return {
     nodes: newNodes,
@@ -1377,7 +1384,10 @@ export const onDragStopElement = (rung: RungState, node: Node): { nodes: Node[];
       }
     })
     newNodes = removePlaceholderNodes(newNodes)
-    newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds as [number, number])
+    newNodes = updateDiagramElementsPosition(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      rung.defaultBounds as [number, number],
+    )
     return { nodes: newNodes, edges: newEdges }
   }
 
