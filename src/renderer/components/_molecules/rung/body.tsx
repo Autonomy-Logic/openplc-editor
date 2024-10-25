@@ -68,7 +68,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    * To make the getNodesBounds function work, the nodes must have width and height properties set in the node data
    * This useEffect will run every time the nodes array changes (i.e. when a node is added or removed)
    */
-  useEffect(() => {
+  const udpateFlowPanelExtent = (rung: RungState) => {
     const zeroPositionNode: FlowNode = {
       id: '-1',
       position: { x: 0, y: 0 },
@@ -76,7 +76,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       width: 150,
       height: 40,
     }
-    const bounds = getNodesBounds([zeroPositionNode, ...rungLocal.nodes])
+    const bounds = getNodesBounds([zeroPositionNode, ...rung.nodes])
     const [defaultWidth, defaultHeight] = rung?.defaultBounds ?? [1530, 200]
 
     // If the bounds are less than the default extent, set the panel extent to the default extent
@@ -92,6 +92,10 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       rungId: rungLocal.id,
       flowViewport: [bounds.width, bounds.height + 20],
     })
+  }
+
+  useEffect(() => {
+    udpateFlowPanelExtent(rungLocal)
   }, [rungLocal.nodes.length])
 
   /**
@@ -99,6 +103,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    */
   useEffect(() => {
     setRungLocal(rung)
+    udpateFlowPanelExtent(rung)
   }, [rung.nodes])
 
   /**

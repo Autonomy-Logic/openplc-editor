@@ -4,6 +4,7 @@ import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
@@ -68,7 +69,7 @@ export const BlockNodeElement = <T extends object>({
     editorActions: { updateModelVariables },
     libraries,
     flows,
-    flowActions: { updateNode },
+    flowActions: { updateNode, updateEdge },
     project: {
       data: { pous },
     },
@@ -131,13 +132,13 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
-    const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { rung, node, variables, edges } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: nodeId ?? '',
     })
     if (!rung || !node) return
 
     let variable = variables.selected
-    console.log('Variable', variable)
+    const variableIndex = variable ? variables.all.indexOf(variable) : -1
 
     if (variable) {
       let res: { ok: boolean; data?: unknown; message?: string; title?: string } = {
@@ -146,7 +147,6 @@ export const BlockNodeElement = <T extends object>({
         message: '',
         title: '',
       }
-      const variableIndex = variables.all.indexOf(variable)
 
       if ((libraryBlock as BlockVariant).type !== 'function-block') {
         deleteVariable({
@@ -186,28 +186,70 @@ export const BlockNodeElement = <T extends object>({
       }
     }
 
+    /**
+     * Update the node with the new block node
+     * The new block node have a new ID to not conflict with the old block node and to no occur any error of rendering
+     */
+    const newBlockNode = buildBlockNode({
+      id: `BLOCK_${uuidv4()}`,
+      posX: node.position.x,
+      posY: node.position.y,
+      handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
+      handleY: (node.data as BasicNodeData).handles[0].glbPosition.y,
+      variant: libraryBlock,
+    })
+    newBlockNode.data = {
+      ...newBlockNode.data,
+      variable: variable ?? { name: '' },
+    }
     updateNode({
       rungId: rung.id,
       nodeId: node.id,
-      node: {
-        ...node,
-        data: {
-          ...node.data,
-          name: blockNameValue,
-          variant: libraryBlock,
-          variable: variable ?? { name: '' },
-        },
-      },
+      node: newBlockNode,
       editorName: editor.meta.name,
     })
-    setWrongName(false)
-
-    console.log('Variable', variable)
-    console.log('Wrong Name', wrongName)
-    console.log('Block changed to:', {
-      ...node,
-      data: { ...node.data, name: blockNameValue, variant: libraryBlock, variable: variable ?? { name: '' } },
+    edges.source?.forEach((edge) => {
+      updateEdge({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        edgeId: edge.id,
+        edge: {
+          ...edge,
+          id: edge.id.replace(node.id, newBlockNode.id),
+          source: newBlockNode.id,
+          sourceHandle: newBlockNode.data.outputConnector.id,
+        },
+      })
     })
+    edges.target?.forEach((edge) => {
+      updateEdge({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        edgeId: edge.id,
+        edge: {
+          ...edge,
+          id: edge.id.replace(node.id, newBlockNode.id),
+          target: newBlockNode.id,
+          targetHandle: newBlockNode.data.inputConnector.id,
+        },
+      })
+    })
+
+    /**
+     * Update the variable ID in the table of variables to link with the new block node
+     */
+    if (variable) {
+      const res = updateVariable({
+        data: {
+          id: newBlockNode.id,
+        },
+        rowId: variableIndex,
+        scope: 'local',
+        associatedPou: editor.meta.name,
+      })
+      variable = res.data as PLCVariable | undefined
+    }
+    setWrongName(false)
   }
 
   return (
