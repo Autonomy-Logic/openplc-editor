@@ -130,6 +130,11 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
    * useEffect to focus the variable input when the block is selected
    */
   useEffect(() => {
+    if (data.variable.name !== '') {
+      setCoilVariableValue(data.variable.name)
+      return
+    }
+
     if (inputVariableRef.current) {
       inputVariableRef.current.focus()
     }
@@ -149,9 +154,10 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
 
     if (!variables.some((variable) => variable.name === coilVariableValue) && !inputFocus) {
       setWrongVariable(true)
-    } else {
-      setWrongVariable(false)
+      return
     }
+
+    setWrongVariable(false)
   }, [pous])
 
   /**

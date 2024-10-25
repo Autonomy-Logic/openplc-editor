@@ -100,6 +100,11 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
    * useEffect to focus the variable input when the block is selected
    */
   useEffect(() => {
+    if (data.variable.name !== '') {
+      setContactVariableValue(data.variable.name)
+      return
+    }
+
     if (inputVariableRef.current) {
       inputVariableRef.current.focus()
     }
@@ -119,7 +124,10 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
 
     const variable = variables.find((variable) => variable.name === contactVariableValue)
     console.log(variable)
-    if ((!variable || variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL') && !inputFocus) {
+    if (
+      (!variable || variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL') &&
+      !inputFocus
+    ) {
       setWrongVariable(true)
       return
     }
