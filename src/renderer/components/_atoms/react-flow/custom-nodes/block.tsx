@@ -406,6 +406,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
           description: res.message,
           variant: 'fail',
         })
+        setBlockVariableValue(variable.name)
         return
       }
       variable = res.data as PLCVariable | undefined

@@ -56,6 +56,13 @@ const arrayValidation = ({ value }: { value: string }) => {
 }
 
 /**
+ * This is a validation to check if the value of the location is unique.
+ */
+const checkIfLocationExists = (variables: PLCVariable[], location: string) => {
+  return variables.some((variable) => variable.location === location)
+}
+
+/**
  * This is a validation to check if it is needed changing the name of a variable at creation.
  * If the variable existis change the variable name.
  **/
@@ -126,6 +133,19 @@ const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Par
         ok: false,
         title: 'Variable name is invalid.',
         message: `Please make sure that the name is valid. Valid names: CamelCase, PascalCase or SnakeCase.`,
+      }
+      return response
+    }
+  }
+
+  if (dataToBeUpdated.location) {
+    const { location } = dataToBeUpdated
+    if (checkIfLocationExists(variables, location)) {
+      console.error(`Location "${location}" already exists`)
+      response = {
+        ok: false,
+        title: 'Location already exists',
+        message: 'Please make sure that the location is unique.',
       }
       return response
     }
