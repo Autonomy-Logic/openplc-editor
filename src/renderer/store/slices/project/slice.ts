@@ -83,13 +83,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             response = { ok: true, message: 'Pou created successfully' }
             console.log('pou created:', pouToBeCreated)
           }
-           if  (dataTypeExists) 
+           if  (dataTypeExists || pouExists) 
               {toast({
                 title: 'Invalid Pou',
-                description: `You can't create a Pou and Data type with the same name.`,
+                description: `You can't create a Pou with this name.`,
                 variant: 'fail',
               })}
-            if (pouExists) { response = { ok: false, message: 'Pou alredy exists'}}
         }),
       )
       return response
