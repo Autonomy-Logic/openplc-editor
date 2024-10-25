@@ -1,5 +1,5 @@
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { RungState } from '@root/renderer/store/slices'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -75,12 +75,20 @@ export const BlockNodeElement = <T extends object>({
     projectActions: { updateVariable, deleteVariable },
   } = useOpenPLCStore()
 
-  const { name, variables, type } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const {
+    name: blockName,
+    variables: blockVariables,
+    type: blockType,
+  } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
 
-  const inputConnectors = variables.filter((variable) => variable.class === 'input').map((variable) => variable.name)
-  const outputConnectors = variables.filter((variable) => variable.class === 'output').map((variable) => variable.name)
+  const inputConnectors = blockVariables
+    .filter((variable) => variable.class === 'input')
+    .map((variable) => variable.name)
+  const outputConnectors = blockVariables
+    .filter((variable) => variable.class === 'output')
+    .map((variable) => variable.name)
 
-  const [blockNameValue, setBlockNameValue] = useState<string>(type === 'generic' ? '' : name)
+  const [blockNameValue, setBlockNameValue] = useState<string>(blockType === 'generic' ? '' : blockName)
   const [wrongName, setWrongName] = useState<boolean>(false)
 
   const inputNameRef = useRef<HTMLInputElement>(null)
@@ -91,13 +99,12 @@ export const BlockNodeElement = <T extends object>({
    */
   useEffect(() => {
     if (inputNameRef.current) {
-      switch ((data.variant as BlockVariant).type) {
-        case 'function-block':
-          break
-        case 'function':
+      switch (blockType) {
+        case 'generic':
+          inputNameRef.current.focus()
           break
         default:
-          inputNameRef.current.focus()
+          break
       }
     }
   }, [])
@@ -105,19 +112,9 @@ export const BlockNodeElement = <T extends object>({
   const handleNameInputOnBlur = () => {
     setInputNameFocus(false)
 
-    if (blockNameValue === '') {
+    if (blockNameValue === '' || blockNameValue === blockName) {
       return
     }
-
-    const rung: RungState | undefined = flows
-      .find((flow) => flow.name === editor.meta.name)
-      ?.rungs.find((rung) => rung.nodes.some((node) => node.id === nodeId))
-    if (!rung) return
-
-    const node: Node | undefined = rung.nodes.find((node) => node.id === nodeId)
-    if (!node) return
-
-    if (blockNameValue === name) return
 
     let libraryBlock: unknown = undefined
     libraries.system.find((block) =>
@@ -129,21 +126,19 @@ export const BlockNodeElement = <T extends object>({
         return
       }),
     ) || undefined
-
     if (!libraryBlock) {
       setWrongName(true)
       return
     }
 
-    let pousVariables: PLCVariable[] = []
-
-    pous.forEach((pou) => {
-      if (pou.data.name === editor.meta.name) {
-        pousVariables = pou.data.variables as PLCVariable[]
-      }
+    const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: nodeId ?? '',
     })
+    if (!rung || !node) return
 
-    let variable = pousVariables.find((variable) => variable.id === node.id)
+    let variable = variables.selected
+    console.log('Variable', variable)
+
     if (variable) {
       let res: { ok: boolean; data?: unknown; message?: string; title?: string } = {
         ok: true,
@@ -151,7 +146,7 @@ export const BlockNodeElement = <T extends object>({
         message: '',
         title: '',
       }
-      const variableIndex = pousVariables.indexOf(variable)
+      const variableIndex = variables.all.indexOf(variable)
 
       if ((libraryBlock as BlockVariant).type !== 'function-block') {
         deleteVariable({
@@ -179,7 +174,15 @@ export const BlockNodeElement = <T extends object>({
           scope: 'local',
           associatedPou: editor.meta.name,
         })
-        if (res.ok && res.data) variable = res.data as PLCVariable
+        if (!res.ok) {
+          toast({
+            title: res.title,
+            description: res.message,
+            variant: 'fail',
+          })
+          return
+        }
+        variable = res.data as PLCVariable | undefined
       }
     }
 
@@ -231,7 +234,7 @@ export const BlockNodeElement = <T extends object>({
         disabled={!setBlockNameValue}
         onFocus={() => setInputNameFocus(true)}
         onBlur={() => inputNameFocus && handleNameInputOnBlur()}
-        onKeyDown={(e) => e.key === 'Enter' && handleNameInputOnBlur()}
+        onKeyDown={(e) => e.key === 'Enter' && inputNameRef.current?.blur()}
         ref={inputNameRef}
       />
       {inputConnectors.map((connector, index) => (
@@ -286,12 +289,11 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
 
     if (inputVariableRef.current) {
       switch (blockType) {
-        case 'function':
-          break
-        case 'generic':
+        case 'function-block':
+          inputVariableRef.current.focus()
           break
         default:
-          inputVariableRef.current.focus()
+          break
       }
     }
   }, [data])
@@ -355,7 +357,15 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
         scope: 'local',
         associatedPou: editor.meta.name,
       })
-      variable = res.data as PLCVariable
+      if (!res.ok) {
+        toast({
+          title: res.title,
+          description: res.message,
+          variant: 'fail',
+        })
+        return
+      }
+      variable = res.data as PLCVariable | undefined
     } else {
       const res = createVariable({
         data: {
@@ -373,9 +383,17 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
         scope: 'local',
         associatedPou: editor.meta.name,
       })
-      variable = res.data as PLCVariable
-      if (res.ok && variable.name !== blockVariableValue) {
-        setBlockVariableValue(variable.name)
+      if (!res.ok) {
+        toast({
+          title: res.title,
+          description: res.message,
+          variant: 'fail',
+        })
+        return
+      }
+      variable = res.data as PLCVariable | undefined
+      if (variable?.name !== blockVariableValue) {
+        setBlockVariableValue(variable?.name ?? '')
       }
     }
 
@@ -385,7 +403,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
         ...node,
         data: {
           ...node.data,
-          variable,
+          variable: variable ?? { name: '' },
         },
       },
       editorName: editor.meta.name,
@@ -427,7 +445,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
             className='w-full bg-transparent text-center text-sm outline-none'
             onFocus={() => setInputVariableFocus(true)}
             onBlur={() => inputVariableFocus && handleSubmitBlockVariable()}
-            onKeyDown={(e) => e.key === 'Enter' && handleSubmitBlockVariable()}
+            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
             ref={inputVariableRef}
           />
         )}

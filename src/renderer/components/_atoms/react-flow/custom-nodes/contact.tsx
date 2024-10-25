@@ -192,7 +192,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
           className='w-full bg-transparent text-center text-sm outline-none'
           onFocus={() => setInputFocus(true)}
           onBlur={() => inputFocus && handleSubmitContactVarible()}
-          onKeyDown={(e) => e.key === 'Enter' && handleSubmitContactVarible()}
+          onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
           ref={inputVariableRef}
         />
       </div>

@@ -213,7 +213,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
           className='w-full bg-transparent text-center text-sm outline-none'
           onFocus={() => setInputFocus(true)}
           onBlur={() => inputFocus && handleSubmitCoilVariable()}
-          onKeyDown={(e) => e.key === 'Enter' && handleSubmitCoilVariable()}
+          onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
           ref={inputVariableRef}
         />
       </div>
