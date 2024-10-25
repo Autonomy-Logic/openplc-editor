@@ -6,7 +6,7 @@ export const getPouVariablesRungNodeAndEdges = (
   editor: EditorModel,
   pous: PLCPou[],
   flows: FlowType[],
-  data: { nodeId: string; variableName: string },
+  data: { nodeId: string; variableName?: string },
 ): {
   pou: PLCPou | undefined
   rung: FlowType['rungs'][0] | undefined

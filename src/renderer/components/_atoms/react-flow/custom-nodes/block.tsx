@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { buildHandle, CustomHandle } from './handle'
+import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
 export type BlockVariant = {
@@ -266,7 +267,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     flowActions: { updateNode },
   } = useOpenPLCStore()
 
-  const { documentation } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const { documentation, type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
@@ -278,8 +279,13 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
    * useEffect to focus the variable input when the correct block type is selected
    */
   useEffect(() => {
+    if (data.variable.name !== '' && blockType === 'function-block') {
+      setBlockVariableValue(data.variable.name)
+      return
+    }
+
     if (inputVariableRef.current) {
-      switch ((data.variant as BlockVariant).type) {
+      switch (blockType) {
         case 'function':
           break
         case 'generic':
@@ -294,28 +300,15 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
    * Update wrongVariable state when the table of variables is updated
    */
   useEffect(() => {
-    let variables: PLCVariable[] = []
-
-    const rung: RungState | undefined = flows
-      .find((flow) => flow.name === editor.meta.name)
-      ?.rungs.find((rung) => rung.nodes.some((node) => node.id === id))
-    if (!rung) return
-
-    const node: Node | undefined = rung.nodes.find((node) => node.id === id)
-    if (!node) return
-
-    if ((node.data as BlockNodeData<BlockVariant>).variant.type !== 'function-block') {
+    if (blockType !== 'function-block') {
       setWrongVariable(false)
       return
     }
 
-    pous.forEach((pou) => {
-      if (pou.data.name === editor.meta.name) {
-        variables = pou.data.variables as PLCVariable[]
-      }
+    const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
     })
-    const variable = variables.find((variable) => variable.id === id)
-
+    const variable = variables.selected
     if (!variable && !inputVariableFocus) {
       setWrongVariable(true)
       return
@@ -336,27 +329,16 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
       return
     }
 
-    let variables: PLCVariable[] = []
-
-    const rung: RungState | undefined = flows
-      .find((flow) => flow.name === editor.meta.name)
-      ?.rungs.find((rung) => rung.nodes.some((node) => node.id === id))
-    if (!rung) return
-
-    const node: Node | undefined = rung.nodes.find((node) => node.id === id)
-    if (!node) return
-
-    pous.forEach((pou) => {
-      if (pou.data.name === editor.meta.name) {
-        variables = pou.data.variables as PLCVariable[]
-      }
+    const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
     })
+    if (!rung || !node) return
 
     /**
      * Check if the variable exists in the table of variables
      * If exists, update the node variable
      */
-    let variable: PLCVariable | undefined = variables.find((variable) => variable.id === node.id)
+    let variable: PLCVariable | undefined = variables.selected
     if (variable) {
       if (variable.name === blockVariableValue) return
 
@@ -369,7 +351,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
             value: (node.data as BlockNodeData<BlockVariant>).variant.name,
           },
         },
-        rowId: variables.indexOf(variable),
+        rowId: variables.all.indexOf(variable),
         scope: 'local',
         associatedPou: editor.meta.name,
       })
@@ -475,53 +457,8 @@ export const buildBlockNode = <T extends object | undefined>({
   handleY,
   variant,
 }: BlockBuilderProps<T>) => {
-  const type = (variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
-  const inputConnectors = type.variables
-    .filter((variable) => variable.class === 'input')
-    .map((variable) => variable.name)
-  const outputConnectors = type.variables
-    .filter((variable) => variable.class === 'output')
-    .map((variable) => variable.name)
-
-  const leftHandles = inputConnectors.map((connector, index) =>
-    buildHandle({
-      id: `${connector}`,
-      position: Position.Left,
-      type: 'target',
-      isConnectable: false,
-      glbX: handleX,
-      glbY: handleY + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-      relX: 0,
-      relY: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-      style: {
-        top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-        left: 0,
-      },
-    }),
-  )
-
-  const rightHandles = outputConnectors.map((connector, index) =>
-    buildHandle({
-      id: `${connector}`,
-      position: Position.Right,
-      type: 'source',
-      isConnectable: false,
-      glbX: handleX + DEFAULT_BLOCK_CONNECTOR_X,
-      glbY: handleY + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-      relX: DEFAULT_BLOCK_CONNECTOR_X,
-      relY: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-      style: {
-        top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-        right: 0,
-      },
-    }),
-  )
-
-  const handles = [...leftHandles, ...rightHandles]
-
-  const blocKHeight =
-    DEFAULT_BLOCK_CONNECTOR_Y +
-    Math.max(inputConnectors.length, outputConnectors.length) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
+  const variantLib = (variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const { handles, leftHandles, rightHandles, height } = getBlockSize(variantLib, { x: handleX, y: handleY })
 
   return {
     id,
@@ -538,13 +475,75 @@ export const buildBlockNode = <T extends object | undefined>({
       variable: { name: '' },
     },
     width: DEFAULT_BLOCK_WIDTH,
-    height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
+    height,
     measured: {
       width: DEFAULT_BLOCK_WIDTH,
-      height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
+      height,
     },
     draggable: true,
     selectable: true,
-    selected: type.type === 'function' ? false : true,
+    selected: variantLib.type === 'function' ? false : true,
+  }
+}
+
+const getBlockSize = (
+  variant: BlockVariant,
+  handlePosition: {
+    x: number
+    y: number
+  },
+) => {
+  const inputConnectors = variant.variables
+    .filter((variable) => variable.class === 'input')
+    .map((variable) => variable.name)
+  const outputConnectors = variant.variables
+    .filter((variable) => variable.class === 'output')
+    .map((variable) => variable.name)
+
+  const leftHandles = inputConnectors.map((connector, index) =>
+    buildHandle({
+      id: `${connector}`,
+      position: Position.Left,
+      type: 'target',
+      isConnectable: false,
+      glbX: handlePosition.x,
+      glbY: handlePosition.y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
+      relX: 0,
+      relY: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
+      style: {
+        top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
+        left: 0,
+      },
+    }),
+  )
+
+  const rightHandles = outputConnectors.map((connector, index) =>
+    buildHandle({
+      id: `${connector}`,
+      position: Position.Right,
+      type: 'source',
+      isConnectable: false,
+      glbX: handlePosition.x + DEFAULT_BLOCK_CONNECTOR_X,
+      glbY: handlePosition.y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
+      relX: DEFAULT_BLOCK_CONNECTOR_X,
+      relY: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
+      style: {
+        top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
+        right: 0,
+      },
+    }),
+  )
+
+  const handles = [...leftHandles, ...rightHandles]
+
+  const blocKHeight =
+    DEFAULT_BLOCK_CONNECTOR_Y +
+    Math.max(inputConnectors.length, outputConnectors.length) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
+
+  return {
+    handles,
+    leftHandles,
+    rightHandles,
+    height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
   }
 }
