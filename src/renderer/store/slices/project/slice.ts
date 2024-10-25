@@ -74,21 +74,22 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           const pouExists = project.data.pous.find((pou) => {
             return pou.data.name === pouToBeCreated.data.name
           })
-          const dataTypeExists = project.data.pous.find((datatype) => datatype.data.name === pouToBeCreated.data.name)
+          const dataTypeExists = project.data.dataTypes.find((datatype) => {
+            return datatype.name === pouToBeCreated.data.name
+          })
 
           if (!pouExists && !dataTypeExists) {
             project.data.pous.push(pouToBeCreated)
             response = { ok: true, message: 'Pou created successfully' }
             console.log('pou created:', pouToBeCreated)
-          } else {
-            response = { ok: false, message: 'Pou already exists' }
-            dataTypeExists &&
-              toast({
+          }
+           if  (dataTypeExists) 
+              {toast({
                 title: 'Invalid array',
                 description: `You can't create a Pou and Data type with the same name.`,
                 variant: 'fail',
-              })
-          }
+              })}
+              else if (pouExists) { response = { ok: false, message: 'Pou alredy exists'}}
         }),
       )
       return response
