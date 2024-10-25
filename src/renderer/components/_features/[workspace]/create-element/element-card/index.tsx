@@ -6,7 +6,6 @@ import { ArrowIcon } from '@root/renderer/assets'
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { DatatypeDerivationSources } from '@root/renderer/data/sources/data-type'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { CreateDatatypeObject } from '@root/renderer/store/slices/shared/utils'
 import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { cn, ConvertToLangShortenedFormat } from '@root/utils'
 import { startCase } from 'lodash'
@@ -14,7 +13,6 @@ import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
 import { useToast } from '../../../[app]/toast/use-toast'
-import { CreateDataType } from './data-type-element'
 
 type ElementCardProps = {
   target: 'function' | 'function-block' | 'program' | 'data-type'
@@ -31,7 +29,6 @@ type CreateDataTypeFormProps = {
   name: string
   derivation: 'array' | 'enumerated' | 'structure'
 }
-
 
 const ElementCard = (props: ElementCardProps): ReactNode => {
   const { toast } = useToast()
@@ -57,8 +54,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
 
   const {
     pouActions: { create },
-    projectActions: { createDatatype },
-    // workspaceActions: { createDatatype },
+    datatypeActions: { create: createDatatype },
   } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
 
@@ -87,7 +83,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       derivation: data.derivation,
       baseType: 'bool',
       initialValue: '',
-      dimensions: []
+      dimensions: [],
     } as PLCArrayDatatype
     const res = createDatatype(draft)
     closeContainer((prev) => !prev)

@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
+import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
 import { ProjectSlice } from '../project'
 import { TabsSlice } from '../tabs'
-import { CreateDatatypeObject, CreateEditorObject, CreatePouObject } from './utils'
+import { CreateEditorObject, CreatePouObject } from './utils'
 
 type PropsToCreatePou = {
   name: string
@@ -12,10 +13,6 @@ type PropsToCreatePou = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
 }
 
-type PropsToCreateDatatype = {
-  name: string
-  derivation: 'enumerated' | 'array' | 'structure'
-}
 export type SharedSlice = {
   pouActions: {
     create: (propsToCreatePou: PropsToCreatePou) => boolean
@@ -23,7 +20,7 @@ export type SharedSlice = {
     delete: () => void
   }
   datatypeActions: {
-    create: (propsToCreateDatatype: PropsToCreateDatatype) => boolean
+    create: (propsToCreateDatatype: PLCArrayDatatype) => boolean
     update: () => void
     delete: () => void
   }
@@ -108,10 +105,8 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSl
     delete: () => {},
   },
   datatypeActions: {
-    create: (propsToCreateDatatype: PropsToCreateDatatype) => {
-      const normalizedDatatypeObj = CreateDatatypeObject(propsToCreateDatatype)
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      getState().workspaceActions.createDatatype(normalizedDatatypeObj)
+    create: (propsToCreateDatatype: PLCArrayDatatype) => {
+      getState().projectActions.createDatatype(propsToCreateDatatype)
       getState().editorActions.addModel({type: 'plc-datatype', meta: {name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation}})
       getState().editorActions.setEditor({type: 'plc-datatype', meta: {name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation}})
       getState().tabsActions.updateTabs({name: propsToCreateDatatype.name, elementType: {type: 'data-type', derivation: propsToCreateDatatype.derivation}})
