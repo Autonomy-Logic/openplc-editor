@@ -74,12 +74,20 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           const pouExists = project.data.pous.find((pou) => {
             return pou.data.name === pouToBeCreated.data.name
           })
-          if (!pouExists) {
+          const dataTypeExists = project.data.pous.find((datatype) => datatype.data.name === pouToBeCreated.data.name)
+
+          if (!pouExists && !dataTypeExists) {
             project.data.pous.push(pouToBeCreated)
             response = { ok: true, message: 'Pou created successfully' }
             console.log('pou created:', pouToBeCreated)
           } else {
             response = { ok: false, message: 'Pou already exists' }
+            dataTypeExists &&
+              toast({
+                title: 'Invalid array',
+                description: `You can't create a Pou and Data type with the same name.`,
+                variant: 'fail',
+              })
           }
         }),
       )
@@ -297,7 +305,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           } else {
             toast({
               title: 'Invalid array',
-              description: `You can't create a Function or Data type with the same name`,
+              description: `You can't create a Pou and Data type with the same name.`,
               variant: 'fail',
             })
           }
@@ -323,9 +331,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce(({ project }: ProjectSlice) => {
           const { name, derivation } = dataToCreateDimension
-          const dataExists = project.data.dataTypes.find(
-            (datatype) => datatype.name === name,
-          ) as PLCArrayDatatype
+          const dataExists = project.data.dataTypes.find((datatype) => datatype.name === name) as PLCArrayDatatype
           if (!dataExists) return
           if (dataExists && derivation === 'array') {
             dataExists.dimensions.push({ dimension: '' })
