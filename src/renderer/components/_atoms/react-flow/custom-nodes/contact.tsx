@@ -117,17 +117,20 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       }
     })
 
-    if (!variables.some((variable) => variable.name === contactVariableValue) && !inputFocus) {
+    const variable = variables.find((variable) => variable.name === contactVariableValue)
+    console.log(variable)
+    if ((!variable || variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL') && !inputFocus) {
       setWrongVariable(true)
-    } else {
-      setWrongVariable(false)
+      return
     }
+
+    setWrongVariable(false)
   }, [pous])
 
   /**
    * Handle with the variable input onBlur event
    */
-  const handleVariableInputOnBlur = () => {
+  const handleSubmitContactVarible = () => {
     setInputFocus(false)
 
     let variables: PLCVariable[] = []
@@ -153,18 +156,11 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     )
 
     if (!variable) {
-      const variableName = node.data.variable.name
-      if (variableName === '' || !variables.some((variable) => variable.name === variableName)) {
-        setWrongVariable(true)
-      }
-      setContactVariableValue(variableName)
+      setWrongVariable(true)
       return
     }
 
-    if (
-      variable.type.definition !== 'base-type' ||
-      (variable.type.definition === 'base-type' && variable.type.value !== 'BOOL')
-    ) {
+    if (variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL') {
       setWrongVariable(true)
       return
     }
@@ -207,7 +203,8 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
           placeholder='???'
           className='w-full bg-transparent text-center text-sm outline-none'
           onFocus={() => setInputFocus(true)}
-          onBlur={handleVariableInputOnBlur}
+          onBlur={() => inputFocus && handleSubmitContactVarible()}
+          onKeyDown={(e) => e.key === 'Enter' && handleSubmitContactVarible()}
           ref={inputVariableRef}
         />
       </div>

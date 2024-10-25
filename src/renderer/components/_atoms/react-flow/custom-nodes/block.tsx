@@ -83,7 +83,7 @@ export const BlockNodeElement = <T extends object>({
   const [wrongName, setWrongName] = useState<boolean>(false)
 
   const inputNameRef = useRef<HTMLInputElement>(null)
-  const [_inputNameFocus, setInputNameFocus] = useState<boolean>(true)
+  const [inputNameFocus, setInputNameFocus] = useState<boolean>(true)
 
   /**
    * useEffect to focus the name input when the correct block type is selected
@@ -229,7 +229,8 @@ export const BlockNodeElement = <T extends object>({
         className='w-full bg-transparent p-1 text-center text-sm outline-none'
         disabled={!setBlockNameValue}
         onFocus={() => setInputNameFocus(true)}
-        onBlur={handleNameInputOnBlur}
+        onBlur={() => inputNameFocus && handleNameInputOnBlur()}
+        onKeyDown={(e) => e.key === 'Enter' && handleNameInputOnBlur()}
         ref={inputNameRef}
       />
       {inputConnectors.map((connector, index) => (
@@ -327,7 +328,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
   /**
    * Handle with the variable input onBlur event
    */
-  const handleVariableInputOnBlur = () => {
+  const handleSubmitBlockVariable = () => {
     setInputVariableFocus(false)
 
     if (blockVariableValue === '') {
@@ -443,7 +444,8 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
             placeholder='???'
             className='w-full bg-transparent text-center text-sm outline-none'
             onFocus={() => setInputVariableFocus(true)}
-            onBlur={handleVariableInputOnBlur}
+            onBlur={() => inputVariableFocus && handleSubmitBlockVariable()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSubmitBlockVariable()}
             ref={inputVariableRef}
           />
         )}

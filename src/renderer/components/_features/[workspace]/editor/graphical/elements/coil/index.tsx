@@ -26,7 +26,7 @@ const CoilElement = ({ isOpen, onOpenChange, onClose, node, rungId }: CoilElemen
 
   const getModifierCoil = (value: string) => {
     const modifier = coilModifiers.find((modifier) => modifier.value === value)
-    return modifier ? modifier.coil.svg : ''
+    return modifier ? modifier.coil.svg(false) : ''
   }
 
   const handleCloseModal = () => {

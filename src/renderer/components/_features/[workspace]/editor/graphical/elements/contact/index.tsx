@@ -26,7 +26,7 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node, rungId }: Contact
 
   const getModifierContact = (value: string) => {
     const modifier = contactModifiers.find((modifier) => modifier.value === value)
-    return modifier ? modifier.contact.svg : ''
+    return modifier ? modifier.contact.svg(false) : ''
   }
 
   const handleCloseModal = () => {
@@ -93,7 +93,10 @@ const ContactElement = ({ isOpen, onOpenChange, onClose, node, rungId }: Contact
           </div>
         </div>
         <div className='flex !h-8 w-full gap-6 '>
-          <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 hover:bg-neutral-300 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'>
+          <button
+            className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 hover:bg-neutral-300 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
+            onClick={handleCloseModal}
+          >
             Cancel
           </button>
           <button

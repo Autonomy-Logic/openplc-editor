@@ -157,7 +157,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
   /**
    * Handle with the variable input onBlur event
    */
-  const handleVariableInputOnBlur = () => {
+  const handleSubmitCoilVariable = () => {
     setInputFocus(false)
 
     let variables: PLCVariable[] = []
@@ -183,11 +183,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     )
 
     if (!variable) {
-      const variableName = node.data.variable.name
-      if (variableName === '' || !variables.some((variable) => variable.name === variableName)) {
-        setWrongVariable(true)
-      }
-      setCoilVariableValue(variableName)
+      setWrongVariable(true)
       return
     }
 
@@ -229,7 +225,8 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
           placeholder='???'
           className='w-full bg-transparent text-center text-sm outline-none'
           onFocus={() => setInputFocus(true)}
-          onBlur={handleVariableInputOnBlur}
+          onBlur={() => inputFocus && handleSubmitCoilVariable()}
+          onKeyDown={(e) => e.key === 'Enter' && handleSubmitCoilVariable()}
           ref={inputVariableRef}
         />
       </div>
