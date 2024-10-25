@@ -5,8 +5,6 @@ import {
   RisingEdgeContact,
 } from '@root/renderer/assets/icons/flow/Contact'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { RungState } from '@root/renderer/store/slices'
-import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
@@ -15,6 +13,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../input'
 import { buildHandle, CustomHandle } from './handle'
+import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
 export type ContactNode = Node<BasicNodeData & { variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }>
@@ -114,16 +113,12 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
    * Update wrongVariable state when the table of variables is updated
    */
   useEffect(() => {
-    let variables: PLCVariable[] = []
-
-    pous.forEach((pou) => {
-      if (pou.data.name === editor.meta.name) {
-        variables = pou.data.variables as PLCVariable[]
-      }
+    const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
+      variableName: contactVariableValue,
     })
 
-    const variable = variables.find((variable) => variable.name === contactVariableValue)
-    console.log(variable)
+    const variable = variables.selected
     if (
       (!variable || variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL') &&
       !inputFocus
@@ -141,28 +136,13 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
   const handleSubmitContactVarible = () => {
     setInputFocus(false)
 
-    let variables: PLCVariable[] = []
-
-    const rung: RungState | undefined = flows
-      .find((flow) => flow.name === editor.meta.name)
-      ?.rungs.find((rung) => rung.nodes.some((node) => node.id === id))
-    if (!rung) return
-
-    const node: Node<BasicNodeData> | undefined = rung.nodes.find((node) => node.id === id) as
-      | Node<BasicNodeData>
-      | undefined
-    if (!node) return
-
-    pous.forEach((pou) => {
-      if (pou.data.name === editor.meta.name) {
-        variables = pou.data.variables as PLCVariable[]
-      }
+    const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
+      variableName: contactVariableValue,
     })
+    if (!rung || !node) return
 
-    const variable = variables.find(
-      (variable) => variable.name === contactVariableValue && variable.type.definition !== 'derived',
-    )
-
+    const variable = variables.selected
     if (!variable) {
       setWrongVariable(true)
       return

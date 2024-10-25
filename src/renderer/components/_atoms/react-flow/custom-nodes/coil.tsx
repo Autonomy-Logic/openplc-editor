@@ -7,8 +7,6 @@ import {
   SetCoil,
 } from '@root/renderer/assets/icons/flow/Coil'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { RungState } from '@root/renderer/store/slices'
-import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
@@ -17,6 +15,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../input'
 import { buildHandle, CustomHandle } from './handle'
+import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
 export type CoilNode = Node<
@@ -144,15 +143,12 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
    * Update wrongVariable state when the table of variables is updated
    */
   useEffect(() => {
-    let variables: PLCVariable[] = []
-
-    pous.forEach((pou) => {
-      if (pou.data.name === editor.meta.name) {
-        variables = pou.data.variables as PLCVariable[]
-      }
+    const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
+      variableName: coilVariableValue,
     })
 
-    if (!variables.some((variable) => variable.name === coilVariableValue) && !inputFocus) {
+    if (!variables.selected && !inputFocus) {
       setWrongVariable(true)
       return
     }
@@ -166,28 +162,13 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
   const handleSubmitCoilVariable = () => {
     setInputFocus(false)
 
-    let variables: PLCVariable[] = []
-
-    const rung: RungState | undefined = flows
-      .find((flow) => flow.name === editor.meta.name)
-      ?.rungs.find((rung) => rung.nodes.some((node) => node.id === id))
-    if (!rung) return
-
-    const node: Node<BasicNodeData> | undefined = rung.nodes.find((node) => node.id === id) as
-      | Node<BasicNodeData>
-      | undefined
-    if (!node) return
-
-    pous.forEach((pou) => {
-      if (pou.data.name === editor.meta.name) {
-        variables = pou.data.variables as PLCVariable[]
-      }
+    const { variables, rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
+      variableName: coilVariableValue,
     })
+    if (!rung || !node) return
 
-    const variable = variables.find(
-      (variable) => variable.name === coilVariableValue && variable.type.definition !== 'derived',
-    )
-
+    const variable = variables.selected
     if (!variable) {
       setWrongVariable(true)
       return
@@ -199,7 +180,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
         ...node,
         data: {
           ...node.data,
-          variable,
+          variable: variable,
         },
       },
       editorName: editor.meta.name,
