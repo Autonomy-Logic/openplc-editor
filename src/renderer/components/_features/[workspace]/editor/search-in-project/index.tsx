@@ -4,6 +4,8 @@ import { InputWithRef } from '@root/renderer/components/_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useEffect, useState } from 'react'
 
+import { useToast } from '../../../[app]/toast/use-toast'
+
 type OptionProps = {
   id: string
   label: string
@@ -81,6 +83,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
   const [disabledSensitiveCase, setDisabledSensitiveCase] = useState(false)
   const [disabledRegularExpression, setDisabledRegularExpression] = useState(false)
 
+  const { toast } = useToast()
   const {
     workspace: { projectData },
     searchQuery,
@@ -232,6 +235,38 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       task: resourceTasks.map((task) => task.name).join(', '),
     }
 
+    const totalMatches =
+      (groupedPous.program
+        ? groupedPous.program.reduce((acc, pou) => {
+            const nameMatch = pou.name.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
+            const variableMatch = pou.variable.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
+            const bodyMatch =
+              ['st', 'il'].includes(pou.language) && pou.body.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
+            return acc + nameMatch + variableMatch + bodyMatch
+          }, 0)
+        : 0) +
+      (groupedPous.function
+        ? groupedPous.function.reduce((acc, pou) => {
+            const nameMatch = pou.name.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
+            const variableMatch = pou.variable.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
+            const bodyMatch =
+              ['st', 'il'].includes(pou.language) && pou.body.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
+            return acc + nameMatch + variableMatch + bodyMatch
+          }, 0)
+        : 0) +
+      (groupedPous['function-block']
+        ? groupedPous['function-block'].reduce((acc, pou) => {
+            const nameMatch = pou.name.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
+            const variableMatch = pou.variable.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
+            const bodyMatch =
+              ['st', 'il'].includes(pou.language) && pou.body.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
+            return acc + nameMatch + variableMatch + bodyMatch
+          }, 0)
+        : 0) +
+      filteredDataTypes.length +
+      resourceGlobalVar.length +
+      resourceTasks.length
+
     const formattedResults = {
       searchQuery,
       projectName: projectData.projectName,
@@ -240,12 +275,27 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
         dataTypes: filteredDataTypes,
         resource,
       },
+      searchCounts: totalMatches,
     }
 
-    setSearchResults(formattedResults)
-    console.log(formattedResults)
-    setSearchQuery('')
-    onClose()
+    const noResults =
+      Object.keys(groupedPous).length === 0 &&
+      filteredDataTypes.length === 0 &&
+      resourceGlobalVar.length === 0 &&
+      resourceTasks.length === 0
+
+    if (noResults) {
+      toast({
+        title: 'No results found',
+        description: 'No matches were found for your search.',
+        variant: 'warn',
+      })
+    } else {
+      setSearchResults(formattedResults)
+      console.log(formattedResults)
+      setSearchQuery('')
+      onClose()
+    }
   }
 
   const handleSearchQueryChange = (event: React.ChangeEvent<HTMLInputElement>) => {

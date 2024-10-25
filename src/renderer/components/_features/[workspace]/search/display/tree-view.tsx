@@ -46,9 +46,8 @@ const ProjectSearchTreeRoot = ({ children, label, ...res }: IProjectSearchTreeRo
               'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
               isOpen && 'font-medium text-neutral-1000 dark:text-white',
             )}
-          >
-            {label}
-          </span>
+            dangerouslySetInnerHTML={{ __html: label || '' }}
+          />
         </li>
         {children && isOpen && (
           <div>
@@ -73,11 +72,11 @@ type IProjectSearchTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
 
 const BranchSources = {
   'data-type': { BranchIcon: DataTypeIcon, label: 'Data Types' },
-  'function': { BranchIcon: FunctionIcon, label: 'Functions' },
+  function: { BranchIcon: FunctionIcon, label: 'Functions' },
   'function-block': { BranchIcon: FunctionBlockIcon, label: 'Function Blocks' },
-  'program': { BranchIcon: ProgramIcon, label: 'Programs' },
-  'resource': { BranchIcon: ResourceIcon, label: 'Resource' },
-  'device': { BranchIcon: DeviceIcon, label: 'Device' },
+  program: { BranchIcon: ProgramIcon, label: 'Programs' },
+  resource: { BranchIcon: ResourceIcon, label: 'Resource' },
+  device: { BranchIcon: DeviceIcon, label: 'Device' },
 }
 
 const ProjectSearchTreeBranch = ({ branchTarget, children, ...res }: IProjectSearchTreeBranchProps) => {
@@ -90,7 +89,9 @@ const ProjectSearchTreeBranch = ({ branchTarget, children, ...res }: IProjectSea
   const { BranchIcon, label } = BranchSources[branchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
   const hasAssociatedPou =
-    pous.some((pou) => pou.type === branchTarget) || (branchTarget === 'data-type' && dataTypes.length > 0) || (branchTarget === 'resource' && configuration !== null)
+    pous.some((pou) => pou.type === branchTarget) ||
+    (branchTarget === 'data-type' && dataTypes.length > 0) ||
+    (branchTarget === 'resource' && configuration !== null)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
 
   return (
@@ -117,9 +118,8 @@ const ProjectSearchTreeBranch = ({ branchTarget, children, ...res }: IProjectSea
             'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
-        >
-          {label}
-        </span>
+          dangerouslySetInnerHTML={{ __html: label || '' }}
+        />
       </div>
 
       {children && branchIsOpen && (
@@ -186,9 +186,8 @@ const ProjectSearchTreeNestedBranch = ({
             'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
-        >
-          {label}
-        </span>
+          dangerouslySetInnerHTML={{ __html: label || '' }}
+        />
       </div>
 
       {children && branchIsOpen && (
@@ -251,9 +250,8 @@ const ProjectSearchTreeLeaf = ({ leafLang, label, ...res }: IProjectSearchTreeLe
         className={cn(
           'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-medium text-neutral-1000 dark:text-white',
         )}
-      >
-        {label}
-      </span>
+        dangerouslySetInnerHTML={{ __html: label || '' }}
+      />
     </li>
   )
 }
@@ -267,7 +265,7 @@ const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: 
   const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)
   const { LeafIcon } = LeafSources[leafLang]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-  const hasVariable = pous.some((pou) => pou.data.variables.length > 0) || (configuration !== null)
+  const hasVariable = pous.some((pou) => pou.data.variables.length > 0) || configuration !== null
   useEffect(() => setBranchIsOpen(hasVariable), [hasVariable])
 
   return (
@@ -292,9 +290,8 @@ const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: 
             'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
-        >
-          {label}
-        </span>
+          dangerouslySetInnerHTML={{ __html: label || '' }}
+        />
       </div>
 
       {branchIsOpen && (
@@ -328,9 +325,8 @@ const ProjectSearchTreeVariableLeaf = ({ label, hasVariable, ...res }: IProjectS
         className={cn(
           'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-medium text-neutral-1000 dark:text-white',
         )}
-      >
-        {label}
-      </span>
+        dangerouslySetInnerHTML={{ __html: label || '' }}
+      />
     </li>
   )
 }

@@ -33,6 +33,7 @@ interface SearchResult {
       task: string
     }
   }
+  searchCounts?: number
 }
 
 interface SearchProps {
@@ -62,7 +63,16 @@ const Search = ({ items }: SearchProps) => {
   const extractSearchQuery = (body: string, searchQuery: string) => {
     const regex = new RegExp(`(${searchQuery})`, 'gi')
     const match = body.match(regex)
-    return match ? match[0] : undefined
+    if (match) {
+      return body.replace(regex, (matched) => `<span class='text-brand-medium dark:text-brand-light'>${matched}</span>`)
+    }
+    return body
+  }
+
+  const extractSearchQueryBody = (body: string, searchQuery: string) => {
+    const regex = new RegExp(`(${searchQuery})`, 'gi')
+    const match = body.match(regex)
+    return match ? `<span class='text-brand-medium dark:text-brand-light'>${match[0]}</span>` : body
   }
 
   return (
@@ -76,9 +86,15 @@ const Search = ({ items }: SearchProps) => {
                 {
                   title: (
                     <div className='flex w-full items-center justify-between'>
-                      <span className='text-sm font-medium text-neutral-950 dark:text-white'>{item.searchQuery}</span>
+                      <p className='text-sm font-medium text-neutral-950 dark:text-white'>
+                        {item.searchQuery}
+                        <span className='text-cp-sm font-normal text-neutral-950 dark:text-white'>
+                          {' '}
+                          - {item.searchCounts} matches
+                        </span>
+                      </p>
                       <CloseIcon
-                        className='ml-2 w-4 cursor-pointer stroke-brand dark:stroke-white hover:stroke-red-500'
+                        className='ml-2 w-4 cursor-pointer stroke-brand hover:stroke-red-500 dark:stroke-white'
                         onClick={() => handleRemoveSearchResult(index)}
                       />
                     </div>
@@ -95,7 +111,7 @@ const Search = ({ items }: SearchProps) => {
                               pou.variable || pou.language === 'st' || pou.language === 'il' ? (
                                 <ProjectSearchTreeVariableBranch
                                   key={pouIndex}
-                                  label={pou.name}
+                                  label={extractSearchQuery(pou.name, item.searchQuery)}
                                   leafLang={pou.language}
                                 >
                                   {pou.variable &&
@@ -104,18 +120,22 @@ const Search = ({ items }: SearchProps) => {
                                       .map((variable, variableIndex) => (
                                         <ProjectSearchTreeVariableLeaf
                                           key={variableIndex}
-                                          label={variable}
+                                          label={extractSearchQuery(variable, item.searchQuery)}
                                           hasVariable
                                         />
                                       ))}
                                   {(pou.language === 'st' || pou.language === 'il') && (
                                     <ProjectSearchTreeVariableLeaf
-                                      label={extractSearchQuery(pou.body, item.searchQuery)}
+                                      label={extractSearchQueryBody(pou.body, item.searchQuery)}
                                     />
                                   )}
                                 </ProjectSearchTreeVariableBranch>
                               ) : (
-                                <ProjectSearchTreeLeaf label={pou.name} leafLang={pou.language} />
+                                <ProjectSearchTreeLeaf
+                                  key={pouIndex}
+                                  label={extractSearchQuery(pou.name, item.searchQuery)}
+                                  leafLang={pou.language}
+                                />
                               ),
                           )}
                         </ProjectSearchTreeBranch>
@@ -126,7 +146,7 @@ const Search = ({ items }: SearchProps) => {
                           {item.functions.dataTypes.map((dataType, dataTypeIndex) => (
                             <ProjectSearchTreeLeaf
                               key={dataTypeIndex}
-                              label={dataType.name}
+                              label={extractSearchQuery(dataType.name, item.searchQuery)}
                               leafLang={mapDataTypeToLeafLang(dataType.type)}
                             />
                           ))}
@@ -138,14 +158,22 @@ const Search = ({ items }: SearchProps) => {
                           {item.functions.resource.globalVariable && (
                             <ProjectSearchTreeVariableBranch label='Global Variables' leafLang='res'>
                               {item.functions.resource.globalVariable.split(', ').map((variable, variableIndex) => (
-                                <ProjectSearchTreeVariableLeaf key={variableIndex} label={variable} hasVariable />
+                                <ProjectSearchTreeVariableLeaf
+                                  key={variableIndex}
+                                  label={extractSearchQuery(variable, item.searchQuery)}
+                                  hasVariable
+                                />
                               ))}
                             </ProjectSearchTreeVariableBranch>
                           )}
                           {item.functions.resource.task && (
                             <ProjectSearchTreeVariableBranch label='Tasks' leafLang='res'>
                               {item.functions.resource.task.split(', ').map((task, taskIndex) => (
-                                <ProjectSearchTreeVariableLeaf key={taskIndex} label={task} hasVariable />
+                                <ProjectSearchTreeVariableLeaf
+                                  key={taskIndex}
+                                  label={extractSearchQuery(task, item.searchQuery)}
+                                  hasVariable
+                                />
                               ))}
                             </ProjectSearchTreeVariableBranch>
                           )}

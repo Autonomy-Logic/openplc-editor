@@ -29,6 +29,7 @@ const projectSchema = z.object({
   searchQuery: z.string(),
   projectName: z.string(),
   functions: searchModelSchema,
+  searchCounts: z.number().optional(),
 });
 type Project = z.infer<typeof projectSchema>
 
