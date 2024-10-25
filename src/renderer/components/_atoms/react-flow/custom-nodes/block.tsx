@@ -17,6 +17,7 @@ export type BlockVariant = {
   type: string
   variables: { name: string; class: string; type: { definition: string; value: string } }[]
   documentation: string
+  extensible: boolean
 }
 export type BlockNodeData<T> = BasicNodeData & { variant: T }
 export type BlockNode<T> = Node<BlockNodeData<T>>
@@ -99,6 +100,8 @@ export const BlockNodeElement = <T extends object>({
    * useEffect to focus the name input when the correct block type is selected
    */
   useEffect(() => {
+    if (disabled) return
+
     if (inputNameRef.current) {
       switch (blockType) {
         case 'generic':
@@ -109,6 +112,16 @@ export const BlockNodeElement = <T extends object>({
       }
     }
   }, [])
+
+  /**
+   * In case the block is disabled, we need to set the block name value to the block name
+   */
+  useEffect(() => {
+    if (disabled) {
+      setBlockNameValue(blockName)
+      return
+    }
+  }, [data])
 
   const handleNameInputOnBlur = () => {
     setInputNameFocus(false)
@@ -274,7 +287,7 @@ export const BlockNodeElement = <T extends object>({
         maxLength={20}
         placeholder='???'
         className='w-full bg-transparent p-1 text-center text-sm outline-none'
-        disabled={!setBlockNameValue}
+        disabled={disabled}
         onFocus={() => setInputNameFocus(true)}
         onBlur={() => inputNameFocus && handleNameInputOnBlur()}
         onKeyDown={(e) => e.key === 'Enter' && inputNameRef.current?.blur()}
@@ -549,7 +562,7 @@ export const buildBlockNode = <T extends object | undefined>({
   }
 }
 
-const getBlockSize = (
+export const getBlockSize = (
   variant: BlockVariant,
   handlePosition: {
     x: number
