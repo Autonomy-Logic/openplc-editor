@@ -5,7 +5,8 @@ import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 import { SubmitHandler, useForm } from 'react-hook-form'
 
-import { NewProjectStore } from '../project-modal'
+import { NewProjectStore } from '../store'
+
 
 const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) => {
   const { register, handleSubmit, setValue, watch } = useForm<{ name: string; path: string }>()

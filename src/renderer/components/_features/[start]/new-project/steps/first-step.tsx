@@ -5,7 +5,8 @@ import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 import { SubmitHandler, useForm } from 'react-hook-form'
 
-import { NewProjectStore } from '../project-modal'
+import { NewProjectStore } from '../store'
+
 
 const Step1 = ({ onNext, onClose }: { onNext: () => void; onClose: () => void }) => {
   const { handleSubmit, setValue } = useForm<{ type: string }>()

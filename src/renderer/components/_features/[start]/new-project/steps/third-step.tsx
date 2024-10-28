@@ -9,7 +9,7 @@ import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
 import { useToast } from '../../../[app]/toast/use-toast'
 import { IntervalModal } from '../interval-model'
-import { NewProjectStore } from '../project-modal'
+import { NewProjectStore } from '../store'
 
 type CreateProjectFileProps = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
