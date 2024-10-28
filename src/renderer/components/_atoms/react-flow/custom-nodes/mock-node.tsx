@@ -141,6 +141,7 @@ export const buildMockNode = ({
     },
     numericId: generateNumericUUID(),
     variable: { name: '' },
+    executionOrder: 0,
   },
   width: 150,
   height: 40,

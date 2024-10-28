@@ -19,10 +19,10 @@ export type BlockVariant = {
   documentation: string
   extensible: boolean
 }
-export type BlockNodeData<T> = BasicNodeData & { variant: T }
+export type BlockNodeData<T> = BasicNodeData & { variant: T; executionControl: boolean }
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
-type BlockBuilderProps<T> = BuilderBasicProps & { variant: T }
+type BlockBuilderProps<T> = BuilderBasicProps & { variant: T; executionControl?: boolean }
 
 export const DEFAULT_BLOCK_WIDTH = 216
 export const DEFAULT_BLOCK_HEIGHT = 128
@@ -210,6 +210,7 @@ export const BlockNodeElement = <T extends object>({
       handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
       handleY: (node.data as BasicNodeData).handles[0].glbPosition.y,
       variant: libraryBlock,
+      executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
     })
     newBlockNode.data = {
       ...newBlockNode.data,
@@ -338,7 +339,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
    * useEffect to focus the variable input when the correct block type is selected
    */
   useEffect(() => {
-    if (data.variable.name !== '' && blockType === 'function-block') {
+    if (data.variable && data.variable.name !== '' && blockType === 'function-block') {
       setBlockVariableValue(data.variable.name)
       return
     }
@@ -532,8 +533,27 @@ export const buildBlockNode = <T extends object | undefined>({
   handleX,
   handleY,
   variant,
+  executionControl = false,
 }: BlockBuilderProps<T>) => {
   const variantLib = (variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  if (executionControl) {
+    if (!variantLib.variables.filter((variable) => variable.name === 'EN' || variable.name === 'ENO')) {
+      variantLib.variables = [
+        {
+          name: 'EN',
+          class: 'input',
+          type: { definition: 'generic-type', value: 'ANY_BOOL' },
+        },
+        {
+          name: 'ENO',
+          class: 'output',
+          type: { definition: 'generic-type', value: 'ANY_BOOL' },
+        },
+        ...variantLib.variables,
+      ]
+    }
+  }
+
   const { handles, leftHandles, rightHandles, height } = getBlockSize(variantLib, { x: handleX, y: handleY })
 
   return {
@@ -549,6 +569,8 @@ export const buildBlockNode = <T extends object | undefined>({
       outputConnector: rightHandles[0],
       numericId: generateNumericUUID(),
       variable: { name: '' },
+      executionOrder: 0,
+      executionControl,
     },
     width: DEFAULT_BLOCK_WIDTH,
     height,

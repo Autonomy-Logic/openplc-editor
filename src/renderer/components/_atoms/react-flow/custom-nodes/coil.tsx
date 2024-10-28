@@ -129,7 +129,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
    * useEffect to focus the variable input when the block is selected
    */
   useEffect(() => {
-    if (data.variable.name !== '') {
+    if (data.variable && data.variable.name !== '') {
       setCoilVariableValue(data.variable.name)
       return
     }
@@ -263,6 +263,7 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
       outputConnector: outputHandle,
       numericId: generateNumericUUID(),
       variable: { name: '' },
+      executionOrder: 0,
     },
     width: DEFAULT_COIL_BLOCK_WIDTH,
     height: DEFAULT_COIL_BLOCK_HEIGHT,

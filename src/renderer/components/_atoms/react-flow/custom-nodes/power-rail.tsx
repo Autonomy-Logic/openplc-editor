@@ -69,6 +69,7 @@ export const buildPowerRailNode = ({ id, posX, posY, connector, handleX, handleY
       numericId: generateNumericUUID(),
       variant: connector === 'right' ? 'left' : 'right',
       variable: { name: '' },
+      executionOrder: 0,
     },
     width: DEFAULT_POWER_RAIL_WIDTH,
     height: DEFAULT_POWER_RAIL_HEIGHT,

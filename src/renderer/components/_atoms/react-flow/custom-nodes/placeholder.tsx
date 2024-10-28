@@ -92,6 +92,7 @@ export const builderPlaceholderNode = ({
       position,
       relatedNode,
       variable: { name: '' },
+      executionOrder: 0,
     },
     position: {
       x: posX,

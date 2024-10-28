@@ -99,7 +99,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
    * useEffect to focus the variable input when the block is selected
    */
   useEffect(() => {
-    if (data.variable.name !== '') {
+    if (data.variable && data.variable.name !== '') {
       setContactVariableValue(data.variable.name)
       return
     }
@@ -242,6 +242,7 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
       outputConnector: outputHandle,
       numericId: generateNumericUUID(),
       variable: { name: '' },
+      executionOrder: 0,
     },
     width: DEFAULT_CONTACT_BLOCK_WIDTH,
     height: DEFAULT_CONTACT_BLOCK_HEIGHT,
