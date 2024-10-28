@@ -281,7 +281,12 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       variant: node.data.variant,
       executionControl: formState.executionControl,
     })
-    newNode.data.executionOrder = Number(formState.executionOrder)
+    newNode.data = {
+      ...newNode.data,
+      variable: selectedNode.data.variable,
+      executionOrder: Number(formState.executionOrder),
+    }
+    console.log(newNode)
 
     const { rung, edges } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: selectedNode.id,
