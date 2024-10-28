@@ -59,7 +59,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('project:create-project-file', (_event, dataToCreateProjectFile: CreateProjectFileProps) => {
       const res = CreateProjectFile(dataToCreateProjectFile)
       if (res.success) {
-        void this.projectService.updateProjectHistory(dataToCreateProjectFile.path)
+        void this.projectService.updateProjectHistory(dataToCreateProjectFile.path + '\\project.json')
       }
       return res
     })
