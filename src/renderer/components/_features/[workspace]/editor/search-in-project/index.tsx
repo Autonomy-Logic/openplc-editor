@@ -78,16 +78,16 @@ const RadioOption = ({
 export default function SearchInProject({ onClose }: SearchInProjectModalProps) {
   const [selectedScope, setSelectedScope] = useState('whole project')
   const [checkedOptions, setCheckedOptions] = useState<{ [key: string]: boolean }>({})
-  const [sensitiveCase, setSensitiveCase] = useState(false)
-  const [regularExpression, setRegularExpression] = useState(false)
-  const [disabledSensitiveCase, setDisabledSensitiveCase] = useState(false)
-  const [disabledRegularExpression, setDisabledRegularExpression] = useState(false)
+  const [sensitiveCaseOption, setsensitiveCaseOption] = useState(false)
+  const [regularExpressionOption, setRegularExpressionOption] = useState(false)
+  const [disabledSensitiveCaseOption, setDisabledSensitiveCaseOption] = useState(false)
+  const [disabledRegularExpressionOption, setDisabledRegularExpressionOption] = useState(false)
 
   const { toast } = useToast()
   const {
     workspace: { projectData },
     searchQuery,
-    searchActions: { setSearchQuery, setSearchResults },
+    searchActions: { setSearchQuery, setSearchResults, setSensitiveCase },
   } = useOpenPLCStore()
 
   useEffect(() => {
@@ -164,15 +164,27 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       .filter((key) => checkedOptions[key])
       .map((key) => filterMap[key as keyof typeof filterMap])
 
+    const countOccurrences = (text: string, searchQuery: string, sensitiveCase: boolean) => {
+      const regex = new RegExp(searchQuery, sensitiveCase ? 'g' : 'gi')
+      const matches = text.match(regex)
+      return matches ? matches.length : 0
+    }
+
     const groupedPous = projectData.pous
       .filter((pou) => {
         const pouTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes(pou.type)
-        const pouMatches = pou.data.name.toLowerCase().includes(searchQuery.toLowerCase())
+        const pouMatches = sensitiveCaseOption
+          ? pou.data.name.includes(searchQuery)
+          : pou.data.name.toLowerCase().includes(searchQuery.toLowerCase())
         const variableMatches = pou.data.variables.some((variable) =>
-          variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
+          sensitiveCaseOption
+            ? variable.name.includes(searchQuery)
+            : variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
         )
         const bodyMatches = ['st', 'il'].includes(pou.data.language)
-          ? pou.data.body.toLowerCase().includes(searchQuery.toLowerCase())
+          ? sensitiveCaseOption
+            ? pou.data.body.includes(searchQuery)
+            : pou.data.body.toLowerCase().includes(searchQuery.toLowerCase())
           : false
 
         return pouTypeMatchesFilter && (pouMatches || variableMatches || bodyMatches)
@@ -191,7 +203,11 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
             pouType: pou.type,
             body: pou.data.body,
             variable: pou.data.variables
-              .filter((variable) => variable.name.toLowerCase().includes(searchQuery.toLowerCase()))
+              .filter((variable) =>
+                sensitiveCaseOption
+                  ? variable.name.includes(searchQuery)
+                  : variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
+              )
               .map((variable) => variable.name)
               .join(', '),
           })
@@ -213,7 +229,9 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
     const filteredDataTypes = projectData.dataTypes
       .filter((dataType) => {
         const dataTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes('data-type')
-        return dataTypeMatchesFilter && dataType.name.toLowerCase().includes(searchQuery.toLowerCase())
+        return dataTypeMatchesFilter && sensitiveCaseOption
+          ? dataType.name.includes(searchQuery)
+          : dataType.name.toLowerCase().includes(searchQuery.toLowerCase())
       })
       .map((dataType) => ({
         name: dataType.name,
@@ -222,12 +240,16 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
 
     const resourceGlobalVar = projectData.configuration.resource.globalVariables.filter((variable) => {
       const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
-      return resourceMatchesFilter && variable.name.toLowerCase().includes(searchQuery.toLowerCase())
+      return resourceMatchesFilter && sensitiveCaseOption
+        ? variable.name.includes(searchQuery)
+        : variable.name.toLowerCase().includes(searchQuery.toLowerCase())
     })
 
     const resourceTasks = projectData.configuration.resource.tasks.filter((task) => {
       const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
-      return resourceMatchesFilter && task.name.toLowerCase().includes(searchQuery.toLowerCase())
+      return resourceMatchesFilter && sensitiveCaseOption
+        ? task.name.includes(searchQuery)
+        : task.name.toLowerCase().includes(searchQuery.toLowerCase())
     })
 
     const resource = {
@@ -236,33 +258,19 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
     }
 
     const totalMatches =
-      (groupedPous.program
-        ? groupedPous.program.reduce((acc, pou) => {
-            const nameMatch = pou.name.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
-            const variableMatch = pou.variable.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
-            const bodyMatch =
-              ['st', 'il'].includes(pou.language) && pou.body.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
-            return acc + nameMatch + variableMatch + bodyMatch
+      Object.keys(groupedPous).reduce((acc, pouType) => {
+        return (
+          acc +
+          groupedPous[pouType].reduce((innerAcc, pou) => {
+            const nameMatches = countOccurrences(pou.name, searchQuery, sensitiveCaseOption)
+            const variableMatches = countOccurrences(pou.variable, searchQuery, sensitiveCaseOption)
+            const bodyMatches = ['st', 'il'].includes(pou.language)
+              ? countOccurrences(pou.body, searchQuery, sensitiveCaseOption)
+              : 0
+            return innerAcc + nameMatches + variableMatches + bodyMatches
           }, 0)
-        : 0) +
-      (groupedPous.function
-        ? groupedPous.function.reduce((acc, pou) => {
-            const nameMatch = pou.name.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
-            const variableMatch = pou.variable.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
-            const bodyMatch =
-              ['st', 'il'].includes(pou.language) && pou.body.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
-            return acc + nameMatch + variableMatch + bodyMatch
-          }, 0)
-        : 0) +
-      (groupedPous['function-block']
-        ? groupedPous['function-block'].reduce((acc, pou) => {
-            const nameMatch = pou.name.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
-            const variableMatch = pou.variable.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
-            const bodyMatch =
-              ['st', 'il'].includes(pou.language) && pou.body.toLowerCase().includes(searchQuery.toLowerCase()) ? 1 : 0
-            return acc + nameMatch + variableMatch + bodyMatch
-          }, 0)
-        : 0) +
+        )
+      }, 0) +
       filteredDataTypes.length +
       resourceGlobalVar.length +
       resourceTasks.length
@@ -321,22 +329,23 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
           <CheckboxOption
             id='case-sensitive'
             label='Case Sensitive'
-            checked={sensitiveCase}
+            checked={sensitiveCaseOption}
             onChange={() => {
-              setSensitiveCase(!sensitiveCase)
-              setDisabledRegularExpression(!disabledRegularExpression)
+              setsensitiveCaseOption(!sensitiveCaseOption)
+              setSensitiveCase(!sensitiveCaseOption)
+              setDisabledRegularExpressionOption(!disabledRegularExpressionOption)
             }}
-            disabled={disabledSensitiveCase}
+            disabled={disabledSensitiveCaseOption}
           />
           <CheckboxOption
             id='regular-expression'
             label='Regular Expression'
-            checked={regularExpression}
+            checked={regularExpressionOption}
             onChange={() => {
-              setRegularExpression(!regularExpression)
-              setDisabledSensitiveCase(!disabledSensitiveCase)
+              setRegularExpressionOption(!regularExpressionOption)
+              setDisabledSensitiveCaseOption(!disabledSensitiveCaseOption)
             }}
-            disabled={disabledRegularExpression}
+            disabled={disabledRegularExpressionOption}
           />
         </div>
       </div>

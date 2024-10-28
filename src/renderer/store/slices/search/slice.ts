@@ -6,6 +6,7 @@ import { SearchSlice } from './type'
 const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setState) => ({
   searchQuery: '',
   searchResults: [],
+  sensitiveCase: false,
   searchActions: {
     setSearchQuery: (searchQuery) => {
       setState(
@@ -18,6 +19,13 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
       setState(
         produce((state: SearchSlice) => {
           state.searchResults.push(searchResults)
+        }),
+      )
+    },
+    setSensitiveCase: (sensitiveCase) => {
+      setState(
+        produce((state: SearchSlice) => {
+          state.sensitiveCase = sensitiveCase
         }),
       )
     },

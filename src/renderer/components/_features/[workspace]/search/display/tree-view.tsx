@@ -308,26 +308,28 @@ const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: 
 }
 
 type IProjectSearchTreeVariableLeafProps = ComponentPropsWithoutRef<'li'> & {
-  label?: string
+  label?: string | null
   hasVariable?: boolean
 }
 
 const ProjectSearchTreeVariableLeaf = ({ label, hasVariable, ...res }: IProjectSearchTreeVariableLeafProps) => {
   return (
-    <li
-      className={cn(
-        'flex w-full cursor-pointer flex-row items-center py-1 pl-[50px] hover:bg-slate-200 dark:hover:bg-neutral-850',
-      )}
-      {...res}
-    >
-      {hasVariable ? <ZapIcon className='flex-shrink-0' /> : <div className='w-5' />}
-      <span
+    label && (
+      <li
         className={cn(
-          'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-medium text-neutral-1000 dark:text-white',
+          'flex w-full cursor-pointer flex-row items-center py-1 pl-[50px] hover:bg-slate-200 dark:hover:bg-neutral-850',
         )}
-        dangerouslySetInnerHTML={{ __html: label || '' }}
-      />
-    </li>
+        {...res}
+      >
+        {hasVariable ? <ZapIcon className='flex-shrink-0' /> : <div className='w-5' />}
+        <span
+          className={cn(
+            'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-medium text-neutral-1000 dark:text-white',
+          )}
+          dangerouslySetInnerHTML={{ __html: label || '' }}
+        />
+      </li>
+    )
   )
 }
 

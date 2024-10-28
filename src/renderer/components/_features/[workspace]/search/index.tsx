@@ -41,7 +41,7 @@ interface SearchProps {
 }
 
 const Search = ({ items }: SearchProps) => {
-  const { searchActions } = useOpenPLCStore()
+  const { searchActions, sensitiveCase } = useOpenPLCStore()
 
   const handleRemoveSearchResult = (index: number) => {
     searchActions.removeSearchResult(index)
@@ -70,9 +70,27 @@ const Search = ({ items }: SearchProps) => {
   }
 
   const extractSearchQueryBody = (body: string, searchQuery: string) => {
-    const regex = new RegExp(`(${searchQuery})`, 'gi')
-    const match = body.match(regex)
-    return match ? `<span class='text-brand-medium dark:text-brand-light'>${match[0]}</span>` : body
+    const regex = sensitiveCase ? new RegExp(`(${searchQuery})`, 'g') : new RegExp(`(${searchQuery})`, 'gi')
+    const matches = body.match(regex)
+
+    if (matches) {
+      const parts = body.split(regex)
+
+      const result = parts
+        .map((part) => {
+          const isMatch = matches.some((match) => match === part)
+          return isMatch ? `<span class='text-brand-medium dark:text-brand-light'>${part}</span>` : null
+        })
+        .join('<br>')
+        .replace(/<br><br>/g, '<br>')
+
+      const finalResult = result.startsWith('<br>') ? result.slice(4) : result
+
+      console.log(finalResult)
+      return finalResult
+    }
+
+    return null
   }
 
   return (
