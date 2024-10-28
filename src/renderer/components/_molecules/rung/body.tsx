@@ -12,6 +12,7 @@ import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
 import { BlockNode } from '../../_atoms/react-flow/custom-nodes/block'
 import { CoilNode } from '../../_atoms/react-flow/custom-nodes/coil'
 import { ContactNode } from '../../_atoms/react-flow/custom-nodes/contact'
+import { toast } from '../../_features/[app]/toast/use-toast'
 import BlockElement from '../../_features/[workspace]/editor/graphical/elements/block'
 import CoilElement from '../../_features/[workspace]/editor/graphical/elements/coil'
 import ContactElement from '../../_features/[workspace]/editor/graphical/elements/contact'
@@ -43,6 +44,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     projectActions: { deleteVariable },
   } = useOpenPLCStore()
 
+  const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
   const [rungLocal, setRungLocal] = useState<RungState>(rung)
@@ -151,13 +153,36 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }, [selectedNodes.length])
 
   const handleAddNode = (newNodeType: string = 'mockNode', blockType: string | undefined) => {
-    let pou = undefined
+    let pouLib = undefined
     if (blockType) {
       const [type, library, pouName] = blockType.split('/')
       if (type === 'system')
-        pou = libraries.system.find((lib) => lib.name === library)?.pous.find((p) => p.name === pouName)
+        pouLib = libraries.system.find((lib) => lib.name === library)?.pous.find((p) => p.name === pouName)
+
+      if (pouLib && pouRef && pouRef.type === 'function' && pouLib.type !== 'function') {
+        const nodes = removePlaceholderNodes(rungLocal.nodes)
+        setRungLocal((rung) => ({ ...rung, nodes }))
+        toast({
+          title: 'Can not add block',
+          description: `You can not add a ${pouLib.type} block to an function POU`,
+          variant: 'fail',
+        })
+        return
+      }
+
+      if (!pouLib) {
+        const nodes = removePlaceholderNodes(rungLocal.nodes)
+        setRungLocal((rung) => ({ ...rung, nodes }))
+        toast({
+          title: 'Can not add block',
+          description: `The block type ${blockType} does not exist in the library`,
+          variant: 'fail',
+        })
+        return
+      }
     }
-    const { nodes, edges } = addNewElement(rungLocal, { newElementType: newNodeType, blockType: pou })
+
+    const { nodes, edges } = addNewElement(rungLocal, { newElementType: newNodeType, blockType: pouLib })
     flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes })
     flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges })
   }
@@ -170,11 +195,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     const blockNodes = nodes.filter((node) => node.type === 'block')
     if (blockNodes.length > 0) {
       let variables: PLCVariable[] = []
-      pous.forEach((pou) => {
-        if (pou.data.name === editor.meta.name) {
-          variables = pou.data.variables as PLCVariable[]
-        }
-      })
+      if (pouRef) variables = pouRef.data.variables as PLCVariable[]
 
       blockNodes.forEach((blockNode) => {
         const variableIndex = variables.findIndex((variable) => variable.id === blockNode.id)
@@ -313,14 +334,14 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) return
 
       event.preventDefault()
-      const type = event.dataTransfer.getData('application/reactflow/ladder-blocks')
-      if (!type) {
+      const blockType = event.dataTransfer.getData('application/reactflow/ladder-blocks')
+      if (!blockType) {
         const nodes = removePlaceholderNodes(rungLocal.nodes)
         setRungLocal((rung) => ({ ...rung, nodes }))
         return
       }
       const library = event.dataTransfer.getData('application/library') ?? undefined
-      handleAddNode(type, library)
+      handleAddNode(blockType, library)
     },
     [rungLocal],
   )
