@@ -1,6 +1,7 @@
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { produce } from 'immer'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { create } from 'zustand'
 
@@ -52,7 +53,10 @@ const NewProjectStore = create<NewProjectStoreProps>((setState) => ({
 
 const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const navigate = useNavigate()
-
+  const {
+    workspaceActions: { setEditingState },
+    tabsActions: { clearTabs },
+  } = useOpenPLCStore()
   const resetFormData = NewProjectStore((state) => state.resetFormData)
   const [currentStep, setCurrentStep] = useState(1)
   const handleNext = () => {
@@ -64,18 +68,20 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   }
 
   const handleClose = () => {
-    resetFormData()
-    setCurrentStep(1)
     onClose()
   }
 
   const handleFinishForm = () => {
     onClose()
     navigate('/workspace')
-    setCurrentStep(1)
-    resetFormData()
   }
 
+  useEffect(() => {
+    setCurrentStep(1)
+    resetFormData()
+    setEditingState('unsaved')
+    clearTabs()
+  }, [])
   const renderStep = () => {
     switch (currentStep) {
       case 1:

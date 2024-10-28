@@ -19,19 +19,22 @@ const WorkspaceMainContent = (props: IWorkspaceMainContentProps) => {
   const { children, ...res } = props
 
   useEffect(() => {
-    const handleCreateTab = () => {
-      const tabToBeCreated: TabsProps = {
-        name: pous[0].data.name,
-        path: '/data/pous/program/main',
-        elementType: { type: 'program', language: pous[0].data.language },
+    // Bad code! - this is only for development purpose
+    if (pous.length !== 0) {
+      const handleCreateTab = () => {
+        const tabToBeCreated: TabsProps = {
+          name: pous[0].data.name,
+          path: '/data/pous/program/main',
+          elementType: { type: 'program', language: pous[0].data.language },
+        }
+        updateTabs(tabToBeCreated)
+        const model = CreateEditorObjectFromTab(tabToBeCreated)
+        addModel(model)
+        setEditor(model)
+        return
       }
-      updateTabs(tabToBeCreated)
-      const model = CreateEditorObjectFromTab(tabToBeCreated)
-      addModel(model)
-      setEditor(model)
-      return
+      handleCreateTab()
     }
-    handleCreateTab()
   }, [])
 
   return (
