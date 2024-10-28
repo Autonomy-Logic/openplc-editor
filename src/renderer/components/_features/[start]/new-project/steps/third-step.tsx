@@ -1,10 +1,8 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import { PouLanguageSources } from '@process:renderer/data'
-import { TabsProps } from '@process:renderer/store/slices/tabs'
 import { TimerIcon } from '@root/renderer/assets'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
 import { cn, ConvertToLangShortenedFormat } from '@root/utils'
 import { useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
@@ -38,18 +36,8 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
   const {
     projectActions: { setProject },
     workspaceActions: { setEditingState },
-    tabsActions: { updateTabs },
-    editorActions: { setEditor, addModel },
   } = useOpenPLCStore()
 
-  const _handleCreateTab = ({ elementType, name, path }: TabsProps) => {
-    const tabToBeCreated = { name, path, elementType }
-    updateTabs(tabToBeCreated)
-    const model = CreateEditorObjectFromTab(tabToBeCreated)
-    addModel(model)
-    setEditor(model)
-    return
-  }
   const handleFormSubmit: SubmitHandler<FormData> = async (data) => {
     const allData = {
       ...projectData,
@@ -58,11 +46,6 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
     }
 
     handleUpdateForm(allData)
-    const _propsToCreateEditorTab: TabsProps = {
-      name: allData.name,
-      elementType: { type: 'program', language: allData.language },
-      path: '/data/pous/program/main',
-    }
     try {
       const result = await window.bridge.createProjectFile({
         ...allData,
@@ -80,7 +63,6 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
           },
           data: result.data.content.data,
         })
-        // handleCreateTab(propsToCreateEditorTab)
         toast({
           title: 'The project was created successfully!',
           description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
@@ -103,7 +85,6 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
       onClose()
       onFinish()
     }
-
   }
 
   return (

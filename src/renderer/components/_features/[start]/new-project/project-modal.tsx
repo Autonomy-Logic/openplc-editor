@@ -70,10 +70,10 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   }
 
   const handleFinishForm = () => {
-    resetFormData()
-    setCurrentStep(1)
     onClose()
     navigate('/workspace')
+    setCurrentStep(1)
+    resetFormData()
   }
 
   const renderStep = () => {
