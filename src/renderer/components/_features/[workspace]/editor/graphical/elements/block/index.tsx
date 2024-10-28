@@ -18,6 +18,7 @@ import {
   // ModalTrigger,
 } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { PLCVariable } from '@root/types/PLC'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -39,6 +40,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
     project: {
       data: { pous },
     },
+    projectActions: { updateVariable },
     libraries,
   } = useOpenPLCStore()
   const maxInputs = 20
@@ -325,6 +327,20 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
         },
       })
     })
+
+    const variables = (pous.find((pou) => pou.data.name === editor.meta.name)?.data.variables as PLCVariable[]) || []
+    const variableIndex = variables.findIndex((variable) => variable.name === selectedNode.data.variable.name)
+    if (variableIndex !== -1) {
+      updateVariable({
+        data: {
+          id: newNode.id,
+        },
+        rowId: variableIndex,
+        scope: 'local',
+        associatedPou: editor.meta.name,
+      })
+    }
+
     handleCloseModal()
   }
 
