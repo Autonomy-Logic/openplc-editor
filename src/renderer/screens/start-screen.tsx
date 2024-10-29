@@ -23,7 +23,6 @@ const StartScreen = () => {
     flowActions: { addFlow },
   } = useOpenPLCStore()
 
-
   const retrieveOpenProjectData = async () => {
     try {
       const { success, data, error } = await window.bridge.openProject()
@@ -161,7 +160,7 @@ const StartScreen = () => {
             <MenuItem ghosted onClick={handleOpenProject}>
               <FolderIcon /> Open
             </MenuItem>
-            <MenuItem ghosted onClick={() => setIsModalOpen(true)}>
+            <MenuItem ghosted>
               <VideoIcon /> Tutorials
             </MenuItem>
           </MenuSection>
