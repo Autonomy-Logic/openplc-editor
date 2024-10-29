@@ -44,7 +44,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     _.debounce(() => {
       const updatedData = { ...data, baseType: selectedValue }
       updateDatatype(data.name, updatedData as PLCArrayDatatype)
-    }, 1000)()
+    }, 100)()
   }
 
   return (
@@ -109,6 +109,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         dimensions={data.dimensions}
         handleRowClick={(row) => setArrayTable({ selectedRow: row.id })}
         selectedRow={parseInt(arrayTable.selectedRow)}
+        baseType={data.baseType}
       />
     </div>
   )

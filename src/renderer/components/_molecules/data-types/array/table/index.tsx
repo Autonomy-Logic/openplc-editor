@@ -22,10 +22,11 @@ type DataTypeDimensionsTableProps = {
   name: string
   dimensions: PLCArrayDatatype['dimensions']
   selectedRow: number
+  baseType: string
   handleRowClick: (row: HTMLTableRowElement) => void
 }
 
-const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: DataTypeDimensionsTableProps) => {
+const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick, baseType }: DataTypeDimensionsTableProps) => {
   const [focusIndex, setFocusIndex] = useState<number | null>(null)
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
@@ -76,7 +77,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
   useEffect(() => {
     setFocusIndex(selectedRow)
-  }, [selectedRow])
+  }, [selectedRow, baseType])
 
   const handleInputChange = (value: string, index: number) => {
     setTableData((prevRows) => prevRows.map((row, i) => (i === index ? { ...row, dimension: value } : row)))
@@ -103,6 +104,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
             description: `The array value is invalid. Pattern: "LEFT_number..RIGHT_number" and RIGHT must be GREATER than LEFT. Example: 0..10.`,
             variant: 'fail',
           })
+          removeRow()
           return newRows;
         } else {
           const newRows = prevRows.map((row, index) => ({
@@ -118,11 +120,11 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
           return newRows;
         }
       }
+      setFocusIndex(null)
       return prevRows;
     });
   };
   
-
   const addNewRow = () => {
     setTableData((prevRows) => {
       const newRows = [...prevRows, { dimension: '' }]
