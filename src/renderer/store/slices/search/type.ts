@@ -37,6 +37,7 @@ const searchStateSchema = z.object({
   searchQuery: z.string(),
   searchResults: z.array(projectSchema),
   sensitiveCase: z.boolean(),
+  regularExpression: z.boolean(),
 });
 type SearchState = z.infer<typeof searchStateSchema>;
 
@@ -44,6 +45,7 @@ const searchActionsSchema = z.object({
   setSearchQuery: z.function().args(z.string()).returns(z.void()),
   setSearchResults: z.function().args(projectSchema).returns(z.void()),
   setSensitiveCase: z.function().args(z.boolean()).returns(z.void()),
+  setRegularExpression: z.function().args(z.boolean()).returns(z.void()),
   removeSearchResult: z.function().args(z.number()).returns(z.void()),
 });
 type SearchActions = z.infer<typeof searchActionsSchema>;

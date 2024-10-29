@@ -7,6 +7,7 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
   searchQuery: '',
   searchResults: [],
   sensitiveCase: false,
+  regularExpression: false,
   searchActions: {
     setSearchQuery: (searchQuery) => {
       setState(
@@ -26,6 +27,13 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
       setState(
         produce((state: SearchSlice) => {
           state.sensitiveCase = sensitiveCase
+        }),
+      )
+    },
+    setRegularExpression: (regularExpression) => {
+      setState(
+        produce((state: SearchSlice) => {
+          state.regularExpression = regularExpression
         }),
       )
     },
