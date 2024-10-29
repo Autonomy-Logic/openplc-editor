@@ -51,6 +51,9 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('project:save', dataToWrite),
   closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
   closeProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-project-accelerator', callback),
+  deletePouAccelerator:(callback:IpcRendererCallbacks) => ipcRenderer.on('workspace:delete-pou-accelerator', callback),
+  removeDeletePouListener: ()=> ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
+  removeCloseTabListener: ()=> ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
   /** -------------------------------------------------------------------------------------------- */
   // saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),

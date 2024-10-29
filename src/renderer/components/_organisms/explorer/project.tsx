@@ -22,7 +22,6 @@ const Project = () => {
     updateTabs(tabToBeCreated)
 
     const editor = getEditorFromEditors(tabToBeCreated.name)
-    console.log(editor)
     if (!editor) {
       const model = CreateEditorObjectFromTab(tabToBeCreated)
       addModel(model)

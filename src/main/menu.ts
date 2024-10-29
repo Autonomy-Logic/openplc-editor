@@ -75,10 +75,16 @@ export default class MenuBuilder {
 
   handleCloseTab() {
     this.mainWindow.webContents.send('workspace:close-tab-accelerator')
+    
   }
 
   handleCloseProject(){
     this.mainWindow.webContents.send('workspace:close-project-accelerator')
+  }
+
+  handleDeletePou(){
+    this.mainWindow.webContents.send('workspace:delete-pou-accelerator')
+   
   }
 
   setupDevelopmentEnvironment(): void {
@@ -369,7 +375,7 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.saveAs'),
             accelerator: 'Ctrl+Shift+S',
-            click: () => {},
+            click: () => this.handleDeletePou(),
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
@@ -494,8 +500,8 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:edit.submenu.delete'),
-            enabled: false,
-            role: 'delete',
+            accelerator:"delete",
+            click: () => this.handleDeletePou(),
           },
         ],
       },

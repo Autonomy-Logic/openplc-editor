@@ -10,7 +10,10 @@ const Tabs = () => {
   const {
     tabs,
     editor,
-    tabsActions: { sortTabs },
+    tabsActions: { sortTabs},
+    projectActions: {
+      deletePou
+    },
     editorActions: { setEditor, getEditorFromEditors, removeModel },
   } = useOpenPLCStore()
   const [selectedTab, setSelectedTab] = useState(editor.meta.name)
@@ -42,6 +45,7 @@ const Tabs = () => {
 
   const handleRemoveTab = (tabToRemove: string) => {
     const draftTabs = tabs.filter((t: TabsProps) => t.name !== tabToRemove)
+   
     removeModel(tabToRemove)
 
     const candidate = draftTabs.slice(-1)[0]
@@ -60,6 +64,12 @@ const Tabs = () => {
     }
     setEditor(editor)
     sortTabs(draftTabs)
+   
+  }
+
+  const handleDeletePou =(pouName: string) => {
+    handleRemoveTab(pouName)
+    deletePou(pouName)
   }
 
   const handleDragStart = ({ tab, idx }: { tab: TabsProps; idx: number }) => {
@@ -73,9 +83,21 @@ const Tabs = () => {
 
   useEffect(() => {
     setSelectedTab(editor.meta.name)
-    window.bridge.closeTabAccelerator((_event) => handleRemoveTab(editor.meta.name))
+    
   }, [editor.meta.name])
-
+  
+  
+  
+  useEffect(() => {
+    window.bridge.closeTabAccelerator((_event) => handleRemoveTab(editor.meta.name))
+    window.bridge.deletePouAccelerator((_event) => handleDeletePou(editor.meta.name))
+    return () => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      window.bridge.removeCloseTabListener(); 
+       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      window.bridge.removeDeletePouListener();
+    };
+  });
 
   return (
     <TabList>

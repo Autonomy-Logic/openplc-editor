@@ -29,8 +29,11 @@ const WorkspaceScreen = () => {
     workspace: { editingState },
     project,
     editor,
-    workspaceActions: { setEditingState },
+    editorActions:{clearEditor},
+    workspaceActions: { setEditingState,setRecents },
+    tabsActions: { clearTabs },
   } = useOpenPLCStore()
+  
   useEffect(() => {
     const handleSaveProject = async () => {
       const projectData = PLCProjectSchema.safeParse(project)
@@ -107,8 +110,17 @@ const WorkspaceScreen = () => {
   }, [collapseAll])
 
   useEffect(()=>{
-    window.bridge.closeProjectAccelerator((_event)=> navigate('/'))
+    const handleCloseProject=()=>{
+  
+      window.bridge.closeProjectAccelerator((_event)=> navigate('/'))
+      clearEditor()
+      clearTabs()
+      setEditingState('unsaved')
+      setRecents([])
+    }
+    handleCloseProject()
   },[])
+
 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
