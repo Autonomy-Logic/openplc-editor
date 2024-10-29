@@ -91,7 +91,10 @@ const variableLocationValidation = (variableLocation: string, variableType: stri
     case 'UDINT':
     case 'ULINT':
       return /^%[QI]W\d$/.test(variableLocation)
-    case 'MEMORY':
+    case 'BYTE':
+    case 'WORD':
+    case 'DWORD':
+    case 'LWORD':
       return /^%M[WDL]\d$/.test(variableLocation)
     default:
       return false
@@ -111,7 +114,10 @@ const variableLocationValidationErrorMessage = (variableType: string) => {
     case 'UDINT':
     case 'ULINT':
       return `The location must start with the prefix "%QW" or "%IW", followed by a number.`
-    case 'MEMORY':
+    case 'BYTE':
+    case 'WORD':
+    case 'DWORD':
+    case 'LWORD':
       return `The location must start with the prefix "%MW", "%MD" or "%ML", followed by a number.`
     default:
       return ''
