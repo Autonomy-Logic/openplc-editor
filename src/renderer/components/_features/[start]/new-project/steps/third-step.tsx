@@ -37,6 +37,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
     projectActions: { setProject },
     workspaceActions: { setEditingState },
     tabsActions: { clearTabs },
+    editorActions: { clearEditor }
   } = useOpenPLCStore()
 
   const handleFormSubmit: SubmitHandler<FormData> = async (data) => {
@@ -55,6 +56,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
 
       if (result.data) {
         setEditingState('unsaved')
+        clearEditor()
         clearTabs()
         setProject({
           meta: {

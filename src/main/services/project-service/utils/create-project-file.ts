@@ -9,6 +9,11 @@ type CreateProjectFileProps = {
   path: string
 }
 const CreateProjectFile = (dataToCreateProjectFile: CreateProjectFileProps) => {
+  const bodyData =
+    dataToCreateProjectFile.language === 'ld'
+      ? { language: dataToCreateProjectFile.language, value: { name: dataToCreateProjectFile.name, rungs: [] } }
+      : { language: dataToCreateProjectFile.language, value: 'This is the body' }
+
   const _projectJSONStructure: PLCProject = {
     meta: {
       name: dataToCreateProjectFile.name,
@@ -23,11 +28,7 @@ const CreateProjectFile = (dataToCreateProjectFile: CreateProjectFileProps) => {
             language: dataToCreateProjectFile.language,
             variables: [],
             documentation: '',
-            body: {
-              // Bad code!!!!!
-              language: dataToCreateProjectFile.language as 'il',
-              value: '',
-            },
+            body: bodyData,
           },
         },
       ],
@@ -57,7 +58,11 @@ const CreateProjectFile = (dataToCreateProjectFile: CreateProjectFileProps) => {
     },
   }
 
-  const success = CreateJSONFile(dataToCreateProjectFile.path, JSON.stringify(_projectJSONStructure, null, 2), 'project')
+  const success = CreateJSONFile(
+    dataToCreateProjectFile.path,
+    JSON.stringify(_projectJSONStructure, null, 2),
+    'project',
+  )
 
   if (!success) {
     return {

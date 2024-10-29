@@ -16,10 +16,12 @@ export default function Activitybar() {
   const {
     workspaceActions: { setEditingState },
     tabsActions: { clearTabs },
+    editorActions: { clearEditor }
   } = useOpenPLCStore()
   const navigate = useNavigate()
   const returnStartScreen = () => {
     setEditingState('unsaved')
+    clearEditor()
     clearTabs()
     navigate('/')
   }
