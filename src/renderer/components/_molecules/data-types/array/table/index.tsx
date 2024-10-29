@@ -22,11 +22,10 @@ type DataTypeDimensionsTableProps = {
   name: string
   dimensions: PLCArrayDatatype['dimensions']
   selectedRow: number
-  baseType: string
   handleRowClick: (row: HTMLTableRowElement) => void
 }
 
-const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick, baseType }: DataTypeDimensionsTableProps) => {
+const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: DataTypeDimensionsTableProps) => {
   const [focusIndex, setFocusIndex] = useState<number | null>(null)
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
@@ -46,6 +45,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick, baseTy
         enableResizing: true,
         cell: (cellProps) => (
           <DimensionCell
+            key={cellProps.row.id}
             onInputChange={(value) => handleInputChange(value, cellProps.row.index)}
             onBlur={() => handleBlur(cellProps.row.index)}
             id={`dimension-input-${cellProps.row.index}`}
@@ -53,13 +53,12 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick, baseTy
             name={name}
             dimensions={dimensions}
             selectedRow={selectedRow}
-            handleRowClick={handleRowClick}
-            {...cellProps}
-          />
+             {...cellProps}
+        />
         ),
       }),
     ],
-    [focusIndex, handleRowClick],
+    [focusIndex, dimensions, name, selectedRow],
   )
 
   useEffect(() => {
@@ -77,7 +76,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick, baseTy
 
   useEffect(() => {
     setFocusIndex(selectedRow)
-  }, [selectedRow, baseType])
+  }, [selectedRow])
 
   const handleInputChange = (value: string, index: number) => {
     setTableData((prevRows) => prevRows.map((row, i) => (i === index ? { ...row, dimension: value } : row)))

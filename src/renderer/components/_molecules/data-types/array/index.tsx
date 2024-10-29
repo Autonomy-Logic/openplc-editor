@@ -109,7 +109,6 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         dimensions={data.dimensions}
         handleRowClick={(row) => setArrayTable({ selectedRow: row.id })}
         selectedRow={parseInt(arrayTable.selectedRow)}
-        baseType={data.baseType}
       />
     </div>
   )
