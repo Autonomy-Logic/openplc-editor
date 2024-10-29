@@ -63,10 +63,74 @@ const checkIfLocationExists = (variables: PLCVariable[], location: string) => {
 }
 
 /**
+ * This is a validation to check if the value of the location is valid.
+ *
+ * The validation have to obey this rules:
+ * 1. For BOOL type:
+ *    - The location must start with the prefix "%QX" or "%IX"
+ *    - Following the prefix, the location must have a integer number starting with 0
+ *    - Following the number, the location must have a dot "."
+ *    - Following the dot, the location must have a integer number starting with 0 and ending with 7
+ * 2. For INT type:
+ *    - The location must start with the prefix "%QW" or "%IW"
+ *    - Following the prefix, the location must have a integer number starting with 0
+ * 3. For MEMORY type:
+ *    - The location must start with the prefix "%MW", "%MD" or "%ML"
+ *    - Following the prefix, the location must have a integer number starting with 0
+ */
+const variableLocationValidation = (variableLocation: string, variableType: string) => {
+  switch (variableType.toUpperCase()) {
+    case 'BOOL':
+      return /^%[QI]X\d\.\d$/.test(variableLocation)
+    case 'SINT':
+    case 'INT':
+    case 'DINT':
+    case 'LINT':
+    case 'USINT':
+    case 'UINT':
+    case 'UDINT':
+    case 'ULINT':
+      return /^%[QI]W\d$/.test(variableLocation)
+    case 'MEMORY':
+      return /^%M[WDL]\d$/.test(variableLocation)
+    default:
+      return false
+  }
+}
+
+const variableLocationValidationErrorMessage = (variableType: string) => {
+  switch (variableType.toUpperCase()) {
+    case 'BOOL':
+      return `The location must start with the prefix "%QX" or "%IX", followed by a number and a dot "." and then a number from 0 to 7.`
+    case 'SINT':
+    case 'INT':
+    case 'DINT':
+    case 'LINT':
+    case 'USINT':
+    case 'UINT':
+    case 'UDINT':
+    case 'ULINT':
+      return `The location must start with the prefix "%QW" or "%IW", followed by a number.`
+    case 'MEMORY':
+      return `The location must start with the prefix "%MW", "%MD" or "%ML", followed by a number.`
+    default:
+      return ''
+  }
+}
+
+/**
  * This is a validation to check if it is needed changing the name of a variable at creation.
  * If the variable existis change the variable name.
  **/
-const createVariableValidation = (variables: PLCVariable[], variableName: string) => {
+const createVariableValidation = (
+  variables: PLCVariable[],
+  variable: PLCVariable,
+): { name: string; location: string } => {
+  const { name: variableName, location: variableLocation } = variable
+  const response = { name: variableName, location: variableLocation }
+
+  console.log('variableName', variableName, '  variableLocation', variableLocation)
+
   if (checkIfVariableExists(variables, variableName)) {
     const regex = /_\d+$/
     const filteredVariables = variables.filter((variable: PLCVariable) =>
@@ -91,10 +155,71 @@ const createVariableValidation = (variables: PLCVariable[], variableName: string
         number = currentNumber
       }
     }
-    const newVariableName = `${variableName.replace(regex, '')}_${number + 1}`
-    return newVariableName
+    response.name = `${variableName.replace(regex, '')}_${number + 1}`
   }
-  return variableName
+
+  if (checkIfLocationExists(variables, variableLocation)) {
+    console.log('variableLocation', variableLocation)
+
+    const variableFound = variables.find((variable) => variable.location === variableLocation)
+    if (!variableFound) return response
+
+    switch (variable.type.value.toUpperCase()) {
+      case 'BOOL': {
+        const stringWithNoPrefix = variableFound.location.replace('%QX', '').replace('%IX', '')
+        const position = parseInt(stringWithNoPrefix.split('.')[0])
+        const dotPosition = parseInt(stringWithNoPrefix.split('.')[1])
+
+        if (variableFound?.location.startsWith('%QX')) {
+          response.location = `%QX${dotPosition === 7 ? position + 1 : position}.${dotPosition === 7 ? 0 : dotPosition + 1}`
+        } else {
+          response.location = `%IX${dotPosition === 7 ? position + 1 : position}.${dotPosition === 7 ? 0 : dotPosition + 1}`
+        }
+        break
+      }
+
+      case 'SINT':
+      case 'INT':
+      case 'DINT':
+      case 'LINT':
+      case 'USINT':
+      case 'UINT':
+      case 'UDINT':
+      case 'ULINT': {
+        console.log('INT')
+        const stringWithNoPrefix = variableFound.location.replace('%QW', '').replace('%IW', '')
+        const position = parseInt(stringWithNoPrefix)
+
+        if (variableFound?.location.startsWith('%QW')) {
+          response.location = `%QW${position + 1}`
+        } else {
+          response.location = `%IW${position + 1}`
+        }
+        break
+      }
+
+      case 'BYTE':
+      case 'WORD':
+      case 'DWORD':
+      case 'LWORD': {
+        const stringWithNoPrefix = variableFound.location.replace('%MW', '').replace('%MD', '').replace('%ML', '')
+        const position = parseInt(stringWithNoPrefix)
+
+        if (variableFound?.location.startsWith('%MW')) {
+          response.location = `%MW${position + 1}`
+        } else if (variableFound?.location.startsWith('%MD')) {
+          response.location = `%MD${position + 1}`
+        } else {
+          response.location = `%ML${position + 1}`
+        }
+        break
+      }
+
+      default:
+        break
+    }
+  }
+  return response
 }
 
 /**
@@ -102,7 +227,11 @@ const createVariableValidation = (variables: PLCVariable[], variableName: string
  * If the variable name is invalid, create a response.
  * If the variable name already exists, create or change a response.
  **/
-const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Partial<PLCVariable>) => {
+const updateVariableValidation = (
+  variables: PLCVariable[],
+  dataToBeUpdated: Partial<PLCVariable>,
+  variableToUpdate: PLCVariable,
+) => {
   let response: ProjectResponse = { ok: true }
 
   if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
@@ -149,6 +278,20 @@ const updateVariableValidation = (variables: PLCVariable[], dataToBeUpdated: Par
       }
       return response
     }
+
+    if (!variableLocationValidation(location, variableToUpdate.type.value)) {
+      console.error(`Location "${location}" is invalid`)
+      response = {
+        ok: false,
+        title: 'Location is invalid.',
+        message: `Please make sure that the location is valid.\n${variableLocationValidationErrorMessage(variableToUpdate.type.value)}`,
+      }
+      return response
+    }
+  }
+
+  if (dataToBeUpdated.type) {
+    response.data = { location: '' }
   }
 
   return response

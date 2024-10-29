@@ -136,10 +136,10 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 response = { ok: false, title: 'Pou not found' }
                 break
               }
-              variableToBeCreated.data.name = createVariableValidation(
-                pou.data.variables,
-                variableToBeCreated.data.name,
-              )
+              variableToBeCreated.data = {
+                ...variableToBeCreated.data,
+                ...createVariableValidation(pou.data.variables, variableToBeCreated.data),
+              }
               if (variableToBeCreated.rowToInsert !== undefined) {
                 pou.data.variables.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
                 break
@@ -196,14 +196,25 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 response = { ok: false, title: 'Pou not found' }
                 break
               }
-              const validationResponse = updateVariableValidation(pou.data.variables, dataToBeUpdated.data)
+
+              const index = dataToBeUpdated.rowId
+              if (index === -1) response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+
+              const variableToUpdate = pou.data.variables[index]
+              const validationResponse = updateVariableValidation(
+                pou.data.variables,
+                dataToBeUpdated.data,
+                variableToUpdate,
+              )
               if (!validationResponse.ok) {
                 response = validationResponse
                 break
               }
-              const index = dataToBeUpdated.rowId
-              if (index === -1) response = { ok: false, title: 'Variable not found', message: 'Internal error' }
-              pou.data.variables[index] = { ...pou.data.variables[index], ...dataToBeUpdated.data }
+              pou.data.variables[index] = {
+                ...pou.data.variables[index],
+                ...dataToBeUpdated.data,
+                ...(validationResponse.data ? validationResponse.data : {}),
+              }
               response.data = pou.data.variables[index]
               break
             }

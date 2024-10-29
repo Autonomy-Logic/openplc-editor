@@ -133,7 +133,6 @@ const VariablesEditor = () => {
           ...variable,
           id: '',
           type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
-          location: '',
         },
       })
       updateModelVariables({
@@ -149,7 +148,6 @@ const VariablesEditor = () => {
         ...variable,
         id: '',
         type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
-        location: '',
       },
       rowToInsert: selectedRow + 1,
     })
