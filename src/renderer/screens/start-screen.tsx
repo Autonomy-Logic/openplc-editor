@@ -1,5 +1,5 @@
 import { IProjectServiceResponse } from '@root/main/services/project-service'
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'
@@ -53,7 +53,7 @@ const StartScreen = () => {
     }
   }
 
-  const handleCreateProject = () => {
+  const _handleCreateProject = () => {
     void retrieveNewProjectData()
   }
 
