@@ -60,7 +60,11 @@ const SelectableTypeCell = ({
           })}
         >
           <span className='line-clamp-1 font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-            {cellValue === null ? '' : definition === 'array' ? cellValue : _.upperCase(cellValue as unknown as string)}
+            {cellValue === null
+              ? ''
+              : definition === 'array' || definition === 'derived'
+                ? cellValue
+                : _.upperCase(cellValue as unknown as string)}
           </span>
         </div>
       </PrimitiveDropdown.Trigger>
