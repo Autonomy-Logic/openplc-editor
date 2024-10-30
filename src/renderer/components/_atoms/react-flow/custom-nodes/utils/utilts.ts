@@ -2,6 +2,8 @@ import type { EditorModel, FlowType } from '@root/renderer/store/slices'
 import type { PLCPou } from '@root/types/PLC/open-plc'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
 
+import { BasicNodeData } from './types';
+
 export const getPouVariablesRungNodeAndEdges = (
   editor: EditorModel,
   pous: PLCPou[],
@@ -25,7 +27,7 @@ export const getPouVariablesRungNodeAndEdges = (
   const variables: PLCVariable[] = pou?.data.variables as PLCVariable[]
   const variable = variables.find((variable) =>
     node?.type === 'block'
-      ? variable.id === node.id
+      ? (variable.id === (node.data as BasicNodeData).variable.id)
       : variable.name === data.variableName && variable.type.definition !== 'derived',
   )
 

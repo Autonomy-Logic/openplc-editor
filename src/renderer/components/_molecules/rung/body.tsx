@@ -12,6 +12,7 @@ import { customNodeTypes } from '../../_atoms/react-flow/custom-nodes'
 import { BlockNode } from '../../_atoms/react-flow/custom-nodes/block'
 import { CoilNode } from '../../_atoms/react-flow/custom-nodes/coil'
 import { ContactNode } from '../../_atoms/react-flow/custom-nodes/contact'
+import { BasicNodeData } from '../../_atoms/react-flow/custom-nodes/utils/types'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import BlockElement from '../../_features/[workspace]/editor/graphical/elements/block'
 import CoilElement from '../../_features/[workspace]/editor/graphical/elements/coil'
@@ -25,7 +26,7 @@ import {
   removePlaceholderNodes,
   renderPlaceholderNodes,
   searchNearestPlaceholder,
-  updateDiagramElementsPosition,
+  // updateDiagramElementsPosition,
 } from './ladder-utils/elements'
 
 type RungBodyProps = {
@@ -106,10 +107,10 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    */
   useEffect(() => {
     console.log('\n\nRung body updated', rung, '\n\n')
-    const result = updateDiagramElementsPosition(rung, rung.defaultBounds as [number, number])
-    const updatedPositionRung = { ...rung, nodes: result }
-    setRungLocal(updatedPositionRung)
-    udpateFlowPanelExtent(updatedPositionRung)
+    // const result = updateDiagramElementsPosition(rung, rung.defaultBounds as [number, number])
+    // const updatedPositionRung = { ...rung, nodes: result }
+    setRungLocal(rung)
+    udpateFlowPanelExtent(rung)
   }, [rung.nodes])
 
   /**
@@ -159,16 +160,16 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       if (type === 'system')
         pouLib = libraries.system.find((lib) => lib.name === library)?.pous.find((p) => p.name === pouName)
 
-      if (pouLib && pouRef && pouRef.type === 'function' && pouLib.type !== 'function') {
-        const nodes = removePlaceholderNodes(rungLocal.nodes)
-        setRungLocal((rung) => ({ ...rung, nodes }))
-        toast({
-          title: 'Can not add block',
-          description: `You can not add a ${pouLib.type} block to an function POU`,
-          variant: 'fail',
-        })
-        return
-      }
+      // if (pouLib && pouRef && pouRef.type === 'function' && pouLib.type !== 'function') {
+      //   const nodes = removePlaceholderNodes(rungLocal.nodes)
+      //   setRungLocal((rung) => ({ ...rung, nodes }))
+      //   toast({
+      //     title: 'Can not add block',
+      //     description: `You can not add a ${pouLib.type} block to an function POU`,
+      //     variant: 'fail',
+      //   })
+      //   return
+      // }
 
       if (!pouLib) {
         const nodes = removePlaceholderNodes(rungLocal.nodes)
@@ -198,7 +199,9 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       if (pouRef) variables = pouRef.data.variables as PLCVariable[]
 
       blockNodes.forEach((blockNode) => {
-        const variableIndex = variables.findIndex((variable) => variable.id === blockNode.id)
+        const variableIndex = variables.findIndex(
+          (variable) => variable.id === (blockNode.data as BasicNodeData).variable.id,
+        )
         if (variableIndex !== -1)
           deleteVariable({
             rowId: variableIndex,
@@ -271,7 +274,11 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onDragEnterViewport = useCallback<DragEventHandler>(
     (event) => {
-      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) return
+      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) {
+        const nodes = removePlaceholderNodes(rungLocal.nodes)
+        setRungLocal((rung) => ({ ...rung, nodes }))
+        return
+      }
 
       event.preventDefault()
       const { relatedTarget } = event
@@ -285,7 +292,11 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onDragLeaveViewport = useCallback<DragEventHandler>(
     (event) => {
-      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) return
+      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) {
+        const nodes = removePlaceholderNodes(rungLocal.nodes)
+        setRungLocal((rung) => ({ ...rung, nodes }))
+        return
+      }
 
       const { relatedTarget } = event
       if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
@@ -297,7 +308,11 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onDragOver = useCallback<DragEventHandler>(
     (event) => {
-      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) return
+      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) {
+        const nodes = removePlaceholderNodes(rungLocal.nodes)
+        setRungLocal((rung) => ({ ...rung, nodes }))
+        return
+      }
 
       event.preventDefault()
       event.dataTransfer.dropEffect = 'move'
@@ -331,7 +346,11 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onDrop = useCallback<DragEventHandler>(
     (event) => {
-      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) return
+      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) {
+        const nodes = removePlaceholderNodes(rungLocal.nodes)
+        setRungLocal((rung) => ({ ...rung, nodes }))
+        return
+      }
 
       event.preventDefault()
       const blockType = event.dataTransfer.getData('application/reactflow/ladder-blocks')

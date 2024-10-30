@@ -145,10 +145,20 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
-    const { rung, node, variables, edges } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { pou, rung, node, variables, edges } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: nodeId ?? '',
     })
-    if (!rung || !node) return
+    if (!pou || !rung || !node) return
+
+    if (libraryBlock && pou.type === 'function' && (libraryBlock as BlockVariant).type !== 'function') {
+      setWrongName(true)
+      toast({
+        title: 'Can not add block',
+        description: `You can not add a ${(libraryBlock as BlockVariant).type} block to an function POU`,
+        variant: 'fail',
+      })
+      return
+    }
 
     let variable = variables.selected
     const variableIndex = variable ? variables.all.indexOf(variable) : -1
@@ -249,20 +259,6 @@ export const BlockNodeElement = <T extends object>({
       })
     })
 
-    /**
-     * Update the variable ID in the table of variables to link with the new block node
-     */
-    if (variable) {
-      const res = updateVariable({
-        data: {
-          id: newBlockNode.id,
-        },
-        rowId: variableIndex,
-        scope: 'local',
-        associatedPou: editor.meta.name,
-      })
-      variable = res.data as PLCVariable | undefined
-    }
     setWrongName(false)
   }
 
@@ -400,7 +396,6 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     let variable: PLCVariable | undefined = variables.selected
     if (variable) {
       if (variable.name === blockVariableValue) return
-
       const res = updateVariable({
         data: {
           ...variable,
@@ -427,7 +422,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     } else {
       const res = createVariable({
         data: {
-          id: node.id,
+          id: uuidv4(),
           name: blockVariableValue,
           type: {
             definition: 'derived',
