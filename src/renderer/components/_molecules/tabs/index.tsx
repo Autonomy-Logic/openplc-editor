@@ -44,28 +44,6 @@ const Tabs = () => {
     setEditor(candidate)
   }
 
-  // const handleRemoveTab = (tabToRemove: string) => {
-  //   const draftTabs = tabs.filter((t: TabsProps) => t.name !== tabToRemove)
-   
-  //   removeModel(tabToRemove)
-
-  //   const candidate = draftTabs.slice(-1)[0]
-  //   if (!candidate) {
-  //     sortTabs(draftTabs)
-  //     setEditor({ type: 'available', meta: { name: '' } })
-  //     return
-  //   }
-  //   setSelectedTab(candidate.name)
-
-  //   const editor = getEditorFromEditors(candidate.name)
-  //   if (!editor) {
-  //     setEditor(CreateEditorObjectFromTab(candidate))
-  //     sortTabs(draftTabs)
-  //     return
-  //   }
-  //   setEditor(editor)
-  //   sortTabs(draftTabs)
-  // }
 
   const handleDeletePou =(pouName: string) => {
     handleRemoveTab(pouName)
