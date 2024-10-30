@@ -100,4 +100,5 @@ export const parseProjectToXML = (project: ProjectState) => {
       console.error('Error saving project:', err)
       console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
     })
+  void window.bridge.compileSTProgram(project.meta.path.replace('data.json', 'plc.xml'))
 }

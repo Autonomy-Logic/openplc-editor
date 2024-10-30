@@ -83,5 +83,10 @@ const rendererProcessBridge = {
    */
   writeXMLFile: (path: string, data: string, fileName: string) =>
     ipcRenderer.invoke('compiler:write-xml-file', { path, data, fileName }),
+  /**
+   * This is a mock implementation to be used as a presentation.
+   * !! Do not use this on production !!
+   */
+  compileSTProgram: (pathToXMLFile: string) => ipcRenderer.invoke('compiler:compile-st-program', pathToXMLFile),
 }
 export default rendererProcessBridge
