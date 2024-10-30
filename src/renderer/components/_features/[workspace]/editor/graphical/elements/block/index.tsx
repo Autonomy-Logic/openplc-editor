@@ -32,7 +32,12 @@ type BlockElementProps<T> = {
   selectedNode: BlockNode<T>
 }
 
-const searchLibrary = (libraries: LibraryState['libraries'], editor: EditorModel, pous: PLCPou[], name: string) => {
+const searchLibraryByPouName = (
+  libraries: LibraryState['libraries'],
+  editor: EditorModel,
+  pous: PLCPou[],
+  pouName: string,
+) => {
   let libraryBlock: unknown = undefined
   libraries.system
     .filter((library) =>
@@ -42,7 +47,7 @@ const searchLibrary = (libraries: LibraryState['libraries'], editor: EditorModel
     )
     .find((block) =>
       block.pous.find((pou) => {
-        if (pou.name === name) {
+        if (pou.name === pouName) {
           libraryBlock = pou
           return true
         }
@@ -95,7 +100,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
   useEffect(() => {
     const [type, selectedLibrary, selectedPou] = selectedFileKey?.split('/') || []
     if (type === 'system' && selectedLibrary && selectedPou) {
-      const library = searchLibrary(libraries, editor, pous, selectedLibrary) as LibraryState['libraries']['system'][0]
+      const library = libraries.system.find((library) => library.name === selectedLibrary)
       const pou = library?.pous.find((pou) => pou.name === selectedPou) as T
       setSelectedFile(pou)
       return
@@ -141,7 +146,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
   }
 
   const handleNameInputSubmit = () => {
-    const libraryBlock = searchLibrary(libraries, editor, pous, formState.name)
+    const libraryBlock = searchLibraryByPouName(libraries, editor, pous, formState.name)
     if (libraryBlock) {
       setSelectedFile(libraryBlock as T)
     }
@@ -229,7 +234,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
 
   const handleInputsSubmit = (e: React.FocusEvent<HTMLInputElement>) => {
     const { value: EventValue } = e.target
-    const libraryBlock = searchLibrary(libraries, editor, pous, formState.name)
+    const libraryBlock = searchLibraryByPouName(libraries, editor, pous, formState.name)
 
     const value = Math.max(
       libraryBlock
