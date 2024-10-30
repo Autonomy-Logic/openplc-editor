@@ -106,9 +106,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    console.log('\n\nRung body updated', rung, '\n\n')
-    // const result = updateDiagramElementsPosition(rung, rung.defaultBounds as [number, number])
-    // const updatedPositionRung = { ...rung, nodes: result }
     setRungLocal(rung)
     udpateFlowPanelExtent(rung)
   }, [rung.nodes])

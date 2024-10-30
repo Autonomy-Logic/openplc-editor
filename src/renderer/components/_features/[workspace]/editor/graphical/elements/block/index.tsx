@@ -6,7 +6,6 @@ import {
   BlockNodeElement,
   BlockVariant,
   buildBlockNode,
-  DEFAULT_BLOCK_TYPE,
   getBlockSize,
 } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
 import { getPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils'
@@ -18,7 +17,9 @@ import {
   // ModalTrigger,
 } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { Dispatch, SetStateAction, useEffect, useState } from 'react'
+import { EditorModel, LibraryState } from '@root/renderer/store/slices'
+import { PLCPou } from '@root/types/PLC/open-plc'
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import ArrowButtonGroup from '../arrow-button-group'
@@ -29,6 +30,26 @@ type BlockElementProps<T> = {
   onOpenChange: Dispatch<SetStateAction<boolean>>
   onClose?: () => void
   selectedNode: BlockNode<T>
+}
+
+const searchLibrary = (libraries: LibraryState['libraries'], editor: EditorModel, pous: PLCPou[], name: string) => {
+  let libraryBlock: unknown = undefined
+  libraries.system
+    .filter((library) =>
+      pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
+        ? library.pous.some((pou) => pou.type === 'function')
+        : library,
+    )
+    .find((block) =>
+      block.pous.find((pou) => {
+        if (pou.name === name) {
+          libraryBlock = pou
+          return true
+        }
+        return
+      }),
+    ) || undefined
+  return libraryBlock
 }
 
 const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selectedNode }: BlockElementProps<T>) => {
@@ -45,6 +66,9 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
   } = useOpenPLCStore()
   const maxInputs = 20
 
+  const inputNameRef = useRef<HTMLInputElement>(null)
+  const inputInputsRef = useRef<HTMLInputElement>(null)
+
   const [node, setNode] = useState<BlockNode<object>>(selectedNode)
   const blockVariant = node.data.variant as BlockVariant
 
@@ -56,7 +80,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
     executionOrder: string
     executionControl: boolean
   }>({
-    name: blockVariant?.name || DEFAULT_BLOCK_TYPE.name,
+    name: blockVariant.name === '???' ? '' : blockVariant.name,
     inputs:
       blockVariant?.variables
         .filter((variable) => variable.class === 'input' && variable.name !== 'EN')
@@ -71,7 +95,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
   useEffect(() => {
     const [type, selectedLibrary, selectedPou] = selectedFileKey?.split('/') || []
     if (type === 'system' && selectedLibrary && selectedPou) {
-      const library = libraries.system.find((library) => library.name === selectedLibrary)
+      const library = searchLibrary(libraries, editor, pous, selectedLibrary) as LibraryState['libraries']['system'][0]
       const pou = library?.pous.find((pou) => pou.name === selectedPou) as T
       setSelectedFile(pou)
       return
@@ -101,7 +125,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       const newNodeDataVariant = newNode.data.variant as BlockVariant
       const formName: string = newNodeDataVariant.name
       const formInputs: string = newNodeDataVariant.variables
-        .filter((variable) => variable.class === 'input')
+        .filter((variable) => variable.class === 'input' && variable.name !== 'EN')
         .length.toString()
       setFormState((prevState) => ({ ...prevState, name: formName, inputs: formInputs }))
     }
@@ -109,20 +133,15 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target
-    setFormState((prevState) => ({ ...prevState, [id]: value }))
+    let formValue = value
+    if (id === 'name') {
+      formValue = value.toUpperCase()
+    }
+    setFormState((prevState) => ({ ...prevState, [id]: formValue }))
   }
 
   const handleNameInputSubmit = () => {
-    let libraryBlock: unknown = undefined
-    libraries.system.find((block) =>
-      block.pous.find((pou) => {
-        if (pou.name === formState.name) {
-          libraryBlock = pou
-          return true
-        }
-        return
-      }),
-    ) || undefined
+    const libraryBlock = searchLibrary(libraries, editor, pous, formState.name)
     if (libraryBlock) {
       setSelectedFile(libraryBlock as T)
     }
@@ -135,22 +154,20 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
     }))
 
     const blockVariables = [
-      ...(node.data.variant as BlockVariant).variables,
+      ...blockVariant.variables,
       {
         name: 'IN' + (Number(formState.inputs) + 1),
         class: 'input',
         type: { definition: 'generic-type', value: 'ANY_NUM' },
       },
     ].filter((variable) => variable.class === 'input')
-    const outputVariable = (node.data.variant as BlockVariant).variables.filter(
-      (variable) => variable.class === 'output',
-    )
+    const outputVariable = blockVariant.variables.filter((variable) => variable.class === 'output')
     outputVariable.forEach((variable) => {
       blockVariables.push(variable)
     })
 
     const { height } = getBlockSize(
-      { ...(node.data.variant as BlockVariant), variables: blockVariables },
+      { ...blockVariant, variables: blockVariables },
       {
         x: (node.data as BasicNodeData).inputConnector?.glbPosition.x || 0,
         y: (node.data as BasicNodeData).inputConnector?.glbPosition.y || 0,
@@ -163,7 +180,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       data: {
         ...node.data,
         variant: {
-          ...node.data.variant,
+          ...blockVariant,
           variables: blockVariables,
         },
       },
@@ -181,18 +198,16 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       ),
     }))
 
-    const blockVariables = [...(node.data.variant as BlockVariant).variables]
+    const blockVariables = [...blockVariant.variables]
       .filter((variable) => variable.class === 'input')
       .slice(0, Number(formState.inputs))
-    const outputVariable = (node.data.variant as BlockVariant).variables.filter(
-      (variable) => variable.class === 'output',
-    )
+    const outputVariable = blockVariant.variables.filter((variable) => variable.class === 'output')
     outputVariable.forEach((variable) => {
       blockVariables.push(variable)
     })
 
     const { height } = getBlockSize(
-      { ...(node.data.variant as BlockVariant), variables: blockVariables },
+      { ...blockVariant, variables: blockVariables },
       {
         x: (node.data as BasicNodeData).inputConnector?.glbPosition.x || 0,
         y: (node.data as BasicNodeData).inputConnector?.glbPosition.y || 0,
@@ -205,7 +220,61 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       data: {
         ...node.data,
         variant: {
-          ...node.data.variant,
+          ...blockVariant,
+          variables: blockVariables,
+        },
+      },
+    }))
+  }
+
+  const handleInputsSubmit = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { value: EventValue } = e.target
+    const libraryBlock = searchLibrary(libraries, editor, pous, formState.name)
+
+    const value = Math.max(
+      libraryBlock
+        ? (libraryBlock as BlockVariant).variables.filter((variable) => variable.class === 'input').length
+        : 2,
+      Math.min(Number(EventValue), maxInputs),
+    )
+    setFormState((prevState) => ({ ...prevState, inputs: String(value) }))
+
+    const blockVariables: BlockVariant['variables'] = []
+    if (formState.executionControl) {
+      blockVariables.push({
+        name: 'EN',
+        class: 'input',
+        type: { definition: 'generic-type', value: 'BOOL' },
+      })
+    }
+    for (let i = 0; i < value; i++) {
+      blockVariables.push({
+        name: 'IN' + (i + 1),
+        class: 'input',
+        type: { definition: 'generic-type', value: 'ANY_NUM' },
+      })
+    }
+
+    const outputVariable = blockVariant.variables.filter((variable) => variable.class === 'output')
+    outputVariable.forEach((variable) => {
+      blockVariables.push(variable)
+    })
+
+    const { height } = getBlockSize(
+      { ...blockVariant, variables: blockVariables },
+      {
+        x: (node.data as BasicNodeData).inputConnector?.glbPosition.x || 0,
+        y: (node.data as BasicNodeData).inputConnector?.glbPosition.y || 0,
+      },
+    )
+
+    setNode((node) => ({
+      ...node,
+      height,
+      data: {
+        ...node.data,
+        variant: {
+          ...blockVariant,
           variables: blockVariables,
         },
       },
@@ -235,7 +304,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       posY: node.position.y,
       handleX: node.data.inputConnector?.glbPosition.x || 0,
       handleY: node.data.inputConnector?.glbPosition.y || 0,
-      variant: node.data.variant,
+      variant: blockVariant,
       executionControl: checked,
     })
 
@@ -263,12 +332,11 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       posY: selectedNode.position.y,
       handleX: selectedNode.data.inputConnector?.glbPosition.x || 0,
       handleY: selectedNode.data.inputConnector?.glbPosition.y || 0,
-      variant: node.data.variant,
+      variant: blockVariant,
       executionControl: formState.executionControl,
     })
     newNode.data = {
       ...newNode.data,
-      variable: selectedNode.data.variable,
       executionOrder: Number(formState.executionOrder),
     }
 
@@ -276,6 +344,37 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       nodeId: selectedNode.id,
     })
     if (!rung) return
+
+    if (variables.selected && variables.all) {
+      if (blockVariant.type === 'function') {
+        deleteVariable({
+          rowId: variables.all.indexOf(variables.selected),
+          scope: 'local',
+          associatedPou: editor.meta.name,
+        })
+        if (
+          editor.type === 'plc-graphical' &&
+          editor.variable.display === 'table' &&
+          parseInt(editor.variable.selectedRow) === variables.all.indexOf(variables.selected)
+        ) {
+          updateModelVariables({ display: 'table', selectedRow: -1 })
+        }
+        newNode.data = { ...newNode.data, variable: { name: '' } }
+      } else {
+        updateVariable({
+          data: {
+            type: {
+              definition: 'derived',
+              value: (newNode.data as BlockNodeData<BlockVariant>).variant.name,
+            },
+          },
+          rowId: variables.all.indexOf(variables.selected),
+          scope: 'local',
+          associatedPou: editor.meta.name,
+        })
+        newNode.data = { ...newNode.data, variable: variables.selected }
+      }
+    }
 
     updateNode({
       nodeId: selectedNode.id,
@@ -309,35 +408,6 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
         },
       })
     })
-
-    if (variables.selected && variables.all) {
-      if ((node.data.variant as BlockVariant).type === 'function') {
-        deleteVariable({
-          rowId: variables.all.indexOf(variables.selected),
-          scope: 'local',
-          associatedPou: editor.meta.name,
-        })
-        if (
-          editor.type === 'plc-graphical' &&
-          editor.variable.display === 'table' &&
-          parseInt(editor.variable.selectedRow) === variables.all.indexOf(variables.selected)
-        ) {
-          updateModelVariables({ display: 'table', selectedRow: -1 })
-        }
-      } else {
-        updateVariable({
-          data: {
-            type: {
-              definition: 'derived',
-              value: (newNode.data as BlockNodeData<BlockVariant>).variant.name,
-            },
-          },
-          rowId: variables.all.indexOf(variables.selected),
-          scope: 'local',
-          associatedPou: editor.meta.name,
-        })
-      }
-    }
 
     handleCloseModal()
   }
@@ -376,35 +446,39 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
             </label>
             <InputWithRef
               id='name'
+              ref={inputNameRef}
               className={inputStyle}
-              placeholder=''
+              placeholder='???'
               type='text'
               value={formState.name}
               onChange={handleInputChange}
               onBlur={handleNameInputSubmit}
+              onKeyDown={(e) => e.key === 'Enter' && inputNameRef.current?.blur()}
             />
-            {(node.data.variant as BlockVariant).type === 'function' &&
-              (node.data.variant as BlockVariant).extensible && (
-                <>
-                  <label htmlFor='inputs' className={labelStyle}>
-                    Inputs:
-                  </label>
-                  <div className='flex items-center gap-1'>
-                    <InputWithRef
-                      id='inputs'
-                      className={inputStyle}
-                      placeholder=''
-                      type='number'
-                      value={formState.inputs}
-                      onChange={handleInputChange}
-                    />
-                    <ArrowButtonGroup
-                      onIncrement={() => handleInputsIncrement()}
-                      onDecrement={() => handleInputsDecrement()}
-                    />
-                  </div>
-                </>
-              )}
+            {blockVariant.type === 'function' && blockVariant.extensible && (
+              <>
+                <label htmlFor='inputs' className={labelStyle}>
+                  Inputs:
+                </label>
+                <div className='flex items-center gap-1'>
+                  <InputWithRef
+                    id='inputs'
+                    ref={inputInputsRef}
+                    className={inputStyle}
+                    placeholder=''
+                    type='number'
+                    value={formState.inputs}
+                    onChange={handleInputChange}
+                    onBlur={(e) => handleInputsSubmit(e)}
+                    onKeyDown={(e) => e.key === 'Enter' && inputInputsRef.current?.blur()}
+                  />
+                  <ArrowButtonGroup
+                    onIncrement={() => handleInputsIncrement()}
+                    onDecrement={() => handleInputsDecrement()}
+                  />
+                </div>
+              </>
+            )}
             <label htmlFor='executionOrder' className={labelStyle}>
               Execution Order:
             </label>

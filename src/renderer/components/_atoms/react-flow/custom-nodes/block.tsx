@@ -280,7 +280,7 @@ export const BlockNodeElement = <T extends object>({
     >
       <InputWithRef
         value={blockNameValue}
-        onChange={(e) => setBlockNameValue(e.target.value)}
+        onChange={(e) => setBlockNameValue(e.target.value.toUpperCase())}
         maxLength={20}
         placeholder='???'
         className='w-full bg-transparent p-1 text-center text-sm outline-none'
