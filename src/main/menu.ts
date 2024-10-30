@@ -1,9 +1,9 @@
 /* eslint-disable no-console */
 import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme } from 'electron'
+import path from 'path'
 
 import { i18n } from '../utils/i18n'
 import { _ProjectService, ProjectService } from './services'
-import path from 'path'
 
 /**
  * Wip: Interface for mac machines menu.
@@ -315,7 +315,7 @@ export default class MenuBuilder {
     const subMenuRecent: DarwinMenuItemConstructorOptions = {
       label: i18n.t('menu:recents'),
       submenu: recents.map((projectEntry) => {
-        let projectPath = projectEntry.path.startsWith(homeDir)
+        const projectPath = projectEntry.path.startsWith(homeDir)
           ? projectEntry.path.replace(homeDir, '~')
           : projectEntry.path
 
@@ -576,7 +576,7 @@ export default class MenuBuilder {
       {
         label: i18n.t('menu:recents'),
         submenu: recents.map((projectEntry) => {
-          let projectPath = projectEntry.path.startsWith(homeDir)
+          const projectPath = projectEntry.path.startsWith(homeDir)
             ? projectEntry.path.replace(homeDir, '~')
             : projectEntry.path
 
