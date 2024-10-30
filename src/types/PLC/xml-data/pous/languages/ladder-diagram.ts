@@ -168,7 +168,6 @@ const contactSchema = z.object({
     '@x': z.number(),
     '@y': z.number(),
   }),
-  variable: z.string(),
   connectionPointIn: z.object({
     relPosition: z.object({
       '@x': z.number(),
@@ -192,6 +191,7 @@ const contactSchema = z.object({
       '@y': z.number(),
     }),
   }),
+  variable: z.string(),
 })
 type ContactLadderXML = z.infer<typeof contactSchema>
 
@@ -222,7 +222,6 @@ const coilSchema = z.object({
     '@x': z.number(),
     '@y': z.number(),
   }),
-  variable: z.string(),
   connectionPointIn: z.object({
     relPosition: z.object({
       '@x': z.number(),
@@ -246,6 +245,7 @@ const coilSchema = z.object({
       '@y': z.number(),
     }),
   }),
+  variable: z.string(),
 })
 type CoilLadderXML = z.infer<typeof coilSchema>
 
@@ -372,22 +372,38 @@ const outVariableSchema = z.object({
 })
 type OutVariableLadderXML = z.infer<typeof outVariableSchema>
 
+/**
+ * Ladder Diagram XML data types.
+ */
+const ladderXMLSchema = z.object({
+  leftPowerRail: z.array(leftPowerRailSchema),
+  rightPowerRail: z.array(rightPowerRailSchema),
+  contact: z.array(contactSchema),
+  coil: z.array(coilSchema),
+  inVariable: z.array(inVariableSchema),
+  inOutVariable: z.array(inOutVariableSchema),
+  outVariable: z.array(outVariableSchema),
+})
+type LadderXML = z.infer<typeof ladderXMLSchema>
+
 export {
   blockSchema,
   coilSchema,
   contactSchema,
   inOutVariableSchema,
   inVariableSchema,
+  ladderXMLSchema,
   leftPowerRailSchema,
   outVariableSchema,
   rightPowerRailSchema,
 }
-export {
+export type {
   BlockLadderXML,
   CoilLadderXML,
   ContactLadderXML,
   InOutVariableLadderXML,
   InVariableLadderXML,
+  LadderXML,
   LeftPowerRailLadderXML,
   OutVariableLadderXML,
   RightPowerRailLadderXML,

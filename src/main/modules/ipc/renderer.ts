@@ -109,5 +109,11 @@ const rendererProcessBridge = {
   // WIP: Refactoring
   // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),
   // createPou: (callback: any) => ipcRenderer.on('pou:create', callback),
+
+  /**
+   * Compiler Service
+   */
+  writeXMLFile: (path: string, data: string, fileName: string) =>
+    ipcRenderer.invoke('compiler:write-xml-file', { path, data, fileName }),
 }
 export default rendererProcessBridge

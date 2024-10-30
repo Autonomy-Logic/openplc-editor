@@ -23,6 +23,40 @@ const StartScreen = () => {
     flowActions: { addFlow },
   } = useOpenPLCStore()
 
+  const retrieveNewProjectData = async () => {
+    const { success, data, error } = await window.bridge.createProject()
+
+    if (success && data) {
+      clearTabs()
+      setEditingState('unsaved')
+      setProject({
+        meta: {
+          name: data.content.meta.name,
+          type: data.content.meta.type,
+          path: data.meta.path,
+        },
+        data: data.content.data,
+      })
+      setEditingState('unsaved')
+      navigate('/workspace')
+      toast({
+        title: 'The project was created successfully!',
+        description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
+        variant: 'default',
+      })
+    } else {
+      toast({
+        title: 'Cannot create a project!',
+        description: error?.description,
+        variant: 'fail',
+      })
+    }
+  }
+
+  const handleCreateProject = () => {
+    void retrieveNewProjectData()
+  }
+
   const retrieveOpenProjectData = async () => {
     try {
       const { success, data, error } = await window.bridge.openProject()
@@ -93,6 +127,7 @@ const StartScreen = () => {
             },
             data: data.content.data,
           })
+          setEditingState('unsaved')
           navigate('/workspace')
           toast({
             title: 'The project was created successfully!',

@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowType } from '@root/renderer/store/slices/flow/types'
-import { PLCProjectSchema } from '@root/types/PLC/open-plc'
+import { PLCProjectSchema} from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
 
@@ -10,12 +12,12 @@ import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
   const {
+     project,
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setRecents },
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
-    project,
   } = useOpenPLCStore()
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
@@ -23,6 +25,15 @@ export const FileMenu = () => {
   const handleCreateProject = async () => {
     const { success, data, error } = await window.bridge.createProject()
     if (success && data) {
+      setProject({
+        meta: {
+          path: data.meta.path,
+          name: 'new-project',
+          type: 'plc-project',
+        },
+        data: data.content.data,
+      })
+      setEditingState('unsaved')
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
@@ -53,6 +64,15 @@ export const FileMenu = () => {
   const handleOpenProject = async () => {
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
+      setProject({
+        meta: {
+          path: data.meta.path,
+          name: 'new-project',
+          type: 'plc-project',
+        },
+        data: data.content.data,
+      })
+      setEditingState('unsaved')
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
@@ -100,7 +120,8 @@ export const FileMenu = () => {
 
     const { success, reason } = await window.bridge.saveProject({
       projectPath: project.meta.path,
-      projectData: projectData.data,
+      //@ts-expect-error overlap
+      projectData: project.data,
     })
 
     if (success) {
@@ -114,7 +135,7 @@ export const FileMenu = () => {
       _.debounce(() => setEditingState('unsaved'), 1000)()
       toast({
         title: 'Error in the save request!',
-        description: reason.description,
+        description: reason?.description,
         variant: 'fail',
       })
     }

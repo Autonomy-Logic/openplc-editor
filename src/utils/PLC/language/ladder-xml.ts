@@ -7,14 +7,11 @@ import { RungState } from '@root/renderer/store/slices'
 import {
   CoilLadderXML,
   ContactLadderXML,
-  InOutVariableLadderXML,
-  InVariableLadderXML,
+  LadderXML,
   LeftPowerRailLadderXML,
-  OutVariableLadderXML,
   RightPowerRailLadderXML,
-} from '@root/types/PLC/language-data/ladder-diagram'
+} from '@root/types/PLC/xml-data/pous/languages/ladder-diagram'
 import { Node } from '@xyflow/react'
-import { create } from 'xmlbuilder2'
 
 /**
  * Find the connections of a node in a rung.
@@ -268,7 +265,6 @@ const contactToXML = (contact: ContactNode, rung: RungState, offsetY: number = 0
       '@x': contact.position.x,
       '@y': (contact.position.y ?? 0) + offsetY,
     },
-    variable: '',
     connectionPointIn: {
       relPosition: {
         '@x': contact.data.inputConnector?.relPosition.x || 0,
@@ -282,13 +278,12 @@ const contactToXML = (contact: ContactNode, rung: RungState, offsetY: number = 0
         '@y': contact.data.outputConnector?.relPosition.y || 0,
       },
     },
+    variable: 'A',
   }
 }
 
 const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLadderXML => {
   const connections = findConnections(coil, rung, offsetY)
-
-  console.log(coil.id.split('_'))
 
   return {
     '@localId': coil.data.numericId,
@@ -302,7 +297,6 @@ const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLa
       '@x': coil.position.x,
       '@y': (coil.position.y ?? 0) + offsetY,
     },
-    variable: '',
     connectionPointIn: {
       relPosition: {
         '@x': coil.data.inputConnector?.relPosition.x || 0,
@@ -316,25 +310,18 @@ const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLa
         '@y': coil.data.outputConnector?.relPosition.y || 0,
       },
     },
+    variable: 'A',
   }
 }
 
 /**
  * Entry point to parse nodes to XML
  */
-const nodesToXML = (rungs: RungState[]) => {
-  console.log('=-=-=-= PARSING TO XML =-=-=-=')
-  const LadderXML: {
+const ladderToXml = (rungs: RungState[]) => {
+  console.log('=-= PARSING LADDER TO XML =-=')
+  const ladderXML: {
     body: {
-      LD: {
-        leftPowerRail: LeftPowerRailLadderXML[]
-        rightPowerRail: RightPowerRailLadderXML[]
-        contact: ContactLadderXML[]
-        coil: CoilLadderXML[]
-        inVariable: InVariableLadderXML[]
-        inOutVariable: InOutVariableLadderXML[]
-        outVariable: OutVariableLadderXML[]
-      }
+      LD: LadderXML
     }
   } = {
     body: {
@@ -356,14 +343,14 @@ const nodesToXML = (rungs: RungState[]) => {
       switch (node.type) {
         case 'powerRail':
           if ((node as PowerRailNode).data.variant === 'left')
-            LadderXML.body.LD.leftPowerRail.push(leftRailToXML(node as PowerRailNode, offsetY))
-          else LadderXML.body.LD.rightPowerRail.push(rightRailToXML(node as PowerRailNode, rung, offsetY))
+            ladderXML.body.LD.leftPowerRail.push(leftRailToXML(node as PowerRailNode, offsetY))
+          else ladderXML.body.LD.rightPowerRail.push(rightRailToXML(node as PowerRailNode, rung, offsetY))
           break
         case 'contact':
-          LadderXML.body.LD.contact.push(contactToXML(node as ContactNode, rung, offsetY))
+          ladderXML.body.LD.contact.push(contactToXML(node as ContactNode, rung, offsetY))
           break
         case 'coil':
-          LadderXML.body.LD.coil.push(coilToXml(node as CoilNode, rung, offsetY))
+          ladderXML.body.LD.coil.push(coilToXml(node as CoilNode, rung, offsetY))
           break
         default:
           break
@@ -371,12 +358,8 @@ const nodesToXML = (rungs: RungState[]) => {
     })
     offsetY += rung.flowViewport[1]
   })
-  console.log('XML RESULT')
-  console.log(LadderXML)
-  const doc = create(LadderXML)
-  const xml = doc.end({ prettyPrint: true })
-  console.log('XML')
-  console.log(xml)
+
+  return ladderXML
 }
 
-export { nodesToXML }
+export { ladderToXml }
