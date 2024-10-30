@@ -23,7 +23,7 @@ const Breadcrumbs = () => {
   const {
     editor: { meta },
     project: {
-      meta: { name: projectName },
+      meta: { name },
     },
   } = useOpenPLCStore()
 
@@ -60,7 +60,7 @@ const Breadcrumbs = () => {
   return (
     <NavigationPanelBreadcrumbs
       crumb={{
-        project_name: projectName,
+        project_name: name,
         pou_to_display: {
           name: meta.name,
           type: Array.isArray(typeOrIcon) ? typeOrIcon : ['data-type'],
