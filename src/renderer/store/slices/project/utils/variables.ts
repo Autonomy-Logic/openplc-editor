@@ -82,20 +82,20 @@ const variableLocationValidation = (variableLocation: string, variableType: stri
   switch (variableType.toUpperCase()) {
     case 'BOOL':
       return /^%[QI]X\d\.\d$/.test(variableLocation)
-    case 'SINT':
     case 'INT':
-    case 'DINT':
-    case 'LINT':
-    case 'USINT':
     case 'UINT':
-    case 'UDINT':
-    case 'ULINT':
-      return /^%[QI]W\d$/.test(variableLocation)
-    case 'BYTE':
     case 'WORD':
+      return /^%[QIM]W\d$/.test(variableLocation)
+    case 'DINT':
+    case 'UDINT':
+    case 'REAL':
     case 'DWORD':
+      return /^%MD\d$/.test(variableLocation)
+    case 'LINT':
+    case 'ULINT':
+    case 'LREAL':
     case 'LWORD':
-      return /^%M[WDL]\d$/.test(variableLocation)
+      return /^%ML\d$/.test(variableLocation)
     default:
       return false
   }
@@ -104,21 +104,21 @@ const variableLocationValidation = (variableLocation: string, variableType: stri
 const variableLocationValidationErrorMessage = (variableType: string) => {
   switch (variableType.toUpperCase()) {
     case 'BOOL':
-      return `The location must start with the prefix "%QX" or "%IX", followed by a number and a dot "." and then a number from 0 to 7.`
-    case 'SINT':
+      return 'Valid locations: %QX0.0..7, %IX0.0..7 (change the number to the desired location)'
     case 'INT':
-    case 'DINT':
-    case 'LINT':
-    case 'USINT':
     case 'UINT':
-    case 'UDINT':
-    case 'ULINT':
-      return `The location must start with the prefix "%QW" or "%IW", followed by a number.`
-    case 'BYTE':
     case 'WORD':
+      return 'Valid locations: %QW0, %IW0, %MW0 (change the number to the desired location)'
+    case 'DINT':
+    case 'UDINT':
+    case 'REAL':
     case 'DWORD':
+      return 'Valid locations: %MD0 (change the number to the desired location)'
+    case 'LINT':
+    case 'ULINT':
+    case 'LREAL':
     case 'LWORD':
-      return `The location must start with the prefix "%MW", "%MD" or "%ML", followed by a number.`
+      return 'Valid locations: %ML0 (change the number to the desired location)'
     default:
       return ''
   }
@@ -184,40 +184,38 @@ const createVariableValidation = (
         break
       }
 
-      case 'SINT':
       case 'INT':
-      case 'DINT':
-      case 'LINT':
-      case 'USINT':
       case 'UINT':
-      case 'UDINT':
-      case 'ULINT': {
-        console.log('INT')
-        const stringWithNoPrefix = variableFound.location.replace('%QW', '').replace('%IW', '')
+      case 'WORD': {
+        const stringWithNoPrefix = variableFound.location.replace('%QW', '').replace('%IW', '').replace('%MW', '')
         const position = parseInt(stringWithNoPrefix)
-
         if (variableFound?.location.startsWith('%QW')) {
           response.location = `%QW${position + 1}`
-        } else {
+        } else if (variableFound?.location.startsWith('%IW')) {
           response.location = `%IW${position + 1}`
+        } else {
+          response.location = `%MW${position + 1}`
         }
         break
       }
 
-      case 'BYTE':
-      case 'WORD':
-      case 'DWORD':
-      case 'LWORD': {
-        const stringWithNoPrefix = variableFound.location.replace('%MW', '').replace('%MD', '').replace('%ML', '')
+      case 'DINT':
+      case 'UDINT':
+      case 'REAL':
+      case 'DWORD': {
+        const stringWithNoPrefix = variableFound.location.replace('%MD', '')
         const position = parseInt(stringWithNoPrefix)
+        response.location = `%MD${position + 1}`
+        break
+      }
 
-        if (variableFound?.location.startsWith('%MW')) {
-          response.location = `%MW${position + 1}`
-        } else if (variableFound?.location.startsWith('%MD')) {
-          response.location = `%MD${position + 1}`
-        } else {
-          response.location = `%ML${position + 1}`
-        }
+      case 'LINT':
+      case 'ULINT':
+      case 'LREAL':
+      case 'LWORD': {
+        const stringWithNoPrefix = variableFound.location.replace('%ML', '')
+        const position = parseInt(stringWithNoPrefix)
+        response.location = `%ML${position + 1}`
         break
       }
 
@@ -297,7 +295,9 @@ const updateVariableValidation = (
   }
 
   if (dataToBeUpdated.type) {
-    response.data = { location: '' }
+    if (!variableLocationValidation(variableToUpdate.location, dataToBeUpdated.type.value)) {
+      response.data = { ...(response.data ? response.data : {}), location: '' }
+    }
   }
 
   return response
