@@ -37,6 +37,7 @@ const StartScreen = () => {
         },
         data: data.content.data,
       })
+      setEditingState('unsaved')
       navigate('/workspace')
       toast({
         title: 'The project was created successfully!',
@@ -111,6 +112,7 @@ const StartScreen = () => {
             },
             data: data.content.data,
           })
+          setEditingState('unsaved')
           navigate('/workspace')
           toast({
             title: 'The project was created successfully!',

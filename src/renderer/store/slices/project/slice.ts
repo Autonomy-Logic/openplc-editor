@@ -1,3 +1,5 @@
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -72,13 +74,21 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           const pouExists = project.data.pous.find((pou) => {
             return pou.data.name === pouToBeCreated.data.name
           })
-          if (!pouExists) {
+          const dataTypeExists = project.data.dataTypes.find((datatype) => {
+            return datatype.name === pouToBeCreated.data.name
+          })
+
+          if (!pouExists && !dataTypeExists) {
             project.data.pous.push(pouToBeCreated)
             response = { ok: true, message: 'Pou created successfully' }
             console.log('pou created:', pouToBeCreated)
-          } else {
-            response = { ok: false, message: 'Pou already exists' }
           }
+           if  (dataTypeExists || pouExists) 
+              {toast({
+                title: 'Invalid Pou',
+                description: `You can't create a Pou with this name.`,
+                variant: 'fail',
+              })}
         }),
       )
       return response
@@ -304,10 +314,42 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce(({ project }: ProjectSlice) => {
           const { name } = dataToCreate
           const dataExists = project.data.dataTypes.find((datatype) => datatype.name === name)
-          if (!dataExists) {
+          const pouExists = project.data.pous.find((datatype) => datatype.data.name === name)
+          if (!dataExists && !pouExists) {
             project.data.dataTypes.push(dataToCreate)
           } else {
-            console.error(`Datatype ${name} already exists`)
+            toast({
+              title: 'Invalid array',
+              description: `You can't create a Pou and Data type with the same name.`,
+              variant: 'fail',
+            })
+          }
+        }),
+      )
+    },
+    // TODO: Review requirements.
+    /**
+     * Function to update a unique data type.
+     * @param name - Data type name to be updated.
+     * @param dataToUpdate - Object contain data to update a data type.
+     */
+    updateDatatype: (name, dataToUpdate) => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const datatypeToUpdateIndex = project.data.dataTypes.findIndex((datatype) => datatype.name === name)
+          if (datatypeToUpdateIndex === -1) return
+          Object.assign(project.data.dataTypes[datatypeToUpdateIndex], dataToUpdate)
+        }),
+      )
+    },
+    createArrayDimension: (dataToCreateDimension) => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const { name, derivation } = dataToCreateDimension
+          const dataExists = project.data.dataTypes.find((datatype) => datatype.name === name) as PLCArrayDatatype
+          if (!dataExists) return
+          if (dataExists && derivation === 'array') {
+            dataExists.dimensions.push({ dimension: '' })
           }
         }),
       )
