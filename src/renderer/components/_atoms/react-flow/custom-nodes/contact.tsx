@@ -119,10 +119,12 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     })
 
     const variable = variables.selected
-    if (
-      (!variable || variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL') &&
-      !inputFocus
-    ) {
+    console.log('variable', variable)
+    if (!variable && !inputFocus) {
+      setWrongVariable(true)
+      return
+    }
+    if (variable && (variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL')) {
       setWrongVariable(true)
       return
     }
