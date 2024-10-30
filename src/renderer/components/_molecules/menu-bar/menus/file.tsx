@@ -2,9 +2,11 @@ import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowType } from '@root/renderer/store/slices/flow/types'
+import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
+import { useEffect, useState } from 'react'
 
 import { MenuClasses } from '../constants'
 
@@ -13,12 +15,17 @@ export const FileMenu = () => {
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setRecents },
     projectActions: { setProject },
-    tabsActions: { clearTabs },
+    tabsActions: { clearTabs,sortTabs },
     flowActions: { addFlow },
     project,
+    editor,
+    tabs,
+    editorActions: { setEditor, getEditorFromEditors, removeModel },
   } = useOpenPLCStore()
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
+
+  const [selectedTab, setSelectedTab] = useState(editor.meta.name)
 
   const handleCreateProject = async () => {
     const { success, data, error } = await window.bridge.createProject()
@@ -120,6 +127,34 @@ export const FileMenu = () => {
     }
   }
 
+  useEffect(() => {
+    setSelectedTab(editor.meta.name)
+  }, [editor])
+
+  const handleRemoveTab = (tabToRemove: string) => {
+    const draftTabs = tabs.filter((t) => t.name !== tabToRemove)
+   
+    removeModel(tabToRemove)
+
+    const candidate = draftTabs.slice(-1)[0]
+    if (!candidate) {
+      sortTabs(draftTabs)
+      setEditor({ type: 'available', meta: { name: '' } })
+      return
+    }
+    setSelectedTab(candidate.name)
+
+    const editor = getEditorFromEditors(candidate.name)
+    if (!editor) {
+      setEditor(CreateEditorObjectFromTab(candidate))
+      sortTabs(draftTabs)
+      return
+    }
+    setEditor(editor)
+    sortTabs(draftTabs)
+   
+  }
+
   return (
     <MenuPrimitive.Menu>
       <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:file.label')}</MenuPrimitive.Trigger>
@@ -142,7 +177,7 @@ export const FileMenu = () => {
             <span>{i18n.t('menu:file.submenu.saveAs')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + S'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM}  onClick={() => void handleRemoveTab(selectedTab)} >
             <span>{i18n.t('menu:file.submenu.closeTab')}</span>
             <span className={ACCELERATOR}>{'Ctrl + W'}</span>
           </MenuPrimitive.Item>

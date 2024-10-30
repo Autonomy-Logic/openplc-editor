@@ -92,10 +92,8 @@ const Tabs = () => {
     window.bridge.closeTabAccelerator((_event) => handleRemoveTab(editor.meta.name))
     window.bridge.deletePouAccelerator((_event) => handleDeletePou(editor.meta.name))
     return () => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      window.bridge.removeCloseTabListener(); 
-       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      window.bridge.removeDeletePouListener();
+     void window.bridge.removeCloseTabListener(); 
+     void window.bridge.removeDeletePouListener();
     };
   });
 

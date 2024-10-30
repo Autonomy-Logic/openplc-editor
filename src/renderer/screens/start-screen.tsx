@@ -205,7 +205,7 @@ const StartScreen = () => {
       }
     })
   }
-  handleOpenRecentAccelerator()
+void  handleOpenRecentAccelerator()
  },[]) 
 
   return (
