@@ -253,8 +253,9 @@ export default class MenuBuilder {
         },
         {
           label: i18n.t('menu:edit.submenu.delete'),
-          role: 'delete',
-          click:()=>this.handleDeletePou()
+          accelerator: 'Cmd+backspace',
+          // role: 'delete',
+          click: () => this.handleDeletePou(),
         },
       ],
     }
