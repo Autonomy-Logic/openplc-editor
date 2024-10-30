@@ -71,11 +71,11 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   }
 
   return (
-    <Popover.Root  open={isOpen} onOpenChange={setIsOpen}>
+    <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
       <Popover.Trigger
         onMouseEnter={handleMouseEnter}
         id={`create-${target}-trigger`}
-        className='focus:bg-neutral-100 dark:focus:bg-neutral-900 rounded-md'
+        className='rounded-md focus:bg-neutral-100 dark:focus:bg-neutral-900'
       >
         <div
           id={`create-${target}-trigger-container`}
@@ -179,7 +179,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                   return (
                                     <SelectItem
                                       key={lang.value}
-                                      className='flex w-full focus:bg-neutral-100 dark:focus:bg-neutral-900 cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                                      className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 focus:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus:bg-neutral-900'
                                       value={ConvertToLangShortenedFormat(lang.value)}
                                     >
                                       <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
@@ -195,14 +195,6 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       />
                     </div>
                     <div id='form-button-container' className='flex w-full justify-between'>
-                      <button
-                        type='submit'
-                        className={cn(
-                          'h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium',
-                        )}
-                      >
-                        Create
-                      </button>
                       <Popover.Close asChild>
                         <button
                           type='button'
@@ -212,6 +204,14 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                           Cancel
                         </button>
                       </Popover.Close>
+                      <button
+                        type='submit'
+                        className={cn(
+                          'h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium',
+                        )}
+                      >
+                        Create
+                      </button>
                     </div>
                   </form>
                 </div>
