@@ -6,6 +6,10 @@ import { MenuClasses } from '../constants'
 
 export const EditMenu = () => {
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
+
+  const handleDeletePou=()=>{
+
+  }
   return (
     <MenuPrimitive.Menu>
       <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:edit.label')}</MenuPrimitive.Trigger>
@@ -60,7 +64,7 @@ export const EditMenu = () => {
             <span>{i18n.t('menu:edit.submenu.selectAll')}</span>
             <span className={ACCELERATOR}>{'Ctrl + A'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} onClick={()=> void handleDeletePou(selectedPou)}>
             <span>{i18n.t('menu:edit.submenu.delete')}</span>
             <span className={ACCELERATOR}>{''}</span>
           </MenuPrimitive.Item>

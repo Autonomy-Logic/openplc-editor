@@ -1,12 +1,12 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowType } from '@root/renderer/store/slices/flow/types'
-import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { MenuClasses } from '../constants'
@@ -17,17 +17,13 @@ export const FileMenu = () => {
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setRecents },
     projectActions: { setProject },
-    tabsActions: { clearTabs, sortTabs },
+    tabsActions: { clearTabs },
     flowActions: { addFlow },
     project,
     editor,
-    tabs,
-    editorActions: { setEditor, getEditorFromEditors, removeModel },
   } = useOpenPLCStore()
-
+  const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
-
-  const [selectedTab, setSelectedTab] = useState(editor.meta.name)
 
   const handleCreateProject = async () => {
     const { success, data, error } = await window.bridge.createProject()
@@ -133,29 +129,6 @@ export const FileMenu = () => {
     setSelectedTab(editor.meta.name)
   }, [editor])
 
-  const handleRemoveTab = (tabToRemove: string) => {
-    const draftTabs = tabs.filter((t) => t.name !== tabToRemove)
-
-    removeModel(tabToRemove)
-
-    const candidate = draftTabs.slice(-1)[0]
-    if (!candidate) {
-      sortTabs(draftTabs)
-      setEditor({ type: 'available', meta: { name: '' } })
-      return
-    }
-    setSelectedTab(candidate.name)
-
-    const editor = getEditorFromEditors(candidate.name)
-    if (!editor) {
-      setEditor(CreateEditorObjectFromTab(candidate))
-      sortTabs(draftTabs)
-      return
-    }
-    setEditor(editor)
-    sortTabs(draftTabs)
-  }
-
   const handleCloseProject = () => {
   navigate('/')
     clearEditor()
@@ -163,6 +136,7 @@ export const FileMenu = () => {
     setEditingState('unsaved')
     setRecents([])
   }
+  
 
   return (
     <MenuPrimitive.Menu>
