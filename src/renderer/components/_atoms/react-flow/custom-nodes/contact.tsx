@@ -119,7 +119,6 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     })
 
     const variable = variables.selected
-    console.log('variable', variable)
     if (!variable && !inputFocus) {
       setWrongVariable(true)
       return
