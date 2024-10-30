@@ -52,6 +52,7 @@ const rendererProcessBridge = {
   closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
   closeProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-project-accelerator', callback),
   deletePouAccelerator:(callback:IpcRendererCallbacks) => ipcRenderer.on('workspace:delete-pou-accelerator', callback),
+  switchPerspective:(callback:IpcRendererCallbacks) => ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
   removeDeletePouListener: ()=> ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
   removeCloseTabListener: ()=> ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
   /** -------------------------------------------------------------------------------------------- */

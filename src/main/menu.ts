@@ -86,6 +86,10 @@ export default class MenuBuilder {
    
   }
 
+  handleSwitchPerspective() {
+    this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
+  }
+
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -290,6 +294,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:display.submenu.switchPerspective'),
           accelerator: 'F12',
+          click: () => this.handleSwitchPerspective(),
         },
         {
           label: i18n.t('menu:display.submenu.fullScreen'),
@@ -533,8 +538,8 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:display.submenu.switchPerspective'),
-
             accelerator: 'F12',
+            click: () => this.handleSwitchPerspective(),
           },
           {
             label: i18n.t('menu:display.submenu.fullScreen'),

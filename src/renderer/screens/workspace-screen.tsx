@@ -121,7 +121,9 @@ const WorkspaceScreen = () => {
     handleCloseProject()
   },[])
 
-
+  window.bridge.switchPerspective((_event)=>{
+    setCollapseAll(!collapseAll)
+  })
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
