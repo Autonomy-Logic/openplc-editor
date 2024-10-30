@@ -7,15 +7,17 @@ import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
+  const navigate = useNavigate()
   const {
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setRecents },
     projectActions: { setProject },
-    tabsActions: { clearTabs,sortTabs },
+    tabsActions: { clearTabs, sortTabs },
     flowActions: { addFlow },
     project,
     editor,
@@ -133,7 +135,7 @@ export const FileMenu = () => {
 
   const handleRemoveTab = (tabToRemove: string) => {
     const draftTabs = tabs.filter((t) => t.name !== tabToRemove)
-   
+
     removeModel(tabToRemove)
 
     const candidate = draftTabs.slice(-1)[0]
@@ -152,7 +154,14 @@ export const FileMenu = () => {
     }
     setEditor(editor)
     sortTabs(draftTabs)
-   
+  }
+
+  const handleCloseProject = () => {
+  navigate('/')
+    clearEditor()
+    clearTabs()
+    setEditingState('unsaved')
+    setRecents([])
   }
 
   return (
@@ -177,11 +186,11 @@ export const FileMenu = () => {
             <span>{i18n.t('menu:file.submenu.saveAs')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + S'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM}  onClick={() => void handleRemoveTab(selectedTab)} >
+          <MenuPrimitive.Item className={ITEM} onClick={() => void handleRemoveTab(selectedTab)}>
             <span>{i18n.t('menu:file.submenu.closeTab')}</span>
             <span className={ACCELERATOR}>{'Ctrl + W'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} onClick={() => void handleCloseProject()}>
             <span>{i18n.t('menu:file.submenu.closeProject')}</span>
             <span className={ACCELERATOR}>{'Ctrl  + W'}</span>
           </MenuPrimitive.Item>
