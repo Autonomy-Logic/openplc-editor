@@ -1,13 +1,12 @@
 /* eslint-disable no-console */
 import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme } from 'electron'
-import path from 'path'
 
 import { i18n } from '../utils/i18n'
 import { _ProjectService, ProjectService } from './services'
 
 /**
  * Wip: Interface for mac machines menu.
- */
+ */ 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string
   submenu?: DarwinMenuItemConstructorOptions[] | Menu
@@ -148,7 +147,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.closeProject'),
           accelerator: '',
-          click: () => console.warn('Close project button clicked! This is not working yet.'),
+          click: () => this.handleCloseProject(),
         },
         { type: 'separator' },
         {
@@ -255,6 +254,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:edit.submenu.delete'),
           role: 'delete',
+          click:()=>this.handleDeletePou()
         },
       ],
     }
@@ -375,7 +375,6 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.saveAs'),
             accelerator: 'Ctrl+Shift+S',
-            click: () => this.handleDeletePou(),
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
