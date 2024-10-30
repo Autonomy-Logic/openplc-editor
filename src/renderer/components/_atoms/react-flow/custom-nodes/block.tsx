@@ -530,9 +530,12 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
-  const variantLib = (variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const variantLib = { ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) }
   if (executionControl) {
-    if (!variantLib.variables.filter((variable) => variable.name === 'EN' || variable.name === 'ENO')) {
+    const executionControlVariable = variantLib.variables.some(
+      (variable) => variable.name === 'EN' || variable.name === 'ENO',
+    )
+    if (!executionControlVariable) {
       variantLib.variables = [
         {
           name: 'EN',
@@ -547,6 +550,8 @@ export const buildBlockNode = <T extends object | undefined>({
         ...variantLib.variables,
       ]
     }
+  } else {
+    variantLib.variables = variantLib.variables.filter((variable) => variable.name !== 'EN' && variable.name !== 'ENO')
   }
 
   const { handles, leftHandles, rightHandles, height } = getBlockSize(variantLib, { x: handleX, y: handleY })
@@ -556,13 +561,13 @@ export const buildBlockNode = <T extends object | undefined>({
     type: 'block',
     position: { x: posX, y: posY },
     data: {
-      variant: variant ?? DEFAULT_BLOCK_TYPE,
       handles,
       inputHandles: leftHandles,
       outputHandles: rightHandles,
       inputConnector: leftHandles[0],
       outputConnector: rightHandles[0],
       numericId: generateNumericUUID(),
+      variant: variantLib,
       variable: { name: '' },
       executionOrder: 0,
       executionControl,

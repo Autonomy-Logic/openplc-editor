@@ -18,7 +18,6 @@ import {
   // ModalTrigger,
 } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCVariable } from '@root/types/PLC'
 import { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -35,17 +34,18 @@ type BlockElementProps<T> = {
 const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selectedNode }: BlockElementProps<T>) => {
   const {
     editor,
+    editorActions: { updateModelVariables },
     flows,
     flowActions: { updateEdge, updateNode },
     project: {
       data: { pous },
     },
-    projectActions: { updateVariable },
+    projectActions: { updateVariable, deleteVariable },
     libraries,
   } = useOpenPLCStore()
   const maxInputs = 20
 
-  const [node, setNode] = useState<BlockNode<T>>(selectedNode)
+  const [node, setNode] = useState<BlockNode<object>>(selectedNode)
   const blockVariant = node.data.variant as BlockVariant
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
@@ -57,9 +57,12 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
     executionControl: boolean
   }>({
     name: blockVariant?.name || DEFAULT_BLOCK_TYPE.name,
-    inputs: blockVariant?.variables.filter((variable) => variable.class === 'input').length.toString() || '0',
-    executionOrder: '0',
-    executionControl: false,
+    inputs:
+      blockVariant?.variables
+        .filter((variable) => variable.class === 'input' && variable.name !== 'EN')
+        .length.toString() || '0',
+    executionOrder: selectedNode.data.executionOrder.toString(),
+    executionControl: selectedNode.data.executionControl,
   })
 
   const isFormValid = Object.values(formState).every((value) => value !== '')
@@ -89,7 +92,11 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       })
       setNode({
         ...newNode,
-        data: { ...newNode.data, variant: selectedFile, executionOrder: Number(formState.executionOrder) },
+        data: {
+          ...newNode.data,
+          executionOrder: Number(formState.executionOrder),
+          variable: selectedNode.data.variable,
+        },
       })
       const newNodeDataVariant = newNode.data.variant as BlockVariant
       const formName: string = newNodeDataVariant.name
@@ -222,44 +229,20 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
   const handleExecutionControlChange = (checked: boolean) => {
     setFormState((prevState) => ({ ...prevState, executionControl: checked }))
 
-    const blockVariables = checked
-      ? [
-          {
-            name: 'EN',
-            class: 'input',
-            type: { definition: 'generic-type', value: 'ANY_BOOL' },
-          },
-          {
-            name: 'ENO',
-            class: 'output',
-            type: { definition: 'generic-type', value: 'ANY_BOOL' },
-          },
-          ...(node.data.variant as BlockVariant).variables,
-        ]
-      : (node.data.variant as BlockVariant).variables.filter(
-          (variable) => variable.name !== 'EN' && variable.name !== 'ENO',
-        )
+    const newNode = buildBlockNode({
+      id: node.id,
+      posX: node.position.x,
+      posY: node.position.y,
+      handleX: node.data.inputConnector?.glbPosition.x || 0,
+      handleY: node.data.inputConnector?.glbPosition.y || 0,
+      variant: node.data.variant,
+      executionControl: checked,
+    })
 
-    const { height } = getBlockSize(
-      { ...(node.data.variant as BlockVariant), variables: blockVariables },
-      {
-        x: (node.data as BasicNodeData).inputConnector?.glbPosition.x || 0,
-        y: (node.data as BasicNodeData).inputConnector?.glbPosition.y || 0,
-      },
-    )
-
-    setNode((node) => ({
-      ...node,
-      height,
-      data: {
-        ...node.data,
-        variant: {
-          ...node.data.variant,
-          variables: blockVariables,
-          executionControl: checked,
-        },
-      },
-    }))
+    setNode({
+      ...newNode,
+      data: { ...newNode.data, variable: selectedNode.data.variable },
+    })
   }
 
   const handleClearForm = () => {
@@ -288,9 +271,8 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       variable: selectedNode.data.variable,
       executionOrder: Number(formState.executionOrder),
     }
-    console.log(newNode)
 
-    const { rung, edges } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { rung, edges, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: selectedNode.id,
     })
     if (!rung) return
@@ -328,17 +310,33 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       })
     })
 
-    const variables = (pous.find((pou) => pou.data.name === editor.meta.name)?.data.variables as PLCVariable[]) || []
-    const variableIndex = variables.findIndex((variable) => variable.name === selectedNode.data.variable.name)
-    if (variableIndex !== -1) {
-      updateVariable({
-        data: {
-          id: newNode.id,
-        },
-        rowId: variableIndex,
-        scope: 'local',
-        associatedPou: editor.meta.name,
-      })
+    if (variables.selected && variables.all) {
+      if ((node.data.variant as BlockVariant).type === 'function') {
+        deleteVariable({
+          rowId: variables.all.indexOf(variables.selected),
+          scope: 'local',
+          associatedPou: editor.meta.name,
+        })
+        if (
+          editor.type === 'plc-graphical' &&
+          editor.variable.display === 'table' &&
+          parseInt(editor.variable.selectedRow) === variables.all.indexOf(variables.selected)
+        ) {
+          updateModelVariables({ display: 'table', selectedRow: -1 })
+        }
+      } else {
+        updateVariable({
+          data: {
+            type: {
+              definition: 'derived',
+              value: (newNode.data as BlockNodeData<BlockVariant>).variant.name,
+            },
+          },
+          rowId: variables.all.indexOf(variables.selected),
+          scope: 'local',
+          associatedPou: editor.meta.name,
+        })
+      }
     }
 
     handleCloseModal()
@@ -432,6 +430,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
                 className='relative h-4 w-[29px] cursor-pointer rounded-full bg-neutral-300 shadow-[0_4_4_1px] outline-none transition-all duration-150 data-[state=checked]:bg-brand dark:bg-neutral-850'
                 id='executionControlSwitch'
                 onCheckedChange={handleExecutionControlChange}
+                checked={formState.executionControl}
               >
                 <Switch.Thumb className='block h-[14px] w-[14px] translate-x-0.5 rounded-full bg-white shadow-[0_0_4_1px] transition-all duration-150 will-change-transform data-[state=checked]:translate-x-[14px]' />
               </Switch.Root>
@@ -444,7 +443,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
               className='flex h-[330px] items-center justify-center rounded-lg border-[2px] border-brand-dark bg-transparent dark:border-neutral-850'
             >
               <BlockNodeElement
-                data={node.data as BlockNodeData<object>}
+                data={node.data}
                 height={node.height || 0}
                 selected={false}
                 disabled={true}
