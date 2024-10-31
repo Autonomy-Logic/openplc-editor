@@ -193,9 +193,8 @@ type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
 const PLCProjectMetaSchema = z.object({
   name: z.string(),
-  type: z.enum(['plc-project']),
+  type: z.enum(['plc-project', 'plc-library']),
 })
-
 type PLCProjectMeta = z.infer<typeof PLCProjectMetaSchema>
 
 const PLCProjectSchema = z.object({
