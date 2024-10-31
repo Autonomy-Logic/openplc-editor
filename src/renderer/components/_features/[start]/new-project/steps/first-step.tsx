@@ -67,11 +67,11 @@ const Step1 = ({ onNext, onClose }: { onNext: () => void; onClose: () => void })
             <button
               type='button'
               className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
-                selected === 'project'
+                selected === 'plc-project'
                   ? 'border-blue-300 bg-blue-300 text-white dark:border-neutral-600 dark:bg-neutral-600'
                   : 'border-transparent bg-gray-200 text-black hover:border-blue-500 hover:dark:border-neutral-600'
               }`}
-              onClick={() => handleSelectType('project')}
+              onClick={() => handleSelectType('plc-project')}
             >
               <FolderIcon className='mr-2' /> PLC Project
             </button>
