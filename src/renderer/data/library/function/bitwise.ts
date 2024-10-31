@@ -4,7 +4,7 @@ import {
   BaseLibraryVariableSchema,
   baseTypeSchema,
   genericTypeSchema,
-} from '@root/types/PLC/library'
+} from '@root/types/PLC'
 import { z } from 'zod'
 
 const BitwiseVariableSchema = BaseLibraryVariableSchema.extend({

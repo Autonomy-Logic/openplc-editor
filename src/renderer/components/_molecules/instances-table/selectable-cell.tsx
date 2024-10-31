@@ -16,8 +16,8 @@ const SelectableTaskCell = ({
   editable = true,
 }: ISelectableCellProps) => {
   const {
-    workspace: {
-      projectData: {
+    project: {
+      data: {
         configuration: {
           resource: { tasks },
         },
@@ -81,8 +81,8 @@ const SelectableProgramCell = ({
   editable = true,
 }: ISelectableCellProps) => {
   const {
-    workspace: {
-      projectData: { pous },
+    project: {
+      data: { pous },
     },
   } = useOpenPLCStore()
   const initialValue = getValue<string>()

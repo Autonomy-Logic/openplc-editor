@@ -19,9 +19,8 @@ import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { UserSettings } from './rw-utility'
-import { EditorService, ProjectService } from './services'
-// import {Service}
+import { ProjectService, UserService } from './services'
+import { CompilerService } from './services/compiler-service'
 
 class AppUpdater {
   constructor() {
@@ -43,12 +42,8 @@ if (process.env.NODE_ENV === 'production') {
   void loadSourceMapSupport()
 }
 
-EditorService.createEditorFolder()
-
-EditorService.setBaseData()
-
-void UserSettings.checkIfUserBaseSettingsExists()
-
+void UserService.checkIfUserBaseSettingsExists()
+void UserService.checkIfUserHistoryFolderExists()
 // Retrieves the system information
 const systemInfo = platform()
 // The options to use when creating the titlebar. Type comes from electron.
@@ -226,6 +221,7 @@ const createMainWindow = async () => {
     mainWindow,
     ipcMain,
     projectService,
+    compilerService: CompilerService,
     store,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()

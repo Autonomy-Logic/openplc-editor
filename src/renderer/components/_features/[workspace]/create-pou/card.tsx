@@ -36,12 +36,13 @@ const Card = (props: ICardProps): ReactNode => {
   } = useForm<IPouFormProps>()
   const {
     pouActions: { create },
-    workspaceActions: { createDatatype },
+    projectActions: { createDatatype },
   } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
+
   const submitData: SubmitHandler<IPouFormProps> = (data) => {
     try {
-      const pouWasCreated = create(data)
+      const pouWasCreated = create.pou(data)
       if (!pouWasCreated) throw new TypeError()
       toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
       closeContainer((prev) => !prev)
@@ -97,7 +98,7 @@ const Card = (props: ICardProps): ReactNode => {
                   </p>
                 </div>
                 <div
-                  onClick={() => handleCreateDatatype('enum')}
+                  onClick={() => handleCreateDatatype('enumerated')}
                   className='relative flex h-7 w-full cursor-pointer select-none items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 dark:hover:bg-neutral-900'
                 >
                   <EnumIcon />
@@ -106,7 +107,7 @@ const Card = (props: ICardProps): ReactNode => {
                   </p>
                 </div>
                 <div
-                  onClick={() => handleCreateDatatype('struct')}
+                  onClick={() => handleCreateDatatype('structure')}
                   className='relative flex h-7 w-full cursor-pointer select-none items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 dark:hover:bg-neutral-900'
                 >
                   <StructureIcon />
@@ -148,11 +149,11 @@ const Card = (props: ICardProps): ReactNode => {
                         placeholder='POU name'
                         className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
                       />
-                      {errors.name?.type === 'already-exists' && (
+                      {/* {errors.name?.type === 'already-exists' && (
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
                           * POU name already exists
                         </span>
-                      )}
+                      )} */}
                       <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
                         ** Name must be at least 3 characters
                       </span>

@@ -2,7 +2,7 @@ import { PLCDataType } from '@root/types/PLC/open-plc'
 
 import type { EditorModel } from '../../editor'
 import { editorModelSchema } from '../../editor'
-import type { PouDTO } from '../../workspace/types'
+import type { PouDTO } from '../../project/types'
 
 type PouProps = {
   type: 'program' | 'function' | 'function-block'
@@ -18,7 +18,10 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
         data: {
           name: name,
           language,
-          body: `This is the body of ${name}`,
+          body:
+            language === 'ld'
+              ? { language, value: { name, rungs: [] } }
+              : { language, value: 'This is the body of function' },
           returnType: 'BOOL',
           variables: [],
           documentation: 'Doc for function',
@@ -30,7 +33,10 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
         data: {
           name: name,
           language,
-          body: `This is the body of ${name}`,
+          body:
+            language === 'ld'
+              ? { language, value: { name, rungs: [] } }
+              : { language, value: 'This is the body of function' },
           variables: [],
           documentation: 'Doc for function block',
         },
@@ -41,49 +47,42 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
         data: {
           name: name,
           language,
-          body: `This is the body of ${name}`,
+          body:
+            language === 'ld'
+              ? { language, value: { name, rungs: [] } }
+              : { language, value: 'This is the body of function' },
           variables: [],
           documentation: 'Doc for program',
-        },
-      }
+        }
   }
+}}
+
+type DatatypeProps = {
+  name: string
+  derivation: 'array' | 'structure'|'enumerated'
 }
 
-const CreateDatatypeObject = (derivation: 'enumerated' | 'structure' | 'array'): PLCDataType => {
-  switch (derivation) {
+const CreateDatatypeObject = (data: DatatypeProps): PLCDataType => {
+  switch (data.derivation) {
     case 'array':
       return {
-        id: 0,
-        name: 'New array datatype',
-        derivation: {
-          type: 'array',
-          value: 'ARRAY [] OF BOOL',
-          data: {
-            baseType: 'bool',
-            dimensions: [],
-          }
-        },
+        name: data.name,
+        derivation: 'array',
+        baseType: 'bool',
+        initialValue: 'false',
+        dimensions: []
       }
     case 'enumerated':
       return {
-        id: 0,
-        name: 'New enum datatype',
-        derivation: {
-          type: 'enumerated',
-          values: [],
-          initialValue: '0',
-        },
+        name: data.name,
+        derivation: data.derivation,
       }
     case 'structure':
       return {
-        id: 0,
-        name: 'New structure datatype',
-        derivation: {
-          type: 'structure',
-          elements: [],
-        },
+        name: data.name,
+        derivation: data.derivation,
       }
-  }
+    }
 }
 
 // type CreateEditorObjectType = z.infer<typeof createEditorObjectSchema>
@@ -104,6 +103,7 @@ const CreateEditorObject = (props: EditorModel): EditorModel => {
         type,
         meta,
         variable: model.variable,
+        graphical: model.graphical,
       }
     case 'plc-datatype':
       return {
@@ -115,6 +115,8 @@ const CreateEditorObject = (props: EditorModel): EditorModel => {
         type,
         meta,
         variable: model.variable,
+        task: model.task,
+        instance: model.instance,
       }
     default:
       return {

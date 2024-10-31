@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import * as Tabs from '@radix-ui/react-tabs'
+import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
@@ -24,7 +25,8 @@ import { useOpenPLCStore } from '../store'
 const WorkspaceScreen = () => {
   const {
     tabs,
-    workspace: { projectData, projectPath, editingState },
+    workspace: { editingState },
+    project,
     editor,
     workspaceActions: { setEditingState },
     searchResults,
@@ -32,7 +34,20 @@ const WorkspaceScreen = () => {
 
   useEffect(() => {
     const handleSaveProject = async () => {
-      const { success, reason } = await window.bridge.saveProject({ projectPath, projectData })
+      const projectData = PLCProjectSchema.safeParse(project)
+      if (!projectData.success) {
+        toast({
+          title: 'Error in the save request!',
+          description: 'The project data is not valid.',
+          variant: 'fail',
+        })
+        return
+      }
+
+      const { success, reason } = await window.bridge.saveProject({
+        projectPath: project.meta.path,
+        projectData: projectData.data,
+      })
       if (success) {
         _.debounce(() => setEditingState('saved'), 1000)()
         toast({
@@ -44,7 +59,7 @@ const WorkspaceScreen = () => {
         _.debounce(() => setEditingState('unsaved'), 1000)()
         toast({
           title: 'Error in the save request!',
-          description: reason.description,
+          description: reason?.description,
           variant: 'fail',
         })
       }
@@ -70,7 +85,6 @@ const WorkspaceScreen = () => {
     { name: 'c', type: 'false' },
     { name: 'd', type: 'false' },
   ]
-
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
   const [collapseAll, setCollapseAll] = useState(false)
@@ -80,6 +94,7 @@ const WorkspaceScreen = () => {
   const consolePanelRef = useRef(null)
   const [activeTab, setActiveTab] = useState('console')
   const hasSearchResults = searchResults.length > 0
+
 
   const togglePanel = () => {
     if (panelRef.current) {
@@ -152,7 +167,7 @@ const WorkspaceScreen = () => {
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
-                          <DataTypeEditor derivation={editor['meta']['derivation']} />{' '}
+                          <DataTypeEditor dataTypeName={editor.meta.name}  />{' '}
                         </div>
                       )}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (

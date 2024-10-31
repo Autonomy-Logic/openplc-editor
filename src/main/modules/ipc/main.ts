@@ -1,13 +1,14 @@
 import { TStoreType } from '@root/main/contracts/types/modules/store'
-import { Event, nativeTheme } from 'electron'
+import { app, Event, nativeTheme } from 'electron'
+import { join } from 'path'
 import { platform } from 'process'
 
-import { PLCProjectData } from '../../../types/PLC/open-plc'
+import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 
 type IDataToWrite = {
   projectPath: string
-  projectData: PLCProjectData
+  projectData: PLCProject
 }
 
 class MainProcessBridge implements MainIpcModule {
@@ -15,10 +16,13 @@ class MainProcessBridge implements MainIpcModule {
   mainWindow
   projectService
   store
-  constructor({ ipcMain, mainWindow, projectService, store }: MainIpcModuleConstructor) {
+  compilerService
+
+  constructor({ ipcMain, mainWindow, projectService, store, compilerService }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
     this.projectService = projectService
+    this.compilerService = compilerService
     this.store = store
   }
   setupMainIpcListener() {
@@ -43,6 +47,34 @@ class MainProcessBridge implements MainIpcModule {
         isWindowMaximized: this.mainWindow?.isMaximized(),
       }
     })
+    this.ipcMain.handle('project:open-by-path', async (_event, projectPath: string) => {
+      try {
+        const response = await this.projectService.openProjectByPath(projectPath)
+
+        return response
+      } catch (error) {
+        console.error('Error opening project:', error)
+        return {
+          success: false,
+          error: {
+            title: 'Errror opening project',
+            description: 'Please try again',
+          },
+        }
+      }
+    })
+    this.ipcMain.handle('app:store-retrieve-recents', async () => {
+      const pathToUserDataFolder = join(app.getPath('userData'), 'User')
+      const pathToUserHistoryFolder = join(pathToUserDataFolder, 'History')
+      const projectsFilePath = join(pathToUserHistoryFolder, 'projects.json')
+      const response = await this.projectService.readProjectHistory(projectsFilePath)
+      try {
+        return response
+      } catch (error) {
+        console.error('Error reading history file:', error)
+        return []
+      }
+    })
     this.ipcMain.on('window-controls:close', () => this.mainWindow?.close())
     this.ipcMain.on('window-controls:minimize', () => this.mainWindow?.minimize())
     this.ipcMain.on('window-controls:maximize', () => {
@@ -55,6 +87,13 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
     this.ipcMain.on('system:update-theme', () => this.mainIpcEventHandlers.handleUpdateTheme())
     this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
+
+    /**
+     * Compiler Service
+     */
+    this.ipcMain.handle('compiler:write-xml-file', (_event, arg: { path: string; data: string; fileName: string }) => {
+      return this.compilerService.writeXMLFile(arg.path, arg.data, arg.fileName)
+    })
   }
 
   mainIpcEventHandlers = {

@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
+import { ProjectSlice } from '../project'
 import { TabsSlice } from '../tabs'
-import { WorkspaceSlice } from '../workspace'
-import { CreateDatatypeObject, CreateEditorObject, CreatePouObject } from './utils'
+import { CreateEditorObject, CreatePouObject } from './utils'
 
 type PropsToCreatePou = {
   name: string
@@ -11,29 +13,27 @@ type PropsToCreatePou = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
 }
 
-type _PropsToCreateDataType = {
-  name: string
-}
-export type ISharedSlice = {
+export type SharedSlice = {
   pouActions: {
-    create: {
-      pou: (propsToCreatePou: PropsToCreatePou) => boolean
-      dataType: (derivation: 'enumerated' | 'structure' | 'array') => boolean
-    }
+    create: (propsToCreatePou: PropsToCreatePou) => boolean
+    update: () => void
+    delete: () => void
+  }
+  datatypeActions: {
+    create: (propsToCreateDatatype: PLCArrayDatatype) => boolean
     update: () => void
     delete: () => void
   }
 }
 
-export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & WorkspaceSlice, [], [], ISharedSlice> = (
+export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSlice, [], [], SharedSlice> = (
   _setState,
   getState,
 ) => ({
   pouActions: {
-    create: {
-      pou: (propsToCreatePou: PropsToCreatePou) => {
+    create: (propsToCreatePou: PropsToCreatePou) => {
         if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
-          const res = getState().workspaceActions.createPou(CreatePouObject(propsToCreatePou))
+          const res = getState().projectActions.createPou(CreatePouObject(propsToCreatePou))
           if (!res.ok) throw new Error()
           const data = CreateEditorObject({
             type: 'plc-textual',
@@ -67,7 +67,7 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
           propsToCreatePou.language === 'sfc' ||
           propsToCreatePou.language === 'fbd'
         ) {
-          const res = getState().workspaceActions.createPou(CreatePouObject(propsToCreatePou))
+          const res = getState().projectActions.createPou(CreatePouObject(propsToCreatePou))
           if (!res.ok) throw new Error()
           const data = CreateEditorObject({
             type: 'plc-graphical',
@@ -83,6 +83,10 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
               classFilter: 'All',
               selectedRow: '-1',
             },
+            graphical:
+              propsToCreatePou.language === 'ld'
+                ? { language: propsToCreatePou.language, openedRungs: [] }
+                : { language: propsToCreatePou.language },
           })
           getState().editorActions.addModel(data)
           getState().editorActions.setEditor(data)
@@ -97,24 +101,20 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & Workspace
         }
         return false
       },
-      dataType: (derivation: 'enumerated' | 'structure' | 'array') => {
-        /**
-         * This is a temporary solution to create a datatype
-         **/
-        getState().workspaceActions.createDatatype(CreateDatatypeObject(derivation))
-        const data = CreateEditorObject({
-          type: 'plc-datatype',
-          meta: { name: '', derivation },
-        })
-        getState().editorActions.addModel(data)
-        getState().editorActions.setEditor(data)
-        // getState().tabsActions.updateTabs(CreateTabObject({ name: derivation, type: 'program', language: 'il' }))
-        return true
-      },
-    },
     update: () => {},
     delete: () => {},
   },
-})
+  datatypeActions: {
+    create: (propsToCreateDatatype: PLCArrayDatatype) => {
+      getState().projectActions.createDatatype(propsToCreateDatatype)
+      getState().editorActions.addModel({type: 'plc-datatype', meta: {name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation}})
+      getState().editorActions.setEditor({type: 'plc-datatype', meta: {name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation}})
+      getState().tabsActions.updateTabs({name: propsToCreateDatatype.name, elementType: {type: 'data-type', derivation: propsToCreateDatatype.derivation}})
 
-export type ISharedSliceToCreate = typeof createSharedSlice
+      return true
+  },
+  update: () => {},
+  delete: () => {},
+}})
+
+export type SharedSliceToCreate = typeof createSharedSlice

@@ -1,4 +1,4 @@
-import { cn } from '@root/utils'
+import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 
@@ -119,6 +119,7 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
       outputHandles: outputHandles,
       inputConnector: handles[0],
       outputConnector: handles[1],
+      numericId: generateNumericUUID(),
       parallelInputConnector: type === 'close' ? handles[2] : undefined,
       parallelOutputConnector: type === 'open' ? handles[2] : undefined,
       parallelOpenReference: undefined,
@@ -127,6 +128,10 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
     },
     width: DEFAULT_PARALLEL_WIDTH,
     height: DEFAULT_PARALLEL_HEIGHT,
+    measured: {
+      width: DEFAULT_PARALLEL_WIDTH,
+      height: DEFAULT_PARALLEL_HEIGHT,
+    },
     draggable: false,
     selectable: false,
     selected: false,

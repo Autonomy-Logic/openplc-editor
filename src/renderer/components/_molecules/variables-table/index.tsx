@@ -85,7 +85,7 @@ const VariablesTable = ({
     editor: {
       meta: { name },
     },
-    workspaceActions: { updateVariable },
+    projectActions: { updateVariable },
   } = useOpenPLCStore()
 
   const tableHeaderRef = useRef<HTMLTableSectionElement>(null)

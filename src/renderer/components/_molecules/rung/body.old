@@ -1,5 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { FlowState } from '@root/renderer/store/slices'
+import { RungState } from '@root/renderer/store/slices'
 import type { CoordinateExtent, Node, OnConnect, OnEdgesChange, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { addEdge, applyEdgeChanges, applyNodeChanges, getNodesBounds, Panel } from '@xyflow/react'
 import { useCallback, useEffect, useState } from 'react'
@@ -7,12 +7,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { FlowPanel } from '../../_atoms/react-flow'
 
 type RungBodyProps = {
-  rung: FlowState
+  rung: RungState
 }
 
 export const RungBody = ({ rung }: RungBodyProps) => {
   const { flowActions } = useOpenPLCStore()
-  const [rungLocal, setRungLocal] = useState<FlowState>(rung)
+  const [rungLocal, setRungLocal] = useState<RungState>(rung)
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
 
   /**

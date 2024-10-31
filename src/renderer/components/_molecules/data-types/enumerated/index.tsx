@@ -1,5 +1,5 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
-import { Table, TableBody, TableCell, TableRow } from '@root/renderer/components/_atoms'
+import { Table, TableBody} from '@root/renderer/components/_atoms'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCDataType } from '@root/types/PLC/open-plc'
@@ -9,15 +9,15 @@ import { EnumeratorDTInitialValueContainer } from './initial-value'
 
 const EnumeratorDataType = () => {
   const {
-    workspace: {
-      projectData: { dataTypes },
+    project: {
+      data: { dataTypes },
     },
   } = useOpenPLCStore()
 
   const [dataTypesState, setDataTypesState] = useState<PLCDataType>()
 
   useEffect(() => {
-    const enumeratedDataType = dataTypes.find((dataType) => dataType.derivation.type === 'enumerated')
+    const enumeratedDataType = dataTypes.find((dataType) => dataType.derivation === 'enumerated')
     setDataTypesState(enumeratedDataType)
   }, [dataTypes])
 
@@ -60,15 +60,17 @@ const EnumeratorDataType = () => {
 
       <Table aria-label='Enumerated data type table' className='w-1/2'>
         <TableBody>
-          {dataTypesState?.derivation.type === 'enumerated' &&
-            dataTypesState.derivation.values.map((dimension, index) => (
-              <TableRow
-                key={index}
-                className='[&:first-child>*]:rounded-t-md [&:first-child>*]:border-t [&:first-child>*]:border-t-neutral-500'
-              >
-                <TableCell className='p-2'>{dimension}</TableCell>
-              </TableRow>
-            ))}
+          {dataTypesState?.derivation === 'enumerated' &&
+          <p>Derivation Editor</p>
+            // dataTypesState.derivation.values.map((dimension, index) => (
+            //   <TableRow
+            //     key={index}
+            //     className='[&:first-child>*]:rounded-t-md [&:first-child>*]:border-t [&:first-child>*]:border-t-neutral-500'
+            //   >
+            //     <TableCell className='p-2'>{dimension}</TableCell>
+            //   </TableRow>
+            // ))
+            }
         </TableBody>
       </Table>
     </div>

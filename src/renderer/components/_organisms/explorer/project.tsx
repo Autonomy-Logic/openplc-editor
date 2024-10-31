@@ -3,16 +3,17 @@ import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
 import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
 const Project = () => {
   const {
-    workspace: {
-      projectData: { pous, dataTypes, projectName, configuration },
+    project: {
+      data: { pous, dataTypes, configuration },
+      meta: {name}
     },
-    workspaceActions: { updateProjectName },
+    projectActions: { updateMetaName },
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
   } = useOpenPLCStore()
@@ -21,6 +22,7 @@ const Project = () => {
     updateTabs(tabToBeCreated)
 
     const editor = getEditorFromEditors(tabToBeCreated.name)
+    console.log(editor)
     if (!editor) {
       const model = CreateEditorObjectFromTab(tabToBeCreated)
       addModel(model)
@@ -32,14 +34,17 @@ const Project = () => {
   }
 
   const [isEditing, setIsEditing] = useState(false)
-  const [inputValue, setInputValue] = useState<string>(projectName)
+  const [inputValue, setInputValue] = useState<string>(name)
 
   const handleBlur = () => {
     setIsEditing(false)
-    if (inputValue !== projectName) {
-      updateProjectName(inputValue)
+    if (inputValue !== name) {
+      updateMetaName(inputValue)
     }
   }
+  useEffect(() => {
+    setInputValue(name)
+  }, [name])
 
   return (
     <div id='project-container' className='flex h-full w-full flex-col pr-2'>
@@ -70,7 +75,7 @@ const Project = () => {
               className={`w-full cursor-pointer overflow-hidden text-ellipsis whitespace-nowrap rounded-lg px-2 py-1 text-xs font-medium text-neutral-1000 dark:text-neutral-50`}
               title='Edit name project'
             >
-              {projectName}
+              {name}
             </span>
           )}
         </div>
@@ -81,7 +86,7 @@ const Project = () => {
 
       {/* Data display */}
       <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto'>
-        <ProjectTreeRoot label={projectName}>
+        <ProjectTreeRoot label={name}>
           <ProjectTreeBranch branchTarget='function'>
             {pous
               ?.filter(({ type }) => type === 'function')
@@ -150,11 +155,11 @@ const Project = () => {
           </ProjectTreeBranch>
           <ProjectTreeBranch branchTarget='data-type'>
             {dataTypes
-              ?.filter(({ derivation }) => derivation.type === 'array')
-              .map(({ id, name }) => (
+              ?.filter(({ derivation }) => derivation === 'array')
+              .map(({ name }) => (
                 <ProjectTreeLeaf
                   nested
-                  key={id}
+                  key={name}
                   leafLang='arr'
                   label={name}
                   onClick={() =>
@@ -168,11 +173,11 @@ const Project = () => {
               ))}
 
             {dataTypes
-              ?.filter(({ derivation }) => derivation.type === 'enumerated')
-              .map(({ id, name }) => (
+              ?.filter(({ derivation }) => derivation === 'enumerated')
+              .map(({  name }) => (
                 <ProjectTreeLeaf
                   nested
-                  key={id}
+                  key={name}
                   leafLang='enum'
                   label={name}
                   /** Todo: Update the tab state */
@@ -187,11 +192,11 @@ const Project = () => {
               ))}
 
             {dataTypes
-              ?.filter(({ derivation }) => derivation.type === 'structure')
-              .map(({ id, name }) => (
+              ?.filter(({ derivation }) => derivation === 'structure')
+              .map(({ name }) => (
                 <ProjectTreeLeaf
                   nested
-                  key={id}
+                  key={name}
                   leafLang='str'
                   label={name}
                   /** Todo: Update the tab state */

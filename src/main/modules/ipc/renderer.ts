@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
-import { PLCProjectData } from '../../../types/PLC/open-plc'
+import { PLCProject } from '../../../types/PLC/open-plc'
 import { IProjectServiceResponse } from '../../services/project-service'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
 type IDataToWrite = {
   projectPath: string
-  projectData: PLCProjectData
+  projectData: PLCProject
 }
 
 type ISaveDataResponse = {
@@ -38,7 +38,8 @@ const rendererProcessBridge = {
     ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
 
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
-
+  openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
+    ipcRenderer.invoke('project:open-by-path', projectPath),
   /**
    * Handlers for opening projects.
    * As for the click and for the accelerator type.
@@ -62,10 +63,13 @@ const rendererProcessBridge = {
     prefersDarkMode: boolean
     isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
+  retrieveRecents: (): Promise<{ path: string; lastOpenedAt: string; createdAt: string }[]> =>
+    ipcRenderer.invoke('app:store-retrieve-recents'),
   closeWindow: () => ipcRenderer.send('window-controls:close'),
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
-  isMaximizedWindow: (callback: IpcRendererCallbacks) => ipcRenderer.on('window-controls:toggle-maximized', (_event) => callback(_event)),
+  isMaximizedWindow: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('window-controls:toggle-maximized', (_event) => callback(_event)),
   reloadWindow: () => ipcRenderer.send('window:reload'),
   handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
   winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
@@ -73,5 +77,11 @@ const rendererProcessBridge = {
   // WIP: Refactoring
   // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),
   // createPou: (callback: any) => ipcRenderer.on('pou:create', callback),
+
+  /**
+   * Compiler Service
+   */
+  writeXMLFile: (path: string, data: string, fileName: string) =>
+    ipcRenderer.invoke('compiler:write-xml-file', { path, data, fileName }),
 }
 export default rendererProcessBridge
