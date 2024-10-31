@@ -24,6 +24,8 @@ export const DisplayMenu = () => {
     switchAppTheme()
   }
 
+
+
   return (
     <MenuPrimitive.Menu>
       <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:display.label')}</MenuPrimitive.Trigger>
@@ -46,7 +48,7 @@ export const DisplayMenu = () => {
             <span>{i18n.t('menu:display.submenu.zoomOut')}</span>
             <span className={ACCELERATOR}>{'Ctrl + - '}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} >
             <span>{i18n.t('menu:display.submenu.switchPerspective')}</span>
             <span className={ACCELERATOR}>{'F12 '}</span>
           </MenuPrimitive.Item>
