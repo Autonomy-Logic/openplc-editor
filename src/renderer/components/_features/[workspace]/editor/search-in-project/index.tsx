@@ -369,7 +369,6 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       })
     } else {
       setSearchResults(formattedResults)
-      console.log(formattedResults)
       setSearchQuery('')
       onClose()
     }
