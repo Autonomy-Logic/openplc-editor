@@ -351,6 +351,12 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
         description: 'No matches were found for your search.',
         variant: 'warn',
       })
+    } else if (searchQuery === '') {
+      toast({
+        title: 'No search query',
+        description: 'Please enter a search query to search.',
+        variant: 'warn',
+      })
     } else {
       setSearchResults(formattedResults)
       console.log(formattedResults)
