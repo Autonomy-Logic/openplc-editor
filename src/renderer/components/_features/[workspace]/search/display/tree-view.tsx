@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   ArrayIcon,
   ArrowIcon,
@@ -81,14 +84,14 @@ const BranchSources = {
 
 const ProjectSearchTreeBranch = ({ branchTarget, children, ...res }: IProjectSearchTreeBranchProps) => {
   const {
-    workspace: {
-      projectData: { pous, dataTypes, configuration },
+    project: {
+      data: { pous, dataTypes, configuration },
     },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState(false)
   const { BranchIcon, label } = BranchSources[branchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-  const hasAssociatedPou =
+  const hasAssociatedPou: boolean =
     pous.some((pou) => pou.type === branchTarget) ||
     (branchTarget === 'data-type' && dataTypes.length > 0) ||
     (branchTarget === 'resource' && configuration !== null)
@@ -154,14 +157,14 @@ const ProjectSearchTreeNestedBranch = ({
   ...res
 }: IProjectSearchTreeNestedBranchProps) => {
   const {
-    workspace: {
-      projectData: { dataTypes },
+    project: {
+      data: { dataTypes },
     },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)
   const { BranchIcon, label } = NestedBranchSources[nestedBranchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-  const hasAssociatedDataType = dataTypes.some((dataType) => dataType.derivation.type === nestedBranchTarget)
+  const hasAssociatedDataType: boolean = dataTypes.some((dataType) => dataType.derivation === nestedBranchTarget)
   useEffect(() => setBranchIsOpen(hasAssociatedDataType), [hasAssociatedDataType])
 
   return (
@@ -258,14 +261,14 @@ const ProjectSearchTreeLeaf = ({ leafLang, label, ...res }: IProjectSearchTreeLe
 
 const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: IProjectSearchTreeLeafProps) => {
   const {
-    workspace: {
-      projectData: { pous, configuration },
+    project: {
+      data: { pous, configuration },
     },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)
   const { LeafIcon } = LeafSources[leafLang]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
-  const hasVariable = pous.some((pou) => pou.data.variables.length > 0) || configuration !== null
+  const hasVariable: boolean = pous.some((pou) => pou.data.variables.length > 0) || configuration !== null
   useEffect(() => setBranchIsOpen(hasVariable), [hasVariable])
 
   return (

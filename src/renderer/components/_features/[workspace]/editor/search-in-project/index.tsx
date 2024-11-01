@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as Checkbox from '@radix-ui/react-checkbox'
 import { CheckIcon } from '@radix-ui/react-icons'
 import { InputWithRef } from '@root/renderer/components/_atoms'
@@ -85,7 +90,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
 
   const { toast } = useToast()
   const {
-    workspace: { projectData },
+    project: { data, meta },
     searchQuery,
     searchActions: { setSearchQuery, setSearchResults, setSensitiveCase, setRegularExpression },
   } = useOpenPLCStore()
@@ -169,7 +174,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       searchQuery: string,
       sensitiveCase: boolean,
       regularExpressionOption: boolean,
-    ) => {
+    ): number => {
       if (regularExpressionOption) {
         try {
           const regex = new RegExp(searchQuery, sensitiveCase ? 'g' : 'gi')
@@ -192,7 +197,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       }
     }
 
-    const groupedPous = projectData.pous
+    const groupedPous = data.pous
       .filter((pou) => {
         const pouTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes(pou.type)
 
@@ -212,10 +217,15 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
 
         const bodyMatches = ['st', 'il'].includes(pou.data.language)
           ? regularExpressionOption
-            ? countOccurrences(pou.data.body, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
+            ? countOccurrences(
+                pou.data.body.value as string,
+                searchQuery,
+                sensitiveCaseOption,
+                regularExpressionOption,
+              ) > 0
             : sensitiveCaseOption
-              ? pou.data.body.includes(searchQuery)
-              : pou.data.body.toLowerCase().includes(searchQuery.toLowerCase())
+              ? (pou.data.body.value as string).includes(searchQuery)
+              : (pou.data.body.value as string).toLowerCase().includes(searchQuery.toLowerCase())
           : false
 
         return pouTypeMatchesFilter && (pouMatches || variableMatches || bodyMatches)
@@ -232,7 +242,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
             name: pou.data.name,
             language: pou.data.language,
             pouType: pou.type,
-            body: pou.data.body,
+            body: typeof pou.data.body === 'string' ? pou.data.body : JSON.stringify(pou.data.body),
             variable: pou.data.variables
               .filter((variable) =>
                 regularExpressionOption
@@ -259,7 +269,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
         >,
       )
 
-    const filteredDataTypes = projectData.dataTypes
+    const filteredDataTypes = data.dataTypes
       .filter((dataType) => {
         const dataTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes('data-type')
         return (
@@ -273,10 +283,10 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       })
       .map((dataType) => ({
         name: dataType.name,
-        type: dataType.derivation.type,
+        type: dataType.derivation,
       }))
 
-    const resourceGlobalVar = projectData.configuration.resource.globalVariables.filter((variable) => {
+    const resourceGlobalVar = data.configuration.resource.globalVariables.filter((variable) => {
       const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
       return (
         resourceMatchesFilter &&
@@ -288,7 +298,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       )
     })
 
-    const resourceTasks = projectData.configuration.resource.tasks.filter((task) => {
+    const resourceTasks = data.configuration.resource.tasks.filter((task) => {
       const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
       return (
         resourceMatchesFilter &&
@@ -330,7 +340,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
 
     const formattedResults = {
       searchQuery,
-      projectName: projectData.projectName,
+      projectName: meta.name,
       functions: {
         pous: groupedPous,
         dataTypes: filteredDataTypes,
