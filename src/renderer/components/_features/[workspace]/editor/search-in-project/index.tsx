@@ -1,11 +1,23 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as Checkbox from '@radix-ui/react-checkbox'
 import { CheckIcon } from '@radix-ui/react-icons'
 import { InputWithRef } from '@root/renderer/components/_atoms'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { useEffect, useState } from 'react'
+
+import { useToast } from '../../../[app]/toast/use-toast'
 
 type OptionProps = {
   id: string
   label: string
+}
+
+interface SearchInProjectModalProps {
+  onClose: () => void
 }
 
 const scopeElements = [{ value: 'whole project' }, { value: 'only elements' }]
@@ -27,7 +39,7 @@ const CheckboxOption = ({
 }: OptionProps & { disabled?: boolean; checked?: boolean; onChange?: () => void }) => (
   <div className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
     <Checkbox.Root
-      className={`flex ${disabled ? 'cursor-not-allowed' : ''} h-4 w-4 appearance-none items-center justify-center rounded-[4px] border ${checked ? 'border-brand' : 'border-neutral-300 dark:border-neutral-850'} outline-none bg-white`}
+      className={`flex ${disabled ? 'cursor-not-allowed' : ''} h-4 w-4 appearance-none items-center justify-center rounded-[4px] border ${checked ? 'border-brand' : 'border-neutral-300 dark:border-neutral-850'} bg-white outline-none`}
       id={id}
       disabled={disabled}
       checked={checked}
@@ -68,11 +80,20 @@ const RadioOption = ({
   </div>
 )
 
-export default function SearchInProject() {
+export default function SearchInProject({ onClose }: SearchInProjectModalProps) {
   const [selectedScope, setSelectedScope] = useState('whole project')
   const [checkedOptions, setCheckedOptions] = useState<{ [key: string]: boolean }>({})
-  const [sensitiveCase, setSensitiveCase] = useState(false)
-  const [regularExpression, setRegularExpression] = useState(false)
+  const [sensitiveCaseOption, setsensitiveCaseOption] = useState(false)
+  const [regularExpressionOption, setRegularExpressionOption] = useState(false)
+  const [disabledSensitiveCaseOption, setDisabledSensitiveCaseOption] = useState(false)
+  const [disabledRegularExpressionOption, setDisabledRegularExpressionOption] = useState(false)
+
+  const { toast } = useToast()
+  const {
+    project: { data, meta },
+    searchQuery,
+    searchActions: { setSearchQuery, setSearchResults, setSensitiveCase, setRegularExpression },
+  } = useOpenPLCStore()
 
   useEffect(() => {
     if (selectedScope === 'whole project') {
@@ -135,25 +156,265 @@ export default function SearchInProject() {
     setSelectedScope(scope)
   }
 
+  const handleSearch = () => {
+    const filterMap = {
+      'data type': 'data-type',
+      function: 'function',
+      'function block': 'function-block',
+      program: 'program',
+      configuration: 'configuration',
+    }
+
+    const activeFilters = Object.keys(checkedOptions)
+      .filter((key) => checkedOptions[key])
+      .map((key) => filterMap[key as keyof typeof filterMap])
+
+    const countOccurrences = (
+      text: string,
+      searchQuery: string,
+      sensitiveCase: boolean,
+      regularExpressionOption: boolean,
+    ): number => {
+      if (regularExpressionOption) {
+        try {
+          const regex = new RegExp(searchQuery, sensitiveCase ? 'g' : 'gi')
+          const matches = text.match(regex)
+          return matches ? matches.length : 0
+        } catch (e) {
+          if (e instanceof SyntaxError) {
+            toast({
+              title: 'Invalid Regular Expression',
+              description: 'The regular expression provided is invalid.',
+              variant: 'warn',
+            })
+          }
+          return 0
+        }
+      } else {
+        const regex = new RegExp(searchQuery, sensitiveCase ? 'g' : 'gi')
+        const matches = text.match(regex)
+        return matches ? matches.length : 0
+      }
+    }
+
+    const groupedPous = data.pous
+      .filter((pou) => {
+        const pouTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes(pou.type)
+
+        const pouMatches = regularExpressionOption
+          ? countOccurrences(pou.data.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
+          : sensitiveCaseOption
+            ? pou.data.name.includes(searchQuery)
+            : pou.data.name.toLowerCase().includes(searchQuery.toLowerCase())
+
+        const variableMatches = pou.data.variables.some((variable) =>
+          regularExpressionOption
+            ? countOccurrences(variable.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
+            : sensitiveCaseOption
+              ? variable.name.includes(searchQuery)
+              : variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
+        )
+
+        const bodyMatches = ['st', 'il'].includes(pou.data.language)
+          ? regularExpressionOption
+            ? countOccurrences(
+                pou.data.body.value as string,
+                searchQuery,
+                sensitiveCaseOption,
+                regularExpressionOption,
+              ) > 0
+            : sensitiveCaseOption
+              ? (pou.data.body.value as string).includes(searchQuery)
+              : (pou.data.body.value as string).toLowerCase().includes(searchQuery.toLowerCase())
+          : false
+
+        return pouTypeMatchesFilter && (pouMatches || variableMatches || bodyMatches)
+      })
+      .reduce(
+        (acc, pou) => {
+          const pouType = pou.type
+
+          if (!acc[pouType]) {
+            acc[pouType] = []
+          }
+
+          acc[pouType].push({
+            name: pou.data.name,
+            language: pou.data.language,
+            pouType: pou.type,
+            body: typeof pou.data.body === 'string' ? pou.data.body : JSON.stringify(pou.data.body),
+            variable: pou.data.variables
+              .filter((variable) =>
+                regularExpressionOption
+                  ? countOccurrences(variable.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
+                  : sensitiveCaseOption
+                    ? variable.name.includes(searchQuery)
+                    : variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
+              )
+              .map((variable) => variable.name)
+              .join(', '),
+          })
+
+          return acc
+        },
+        {} as Record<
+          string,
+          Array<{
+            name: string
+            language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st'
+            pouType: 'function' | 'function-block' | 'program'
+            body: string
+            variable: string
+          }>
+        >,
+      )
+
+    const filteredDataTypes = data.dataTypes
+      .filter((dataType) => {
+        const dataTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes('data-type')
+        return (
+          dataTypeMatchesFilter &&
+          (regularExpressionOption
+            ? countOccurrences(dataType.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
+            : sensitiveCaseOption
+              ? dataType.name.includes(searchQuery)
+              : dataType.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        )
+      })
+      .map((dataType) => ({
+        name: dataType.name,
+        type: dataType.derivation,
+      }))
+
+    const resourceGlobalVar = data.configuration.resource.globalVariables.filter((variable) => {
+      const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
+      return (
+        resourceMatchesFilter &&
+        (regularExpressionOption
+          ? countOccurrences(variable.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
+          : sensitiveCaseOption
+            ? variable.name.includes(searchQuery)
+            : variable.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    })
+
+    const resourceTasks = data.configuration.resource.tasks.filter((task) => {
+      const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
+      return (
+        resourceMatchesFilter &&
+        (regularExpressionOption
+          ? countOccurrences(task.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
+          : sensitiveCaseOption
+            ? task.name.includes(searchQuery)
+            : task.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    })
+
+    const resource = {
+      globalVariable: resourceGlobalVar.map((variable) => variable.name).join(', '),
+      task: resourceTasks.map((task) => task.name).join(', '),
+    }
+
+    const totalMatches =
+      Object.keys(groupedPous).reduce((acc, pouType) => {
+        return (
+          acc +
+          groupedPous[pouType].reduce((innerAcc, pou) => {
+            const nameMatches = countOccurrences(pou.name, searchQuery, sensitiveCaseOption, regularExpressionOption)
+            const variableMatches = countOccurrences(
+              pou.variable,
+              searchQuery,
+              sensitiveCaseOption,
+              regularExpressionOption,
+            )
+            const bodyMatches = ['st', 'il'].includes(pou.language)
+              ? countOccurrences(pou.body, searchQuery, sensitiveCaseOption, regularExpressionOption)
+              : 0
+            return innerAcc + nameMatches + variableMatches + bodyMatches
+          }, 0)
+        )
+      }, 0) +
+      filteredDataTypes.length +
+      resourceGlobalVar.length +
+      resourceTasks.length
+
+    const formattedResults = {
+      searchQuery,
+      projectName: meta.name,
+      functions: {
+        pous: groupedPous,
+        dataTypes: filteredDataTypes,
+        resource,
+      },
+      searchCounts: totalMatches,
+    }
+
+    const noResults =
+      Object.keys(groupedPous).length === 0 &&
+      filteredDataTypes.length === 0 &&
+      resourceGlobalVar.length === 0 &&
+      resourceTasks.length === 0
+
+    if (noResults) {
+      toast({
+        title: 'No results found',
+        description: 'No matches were found for your search.',
+        variant: 'warn',
+      })
+    } else if (searchQuery === '') {
+      toast({
+        title: 'No search query',
+        description: 'Please enter a search query to search.',
+        variant: 'warn',
+      })
+    } else {
+      setSearchResults(formattedResults)
+      setSearchQuery('')
+      onClose()
+    }
+  }
+
+  const handleSearchQueryChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(event.target.value)
+  }
+
+  const handleClose = () => {
+    onClose()
+  }
+
   return (
     <div className='flex h-full w-full flex-col gap-8'>
       <div className='flex h-[57px] w-full gap-6'>
         <div className='flex w-full flex-col justify-between'>
           <p className='text-base font-medium text-neutral-950 dark:text-white'>Pattern to Search</p>
-          <InputWithRef className='h-[30px] w-full rounded-lg border border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-100' />
+          <InputWithRef
+            className='h-[30px] w-full rounded-lg border border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-100'
+            value={searchQuery}
+            onChange={handleSearchQueryChange}
+          />
         </div>
         <div className='flex flex-col justify-between'>
           <CheckboxOption
             id='case-sensitive'
             label='Case Sensitive'
-            checked={sensitiveCase}
-            onChange={() => setSensitiveCase(!sensitiveCase)}
+            checked={sensitiveCaseOption}
+            onChange={() => {
+              setsensitiveCaseOption(!sensitiveCaseOption)
+              setSensitiveCase(!sensitiveCaseOption)
+              setDisabledRegularExpressionOption(!disabledRegularExpressionOption)
+            }}
+            disabled={disabledSensitiveCaseOption}
           />
           <CheckboxOption
             id='regular-expression'
             label='Regular Expression'
-            checked={regularExpression}
-            onChange={() => setRegularExpression(!regularExpression)}
+            checked={regularExpressionOption}
+            onChange={() => {
+              setRegularExpressionOption(!regularExpressionOption)
+              setRegularExpression(!regularExpressionOption)
+              setDisabledSensitiveCaseOption(!disabledSensitiveCaseOption)
+            }}
+            disabled={disabledRegularExpressionOption}
           />
         </div>
       </div>
@@ -191,10 +452,16 @@ export default function SearchInProject() {
         </div>
       </div>
       <div className='flex !h-8 w-full gap-6'>
-        <button className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
+        <button
+          className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+          onClick={handleClose}
+        >
           Close
         </button>
-        <button className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'>
+        <button
+          className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'
+          onClick={handleSearch}
+        >
           Find
         </button>
       </div>
