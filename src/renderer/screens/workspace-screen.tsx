@@ -121,9 +121,23 @@ const WorkspaceScreen = () => {
     handleCloseProject()
   },[])
 
-  window.bridge.switchPerspective((_event)=>{
-    toggleCollapse()
-  })
+  const [isSwitchingPerspective, setIsSwitchingPerspective] = useState(false);
+
+  const handleSwitchPerspective = () => {
+    if (!isSwitchingPerspective) {
+      setIsSwitchingPerspective(true);
+      toggleCollapse(); 
+  };
+  }
+
+  useEffect(() => {
+    window.bridge.switchPerspective((_event) => {
+      handleSwitchPerspective();
+    });
+  }, []);
+
+
+ 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <WorkspaceSideContent>
