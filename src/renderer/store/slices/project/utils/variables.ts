@@ -165,7 +165,7 @@ const createVariableValidation = (
   }
 
   if (checkIfLocationExists(variables, variableLocation)) {
-    console.log('variableLocation', variableLocation)
+    if (variableLocation === '') return response
 
     const variableFound = variables.find((variable) => variable.location === variableLocation)
     if (!variableFound) return response
