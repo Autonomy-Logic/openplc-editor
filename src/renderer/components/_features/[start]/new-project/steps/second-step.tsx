@@ -84,7 +84,7 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
           </h2>
           <div className='relative h-20 w-64'>
             {' '}
-            {/* Altura fixa para a div */}
+            {/* Fixed height for the div element */}
             <div
               className='group flex h-10 w-full cursor-pointer items-center justify-center rounded-md border border-gray-300 p-2'
               onClick={handlePathPicker}
@@ -99,7 +99,7 @@ const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) =
                 readOnly
               />
             </div>
-            {/* Mensagem de erro com altura fixa */}
+            {/* Error message with fixed height */}
             {pathErrorMessage && (
               <div className='absolute bottom-0 left-0 w-full text-sm text-red-600' style={{ height: '20px' }}>
                 {pathErrorMessage}
