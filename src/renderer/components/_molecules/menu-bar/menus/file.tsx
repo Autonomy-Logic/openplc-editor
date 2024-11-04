@@ -17,6 +17,7 @@ export const FileMenu = () => {
     workspaceActions: { setEditingState, setRecents },
     projectActions: { setProject },
     tabsActions: { clearTabs },
+    workspace: {editingState},
     flowActions: { addFlow },
   } = useOpenPLCStore()
 
@@ -63,6 +64,7 @@ export const FileMenu = () => {
 
   const handleOpenProject = async () => {
     const { success, data, error } = await window.bridge.openProject()
+    if (editingState === 'unsaved') window.alert("não tá salvo")
     if (success && data) {
       setProject({
         meta: {
@@ -106,6 +108,7 @@ export const FileMenu = () => {
       })
     }
   }
+  console.log("editingState -->", editingState)
 
   const handleSaveProject = async () => {
     const projectData = PLCProjectSchema.safeParse(project)
