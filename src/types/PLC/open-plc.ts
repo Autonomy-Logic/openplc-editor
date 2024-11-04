@@ -34,7 +34,7 @@ const PLCArrayDatatypeSchema = z.object({
   initialValue: z.string(),
   dimensions: z.array(z.object({ dimension: z.string() })),
 })
- 
+
 type PLCArrayDatatype = z.infer<typeof PLCArrayDatatypeSchema>
 
 const PLCDataTypeSchema = z.discriminatedUnion('derivation', [
@@ -193,9 +193,8 @@ type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
 const PLCProjectMetaSchema = z.object({
   name: z.string(),
-  type: z.enum(['plc-project']),
+  type: z.enum(['plc-project', 'plc-library']),
 })
-
 type PLCProjectMeta = z.infer<typeof PLCProjectMetaSchema>
 
 const PLCProjectSchema = z.object({
