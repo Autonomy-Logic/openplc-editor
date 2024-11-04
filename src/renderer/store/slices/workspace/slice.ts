@@ -13,6 +13,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       isWindowMaximized: false,
     },
     recents: [],
+    isCollapsed: false,
   },
 
   workspaceActions: {
@@ -53,7 +54,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-
+    toggleCollapse: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.isCollapsed = !workspace.isCollapsed;
+        }),
+      )
+    },
    },
 })
 

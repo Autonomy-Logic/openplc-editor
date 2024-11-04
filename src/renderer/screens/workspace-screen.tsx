@@ -26,11 +26,11 @@ const WorkspaceScreen = () => {
   const navigate = useNavigate()
   const {
     tabs,
-    workspace: { editingState },
+    workspace: { editingState,isCollapsed },
     project,
     editor,
     editorActions:{clearEditor},
-    workspaceActions: { setEditingState,setRecents },
+    workspaceActions: { setEditingState,setRecents,toggleCollapse },
     tabsActions: { clearTabs },
   } = useOpenPLCStore()
   
@@ -90,7 +90,7 @@ const WorkspaceScreen = () => {
 
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
-  const [collapseAll, setCollapseAll] = useState(false)
+ 
   const panelRef = useRef(null)
   const explorerPanelRef = useRef(null)
   const workspacePanelRef = useRef(null)
@@ -103,11 +103,11 @@ const WorkspaceScreen = () => {
   }
 
   useEffect(() => {
-    const action = collapseAll ? 'collapse' : 'expand'
+    const action = isCollapsed ? 'collapse' : 'expand'
     ;[explorerPanelRef, workspacePanelRef, consolePanelRef].forEach((ref) => {
       if (ref.current) ref.current[action]()
     })
-  }, [collapseAll])
+  }, [isCollapsed])
 
   useEffect(()=>{
     const handleCloseProject=()=>{
@@ -122,7 +122,7 @@ const WorkspaceScreen = () => {
   },[])
 
   window.bridge.switchPerspective((_event)=>{
-    setCollapseAll(!collapseAll)
+    toggleCollapse()
   })
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
@@ -130,7 +130,7 @@ const WorkspaceScreen = () => {
         <WorkspaceActivityBar
           defaultActivityBar={{
             zoom: {
-              onClick: () => setCollapseAll(!collapseAll),
+              onClick: () => void toggleCollapse(),
             },
           }}
         />
