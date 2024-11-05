@@ -1,12 +1,12 @@
 /* eslint-disable no-console */
-import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
 import { i18n } from '../utils/i18n'
 import { _ProjectService, ProjectService } from './services'
 
 /**
  * Wip: Interface for mac machines menu.
- */ 
+ */
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string
   submenu?: DarwinMenuItemConstructorOptions[] | Menu
@@ -74,28 +74,26 @@ export default class MenuBuilder {
 
   handleCloseTab() {
     this.mainWindow.webContents.send('workspace:close-tab-accelerator')
-    
   }
 
-  handleCloseProject(){
+  handleCloseProject() {
     this.mainWindow.webContents.send('workspace:close-project-accelerator')
   }
 
-  handleDeletePou(){
+  handleDeletePou() {
     this.mainWindow.webContents.send('workspace:delete-pou-accelerator')
-   
   }
 
   handleSwitchPerspective() {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
   }
-handleOpenExternalLink(link:string) {
- void shell.openExternal(link)
-}
+  handleOpenExternalLink(link: string) {
+    void shell.openExternal(link)
+  }
 
-handleFindInProject(){
-  this.mainWindow.webContents.send('project:find-in-project-accelerator')
-}
+  handleFindInProject() {
+    this.mainWindow.webContents.send('project:find-in-project-accelerator')
+  }
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -122,45 +120,19 @@ handleFindInProject(){
     const recents = await this.handleGetRecents()
     const homeDir = process.env.HOME || ''
     const defaultDarwinMenu: MenuItemConstructorOptions = {
-      role: 'appMenu',
-    }
-
-    const subMenuApp: DarwinMenuItemConstructorOptions = {
-      label: 'OpenPLC Editor',
+      label: app.name,
       submenu: [
-        {
-          label: 'About OpenPLC Editor',
-    
-            click: () => void this.handleOpenExternalLink('https://autonomylogic.com/'),
-        
-        },
+        { role: 'about' },
         { type: 'separator' },
-        {
-          label: 'Community Support',
-          click: () => void this.handleOpenExternalLink('https://openplc.discussion.community/'),
-        },
+        { role: 'services' },
         { type: 'separator' },
-        {
-          label: 'Check for Updates',
-          enabled: false,
-          click: () => {
-            console.log('Check for Updates clicked');
-           
-          },
-        },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
         { type: 'separator' },
-        {
-          label: 'Hide OpenPLC Editor',
-          role: 'hide',
-        },
-        { type: 'separator' },
-        {
-          label: 'Quit OpenPLC Editor',
-          role: 'quit',
-        },
+        { role: 'quit' },
       ],
-    };
-    
+    }
 
     const subMenuFile: DarwinMenuItemConstructorOptions = {
       label: i18n.t('menu:file.label'),
@@ -395,7 +367,7 @@ handleFindInProject(){
       ],
     }
 
-    return [defaultDarwinMenu, subMenuApp,subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
+    return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
   }
 
   // Wip: Constructing a default machines menu.
@@ -417,7 +389,7 @@ handleFindInProject(){
             accelerator: 'Ctrl+O',
             click: () => void this.handleOpenProject(),
           },
-             {
+          {
             type: 'separator',
           },
           {
@@ -431,7 +403,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
-            
+
             accelerator: 'Ctrl+W',
             click: () => this.handleCloseTab(),
           },
@@ -558,7 +530,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:edit.submenu.delete'),
-            accelerator:"delete",
+            accelerator: 'delete',
             click: () => this.handleDeletePou(),
           },
         ],
@@ -629,7 +601,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:help.submenu.about'),
-            accelerator : 'F1',
+            accelerator: 'F1',
             click: () => this.handleOpenExternalLink('https://autonomylogic.com/'),
           },
         ],
