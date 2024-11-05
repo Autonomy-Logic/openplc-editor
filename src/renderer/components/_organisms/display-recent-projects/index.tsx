@@ -1,6 +1,7 @@
 import { FileElement } from '@components/elements'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
+import type { FlowType } from '@root/renderer/store/slices'
 import { ComponentProps, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -13,6 +14,7 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
     workspaceActions: { setEditingState, setRecents },
     projectActions: { setProject },
     tabsActions: { clearTabs },
+    flowActions: { addFlow },
   } = useOpenPLCStore()
   const navigate = useNavigate()
 
@@ -106,6 +108,14 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
       clearEditor()
       clearTabs()
       navigate('/workspace')
+
+      const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
+      if (ladderPous.length > 0) {
+        ladderPous.forEach((pou) => {
+          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+        })
+      }
+
       toast({
         title: 'Project opened!',
         description: 'Your project was opened and loaded.',

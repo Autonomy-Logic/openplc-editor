@@ -182,7 +182,7 @@ const changeRailBounds = (rightRail: Node, nodes: Node[], defaultBounds: [number
   return newRail
 }
 
-const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [number, number]) => {
+export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [number, number]) => {
   const { nodes } = rung
   const newNodes: Node[] = []
 
@@ -863,6 +863,7 @@ const startParallelConnectionKeepingTheNode = (
   const newAboveNodePosition = getNodePositionBasedOnPreviousNode(openParallelNode, aboveNode, 'serial')
   const buildedAboveNode = buildGenericNode({
     nodeType: aboveNode.type ?? '',
+    blockType: aboveNode.data.variant,
     id: `${aboveNode.type?.toUpperCase()}_${uuidv4()}`,
     ...newAboveNodePosition,
   })
@@ -1104,7 +1105,7 @@ export const addNewElement = <T>(
     Object.entries(rung.nodes).find(
       (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
     ) ?? []
-  if (!selectedPlaceholder || !selectedPlaceholderIndex) return { nodes: rung.nodes, edges: rung.edges }
+  if (!selectedPlaceholder || !selectedPlaceholderIndex) return { nodes: removePlaceholderNodes(rung.nodes), edges: rung.edges }
 
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
@@ -1125,7 +1126,10 @@ export const addNewElement = <T>(
     newNodes = serialNodes
   }
 
-  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds as [number, number])
+  newNodes = updateDiagramElementsPosition(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    rung.defaultBounds as [number, number],
+  )
   return { nodes: newNodes, edges: newEdges }
 }
 
@@ -1150,7 +1154,10 @@ export const removeElement = (rung: RungState, element: Node) => {
   newNodes = auxNodes
   newEdges = auxEdges
 
-  newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds as [number, number])
+  newNodes = updateDiagramElementsPosition(
+    { ...rung, nodes: newNodes, edges: newEdges },
+    rung.defaultBounds as [number, number],
+  )
 
   return {
     nodes: newNodes,
@@ -1348,7 +1355,7 @@ export const onDragStopElement = (rung: RungState, node: Node): { nodes: Node[];
     Object.entries(rung.nodes).find(
       (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
     ) ?? []
-  if (!selectedPlaceholder || !selectedPlaceholderIndex) return { nodes: rung.nodes, edges: rung.edges }
+  if (!selectedPlaceholder || !selectedPlaceholderIndex) return { nodes: removePlaceholderNodes(rung.nodes), edges: rung.edges }
 
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
@@ -1377,7 +1384,11 @@ export const onDragStopElement = (rung: RungState, node: Node): { nodes: Node[];
       }
     })
     newNodes = removePlaceholderNodes(newNodes)
-    newNodes = updateDiagramElementsPosition({ ...rung, nodes: newNodes, edges: newEdges }, rung.defaultBounds as [number, number])
+
+    newNodes = updateDiagramElementsPosition(
+      { ...rung, nodes: newNodes, edges: newEdges },
+      rung.defaultBounds as [number, number],
+    )
     return { nodes: newNodes, edges: newEdges }
   }
 

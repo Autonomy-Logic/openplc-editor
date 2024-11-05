@@ -330,14 +330,6 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       />
                     </div>
                     <div id='form-button-container' className='flex w-full justify-between'>
-                      <button
-                        type='submit'
-                        className={cn(
-                          'h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium',
-                        )}
-                      >
-                        Create
-                      </button>
                       <Popover.Close asChild>
                         <button
                           type='button'
@@ -347,6 +339,14 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                           Cancel
                         </button>
                       </Popover.Close>
+                      <button
+                        type='submit'
+                        className={cn(
+                          'h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium',
+                        )}
+                      >
+                        Create
+                      </button>
                     </div>
                   </form>
                 </div>
