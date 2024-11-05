@@ -149,11 +149,11 @@ const Card = (props: ICardProps): ReactNode => {
                         placeholder='POU name'
                         className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
                       />
-                      {errors.name?.type === 'already-exists' && (
+                      {/* {errors.name?.type === 'already-exists' && (
                         <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
                           * POU name already exists
                         </span>
-                      )}
+                      )} */}
                       <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
                         ** Name must be at least 3 characters
                       </span>

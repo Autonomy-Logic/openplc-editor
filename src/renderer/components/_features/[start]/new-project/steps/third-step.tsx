@@ -2,36 +2,92 @@
 import { PouLanguageSources } from '@process:renderer/data'
 import { TimerIcon } from '@root/renderer/assets'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, ConvertToLangShortenedFormat } from '@root/utils'
 import { useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
+import { useToast } from '../../../[app]/toast/use-toast'
 import { IntervalModal } from '../interval-model'
-import { NewProjectStore } from '../project-modal'
+import { NewProjectStore } from '../store'
 
-const Step3 = ({ onPrev, onClose }: { onPrev: () => void; onClose: () => void }) => {
+type CreateProjectFileProps = {
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+  time: string
+  type: 'plc-project' | 'plc-library'
+  name: string
+  path: string
+}
+
+const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: () => void; onClose: () => void }) => {
   type FormData = {
     name: string
     path: string
     language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
     time: string
   }
-
-  const { handleSubmit, control } = useForm<FormData>()
+  const { toast } = useToast()
+  const { handleSubmit, control, watch } = useForm<FormData>()
+  const language = watch('language')
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)
   const projectData = NewProjectStore((state) => state.formData)
   const [isModalOpen, setModalOpen] = useState(false)
   const [intervalValue, setIntervalValue] = useState('T#20ms')
+  const {
+    projectActions: { setProject },
+    workspaceActions: { setEditingState },
+    tabsActions: { clearTabs },
+    editorActions: { clearEditor }
+  } = useOpenPLCStore()
 
-  const handleFormSubmit: SubmitHandler<FormData> = (data) => {
+  const handleFormSubmit: SubmitHandler<FormData> = async (data) => {
     const allData = {
       ...projectData,
       language: data.language,
       time: intervalValue,
     }
+
     handleUpdateForm(allData)
-    console.log('Formulario finalizado', allData)
-    onClose()
+    try {
+      const result = await window.bridge.createProjectFile({
+        ...allData,
+        path: projectData.path,
+      } as CreateProjectFileProps)
+
+      if (result.data) {
+        setEditingState('unsaved')
+        clearEditor()
+        clearTabs()
+        setProject({
+          meta: {
+            name: allData.name,
+            type: allData.type,
+            path: allData.path + '/project.json',
+          },
+          data: result.data.content.data,
+        })
+        toast({
+          title: 'The project was created successfully!',
+          description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
+          variant: 'default',
+        })
+      } else {
+        toast({
+          title: 'Cannot create a project!',
+          description: 'Failed to create the project. No data returned.',
+          variant: 'fail',
+        })
+      }
+    } catch (_error) {
+      toast({
+        title: 'Cannot create a project!',
+        description: 'Failed to create the project.',
+        variant: 'fail',
+      })
+    } finally {
+      onClose()
+      onFinish()
+    }
   }
 
   return (
@@ -45,7 +101,7 @@ const Step3 = ({ onPrev, onClose }: { onPrev: () => void; onClose: () => void })
           2
         </div>
         <div className='h-[2px] w-12 bg-blue-300'></div>
-        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white dark:bg-neutral-950 text-blue-500'>
+        <div className='z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-blue-500 bg-white text-blue-500 dark:bg-neutral-950'>
           3
         </div>
       </div>
@@ -136,7 +192,10 @@ const Step3 = ({ onPrev, onClose }: { onPrev: () => void; onClose: () => void })
           </button>
           <button
             type='submit'
-            className={cn('h-8 w-52 items-center rounded-lg bg-blue-500 text-center font-medium text-white')}
+            className={cn('h-8 w-52 items-center rounded-lg bg-blue-500 text-center font-medium text-white', {
+              'cursor-not-allowed opacity-50': !language,
+            })}
+            disabled={!language}
           >
             Create Project
           </button>

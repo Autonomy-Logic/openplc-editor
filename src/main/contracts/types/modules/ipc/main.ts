@@ -1,3 +1,4 @@
+import { CompilerService } from '@root/main/services/compiler-service'
 import { BrowserWindow, Event, IpcMain } from 'electron/main'
 
 import { _ProjectService } from '../../../../services'
@@ -7,6 +8,7 @@ import { TStoreType } from '../store'
 export type MainIpcModule = {
   ipcMain: IpcMain
   mainWindow: InstanceType<typeof BrowserWindow> | null
+  compilerService: typeof CompilerService
   projectService: typeof _ProjectService
   store: TStoreType
   setupMainIpcListener: () => void
@@ -21,6 +23,7 @@ export type MainIpcModule = {
 export type MainIpcModuleConstructor = {
   ipcMain: IpcMain
   mainWindow: InstanceType<typeof BrowserWindow> | null
+  compilerService: typeof CompilerService
   projectService: typeof _ProjectService
   store: TStoreType
 }

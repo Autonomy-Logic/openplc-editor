@@ -27,56 +27,21 @@ const baseTypeSchema = z.enum([
 ])
 type BaseType = z.infer<typeof baseTypeSchema>
 
-const PLCDataTypeStructureElementSchema = z.object({
-  id: z.string().optional(),
+const PLCArrayDatatypeSchema = z.object({
   name: z.string(),
-  type: z.discriminatedUnion('definition', [
-    z.object({
-      definition: z.literal('base-type'),
-      value: z.string(),
-    }),
-    z.object({
-      definition: z.literal('array'),
-      value: z.string(),
-      data: z.object({
-        baseType: baseTypeSchema,
-        dimensions: z.array(z.string()),
-      }),
-    }),
-  ]),
-  initialValue: z.string().optional(),
+  derivation: z.literal('array'),
+  baseType: baseTypeSchema,
+  initialValue: z.string(),
+  dimensions: z.array(z.object({ dimension: z.string() })),
 })
-type PLCDataTypeStructureElement = z.infer<typeof PLCDataTypeStructureElementSchema>
 
-const PLCDataTypeDerivationSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('array'),
-    value: z.string(),
-    data: z.object({
-      baseType: baseTypeSchema,
-      dimensions: z.array(z.string()),
-    }),
-    initialValue: z.string(),
-  }),
-  /** This enumerated needs to be reviewed */
-  z.object({
-    type: z.literal('enumerated'),
-    values: z.array(z.string()),
-    /** The initial value must be one of the values created */
-    initialValue: z.string(),
-  }),
-  /** This structure needs to be reviewed */
-  z.object({
-    type: z.literal('structure'),
-    elements: z.array(PLCDataTypeStructureElementSchema),
-  }),
+type PLCArrayDatatype = z.infer<typeof PLCArrayDatatypeSchema>
+
+const PLCDataTypeSchema = z.discriminatedUnion('derivation', [
+  PLCArrayDatatypeSchema,
+  z.object({ name: z.string(), derivation: z.literal('structure') }),
+  z.object({ name: z.string(), derivation: z.literal('enumerated') }),
 ])
-
-const PLCDataTypeSchema = z.object({
-  id: z.string().optional(),
-  name: z.string(),
-  derivation: PLCDataTypeDerivationSchema,
-})
 
 type PLCDataType = z.infer<typeof PLCDataTypeSchema>
 
@@ -108,24 +73,10 @@ const PLCVariableSchema = z.object({
     }),
   ]),
   location: z.string(),
-  // initialValue: z.string().optional(),
+  initialValue: z.string().optional(),
   documentation: z.string(),
   debug: z.boolean(),
 })
-
-// const variable: PLCVariable = {
-//   name: 'CU_T',
-//   class: 'local',
-//   type: {
-//     definition: 'base-type',
-//     value: baseTypeSchema.parse('R_TRIG'),
-//   },
-//   location: 'CV location',
-//   documentation: 'CV location',
-//   debug: false,
-// };
-
-// PLCVariableSchema.parse(variable);
 
 type PLCVariable = z.infer<typeof PLCVariableSchema>
 const PLCGlobalVariableSchema = PLCVariableSchema
@@ -207,40 +158,43 @@ const PLCFunctionBlockSchema = z.object({
 
 type PLCFunctionBlock = z.infer<typeof PLCFunctionBlockSchema>
 
+const PLCPouSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('program'),
+    data: PLCProgramSchema,
+  }),
+  z.object({
+    type: z.literal('function'),
+    data: PLCFunctionSchema,
+  }),
+  z.object({
+    type: z.literal('function-block'),
+    data: PLCFunctionBlockSchema,
+  }),
+])
+type PLCPou = z.infer<typeof PLCPouSchema>
+
+const PLCConfigurationSchema = z.object({
+  resource: z.object({
+    tasks: z.array(PLCTaskSchema),
+    instances: z.array(PLCInstanceSchema),
+    globalVariables: z.array(PLCVariableSchema.omit({ class: true })),
+  }),
+})
+type PLCConfiguration = z.infer<typeof PLCConfigurationSchema>
+
 const PLCProjectDataSchema = z.object({
   dataTypes: z.array(PLCDataTypeSchema),
-  pous: z.array(
-    z.discriminatedUnion('type', [
-      z.object({
-        type: z.literal('program'),
-        data: PLCProgramSchema,
-      }),
-      z.object({
-        type: z.literal('function'),
-        data: PLCFunctionSchema,
-      }),
-      z.object({
-        type: z.literal('function-block'),
-        data: PLCFunctionBlockSchema,
-      }),
-    ]),
-  ),
-  configuration: z.object({
-    resource: z.object({
-      tasks: z.array(PLCTaskSchema),
-      instances: z.array(PLCInstanceSchema),
-      globalVariables: z.array(PLCVariableSchema.omit({ class: true })),
-    }),
-  }),
+  pous: z.array(PLCPouSchema),
+  configuration: PLCConfigurationSchema,
 })
 
 type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
 
 const PLCProjectMetaSchema = z.object({
   name: z.string(),
-  type: z.enum(['plc-project']),
+  type: z.enum(['plc-project', 'plc-library']),
 })
-
 type PLCProjectMeta = z.infer<typeof PLCProjectMetaSchema>
 
 const PLCProjectSchema = z.object({
@@ -253,13 +207,14 @@ type PLCProject = z.infer<typeof PLCProjectSchema>
 export {
   baseTypeSchema,
   bodySchema,
-  PLCDataTypeDerivationSchema,
+  PLCArrayDatatypeSchema,
+  PLCConfigurationSchema,
   PLCDataTypeSchema,
-  PLCDataTypeStructureElementSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
   PLCGlobalVariableSchema,
   PLCInstanceSchema,
+  PLCPouSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
   PLCProjectMetaSchema,
@@ -270,12 +225,14 @@ export {
 
 export type {
   BaseType,
+  PLCArrayDatatype,
+  PLCConfiguration,
   PLCDataType,
-  PLCDataTypeStructureElement,
   PLCFunction,
   PLCFunctionBlock,
   PLCGlobalVariable,
   PLCInstance,
+  PLCPou,
   PLCProgram,
   PLCProject,
   PLCProjectData,

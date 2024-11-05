@@ -11,6 +11,7 @@ import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
+import { Search } from '../components/_features/[workspace]/search'
 import { Console } from '../components/_molecules/console'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Debugger } from '../components/_organisms/debugger'
@@ -32,8 +33,8 @@ const WorkspaceScreen = () => {
     editorActions:{clearEditor},
     workspaceActions: { setEditingState,setRecents,toggleCollapse },
     tabsActions: { clearTabs },
+    searchResults,
   } = useOpenPLCStore()
-  
   useEffect(() => {
     const handleSaveProject = async () => {
       const projectData = PLCProjectSchema.safeParse(project)
@@ -61,7 +62,7 @@ const WorkspaceScreen = () => {
         _.debounce(() => setEditingState('unsaved'), 1000)()
         toast({
           title: 'Error in the save request!',
-          description: reason.description,
+          description: reason?.description,
           variant: 'fail',
         })
       }
@@ -87,7 +88,6 @@ const WorkspaceScreen = () => {
     { name: 'c', type: 'false' },
     { name: 'd', type: 'false' },
   ]
-
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
  
@@ -95,12 +95,23 @@ const WorkspaceScreen = () => {
   const explorerPanelRef = useRef(null)
   const workspacePanelRef = useRef(null)
   const consolePanelRef = useRef(null)
+  const [activeTab, setActiveTab] = useState('console')
+  const hasSearchResults = searchResults.length > 0
+
 
   const togglePanel = () => {
     if (panelRef.current) {
       panelRef.current.resize(25)
     }
   }
+
+  useEffect(() => {
+    if (hasSearchResults) {
+      setActiveTab('search')
+    } else {
+      setActiveTab('console')
+    }
+  }, [hasSearchResults])
 
   useEffect(() => {
     const action = isCollapsed ? 'collapse' : 'expand'
@@ -188,7 +199,7 @@ const WorkspaceScreen = () => {
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
-                          <DataTypeEditor derivation={editor['meta']['derivation']} />{' '}
+                          <DataTypeEditor dataTypeName={editor.meta.name}  />{' '}
                         </div>
                       )}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
@@ -286,7 +297,11 @@ const WorkspaceScreen = () => {
                   minSize={22}
                   className='flex-1 grow  rounded-lg border-2 border-neutral-200 bg-white p-4 data-[panel-size="0.0"]:hidden dark:border-neutral-800 dark:bg-neutral-950'
                 >
-                  <Tabs.Root defaultValue='console' className='flex h-full w-full flex-col gap-2 overflow-hidden'>
+                  <Tabs.Root
+                    value={activeTab}
+                    onValueChange={setActiveTab}
+                    className='flex h-full w-full flex-col gap-2 overflow-hidden'
+                  >
                     <Tabs.List className='flex h-7 w-64 gap-4'>
                       <Tabs.Trigger
                         value='console'
@@ -300,6 +315,14 @@ const WorkspaceScreen = () => {
                       >
                         Debugger
                       </Tabs.Trigger>
+                      {hasSearchResults && (
+                        <Tabs.Trigger
+                          value='search'
+                          className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
+                        >
+                          Search
+                        </Tabs.Trigger>
+                      )}
                     </Tabs.List>
                     <Tabs.Content
                       aria-label='Console panel content'
@@ -322,6 +345,18 @@ const WorkspaceScreen = () => {
                         </ResizablePanel>
                       </ResizablePanelGroup>
                     </Tabs.Content>
+                    {hasSearchResults && (
+                      <Tabs.Content
+                        value='search'
+                        className='debug-panel flex  h-full w-full overflow-hidden  data-[state=inactive]:hidden'
+                      >
+                        <ResizablePanelGroup direction='horizontal' className='flex h-full w-full '>
+                          <ResizablePanel minSize={20} defaultSize={100} className='h-full w-full'>
+                            <Search items={searchResults} />
+                          </ResizablePanel>
+                        </ResizablePanelGroup>
+                      </Tabs.Content>
+                    )}
                   </Tabs.Root>
                 </ResizablePanel>
               </ResizablePanelGroup>

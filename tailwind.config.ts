@@ -56,6 +56,8 @@ module.exports = {
       animation: {
         'slide-in-l-to-r': 'slideInLToR 1s ease-in-out',
         'slide-in-r-to-l': 'slideInRToL 0.5s ease-in-out',
+        slideDown: "slideDown 300ms ease-in-out",
+				slideUp: "slideUp 300ms ease-in-out",
       },
       boxShadow: {
         oplc: '0px 4px 20px 0px rgba(0, 0, 0, 0.25)',
@@ -70,6 +72,14 @@ module.exports = {
       slideInRToL: {
         '0%': { opacity: 0, transform: 'translateX(75%)' },
         '100%': { opacity: 1, transform: 'translateX(0)' },
+      },
+      slideDown: {
+        from: { height: "0px" },
+        to: { height: "var(--radix-accordion-content-height)" },
+      },
+      slideUp: {
+        from: { height: "var(--radix-accordion-content-height)" },
+        to: { height: "0px" },
       },
     },
   },

@@ -5,7 +5,8 @@ import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 import { SubmitHandler, useForm } from 'react-hook-form'
 
-import { NewProjectStore } from '../project-modal'
+import { NewProjectStore } from '../store'
+
 
 const Step1 = ({ onNext, onClose }: { onNext: () => void; onClose: () => void }) => {
   const { handleSubmit, setValue } = useForm<{ type: string }>()
@@ -59,18 +60,18 @@ const Step1 = ({ onNext, onClose }: { onNext: () => void; onClose: () => void })
       <form onSubmit={handleSubmit(handleFormSubmit)} className='flex flex-grow flex-col justify-between'>
         <div>
           <h2 className='mb-8 select-none text-center text-lg font-semibold text-neutral-1000 dark:text-white'>
-            What type of project will you be working on?
+            What type of project will you be working on? *
           </h2>
 
           <div className='flex w-full justify-around'>
             <button
               type='button'
               className={`flex h-10 w-40 items-center justify-center rounded-md border-2 ${
-                selected === 'project'
+                selected === 'plc-project'
                   ? 'border-blue-300 bg-blue-300 text-white dark:border-neutral-600 dark:bg-neutral-600'
                   : 'border-transparent bg-gray-200 text-black hover:border-blue-500 hover:dark:border-neutral-600'
               }`}
-              onClick={() => handleSelectType('project')}
+              onClick={() => handleSelectType('plc-project')}
             >
               <FolderIcon className='mr-2' /> PLC Project
             </button>

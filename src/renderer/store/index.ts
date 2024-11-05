@@ -4,9 +4,10 @@ import { create } from 'zustand'
 import type {
   EditorSlice,
   FlowSlice,
-  ISharedSlice,
   LibrarySlice,
   ProjectSlice,
+  SearchSlice,
+  SharedSlice,
   TabsSlice,
   WorkspaceSlice,
 } from './slices'
@@ -18,6 +19,7 @@ import {
   createFlowSlice,
   createLibrarySlice,
   createProjectSlice,
+  createSearchSlice,
   createSharedSlice,
   createTabsSlice,
   createWorkspaceSlice,
@@ -27,11 +29,12 @@ import {
  * Create the base store to be exported as a hook.
  */
 export const openPLCStoreBase = create<
-  WorkspaceSlice & EditorSlice & TabsSlice & FlowSlice & ISharedSlice & LibrarySlice & ProjectSlice
+  WorkspaceSlice & EditorSlice & TabsSlice & FlowSlice & SearchSlice & SharedSlice & LibrarySlice & ProjectSlice
 >()((...a) => ({
   ...createWorkspaceSlice(...a),
   ...createEditorSlice(...a),
   ...createTabsSlice(...a),
+  ...createSearchSlice(...a),
   ...createSharedSlice(...a),
   ...createFlowSlice(...a),
   ...createLibrarySlice(...a),
