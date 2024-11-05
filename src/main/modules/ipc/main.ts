@@ -24,10 +24,13 @@ class MainProcessBridge implements MainIpcModule {
   }
   setupMainIpcListener() {
     this.ipcMain.handle('open-external-link', async (_event, url: string) => {
+      console.log('Opening external link:', url)
       try {
+        console.log('Opening external link:', url)
         await shell.openExternal(url)
         return { success: true }
       } catch (error) {
+        console.log('Opening external link:', url)
         console.error('Error opening external link:', error)
         return { success: false, error }
       }

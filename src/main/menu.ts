@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme } from 'electron'
+import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
 import { i18n } from '../utils/i18n'
 import { _ProjectService, ProjectService } from './services'
@@ -89,7 +89,9 @@ export default class MenuBuilder {
   handleSwitchPerspective() {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
   }
-
+handleOpenExternalLink(link:string) {
+ void shell.openExternal(link)
+}
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -340,10 +342,13 @@ export default class MenuBuilder {
       submenu: [
         {
           label: i18n.t('menu:help.submenu.communitySupport'),
+          accelerator: 'F1',
+          click: () => void this.handleOpenExternalLink('https://openplc.discussion.community/'),
         },
         {
           label: i18n.t('menu:help.submenu.about'),
-          role: 'about',
+          accelerator: 'F1',
+          click: () => void this.handleOpenExternalLink('https://autonomylogic.com/'),
         },
       ],
     }
@@ -569,11 +574,13 @@ export default class MenuBuilder {
         submenu: [
           {
             label: i18n.t('menu:help.submenu.communitySupport'),
-            enabled: false,
+            accelerator: 'F1',
+            click: () => void this.handleOpenExternalLink('https://openplc.discussion.community/'),
           },
           {
             label: i18n.t('menu:help.submenu.about'),
-            role: 'about',
+            accelerator : 'F1',
+            click: () => this.handleOpenExternalLink('https://autonomylogic.com/'),
           },
         ],
       },
