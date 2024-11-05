@@ -72,7 +72,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    * To make the getNodesBounds function work, the nodes must have width and height properties set in the node data
    * This useEffect will run every time the nodes array changes (i.e. when a node is added or removed)
    */
-  const udpateFlowPanelExtent = (rung: RungState) => {
+  const updateFlowPanelExtent = (rung: RungState) => {
     const zeroPositionNode: FlowNode = {
       id: '-1',
       position: { x: 0, y: 0 },
@@ -99,16 +99,20 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }
 
   useEffect(() => {
-    udpateFlowPanelExtent(rungLocal)
+    updateFlowPanelExtent(rungLocal)
   }, [rungLocal.nodes.length])
+
+  useEffect(() => {
+    console.log('Rung local changed', rungLocal)
+  }, [rungLocal.nodes])
 
   /**
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    // console.log(`Rung ${rung.id} nodes changed`, rung)
+    console.log(`Rung ${rung.id} nodes changed`, rung)
     setRungLocal(rung)
-    udpateFlowPanelExtent(rung)
+    updateFlowPanelExtent(rung)
   }, [rung.nodes])
 
   /**
