@@ -121,10 +121,10 @@ type FlowActions = {
   onConnect: ({ changes, rungId, editorName }: { changes: Connection; rungId: string; editorName: string }) => void
 
   setNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
-  updateNode: ({ node, rungId, editorName }: { node: Node; rungId: string; editorName: string }) => void
+  updateNode: ({ node, nodeId, rungId, editorName }: { node: Node; nodeId: string, rungId: string; editorName: string }) => void
 
   setEdges: ({ edges, rungId, editorName }: { edges: Edge[]; rungId: string; editorName: string }) => void
-  updateEdge: ({ edge, rungId, editorName }: { edge: Edge; rungId: string; editorName: string }) => void
+  updateEdge: ({ edge, edgeId, rungId, editorName }: { edge: Edge; edgeId: string, rungId: string; editorName: string }) => void
 
   /**
    * Controll the flow viewport of the rung

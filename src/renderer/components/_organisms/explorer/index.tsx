@@ -19,14 +19,20 @@ type explorerProps = {
 
 const Explorer = ({ collapse }: explorerProps): ReactElement => {
   const {
+    editor,
+    project: {
+      data: { pous },
+    },
     libraries: { system },
   } = useOpenPLCStore()
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [filterText, setFilterText] = useState<string>('')
 
-  const filteredLibraries = system.filter((library: { pous: { name: string }[] }) =>
-    library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
+  const filteredLibraries = system.filter((library) =>
+    pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
+      ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')
+      : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
   )
 
   const selectedPouDocumentation =

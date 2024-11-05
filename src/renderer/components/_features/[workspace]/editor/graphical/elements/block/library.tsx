@@ -12,13 +12,19 @@ export const ModalBlockLibrary = ({
   setSelectedFileKey: (string: string) => void
 }) => {
   const {
+    editor,
+    project: {
+      data: { pous },
+    },
     libraries: { system },
   } = useOpenPLCStore()
 
   const [filterText, setFilterText] = useState('')
 
   const filteredLibraries = system.filter((library) =>
-    library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
+    pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
+      ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')
+      : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
   )
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
