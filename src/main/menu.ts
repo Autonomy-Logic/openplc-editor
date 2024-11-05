@@ -92,6 +92,10 @@ export default class MenuBuilder {
 handleOpenExternalLink(link:string) {
  void shell.openExternal(link)
 }
+
+handleFindInProject(){
+  this.mainWindow.webContents.send('project:find-in-project-accelerator')
+}
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -270,6 +274,7 @@ handleOpenExternalLink(link:string) {
         {
           label: i18n.t('menu:edit.submenu.findInProject'),
           accelerator: '',
+          click: () => this.handleFindInProject(),
         },
         { type: 'separator' },
         {
@@ -524,7 +529,7 @@ handleOpenExternalLink(link:string) {
           {
             label: i18n.t('menu:edit.submenu.findInProject'),
             accelerator: 'Ctrl+Shift+F',
-            enabled: false,
+            click: () => this.handleFindInProject(),
           },
           { type: 'separator' },
           {

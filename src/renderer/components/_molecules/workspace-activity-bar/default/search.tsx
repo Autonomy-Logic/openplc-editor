@@ -1,5 +1,6 @@
 import { SearchIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { useEffect } from 'react'
 
 import { ActivityBarButton } from '../../../_atoms/buttons'
 import SearchInProject from '../../../_features/[workspace]/editor/search-in-project'
@@ -14,6 +15,13 @@ export const SearchButton = () => {
   const handleModalClose = () => {
     setModalOpen(!isModalOpen)
   }
+
+  useEffect(() => {
+    
+    window.bridge.findInProjectAccelerator((_event) => {
+      setModalOpen(!isModalOpen)
+    })
+  }, [])
 
   return (
     <Modal onOpenChange={setModalOpen} open={isModalOpen}>
