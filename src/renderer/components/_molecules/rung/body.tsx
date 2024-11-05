@@ -26,7 +26,6 @@ import {
   removePlaceholderNodes,
   renderPlaceholderNodes,
   searchNearestPlaceholder,
-  // updateDiagramElementsPosition,
 } from './ladder-utils/elements'
 
 type RungBodyProps = {
