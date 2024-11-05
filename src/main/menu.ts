@@ -418,12 +418,14 @@ handleOpenExternalLink(link:string) {
             accelerator: 'Ctrl+P',
             enabled: false,
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:file.submenu.updates'),
             enabled: false,
             accelerator: 'Ctrl+U',
             click: () => console.warn('Menu button clicked! This is not working yet.'),
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:file.submenu.quit'),
             role: 'quit',
@@ -446,6 +448,7 @@ handleOpenExternalLink(link:string) {
             accelerator: 'Ctrl+Y',
             role: 'redo',
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:edit.submenu.cut'),
             enabled: false,
@@ -464,6 +467,7 @@ handleOpenExternalLink(link:string) {
             accelerator: 'Ctrl+V',
             role: 'paste',
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:edit.submenu.find'),
             enabled: false,
@@ -479,11 +483,13 @@ handleOpenExternalLink(link:string) {
             accelerator: 'Ctrl+Shift+K',
             enabled: false,
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:edit.submenu.findInProject'),
             accelerator: 'Ctrl+Shift+F',
             enabled: false,
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:edit.submenu.addElement.label'),
             enabled: false,
@@ -527,6 +533,7 @@ handleOpenExternalLink(link:string) {
             enabled: false,
             accelerator: '',
           },
+          { type: 'separator' },
           {
             label: 'Zoom',
             enabled: false,
@@ -541,6 +548,7 @@ handleOpenExternalLink(link:string) {
               },
             ],
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:display.submenu.switchPerspective'),
             accelerator: 'F12',
