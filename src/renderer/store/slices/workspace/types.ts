@@ -14,6 +14,7 @@ const workspaceStateSchema = z.object({
     systemConfigs: systemConfigsSchema,
     recents: z.array(z.object({ lastOpenedAt: z.string(), createdAt: z.string(), path: z.string() })),
     isCollapsed: z.boolean(),
+    isModalOpen: z.boolean(),
   }),
 })
 type WorkspaceState = z.infer<typeof workspaceStateSchema>
@@ -33,6 +34,7 @@ const workspaceActionsSchema = z.object({
   switchAppTheme: z.function().returns(z.void()),
   toggleMaximizedWindow: z.function().returns(z.void()),
   toggleCollapse: z.function().returns(z.void()),
+  setModalOpen: z.function().returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 

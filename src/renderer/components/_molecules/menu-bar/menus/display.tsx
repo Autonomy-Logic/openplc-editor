@@ -54,10 +54,6 @@ export const DisplayMenu = () => {
             <span>{i18n.t('menu:display.submenu.switchPerspective')}</span>
             <span className={ACCELERATOR}>{'F12 '}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
-            <span>{i18n.t('menu:display.submenu.resetPerspective')}</span>
-            <span className={ACCELERATOR}>{'Shift + F12 '}</span>
-          </MenuPrimitive.Item>
           <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:display.submenu.resetPerspective')}</span>

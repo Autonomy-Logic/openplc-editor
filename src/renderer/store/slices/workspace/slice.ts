@@ -14,6 +14,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     },
     recents: [],
     isCollapsed: false,
+    isModalOpen: false,
   },
 
   workspaceActions: {
@@ -57,11 +58,18 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     toggleCollapse: (): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
-          workspace.isCollapsed = !workspace.isCollapsed;
+          workspace.isCollapsed = !workspace.isCollapsed
         }),
       )
     },
-   },
+    setModalOpen: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.isModalOpen = !workspace.isModalOpen
+        }),
+      )
+    },
+  },
 })
 
 export { createWorkspaceSlice }

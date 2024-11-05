@@ -88,6 +88,7 @@ const rendererProcessBridge = {
   switchPerspective:(callback:IpcRendererCallbacks) => ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
   removeDeletePouListener: ()=> ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
   removeCloseTabListener: ()=> ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
+  findInProjectAccelerator:(callback:IpcRendererCallbacks) => ipcRenderer.on('project:find-in-project-accelerator', callback),
   /** -------------------------------------------------------------------------------------------- */
   // saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),

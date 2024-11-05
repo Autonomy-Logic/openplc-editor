@@ -11,17 +11,23 @@ export const EditMenu = () => {
   const {
     editor,
     projectActions: { deletePou },
+    workspaceActions: { setModalOpen },
+    workspace: { isModalOpen },
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
-  useEffect(()=>{
+  useEffect(() => {
     setSelectedTab(editor.meta.name)
-  },[editor])
+  }, [editor])
   const handleDeletePou = () => {
     handleRemoveTab(selectedTab)
     deletePou(selectedTab)
   }
+  const findInProject = () => {
+    setModalOpen(!isModalOpen)
+  }
+
   return (
     <MenuPrimitive.Menu>
       <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:edit.label')}</MenuPrimitive.Trigger>
@@ -62,7 +68,7 @@ export const EditMenu = () => {
             <span className={ACCELERATOR}>{'Ctrl + Shift + K'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Separator className={SEPARATOR} />
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} onClick={() => void findInProject()}>
             <span>{i18n.t('menu:edit.submenu.findInProject')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + F'}</span>
           </MenuPrimitive.Item>
