@@ -1,12 +1,12 @@
 /* eslint-disable no-console */
-import { app, BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
+import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
 import { i18n } from '../utils/i18n'
 import { _ProjectService, ProjectService } from './services'
 
 /**
  * Wip: Interface for mac machines menu.
- */
+ */ 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string
   submenu?: DarwinMenuItemConstructorOptions[] | Menu
@@ -74,26 +74,28 @@ export default class MenuBuilder {
 
   handleCloseTab() {
     this.mainWindow.webContents.send('workspace:close-tab-accelerator')
+    
   }
 
-  handleCloseProject() {
+  handleCloseProject(){
     this.mainWindow.webContents.send('workspace:close-project-accelerator')
   }
 
-  handleDeletePou() {
+  handleDeletePou(){
     this.mainWindow.webContents.send('workspace:delete-pou-accelerator')
+   
   }
 
   handleSwitchPerspective() {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
   }
-  handleOpenExternalLink(link: string) {
-    void shell.openExternal(link)
-  }
+handleOpenExternalLink(link:string) {
+ void shell.openExternal(link)
+}
 
-  handleFindInProject() {
-    this.mainWindow.webContents.send('project:find-in-project-accelerator')
-  }
+handleFindInProject(){
+  this.mainWindow.webContents.send('project:find-in-project-accelerator')
+}
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -120,18 +122,7 @@ export default class MenuBuilder {
     const recents = await this.handleGetRecents()
     const homeDir = process.env.HOME || ''
     const defaultDarwinMenu: MenuItemConstructorOptions = {
-      label: app.name,
-      submenu: [
-        { role: 'about' },
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' },
-      ],
+      role: 'appMenu',
     }
 
     const subMenuFile: DarwinMenuItemConstructorOptions = {
@@ -367,7 +358,7 @@ export default class MenuBuilder {
       ],
     }
 
-    return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
+    return [defaultDarwinMenu,subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
   }
 
   // Wip: Constructing a default machines menu.
@@ -389,7 +380,7 @@ export default class MenuBuilder {
             accelerator: 'Ctrl+O',
             click: () => void this.handleOpenProject(),
           },
-          {
+             {
             type: 'separator',
           },
           {
@@ -403,7 +394,7 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
-
+            
             accelerator: 'Ctrl+W',
             click: () => this.handleCloseTab(),
           },
@@ -530,7 +521,7 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:edit.submenu.delete'),
-            accelerator: 'delete',
+            accelerator:"delete",
             click: () => this.handleDeletePou(),
           },
         ],
@@ -601,7 +592,7 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:help.submenu.about'),
-            accelerator: 'F1',
+            accelerator : 'F1',
             click: () => this.handleOpenExternalLink('https://autonomylogic.com/'),
           },
         ],
