@@ -121,6 +121,43 @@ handleOpenExternalLink(link:string) {
       role: 'appMenu',
     }
 
+    const subMenuApp: DarwinMenuItemConstructorOptions = {
+      label: 'OpenPLC Editor',
+      submenu: [
+        {
+          label: 'About OpenPLC Editor',
+    
+            click: () => void this.handleOpenExternalLink('https://autonomylogic.com/'),
+        
+        },
+        { type: 'separator' },
+        {
+          label: 'Community Support',
+          click: () => void this.handleOpenExternalLink('https://openplc.discussion.community/'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Check for Updates',
+          enabled: false,
+          click: () => {
+            console.log('Check for Updates clicked');
+           
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Hide OpenPLC Editor',
+          role: 'hide',
+        },
+        { type: 'separator' },
+        {
+          label: 'Quit OpenPLC Editor',
+          role: 'quit',
+        },
+      ],
+    };
+    
+
     const subMenuFile: DarwinMenuItemConstructorOptions = {
       label: i18n.t('menu:file.label'),
       submenu: [
@@ -353,7 +390,7 @@ handleOpenExternalLink(link:string) {
       ],
     }
 
-    return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
+    return [defaultDarwinMenu, subMenuApp,subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
   }
 
   // Wip: Constructing a default machines menu.
