@@ -37,16 +37,20 @@ const Card = (props: ICardProps): ReactNode => {
   const {
     pouActions: { create },
     projectActions: { createDatatype },
+    libraryActions: { addLibrary },
   } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
 
   const submitData: SubmitHandler<IPouFormProps> = (data) => {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const pouWasCreated = create.pou(data)
       if (!pouWasCreated) throw new TypeError()
       toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
+      addLibrary(data.name)
       closeContainer((prev) => !prev)
       setIsOpen(false)
+      console.log('foi adicionado:', addLibrary);
     } catch (_error) {
       setError('name', {
         type: 'already-exists',

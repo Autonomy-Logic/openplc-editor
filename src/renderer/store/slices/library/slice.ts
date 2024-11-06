@@ -22,6 +22,10 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { LibrarySlice } from './type'
+export interface LibrarySliceAdd {
+  pouWasCreated: boolean
+  addLibraryToUser: (pou: unknown) => void
+}
 
 const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (setState) => ({
   libraries: {
@@ -44,7 +48,7 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
       Time,
       TypeConversion,
     ],
-    user: [],
+    user: ['TEST'],
   },
   /**
    * TODO: Create and implement the logic for the functions below
@@ -53,9 +57,20 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
     addLibrary: (libraryName) => {
       setState(
         produce(({ libraries }: LibrarySlice) => {
-          libraries.user.push(libraryName)
+          if (!libraries.user.includes(libraryName)) {
+            libraries.user.push(libraryName)
+          }
         }),
       )
+    },
+    addLibraryToUser: (pou: string) => {
+      setState((state) => ({
+        libraries: {
+          ...state.libraries,
+          user: [...state.libraries.user, pou],
+        },
+        pouWasCreated: true,
+      }))
     },
     removeLibrary: (libraryName) => {
       setState(
