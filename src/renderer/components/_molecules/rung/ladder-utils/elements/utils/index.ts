@@ -1,39 +1,111 @@
-import { CustomHandleProps } from '@root/renderer/components/_atoms/react-flow/custom-nodes/handle'
+import type { CustomHandleProps } from '@root/renderer/components/_atoms/react-flow/custom-nodes/handle'
 import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
-import { RungState } from '@root/renderer/store/slices'
-import { Edge, Node } from '@xyflow/react'
+import type { RungState } from '@root/renderer/store/slices'
+import type { Edge, Node } from '@xyflow/react'
 
-import { getDefaultNodeStyle } from '../../nodes'
+import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
 
 /**
- * Get the previous element in the rung
+ * Get the previous element by searching with edge in the rung
  *
- * @param nodes
- * @param nodeIndex
+ * @param rung: RungState
+ * @param node: Node
  *
- * @returns { Node | undefined }
+ * @returns obj: { serial: Node[], parallel: Node[] }
  */
-export const getPreviousElement = (nodes: Node[], nodeIndex?: number) => {
-  return nodes[(nodeIndex ?? nodes.length - 1) - 1]
+export const getPreviousElementsByEdge = (
+  rung: RungState,
+  node: Node,
+): { nodes: { serial: Node[]; parallel: Node[] }; edges: Edge[] } => {
+  const { edges } = rung
+  const lastNodes: { nodes: { serial: Node[]; parallel: Node[] }; edges: Edge[] } = {
+    nodes: { serial: [], parallel: [] },
+    edges: [],
+  }
+
+  // Get the connected edges to the node
+  const connectedEdges = edges.filter((e) => e.target === node.id)
+  // If there is no connected edges, return the last nodes
+  if (connectedEdges.length === 0) {
+    return lastNodes
+  }
+
+  connectedEdges.forEach((e) => {
+    // Find the source of the edge
+    const n = rung.nodes.find((n) => n.id === e.source)
+    /**
+     * If the node is undefined or an variable, skip it
+     */
+    if (!n || n.type === 'variable') return
+
+    /**
+     * If there is a parallel node, check if it is an open or close parallel
+     * If it is a close parallel, add it to the parallel nodes
+     */
+    if (
+      isNodeOfType(node, 'parallel') &&
+      (node as ParallelNode).data.type === 'close' &&
+      e.targetHandle === (node as ParallelNode).data.parallelInputConnector?.id
+    ) {
+      lastNodes.nodes.parallel.push(n)
+      return
+    }
+
+    lastNodes.nodes.serial.push(n)
+  })
+  lastNodes.edges = connectedEdges
+
+  return lastNodes
 }
 
 /**
- * Get the previous elements by edges
+ * Get the previous node when adding a new element
+ * It works when removing the placeholder and variables elements
  *
- * @param rung
- * @param node
+ * @param rung: RungState
+ * @param nodeIndex: number
  *
- * @returns { nodes, edges }
+ * @returns Node
  */
-export const getPreviousElementsByEdges = (
-  rung: RungState,
-  node: Node,
-): { nodes: Node[] | undefined; edges: Edge[] | undefined } => {
-  const edges = rung.edges.filter((edge) => edge.target === node.id)
-  if (!edges) return { nodes: undefined, edges: undefined }
-  const previousNodes = rung.nodes.filter((n) => edges.map((edge) => edge.source).includes(n.id))
-  if (!previousNodes) return { nodes: undefined, edges: edges }
-  return { nodes: previousNodes, edges: edges }
+export const getPreviousElement = (rung: RungState, nodeIndex: number): Node => {
+  const nodesWithNoPlaceholderAndVariables = rung.nodes.filter(
+    (n) => n.type !== 'placeholder' && n.type !== 'parallelPlaceholder' && n.type !== 'variable',
+  )
+  return nodesWithNoPlaceholderAndVariables[nodeIndex - 1]
+}
+
+/**
+ * Get the node position based on the placeholder node
+ *
+ * @param placeholderNode
+ * @param newElement
+ *
+ * @returns obj: { posX, posY, handleX, handleY }
+ */
+export const getElementPositionBasedOnPlaceholderElement = (
+  placeholderNode: Node,
+  newElement: Node | string,
+): {
+  posX: number
+  posY: number
+  handleX: number
+  handleY: number
+} => {
+  const newNodeStyle = getDefaultNodeStyle(
+    typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement },
+  )
+
+  const placeholderHandles = placeholderNode.data.handles as CustomHandleProps[]
+  const placeholderHandle = placeholderHandles[0]
+
+  const position = {
+    posX: placeholderHandle.glbPosition.x + newNodeStyle.gap,
+    posY: placeholderHandle.glbPosition.y - newNodeStyle.handle.y,
+    handleX: placeholderHandle.glbPosition.x + newNodeStyle.gap,
+    handleY: placeholderHandle.glbPosition.y,
+  }
+
+  return position
 }
 
 /**
@@ -49,7 +121,12 @@ export const getNodePositionBasedOnPreviousNode = (
   previousElement: Node,
   newElement: string | Node,
   type: 'serial' | 'parallel',
-) => {
+): {
+  posX: number
+  posY: number
+  handleX: number
+  handleY: number
+} => {
   const previousElementOutputHandle = (
     type === 'parallel'
       ? (previousElement as ParallelNode).data.parallelOutputConnector
@@ -74,96 +151,4 @@ export const getNodePositionBasedOnPreviousNode = (
   }
 
   return position
-}
-
-/**
- * Get the node position based on the placeholder node
- *
- * @param placeholderNode
- * @param newElement
- *
- * @returns { posX, posY, handleX, handleY }
- */
-export const getNodePositionBasedOnPlaceholderNode = (placeholderNode: Node, newElement: string | Node) => {
-  const newNodeStyle = getDefaultNodeStyle(
-    typeof newElement === 'string' ? { nodeType: newElement } : { node: newElement },
-  )
-
-  const placeholderHandles = placeholderNode.data.handles as CustomHandleProps[]
-  const placeholderHandle = placeholderHandles[0]
-
-  const position = {
-    posX: placeholderHandle.glbPosition.x + newNodeStyle.gap,
-    posY: placeholderHandle.glbPosition.y - newNodeStyle.handle.y,
-    handleX: placeholderHandle.glbPosition.x + newNodeStyle.gap,
-    handleY: placeholderHandle.glbPosition.y,
-  }
-
-  return position
-}
-
-/**
- * Get the placeholder position based on the node
- *
- * @param node
- * @param side: 'left' | 'bottom' | 'right'
- *
- * @returns { posX, posY, handleX, handleY }
- */
-export const getPlaceholderPositionBasedOnNode = (node: Node, side: 'left' | 'bottom' | 'right') => {
-  switch (side) {
-    case 'left':
-      return {
-        posX:
-          node.position.x -
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).gap -
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
-        posY:
-          ((node.data.inputConnector ?? node.data.outputConnector) as CustomHandleProps)?.glbPosition.y -
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).handle.y,
-        handleX:
-          node.position.x -
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).gap -
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
-        handleY: ((node.data.inputConnector ?? node.data.outputConnector) as CustomHandleProps)?.glbPosition.y,
-      }
-    case 'right':
-      return {
-        posX:
-          node.position.x +
-          getDefaultNodeStyle({ node }).width +
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).gap -
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
-        posY:
-          ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y -
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).handle.y,
-        handleX:
-          node.position.x +
-          getDefaultNodeStyle({ node }).width +
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).gap -
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).width,
-        handleY: ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y,
-      }
-    case 'bottom':
-      return {
-        posX:
-          node.position.x +
-          getDefaultNodeStyle({ node }).width / 2 -
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
-        posY:
-          node.position.y +
-          (node?.height ?? 0) -
-          getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
-          getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
-        handleX:
-          node.position.x +
-          getDefaultNodeStyle({ node }).width / 2 -
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
-        handleY:
-          node.position.y +
-          (node?.height ?? 0) -
-          getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
-          getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
-      }
-  }
 }

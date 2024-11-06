@@ -18,6 +18,9 @@ import BlockElement from '../../_features/[workspace]/editor/graphical/elements/
 import CoilElement from '../../_features/[workspace]/editor/graphical/elements/coil'
 import ContactElement from '../../_features/[workspace]/editor/graphical/elements/contact'
 import {
+  addNewElement as NewAddNewElement,
+ } from './ladder-utils/elements'
+import {
   addNewElement,
   onDragElement,
   onDragStartElement,
@@ -26,7 +29,7 @@ import {
   removePlaceholderNodes,
   renderPlaceholderNodes,
   searchNearestPlaceholder,
-} from './ladder-utils/elements'
+} from './ladder-utils/elementsOld'
 
 type RungBodyProps = {
   rung: RungState
@@ -101,9 +104,9 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     updateFlowPanelExtent(rungLocal)
   }, [rungLocal.nodes.length])
 
-  useEffect(() => {
-    console.log('Rung local changed', rungLocal)
-  }, [rungLocal.nodes])
+  // useEffect(() => {
+  //   console.log('Rung local changed', rungLocal)
+  // }, [rungLocal.nodes])
 
   /**
    *  Update the local rung state when the rung state changes
@@ -183,6 +186,10 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         return
       }
     }
+
+    const { nodes: testNode, edges: testEdge } = NewAddNewElement(rungLocal, { elementType: newNodeType, blockVariant: pouLib })
+    console.log('TEST NODE', testNode)
+    console.log('TEST EDGE', testEdge)
 
     const { nodes, edges } = addNewElement(rungLocal, { newElementType: newNodeType, blockType: pouLib })
     flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes })

@@ -1,132 +1,97 @@
-import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
-import { PlaceholderNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/placeholder'
-import { RungState } from '@root/renderer/store/slices'
-import { Edge, Node } from '@xyflow/react'
-import { toInteger } from 'lodash'
+import { checkIfElementIsNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
+import type { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
+import type { PlaceholderNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/placeholder'
+import type { RungState } from '@root/renderer/store/slices'
+import type { Edge, Node } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { connectNodes } from '../../edges'
 import { buildGenericNode, isNodeOfType } from '../../nodes'
-import { removePlaceholderNodes } from '../index'
-import { getNodePositionBasedOnPlaceholderNode, getPreviousElement, getPreviousElementsByEdges } from '../utils'
+import { removePlaceholderElements } from '../placeholder'
+import { getElementPositionBasedOnPlaceholderElement, getPreviousElement, getPreviousElementsByEdge } from '../utils'
 
-/**
- * Append a serial connection by node type. The node will be created based on the node type, so it is going to be a new "clean" node
- *
- * @param rung
- * @param node
- *    @param node.newElementType
- *    @param node.blockType
- * @param placeholder
- *    @param placeholder.selectedPlaceholder
- *    @param placeholder.selectedPlaceholderIndex
- *
- * @returns object: { nodes: Node[], edges: Edge[] }
- */
-export const appendSerialConnectionByNodeType = <T>(
+export const appendSerialConnection = <T>(
   rung: RungState,
-  node: { newElementType: string; blockType: T | undefined },
-  placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
+  placeholder: {
+    index: number
+    selected: PlaceholderNode
+  },
+  node: Node | { elementType: string; blockVariant?: T },
 ): { nodes: Node[]; edges: Edge[] } => {
-  const { selectedPlaceholder, selectedPlaceholderIndex } = placeholder
+  console.log('\tappendSerialConnection:', rung, placeholder, node)
 
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
-  const newElelementPosition = getNodePositionBasedOnPlaceholderNode(selectedPlaceholder, node.newElementType)
-  const newElement = buildGenericNode({
-    nodeType: node.newElementType,
-    blockType: node.blockType,
-    id: `${node.newElementType.toUpperCase()}_${uuidv4()}`,
-    ...newElelementPosition,
-  })
-  newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newElement)
-  newNodes = removePlaceholderNodes(newNodes)
-
-  // get the related node
-  const relatedNode = (selectedPlaceholder as PlaceholderNode).data.relatedNode as Node
-  const { nodes: relatedNodePreviousNodes, edges: relatedNodePreviousEdges } = getPreviousElementsByEdges(
-    { ...rung, nodes: newNodes },
-    relatedNode,
-  )
-  if (!relatedNodePreviousNodes || !relatedNodePreviousEdges) return { nodes: newNodes, edges: newEdges }
-
-  // find the previous node
-  let previousNode: Node = getPreviousElement(
-    newNodes,
-    newNodes.findIndex((n) => n.id === newElement.id),
-  )
-
-  // if the related node is a parallel, check if it is an open or close parallel
-  if (
-    relatedNodePreviousNodes.length > 0 &&
-    isNodeOfType(relatedNodePreviousNodes[0], 'parallel') &&
-    (relatedNodePreviousNodes[0] as ParallelNode).data.type === 'open' &&
-    selectedPlaceholder.data.position === 'left' &&
-    relatedNodePreviousEdges[0].sourceHandle ===
-      (relatedNodePreviousNodes[0] as ParallelNode).data.parallelOutputConnector?.id
-  ) {
-    previousNode = relatedNodePreviousNodes[0]
-    newEdges = connectNodes({ ...rung, nodes: newNodes }, previousNode.id, newElement.id, 'parallel')
+  /**
+   * Build the new element correctly
+   */
+  let newElement: Node = {} as Node
+  if (!checkIfElementIsNode(node)) {
+    const newElementPosition = getElementPositionBasedOnPlaceholderElement(
+      placeholder.selected as Node,
+      node.elementType,
+    )
+    newElement = buildGenericNode({
+      nodeType: node.elementType,
+      blockType: node.blockVariant,
+      id: `${node.elementType.toUpperCase()}_${uuidv4()}`,
+      ...newElementPosition,
+    })
   } else {
-    newEdges = connectNodes({ ...rung, nodes: newNodes }, previousNode.id, newElement.id, 'serial')
+    newElement = node
   }
+  console.log('\tnewElement:', newElement)
 
-  return { nodes: newNodes, edges: newEdges }
-}
+  newNodes.splice(placeholder.index, 1, newElement)
+  newNodes = removePlaceholderElements(newNodes)
 
-/**
- * Append a serial connection keeping the node. The node will be kept and the connection will be made with the selected placeholder
- *
- * @param rung
- * @param node
- * @param placeholder
- *    @param placeholder.selectedPlaceholder
- *    @param placeholder.selectedPlaceholderIndex
- *
- * @returns object: { nodes: Node[], edges: Edge[] }
- */
-export const appendSerialConnectionKeepingTheNode = (
-  rung: RungState,
-  node: Node,
-  placeholder: { selectedPlaceholder: Node; selectedPlaceholderIndex: string },
-): { nodes: Node[]; edges: Edge[] } => {
-  const { selectedPlaceholder, selectedPlaceholderIndex } = placeholder
+  console.log('\tnewNodes:', newNodes)
 
-  let newNodes = [...rung.nodes]
-  let newEdges = [...rung.edges]
-
-  const newElement = node
-  newNodes.splice(toInteger(selectedPlaceholderIndex), 1, newElement)
-  newNodes = removePlaceholderNodes(newNodes)
-
-  // get the related node
-  const relatedNode = (selectedPlaceholder as PlaceholderNode).data.relatedNode as Node
-  const { nodes: relatedNodePreviousNodes, edges: relatedNodePreviousEdges } = getPreviousElementsByEdges(
-    { ...rung, nodes: newNodes },
+  /**
+   * Get the related element of the placeholder
+   *   If there is no related element, return the new nodes and edges
+   * Get the previous elements (based on the related node)
+   */
+  const relatedNode = placeholder.selected.data.relatedNode as Node
+  console.log('\trelatedNode:', relatedNode)
+  const { nodes: relatedNodePreviousNodes, edges: relatedNodePreviousEdges } = getPreviousElementsByEdge(
+    { ...rung, nodes: newNodes, edges: newEdges },
     relatedNode,
   )
+  console.log('\trelatedNodePreviousNodes:', relatedNodePreviousNodes)
   if (!relatedNodePreviousNodes || !relatedNodePreviousEdges) return { nodes: newNodes, edges: newEdges }
 
-  // find the previous node
-  let previousNode: Node = getPreviousElement(
-    newNodes,
+  /**
+   * Get the previous node
+   */
+  let previousNode = getPreviousElement(
+    { ...rung, nodes: newNodes, edges: newEdges },
     newNodes.findIndex((n) => n.id === newElement.id),
   )
 
-  // if the related node is a parallel, check if it is an open or close parallel
+  /**
+   * If the related node is a parallel, check if it is an open or close parallel
+   *    If it is an open parallel, check if the new element is being added to the left
+   *    If it is, connect the new element to the parallel node
+   * If it is not a parallel, connect the new element to the previous node
+   */
   if (
-    relatedNodePreviousNodes.length > 0 &&
-    isNodeOfType(relatedNodePreviousNodes[0], 'parallel') &&
-    (relatedNodePreviousNodes[0] as ParallelNode).data.type === 'open' &&
-    selectedPlaceholder.data.position === 'left' &&
+    // Check if there is serial previous nodes
+    relatedNodePreviousNodes.serial.length > 0 &&
+    // Check if the node is a open parallel node
+    isNodeOfType(relatedNodePreviousNodes.serial[0], 'parallel') &&
+    (relatedNodePreviousNodes.serial[0] as ParallelNode).data.type === 'open' &&
+    // If it is, check if the new element is being added to the left
+    placeholder.selected.data.position === 'left' &&
+    // If it is, check if the new element is being added to the parallel output connector
     relatedNodePreviousEdges[0].sourceHandle ===
-      (relatedNodePreviousNodes[0] as ParallelNode).data.parallelOutputConnector?.id
+      (relatedNodePreviousNodes.serial[0] as ParallelNode).data.parallelOutputConnector?.id
   ) {
-    previousNode = relatedNodePreviousNodes[0]
-    newEdges = connectNodes({ ...rung, nodes: newNodes }, previousNode.id, newElement.id, 'parallel')
+    previousNode = relatedNodePreviousNodes.serial[0]
+    newEdges = connectNodes({ ...rung, nodes: newNodes, edges: newEdges }, previousNode.id, newElement.id, 'parallel')
   } else {
-    newEdges = connectNodes({ ...rung, nodes: newNodes }, previousNode.id, newElement.id, 'serial')
+    newEdges = connectNodes({ ...rung, nodes: newNodes, edges: newEdges }, previousNode.id, newElement.id, 'serial')
   }
 
   return { nodes: newNodes, edges: newEdges }

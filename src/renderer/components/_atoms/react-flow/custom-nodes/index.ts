@@ -1,3 +1,5 @@
+import { Node } from '@xyflow/react'
+
 import * as blockNode from './block'
 import * as coilNode from './coil'
 import * as contactNode from './contact'
@@ -146,4 +148,8 @@ export const nodesBuilder = {
   powerRail: powerRailNode.buildPowerRailNode,
   variable: variableNode.buildVariableNode,
   mockNode: mockNode.buildMockNode,
+}
+
+export const checkIfElementIsNode = (element: unknown): element is Node => {
+  return (element as Node)?.data !== undefined
 }
