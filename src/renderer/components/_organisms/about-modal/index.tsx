@@ -54,8 +54,8 @@ const AboutModal = () => {
           <img src={openPlcLogo} />
         </div>
 
-        <div className='text-center text-xs font-normal dark:text-neutral-200'>
-          <div className='text-xl font-bold'>
+        <div className='text-center text-neutral-950 text-xs font-normal dark:text-neutral-200'>
+          <div className='text-xl font-medium'>
             <h2>{title}</h2>
             <h2>{releaseDate}</h2>
           </div>
