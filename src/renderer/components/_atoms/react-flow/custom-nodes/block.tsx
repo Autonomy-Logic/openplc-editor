@@ -321,6 +321,8 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     projectActions: { createVariable, updateVariable },
     flows,
     flowActions: { updateNode },
+    searchActions: { extractSearchQuery },
+    searchQuery,
   } = useOpenPLCStore()
 
   const { documentation, type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
@@ -330,6 +332,12 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
 
   const inputVariableRef = useRef<HTMLInputElement>(null)
   const [inputVariableFocus, setInputVariableFocus] = useState<boolean>(true)
+
+  const [isEditing, setIsEditing] = useState<boolean>(false)
+
+  const formmatedBlockVariableValue = searchQuery
+    ? extractSearchQuery(blockVariableValue, searchQuery)
+    : blockVariableValue
 
   /**
    * useEffect to focus the variable input when the correct block type is selected
@@ -463,6 +471,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
       },
     })
     setWrongVariable(false)
+    setIsEditing(false)
   }
 
   return (
@@ -491,18 +500,26 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
           width: DEFAULT_BLOCK_WIDTH,
         }}
       >
-        {(data.variant as BlockVariant).type !== 'function' && (data.variant as BlockVariant).type !== 'generic' && (
-          <InputWithRef
-            value={blockVariableValue}
-            onChange={(e) => setBlockVariableValue(e.target.value)}
-            placeholder='???'
-            className='w-full bg-transparent text-center text-sm outline-none'
-            onFocus={() => setInputVariableFocus(true)}
-            onBlur={() => inputVariableFocus && handleSubmitBlockVariable()}
-            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-            ref={inputVariableRef}
-          />
-        )}
+        {(data.variant as BlockVariant).type !== 'function' &&
+          (data.variant as BlockVariant).type !== 'generic' &&
+          (isEditing ? (
+            <InputWithRef
+              value={blockVariableValue}
+              onChange={(e) => setBlockVariableValue(e.target.value)}
+              placeholder='???'
+              className='w-full bg-transparent text-center text-sm outline-none'
+              onFocus={() => setInputVariableFocus(true)}
+              onBlur={() => inputVariableFocus && handleSubmitBlockVariable()}
+              onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+              ref={inputVariableRef}
+            />
+          ) : (
+            <p
+              onClick={() => setIsEditing(true)}
+              className='w-full bg-transparent text-center text-sm outline-none'
+              dangerouslySetInnerHTML={{ __html: formmatedBlockVariableValue || '???' }}
+            />
+          ))}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

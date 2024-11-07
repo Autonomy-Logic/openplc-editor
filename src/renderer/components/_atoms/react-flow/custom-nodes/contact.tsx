@@ -86,6 +86,8 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     },
     flows,
     flowActions: { updateNode },
+    searchActions: { extractSearchQuery },
+    searchQuery,
   } = useOpenPLCStore()
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
@@ -94,6 +96,12 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
 
   const inputVariableRef = useRef<HTMLInputElement>(null)
   const [inputFocus, setInputFocus] = useState<boolean>(true)
+
+  const [isEditing, setIsEditing] = useState<boolean>(false)
+
+  const formattedContactVariableValue = searchQuery
+    ? extractSearchQuery(contactVariableValue, searchQuery)
+    : contactVariableValue
 
   /**
    * useEffect to focus the variable input when the block is selected
@@ -167,6 +175,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       },
     })
     setWrongVariable(false)
+    setIsEditing(false)
   }
 
   return (
@@ -187,16 +196,24 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
         {contact.svg(wrongVariable)}
       </div>
       <div className='absolute -left-[34px] -top-7 w-24'>
-        <InputWithRef
-          value={contactVariableValue}
-          onChange={(e) => setContactVariableValue(e.target.value)}
-          placeholder='???'
-          className='w-full bg-transparent text-center text-sm outline-none'
-          onFocus={() => setInputFocus(true)}
-          onBlur={() => inputFocus && handleSubmitContactVarible()}
-          onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-          ref={inputVariableRef}
-        />
+        {isEditing ? (
+          <InputWithRef
+            value={contactVariableValue}
+            onChange={(e) => setContactVariableValue(e.target.value)}
+            placeholder='???'
+            className='w-full bg-transparent text-center text-sm outline-none'
+            onFocus={() => setInputFocus(true)}
+            onBlur={() => inputFocus && handleSubmitContactVarible()}
+            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+            ref={inputVariableRef}
+          />
+        ) : (
+          <p
+            onClick={() => setIsEditing(true)}
+            className='w-full bg-transparent text-center text-sm outline-none'
+            dangerouslySetInnerHTML={{ __html: formattedContactVariableValue || '???' }}
+          />
+        )}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

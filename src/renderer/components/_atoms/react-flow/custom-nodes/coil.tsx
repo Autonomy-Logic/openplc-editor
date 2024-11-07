@@ -6,6 +6,7 @@ import {
   RisingEdgeCoil,
   SetCoil,
 } from '@root/renderer/assets/icons/flow/Coil'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
@@ -115,6 +116,8 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     },
     flows,
     flowActions: { updateNode },
+    searchActions: { extractSearchQuery },
+    searchQuery,
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
@@ -123,6 +126,12 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
 
   const inputVariableRef = useRef<HTMLInputElement>(null)
   const [inputFocus, setInputFocus] = useState<boolean>(true)
+
+  const [isEditing, setIsEditing] = useState<boolean>(false)
+
+  const formattedCoilVariableValue = searchQuery
+    ? extractSearchQuery(coilVariableValue, searchQuery)
+    : coilVariableValue
 
   /**
    * useEffect to focus the variable input when the block is selected
@@ -186,6 +195,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       },
     })
     setWrongVariable(false)
+    setIsEditing(false)
   }
 
   return (
@@ -206,16 +216,24 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
         {coil.svg(wrongVariable)}
       </div>
       <div className='absolute -left-[31px] -top-7 w-24'>
-        <InputWithRef
-          value={coilVariableValue}
-          onChange={(e) => setCoilVariableValue(e.target.value)}
-          placeholder='???'
-          className='w-full bg-transparent text-center text-sm outline-none'
-          onFocus={() => setInputFocus(true)}
-          onBlur={() => inputFocus && handleSubmitCoilVariable()}
-          onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-          ref={inputVariableRef}
-        />
+        {isEditing ? (
+          <InputWithRef
+            value={coilVariableValue}
+            onChange={(e) => setCoilVariableValue(e.target.value)}
+            placeholder='???'
+            className='w-full bg-transparent text-center text-sm outline-none'
+            onFocus={() => setInputFocus(true)}
+            onBlur={() => inputFocus && handleSubmitCoilVariable()}
+            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+            ref={inputVariableRef}
+          />
+        ) : (
+          <p
+            onClick={() => setIsEditing(true)}
+            className='w-full bg-transparent text-center text-sm outline-none'
+            dangerouslySetInnerHTML={{ __html: formattedCoilVariableValue || '???' }}
+          />
+        )}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
