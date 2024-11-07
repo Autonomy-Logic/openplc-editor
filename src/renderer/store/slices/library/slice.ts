@@ -22,10 +22,6 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { LibrarySlice } from './type'
-export interface LibrarySliceAdd {
-  pouWasCreated: boolean
-  addLibraryToUser: (pou: unknown) => void
-}
 
 const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (setState) => ({
   libraries: {
@@ -48,34 +44,26 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
       Time,
       TypeConversion,
     ],
-    user: ['TEST'],
+    user: [],
   },
   /**
    * TODO: Create and implement the logic for the functions below
    */
   libraryActions: {
-    addLibrary: (libraryName) => {
+    addLibrary: (libraryName, libraryType) => {
       setState(
-        produce(({ libraries }: LibrarySlice) => {
-          if (!libraries.user.includes(libraryName)) {
-            libraries.user.push(libraryName)
+        produce(({ libraries: { user: userLibraries } }: LibrarySlice) => {
+          const libraryAlreadyExists = userLibraries.some((library) => library.name === libraryName)
+          if (!libraryAlreadyExists) {
+            userLibraries.push({ name: libraryName, type: libraryType })
           }
         }),
       )
     },
-    addLibraryToUser: (pou: string) => {
-      setState((state) => ({
-        libraries: {
-          ...state.libraries,
-          user: [...state.libraries.user, pou],
-        },
-        pouWasCreated: true,
-      }))
-    },
     removeLibrary: (libraryName) => {
       setState(
-        produce(({ libraries }: LibrarySlice) => {
-          libraries.user = libraries.user.filter((library) => library !== libraryName)
+        produce(({ libraries: { user: userLibraries } }: LibrarySlice) => {
+          return (userLibraries = userLibraries.filter((library) => library.name !== libraryName))
         }),
       )
     },

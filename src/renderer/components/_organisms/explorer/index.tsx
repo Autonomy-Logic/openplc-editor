@@ -23,23 +23,24 @@ const Explorer = ({ collapse }: explorerProps): ReactElement => {
     project: {
       data: { pous },
     },
-    libraries: { system },
+    libraries: { system, user },
   } = useOpenPLCStore()
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [filterText, setFilterText] = useState<string>('')
-
+//PASSAR O USER TBM
   const filteredLibraries = system.filter((library) =>
     pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
       ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')
       : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
   )
-
+//PASSAR SYSTEN E USER
   const selectedPouDocumentation =
     system
       .flatMap((library: { pous: { name: string; documentation?: string }[] }) => library.pous)
       .find((pou) => pou.name === selectedFileKey)?.documentation || null
 
+  console.warn('User libraries ->', user)
   return (
     <ResizablePanel
       ref={collapse}
