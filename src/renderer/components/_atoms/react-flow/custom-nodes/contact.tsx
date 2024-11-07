@@ -4,6 +4,7 @@ import {
   NegatedContact,
   RisingEdgeContact,
 } from '@root/renderer/assets/icons/flow/Contact'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
@@ -69,8 +70,23 @@ export const DEFAULT_CONTACT_TYPES: ContactType = {
 }
 
 export const Contact = ({ selected, data, id }: ContactProps) => {
-  const [contactLabelValue, setContactLabelValue] = useState<string>('')
+  const {
+    searchActions: { extractSearchQuery },
+    searchQuery,
+  } = useOpenPLCStore()
+
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
+
+  const [contactLabelValue, setContactLabelValue] = useState<string>('')
+  const [isEditing, setIsEditing] = useState<boolean>(false)
+
+  const formattedContactLabelValue = searchQuery
+    ? extractSearchQuery(contactLabelValue, searchQuery)
+    : contactLabelValue
+
+  const handleStartEditing = () => {
+    setIsEditing(true)
+  }
 
   return (
     <div
@@ -90,12 +106,21 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
         {contact.svg}
       </div>
       <div className='absolute -left-[34px] -top-7 w-24'>
-        <InputWithRef
-          value={contactLabelValue}
-          onChange={(e) => setContactLabelValue(e.target.value)}
-          placeholder='???'
-          className='w-full bg-transparent text-center text-sm outline-none'
-        />
+        {isEditing ? (
+          <InputWithRef
+            value={contactLabelValue}
+            onChange={(e) => setContactLabelValue(e.target.value)}
+            onBlur={() => setIsEditing(false)}
+            placeholder='???'
+            className='w-full bg-transparent text-center text-sm outline-none'
+          />
+        ) : (
+          <p
+            onClick={handleStartEditing}
+            className='w-full bg-transparent text-center text-sm outline-none'
+            dangerouslySetInnerHTML={{ __html: formattedContactLabelValue || '???' }}
+          />
+        )}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
@@ -146,7 +171,7 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
     height: DEFAULT_CONTACT_BLOCK_HEIGHT,
     measured: {
       width: DEFAULT_CONTACT_BLOCK_WIDTH,
-      height: DEFAULT_CONTACT_BLOCK_HEIGHT
+      height: DEFAULT_CONTACT_BLOCK_HEIGHT,
     },
     draggable: true,
     selectable: true,

@@ -1,3 +1,4 @@
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useState } from 'react'
@@ -108,10 +109,22 @@ export const BlockNodeElement = <T extends object>({
 }
 
 export const Block = <T extends object>({ data, dragging, height, selected, id }: BlockProps<T>) => {
+  const {
+    searchActions: { extractSearchQuery },
+    searchQuery,
+  } = useOpenPLCStore()
+
   const { name, documentation } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
 
   const [blockLabelValue, setBlockLabelValue] = useState<string>('')
   const [blockNameValue, setBlockNameValue] = useState<string>(name)
+  const [isEditing, setIsEditing] = useState<boolean>(false)
+
+  const formattedBlockLabelValue = searchQuery ? extractSearchQuery(blockLabelValue, searchQuery) : blockLabelValue
+
+  const handleStartEditing = () => {
+    setIsEditing(true)
+  }
 
   return (
     <div
@@ -139,12 +152,21 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
           width: DEFAULT_BLOCK_WIDTH,
         }}
       >
-        <InputWithRef
-          value={blockLabelValue}
-          onChange={(e) => setBlockLabelValue(e.target.value)}
-          placeholder='???'
-          className='w-full bg-transparent text-center text-sm outline-none'
-        />
+        {isEditing ? (
+          <InputWithRef
+            value={blockLabelValue}
+            onChange={(e) => setBlockLabelValue(e.target.value)}
+            onBlur={() => setIsEditing(false)}
+            placeholder='???'
+            className='w-full bg-transparent text-center text-sm outline-none'
+          />
+        ) : (
+          <p
+            onClick={handleStartEditing}
+            className='w-full bg-transparent text-center text-sm outline-none'
+            dangerouslySetInnerHTML={{ __html: formattedBlockLabelValue || '???' }}
+          />
+        )}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
@@ -236,7 +258,7 @@ export const buildBlockNode = <T extends object | undefined>({
     height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
     measured: {
       width: DEFAULT_BLOCK_WIDTH,
-      height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT
+      height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
     },
     draggable: true,
     selectable: true,

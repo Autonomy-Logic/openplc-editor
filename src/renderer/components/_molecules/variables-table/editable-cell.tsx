@@ -64,7 +64,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
   ) : (
     <div
       onClick={handleStartEditing}
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center', { 'pointer-events-none': !editable })}
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', { 'pointer-events-none': !editable })}
     >
       <p
         className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'

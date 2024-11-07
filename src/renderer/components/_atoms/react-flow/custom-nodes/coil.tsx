@@ -6,6 +6,7 @@ import {
   RisingEdgeCoil,
   SetCoil,
 } from '@root/renderer/assets/icons/flow/Coil'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
@@ -95,8 +96,21 @@ export const DEFAULT_COIL_TYPES: CoilType = {
 }
 
 export const Coil = ({ selected, data, id }: CoilProps) => {
-  const [coilLabelValue, setCoilLabelValue] = useState<string>('')
+  const {
+    searchActions: { extractSearchQuery },
+    searchQuery,
+  } = useOpenPLCStore()
+
   const coil = DEFAULT_COIL_TYPES[data.variant]
+
+  const [coilLabelValue, setCoilLabelValue] = useState<string>('')
+  const [isEditing, setIsEditing] = useState<boolean>(false)
+
+  const formattedCoilLabelValue = searchQuery ? extractSearchQuery(coilLabelValue, searchQuery) : coilLabelValue
+
+  const handleStartEditing = () => {
+    setIsEditing(true)
+  }
 
   return (
     <div
@@ -116,12 +130,21 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
         {coil.svg}
       </div>
       <div className='absolute -left-[31px] -top-7 w-24'>
-        <InputWithRef
-          value={coilLabelValue}
-          onChange={(e) => setCoilLabelValue(e.target.value)}
-          placeholder='???'
-          className='w-full bg-transparent text-center text-sm outline-none'
-        />
+        {isEditing ? (
+          <InputWithRef
+            value={coilLabelValue}
+            onChange={(e) => setCoilLabelValue(e.target.value)}
+            onBlur={() => setIsEditing(false)}
+            placeholder='???'
+            className='w-full bg-transparent text-center text-sm outline-none'
+          />
+        ) : (
+          <p
+            className='w-full bg-transparent text-center text-sm outline-none'
+            onClick={handleStartEditing}
+            dangerouslySetInnerHTML={{ __html: formattedCoilLabelValue || '???' }}
+          />
+        )}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
