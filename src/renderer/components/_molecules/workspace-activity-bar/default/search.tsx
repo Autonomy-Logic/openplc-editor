@@ -13,18 +13,24 @@ export const SearchButton = () => {
   } = useOpenPLCStore()
 
   const handleModalClose = () => {
-    setModalOpen(!isModalOpen)
+    setModalOpen('findInProject',false)
+  }
+  const handleOpenChange = (open: boolean) => {
+    setModalOpen('findInProject', open)
   }
 
+  const isFindInProjectModalOpen = isModalOpen.some(
+    (modal: { modalName: string; modalState: boolean }) => modal.modalName === 'findInProject' && modal.modalState,
+  )
+
   useEffect(() => {
-    
     window.bridge.findInProjectAccelerator((_event) => {
-      setModalOpen(!isModalOpen)
+      setModalOpen('findInProject',true)
     })
   }, [])
 
   return (
-    <Modal onOpenChange={setModalOpen} open={isModalOpen}>
+    <Modal onOpenChange={handleOpenChange} open={isFindInProjectModalOpen}>
       <ModalTrigger>
         <ActivityBarButton aria-label='Search'>
           <SearchIcon />

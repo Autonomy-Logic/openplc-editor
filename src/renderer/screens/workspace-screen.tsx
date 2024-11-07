@@ -14,6 +14,7 @@ import { ResourcesEditor } from '../components/_features/[workspace]/editor/reso
 import { Search } from '../components/_features/[workspace]/search'
 import { Console } from '../components/_molecules/console'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
+import AboutModal from '../components/_organisms/about-modal'
 import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
@@ -150,6 +151,7 @@ const WorkspaceScreen = () => {
  
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
+      <AboutModal />
       <WorkspaceSideContent>
         <WorkspaceActivityBar
           defaultActivityBar={{
