@@ -1,6 +1,7 @@
 import openPlcLogo from '@root/renderer/assets/icons/about/logo.svg'
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { useEffect, useState } from 'react'
 
 const AboutModal = () => {
   const {
@@ -29,6 +30,21 @@ const AboutModal = () => {
   const handleOpenAboutLink = () => {
     void window.bridge.openExternalLinkAccelerator(linkUrl)
   }
+
+  const [isAboutOpen, setisAboutOpen] = useState(false);
+
+  const openAboutModal = () => {
+    if (!isAboutOpen) {
+      setisAboutOpen(true);
+      setModalOpen('aboutOpenPlc', true) 
+  };
+  }
+
+  useEffect(() => {
+   void window.bridge.aboutModalAccelerator((_event) => {
+    openAboutModal()
+    })
+  },[])
 
   return (
     <Modal onOpenChange={handleOpenChange} open={isAboutModalOpen}>

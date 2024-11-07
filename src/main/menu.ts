@@ -93,6 +93,10 @@ handleOpenExternalLink(link:string) {
  void shell.openExternal(link)
 }
 
+handleOpenAboutModal() {
+  this.mainWindow.webContents.send('about:open-accelerator')
+}
+
 handleFindInProject(){
   this.mainWindow.webContents.send('project:find-in-project-accelerator')
 }
@@ -353,7 +357,7 @@ handleFindInProject(){
         {
           label: i18n.t('menu:help.submenu.about'),
           accelerator: 'F1',
-          click: () => void this.handleOpenExternalLink('https://autonomylogic.com/'),
+          click: () => void this.handleOpenAboutModal(),
         },
       ],
     }
@@ -593,7 +597,7 @@ handleFindInProject(){
           {
             label: i18n.t('menu:help.submenu.about'),
             accelerator : 'F1',
-            click: () => this.handleOpenExternalLink('https://autonomylogic.com/'),
+            click: () => this.handleOpenAboutModal(),
           },
         ],
       },
