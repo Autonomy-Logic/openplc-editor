@@ -1,6 +1,8 @@
 import { CloseIcon } from '@root/renderer/assets'
 import { Accordion } from '@root/renderer/components/_atoms/accordion'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { TabsProps } from '@root/renderer/store/slices'
+import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
 
 import {
   ProjectSearchTreeBranch,
@@ -31,6 +33,7 @@ interface SearchResult {
     resource: {
       globalVariable: string
       task: string
+      instance: string
     }
   }
   searchCounts?: number
@@ -41,10 +44,31 @@ interface SearchProps {
 }
 
 const Search = ({ items }: SearchProps) => {
-  const { searchActions, sensitiveCase } = useOpenPLCStore()
+  const {
+    searchActions: { extractSearchQuery, removeSearchResult, setSearchQuery },
+    sensitiveCase,
+    tabsActions: { updateTabs },
+    editorActions: { setEditor, addModel, getEditorFromEditors },
+  } = useOpenPLCStore()
+
+  const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
+    const tabToBeCreated = { name, path, elementType }
+    updateTabs(tabToBeCreated)
+
+    const editor = getEditorFromEditors(tabToBeCreated.name)
+    if (!editor) {
+      const model = CreateEditorObjectFromTab(tabToBeCreated)
+      addModel(model)
+      setEditor(model)
+      return
+    }
+    addModel(editor)
+    setEditor(editor)
+  }
 
   const handleRemoveSearchResult = (index: number) => {
-    searchActions.removeSearchResult(index)
+    removeSearchResult(index)
+    setSearchQuery('')
   }
 
   const mapDataTypeToLeafLang = (type: 'array' | 'structure' | 'enumerated'): 'arr' | 'str' | 'enum' => {
@@ -58,15 +82,6 @@ const Search = ({ items }: SearchProps) => {
       default:
         return 'arr'
     }
-  }
-
-  const extractSearchQuery = (body: string, searchQuery: string) => {
-    const regex = new RegExp(`(${searchQuery})`, 'gi')
-    const match = body.match(regex)
-    if (match) {
-      return body.replace(regex, (matched) => `<span class='text-brand-medium dark:text-brand-light'>${matched}</span>`)
-    }
-    return body
   }
 
   const extractSearchQueryBody = (body: string, searchQuery: string) => {
@@ -85,8 +100,6 @@ const Search = ({ items }: SearchProps) => {
         .replace(/<br><br>/g, '<br>')
 
       const finalResult = result.startsWith('<br>') ? result.slice(4) : result
-
-      console.log(finalResult)
       return finalResult
     }
 
@@ -131,6 +144,14 @@ const Search = ({ items }: SearchProps) => {
                                   key={pouIndex}
                                   label={extractSearchQuery(pou.name, item.searchQuery)}
                                   leafLang={pou.language}
+                                  onClick={() => {
+                                    handleCreateTab({
+                                      name: pou.name,
+                                      path: `/data/pous/${pou.pouType}/${pou.name}`,
+                                      elementType: { type: pou.pouType, language: pou.language },
+                                    }),
+                                      setSearchQuery(item.searchQuery)
+                                  }}
                                 >
                                   {pou.variable &&
                                     pou.variable
@@ -153,6 +174,14 @@ const Search = ({ items }: SearchProps) => {
                                   key={pouIndex}
                                   label={extractSearchQuery(pou.name, item.searchQuery)}
                                   leafLang={pou.language}
+                                  onClick={() => {
+                                    handleCreateTab({
+                                      name: pou.name,
+                                      path: `/data/pous/${pou.pouType}/${pou.name}`,
+                                      elementType: { type: pou.pouType, language: pou.language },
+                                    }),
+                                      setSearchQuery(item.searchQuery)
+                                  }}
                                 />
                               ),
                           )}
@@ -166,12 +195,22 @@ const Search = ({ items }: SearchProps) => {
                               key={dataTypeIndex}
                               label={extractSearchQuery(dataType.name, item.searchQuery)}
                               leafLang={mapDataTypeToLeafLang(dataType.type)}
+                              onClick={() => {
+                                handleCreateTab({
+                                  name: dataType.name,
+                                  path: `/data/data-types/${dataType.type}/${dataType.name}`,
+                                  elementType: { type: 'data-type', derivation: dataType.type },
+                                }),
+                                  setSearchQuery(item.searchQuery)
+                              }}
                             />
                           ))}
                         </ProjectSearchTreeBranch>
                       )}
 
-                      {(item.functions.resource.globalVariable || item.functions.resource.task) && (
+                      {(item.functions.resource.globalVariable ||
+                        item.functions.resource.task ||
+                        item.functions.resource.instance) && (
                         <ProjectSearchTreeBranch branchTarget='resource'>
                           {item.functions.resource.globalVariable && (
                             <ProjectSearchTreeVariableBranch label='Global Variables' leafLang='res'>
@@ -180,6 +219,14 @@ const Search = ({ items }: SearchProps) => {
                                   key={variableIndex}
                                   label={extractSearchQuery(variable, item.searchQuery)}
                                   hasVariable
+                                  onClick={() => {
+                                    handleCreateTab({
+                                      name: 'resource',
+                                      path: `/data/configuration/resource`,
+                                      elementType: { type: 'resource' },
+                                    }),
+                                      setSearchQuery(item.searchQuery)
+                                  }}
                                 />
                               ))}
                             </ProjectSearchTreeVariableBranch>
@@ -191,6 +238,33 @@ const Search = ({ items }: SearchProps) => {
                                   key={taskIndex}
                                   label={extractSearchQuery(task, item.searchQuery)}
                                   hasVariable
+                                  onClick={() => {
+                                    handleCreateTab({
+                                      name: 'resource',
+                                      path: `/data/configuration/resource`,
+                                      elementType: { type: 'resource' },
+                                    }),
+                                      setSearchQuery(item.searchQuery)
+                                  }}
+                                />
+                              ))}
+                            </ProjectSearchTreeVariableBranch>
+                          )}
+                          {item.functions.resource.instance && (
+                            <ProjectSearchTreeVariableBranch label='Instances' leafLang='res'>
+                              {item.functions.resource.instance.split(', ').map((instance, instanceIndex) => (
+                                <ProjectSearchTreeVariableLeaf
+                                  key={instanceIndex}
+                                  label={extractSearchQuery(instance, item.searchQuery)}
+                                  hasVariable
+                                  onClick={() => {
+                                    handleCreateTab({
+                                      name: 'resource',
+                                      path: `/data/configuration/resource`,
+                                      elementType: { type: 'resource' },
+                                    }),
+                                      setSearchQuery(item.searchQuery)
+                                  }}
                                 />
                               ))}
                             </ProjectSearchTreeVariableBranch>

@@ -1,8 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as Checkbox from '@radix-ui/react-checkbox'
 import { CheckIcon } from '@radix-ui/react-icons'
 import { InputWithRef } from '@root/renderer/components/_atoms'
@@ -310,9 +305,22 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       )
     })
 
+    const resourceInstances = data.configuration.resource.instances.filter((instance) => {
+      const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
+      return (
+        resourceMatchesFilter &&
+        (regularExpressionOption
+          ? countOccurrences(instance.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
+          : sensitiveCaseOption
+            ? instance.name.includes(searchQuery)
+            : instance.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    })
+
     const resource = {
       globalVariable: resourceGlobalVar.map((variable) => variable.name).join(', '),
       task: resourceTasks.map((task) => task.name).join(', '),
+      instance: resourceInstances.map((instance) => instance.name).join(', '),
     }
 
     const totalMatches =
@@ -336,7 +344,8 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       }, 0) +
       filteredDataTypes.length +
       resourceGlobalVar.length +
-      resourceTasks.length
+      resourceTasks.length +
+      resourceInstances.length
 
     const formattedResults = {
       searchQuery,
@@ -369,7 +378,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       })
     } else {
       setSearchResults(formattedResults)
-      setSearchQuery('')
+      console.log(formattedResults)
       onClose()
     }
   }

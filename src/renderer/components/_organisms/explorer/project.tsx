@@ -16,6 +16,8 @@ const Project = () => {
     projectActions: { updateMetaName },
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
+    searchActions: { extractSearchQuery },
+    searchQuery,
   } = useOpenPLCStore()
   const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
     const tabToBeCreated = { name, path, elementType }
@@ -94,7 +96,7 @@ const Project = () => {
                 <ProjectTreeLeaf
                   key={data.name}
                   leafLang={data.language}
-                  label={data.name}
+                  label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
                   onClick={() =>
                     handleCreateTab({
                       name: data.name,
@@ -112,7 +114,7 @@ const Project = () => {
                 <ProjectTreeLeaf
                   key={data.name}
                   leafLang={data.language}
-                  label={data.name}
+                  label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
                   onClick={() =>
                     handleCreateTab({
                       name: data.name,
@@ -142,7 +144,7 @@ const Project = () => {
                 <ProjectTreeLeaf
                   key={data.name}
                   leafLang={data.language}
-                  label={data.name}
+                  label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
                   onClick={() =>
                     handleCreateTab({
                       name: data.name,
@@ -161,7 +163,7 @@ const Project = () => {
                   nested
                   key={name}
                   leafLang='arr'
-                  label={name}
+                  label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
                   onClick={() =>
                     handleCreateTab({
                       name,
@@ -179,7 +181,7 @@ const Project = () => {
                   nested
                   key={name}
                   leafLang='enum'
-                  label={name}
+                  label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
                   /** Todo: Update the tab state */
                   onClick={() =>
                     handleCreateTab({
@@ -198,7 +200,7 @@ const Project = () => {
                   nested
                   key={name}
                   leafLang='str'
-                  label={name}
+                  label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
                   /** Todo: Update the tab state */
                   onClick={() =>
                     handleCreateTab({

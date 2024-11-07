@@ -1,4 +1,5 @@
 import { SearchIcon } from '@root/renderer/assets'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { useState } from 'react'
 
 import { ActivityBarButton } from '../../../_atoms/buttons'
@@ -6,14 +7,22 @@ import SearchInProject from '../../../_features/[workspace]/editor/search-in-pro
 import { Modal, ModalContent, ModalTitle, ModalTrigger } from '../../modal'
 
 export const SearchButton = () => {
+  const {
+    searchActions: { setSearchQuery },
+  } = useOpenPLCStore()
   const [isModalOpen, setIsModalOpen] = useState(false)
+
+  const handleModalOpen = () => {
+    setSearchQuery('')
+    setIsModalOpen(true)
+  }
 
   const handleModalClose = () => {
     setIsModalOpen(false)
   }
 
   return (
-    <Modal onOpenChange={setIsModalOpen} open={isModalOpen}>
+    <Modal onOpenChange={handleModalOpen} open={isModalOpen}>
       <ModalTrigger>
         <ActivityBarButton aria-label='Search' onClick={() => setIsModalOpen(true)}>
           <SearchIcon />

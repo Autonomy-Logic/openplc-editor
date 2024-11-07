@@ -22,6 +22,7 @@ const searchModelSchema = z.object({
   resource: z.object({
     globalVariable: z.string(),
     task: z.string(),
+    instance: z.string(),
   }),
 });
 
@@ -47,6 +48,7 @@ const searchActionsSchema = z.object({
   setSensitiveCase: z.function().args(z.boolean()).returns(z.void()),
   setRegularExpression: z.function().args(z.boolean()).returns(z.void()),
   removeSearchResult: z.function().args(z.number()).returns(z.void()),
+  extractSearchQuery: z.function().args(z.string(), z.string()).returns(z.string()),
 });
 type SearchActions = z.infer<typeof searchActionsSchema>;
 

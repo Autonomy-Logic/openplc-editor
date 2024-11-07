@@ -16,8 +16,11 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     project: {
       data: { dataTypes },
     },
+    searchActions: { extractSearchQuery },
+    searchQuery,
   } = useOpenPLCStore()
   const [editorContent, setEditorContent] = useState<PLCDataType>()
+  const [isEditing, setIsEditing] = useState(false)
 
   useEffect(() => {
     const dataTypeIndex = dataTypes.findIndex((dataType) => dataType.name === dataTypeName)
@@ -27,13 +30,17 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     }
   }, [dataTypes, dataTypeName])
 
+  const handleStartEditing = () => {
+    setIsEditing(true)
+  }
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { value } = e.target;
+    const { value } = e.target
     setEditorContent((prevContent) => ({
       ...prevContent,
       name: value,
-    }));
-  };
+    }))
+  }
 
   return (
     <div aria-label='Data type editor container' className='flex h-full w-full flex-col items-center p-2' {...rest}>
@@ -52,13 +59,23 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
             aria-label='Data type name input container'
             className='h-[30px] w-full max-w-[385px] rounded-lg border border-neutral-400 bg-white focus-within:border-brand dark:border-neutral-800 dark:bg-neutral-950'
           >
-            <InputWithRef
-              value={editorContent?.name}
-              onChange={handleChange}
-              id='data-type-name'
-              aria-label='data-type-name'
-              className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
-            />
+            {isEditing ? (
+              <InputWithRef
+                value={editorContent?.name}
+                onChange={handleChange}
+                onBlur={() => setIsEditing(false)}
+                id='data-type-name'
+                aria-label='data-type-name'
+                className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
+              />
+            ) : (
+              <div
+                aria-label='data-type-name'
+                className='flex items-center h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
+                onClick={handleStartEditing}
+                dangerouslySetInnerHTML={{ __html: extractSearchQuery(editorContent?.name || '', searchQuery) }}
+              />
+            )}
           </div>
         </div>
         <div aria-label='Data type derivation container' className='flex h-full w-1/2 items-center gap-2'>

@@ -1,3 +1,4 @@
+import { useOpenPLCStore } from '@root/renderer/store'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
 import type { PLCInstance } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
@@ -20,24 +21,38 @@ type IEditableCellProps = CellContext<PLCInstance, unknown> & { editable?: boole
 const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
   const initialValue = getValue<string>()
   const { toast } = useToast()
+
+  const {
+    searchActions: { extractSearchQuery },
+    searchQuery,
+  } = useOpenPLCStore()
+
   const [cellValue, setCellValue] = useState(initialValue)
+  const [isEditing, setIsEditing] = useState(false)
 
   const onBlur = () => {
-    if (cellValue === initialValue) return
+    if (cellValue === initialValue) return setIsEditing(false)
 
     const res = table.options.meta?.updateData(index, id, cellValue)
 
-    if (res?.ok) return
+    if (res?.ok) return setIsEditing(false)
 
     setCellValue(initialValue)
     toast({ title: res?.title, description: res?.message, variant: 'fail' })
   }
 
+  const handleStartEditing = () => {
+    if (!editable) return
+    setIsEditing(true)
+  }
+
+  const formattedCellValue = searchQuery ? extractSearchQuery(cellValue, searchQuery) : cellValue
+
   useEffect(() => {
     setCellValue(initialValue)
   }, [initialValue])
 
-  return (
+  return isEditing ? (
     <InputWithRef
       value={cellValue}
       onChange={(e) => setCellValue(e.target.value)}
@@ -46,6 +61,16 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
         'pointer-events-none': !editable,
       })}
     />
+  ) : (
+    <div
+      onClick={handleStartEditing}
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center', { 'pointer-events-none': !editable })}
+    >
+      <p
+        className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'
+        dangerouslySetInnerHTML={{ __html: formattedCellValue }}
+      />
+    </div>
   )
 }
 
