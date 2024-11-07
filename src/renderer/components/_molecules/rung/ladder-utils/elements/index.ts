@@ -1,10 +1,11 @@
-import { PlaceholderNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/placeholder'
+import type { PlaceholderNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/placeholder'
 import type { RungState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
 import { disconnectNodes } from '../edges'
 import { removeEmptyParallelConnections } from '../elements/parallel'
 import { isNodeOfType, removeNode } from '../nodes'
+import { updateDiagramElementsPosition } from './diagram'
 import { startParallelConnection } from './parallel'
 import { appendSerialConnection } from './serial'
 
@@ -63,6 +64,14 @@ export const addNewElement = <T>(
   /**
    * After adding the new element, update the diagram with the new rung
    */
+  newNodes = updateDiagramElementsPosition(
+    {
+      ...rung,
+      nodes: newNodes,
+      edges: newEdges,
+    },
+    rung.defaultBounds as [number, number],
+  )
 
   /**
    * Return the updated rung
@@ -70,7 +79,7 @@ export const addNewElement = <T>(
   return { nodes: newNodes, edges: newEdges }
 }
 
-const removeElement = (rung: RungState, element: Node): { nodes: Node[]; edges: Edge[] } => {
+export const removeElement = (rung: RungState, element: Node): { nodes: Node[]; edges: Edge[] } => {
   /**
    * Remove the selected element from the rung
    */
@@ -98,6 +107,14 @@ const removeElement = (rung: RungState, element: Node): { nodes: Node[]; edges: 
   /**
    * After adding the new element, update the diagram with the new rung
    */
+  newNodes = updateDiagramElementsPosition(
+    {
+      ...rung,
+      nodes: newNodes,
+      edges: newEdges,
+    },
+    rung.defaultBounds as [number, number],
+  )
 
   /**
    * Return the updated rung

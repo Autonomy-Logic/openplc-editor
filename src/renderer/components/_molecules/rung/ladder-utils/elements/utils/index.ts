@@ -1,5 +1,5 @@
 import type { CustomHandleProps } from '@root/renderer/components/_atoms/react-flow/custom-nodes/handle'
-import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
+import type { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
 import type { RungState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
@@ -11,15 +11,15 @@ import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
  * @param rung: RungState
  * @param node: Node
  *
- * @returns obj: { serial: Node[], parallel: Node[] }
+ * @returns obj: { nodes: { serial: Node[]; parallel: Node[]; all: Node[] }; edges: Edge[] }
  */
 export const getPreviousElementsByEdge = (
   rung: RungState,
   node: Node,
-): { nodes: { serial: Node[]; parallel: Node[] }; edges: Edge[] } => {
+): { nodes: { serial: Node[]; parallel: Node[]; all: Node[] }; edges: Edge[] } => {
   const { edges } = rung
-  const lastNodes: { nodes: { serial: Node[]; parallel: Node[] }; edges: Edge[] } = {
-    nodes: { serial: [], parallel: [] },
+  const lastNodes: { nodes: { serial: Node[]; parallel: Node[]; all: Node[] }; edges: Edge[] } = {
+    nodes: { serial: [], parallel: [], all: [] },
     edges: [],
   }
 
@@ -54,6 +54,7 @@ export const getPreviousElementsByEdge = (
     lastNodes.nodes.serial.push(n)
   })
   lastNodes.edges = connectedEdges
+  lastNodes.nodes.all = [...lastNodes.nodes.serial, ...lastNodes.nodes.parallel]
 
   return lastNodes
 }

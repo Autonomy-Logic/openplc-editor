@@ -1,5 +1,5 @@
 import { nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
-import { RungState } from '@root/renderer/store/slices'
+import type { RungState } from '@root/renderer/store/slices'
 import type { Node, ReactFlowInstance } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 
