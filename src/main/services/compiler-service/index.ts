@@ -3,6 +3,14 @@ import { join } from 'path'
 
 import { CreateXMLFile } from '../../utils/xml-manager'
 
+type CompilerResponse = {
+  error?: boolean
+  message: {
+    type: 'error' | 'warning' | 'info'
+    content: string
+  }
+}
+
 const CompilerService = {
   writeXMLFile: (path: string, data: string, fileName: string) => {
     const ok = CreateXMLFile({
@@ -17,26 +25,43 @@ const CompilerService = {
    * This is a mock implementation to be used as a presentation.
    * !! Do not use this on production !!
    */
-  compileSTProgram: (pathToXMLFile: string) => {
+  compileSTProgram: (pathToXMLFile: string): CompilerResponse => {
+    const responseObject: CompilerResponse = {
+      error: false,
+      message: {
+        type: 'info',
+        content: 'Compilation started',
+      },
+    }
+
+    const isDevelopment = process.env.NODE_ENV === 'development'
+
     // Construct the path for the current working directory to be able to access the compiler
     const workingDirectory = process.cwd()
 
-    // Construct the path for the st compiler script
-    const stCompilerPath = join(workingDirectory, 'assets', 'python', 'st-compiler', 'xml2st.py')
+    // Construct the path for the st compiler script based on the current environment
+    const stCompilerPath = isDevelopment ? join(workingDirectory, 'assets', 'python', 'st-compiler', 'xml2st.py') : ''
 
     // Execute the st compiler script with the path to the xml file.
     // TODO: This only works on development environment. Need to be added the path for the production environment
     exec(`python3 ${stCompilerPath} '${pathToXMLFile}'`, (error, stdout, stderr) => {
       if (error) {
-        console.error(`error: ${error.message}`)
+        responseObject.error = true
+        responseObject.message = { type: 'error', content: error.message }
         return
       }
       if (stderr) {
-        console.error(`stderr: ${stderr}`)
+        responseObject.error = true
+        responseObject.message = { type: 'error', content: stderr }
         return
       }
-      console.log(`stdout: ${stdout}`)
+      responseObject.message = {
+        type: 'info',
+        content: stdout,
+      }
     })
+
+    return responseObject
   },
 }
 

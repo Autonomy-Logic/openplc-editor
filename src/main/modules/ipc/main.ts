@@ -99,9 +99,9 @@ class MainProcessBridge implements MainIpcModule {
      * This is a mock implementation to be used as a presentation.
      * !! Do not use this on production !!
      */
-    this.ipcMain.handle('compiler:compile-st-program', (_event, pathToXMLFile: string) => {
-      this.compilerService.compileSTProgram(pathToXMLFile)
-    })
+    this.ipcMain.handle('compiler:compile-st-program', (_event, pathToXMLFile: string) =>
+      this.compilerService.compileSTProgram(pathToXMLFile),
+    )
   }
 
   mainIpcEventHandlers = {
