@@ -26,7 +26,7 @@ const CompilerService = {
 
     // Execute the st compiler script with the path to the xml file.
     // TODO: This only works on development environment. Need to be added the path for the production environment
-    exec(`python3 ${stCompilerPath} ${pathToXMLFile}`, (error, stdout, stderr) => {
+    exec(`python3 ${stCompilerPath} '${pathToXMLFile}'`, (error, stdout, stderr) => {
       if (error) {
         console.error(`error: ${error.message}`)
         return
