@@ -2,7 +2,6 @@ import openPlcLogo from '@root/renderer/assets/icons/about/logo.svg'
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
 
-
 const AboutModal = () => {
   const {
     workspaceActions: { setModalOpen },
@@ -27,6 +26,10 @@ const AboutModal = () => {
   const copyright = '(C) 2019 Thiago Alves'
   const linkUrl = 'https://autonomylogic.com/'
 
+  const handleOpenAboutLink = () => {
+    void window.bridge.openExternalLinkAccelerator(linkUrl)
+  }
+
   return (
     <Modal onOpenChange={handleOpenChange} open={isAboutModalOpen}>
       <ModalContent className='h-[540px] w-[508px] select-none flex-col justify-between px-4 py-4'>
@@ -44,12 +47,12 @@ const AboutModal = () => {
             <p className='mt-4'>{description}</p>
             <p className='mt-2'>{basedOn}</p>
           </div>
-            <p className='mt-2'>{copyright}</p>
-            <p className='mt-2'>
-              <a className='text-[#0464fb] underline' href={linkUrl}>
-                {linkUrl}
-              </a>
-            </p>
+          <p className='mt-2'>{copyright}</p>
+          <p className='mt-2'>
+            <button onClick={() => void handleOpenAboutLink()} className='text-[#0464fb] underline'>
+              {linkUrl}
+            </button>
+          </p>
         </div>
 
         <div className='mt-4 flex justify-center gap-3 text-sm font-medium dark:text-neutral-100'>
