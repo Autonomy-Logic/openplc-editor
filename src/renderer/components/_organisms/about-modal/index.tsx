@@ -31,20 +31,20 @@ const AboutModal = () => {
     void window.bridge.openExternalLinkAccelerator(linkUrl)
   }
 
-  const [isAboutOpen, setisAboutOpen] = useState(false);
+  const [isAboutOpen, setisAboutOpen] = useState(false)
 
   const openAboutModal = () => {
     if (!isAboutOpen) {
-      setisAboutOpen(true);
-      setModalOpen('aboutOpenPlc', true) 
-  };
+      setisAboutOpen(true)
+      setModalOpen('aboutOpenPlc', true)
+    }
   }
 
   useEffect(() => {
-   void window.bridge.aboutModalAccelerator((_event) => {
-    openAboutModal()
+    window.bridge.aboutModalAccelerator((_event) => {
+      openAboutModal()
     })
-  },[])
+  }, [])
 
   return (
     <Modal onOpenChange={handleOpenChange} open={isAboutModalOpen}>
