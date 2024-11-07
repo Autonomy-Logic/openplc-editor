@@ -6,15 +6,15 @@ import {
   RisingEdgeCoil,
   SetCoil,
 } from '@root/renderer/assets/icons/flow/Coil'
-import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../input'
 import { buildHandle, CustomHandle } from './handle'
+import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
 export type CoilNode = Node<
@@ -35,61 +35,73 @@ export const DEFAULT_COIL_CONNECTOR_Y = DEFAULT_COIL_BLOCK_HEIGHT / 2
 
 type CoilType = {
   [key in CoilNode['data']['variant']]: {
-    svg: ReactNode
+    svg: (wrongVariable: boolean) => ReactNode
   }
 }
 export const DEFAULT_COIL_TYPES: CoilType = {
   default: {
-    svg: (
+    svg: (wrongVariable) => (
       <DefaultCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
-        parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
+        parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
+          'fill-red-500 dark:fill-red-500': wrongVariable,
+        })}
       />
     ),
   },
   negated: {
-    svg: (
+    svg: (wrongVariable) => (
       <NegatedCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
-        parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
+        parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
+          'fill-red-500 dark:fill-red-500': wrongVariable,
+        })}
       />
     ),
   },
   risingEdge: {
-    svg: (
+    svg: (wrongVariable) => (
       <RisingEdgeCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
-        parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
+        parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
+          'fill-red-500 dark:fill-red-500': wrongVariable,
+        })}
       />
     ),
   },
   fallingEdge: {
-    svg: (
+    svg: (wrongVariable) => (
       <FallingEdgeCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
-        parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
+        parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
+          'fill-red-500 dark:fill-red-500': wrongVariable,
+        })}
       />
     ),
   },
   set: {
-    svg: (
+    svg: (wrongVariable) => (
       <SetCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
-        parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
+        parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
+          'fill-red-500 dark:fill-red-500': wrongVariable,
+        })}
       />
     ),
   },
   reset: {
-    svg: (
+    svg: (wrongVariable) => (
       <ResetCoil
         width={DEFAULT_COIL_BLOCK_WIDTH}
         height={DEFAULT_COIL_BLOCK_HEIGHT}
-        parenthesesClassName='fill-neutral-1000 dark:fill-neutral-100'
+        parenthesesClassName={cn('fill-neutral-1000 dark:fill-neutral-100', {
+          'fill-red-500 dark:fill-red-500': wrongVariable,
+        })}
       />
     ),
   },
@@ -97,19 +109,83 @@ export const DEFAULT_COIL_TYPES: CoilType = {
 
 export const Coil = ({ selected, data, id }: CoilProps) => {
   const {
-    searchActions: { extractSearchQuery },
-    searchQuery,
+    editor,
+    project: {
+      data: { pous },
+    },
+    flows,
+    flowActions: { updateNode },
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
+  const [coilVariableValue, setCoilVariableValue] = useState<string>('')
+  const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
-  const [coilLabelValue, setCoilLabelValue] = useState<string>('')
-  const [isEditing, setIsEditing] = useState<boolean>(false)
+  const inputVariableRef = useRef<HTMLInputElement>(null)
+  const [inputFocus, setInputFocus] = useState<boolean>(true)
 
-  const formattedCoilLabelValue = searchQuery ? extractSearchQuery(coilLabelValue, searchQuery) : coilLabelValue
+  /**
+   * useEffect to focus the variable input when the block is selected
+   */
+  useEffect(() => {
+    if (data.variable && data.variable.name !== '') {
+      setCoilVariableValue(data.variable.name)
+      return
+    }
 
-  const handleStartEditing = () => {
-    setIsEditing(true)
+    if (inputVariableRef.current) {
+      inputVariableRef.current.focus()
+    }
+  }, [])
+
+  /**
+   * Update wrongVariable state when the table of variables is updated
+   */
+  useEffect(() => {
+    const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
+      variableName: coilVariableValue,
+    })
+
+    if (!variables.selected && !inputFocus) {
+      setWrongVariable(true)
+      return
+    }
+
+    setWrongVariable(false)
+  }, [pous])
+
+  /**
+   * Handle with the variable input onBlur event
+   */
+  const handleSubmitCoilVariable = () => {
+    setInputFocus(false)
+
+    const { variables, rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
+      variableName: coilVariableValue,
+    })
+    if (!rung || !node) return
+
+    const variable = variables.selected
+    if (!variable) {
+      setWrongVariable(true)
+      return
+    }
+
+    updateNode({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodeId: node.id,
+      node: {
+        ...node,
+        data: {
+          ...node.data,
+          variable: variable,
+        },
+      },
+    })
+    setWrongVariable(false)
   }
 
   return (
@@ -127,24 +203,19 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
       >
-        {coil.svg}
+        {coil.svg(wrongVariable)}
       </div>
       <div className='absolute -left-[31px] -top-7 w-24'>
-        {isEditing ? (
-          <InputWithRef
-            value={coilLabelValue}
-            onChange={(e) => setCoilLabelValue(e.target.value)}
-            onBlur={() => setIsEditing(false)}
-            placeholder='???'
-            className='w-full bg-transparent text-center text-sm outline-none'
-          />
-        ) : (
-          <p
-            className='w-full bg-transparent text-center text-sm outline-none'
-            onClick={handleStartEditing}
-            dangerouslySetInnerHTML={{ __html: formattedCoilLabelValue || '???' }}
-          />
-        )}
+        <InputWithRef
+          value={coilVariableValue}
+          onChange={(e) => setCoilVariableValue(e.target.value)}
+          placeholder='???'
+          className='w-full bg-transparent text-center text-sm outline-none'
+          onFocus={() => setInputFocus(true)}
+          onBlur={() => inputFocus && handleSubmitCoilVariable()}
+          onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+          ref={inputVariableRef}
+        />
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
@@ -190,6 +261,8 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
       inputConnector: inputHandle,
       outputConnector: outputHandle,
       numericId: generateNumericUUID(),
+      variable: { name: '' },
+      executionOrder: 0,
     },
     width: DEFAULT_COIL_BLOCK_WIDTH,
     height: DEFAULT_COIL_BLOCK_HEIGHT,
