@@ -6,12 +6,13 @@ import type { RungState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 
-import { connectNodes } from '../../edges'
-import { buildGenericNode, isNodeOfType } from '../../nodes'
+import { buildEdge, connectNodes, removeEdge } from '../../edges'
+import { buildGenericNode, isNodeOfType, removeNode } from '../../nodes'
 import { removePlaceholderElements } from '../placeholder'
 import {
   getElementPositionBasedOnPlaceholderElement,
   getNodePositionBasedOnPreviousNode,
+  getNodesInsideParallel,
   getPreviousElementsByEdge,
 } from '../utils'
 
@@ -41,11 +42,12 @@ export const startParallelConnection = <T>(
   /**
    * Get the element above the selected placeholder and the edges
    */
-  const aboveElement = placeholder.selected.data.relatedNode as Node
+  const aboveElement = placeholder.selected.data.relatedNode
   if (!aboveElement) return { nodes: newNodes, edges: newEdges }
   const aboveElementTargetEdges = newEdges.filter((edge) => edge.target === aboveElement.id)
   const aboveElementSourceEdges = newEdges.filter((edge) => edge.source === aboveElement.id)
   if (!aboveElementTargetEdges || !aboveElementSourceEdges) return { nodes: newNodes, edges: newEdges }
+  console.log('\taboveElement:', aboveElement)
 
   /**
    * Build the parallel open node based on the node that antecede the above node
@@ -64,6 +66,7 @@ export const startParallelConnection = <T>(
     handleX: openParallelPosition.handleX,
     handleY: openParallelPosition.handleY,
   })
+  console.log('\topenParallelElement:', openParallelElement)
 
   /**
    * Build the new element node
@@ -83,6 +86,7 @@ export const startParallelConnection = <T>(
   } else {
     newElement = node as Node<BasicNodeData>
   }
+  console.log('\tnewElement:', newElement)
 
   /**
    * Recreate the above element
@@ -126,6 +130,7 @@ export const startParallelConnection = <T>(
         : closeParallelPositionParallel.handleX,
     handleY: closeParallelPositionSerial.handleY,
   })
+  console.log('\tcloseParallelElement:', closeParallelElement)
 
   /**
    * Add reference between the open parallel and the close parallel node
@@ -149,8 +154,7 @@ export const startParallelConnection = <T>(
   // first insert the new element
   newNodes.splice(placeholder.index, 1, openParallelElement, newAboveElement, newElement, closeParallelElement)
   // then remove the old above node
-  console.log('\toldAboveElement:', aboveElement)
-  newNodes = newNodes.filter((node) => node.id !== aboveElement.id)
+  newNodes = removeNode({ ...rung, nodes: newNodes }, aboveElement.id)
   // finally remove the placeholder nodes
   newNodes = removePlaceholderElements(newNodes)
 
@@ -230,5 +234,147 @@ export const startParallelConnection = <T>(
     },
   )
 
+  return { nodes: newNodes, edges: newEdges }
+}
+
+/**
+ * Remove empty parallel connections.
+ * - If the parallel connection is empty, remove the parallel connection and reconnect the nodes turning the parallel connection into serial.
+ * - If the serial connection is empty, remove the serial connection and reconnect the nodes turning the parallel connection into serial.
+ * - If the parallel connection is not empty, reconnect the nodes turning the parallel connection into serial.
+ *
+ * @param rung
+ *
+ * @returns object: { nodes: Node[], edges: Edge[] }
+ */
+export const removeEmptyParallelConnections = (rung: RungState): { nodes: Node[]; edges: Edge[] } => {
+  const { nodes, edges } = rung
+
+  let newNodes = [...nodes]
+  let newEdges = [...edges]
+
+  nodes.forEach((node) => {
+    if (node.type === 'parallel') {
+      const parallelNode = node as ParallelNode
+      // check if it is an open parallel
+      if (parallelNode.data.type === 'close') {
+        const closeParallel = parallelNode
+        const openParallel = newNodes.find((n) => n.id === closeParallel.data.parallelOpenReference) as ParallelNode
+
+        /**
+         * Get the nodes inside the parallel connection
+         */
+        const { serial: serialNodes, parallel: parallelNodes } = getNodesInsideParallel(
+          { ...rung, nodes: newNodes, edges: newEdges },
+          closeParallel,
+        )
+
+        /**
+         * Check if the serial connection is empty
+         */
+        if (serialNodes.length === 0) {
+          const serialEdge = newEdges.find(
+            (edge) => edge.source === openParallel.id && edge.sourceHandle === openParallel.data.outputConnector?.id,
+          )
+          if (!serialEdge) return { nodes: newNodes, edges: newEdges }
+          newEdges = removeEdge(newEdges, serialEdge.id)
+
+          const openParallelTarget = newEdges.find((edge) => edge.target === openParallel.id)
+          const openParallelSource = newEdges.find((edge) => edge.source === openParallel.id)
+          const closeParallelTarget = newEdges.find((edge) => edge.target === closeParallel.id)
+          const closeParallelSource = newEdges.find((edge) => edge.source === closeParallel.id)
+
+          if (!openParallelTarget || !openParallelSource || !closeParallelSource || !closeParallelTarget) return
+
+          /**
+           * Check if the parallel connection is not empty. If it is not, reconnect nodes turning the parallel connection into serial
+           * If it is empty, remove the parallel connection
+           */
+          if (parallelNodes.length > 0) {
+            newEdges = removeEdge(newEdges, openParallelSource.id)
+            newEdges = removeEdge(newEdges, closeParallelTarget.id)
+            newEdges.push(
+              buildEdge(openParallelTarget.source, openParallelSource.target, {
+                sourceHandle: openParallelTarget.sourceHandle ?? undefined,
+                targetHandle: openParallelSource.targetHandle ?? undefined,
+              }),
+            )
+            newEdges.push(
+              buildEdge(closeParallelTarget.source, closeParallelSource.target, {
+                sourceHandle: closeParallelTarget.sourceHandle ?? undefined,
+                targetHandle: closeParallelSource.targetHandle ?? undefined,
+              }),
+            )
+          }
+
+          newEdges = removeEdge(newEdges, openParallelTarget.id)
+          newEdges = removeEdge(newEdges, closeParallelSource.id)
+
+          newNodes = removeNode({ ...rung, nodes: newNodes }, closeParallel.id)
+          newNodes = removeNode({ ...rung, nodes: newNodes }, openParallel.id)
+
+          return { nodes: newNodes, edges: newEdges }
+        }
+
+        /**
+         * Check if the parallel connection is empty
+         * If it is empty, remove the parallel connection
+         */
+        if (parallelNodes.length === 0) {
+          const parallelEdge = newEdges.find(
+            (edge) =>
+              edge.source === openParallel.id && edge.sourceHandle === openParallel.data.parallelOutputConnector?.id,
+          )
+          if (!parallelEdge) return { nodes: newNodes, edges: newEdges }
+          newEdges = removeEdge(newEdges, parallelEdge.id)
+
+          const openParallelTarget = newEdges.find((edge) => edge.target === openParallel.id)
+          const openParallelSource = newEdges.find((edge) => edge.source === openParallel.id)
+          const closeParallelTarget = newEdges.find((edge) => edge.target === closeParallel.id)
+          const closeParallelSource = newEdges.find((edge) => edge.source === closeParallel.id)
+
+          if (!openParallelTarget || !openParallelSource || !closeParallelSource || !closeParallelTarget) return
+
+          /**
+           * Set serial connection between the openParallel and closeParallel
+           */
+          if (openParallelSource.id === closeParallelTarget.id) {
+            newEdges = removeEdge(newEdges, openParallelSource.id)
+            newEdges.push(
+              buildEdge(openParallelTarget.source, closeParallelSource.target, {
+                sourceHandle: openParallelTarget.sourceHandle ?? undefined,
+                targetHandle: closeParallelSource.targetHandle ?? undefined,
+              }),
+            )
+          }
+          /**
+           * If have other nodes inside the serial connection, reconnect nodes
+           */
+          if (openParallelSource.id !== closeParallelTarget.id) {
+            newEdges = removeEdge(newEdges, openParallelSource.id)
+            newEdges = removeEdge(newEdges, closeParallelTarget.id)
+            newEdges.push(
+              buildEdge(openParallelTarget.source, openParallelSource.target, {
+                sourceHandle: openParallelTarget.sourceHandle ?? undefined,
+                targetHandle: openParallelSource.targetHandle ?? undefined,
+              }),
+            )
+            newEdges.push(
+              buildEdge(closeParallelTarget.source, closeParallelSource.target, {
+                sourceHandle: closeParallelTarget.sourceHandle ?? undefined,
+                targetHandle: closeParallelSource.targetHandle ?? undefined,
+              }),
+            )
+          }
+
+          newEdges = removeEdge(newEdges, openParallelTarget.id)
+          newEdges = removeEdge(newEdges, closeParallelSource.id)
+
+          newNodes = removeNode({ ...rung, nodes: newNodes }, closeParallel.id)
+          newNodes = removeNode({ ...rung, nodes: newNodes }, openParallel.id)
+        }
+      }
+    }
+  })
   return { nodes: newNodes, edges: newEdges }
 }

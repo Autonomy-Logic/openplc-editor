@@ -2,7 +2,9 @@ import { PlaceholderNode } from '@root/renderer/components/_atoms/react-flow/cus
 import type { RungState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
-import { isNodeOfType } from '../nodes'
+import { disconnectNodes } from '../edges'
+import { removeEmptyParallelConnections } from '../elements/parallel'
+import { isNodeOfType, removeNode } from '../nodes'
 import { startParallelConnection } from './parallel'
 import { appendSerialConnection } from './serial'
 
@@ -68,7 +70,50 @@ export const addNewElement = <T>(
   return { nodes: newNodes, edges: newEdges }
 }
 
-const removeElement = () => {}
-export const removeElements = () => {
-  removeElement()
+const removeElement = (rung: RungState, element: Node): { nodes: Node[]; edges: Edge[] } => {
+  /**
+   * Remove the selected element from the rung
+   */
+  let newNodes = removeNode(rung, element.id)
+
+  /**
+   * Disconnect the element from the rung
+   */
+  const edgeToRemove = rung.edges.find((e) => e.source === element.id)
+  if (!edgeToRemove) return { nodes: rung.nodes, edges: rung.edges }
+  let newEdges = disconnectNodes(rung, edgeToRemove.source, edgeToRemove.target)
+
+  /**
+   * Check if there is empty parallel connections
+   * If there is, remove them
+   */
+  const { nodes: checkedParallelNodes, edges: checkedParallelEdges } = removeEmptyParallelConnections({
+    ...rung,
+    nodes: newNodes,
+    edges: newEdges,
+  })
+  newNodes = checkedParallelNodes
+  newEdges = checkedParallelEdges
+
+  /**
+   * After adding the new element, update the diagram with the new rung
+   */
+
+  /**
+   * Return the updated rung
+   */
+  return { nodes: newNodes, edges: newEdges }
+}
+
+export const removeElements = (rung: RungState, nodesToRemove: Node[]): { nodes: Node[]; edges: Edge[] } => {
+  if (!nodesToRemove || nodesToRemove.length === 0) return { nodes: rung.nodes, edges: rung.edges }
+
+  const rungState = { ...rung }
+  for (const node of nodesToRemove) {
+    const { nodes, edges } = removeElement(rungState, node)
+    rungState.nodes = nodes
+    rungState.edges = edges
+  }
+
+  return { nodes: rungState.nodes, edges: rungState.edges }
 }
