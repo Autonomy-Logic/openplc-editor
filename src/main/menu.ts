@@ -263,7 +263,7 @@ handleFindInProject(){
           selector: 'selectAll:',
         },
         {
-          label: i18n.t('menu:edit.submenu.delete'),
+          label: i18n.t('menu:edit.submenu.deletePou'),
           accelerator: 'Cmd+backspace',
           // role: 'delete',
           click: () => this.handleDeletePou(),
@@ -520,7 +520,7 @@ handleFindInProject(){
             role: 'selectAll',
           },
           {
-            label: i18n.t('menu:edit.submenu.delete'),
+            label: i18n.t('menu:edit.submenu.deletePou'),
             accelerator:"delete",
             click: () => this.handleDeletePou(),
           },

@@ -50,7 +50,8 @@
         }
       },
       "selectAll": "Select all",
-      "delete": "Delete"
+      "delete": "Delete",
+      "deletePou": "Delete Pou"
     }
   },
   "display": {

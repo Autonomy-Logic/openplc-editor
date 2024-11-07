@@ -83,7 +83,7 @@ export const EditMenu = () => {
             <span className={ACCELERATOR}>{'Ctrl + A'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} onClick={() => void handleDeletePou()}>
-            <span>{i18n.t('menu:edit.submenu.delete')}</span>
+            <span>{i18n.t('menu:edit.submenu.deletePou')}</span>
             <span className={ACCELERATOR}>{''}</span>
           </MenuPrimitive.Item>
         </MenuPrimitive.Content>
