@@ -7,12 +7,24 @@ import {
   TransferIcon,
   ZoomInOut,
 } from '@process:renderer/assets/icons'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { useNavigate } from 'react-router-dom'
 
 import { ActivitybarButton } from './components'
 
 export default function Activitybar() {
+  const {
+    workspaceActions: { setEditingState },
+    tabsActions: { clearTabs },
+    editorActions: { clearEditor }
+  } = useOpenPLCStore()
   const navigate = useNavigate()
+  const returnStartScreen = () => {
+    setEditingState('unsaved')
+    clearEditor()
+    clearTabs()
+    navigate('/')
+  }
 
   return (
     /* Refactor: This outside div will be replaced by the new <WorkspaceSideContent /> */
@@ -26,7 +38,7 @@ export default function Activitybar() {
         <ActivitybarButton label='Play' Icon={PlayIcon} onClick={() => console.log('play')} />
       </div>
       <div className='flex h-20 w-full flex-col gap-6'>
-        <ActivitybarButton label='Exit' Icon={ExitIcon} onClick={() => navigate('/')} />
+        <ActivitybarButton label='Exit' Icon={ExitIcon} onClick={returnStartScreen} />
       </div>
     </div>
   )

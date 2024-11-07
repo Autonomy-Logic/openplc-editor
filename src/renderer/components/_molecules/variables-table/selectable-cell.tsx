@@ -51,18 +51,20 @@ const SelectableTypeCell = ({
   }, [value])
 
   return (
-    <PrimitiveDropdown.Root
-      onOpenChange={setPoppoverIsOpen}
-      open={poppoverIsOpen}
-    >
-      <PrimitiveDropdown.Trigger asChild>
+    <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
+      <PrimitiveDropdown.Trigger asChild disabled={definition === 'derived'}>
         <div
           className={cn('flex h-full w-full cursor-pointer justify-center p-2 outline-none', {
             'pointer-events-none': !editable,
+            'cursor-default': !editable || definition === 'derived',
           })}
         >
           <span className='line-clamp-1 font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-            {cellValue === null ? '' : definition === 'array' ? cellValue : _.upperCase(cellValue as unknown as string)}
+            {cellValue === null
+              ? ''
+              : definition === 'array' || definition === 'derived'
+                ? cellValue
+                : _.upperCase(cellValue as unknown as string)}
           </span>
         </div>
       </PrimitiveDropdown.Trigger>
