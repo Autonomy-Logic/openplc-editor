@@ -1,3 +1,4 @@
+import { defaultCustomNodesStyles } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
 import type { CustomHandleProps } from '@root/renderer/components/_atoms/react-flow/custom-nodes/handle'
 import type { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
 import type { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
@@ -204,15 +205,31 @@ export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [n
      * based on the new node position
      */
     const nodeData = node.data as BasicNodeData
-    const newNodeHandlesPosition = nodeData.handles.map((handle) => {
+    const newNodeHandlesInputPosition = nodeData.inputHandles.map((handle, index) => {
       return {
         ...handle,
         glbPosition: {
           x: handle.position === Position.Left ? newNodePosition.handleX : newNodePosition.handleX + (node.width ?? 0),
-          y: newNodePosition.handleY,
+          y:
+            node.type !== 'block'
+              ? newNodePosition.handleY
+              : newNodePosition.handleY + index * defaultCustomNodesStyles.block.handle.offsetY,
         },
       }
     })
+    const newNodeHandlesOutputPosition = nodeData.outputHandles.map((handle, index) => {
+      return {
+        ...handle,
+        glbPosition: {
+          x: handle.position === Position.Left ? newNodePosition.handleX : newNodePosition.handleX + (node.width ?? 0),
+          y:
+            node.type !== 'block'
+              ? newNodePosition.handleY
+              : newNodePosition.handleY + index * defaultCustomNodesStyles.block.handle.offsetY,
+        },
+      }
+    })
+    const newNodeHandlesPosition = [...newNodeHandlesInputPosition, ...newNodeHandlesOutputPosition]
 
     /**
      * Create the new node
@@ -230,6 +247,8 @@ export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [n
         data: {
           ...nodeData,
           handles: newNodeHandlesPosition,
+          inputHandles: newNodeHandlesInputPosition,
+          outputHandles: newNodeHandlesOutputPosition,
           inputConnector: newNodeHandlesPosition.find(
             (handle) => handle.id === (node.data as BasicNodeData).inputConnector?.id,
           ),
@@ -247,6 +266,8 @@ export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [n
         data: {
           ...parallelNode.data,
           handles: newNodeHandlesPosition,
+          inputHandles: newNodeHandlesPosition.filter((handle) => handle.type === 'target'),
+          outputHandles: newNodeHandlesPosition.filter((handle) => handle.type === 'source'),
           inputConnector: newNodeHandlesPosition.find((handle) => handle.id === parallelNode.data.inputConnector?.id),
           outputConnector: newNodeHandlesPosition.find((handle) => handle.id === parallelNode.data.outputConnector?.id),
           parallelInputConnector: newNodeHandlesPosition.find(
