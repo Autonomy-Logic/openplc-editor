@@ -3,7 +3,7 @@ import { join } from 'path'
 
 import { CreateXMLFile } from '../../utils/xml-manager'
 
-type CompilerResponse = {
+export type CompilerResponse = {
   error?: boolean
   message: {
     type: 'error' | 'warning' | 'info'

@@ -1,5 +1,7 @@
+// import { useOpenPLCStore } from '@root/renderer/store'
 import { ProjectState } from '@root/renderer/store/slices'
 import { BaseXml } from '@root/types/PLC/xml-data/base-diagram'
+// import { v4 as uuidv4 } from 'uuid'
 import { create } from 'xmlbuilder2'
 
 import formatDate from '../formatDate'
@@ -64,7 +66,7 @@ const baseXmlStructure = (): BaseXml => ({
   },
 })
 
-export const parseProjectToXML = (project: ProjectState) => {
+export const parseProjectToXML = async (project: ProjectState) => {
   console.log('=-=-=-= PARSING TO XML =-=-=-=')
   console.log('Project:', project)
   let xmlResult = baseXmlStructure()
@@ -100,5 +102,8 @@ export const parseProjectToXML = (project: ProjectState) => {
       console.error('Error saving project:', err)
       console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
     })
-  void window.bridge.compileSTProgram(project.meta.path.replace('data.json', 'plc.xml'))
+  const { error, message } = await window.bridge.compileSTProgram(project.meta.path.replace('project.json', 'plc.xml'))
+  if (error) console.warn(error)
+    console.log(message)
+  // addLog({ id: uuidv4(), type: message.type, message: message.content })
 }

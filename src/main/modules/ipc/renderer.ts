@@ -2,6 +2,7 @@
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { PLCProject } from '../../../types/PLC/open-plc'
+import { CompilerResponse } from '../../services/compiler-service'
 import { IProjectServiceResponse } from '../../services/project-service'
 import { CreateProjectFile } from '../../services/project-service/utils'
 
@@ -119,6 +120,6 @@ const rendererProcessBridge = {
    * This is a mock implementation to be used as a presentation.
    * !! Do not use this on production !!
    */
-  compileSTProgram: (pathToXMLFile: string) => ipcRenderer.invoke('compiler:compile-st-program', pathToXMLFile),
+  compileSTProgram: (pathToXMLFile: string): Promise<CompilerResponse> => ipcRenderer.invoke('compiler:compile-st-program', pathToXMLFile),
 }
 export default rendererProcessBridge
