@@ -1,7 +1,5 @@
-// import { useOpenPLCStore } from '@root/renderer/store'
 import { ProjectState } from '@root/renderer/store/slices'
 import { BaseXml } from '@root/types/PLC/xml-data/base-diagram'
-// import { v4 as uuidv4 } from 'uuid'
 import { create } from 'xmlbuilder2'
 
 import formatDate from '../formatDate'
@@ -66,7 +64,7 @@ const baseXmlStructure = (): BaseXml => ({
   },
 })
 
-export const parseProjectToXML = async (project: ProjectState) => {
+export const parseProjectToXML = (project: ProjectState) => {
   console.log('=-=-=-= PARSING TO XML =-=-=-=')
   console.log('Project:', project)
   let xmlResult = baseXmlStructure()
@@ -91,10 +89,10 @@ export const parseProjectToXML = async (project: ProjectState) => {
   console.log('=-=-=-= FINISHED PARSE TO XML =-=-=-=')
   console.log('=-=-=-= SAVING XML =-=-=-=')
   window.bridge
-    .writeXMLFile(project.meta.path.replace('data.json', ''), xml, 'plc')
+    .writeXMLFile(project.meta.path.replace('project.json', ''), xml, 'plc')
     .then((res) => {
       if (res) {
-        console.log('File saved', project.meta.path.replace('data.json', 'plc.xml'))
+        console.log('File saved', project.meta.path.replace('project.json', 'plc.xml'))
         console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
       }
     })
@@ -102,8 +100,5 @@ export const parseProjectToXML = async (project: ProjectState) => {
       console.error('Error saving project:', err)
       console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
     })
-  const { error, message } = await window.bridge.compileSTProgram(project.meta.path.replace('project.json', 'plc.xml'))
-  if (error) console.warn(error)
-    console.log(message)
-  // addLog({ id: uuidv4(), type: message.type, message: message.content })
+
 }
