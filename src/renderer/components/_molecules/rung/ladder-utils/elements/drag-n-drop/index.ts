@@ -109,7 +109,7 @@ export const onElementDrop = (
   if (!copycatNode) return { nodes: oldStateRung.nodes, edges: oldStateRung.edges }
 
   /**
-   * Remove the old node
+   * Remove the old node and the copycat node
    * If the old node is not found, return the old rung as it is
    */
   const oldNodeIndex = newNodes.findIndex((n) => n.id === node.id)

@@ -19,7 +19,18 @@ export type BlockVariant = {
   documentation: string
   extensible: boolean
 }
-export type BlockNodeData<T> = BasicNodeData & { variant: T; executionControl: boolean }
+type variables = {
+  [key: string]: {
+    variable: PLCVariable | undefined
+    type: 'input' | 'output'
+  }
+}
+
+export type BlockNodeData<T> = BasicNodeData & {
+  variant: T
+  executionControl: boolean
+  connectedVariables: variables
+}
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
 type BlockBuilderProps<T> = BuilderBasicProps & { variant: T; executionControl?: boolean }
@@ -571,6 +582,7 @@ export const buildBlockNode = <T extends object | undefined>({
       variable: { name: '' },
       executionOrder: 0,
       executionControl,
+      connectedVariables: {},
     },
     width: DEFAULT_BLOCK_WIDTH,
     height,

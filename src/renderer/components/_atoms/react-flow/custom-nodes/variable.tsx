@@ -1,16 +1,33 @@
 import { useOpenPLCStore } from '@root/renderer/store'
+import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../input'
+import { BlockNodeData } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
 
-export type VariableNode = Node<BasicNodeData & { variant: 'input' | 'output' }>
+export type VariableNode = Node<
+  BasicNodeData & {
+    variant: 'input' | 'output'
+    block: {
+      id: string
+      handleId: string
+    }
+  }
+>
 type VariableProps = NodeProps<VariableNode>
-type VariableBuilderProps = BuilderBasicProps & { variant: 'input' | 'output' }
+type VariableBuilderProps = BuilderBasicProps & {
+  variant: 'input' | 'output'
+  block: {
+    id: string
+    handleId: string
+  }
+  variable: PLCVariable | undefined
+}
 
 export const DEFAULT_VARIABLE_WIDTH = 34
 export const DEFAULT_VARIABLE_HEIGHT = 16
@@ -74,6 +91,7 @@ const VariableElement = ({ id, data }: VariableProps) => {
       variableName: variableName,
     })
     if (!rung || !node) return
+    const variableNode = node as VariableNode
 
     const variable = variables.selected
     if (!variable) {
@@ -84,15 +102,38 @@ const VariableElement = ({ id, data }: VariableProps) => {
     updateNode({
       editorName: editor.meta.name,
       rungId: rung.id,
-      nodeId: node.id,
+      nodeId: variableNode.id,
       node: {
-        ...node,
+        ...variableNode,
         data: {
-          ...node.data,
+          ...variableNode.data,
           variable: variable,
         },
       },
     })
+
+    const relatedBlock = rung.nodes.find((node) => node.id === variableNode.data.block.id)
+    if (!relatedBlock) return
+
+    updateNode({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodeId: relatedBlock.id,
+      node: {
+        ...relatedBlock,
+        data: {
+          ...relatedBlock.data,
+          connectedVariables: {
+            ...(relatedBlock.data as BlockNodeData<object>).connectedVariables,
+            [variableNode.data.block.handleId]: {
+              variable: variable,
+              type: variableNode.data.variant,
+            },
+          },
+        },
+      },
+    })
+
     setWrongVariable(false)
   }
 
@@ -124,7 +165,16 @@ const VariableElement = ({ id, data }: VariableProps) => {
   )
 }
 
-const buildVariableNode = ({ id, posX, posY, handleX, handleY, variant }: VariableBuilderProps): VariableNode => {
+const buildVariableNode = ({
+  id,
+  posX,
+  posY,
+  handleX,
+  handleY,
+  variant,
+  block,
+  variable,
+}: VariableBuilderProps): VariableNode => {
   const inputHandle =
     variant === 'output'
       ? buildHandle({
@@ -156,6 +206,7 @@ const buildVariableNode = ({ id, posX, posY, handleX, handleY, variant }: Variab
 
   return {
     id,
+    type: 'variable',
     position: {
       x: posX,
       y: posY,
@@ -173,10 +224,13 @@ const buildVariableNode = ({ id, posX, posY, handleX, handleY, variant }: Variab
       inputConnector: inputHandle,
       outputConnector: outputHandle,
       numericId: generateNumericUUID(),
-      variable: { name: '' },
+      variable: variable ?? { name: '' },
       executionOrder: 0,
       variant,
+      block,
     },
+    deletable: false,
+    draggable: false,
   }
 }
 
