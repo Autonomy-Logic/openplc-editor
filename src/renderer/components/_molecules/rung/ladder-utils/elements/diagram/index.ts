@@ -266,8 +266,8 @@ export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [n
         data: {
           ...parallelNode.data,
           handles: newNodeHandlesPosition,
-          inputHandles: newNodeHandlesPosition.filter((handle) => handle.type === 'target'),
-          outputHandles: newNodeHandlesPosition.filter((handle) => handle.type === 'source'),
+          inputHandles: newNodeHandlesInputPosition,
+          outputHandles: newNodeHandlesOutputPosition,
           inputConnector: newNodeHandlesPosition.find((handle) => handle.id === parallelNode.data.inputConnector?.id),
           outputConnector: newNodeHandlesPosition.find((handle) => handle.id === parallelNode.data.outputConnector?.id),
           parallelInputConnector: newNodeHandlesPosition.find(
