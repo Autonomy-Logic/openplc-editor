@@ -51,7 +51,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   const [modalOpen, setModalOpen] = useState(false)
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
-  const flowRef = useRef<HTMLDivElement>(null)
+  const flowViewportRef = useRef<HTMLDivElement>(null)
 
   /**
    * -- Which means, by default, the flow panel extent is:
@@ -151,6 +151,9 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     }))
   }, [selectedNodes.length])
 
+  /**
+   * Add a new node to the rung
+   */
   const handleAddNode = (newNodeType: string = 'mockNode', blockType: string | undefined) => {
     let pouLib = undefined
     if (blockType) {
@@ -189,6 +192,9 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges })
   }
 
+  /**
+   * Remove some nodes from the rung
+   */
   const handleRemoveNode = (nodes: FlowNode[]) => {
     const { nodes: newNodes, edges: newEdges } = removeElements({ ...rungLocal }, nodes)
     flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: newNodes })
@@ -220,11 +226,17 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     }
   }
 
+  /**
+   * Handle the start of a node drag
+   */
   const handleNodeStartDrag = (node: FlowNode) => {
     const result = onElementDragStart(rungLocal, node)
     setRungLocal((rung) => ({ ...rung, nodes: result.nodes, edges: result.edges }))
   }
 
+  /**
+   * Handle the drag of a node
+   */
   const handleNodeDrag = (event: MouseEvent) => {
     if (!reactFlowInstance) return
     const closestPlaceholder = onElementDragOver(rungLocal, reactFlowInstance, { x: event.clientX, y: event.clientY })
@@ -247,22 +259,36 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     }))
   }
 
+  /**
+   * Handle the stop of a node drag
+   */
   const handleNodeDragStop = (node: FlowNode) => {
     const result = onElementDrop(rungLocal, rung, node)
     flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: result.nodes })
     flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: result.edges })
   }
 
+  /**
+   * Handle the double click of a node
+   */
   const handleNodeDoubleClick = (node: FlowNode) => {
     setModalNode(node)
     setModalOpen(true)
   }
 
+  /**
+   * Handle the close of the modal
+   */
   const handleModalClose = () => {
     setModalNode(null)
     setModalOpen(false)
   }
 
+  /**
+   * Handle the change of the nodes
+   * This function is called every time the nodes change
+   * It is used to update the local rung state
+   */
   const onNodesChange: OnNodesChange<FlowNode> = useCallback(
     (changes) => {
       setRungLocal((rung) => ({
@@ -273,52 +299,62 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     [rungLocal],
   )
 
+  /**
+   * Handle the drag enter of the viewport
+   * This function is called when a dragged element enters the viewport
+   */
   const onDragEnterViewport = useCallback<DragEventHandler>(
     (event) => {
+      // Check if the dragged element is not a ladder block
       if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) {
-        const nodes = removePlaceholderElements(rungLocal.nodes)
-        setRungLocal((rung) => ({ ...rung, nodes }))
+        setRungLocal(rung)
         return
       }
 
       event.preventDefault()
+      // Check if the dragged element is not a child of the flow viewport
       const { relatedTarget } = event
-      if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
+      if (!flowViewportRef.current || !relatedTarget || !flowViewportRef.current.contains(relatedTarget as Node)) {
+        return
+      }
+
+      // If it is a ladder block and the dragged element is a child of the flow viewport, render the placeholder elements
       const copyRungLocal = { ...rungLocal }
       const nodes = renderPlaceholderElements(copyRungLocal)
       setRungLocal((rung) => ({ ...rung, nodes }))
     },
-    [rungLocal],
+    [rung, rungLocal],
   )
 
+  /**
+   * Handle the drag leave of the viewport
+   * This function is called when a dragged element leaves the viewport
+   */
   const onDragLeaveViewport = useCallback<DragEventHandler>(
     (event) => {
-      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) {
-        const nodes = removePlaceholderElements(rungLocal.nodes)
-        setRungLocal((rung) => ({ ...rung, nodes }))
+      // Check if the dragged element is a child of the flow viewport
+      const { relatedTarget } = event
+      if (!flowViewportRef.current || !relatedTarget || flowViewportRef.current.contains(relatedTarget as Node)) {
         return
       }
 
-      const { relatedTarget } = event
-      if (!flowRef.current || !relatedTarget || flowRef.current.contains(relatedTarget as Node)) return
+      // If it is, remove the placeholder elements`
       const nodes = removePlaceholderElements(rungLocal.nodes)
       setRungLocal((rung) => ({ ...rung, nodes }))
     },
-    [rungLocal],
+    [rung, rungLocal],
   )
 
+  /**
+   * Handle the drag over of the viewport
+   * This function is called when a dragged element is over the viewport
+   */
   const onDragOver = useCallback<DragEventHandler>(
     (event) => {
-      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) {
-        const nodes = removePlaceholderElements(rungLocal.nodes)
-        setRungLocal((rung) => ({ ...rung, nodes }))
-        return
-      }
+      if (!reactFlowInstance) return
 
       event.preventDefault()
       event.dataTransfer.dropEffect = 'move'
-
-      if (!reactFlowInstance) return
 
       const closestPlaceholder = searchNearestPlaceholder(rungLocal, reactFlowInstance, {
         x: event.clientX,
@@ -342,29 +378,36 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         }),
       }))
     },
-    [rungLocal],
+    [rung, rungLocal],
   )
 
+  /**
+   * Handle the drop of the viewport
+   * This function is called when a dragged element is dropped in the viewport
+   */
   const onDrop = useCallback<DragEventHandler>(
     (event) => {
-      if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) {
-        const nodes = removePlaceholderElements(rungLocal.nodes)
-        setRungLocal((rung) => ({ ...rung, nodes }))
-        return
-      }
-
+      // Check if there is a ladder block in the dragged data
       event.preventDefault()
-      const blockType = event.dataTransfer.getData('application/reactflow/ladder-blocks')
+      const blockType =
+        event.dataTransfer.getData('application/reactflow/ladder-blocks') === ''
+          ? undefined
+          : event.dataTransfer.getData('application/reactflow/ladder-blocks')
       if (!blockType) {
-        const nodes = removePlaceholderElements(rungLocal.nodes)
-        setRungLocal((rung) => ({ ...rung, nodes }))
+        setRungLocal(rung)
         return
       }
 
-      const library = event.dataTransfer.getData('application/library') ?? undefined
+      // Check if there is a library in the dragged data
+      const library =
+        event.dataTransfer.getData('application/library') === ''
+          ? undefined
+          : event.dataTransfer.getData('application/library')
+
+      // Then add the node to the rung
       handleAddNode(blockType, library)
     },
-    [rungLocal],
+    [rung, rungLocal],
   )
 
   return (
@@ -375,7 +418,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
             height: flowPanelExtent[1][1] + 8,
             width: flowPanelExtent[1][0],
           }}
-          ref={flowRef}
+          ref={flowViewportRef}
         >
           <FlowPanel
             viewportConfig={{
