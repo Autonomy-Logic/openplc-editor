@@ -11,8 +11,8 @@ import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { Search } from '../components/_features/[workspace]/search'
-import { Console } from '../components/_molecules/console'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
+import { Console as ConsoleComponent } from '../components/_organisms/console'
 import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
@@ -297,7 +297,7 @@ const WorkspaceScreen = () => {
                       value='console'
                       className='h-full w-full overflow-hidden p-2 data-[state=inactive]:hidden'
                     >
-                      <Console />
+                      <ConsoleComponent />
                     </Tabs.Content>
                     <Tabs.Content
                       value='debug'
