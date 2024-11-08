@@ -7,12 +7,6 @@ import { Info } from './info'
 import { Library } from './library'
 import { Project } from './project'
 
-/**
- * Renders the Explorer component which consists of a ResizablePanel containing a ProjectExplorer and a LibraryExplorer.
- *
- * @return {ReactElement} The rendered Explorer component
- */
-
 type explorerProps = {
   collapse: LegacyRef<ImperativePanelHandle> | undefined
 }
@@ -28,19 +22,31 @@ const Explorer = ({ collapse }: explorerProps): ReactElement => {
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [filterText, setFilterText] = useState<string>('')
-//PASSAR O USER TBM
-  const filteredLibraries = system.filter((library) =>
+
+  const userLibrary = {
+    name: 'User Library',
+    pous: user.map((userItem) => ({
+      name: userItem.name,
+      language: '',
+      type: userItem.type,
+      body: '',
+      documentation: '',
+      variables: [],
+    })),
+  }
+
+  const filteredLibraries = [...system, userLibrary].filter((library) =>
     pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
       ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')
-      : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
+      : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText))
   )
-//PASSAR SYSTEN E USER
+
   const selectedPouDocumentation =
     system
       .flatMap((library: { pous: { name: string; documentation?: string }[] }) => library.pous)
       .find((pou) => pou.name === selectedFileKey)?.documentation || null
 
-  console.warn('User libraries ->', user)
+  console.warn('User library ->', userLibrary)
   return (
     <ResizablePanel
       ref={collapse}
