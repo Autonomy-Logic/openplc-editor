@@ -1,12 +1,12 @@
 /* eslint-disable no-console */
-import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme } from 'electron'
+import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
 import { i18n } from '../utils/i18n'
-import { ProjectService } from './services'
+import { _ProjectService, ProjectService } from './services'
 
 /**
  * Wip: Interface for mac machines menu.
- */
+ */ 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string
   submenu?: DarwinMenuItemConstructorOptions[] | Menu
@@ -19,7 +19,7 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 export default class MenuBuilder {
   mainWindow: BrowserWindow
 
-  projectService: InstanceType<typeof ProjectService>
+  projectService: typeof _ProjectService
 
   developOptions: MenuItemConstructorOptions[] = [
     { type: 'separator' },
@@ -33,13 +33,14 @@ export default class MenuBuilder {
     this.projectService = new ProjectService(mainWindow)
   }
 
-  buildMenu(): Menu {
+  async buildMenu(): Promise<Menu> {
     if (process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true') {
       this.setupDevelopmentEnvironment()
     }
 
     // Todo: Can be used to construct a different menu for mac machines.
-    const template = process.platform === 'darwin' ? this.buildDarwinTemplate() : this.buildDefaultTemplate()
+    const template =
+      process.platform === 'darwin' ? await this.buildDarwinTemplate() : await this.buildDefaultTemplate()
 
     const menu = Menu.buildFromTemplate(template)
     Menu.setApplicationMenu(menu)
@@ -61,6 +62,44 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-accelerator')
   }
 
+  async handleGetRecents() {
+    const response = await this.projectService.readProjectHistory(this.projectService.getProjectsFilePath())
+    return response
+  }
+
+  async handleOpenProjectByPath(projectPath: string) {
+    const response = await this.projectService.openProjectByPath(projectPath)
+    this.mainWindow.webContents.send('project:open-recent-accelerator', response)
+  }
+
+  handleCloseTab() {
+    this.mainWindow.webContents.send('workspace:close-tab-accelerator')
+    
+  }
+
+  handleCloseProject(){
+    this.mainWindow.webContents.send('workspace:close-project-accelerator')
+  }
+
+  handleDeletePou(){
+    this.mainWindow.webContents.send('workspace:delete-pou-accelerator')
+   
+  }
+
+  handleSwitchPerspective() {
+    this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
+  }
+handleOpenExternalLink(link:string) {
+ void shell.openExternal(link)
+}
+
+handleOpenAboutModal() {
+  this.mainWindow.webContents.send('about:open-accelerator')
+}
+
+handleFindInProject(){
+  this.mainWindow.webContents.send('project:find-in-project-accelerator')
+}
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -83,7 +122,9 @@ export default class MenuBuilder {
   }
 
   // Wip: Constructing a mac machines menu.
-  buildDarwinTemplate(): MenuItemConstructorOptions[] {
+  async buildDarwinTemplate(): Promise<MenuItemConstructorOptions[]> {
+    const recents = await this.handleGetRecents()
+    const homeDir = process.env.HOME || ''
     const defaultDarwinMenu: MenuItemConstructorOptions = {
       role: 'appMenu',
     }
@@ -110,17 +151,17 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.saveAs'),
           accelerator: 'Cmd+Shift+S',
-          click: () => console.warn('Save as button clicked! This is not working yet.'),
+          click: () => {},
         },
         {
           label: i18n.t('menu:file.submenu.closeTab'),
           accelerator: 'Cmd+W',
-          click: () => console.warn('Close tab button clicked! This is not working yet.'),
+          click: () => this.handleCloseTab(),
         },
         {
           label: i18n.t('menu:file.submenu.closeProject'),
           accelerator: '',
-          click: () => console.warn('Close project button clicked! This is not working yet.'),
+          click: () => this.handleCloseProject(),
         },
         { type: 'separator' },
         {
@@ -200,6 +241,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:edit.submenu.findInProject'),
           accelerator: '',
+          click: () => this.handleFindInProject(),
         },
         { type: 'separator' },
         {
@@ -225,8 +267,10 @@ export default class MenuBuilder {
           selector: 'selectAll:',
         },
         {
-          label: i18n.t('menu:edit.submenu.delete'),
-          role: 'delete',
+          label: i18n.t('menu:edit.submenu.deletePou'),
+          accelerator: 'Cmd+backspace',
+          // role: 'delete',
+          click: () => this.handleDeletePou(),
         },
       ],
     }
@@ -261,6 +305,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:display.submenu.switchPerspective'),
           accelerator: 'F12',
+          click: () => this.handleSwitchPerspective(),
         },
         {
           label: i18n.t('menu:display.submenu.fullScreen'),
@@ -284,24 +329,46 @@ export default class MenuBuilder {
       ],
     }
 
+    const subMenuRecent: DarwinMenuItemConstructorOptions = {
+      label: i18n.t('menu:recents'),
+      submenu: recents.map((projectEntry) => {
+        const projectPath = projectEntry.path.startsWith(homeDir)
+          ? projectEntry.path.replace(homeDir, '~')
+          : projectEntry.path
+
+        return {
+          label: projectPath,
+          click: () => {
+            this.handleOpenProjectByPath(projectEntry.path)
+            console.log('Opened project from path:', projectEntry.path)
+          },
+        }
+      }),
+    }
+
     const subMenuHelp: DarwinMenuItemConstructorOptions = {
       label: i18n.t('menu:help.label'),
       submenu: [
         {
           label: i18n.t('menu:help.submenu.communitySupport'),
+          accelerator: 'F1',
+          click: () => void this.handleOpenExternalLink('https://openplc.discussion.community/'),
         },
         {
           label: i18n.t('menu:help.submenu.about'),
-          role: 'about',
+          accelerator: 'F1',
+          click: () => void this.handleOpenAboutModal(),
         },
       ],
     }
 
-    return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp]
+    return [defaultDarwinMenu,subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
   }
 
   // Wip: Constructing a default machines menu.
-  buildDefaultTemplate() {
+  async buildDefaultTemplate() {
+    const recents = await this.handleGetRecents()
+    const homeDir = process.env.HOME || ''
     const templateDefault: MenuItemConstructorOptions[] = [
       {
         label: i18n.t('menu:file.label'),
@@ -317,6 +384,9 @@ export default class MenuBuilder {
             accelerator: 'Ctrl+O',
             click: () => void this.handleOpenProject(),
           },
+             {
+            type: 'separator',
+          },
           {
             label: i18n.t('menu:file.submenu.save'),
             accelerator: 'Ctrl+S',
@@ -324,21 +394,21 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.saveAs'),
-            enabled: false,
             accelerator: 'Ctrl+Shift+S',
-            click: () => console.warn('Menu button clicked! This is not working yet.'),
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
-            enabled: false,
+            
             accelerator: 'Ctrl+W',
-            click: () => console.warn('Menu button clicked! This is not working yet.'),
+            click: () => this.handleCloseTab(),
           },
           {
             label: i18n.t('menu:file.submenu.closeProject'),
-            enabled: false,
             accelerator: 'Ctrl+Shift+W',
-            click: () => console.warn('Menu button clicked! This is not working yet.'),
+            click: () => this.handleCloseProject(),
+          },
+          {
+            type: 'separator',
           },
           {
             label: i18n.t('menu:file.submenu.pageSetup'),
@@ -357,12 +427,14 @@ export default class MenuBuilder {
             accelerator: 'Ctrl+P',
             enabled: false,
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:file.submenu.updates'),
             enabled: false,
             accelerator: 'Ctrl+U',
             click: () => console.warn('Menu button clicked! This is not working yet.'),
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:file.submenu.quit'),
             role: 'quit',
@@ -385,6 +457,7 @@ export default class MenuBuilder {
             accelerator: 'Ctrl+Y',
             role: 'redo',
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:edit.submenu.cut'),
             enabled: false,
@@ -403,6 +476,7 @@ export default class MenuBuilder {
             accelerator: 'Ctrl+V',
             role: 'paste',
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:edit.submenu.find'),
             enabled: false,
@@ -418,11 +492,13 @@ export default class MenuBuilder {
             accelerator: 'Ctrl+Shift+K',
             enabled: false,
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:edit.submenu.findInProject'),
             accelerator: 'Ctrl+Shift+F',
-            enabled: false,
+            click: () => this.handleFindInProject(),
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:edit.submenu.addElement.label'),
             enabled: false,
@@ -448,9 +524,9 @@ export default class MenuBuilder {
             role: 'selectAll',
           },
           {
-            label: i18n.t('menu:edit.submenu.delete'),
-            enabled: false,
-            role: 'delete',
+            label: i18n.t('menu:edit.submenu.deletePou'),
+            accelerator:"delete",
+            click: () => this.handleDeletePou(),
           },
         ],
       },
@@ -466,6 +542,7 @@ export default class MenuBuilder {
             enabled: false,
             accelerator: '',
           },
+          { type: 'separator' },
           {
             label: 'Zoom',
             enabled: false,
@@ -480,10 +557,11 @@ export default class MenuBuilder {
               },
             ],
           },
+          { type: 'separator' },
           {
             label: i18n.t('menu:display.submenu.switchPerspective'),
-
             accelerator: 'F12',
+            click: () => this.handleSwitchPerspective(),
           },
           {
             label: i18n.t('menu:display.submenu.fullScreen'),
@@ -513,13 +591,32 @@ export default class MenuBuilder {
         submenu: [
           {
             label: i18n.t('menu:help.submenu.communitySupport'),
-            enabled: false,
+            accelerator: 'F1',
+            click: () => void this.handleOpenExternalLink('https://openplc.discussion.community/'),
           },
           {
             label: i18n.t('menu:help.submenu.about'),
-            role: 'about',
+            accelerator : 'F1',
+            click: () => this.handleOpenAboutModal(),
           },
         ],
+      },
+
+      {
+        label: i18n.t('menu:recents'),
+        submenu: recents.map((projectEntry) => {
+          const projectPath = projectEntry.path.startsWith(homeDir)
+            ? projectEntry.path.replace(homeDir, '~')
+            : projectEntry.path
+
+          return {
+            label: projectPath,
+            click: () => {
+              this.handleOpenProjectByPath(projectEntry.path)
+              console.log('Opened project from path:', projectEntry.path)
+            },
+          }
+        }),
       },
     ]
 

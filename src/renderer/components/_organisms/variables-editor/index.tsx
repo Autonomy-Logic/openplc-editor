@@ -47,9 +47,16 @@ const VariablesEditor = () => {
    * Update the table data and the editor's variables when the editor or the pous change
    */
   useEffect(() => {
-    const variablesToTable = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
-    setTableData(variablesToTable)
-  }, [editor, pous])
+    const foundPou = pous.find((pou) => pou?.data?.name === editor?.meta?.name);
+  
+    if (foundPou) {
+     
+      setTableData(foundPou.data.variables);
+    } else {
+     
+      setTableData([]); 
+    }
+  }, [editor, pous]);
 
   /**
    * If the editor name is not the same as the current editor name
