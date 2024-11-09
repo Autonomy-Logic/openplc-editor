@@ -4,6 +4,7 @@ import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { ExitIcon } from '../assets'
 import { toast } from '../components/_features/[app]/toast/use-toast'
@@ -12,6 +13,7 @@ import { GraphicalEditor } from '../components/_features/[workspace]/editor/grap
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { Search } from '../components/_features/[workspace]/search'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
+import AboutModal from '../components/_organisms/about-modal'
 import { Console as ConsoleComponent } from '../components/_organisms/console'
 import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
@@ -23,15 +25,17 @@ import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templ
 import { useOpenPLCStore } from '../store'
 
 const WorkspaceScreen = () => {
+  const navigate = useNavigate()
   const {
     tabs,
-    workspace: { editingState },
+    workspace: { editingState,isCollapsed },
     project,
     editor,
-    workspaceActions: { setEditingState },
+    editorActions:{clearEditor},
+    workspaceActions: { setEditingState,setRecents,toggleCollapse },
+    tabsActions: { clearTabs },
     searchResults,
   } = useOpenPLCStore()
-
   useEffect(() => {
     const handleSaveProject = async () => {
       const projectData = PLCProjectSchema.safeParse(project)
@@ -87,7 +91,7 @@ const WorkspaceScreen = () => {
   ]
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
-  const [collapseAll, setCollapseAll] = useState(false)
+ 
   const panelRef = useRef(null)
   const explorerPanelRef = useRef(null)
   const workspacePanelRef = useRef(null)
@@ -111,19 +115,48 @@ const WorkspaceScreen = () => {
   }, [hasSearchResults])
 
   useEffect(() => {
-    const action = collapseAll ? 'collapse' : 'expand'
+    const action = isCollapsed ? 'collapse' : 'expand'
     ;[explorerPanelRef, workspacePanelRef, consolePanelRef].forEach((ref) => {
       if (ref.current) ref.current[action]()
     })
-  }, [collapseAll])
+  }, [isCollapsed])
 
+  useEffect(()=>{
+    const handleCloseProject=()=>{
+      clearEditor()
+      clearTabs()
+      setEditingState('unsaved')
+      setRecents([])
+      window.bridge.closeProjectAccelerator((_event)=> navigate('/'))
+    }
+    handleCloseProject()
+  },[])
+
+  const [isSwitchingPerspective, setIsSwitchingPerspective] = useState(false);
+
+  const handleSwitchPerspective = () => {
+    if (!isSwitchingPerspective) {
+      setIsSwitchingPerspective(true);
+      toggleCollapse(); 
+  };
+  }
+
+  useEffect(() => {
+    window.bridge.switchPerspective((_event) => {
+      handleSwitchPerspective();
+    });
+  }, []);
+
+
+ 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
+      <AboutModal />
       <WorkspaceSideContent>
         <WorkspaceActivityBar
           defaultActivityBar={{
             zoom: {
-              onClick: () => setCollapseAll(!collapseAll),
+              onClick: () => void toggleCollapse(),
             },
           }}
         />
