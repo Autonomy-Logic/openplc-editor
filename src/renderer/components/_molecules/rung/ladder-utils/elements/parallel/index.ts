@@ -71,7 +71,7 @@ export const startParallelConnection = <T>(
   /**
    * Build the new element node
    */
-  let newElement: Node<BasicNodeData> = {} as Node<BasicNodeData>
+  let newElement: Node = {} as Node
   if (!checkIfElementIsNode(node)) {
     const newElementPosition = getElementPositionBasedOnPlaceholderElement(
       placeholder.selected as Node,
@@ -82,9 +82,9 @@ export const startParallelConnection = <T>(
       blockType: node.blockVariant,
       id: `${node.elementType.toUpperCase()}_${uuidv4()}`,
       ...newElementPosition,
-    }) as Node<BasicNodeData>
+    })
   } else {
-    newElement = node as Node<BasicNodeData>
+    newElement = node
   }
   console.log('\tnewElement:', newElement)
 
@@ -220,7 +220,7 @@ export const startParallelConnection = <T>(
     'parallel',
     {
       sourceHandle: openParallelElement.data.parallelOutputConnector?.id,
-      targetHandle: newElement.data.inputConnector?.id,
+      targetHandle: (newElement.data as BasicNodeData).inputConnector?.id,
     },
   )
   newEdges = connectNodes(
@@ -229,7 +229,7 @@ export const startParallelConnection = <T>(
     closeParallelElement.id,
     'parallel',
     {
-      sourceHandle: newElement.data.outputConnector?.id,
+      sourceHandle: (newElement.data as BasicNodeData).outputConnector?.id,
       targetHandle: closeParallelElement.data.parallelInputConnector?.id,
     },
   )
