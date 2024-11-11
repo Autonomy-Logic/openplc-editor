@@ -29,8 +29,8 @@ type VariableBuilderProps = BuilderBasicProps & {
   variable: PLCVariable | undefined
 }
 
-export const DEFAULT_VARIABLE_WIDTH = 34
-export const DEFAULT_VARIABLE_HEIGHT = 16
+export const DEFAULT_VARIABLE_WIDTH = 80
+export const DEFAULT_VARIABLE_HEIGHT = 32
 
 export const DEFAULT_VARIABLE_CONNECTOR_X = DEFAULT_VARIABLE_WIDTH
 export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
@@ -139,7 +139,7 @@ const VariableElement = ({ id, data }: VariableProps) => {
 
   return (
     <>
-      <div className='h-fit w-full'>
+      <div className='h-fit w-fit'>
         <InputWithRef
           value={variableName}
           onChange={(e) => {
@@ -147,9 +147,10 @@ const VariableElement = ({ id, data }: VariableProps) => {
           }}
           style={{
             height: DEFAULT_VARIABLE_HEIGHT,
+            width: DEFAULT_VARIABLE_WIDTH,
           }}
           placeholder='???'
-          className={cn('w-fit bg-transparent text-center text-sm outline-none', {
+          className={cn('bg-transparent px-1 text-center text-sm outline-none', {
             'text-red-500': wrongVariable,
           })}
           onFocus={() => setInputVariableFocus(true)}
@@ -186,7 +187,6 @@ const buildVariableNode = ({
           glbY: handleY,
           relX: 0,
           relY: DEFAULT_VARIABLE_CONNECTOR_Y,
-          style: { left: -3 },
         })
       : undefined
   const outputHandle =
@@ -200,7 +200,6 @@ const buildVariableNode = ({
           glbY: handleY,
           relX: DEFAULT_VARIABLE_WIDTH,
           relY: DEFAULT_VARIABLE_CONNECTOR_Y,
-          style: { right: -3 },
         })
       : undefined
 

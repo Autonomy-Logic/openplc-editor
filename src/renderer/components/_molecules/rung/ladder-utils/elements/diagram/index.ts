@@ -2,6 +2,7 @@ import { defaultCustomNodesStyles } from '@root/renderer/components/_atoms/react
 import type { CustomHandleProps } from '@root/renderer/components/_atoms/react-flow/custom-nodes/handle'
 import type { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
 import type { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
+// import type { VariableNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/variable'
 import type { RungState } from '@root/renderer/store/slices'
 import type { Node } from '@xyflow/react'
 import { Position } from '@xyflow/react'
@@ -107,18 +108,97 @@ export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [n
       continue
     }
 
-    /**
-     * Find the previous nodes and edges of the current node
-     */
-    const { nodes: previousNodes, edges: previousEdges } = getPreviousElementsByEdge({ ...rung, nodes: newNodes }, node)
-    if (!previousNodes || !previousEdges) return nodes
-
     let newNodePosition: { posX: number; posY: number; handleX: number; handleY: number } = {
       posX: 0,
       posY: 0,
       handleX: 0,
       handleY: 0,
     }
+
+    // if (node.type === 'variable') {
+    //   const relatedBlock = newNodes.find((n) => n.id === (node as VariableNode).data.block.id)
+    //   if (!relatedBlock) continue
+    //   const blockHandle = (relatedBlock.data as BasicNodeData).handles.find(
+    //     (handle) => handle.id === (node as VariableNode).data.block.handleId,
+    //   )
+    //   if (!blockHandle) continue
+
+    //   if (blockHandle.type === 'source') {
+    //     newNodePosition = {
+    //       posX:
+    //         blockHandle.glbPosition.x - defaultCustomNodesStyles.variable.width - defaultCustomNodesStyles.variable.gap,
+    //       posY: blockHandle.glbPosition.y - defaultCustomNodesStyles.variable.handle.y,
+    //       handleX: blockHandle.glbPosition.x - defaultCustomNodesStyles.variable.gap,
+    //       handleY: blockHandle.glbPosition.y,
+    //     }
+    //     const newNodeHandlesInputPosition = (node as VariableNode).data.handles.map((handle) => {
+    //       return {
+    //         ...handle,
+    //         glbPosition: {
+    //           x:
+    //             handle.position === Position.Left
+    //               ? newNodePosition.handleX
+    //               : newNodePosition.handleX + (node.width ?? 0),
+    //           y: newNodePosition.handleY,
+    //         },
+    //       }
+    //     })
+
+    //     const newNode: VariableNode = {
+    //       ...node,
+    //       position: { x: newNodePosition.posX, y: newNodePosition.posY },
+    //       data: {
+    //         ...(node as VariableNode).data,
+    //         handles: newNodeHandlesInputPosition,
+    //         inputHandles: newNodeHandlesInputPosition,
+    //         outputHandles: [],
+    //       },
+    //     }
+
+    //     newNodes.push(newNode)
+    //     continue
+    //   }
+
+    //   if (blockHandle.type === 'target') {
+    //     newNodePosition = {
+    //       posX: blockHandle.glbPosition.x + defaultCustomNodesStyles.variable.gap,
+    //       posY: blockHandle.glbPosition.y - defaultCustomNodesStyles.variable.handle.y,
+    //       handleX: blockHandle.glbPosition.x,
+    //       handleY: blockHandle.glbPosition.y,
+    //     }
+    //     const newNodeHandlesOutputPosition = (node as VariableNode).data.handles.map((handle) => {
+    //       return {
+    //         ...handle,
+    //         glbPosition: {
+    //           x:
+    //             handle.position === Position.Left
+    //               ? newNodePosition.handleX
+    //               : newNodePosition.handleX + (node.width ?? 0),
+    //           y: newNodePosition.handleY,
+    //         },
+    //       }
+    //     })
+
+    //     const newNode: VariableNode = {
+    //       ...node,
+    //       position: { x: newNodePosition.posX, y: newNodePosition.posY },
+    //       data: {
+    //         ...(node as VariableNode).data,
+    //         handles: newNodeHandlesOutputPosition,
+    //         inputHandles: [],
+    //         outputHandles: newNodeHandlesOutputPosition,
+    //       },
+    //     }
+
+    //     newNodes.push(newNode)
+    //   }
+    // }
+
+    /**
+     * Find the previous nodes and edges of the current node
+     */
+    const { nodes: previousNodes, edges: previousEdges } = getPreviousElementsByEdge({ ...rung, nodes: newNodes }, node)
+    if (!previousNodes || !previousEdges) return nodes
 
     if (previousNodes.all.length === 1) {
       /**
@@ -245,6 +325,7 @@ export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [n
         ...node,
         position: { x: newNodePosition.posX, y: newNodePosition.posY },
         data: {
+          ...node.data,
           ...nodeData,
           handles: newNodeHandlesPosition,
           inputHandles: newNodeHandlesInputPosition,
