@@ -8,6 +8,7 @@ import { isNodeOfType, removeNode } from '../nodes'
 import { updateDiagramElementsPosition } from './diagram'
 import { startParallelConnection } from './parallel'
 import { appendSerialConnection } from './serial'
+// import { renderVariableBlock } from './variable-block'
 
 export const addNewElement = <T>(
   rung: RungState,
@@ -35,9 +36,14 @@ export const addNewElement = <T>(
    * If it is, create a new parallel junction and add the new element to it
    * If it is not, add the new element to the selected placeholder
    */
+  // let newCreatedNode: Node | undefined = undefined
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
     console.log('Parallel Placeholder')
-    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnection(
+    const {
+      nodes: parallelNodes,
+      edges: parallelEdges,
+      // newNode: newAuxNode,
+    } = startParallelConnection(
       rung,
       {
         index: parseInt(selectedPlaceholderIndex),
@@ -47,9 +53,14 @@ export const addNewElement = <T>(
     )
     newNodes = parallelNodes
     newEdges = parallelEdges
+    // newCreatedNode = newAuxNode
   } else {
     console.log('Normal Placeholder')
-    const { nodes: serialNodes, edges: serialEdges } = appendSerialConnection(
+    const {
+      nodes: serialNodes,
+      edges: serialEdges,
+      // newNode: newAuxNode,
+    } = appendSerialConnection(
       rung,
       {
         index: parseInt(selectedPlaceholderIndex),
@@ -59,12 +70,13 @@ export const addNewElement = <T>(
     )
     newNodes = serialNodes
     newEdges = serialEdges
+    // newCreatedNode = newAuxNode
   }
 
   /**
    * After adding the new element, update the diagram with the new rung
    */
-  newNodes = updateDiagramElementsPosition(
+  const { nodes: updatedDiagramNodes, edges: updatedDiagramEdges} = updateDiagramElementsPosition(
     {
       ...rung,
       nodes: newNodes,
@@ -72,6 +84,19 @@ export const addNewElement = <T>(
     },
     rung.defaultBounds as [number, number],
   )
+
+  newNodes = updatedDiagramNodes
+  newEdges = updatedDiagramEdges
+
+  // if (newNode.blockVariant && newCreatedNode && newCreatedNode.type === 'block') {
+  //   const block = newNodes.find((node) => node.id === newCreatedNode.id)
+  //   const { nodes: variableNodes, edges: variableEdges } = renderVariableBlock(
+  //     { ...rung, nodes: newNodes, edges: newEdges },
+  //     block ?? newCreatedNode,
+  //   )
+  //   newNodes = variableNodes
+  //   newEdges = variableEdges
+  // }
 
   /**
    * Return the updated rung
@@ -107,7 +132,7 @@ export const removeElement = (rung: RungState, element: Node): { nodes: Node[]; 
   /**
    * After adding the new element, update the diagram with the new rung
    */
-  newNodes = updateDiagramElementsPosition(
+  const {nodes: updatedDiagramNodes, edges: updatedDiagramEdges} = updateDiagramElementsPosition(
     {
       ...rung,
       nodes: newNodes,
@@ -115,6 +140,8 @@ export const removeElement = (rung: RungState, element: Node): { nodes: Node[]; 
     },
     rung.defaultBounds as [number, number],
   )
+  newNodes = updatedDiagramNodes
+  newEdges = updatedDiagramEdges
 
   /**
    * Return the updated rung

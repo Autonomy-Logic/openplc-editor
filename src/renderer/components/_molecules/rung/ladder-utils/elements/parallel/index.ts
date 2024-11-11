@@ -1,4 +1,5 @@
 import { checkIfElementIsNode, nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
+import { BlockNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
 import type { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
 import type { PlaceholderNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/placeholder'
 import type { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
@@ -33,7 +34,7 @@ export const startParallelConnection = <T>(
   rung: RungState,
   placeholder: { index: number; selected: PlaceholderNode },
   node: Node | { elementType: string; blockVariant?: T },
-): { nodes: Node[]; edges: Edge[] } => {
+): { nodes: Node[]; edges: Edge[]; newNode?: Node } => {
   console.log('\tstartParallelConnection:', rung, placeholder, node)
 
   let newNodes = [...rung.nodes]
@@ -93,12 +94,20 @@ export const startParallelConnection = <T>(
    * After recreate, set the old data to the new element
    */
   const newAboveElementPosition = getNodePositionBasedOnPreviousNode(openParallelElement, aboveElement, 'serial')
-  const buildedAboveElement = buildGenericNode({
-    nodeType: aboveElement.type ?? '',
-    blockType: aboveElement.data.blockType,
-    id: `${aboveElement.type?.toUpperCase()}_${uuidv4()}`,
-    ...newAboveElementPosition,
-  })
+  const buildedAboveElement =
+    aboveElement.type !== 'block'
+      ? buildGenericNode({
+          nodeType: aboveElement.type ?? '',
+          blockType: aboveElement.data.blockType,
+          id: `${aboveElement.type?.toUpperCase()}_${uuidv4()}`,
+          ...newAboveElementPosition,
+        })
+      : nodesBuilder.block({
+          id: `${aboveElement.type?.toUpperCase()}_${uuidv4()}`,
+          variant: (aboveElement.data as BlockNodeData<object>).variant,
+          executionControl: (aboveElement.data as BlockNodeData<object>).executionControl,
+          ...newAboveElementPosition,
+        })
   const newAboveElement = {
     ...buildedAboveElement,
     position: { x: newAboveElementPosition.posX, y: newAboveElementPosition.posY },
@@ -234,7 +243,7 @@ export const startParallelConnection = <T>(
     },
   )
 
-  return { nodes: newNodes, edges: newEdges }
+  return { nodes: newNodes, edges: newEdges, newNode: newElement }
 }
 
 /**

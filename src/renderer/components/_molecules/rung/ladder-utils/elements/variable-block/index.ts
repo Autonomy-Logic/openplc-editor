@@ -7,7 +7,6 @@ import { v4 as uuidv4 } from 'uuid'
 import { buildEdge } from '../../edges'
 
 export const renderVariableBlock = <T>(rung: RungState, block: Node) => {
-  console.log('renderVariableBlock')
   const variableElements: Node[] = []
   const variableEdges: Edge[] = []
   const variableElementStyle = defaultCustomNodesStyles.variable
@@ -31,7 +30,7 @@ export const renderVariableBlock = <T>(rung: RungState, block: Node) => {
 
     const variableElement = nodesBuilder.variable({
       id: `variable_${uuidv4()}`,
-      posX: inputHandle.glbPosition.x - variableElementStyle.width - variableElementStyle.gap,
+      posX: inputHandle.glbPosition.x - (variableElementStyle.width + variableElementStyle.gap),
       posY: inputHandle.glbPosition.y - variableElementStyle.handle.y,
       handleX: inputHandle.glbPosition.x - variableElementStyle.gap,
       handleY: inputHandle.glbPosition.y,
@@ -58,7 +57,7 @@ export const renderVariableBlock = <T>(rung: RungState, block: Node) => {
       id: `variable_${uuidv4()}`,
       posX: outputHandle.glbPosition.x + variableElementStyle.gap,
       posY: outputHandle.glbPosition.y - variableElementStyle.handle.y,
-      handleX: outputHandle.glbPosition.x,
+      handleX: outputHandle.glbPosition.x + variableElementStyle.gap,
       handleY: outputHandle.glbPosition.y,
       variant: 'output',
       block: {
@@ -96,9 +95,16 @@ export const updateVariableBlockPosition = (rung: RungState) => {
   const blockElements = newNodes.filter((node) => node.type === 'block')
 
   blockElements.forEach((blockElement) => {
-    const { nodes, edges } = renderVariableBlock(rung, blockElement)
-    newNodes = [...newNodes, ...nodes]
-    newEdges = [...newEdges, ...edges]
+    const { nodes, edges } = renderVariableBlock(
+      {
+        ...rung,
+        nodes: newNodes,
+        edges: newEdges,
+      },
+      blockElement,
+    )
+    newNodes = nodes
+    newEdges = edges
   })
 
   return { nodes: newNodes, edges: newEdges }

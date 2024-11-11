@@ -17,7 +17,7 @@ export const appendSerialConnection = <T>(
     selected: PlaceholderNode
   },
   node: Node | { elementType: string; blockVariant?: T },
-): { nodes: Node[]; edges: Edge[] } => {
+): { nodes: Node[]; edges: Edge[]; newNode?: Node } => {
   console.log('\tappendSerialConnection:', rung, placeholder, node)
 
   let newNodes = [...rung.nodes]
@@ -94,5 +94,5 @@ export const appendSerialConnection = <T>(
     newEdges = connectNodes({ ...rung, nodes: newNodes, edges: newEdges }, previousNode.id, newElement.id, 'serial')
   }
 
-  return { nodes: newNodes, edges: newEdges }
+  return { nodes: newNodes, edges: newEdges, newNode: newElement }
 }

@@ -139,7 +139,7 @@ const VariableElement = ({ id, data }: VariableProps) => {
 
   return (
     <>
-      <div className='h-fit w-fit'>
+      <div className={cn('h-fit w-fit')}>
         <InputWithRef
           value={variableName}
           onChange={(e) => {
@@ -150,8 +150,10 @@ const VariableElement = ({ id, data }: VariableProps) => {
             width: DEFAULT_VARIABLE_WIDTH,
           }}
           placeholder='???'
-          className={cn('bg-transparent px-1 text-center text-sm outline-none', {
+          className={cn('bg-transparent text-sm outline-none', {
             'text-red-500': wrongVariable,
+            'pl-2 text-left': data.variant === 'output',
+            'pr-2 text-right': data.variant === 'input',
           })}
           onFocus={() => setInputVariableFocus(true)}
           onBlur={() => inputVariableFocus && handleSubmitVariableVariable()}

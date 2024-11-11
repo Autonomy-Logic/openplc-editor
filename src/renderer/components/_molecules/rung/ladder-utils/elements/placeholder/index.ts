@@ -29,9 +29,10 @@ export const renderPlaceholderElements = (rung: RungState) => {
     if (
       node.type === 'placeholder' ||
       node.type === 'parallelPlaceholder' ||
+      node.type === 'variable' ||
       nodes.find((n) => n.id === `copycat_${node.id}`)
     ) {
-      if (nodes.find((n) => n.id === `copycat_${node.id}`)) placeholderNodes.push(node)
+      if (nodes.find((n) => n.id === `copycat_${node.id}`) || node.type === 'variable') placeholderNodes.push(node)
       return
     }
 

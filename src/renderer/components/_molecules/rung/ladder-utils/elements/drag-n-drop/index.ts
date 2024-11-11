@@ -10,6 +10,7 @@ import { updateDiagramElementsPosition } from '../diagram'
 import { startParallelConnection } from '../parallel'
 import { renderPlaceholderElements, searchNearestPlaceholder } from '../placeholder'
 import { appendSerialConnection } from '../serial'
+import { removeVariableBlock } from '../variable-block'
 
 export const onElementDragStart = (rung: RungState, draggedNode: Node) => {
   /**
@@ -101,6 +102,14 @@ export const onElementDrop = (
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
+  const { nodes: removedVariablesNodes, edges: removedVariablesEdges } = removeVariableBlock({
+    ...rung,
+    nodes: newNodes,
+    edges: newEdges,
+  })
+  newNodes = removedVariablesNodes
+  newEdges = removedVariablesEdges
+
   /**
    * Find the copycat node
    * If not found, return the old rung as it is
@@ -137,10 +146,12 @@ export const onElementDrop = (
     /**
      * After adding the new element, update the diagram with the new rung
      */
-    newNodes = updateDiagramElementsPosition(
+    const { nodes: updatedDiagramNodes, edges: updatedDiagramEdges } = updateDiagramElementsPosition(
       { ...rung, nodes: newNodes, edges: newEdges },
       rung.defaultBounds as [number, number],
     )
+    newNodes = updatedDiagramNodes
+    newEdges = updatedDiagramEdges
     return { nodes: newNodes, edges: newEdges }
   }
 

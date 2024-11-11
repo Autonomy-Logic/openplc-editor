@@ -33,6 +33,7 @@ export const getPreviousElementsByEdge = (
   connectedEdges.forEach((e) => {
     // Find the source of the edge
     const n = rung.nodes.find((n) => n.id === e.source)
+
     /**
      * If the node is undefined or an variable, skip it
      */
@@ -47,11 +48,11 @@ export const getPreviousElementsByEdge = (
       (node as ParallelNode).data.type === 'close' &&
       e.targetHandle === (node as ParallelNode).data.parallelInputConnector?.id
     ) {
-      lastNodes.nodes.parallel.push(n)
+      lastNodes.nodes.parallel.push({...n})
       return
     }
 
-    lastNodes.nodes.serial.push(n)
+    lastNodes.nodes.serial.push({...n})
   })
   lastNodes.edges = connectedEdges
   lastNodes.nodes.all = [...lastNodes.nodes.serial, ...lastNodes.nodes.parallel]
@@ -348,6 +349,8 @@ export const getNodesInsideParallel = (
   rung: RungState,
   closeParallelNode: Node,
 ): { serial: Node[]; parallel: Node[] } => {
+  console.log('\t\tgetNodesInsideParallel')
+
   const openParallelNode = rung.nodes.find(
     (node) => node.id === closeParallelNode.data.parallelOpenReference,
   ) as ParallelNode
@@ -355,9 +358,11 @@ export const getNodesInsideParallel = (
   const parallel: Node[] = []
 
   const openParallelEdges = rung.edges.filter((edge) => edge.source === openParallelNode.id)
+  console.log('\t\t\topenParallel', openParallelNode, openParallelEdges)
   for (const parallelEdge of openParallelEdges) {
     let nextEdge = parallelEdge
-    while (nextEdge.target !== closeParallelNode.id) {
+    console.log('nextEdge', nextEdge)
+    while (nextEdge && nextEdge.target !== closeParallelNode.id) {
       const node = rung.nodes.find((n) => n.id === nextEdge.target)
       if (!node) continue
       nextEdge = rung.edges.find((edge) => edge.source === nextEdge.target) as Edge

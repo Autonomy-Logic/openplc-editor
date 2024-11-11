@@ -40,7 +40,7 @@ export const defaultCustomNodesStyles: CustomNodeTypes = {
   block: {
     width: blockNode.DEFAULT_BLOCK_WIDTH,
     height: blockNode.DEFAULT_BLOCK_HEIGHT,
-    gap: 100,
+    gap: 120,
     verticalGap: 80,
     handle: {
       x: blockNode.DEFAULT_BLOCK_CONNECTOR_X,

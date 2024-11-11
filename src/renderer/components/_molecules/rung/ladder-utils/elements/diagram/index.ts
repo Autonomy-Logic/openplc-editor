@@ -4,7 +4,7 @@ import type { ParallelNode } from '@root/renderer/components/_atoms/react-flow/c
 import type { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 // import type { VariableNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/variable'
 import type { RungState } from '@root/renderer/store/slices'
-import type { Node } from '@xyflow/react'
+import type { Edge, Node } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 
 import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
@@ -14,6 +14,7 @@ import {
   getNodePositionBasedOnPreviousNode,
   getPreviousElementsByEdge,
 } from '../utils'
+import { updateVariableBlockPosition } from '../variable-block'
 
 /**
  * Change the right rail bounds based on the nodes position
@@ -83,9 +84,14 @@ export const changeRailBounds = (rung: RungState, defaultBounds: [number, number
  *
  * @returns The new nodes
  */
-export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [number, number]) => {
+export const updateDiagramElementsPosition = (
+  rung: RungState,
+  defaultBounds: [number, number],
+): { nodes: Node[]; edges: Edge[] } => {
   const { nodes } = rung
   const newNodes: Node[] = []
+
+  console.log('Update diagram rung', rung)
 
   /**
    * Find the parallels in the rung
@@ -98,6 +104,7 @@ export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [n
    */
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]
+    console.log('Node', node)
 
     /**
      * Nodes that are not moved in the diagram
@@ -105,8 +112,11 @@ export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [n
      */
     if (node.type === 'powerRail') {
       newNodes.push(node)
+      console.log('\n')
       continue
     }
+
+    if (node.type === 'variable') continue
 
     let newNodePosition: { posX: number; posY: number; handleX: number; handleY: number } = {
       posX: 0,
@@ -115,90 +125,13 @@ export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [n
       handleY: 0,
     }
 
-    // if (node.type === 'variable') {
-    //   const relatedBlock = newNodes.find((n) => n.id === (node as VariableNode).data.block.id)
-    //   if (!relatedBlock) continue
-    //   const blockHandle = (relatedBlock.data as BasicNodeData).handles.find(
-    //     (handle) => handle.id === (node as VariableNode).data.block.handleId,
-    //   )
-    //   if (!blockHandle) continue
-
-    //   if (blockHandle.type === 'source') {
-    //     newNodePosition = {
-    //       posX:
-    //         blockHandle.glbPosition.x - defaultCustomNodesStyles.variable.width - defaultCustomNodesStyles.variable.gap,
-    //       posY: blockHandle.glbPosition.y - defaultCustomNodesStyles.variable.handle.y,
-    //       handleX: blockHandle.glbPosition.x - defaultCustomNodesStyles.variable.gap,
-    //       handleY: blockHandle.glbPosition.y,
-    //     }
-    //     const newNodeHandlesInputPosition = (node as VariableNode).data.handles.map((handle) => {
-    //       return {
-    //         ...handle,
-    //         glbPosition: {
-    //           x:
-    //             handle.position === Position.Left
-    //               ? newNodePosition.handleX
-    //               : newNodePosition.handleX + (node.width ?? 0),
-    //           y: newNodePosition.handleY,
-    //         },
-    //       }
-    //     })
-
-    //     const newNode: VariableNode = {
-    //       ...node,
-    //       position: { x: newNodePosition.posX, y: newNodePosition.posY },
-    //       data: {
-    //         ...(node as VariableNode).data,
-    //         handles: newNodeHandlesInputPosition,
-    //         inputHandles: newNodeHandlesInputPosition,
-    //         outputHandles: [],
-    //       },
-    //     }
-
-    //     newNodes.push(newNode)
-    //     continue
-    //   }
-
-    //   if (blockHandle.type === 'target') {
-    //     newNodePosition = {
-    //       posX: blockHandle.glbPosition.x + defaultCustomNodesStyles.variable.gap,
-    //       posY: blockHandle.glbPosition.y - defaultCustomNodesStyles.variable.handle.y,
-    //       handleX: blockHandle.glbPosition.x,
-    //       handleY: blockHandle.glbPosition.y,
-    //     }
-    //     const newNodeHandlesOutputPosition = (node as VariableNode).data.handles.map((handle) => {
-    //       return {
-    //         ...handle,
-    //         glbPosition: {
-    //           x:
-    //             handle.position === Position.Left
-    //               ? newNodePosition.handleX
-    //               : newNodePosition.handleX + (node.width ?? 0),
-    //           y: newNodePosition.handleY,
-    //         },
-    //       }
-    //     })
-
-    //     const newNode: VariableNode = {
-    //       ...node,
-    //       position: { x: newNodePosition.posX, y: newNodePosition.posY },
-    //       data: {
-    //         ...(node as VariableNode).data,
-    //         handles: newNodeHandlesOutputPosition,
-    //         inputHandles: [],
-    //         outputHandles: newNodeHandlesOutputPosition,
-    //       },
-    //     }
-
-    //     newNodes.push(newNode)
-    //   }
-    // }
-
     /**
      * Find the previous nodes and edges of the current node
      */
     const { nodes: previousNodes, edges: previousEdges } = getPreviousElementsByEdge({ ...rung, nodes: newNodes }, node)
-    if (!previousNodes || !previousEdges) return nodes
+    if (!previousNodes || !previousEdges) return { nodes: rung.nodes, edges: rung.edges }
+
+    console.log('Previous Nodes', previousNodes)
 
     if (previousNodes.all.length === 1) {
       /**
@@ -393,7 +326,10 @@ export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [n
         }
       })
     }
+    console.log('\n')
   }
+
+  console.log('New Nodes', newNodes)
 
   const { nodes: changedRailNodes } = changeRailBounds(
     {
@@ -403,5 +339,14 @@ export const updateDiagramElementsPosition = (rung: RungState, defaultBounds: [n
     defaultBounds,
   )
 
-  return changedRailNodes
+  console.log('Changed Rail Nodes', changedRailNodes)
+
+  const variablesNodes = updateVariableBlockPosition({
+    ...rung,
+    nodes: changedRailNodes,
+  })
+
+  console.log('Variables Nodes', variablesNodes)
+
+  return { nodes: variablesNodes.nodes, edges: variablesNodes.edges }
 }
