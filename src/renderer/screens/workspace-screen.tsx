@@ -29,6 +29,7 @@ const WorkspaceScreen = () => {
     editor,
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()
+
   useEffect(() => {
     const handleSaveProject = async () => {
       const projectData = PLCProjectSchema.safeParse(project)
@@ -89,7 +90,6 @@ const WorkspaceScreen = () => {
   const explorerPanelRef = useRef(null)
   const workspacePanelRef = useRef(null)
   const consolePanelRef = useRef(null)
-
 
   const togglePanel = () => {
     if (panelRef.current) {
@@ -154,7 +154,7 @@ const WorkspaceScreen = () => {
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
-                          <DataTypeEditor dataTypeName={editor.meta.name}  />{' '}
+                          <DataTypeEditor dataTypeName={editor.meta.name} />{' '}
                         </div>
                       )}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (

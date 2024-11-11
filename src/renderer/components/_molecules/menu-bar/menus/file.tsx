@@ -4,28 +4,56 @@ import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowType } from '@root/renderer/store/slices/flow/types'
-import { PLCProjectSchema} from '@root/types/PLC/open-plc'
+import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
+import { useState } from 'react'
 
+import { Modal, ModalContent } from '../../modal'
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
   const {
-     project,
+    project,
+    workspace: { editingState },
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setRecents },
     projectActions: { setProject },
     tabsActions: { clearTabs },
-    workspace: {editingState},
     flowActions: { addFlow },
   } = useOpenPLCStore()
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
+  const [modalOpen, setModalOpen] = useState(false)
+
+  // useEffect(() => {
+  //   const handleKeyDown = (event: { ctrlKey: unknown; key: string; preventDefault: () => void }) => {
+  //     if (
+  //       (event.ctrlKey && event.key === 'o' && editingState === 'unsaved') ||
+  //       (event.ctrlKey && event.key === 'n' && editingState === 'unsaved') ||
+  //       (event.ctrlKey && event.key === 'q' && editingState === 'unsaved')
+  //     ) {
+  //       event.preventDefault()
+  //       setModalOpen(true)
+  //     }
+  //   }
+  //   window.addEventListener('keydown', handleKeyDown)
+  //   return () => {
+  //     window.removeEventListener('keydown', handleKeyDown)
+  //   }
+  // }, [editingState])
+
+  const handleModalClose = () => {
+    setModalOpen(false)
+  }
 
   const handleCreateProject = async () => {
     const { success, data, error } = await window.bridge.createProject()
-    if (success && data) {
+
+    if (editingState === 'unsaved') {
+      setModalOpen(true)
+    }
+    else if (success && data) {
       setProject({
         meta: {
           path: data.meta.path,
@@ -64,8 +92,12 @@ export const FileMenu = () => {
 
   const handleOpenProject = async () => {
     const { success, data, error } = await window.bridge.openProject()
-    if (editingState === 'unsaved') window.alert("não tá salvo")
-    if (success && data) {
+
+    if (editingState === 'unsaved') {
+      setModalOpen(true)
+    }
+
+    else if (success && data) {
       setProject({
         meta: {
           path: data.meta.path,
@@ -77,7 +109,6 @@ export const FileMenu = () => {
       setEditingState('unsaved')
       clearEditor()
       clearTabs()
-      setEditingState('unsaved')
       setRecents([])
       setProject({
         meta: {
@@ -106,9 +137,8 @@ export const FileMenu = () => {
         description: error?.description,
         variant: 'fail',
       })
-    }
+    } 
   }
-  console.log("editingState -->", editingState)
 
   const handleSaveProject = async () => {
     const projectData = PLCProjectSchema.safeParse(project)
@@ -199,6 +229,45 @@ export const FileMenu = () => {
           </MenuPrimitive.Item>
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>
+      {modalOpen && (
+        <Modal open={modalOpen} onOpenChange={setModalOpen}>
+          <ModalContent
+            onClose={handleModalClose}
+            className='flex max-h-56 w-fit select-none flex-col justify-between gap-2 rounded-lg p-8'
+          >
+            <p className='text-m text-center font-medium text-neutral-950 dark:text-white'>
+              There are unsaved changes in your project. Do you want to save before closing?
+            </p>
+
+            <div className='flex h-8 w-full flex-col items-center justify-evenly gap-7'>
+              <button
+                onClick={() => {
+                  handleModalClose()
+                }}
+                className='h-full w-[236px] rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+                onChange={handleModalClose}
+              >
+                Discart changes
+              </button>
+              <button
+                onClick={handleModalClose}
+                className='h-full w-[236px] rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                 void handleSaveProject()
+                  handleModalClose()
+                }}
+                className='left-[71px] top-[231px] h-[32px] w-[198px] rounded-lg bg-blue-500 text-center font-medium text-neutral-1000 dark:text-neutral-100'
+              >
+                Save
+              </button>
+            </div>
+          </ModalContent>
+        </Modal>
+      )}
     </MenuPrimitive.Menu>
   )
 }
