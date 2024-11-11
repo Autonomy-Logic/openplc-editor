@@ -25,6 +25,7 @@ export const FileMenu = () => {
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
   const [modalOpen, setModalOpen] = useState(false)
+  const [discardChanges, setDiscardChanges] = useState(false)
 
   // useEffect(() => {
   //   const handleKeyDown = (event: { ctrlKey: unknown; key: string; preventDefault: () => void }) => {
@@ -48,12 +49,12 @@ export const FileMenu = () => {
   }
 
   const handleCreateProject = async () => {
-    const { success, data, error } = await window.bridge.createProject()
-
     if (editingState === 'unsaved') {
       setModalOpen(true)
     }
-    else if (success && data) {
+    if ( editingState === 'saved' || discardChanges === true ) {
+    const { success, data, error } = await window.bridge.createProject()
+      if (success && data) {
       setProject({
         meta: {
           path: data.meta.path,
@@ -81,23 +82,23 @@ export const FileMenu = () => {
         description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
         variant: 'default',
       })
-    } else {
-      toast({
-        title: 'Cannot create a project!',
-        description: error?.description,
-        variant: 'fail',
-      })
     }
+    else   
+      toast({
+          title: 'Cannot create a project!',
+          description: error?.description,
+          variant: 'fail',
+        })
+  }
   }
 
   const handleOpenProject = async () => {
-    const { success, data, error } = await window.bridge.openProject()
-
     if (editingState === 'unsaved') {
       setModalOpen(true)
     }
-
-    else if (success && data) {
+    if (editingState === 'saved'||  discardChanges === true) {
+      const { success, data, error } = await window.bridge.openProject()
+      if (success && data) {
       setProject({
         meta: {
           path: data.meta.path,
@@ -131,14 +132,16 @@ export const FileMenu = () => {
         description: 'Your project was opened, and loaded.',
         variant: 'default',
       })
-    } else {
+    }
+    else {
       toast({
         title: 'Cannot open the project.',
         description: error?.description,
         variant: 'fail',
       })
-    } 
+    }
   }
+}
 
   const handleSaveProject = async () => {
     const projectData = PLCProjectSchema.safeParse(project)
@@ -242,10 +245,10 @@ export const FileMenu = () => {
             <div className='flex h-8 w-full flex-col items-center justify-evenly gap-7'>
               <button
                 onClick={() => {
+                  setDiscardChanges(true)
                   handleModalClose()
                 }}
                 className='h-full w-[236px] rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
-                onChange={handleModalClose}
               >
                 Discart changes
               </button>
@@ -257,7 +260,7 @@ export const FileMenu = () => {
               </button>
               <button
                 onClick={() => {
-                 void handleSaveProject()
+                  void handleSaveProject()
                   handleModalClose()
                 }}
                 className='left-[71px] top-[231px] h-[32px] w-[198px] rounded-lg bg-blue-500 text-center font-medium text-neutral-1000 dark:text-neutral-100'
