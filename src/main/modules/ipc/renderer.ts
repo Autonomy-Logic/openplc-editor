@@ -75,7 +75,8 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('project:open-by-path', projectPath),
   openRecentAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
-  openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> => ipcRenderer.invoke('open-external-link', link),
+  openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('open-external-link', link),
   /**
    * Handlers for opening projects.
    * As for the click and for the accelerator type.
@@ -84,14 +85,18 @@ const rendererProcessBridge = {
   saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
     ipcRenderer.invoke('project:save', dataToWrite),
   closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
-  closeProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-project-accelerator', callback),
-  deletePouAccelerator:(callback:IpcRendererCallbacks) => ipcRenderer.on('workspace:delete-pou-accelerator', callback),
-  switchPerspective:(callback:IpcRendererCallbacks) => ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
-  removeDeletePouListener: ()=> ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
-  removeCloseTabListener: ()=> ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
-  findInProjectAccelerator:(callback:IpcRendererCallbacks) => ipcRenderer.on('project:find-in-project-accelerator', callback),
+  closeProjectAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('workspace:close-project-accelerator', callback),
+  deletePouAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('workspace:delete-pou-accelerator', callback),
+  switchPerspective: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
+  removeDeletePouListener: () => ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
+  removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
+  findInProjectAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:find-in-project-accelerator', callback),
   aboutModalAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('about:open-accelerator', callback),
-  aboutAccelerator:(callback:IpcRendererCallbacks) => ipcRenderer.on('website:about-accelerator', callback),
+  aboutAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('website:about-accelerator', callback),
   /** -------------------------------------------------------------------------------------------- */
   // saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
@@ -131,6 +136,15 @@ const rendererProcessBridge = {
    * This is a mock implementation to be used as a presentation.
    * !! Do not use this on production !!
    */
-  compileSTProgram: (pathToXMLFile: string): Promise<CompilerResponse> => ipcRenderer.invoke('compiler:compile-st-program', pathToXMLFile),
+  compileSTProgram: (pathToXMLFile: string): Promise<CompilerResponse> =>
+    ipcRenderer.invoke('compiler:compile-st-program', pathToXMLFile),
+  /**
+   * TODO: Implement this.
+   */
+  getCompileStProgram: (element: unknown, callback: unknown) => {
+    const { port1, port2 } = new MessageChannel()
+
+    ipcRenderer.postMessage('compiler:get-compile-st-program', element, [port1])
+  },
 }
 export default rendererProcessBridge
