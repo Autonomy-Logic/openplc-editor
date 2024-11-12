@@ -37,7 +37,7 @@ type LibraryProps = {
   }[]
   filteredUserLibraries: {
     name: string
-    type: "function" | "function-block"
+    type: 'function' | 'function-block'
   }[]
   setSelectedFileKey: (key: string) => void
   selectedFileKey: string | null
@@ -177,24 +177,24 @@ const Library = ({
             </LibraryFolder>
           ))}
         </LibraryRoot>
-
-        {/* User Defined Libraries */}
-        <LibraryRoot>
-          <LibraryFolder label="User Defined" initiallyOpen={true}>
-            {filteredUserLibraries
-              .filter((userLibrary) => userLibrary.name.toLowerCase().includes(filterText))
-              .map((userLibrary) => (
-                <LibraryFile
-                  key={userLibrary.name}
-                  label={userLibrary.name}
-                  onClick={() => setSelectedFileKey(userLibrary.name)}
-                  onSelect={() => setSelectedFileKey(userLibrary.name)}
-                  isSelected={selectedFileKey === userLibrary.name}
-                  draggable
-                />
-              ))}
-          </LibraryFolder>
-        </LibraryRoot>
+        {filteredUserLibraries.length > 0 && (
+          <LibraryRoot>
+            <LibraryFolder label='User Defined' initiallyOpen={true}>
+              {filteredUserLibraries
+                .filter((userLibrary) => userLibrary.name.toLowerCase().includes(filterText))
+                .map((userLibrary) => (
+                  <LibraryFile
+                    key={userLibrary.name}
+                    label={userLibrary.name}
+                    onClick={() => setSelectedFileKey(userLibrary.name)}
+                    onSelect={() => setSelectedFileKey(userLibrary.name)}
+                    isSelected={selectedFileKey === userLibrary.name}
+                    draggable
+                  />
+                ))}
+            </LibraryFolder>
+          </LibraryRoot>
+        )}
       </div>
     </div>
   )
