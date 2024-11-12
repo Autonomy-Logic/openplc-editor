@@ -7,8 +7,8 @@ import { removeEmptyParallelConnections } from '../elements/parallel'
 import { isNodeOfType, removeNode } from '../nodes'
 import { updateDiagramElementsPosition } from './diagram'
 import { startParallelConnection } from './parallel'
+import { removePlaceholderElements } from './placeholder'
 import { appendSerialConnection } from './serial'
-// import { renderVariableBlock } from './variable-block'
 
 export const addNewElement = <T>(
   rung: RungState,
@@ -29,7 +29,8 @@ export const addNewElement = <T>(
   const [selectedPlaceholderIndex, selectedPlaceholder] = Object.entries(rung.nodes).find(
     (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
   ) ?? [undefined, undefined]
-  if (!selectedPlaceholder || !selectedPlaceholderIndex) return { nodes: rung.nodes, edges: rung.edges }
+  if (!selectedPlaceholder || !selectedPlaceholderIndex)
+    return { nodes: removePlaceholderElements(rung.nodes), edges: rung.edges }
 
   /**
    * Check if the selected placeholder is a parallel placeholder
@@ -76,7 +77,7 @@ export const addNewElement = <T>(
   /**
    * After adding the new element, update the diagram with the new rung
    */
-  const { nodes: updatedDiagramNodes, edges: updatedDiagramEdges} = updateDiagramElementsPosition(
+  const { nodes: updatedDiagramNodes, edges: updatedDiagramEdges } = updateDiagramElementsPosition(
     {
       ...rung,
       nodes: newNodes,
@@ -132,7 +133,7 @@ export const removeElement = (rung: RungState, element: Node): { nodes: Node[]; 
   /**
    * After adding the new element, update the diagram with the new rung
    */
-  const {nodes: updatedDiagramNodes, edges: updatedDiagramEdges} = updateDiagramElementsPosition(
+  const { nodes: updatedDiagramNodes, edges: updatedDiagramEdges } = updateDiagramElementsPosition(
     {
       ...rung,
       nodes: newNodes,

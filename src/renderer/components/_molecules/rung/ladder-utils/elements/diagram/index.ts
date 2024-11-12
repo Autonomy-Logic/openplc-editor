@@ -14,7 +14,6 @@ import {
   getNodePositionBasedOnPreviousNode,
   getPreviousElementsByEdge,
 } from '../utils'
-import { updateVariableBlockPosition } from '../variable-block'
 
 /**
  * Change the right rail bounds based on the nodes position
@@ -91,8 +90,6 @@ export const updateDiagramElementsPosition = (
   const { nodes } = rung
   const newNodes: Node[] = []
 
-  console.log('Update diagram rung', rung)
-
   /**
    * Find the parallels in the rung
    */
@@ -104,7 +101,6 @@ export const updateDiagramElementsPosition = (
    */
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]
-    console.log('Node', node)
 
     /**
      * Nodes that are not moved in the diagram
@@ -112,7 +108,6 @@ export const updateDiagramElementsPosition = (
      */
     if (node.type === 'powerRail') {
       newNodes.push(node)
-      console.log('\n')
       continue
     }
 
@@ -130,8 +125,6 @@ export const updateDiagramElementsPosition = (
      */
     const { nodes: previousNodes, edges: previousEdges } = getPreviousElementsByEdge({ ...rung, nodes: newNodes }, node)
     if (!previousNodes || !previousEdges) return { nodes: rung.nodes, edges: rung.edges }
-
-    console.log('Previous Nodes', previousNodes)
 
     if (previousNodes.all.length === 1) {
       /**
@@ -326,10 +319,7 @@ export const updateDiagramElementsPosition = (
         }
       })
     }
-    console.log('\n')
   }
-
-  console.log('New Nodes', newNodes)
 
   const { nodes: changedRailNodes } = changeRailBounds(
     {
@@ -339,14 +329,5 @@ export const updateDiagramElementsPosition = (
     defaultBounds,
   )
 
-  console.log('Changed Rail Nodes', changedRailNodes)
-
-  const variablesNodes = updateVariableBlockPosition({
-    ...rung,
-    nodes: changedRailNodes,
-  })
-
-  console.log('Variables Nodes', variablesNodes)
-
-  return { nodes: variablesNodes.nodes, edges: variablesNodes.edges }
+  return { nodes: changedRailNodes, edges: rung.edges }
 }

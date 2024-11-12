@@ -237,6 +237,7 @@ export const BlockNodeElement = <T extends object>({
       ...newBlockNode.data,
       variable: variable ?? { name: '' },
     }
+
     updateNode({
       rungId: rung.id,
       nodeId: node.id,

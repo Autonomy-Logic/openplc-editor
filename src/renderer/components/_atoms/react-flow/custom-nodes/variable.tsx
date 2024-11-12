@@ -85,7 +85,7 @@ const VariableElement = ({ id, data }: VariableProps) => {
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitVariableVariable = () => {
+  const handleSubmitVariableValue = () => {
     const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
       variableName: variableName,
@@ -156,7 +156,7 @@ const VariableElement = ({ id, data }: VariableProps) => {
             'pr-2 text-right': data.variant === 'input',
           })}
           onFocus={() => setInputVariableFocus(true)}
-          onBlur={() => inputVariableFocus && handleSubmitVariableVariable()}
+          onBlur={() => inputVariableFocus && handleSubmitVariableValue()}
           onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
           ref={inputVariableRef}
         />

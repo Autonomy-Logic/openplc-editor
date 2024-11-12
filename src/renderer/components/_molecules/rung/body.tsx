@@ -24,6 +24,7 @@ import {
   renderPlaceholderElements,
   searchNearestPlaceholder,
 } from './ladder-utils/elements/placeholder'
+import { updateVariableBlockPosition } from './ladder-utils/elements/variable-block'
 
 type RungBodyProps = {
   rung: RungState
@@ -107,7 +108,12 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    */
   useEffect(() => {
     console.log(`Rung ${rung.id} nodes changed`, rung)
-    setRungLocal(rung)
+    const { nodes, edges } = updateVariableBlockPosition(rung)
+    setRungLocal({
+      ...rung,
+      nodes,
+      edges,
+    })
     updateFlowPanelExtent(rung)
     console.log('\n\n\n\n\n')
   }, [rung.nodes])
@@ -308,16 +314,14 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     (event) => {
       // Check if the dragged element is not a ladder block
       if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) {
-        setRungLocal(rung)
         return
       }
 
       event.preventDefault()
-      // Check if the dragged element is not a child of the flow viewport
-      const { relatedTarget } = event
-      if (!flowViewportRef.current || !relatedTarget || !flowViewportRef.current.contains(relatedTarget as Node)) {
-        return
-      }
+
+      // if (!flowViewportRef.current || !relatedTarget || !flowViewportRef.current.contains(relatedTarget as Node)) {
+      //   return
+      // }
 
       // If it is a ladder block and the dragged element is a child of the flow viewport, render the placeholder elements
       const copyRungLocal = { ...rungLocal }
@@ -413,13 +417,12 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   return (
     <div className='relative h-fit w-full rounded-b-lg border border-t-0 p-1 dark:border-neutral-800'>
-      <div aria-label='Rung body' className='h-full w-full overflow-x-auto'>
+      <div aria-label='Rung body' className='h-full w-full overflow-x-auto' ref={flowViewportRef}>
         <div
           style={{
             height: flowPanelExtent[1][1] + 8,
             width: flowPanelExtent[1][0],
           }}
-          ref={flowViewportRef}
         >
           <FlowPanel
             viewportConfig={{
