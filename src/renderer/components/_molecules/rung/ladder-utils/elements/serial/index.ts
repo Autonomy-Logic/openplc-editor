@@ -18,8 +18,6 @@ export const appendSerialConnection = <T>(
   },
   node: Node | { elementType: string; blockVariant?: T },
 ): { nodes: Node[]; edges: Edge[]; newNode?: Node } => {
-  console.log('\tappendSerialConnection:', rung, placeholder, node)
-
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
@@ -41,12 +39,10 @@ export const appendSerialConnection = <T>(
   } else {
     newElement = node
   }
-  console.log('\tnewElement:', newElement)
 
   newNodes.splice(placeholder.index, 1, newElement)
   newNodes = removePlaceholderElements(newNodes)
 
-  console.log('\tnewNodes:', newNodes)
 
   /**
    * Get the related element of the placeholder
@@ -54,12 +50,10 @@ export const appendSerialConnection = <T>(
    * Get the previous elements (based on the related node)
    */
   const relatedNode = placeholder.selected.data.relatedNode as Node
-  console.log('\trelatedNode:', relatedNode)
   const { nodes: relatedNodePreviousNodes, edges: relatedNodePreviousEdges } = getPreviousElementsByEdge(
     { ...rung, nodes: newNodes, edges: newEdges },
     relatedNode,
   )
-  console.log('\trelatedNodePreviousNodes:', relatedNodePreviousNodes)
   if (!relatedNodePreviousNodes || !relatedNodePreviousEdges) return { nodes: newNodes, edges: newEdges }
 
   /**

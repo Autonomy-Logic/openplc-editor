@@ -35,7 +35,6 @@ export const startParallelConnection = <T>(
   placeholder: { index: number; selected: PlaceholderNode },
   node: Node | { elementType: string; blockVariant?: T },
 ): { nodes: Node[]; edges: Edge[]; newNode?: Node } => {
-  console.log('\tstartParallelConnection:', rung, placeholder, node)
 
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
@@ -48,7 +47,6 @@ export const startParallelConnection = <T>(
   const aboveElementTargetEdges = newEdges.filter((edge) => edge.target === aboveElement.id)
   const aboveElementSourceEdges = newEdges.filter((edge) => edge.source === aboveElement.id)
   if (!aboveElementTargetEdges || !aboveElementSourceEdges) return { nodes: newNodes, edges: newEdges }
-  console.log('\taboveElement:', aboveElement)
 
   /**
    * Build the parallel open node based on the node that antecede the above node
@@ -67,7 +65,6 @@ export const startParallelConnection = <T>(
     handleX: openParallelPosition.handleX,
     handleY: openParallelPosition.handleY,
   })
-  console.log('\topenParallelElement:', openParallelElement)
 
   /**
    * Build the new element node
@@ -87,7 +84,6 @@ export const startParallelConnection = <T>(
   } else {
     newElement = node
   }
-  console.log('\tnewElement:', newElement)
 
   /**
    * Recreate the above element
@@ -118,7 +114,6 @@ export const startParallelConnection = <T>(
       outputConnector: buildedAboveElement.data.outputConnector,
     },
   }
-  console.log('\tnewAboveElement:', newAboveElement)
 
   /**
    * Build the close parallel node
@@ -139,7 +134,6 @@ export const startParallelConnection = <T>(
         : closeParallelPositionParallel.handleX,
     handleY: closeParallelPositionSerial.handleY,
   })
-  console.log('\tcloseParallelElement:', closeParallelElement)
 
   /**
    * Add reference between the open parallel and the close parallel node

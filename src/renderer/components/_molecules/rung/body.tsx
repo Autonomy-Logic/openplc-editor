@@ -24,7 +24,6 @@ import {
   renderPlaceholderElements,
   searchNearestPlaceholder,
 } from './ladder-utils/elements/placeholder'
-import { updateVariableBlockPosition } from './ladder-utils/elements/variable-block'
 
 type RungBodyProps = {
   rung: RungState
@@ -107,15 +106,9 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    console.log(`Rung ${rung.id} nodes changed`, rung)
-    const { nodes, edges } = updateVariableBlockPosition(rung)
-    setRungLocal({
-      ...rung,
-      nodes,
-      edges,
-    })
+    // console.log(`Rung ${rung.id} nodes changed`, rung)
+    setRungLocal(rung)
     updateFlowPanelExtent(rung)
-    console.log('\n\n\n\n\n')
   }, [rung.nodes])
 
   /**

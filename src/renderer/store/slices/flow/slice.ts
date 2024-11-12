@@ -23,7 +23,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
 
     /**
-     * Controll the rungs of the flow
+     * Control the rungs of the flow
      */
     startLadderRung: ({ editorName, rungId, defaultBounds, flowViewport }) => {
       setState(
@@ -102,7 +102,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
 
     /**
-     * Controll the rungs transactions
+     * Control the rungs transactions
      */
     onNodesChange: ({ changes, editorName, rungId }) => {
       setState(
@@ -173,6 +173,19 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         }),
       )
     },
+    addNode({ editorName, node, rungId }) {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+
+          rung.nodes.push(node)
+        }),
+      )
+    },
 
     setEdges({ edges, editorName, rungId }) {
       setState(
@@ -203,9 +216,22 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         }),
       )
     },
+    addEdge({ edge, editorName, rungId }) {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+
+          rung.edges.push(edge)
+        }),
+      )
+    },
 
     /**
-     * Controll the flow viewport of the rung
+     * Control the flow viewport of the rung
      */
     updateFlowViewport({ editorName, flowViewport, rungId }) {
       setState(

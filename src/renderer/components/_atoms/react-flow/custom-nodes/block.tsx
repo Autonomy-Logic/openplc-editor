@@ -1,4 +1,5 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
@@ -81,7 +82,7 @@ export const BlockNodeElement = <T extends object>({
     editorActions: { updateModelVariables },
     libraries,
     flows,
-    flowActions: { updateNode, updateEdge },
+    flowActions: { setNodes, setEdges },
     project: {
       data: { pous },
     },
@@ -220,6 +221,9 @@ export const BlockNodeElement = <T extends object>({
       }
     }
 
+    let newNodes = [...rung.nodes]
+    let newEdges = [...rung.edges]
+
     /**
      * Update the node with the new block node
      * The new block node have a new ID to not conflict with the old block node and to no occur any error of rendering
@@ -238,37 +242,42 @@ export const BlockNodeElement = <T extends object>({
       variable: variable ?? { name: '' },
     }
 
-    updateNode({
-      rungId: rung.id,
-      nodeId: node.id,
-      node: newBlockNode,
-      editorName: editor.meta.name,
-    })
+    newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n))
+
     edges.source?.forEach((edge) => {
-      updateEdge({
-        editorName: editor.meta.name,
-        rungId: rung.id,
-        edgeId: edge.id,
-        edge: {
-          ...edge,
-          id: edge.id.replace(node.id, newBlockNode.id),
-          source: newBlockNode.id,
-          sourceHandle: newBlockNode.data.outputConnector.id,
-        },
-      })
+      const newEdge = {
+        ...edge,
+        id: edge.id.replace(node.id, newBlockNode.id),
+        source: newBlockNode.id,
+        sourceHandle: newBlockNode.data.outputConnector.id,
+      }
+      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
     edges.target?.forEach((edge) => {
-      updateEdge({
-        editorName: editor.meta.name,
-        rungId: rung.id,
-        edgeId: edge.id,
-        edge: {
-          ...edge,
-          id: edge.id.replace(node.id, newBlockNode.id),
-          target: newBlockNode.id,
-          targetHandle: newBlockNode.data.inputConnector.id,
-        },
-      })
+      const newEdge = {
+        ...edge,
+        id: edge.id.replace(node.id, newBlockNode.id),
+        target: newBlockNode.id,
+        targetHandle: newBlockNode.data.inputConnector.id,
+      }
+      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
+    })
+
+    const { nodes: variableNodes, edges: variableEdges } = updateVariableBlockPosition({
+      ...rung,
+      nodes: newNodes,
+      edges: newEdges,
+    })
+
+    setNodes({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodes: variableNodes,
+    })
+    setEdges({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      edges: variableEdges,
     })
 
     setWrongName(false)

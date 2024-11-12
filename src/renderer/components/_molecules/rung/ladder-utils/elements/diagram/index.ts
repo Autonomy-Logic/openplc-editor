@@ -14,6 +14,7 @@ import {
   getNodePositionBasedOnPreviousNode,
   getPreviousElementsByEdge,
 } from '../utils'
+import { updateVariableBlockPosition } from '../variable-block'
 
 /**
  * Change the right rail bounds based on the nodes position
@@ -329,5 +330,10 @@ export const updateDiagramElementsPosition = (
     defaultBounds,
   )
 
-  return { nodes: changedRailNodes, edges: rung.edges }
+  const variablesNodes = updateVariableBlockPosition({
+    ...rung,
+    nodes: changedRailNodes,
+  })
+
+  return { nodes: variablesNodes.nodes, edges: variablesNodes.edges }
 }

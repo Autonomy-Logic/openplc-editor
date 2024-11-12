@@ -17,8 +17,6 @@ export const addNewElement = <T>(
     blockVariant?: T
   },
 ): { nodes: Node[]; edges: Edge[] } => {
-  console.log('Adding new element to rung:', newNode)
-
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
@@ -39,7 +37,6 @@ export const addNewElement = <T>(
    */
   // let newCreatedNode: Node | undefined = undefined
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
-    console.log('Parallel Placeholder')
     const {
       nodes: parallelNodes,
       edges: parallelEdges,
@@ -56,7 +53,6 @@ export const addNewElement = <T>(
     newEdges = parallelEdges
     // newCreatedNode = newAuxNode
   } else {
-    console.log('Normal Placeholder')
     const {
       nodes: serialNodes,
       edges: serialEdges,
