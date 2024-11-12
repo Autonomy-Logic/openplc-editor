@@ -106,7 +106,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    // console.log(`Rung ${rung.id} nodes changed`, rung)
+    console.log(`Rung ${rung.id} nodes changed`, rung)
     setRungLocal(rung)
     updateFlowPanelExtent(rung)
   }, [rung.nodes])
@@ -115,7 +115,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    * Update the selected nodes array when the nodes array changes
    */
   useEffect(() => {
-    const selectedNodes = rungLocal.nodes.filter((node) => node.selected)
+    const selectedNodes = rungLocal.nodes.filter((node) => node.selected && node.selectable)
     setSelectedNodes(selectedNodes)
   }, [
     rungLocal.nodes.filter(
@@ -146,7 +146,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       ...rung,
       nodes: rung.nodes.map((node) => ({
         ...node,
-        draggable: true,
+        draggable: (node.data as BasicNodeData).draggable === false ? false : true,
       })),
     }))
   }, [selectedNodes.length])
@@ -423,6 +423,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               nodes: rungLocal.nodes,
               edges: rungLocal.edges,
               nodesFocusable: false,
+              nodesDraggable: false,
+              elementsSelectable: false,
               edgesFocusable: false,
               defaultEdgeOptions: {
                 deletable: false,

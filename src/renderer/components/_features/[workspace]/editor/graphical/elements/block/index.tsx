@@ -95,10 +95,6 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
     executionControl: selectedNode.data.executionControl,
   })
 
-  console.log('formState', formState)
-  console.log('node', node)
-  console.log('selectedFile', selectedFile)
-
   const isFormValid = Object.values(formState).every((value) => value !== '')
   const isBlockDifferent = selectedNode !== node
 
