@@ -69,7 +69,7 @@ const VariableElement = ({ id, data }: VariableProps) => {
    * Update wrongVariable state when the table of variables is updated
    */
   useEffect(() => {
-    const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { rung, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
       variableName: variableName,
     })
@@ -79,6 +79,12 @@ const VariableElement = ({ id, data }: VariableProps) => {
       return
     }
 
+    if (!rung) return
+
+    const relatedBlock = rung.nodes.find((node) => node.id === data.block.id)
+    if (!relatedBlock) return
+
+    handleSubmitVariableValue()
     setWrongVariable(false)
   }, [pous])
 

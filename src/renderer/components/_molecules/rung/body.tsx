@@ -423,8 +423,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               nodes: rungLocal.nodes,
               edges: rungLocal.edges,
               nodesFocusable: false,
-              nodesDraggable: false,
-              elementsSelectable: false,
               edgesFocusable: false,
               defaultEdgeOptions: {
                 deletable: false,
