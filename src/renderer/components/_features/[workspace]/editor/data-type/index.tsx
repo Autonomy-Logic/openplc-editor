@@ -1,7 +1,7 @@
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { ArrayDataType } from '@root/renderer/components/_molecules/data-types/array'
+import { EnumeratorDataType } from '@root/renderer/components/_molecules/data-types/enumerated'
 import { useOpenPLCStore } from '@root/renderer/store'
-// import { EnumeratorDataType } from '@root/renderer/components/_molecules/data-types/enumerated'
 // import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCDataType } from '@root/types/PLC/open-plc'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
@@ -28,12 +28,12 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   }, [dataTypes, dataTypeName])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { value } = e.target;
+    const { value } = e.target
     setEditorContent((prevContent) => ({
       ...prevContent,
       name: value,
-    }));
-  };
+    }))
+  }
 
   return (
     <div aria-label='Data type editor container' className='flex h-full w-full flex-col items-center p-2' {...rest}>
@@ -110,6 +110,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
       </div>
       <div aria-label='Data type content container' className='h-full w-full'>
         {editorContent?.derivation === 'array' && <ArrayDataType data={editorContent} />}
+        {editorContent?.derivation === 'enumerated' && <EnumeratorDataType data={editorContent} />}
       </div>
     </div>
   )

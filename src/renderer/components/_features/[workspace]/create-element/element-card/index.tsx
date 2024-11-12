@@ -6,7 +6,7 @@ import { ArrowIcon } from '@root/renderer/assets'
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { DatatypeDerivationSources } from '@root/renderer/data/sources/data-type'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
+import { PLCArrayDatatype, PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
 import { cn, ConvertToLangShortenedFormat } from '@root/utils'
 import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
@@ -78,17 +78,29 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   }
 
   const handleCreateDatatype: SubmitHandler<CreateDataTypeFormProps> = (data) => {
-    const draft = {
-      name: data.name,
-      derivation: data.derivation,
-      baseType: 'bool',
-      initialValue: '',
-      dimensions: [],
-    } as PLCArrayDatatype
-    const res = createDatatype(draft)
+    if (data.derivation === 'array') {
+      const draft = {
+        name: data.name,
+        derivation: data.derivation,
+        baseType: 'bool',
+        initialValue: '',
+        dimensions: [],
+      } as PLCArrayDatatype
+      const res = createDatatype(draft)
+    }
+    else if (data.derivation === 'enumerated') {
+      const draft = {
+        name: data.name,
+        derivation: data.derivation,
+        initialValue: '',
+        values: [],
+      } as PLCEnumeratedDatatype
+      const res = createDatatype(draft)
+    }
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
+
   const handleMouseEnter = () => {
     setIsOpen(true)
   }

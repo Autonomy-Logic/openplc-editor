@@ -9,66 +9,65 @@ import { StickArrowIcon } from '@root/renderer/assets'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { arrayValidation } from '@root/renderer/store/slices/project/utils/variables'
-import { PLCArrayDatatype, PLCDataType } from '@root/types/PLC/open-plc'
+import { enumeratedValidation } from '@root/renderer/store/slices/project/utils/variables'
+import { PLCDataType, PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils/cn'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import { useEffect, useRef, useState } from 'react'
 import React from 'react'
 
-import { DimensionCell } from './editable-cell'
+import { DescriptionCell } from './editable-cell'
 
-type DataTypeDimensionsTableProps = {
+type DataTypeEnumeratedTableProps = {
   name: string
-  dimensions: PLCArrayDatatype['dimensions']
+  values: PLCEnumeratedDatatype['values']
   selectedRow: number
   handleRowClick: (row: HTMLTableRowElement) => void
 }
 
-const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: DataTypeDimensionsTableProps) => {
+const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataTypeEnumeratedTableProps) => {
   const [focusIndex, setFocusIndex] = useState<number | null>(null)
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
-  const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>(dimensions)
+  const [tableData, setTableData] = useState<PLCEnumeratedDatatype['values']>(values)
 
   const {
     projectActions: { updateDatatype },
   } = useOpenPLCStore()
 
-  const columnHelper = createColumnHelper<{ dimension: unknown }>()
+  const columnHelper = createColumnHelper<{ description: unknown }>()
   const columns = React.useMemo(
     () => [
-      columnHelper.accessor('dimension', {
+      columnHelper.accessor('description', {
         size: 900,
         minSize: 350,
         maxSize: 900,
         enableResizing: true,
-
         cell: (cellProps) => (
-          <DimensionCell
+          <DescriptionCell
             key={cellProps.row.id}
             onInputChange={(value) => handleInputChange(value, cellProps.row.index)}
             onBlur={() => handleBlur(cellProps.row.index)}
-            id={`dimension-input-${cellProps.row.index}`}
+            id={`description-input-${cellProps.row.index}`}
             autoFocus={cellProps.row.index === focusIndex}
             name={name}
-            dimensions={dimensions}
+            values={values}
             selectedRow={selectedRow}
-             {...cellProps}
-        />
+            {...cellProps}
+          />
         ),
       }),
     ],
-    [focusIndex, dimensions, name, selectedRow],
+    [focusIndex, values, name, selectedRow],
   )
 
   useEffect(() => {
-    setTableData([...dimensions])
-  }, [dimensions, name])
+    setTableData([...values])
+  }, [values, name])
 
   useEffect(() => {
     if (focusIndex !== null) {
-      const inputElement = document.getElementById(`dimension-input-${focusIndex}`)
+      const inputElement = document.getElementById(`description-input-${focusIndex}`)
       if (inputElement) {
         inputElement.focus()
       }
@@ -79,55 +78,55 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
     setFocusIndex(selectedRow)
   }, [selectedRow])
 
-  const handleInputChange = (value: string, index: number) => {
-    setTableData((prevRows) => prevRows.map((row, i) => (i === index ? { ...row, dimension: value } : row)))
+  const handleInputChange = (inputValue: string, index: number) => {
+    setTableData((prevRows) => prevRows.map((row, i) => (i === index ? { ...row, value: inputValue } : row)))
     setFocusIndex(index)
   }
 
-  const updateDimensions = (newDimensions: unknown[]) => {
-    newDimensions.map((row) => ({ dimension: row.dimension }))
+  const updateDescriptions = (newValues: unknown[]) => {
+    newValues.map((row) => ({ description: row.description }))
   }
 
   const handleBlur = (rowIndex: number) => {
     setTableData((prevRows) => {
-      const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
+      const inputElement = document.getElementById(`description-input-${rowIndex}`) as HTMLInputElement
       if (inputElement) {
-        const inputValue = inputElement.value.trim();
-        const validation = arrayValidation({ value: inputValue });
-  
+        const inputValue = inputElement.value.trim()
+        const validation = enumeratedValidation({ value: inputValue })
+
         if (!validation.ok || inputValue === '') {
-          const newRows = prevRows.filter((_, index) => index !== rowIndex);
-          updateDimensions(newRows);
-          setFocusIndex(null);
+          const newRows = prevRows.filter((_, index) => index !== rowIndex)
+          updateDescriptions(newRows)
+          setFocusIndex(null)
           toast({
-            title: 'Invalid array',
-            description: `The array value is invalid. Pattern: "LEFT_number..RIGHT_number" and RIGHT must be GREATER than LEFT. Example: 0..10.`,
+            title: 'Invalid enumerated value',
+            description: `The enumerated value is invalid. Valid names: CamelCase, PascalCase or SnakeCase.`,
             variant: 'fail',
           })
           removeRow()
-          return newRows;
+          return newRows
         } else {
           const newRows = prevRows.map((row, index) => ({
             ...row,
-            dimension: index === rowIndex ? inputValue : row.dimension,
-          }));
+            description: index === rowIndex ? inputValue : row.description,
+          }))
           const optionalSchema = {
             name: name,
-            dimensions: newRows.map((row) => ({ dimension: row.dimension })),
-          };
-          updateDatatype(name, optionalSchema as PLCDataType);
-          updateDimensions(newRows);
-          return newRows;
+            values: newRows.map((row) => ({ description: row.description })),
+          }
+          updateDatatype(name, optionalSchema as PLCDataType)
+          updateDescriptions(newRows)
+          return newRows
         }
       }
       setFocusIndex(null)
-      return prevRows;
-    });
-  };
-  
+      return prevRows
+    })
+  }
+
   const addNewRow = () => {
     setTableData((prevRows) => {
-      const newRows = [...prevRows, { dimension: '' }]
+      const newRows = [...prevRows, { description: '' }]
       setFocusIndex(newRows?.length - 1)
       resetBorders()
       return newRows
@@ -141,9 +140,9 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
         newRows.forEach(() => {
           const optionalSchema = {
-            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
+            values: newRows.map((row) => ({ description: row?.description })),
           }
-          updateDatatype(name, optionalSchema as PLCArrayDatatype)
+          updateDatatype(name, optionalSchema as PLCEnumeratedDatatype)
         })
         prevRows = newRows
       }
@@ -164,9 +163,9 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
         newRows.forEach(() => {
           const optionalSchema = {
-            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
+            values: newRows.map((row) => ({ description: row?.description })),
           }
-          updateDatatype(name, optionalSchema as PLCArrayDatatype)
+          updateDatatype(name, optionalSchema as PLCEnumeratedDatatype)
         })
 
         setBorders(newFocusIndex)
@@ -189,9 +188,9 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
         newRows.forEach(() => {
           const optionalSchema = {
-            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
+            values: newRows.map((row) => ({ description: row?.description })),
           }
-          updateDatatype(name, optionalSchema as PLCArrayDatatype)
+          updateDatatype(name, optionalSchema as PLCEnumeratedDatatype)
         })
         setBorders(newFocusIndex)
         prevRows = newRows
@@ -220,7 +219,6 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   const setBorders = (indexFocus: number | null) => {
     const parent = tableBodyRef.current
     if (!parent) return
-
     ;[...parent.children].forEach((child, index) => {
       if (index !== indexFocus) {
         child.className = cn(child.className, '[&>td]:border-neutral-500 dark:[&>td]:border-neutral-500')
@@ -267,11 +265,11 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   return (
     <>
       <div
-        aria-label='Array data type table actions container'
+        aria-label='Enum data type table actions container'
         className='flex h-fit w-3/5 items-center justify-between'
       >
         <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
-          Dimensions
+         Description
         </p>
         <div
           aria-label='Data type table actions buttons container'
@@ -291,7 +289,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
           </TableActionButton>
         </div>
       </div>
-      <Table context='data-type-array'>
+      <Table context='data-type-enumerated'>
         <TableBody ref={tableBodyRef}>
           {table.getRowModel().rows.map((row, index) => (
             <TableRow
@@ -321,4 +319,4 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   )
 }
 
-export { DimensionsTable }
+export { EnumeratedTable }

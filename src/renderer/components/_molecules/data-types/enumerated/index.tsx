@@ -1,78 +1,67 @@
-import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
-import { Table, TableBody} from '@root/renderer/components/_atoms'
-import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
+import { InputWithRef} from '@root/renderer/components/_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCDataType } from '@root/types/PLC/open-plc'
-import { useEffect, useState } from 'react'
+import { PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
+import _ from 'lodash'
+import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
-import { EnumeratorDTInitialValueContainer } from './initial-value'
+import { EnumeratedTable } from './table'
 
-const EnumeratorDataType = () => {
+type EnumDatatypeProps = ComponentPropsWithoutRef<'div'> & {
+  data: PLCEnumeratedDatatype
+}
+const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   const {
-    project: {
-      data: { dataTypes },
-    },
+    projectActions: { updateDatatype },
   } = useOpenPLCStore()
-
-  const [dataTypesState, setDataTypesState] = useState<PLCDataType>()
-
-  useEffect(() => {
-    const enumeratedDataType = dataTypes.find((dataType) => dataType.derivation === 'enumerated')
-    setDataTypesState(enumeratedDataType)
-  }, [dataTypes])
+  const ROWS_NOT_SELECTED = -1
+  const [enumTable, setEnumTable] = useState<{ selectedRow: string }>({ selectedRow: ROWS_NOT_SELECTED.toString() })
+  const [initialValueData, setInitialValueData] = useState<string>('')
 
   useEffect(() => {
-    console.log('enumerated data type', dataTypesState)
-  }, [dataTypesState])
+    setInitialValueData(data.initialValue)
+  }, [data.initialValue, data.name])
+
+  const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setInitialValueData(e.target.value)
+    _.debounce(() => {
+      const updatedData = { ...data }
+      updatedData.initialValue = e.target.value
+      updateDatatype(data.name, updatedData as PLCEnumeratedDatatype)
+    }, 1000)()
+  }
 
   return (
-    <div aria-label='Enumerate data type container' className='flex h-full w-full flex-col gap-4 bg-transparent'>
+    <div
+      aria-label='Enumerated data type container'
+      className='flex h-full w-full flex-col gap-4 bg-transparent'
+      {...rest}
+    >
       <div aria-label='Data type content actions container' className='flex h-fit w-full gap-8'>
-        <div
-          aria-label='Enum data type table actions container'
-          className='flex h-full w-1/2 items-center justify-between'
-        >
-          <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
-            Values
-          </p>
+        <div aria-label='Enumerated base type container' className='flex w-1/2 flex-col gap-3'>
+    
+        </div>
+        <div aria-label='Enumerated initial value container' className='w-1/2'>
           <div
-            aria-label='Data type table actions buttons container'
-            className='flex h-full w-fit items-center justify-evenly *:rounded-md *:p-1'
+            aria-label='Enumerated data type initial value container'
+            className='flex h-fit w-full items-center justify-end'
           >
-            <TableActionButton aria-label='Add table row button' onClick={() => console.log('Button clicked')}>
-              <PlusIcon className='!stroke-brand' />
-            </TableActionButton>
-            <TableActionButton aria-label='Remove table row button' onClick={() => console.log('Button clicked')}>
-              <MinusIcon />
-            </TableActionButton>
-            <TableActionButton aria-label='Move table row up button' onClick={() => console.log('Button clicked')}>
-              <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
-            </TableActionButton>
-            <TableActionButton aria-label='Move table row down button' onClick={() => console.log('Button clicked')}>
-              <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
-            </TableActionButton>
+            <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100 '>
+              Initial Value
+            </label>
+            <InputWithRef
+              onChange={handleInitialValueChange}
+              value={initialValueData}
+              className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 focus-within:border-brand focus:border-brand focus:outline-none dark:border-neutral-800 dark:border-neutral-800 dark:bg-neutral-950 dark:bg-neutral-950 dark:text-neutral-100'
+            />
           </div>
         </div>
-        <div className='w-1/2'>
-          <EnumeratorDTInitialValueContainer />
-        </div>
       </div>
-
-      <Table aria-label='Enumerated data type table' className='w-1/2'>
-        <TableBody>
-          {dataTypesState?.derivation === 'enumerated' &&
-          <p>Derivation Editor</p>
-            // dataTypesState.derivation.values.map((dimension, index) => (
-            //   <TableRow
-            //     key={index}
-            //     className='[&:first-child>*]:rounded-t-md [&:first-child>*]:border-t [&:first-child>*]:border-t-neutral-500'
-            //   >
-            //     <TableCell className='p-2'>{dimension}</TableCell>
-            //   </TableRow>
-            // ))
-            }
-        </TableBody>
-      </Table>
+      <EnumeratedTable
+        name={data.name}
+        values={data.values}
+        handleRowClick={(row) => setEnumTable({ selectedRow: row.id })}
+        selectedRow={parseInt(enumTable.selectedRow)}
+      />
     </div>
   )
 }
