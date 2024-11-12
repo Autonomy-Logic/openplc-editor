@@ -89,10 +89,10 @@ export const parseProjectToXML = (project: ProjectState) => {
   console.log('=-=-=-= FINISHED PARSE TO XML =-=-=-=')
   console.log('=-=-=-= SAVING XML =-=-=-=')
   window.bridge
-    .writeXMLFile(project.meta.path.replace('data.json', ''), xml, 'plc')
+    .writeXMLFile(project.meta.path.replace('project.json', ''), xml, 'plc')
     .then((res) => {
       if (res) {
-        console.log('File saved', project.meta.path.replace('data.json', 'plc.xml'))
+        console.log('File saved', project.meta.path.replace('project.json', 'plc.xml'))
         console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
       }
     })
