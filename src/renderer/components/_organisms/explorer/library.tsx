@@ -35,13 +35,24 @@ type LibraryProps = {
       }[]
     }[]
   }[]
+  filteredUserLibraries: {
+    name: string
+    type: "function" | "function-block"
+  }[]
   setSelectedFileKey: (key: string) => void
   selectedFileKey: string | null
   filterText: string
   setFilterText: (text: string) => void
 }
 
-const Library = ({  filterText, setFilterText, setSelectedFileKey, selectedFileKey , filteredLibraries }: LibraryProps) => {
+const Library = ({
+  filterText,
+  setFilterText,
+  setSelectedFileKey,
+  selectedFileKey,
+  filteredLibraries,
+  filteredUserLibraries,
+}: LibraryProps) => {
   const {
     editor: { type, meta },
   } = useOpenPLCStore()
@@ -165,6 +176,24 @@ const Library = ({  filterText, setFilterText, setSelectedFileKey, selectedFileK
                 ))}
             </LibraryFolder>
           ))}
+        </LibraryRoot>
+
+        {/* User Defined Libraries */}
+        <LibraryRoot>
+          <LibraryFolder label="User Defined" initiallyOpen={true}>
+            {filteredUserLibraries
+              .filter((userLibrary) => userLibrary.name.toLowerCase().includes(filterText))
+              .map((userLibrary) => (
+                <LibraryFile
+                  key={userLibrary.name}
+                  label={userLibrary.name}
+                  onClick={() => setSelectedFileKey(userLibrary.name)}
+                  onSelect={() => setSelectedFileKey(userLibrary.name)}
+                  isSelected={selectedFileKey === userLibrary.name}
+                  draggable
+                />
+              ))}
+          </LibraryFolder>
         </LibraryRoot>
       </div>
     </div>

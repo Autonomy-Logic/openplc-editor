@@ -69,12 +69,13 @@ const Explorer = ({ collapse }: explorerProps): ReactElement => {
           className={`bg-neutral-200 transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light dark:bg-neutral-850 data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
         />
         <ResizablePanel id='libraryExplorerPanel' order={2} defaultSize={40} collapsible minSize={20}>
-          <Library
+        <Library
             filterText={filterText}
             setFilterText={setFilterText}
             selectedFileKey={selectedFileKey}
             setSelectedFileKey={setSelectedFileKey}
             filteredLibraries={filteredLibraries}
+            filteredUserLibraries={filteredUserLibraries}
           />
         </ResizablePanel>
       </ResizablePanelGroup>
