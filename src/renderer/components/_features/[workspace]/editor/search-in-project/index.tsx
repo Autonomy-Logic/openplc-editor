@@ -82,6 +82,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
   const [regularExpressionOption, setRegularExpressionOption] = useState(false)
   const [disabledSensitiveCaseOption, setDisabledSensitiveCaseOption] = useState(false)
   const [disabledRegularExpressionOption, setDisabledRegularExpressionOption] = useState(false)
+  const [typedSearchQuery, setTypedSearchQuery] = useState('')
 
   const { toast } = useToast()
   const {
@@ -378,7 +379,6 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       })
     } else {
       setSearchResults(formattedResults)
-      console.log(formattedResults)
       onClose()
     }
   }
@@ -398,8 +398,12 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
           <p className='text-base font-medium text-neutral-950 dark:text-white'>Pattern to Search</p>
           <InputWithRef
             className='h-[30px] w-full rounded-lg border border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-100'
-            value={searchQuery}
-            onChange={handleSearchQueryChange}
+            value={typedSearchQuery}
+            placeholder='Search'
+            onBlur={handleSearchQueryChange}
+            onChange={(event) => {
+              setTypedSearchQuery(event.target.value)
+            }}
           />
         </div>
         <div className='flex flex-col justify-between'>
