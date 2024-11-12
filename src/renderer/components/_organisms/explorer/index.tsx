@@ -23,30 +23,32 @@ const Explorer = ({ collapse }: explorerProps): ReactElement => {
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [filterText, setFilterText] = useState<string>('')
 
-  const userLibrary = {
-    name: 'User Library',
-    pous: user.map((userItem) => ({
-      name: userItem.name,
-      language: '',
-      type: userItem.type,
-      body: '',
-      documentation: '',
-      variables: [],
-    })),
-  }
 
-  const filteredLibraries = [...system, userLibrary].filter((library) =>
+  const filteredUserLibraries = user.filter((userLibrary) => {
+    if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+      return (
+        (editor.meta.pouType === 'function' && userLibrary.type === 'function' && userLibrary.name === editor.meta.name) ||
+        (editor.meta.pouType === 'function-block' &&
+          (userLibrary.type === 'function' || userLibrary.type === 'function-block'))
+      );
+    }
+    return false;
+  });
+
+
+  const filteredLibraries = system.filter((library) =>
     pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
       ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')
-      : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText))
+      : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
   )
+
 
   const selectedPouDocumentation =
     system
       .flatMap((library: { pous: { name: string; documentation?: string }[] }) => library.pous)
       .find((pou) => pou.name === selectedFileKey)?.documentation || null
 
-  console.warn('User library ->', userLibrary)
+  console.warn('User library ->', filteredUserLibraries)
   return (
     <ResizablePanel
       ref={collapse}
@@ -64,7 +66,7 @@ const Explorer = ({ collapse }: explorerProps): ReactElement => {
         </ResizablePanel>
         <ResizableHandle
           style={{ height: '1px' }}
-          className={`bg-neutral-200  transition-colors  duration-200  data-[resize-handle-active="pointer"]:bg-brand-light  data-[resize-handle-state="hover"]:bg-brand-light dark:bg-neutral-850 data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
+          className={`bg-neutral-200 transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light dark:bg-neutral-850 data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
         />
         <ResizablePanel id='libraryExplorerPanel' order={2} defaultSize={40} collapsible minSize={20}>
           <Library
