@@ -163,7 +163,6 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
       return newRows
     })
   }
-  console.log('tableData', tableData)
 
   const removeRow = () => {
     setTableData((prevRows) => {
@@ -174,12 +173,18 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
           values: newRows.map((row) => ({ description: row?.description })),
         } as PLCEnumeratedDatatype)
 
+        let newFocusIndex = focusIndex
+        if (focusIndex === prevRows.length - 1) {
+          newFocusIndex = prevRows.length - 2
+        }
+
+        setFocusIndex(newFocusIndex)
+
         return newRows
       }
       return prevRows
     })
   }
-
   const moveRowUp = () => {
     setTableData((prevRows) => {
       if (focusIndex !== null && focusIndex > 0) {
@@ -231,6 +236,10 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
       return prevRows
     })
   }
+
+  const isMoveUpDisabled = focusIndex === null || focusIndex === 0 || focusIndex === -1
+  const isMoveDownDisabled =
+    focusIndex === null || focusIndex === tableData.length - 1 || tableData.length === 1 || focusIndex === -1
 
   const resetBorders = () => {
     const parent = tableBodyRef.current
@@ -314,10 +323,14 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
           <TableActionButton aria-label='Remove table row button' onClick={removeRow}>
             <MinusIcon className='stroke-[#0464FB]' />
           </TableActionButton>
-          <TableActionButton aria-label='Move table row up button' onClick={moveRowUp}>
+          <TableActionButton aria-label='Move table row up button' disabled={isMoveUpDisabled} onClick={moveRowUp}>
             <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
           </TableActionButton>
-          <TableActionButton aria-label='Move table row down button' onClick={moveRowDown}>
+          <TableActionButton
+            aria-label='Move table row down button'
+            disabled={isMoveDownDisabled}
+            onClick={moveRowDown}
+          >
             <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
           </TableActionButton>
         </div>
