@@ -88,54 +88,73 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
   }
 
   const handleBlur = (rowIndex: number) => {
-    setTableData((prevRows) => {
-      const inputElement = document.getElementById(`description-input-${rowIndex}`) as HTMLInputElement
-      if (inputElement) {
-        const inputValue = inputElement.value.trim()
-        const validation = enumeratedValidation({ value: inputValue })
-        const checkIfExists = prevRows.some((row) => row.description === inputValue)
-        if (checkIfExists) {
-          const newRows = prevRows.filter((_, index) => index !== rowIndex)
-          updateDescriptions(newRows)
-          setFocusIndex(null)
-          toast({
-            title: 'Value already exists',
-            description: `The value already exists in the list.`,
-            variant: 'fail',
-          })
-          removeRow()
-          return newRows
-        }
-        if (!validation.ok || inputValue === '') {
-          const newRows = prevRows.filter((_, index) => index !== rowIndex)
-          updateDescriptions(newRows)
-          setFocusIndex(null)
-          toast({
-            title: 'Invalid enumerated value',
-            description: `The enumerated value is invalid. Valid names: CamelCase, PascalCase or SnakeCase.`,
-            variant: 'fail',
-          })
-          removeRow()
-          return newRows
-        } else {
-          const newRows = prevRows.map((row, index) => ({
-            ...row,
-            description: index === rowIndex ? inputValue : row.description,
-          }))
-          const optionalSchema = {
-            name: name,
-            values: newRows.map((row) => ({ description: row.description })),
-          }
-          updateDatatype(name, optionalSchema as PLCDataType)
-          updateDescriptions(newRows)
-          return newRows
-        }
-      }
-      setFocusIndex(null)
-      return prevRows
-    })
-  }
+    if (rowIndex !== selectedRow) {
+      setTableData((prevRows) => {
+        const inputElement = document.getElementById(`description-input-${rowIndex}`) as HTMLInputElement
+        if (inputElement) {
+          const inputValue = inputElement.value.trim()
 
+          if (inputValue === '') {
+            const newRows = prevRows.filter((_, index) => index !== rowIndex)
+            updateDescriptions(newRows)
+            setFocusIndex(null)
+            toast({
+              title: 'Row removed',
+              description: `The row was removed because the value was empty.`,
+              variant: 'fail',
+            })
+            return newRows
+          }
+
+          if (prevRows[rowIndex].description === inputValue) {
+            setFocusIndex(null)
+            return prevRows
+          }
+
+          const validation = enumeratedValidation({ value: inputValue })
+          const checkIfExists = prevRows.some((row, i) => i !== rowIndex && row.description === inputValue)
+
+          if (checkIfExists) {
+            const newRows = prevRows.filter((_, index) => index !== rowIndex)
+            updateDescriptions(newRows)
+            setFocusIndex(null)
+            toast({
+              title: 'Value already exists',
+              description: `The value already exists in the list.`,
+              variant: 'fail',
+            })
+            return newRows
+          }
+
+          if (!validation.ok) {
+            const newRows = prevRows.filter((_, index) => index !== rowIndex)
+            updateDescriptions(newRows)
+            setFocusIndex(null)
+            toast({
+              title: 'Invalid enumerated value',
+              description: `The enumerated value is invalid. Valid names: CamelCase, PascalCase or SnakeCase.`,
+              variant: 'fail',
+            })
+            return newRows
+          } else {
+            const newRows = prevRows.map((row, index) => ({
+              ...row,
+              description: index === rowIndex ? inputValue : row.description,
+            }))
+            const optionalSchema = {
+              name: name,
+              values: newRows.map((row) => ({ description: row.description })),
+            }
+            updateDatatype(name, optionalSchema as PLCDataType)
+            updateDescriptions(newRows)
+            return newRows
+          }
+        }
+        setFocusIndex(null)
+        return prevRows
+      })
+    }
+  }
   const addNewRow = () => {
     setTableData((prevRows) => {
       const newRows = [...prevRows, { description: '' }]
@@ -144,11 +163,13 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
       return newRows
     })
   }
+  console.log('tableData', tableData)
 
   const removeRow = () => {
     setTableData((prevRows) => {
       if (focusIndex !== null) {
         const newRows = prevRows.filter((_, index) => index !== focusIndex)
+
         updateDatatype(name, {
           values: newRows.map((row) => ({ description: row?.description })),
         } as PLCEnumeratedDatatype)
@@ -158,9 +179,6 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
       return prevRows
     })
   }
-  useEffect(() => {
-    setTableData([...values])
-  }, [values, name])
 
   const moveRowUp = () => {
     setTableData((prevRows) => {
@@ -186,6 +204,9 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
       return prevRows
     })
   }
+  useEffect(() => {
+    setTableData([...values])
+  }, [values, name])
 
   const moveRowDown = () => {
     setTableData((prevRows) => {
