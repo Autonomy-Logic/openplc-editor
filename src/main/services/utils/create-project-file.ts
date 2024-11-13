@@ -1,5 +1,5 @@
-import { PLCProject } from '../../../../types/PLC/open-plc'
-import { CreateJSONFile } from '../../../utils'
+import { PLCProject } from '../../../../src/types/PLC/open-plc'
+import { CreateJSONFile } from '../../../main/utils/'
 
 type CreateProjectFileProps = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
@@ -11,8 +11,8 @@ type CreateProjectFileProps = {
 const CreateProjectFile = (dataToCreateProjectFile: CreateProjectFileProps) => {
   const bodyData =
     dataToCreateProjectFile.language === 'ld'
-      ? { language: dataToCreateProjectFile.language, value: { name: dataToCreateProjectFile.name, rungs: [] } }
-      : { language: dataToCreateProjectFile.language, value: 'This is the body' }
+      ? { derivation: dataToCreateProjectFile.language, value: { name: dataToCreateProjectFile.name, rungs: [] } }
+      : { derivation: dataToCreateProjectFile.language, value: 'This is the body' }
 
   const _projectJSONStructure: PLCProject = {
     meta: {
