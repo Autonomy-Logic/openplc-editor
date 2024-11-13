@@ -94,7 +94,7 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
         const inputValue = inputElement.value.trim()
         const validation = enumeratedValidation({ value: inputValue })
         const checkIfExists = prevRows.some((row) => row.description === inputValue)
-        if(checkIfExists) {
+        if (checkIfExists) {
           const newRows = prevRows.filter((_, index) => index !== rowIndex)
           updateDescriptions(newRows)
           setFocusIndex(null)
@@ -149,18 +149,18 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
     setTableData((prevRows) => {
       if (focusIndex !== null) {
         const newRows = prevRows.filter((_, index) => index !== focusIndex)
+        updateDatatype(name, {
+          values: newRows.map((row) => ({ description: row?.description })),
+        } as PLCEnumeratedDatatype)
 
-        newRows.forEach(() => {
-          const optionalSchema = {
-            values: newRows.map((row) => ({ description: row?.description })),
-          }
-          updateDatatype(name, optionalSchema as PLCEnumeratedDatatype)
-        })
-        prevRows = newRows
+        return newRows
       }
       return prevRows
     })
   }
+  useEffect(() => {
+    setTableData([...values])
+  }, [values, name])
 
   const moveRowUp = () => {
     setTableData((prevRows) => {
