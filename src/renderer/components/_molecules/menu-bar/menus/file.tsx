@@ -236,37 +236,38 @@ export const FileMenu = () => {
         <Modal open={modalOpen} onOpenChange={setModalOpen}>
           <ModalContent
             onClose={handleModalClose}
-            className='flex max-h-56 w-fit select-none flex-col justify-between gap-2 rounded-lg p-8'
+            className='flex max-h-80 flex w-[340px] select-none flex-col justify-evenly rounded-lg items-center'
           >
-            <p className='text-m text-center font-medium text-neutral-950 dark:text-white'>
-              There are unsaved changes in your project. Do you want to save before closing?
+            <p className='text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100'>
+            Do you want to save the changes you made at this file?
             </p>
 
-            <div className='flex h-8 w-full flex-col items-center justify-evenly gap-7'>
+            <div className='flex flex-col w-[200px] space-y-2 text-sm'>
+            <button
+                onClick={() => {
+                  void handleSaveProject()
+                  handleModalClose()
+                }}
+                className='w-full py-2 rounded-lg bg-blue-500 text-center px-4 font-medium text-neutral-1000 dark:text-neutral-100'
+              >
+                Save
+              </button>
               <button
                 onClick={() => {
                   setDiscardChanges(true)
                   handleModalClose()
                 }}
-                className='h-full w-[236px] rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+                className='w-full py-2 rounded-md px-4 dark:bg-neutral-850 dark:text-neutral-100'
               >
                 Discart changes
               </button>
               <button
                 onClick={handleModalClose}
-                className='h-full w-[236px] rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+                className='w-full py-2 rounded-md px-4 dark:bg-neutral-850 px-4 dark:text-neutral-100'
               >
                 Cancel
               </button>
-              <button
-                onClick={() => {
-                  void handleSaveProject()
-                  handleModalClose()
-                }}
-                className='left-[71px] top-[231px] h-[32px] w-[198px] rounded-lg bg-blue-500 text-center font-medium text-neutral-1000 dark:text-neutral-100'
-              >
-                Save
-              </button>
+             
             </div>
           </ModalContent>
         </Modal>
