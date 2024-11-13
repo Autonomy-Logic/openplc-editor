@@ -11,7 +11,7 @@ type CreateProjectFileProps = {
 const CreateProjectFile = (dataToCreateProjectFile: CreateProjectFileProps) => {
   const bodyData =
     dataToCreateProjectFile.language === 'ld'
-      ? { derivation: dataToCreateProjectFile.language, value: { name: dataToCreateProjectFile.name, rungs: [] } }
+      ? { derivation: dataToCreateProjectFile.language, value: { name: 'main', rungs: [] } }
       : { derivation: dataToCreateProjectFile.language, value: 'This is the body' }
 
   const _projectJSONStructure: PLCProject = {
