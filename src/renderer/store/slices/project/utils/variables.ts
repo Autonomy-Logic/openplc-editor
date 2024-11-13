@@ -41,6 +41,7 @@ const enumeratedValidation = ({ value }: { value: string }) => {
       message: `The enumerated value can not be empty.`,
     }
   }
+
   if (!regex.test(value)) {
     return {
       ok: false,

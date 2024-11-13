@@ -93,7 +93,19 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
       if (inputElement) {
         const inputValue = inputElement.value.trim()
         const validation = enumeratedValidation({ value: inputValue })
-
+        const checkIfExists = prevRows.some((row) => row.description === inputValue)
+        if(checkIfExists) {
+          const newRows = prevRows.filter((_, index) => index !== rowIndex)
+          updateDescriptions(newRows)
+          setFocusIndex(null)
+          toast({
+            title: 'Value already exists',
+            description: `The value already exists in the list.`,
+            variant: 'fail',
+          })
+          removeRow()
+          return newRows
+        }
         if (!validation.ok || inputValue === '') {
           const newRows = prevRows.filter((_, index) => index !== rowIndex)
           updateDescriptions(newRows)
@@ -269,7 +281,7 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
         className='flex h-fit w-3/5 items-center justify-between'
       >
         <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
-         Description
+          Description
         </p>
         <div
           aria-label='Data type table actions buttons container'
