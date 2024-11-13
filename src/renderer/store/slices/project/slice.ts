@@ -4,7 +4,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import { ProjectResponse, ProjectSlice } from './types'
-import { createInstanceValidation, updateInstancevalidation } from './utils/instances'
+import { createInstanceValidation, updateInstanceValidation } from './utils/instances'
 import { createTaskValidation, updateTaskValidation } from './utils/tasks'
 import {
   createGlobalVariableValidation,
@@ -19,6 +19,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       name: '',
       type: 'plc-project',
       path: '',
+      buildPath: '',
     },
     data: {
       dataTypes: [],
@@ -63,6 +64,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
+    updateMetaBuildPath: (buildPath: string): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          project.meta.buildPath = buildPath
+        }),
+      )
+    },
 
     /**
      * POU Actions
@@ -83,12 +91,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             response = { ok: true, message: 'Pou created successfully' }
             console.log('pou created:', pouToBeCreated)
           }
-           if  (dataTypeExists || pouExists) 
-              {toast({
-                title: 'Invalid Pou',
-                description: `You can't create a Pou with this name.`,
-                variant: 'fail',
-              })}
+          if (dataTypeExists || pouExists) {
+            toast({
+              title: 'Invalid Pou',
+              description: `You can't create a Pou with this name.`,
+              variant: 'fail',
+            })
+          }
         }),
       )
       return response
@@ -494,7 +503,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           const { rowId } = dataToBeUpdated
           switch (rowId) {
             case rowId: {
-              const validationResponse = updateInstancevalidation(
+              const validationResponse = updateInstanceValidation(
                 project.data.configuration.resource.instances,
                 dataToBeUpdated.data,
               )

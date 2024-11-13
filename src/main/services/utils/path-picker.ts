@@ -1,7 +1,7 @@
 import { BrowserWindow, dialog } from 'electron'
 import {promises} from 'fs'
 
-import { i18n } from '../../../../utils/i18n'
+import { i18n } from '../../../../src/utils/i18n'
 
 type GetProjectPathProps = InstanceType<typeof BrowserWindow>
 

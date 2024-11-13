@@ -5,7 +5,7 @@ import { platform } from 'process'
 
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
-import { CreateProjectFile, GetProjectPath } from '../../services/project-service/utils'
+import { CreateProjectFile, GetProjectPath } from '../../services/utils'
 
 type IDataToWrite = {
   projectPath: string
@@ -45,7 +45,7 @@ class MainProcessBridge implements MainIpcModule {
         return { success: false, error }
       }
     })
-    
+
     this.ipcMain.handle('project:create', async () => {
       const response = await this.projectService.createProject()
       return response

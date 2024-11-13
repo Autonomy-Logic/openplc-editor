@@ -13,7 +13,7 @@ export const RecentMenu = () => {
   const {
     workspace: { recents },
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecents },
+    workspaceActions: { setEditingState, setRecents, setDirPath },
     tabsActions: { clearTabs },
     projectActions: { setProject },
     flowActions: { addFlow },
@@ -97,11 +97,13 @@ export const RecentMenu = () => {
       clearTabs()
       setEditingState('unsaved')
       setRecents([])
+      setDirPath(data.meta.directoryPath)
       setProject({
         meta: {
           name: data.content.meta.name,
           type: data.content.meta.type,
-          path: data.meta.path,
+          path: data.meta.projectPath,
+          buildPath: data.meta.buildPath,
         },
         data: data.content.data,
       })

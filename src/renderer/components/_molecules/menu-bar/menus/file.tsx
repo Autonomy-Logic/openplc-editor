@@ -18,7 +18,7 @@ export const FileMenu = () => {
   const {
      project,
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecents },
+    workspaceActions: { setEditingState, setRecents, setDirPath },
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
@@ -30,27 +30,21 @@ export const FileMenu = () => {
   const handleCreateProject = async () => {
     const { success, data, error } = await window.bridge.createProject()
     if (success && data) {
-      setProject({
-        meta: {
-          path: data.meta.path,
-          name: 'new-project',
-          type: 'plc-project',
-        },
-        data: data.content.data,
-      })
-      setEditingState('unsaved')
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
       setRecents([])
+      setDirPath(data.meta.directoryPath)
       setProject({
         meta: {
           name: 'new-project',
           type: 'plc-project',
-          path: data.meta.path,
+          path: data.meta.projectPath,
+          buildPath: data.meta.buildPath,
         },
         data: data.content.data,
       })
+
 
       toast({
         title: 'The project was created successfully!',
@@ -69,24 +63,17 @@ export const FileMenu = () => {
   const handleOpenProject = async () => {
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
-      setProject({
-        meta: {
-          path: data.meta.path,
-          name: 'new-project',
-          type: 'plc-project',
-        },
-        data: data.content.data,
-      })
-      setEditingState('unsaved')
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
       setRecents([])
+      setDirPath(data.meta.directoryPath)
       setProject({
         meta: {
           name: data.content.meta.name,
           type: data.content.meta.type,
-          path: data.meta.path,
+          path: data.meta.projectPath,
+          buildPath: data.meta.buildPath,
         },
         data: data.content.data,
       })
@@ -157,7 +144,7 @@ export const FileMenu = () => {
     setEditingState('unsaved')
     setRecents([])
   }
-  
+
 
   return (
     <MenuPrimitive.Menu>

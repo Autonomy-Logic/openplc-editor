@@ -17,7 +17,7 @@ const StartScreen = () => {
   const { toast } = useToast()
   const navigate = useNavigate()
   const {
-    workspaceActions: { setEditingState },
+    workspaceActions: { setEditingState, setDirPath },
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
@@ -33,11 +33,13 @@ const StartScreen = () => {
         const projectMeta = {
           name: data.content.meta.name,
           type: data.content.meta.type,
-          path: data.meta.path,
+          path: data.meta.projectPath,
+          buildPath: data.meta.buildPath,
         }
 
         const projectData = data.content.data
 
+        setDirPath(data.meta.projectPath)
         setProject({
           meta: projectMeta,
           data: projectData,
@@ -85,11 +87,13 @@ const StartScreen = () => {
         if (data) {
           clearTabs()
           setEditingState('unsaved')
+          setDirPath(data.meta.projectPath)
           setProject({
             meta: {
               name: data.content.meta.name,
               type: data.content.meta.type,
-              path: data.meta.path,
+              path: data.meta.projectPath,
+              buildPath: data.meta.buildPath,
             },
             data: data.content.data,
           })
@@ -126,11 +130,13 @@ const StartScreen = () => {
       if (data) {
         clearTabs()
         setEditingState('unsaved')
+        setDirPath(data.meta.directoryPath)
         setProject({
           meta: {
             name: data.content.meta.name,
             type: data.content.meta.type,
-            path: data.meta.path,
+            path: data.meta.projectPath,
+            buildPath: data.meta.buildPath,
           },
           data: data.content.data,
         })
@@ -158,7 +164,7 @@ const StartScreen = () => {
     })
   }
 void  handleOpenRecentAccelerator()
- },[]) 
+ },[])
 
   return (
     <>

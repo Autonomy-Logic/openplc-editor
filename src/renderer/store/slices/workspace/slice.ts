@@ -6,6 +6,7 @@ import type { WorkspaceSlice } from './types'
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   workspace: {
     editingState: 'unsaved',
+    dirPath: '',
     systemConfigs: {
       OS: '',
       arch: '',
@@ -22,6 +23,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.editingState = editingState
+        }),
+      )
+    },
+    setDirPath: (dirPath): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.dirPath = dirPath
         }),
       )
     },

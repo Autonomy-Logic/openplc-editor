@@ -17,7 +17,9 @@ export type IProjectServiceResponse = {
   message?: string
   data?: {
     meta: {
-      path: string
+      buildPath: string
+      directoryPath: string
+      projectPath: string
     }
     content: PLCProject
   }
@@ -107,10 +109,13 @@ const _ProjectService = {
   },
 
   createSuccessResponse: (projectPath: string, content: PLCProject): IProjectServiceResponse => {
+    const directoryPath = projectPath.split('/').slice(0, -1).join('/')
+    const buildPath = join(directoryPath, 'build')
+
     return {
       success: true,
       data: {
-        meta: { path: projectPath },
+        meta: { projectPath, directoryPath, buildPath },
         content,
       },
     }
@@ -166,16 +171,21 @@ const _ProjectService = {
     }
 
     await UserService.checkIfUserHistoryFolderExists()
-    CreateJSONFile(filePath, JSON.stringify(baseJsonStructure, null, 2), 'data')
+    CreateJSONFile(filePath, JSON.stringify(baseJsonStructure, null, 2), 'project')
 
-    const projectPath = join(filePath, 'data.json')
+    const projectPath = join(filePath, 'project.json')
+    const directoryPath = projectPath.split('/').slice(0, -1).join('/')
+    const buildPath = join(directoryPath, 'build')
+
     await this.updateProjectHistory(projectPath)
 
     return {
       success: true,
       data: {
         meta: {
-          path: projectPath,
+          projectPath,
+          directoryPath,
+          buildPath,
         },
         content: baseJsonStructure,
       },
@@ -241,13 +251,18 @@ const _ProjectService = {
     }
 
     const projectPath = filePath
+    const directoryPath = projectPath.split('/').slice(0, -1).join('/')
+    const buildPath = join(directoryPath, 'build')
+
     await this.updateProjectHistory(projectPath)
 
     return {
       success: true,
       data: {
         meta: {
-          path: projectPath,
+          projectPath,
+          directoryPath,
+          buildPath,
         },
         content: parsedFile.data,
       },
@@ -358,10 +373,13 @@ class ProjectService {
   }
 
   private createSuccessResponse(projectPath: string, content: PLCProject): IProjectServiceResponse {
+    const directoryPath = projectPath.split('/').slice(0, -1).join('/')
+    const buildPath = join(directoryPath, 'build')
+
     return {
       success: true,
       data: {
-        meta: { path: projectPath },
+        meta: { projectPath, directoryPath, buildPath },
         content,
       },
     }
@@ -407,16 +425,21 @@ class ProjectService {
     }
 
     await UserService.checkIfUserHistoryFolderExists()
-    CreateJSONFile(filePath, JSON.stringify(baseJsonStructure, null, 2), 'data')
+    CreateJSONFile(filePath, JSON.stringify(baseJsonStructure, null, 2), 'project')
 
-    const projectPath = join(filePath, 'data.json')
+    const projectPath = join(filePath, 'project.json')
+    const directoryPath = projectPath.split('/').slice(0, -1).join('/')
+    const buildPath = join(directoryPath, 'build')
+
     await this.updateProjectHistory(projectPath)
 
     return {
       success: true,
       data: {
         meta: {
-          path: projectPath,
+          projectPath,
+          directoryPath,
+          buildPath,
         },
         content: baseJsonStructure,
       },
@@ -472,13 +495,18 @@ class ProjectService {
     }
 
     const projectPath = filePath
+    const directoryPath = projectPath.split('/').slice(0, -1).join('/')
+    const buildPath = join(directoryPath, 'build')
+
     await this.updateProjectHistory(projectPath)
 
     return {
       success: true,
       data: {
         meta: {
-          path: projectPath,
+          projectPath,
+          directoryPath,
+          buildPath,
         },
         content: parsedFile.data,
       },

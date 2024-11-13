@@ -35,9 +35,9 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
   const [intervalValue, setIntervalValue] = useState('T#20ms')
   const {
     projectActions: { setProject },
-    workspaceActions: { setEditingState },
+    workspaceActions: { setEditingState, setDirPath },
     tabsActions: { clearTabs },
-    editorActions: { clearEditor }
+    editorActions: { clearEditor },
   } = useOpenPLCStore()
 
   const handleFormSubmit: SubmitHandler<FormData> = async (data) => {
@@ -55,14 +55,16 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
       } as CreateProjectFileProps)
 
       if (result.data) {
-        setEditingState('unsaved')
         clearEditor()
         clearTabs()
+        setEditingState('unsaved')
+        setDirPath(allData.path)
         setProject({
           meta: {
             name: allData.name,
-            type: allData.type,
+            type: allData.type as 'plc-project' | 'plc-library',
             path: allData.path + '/project.json',
+            buildPath: allData.path + '/build',
           },
           data: result.data.content.data,
         })

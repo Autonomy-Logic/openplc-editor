@@ -3,7 +3,7 @@ import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { IProjectServiceResponse } from '../../services/project-service'
-import { CreateProjectFile } from '../../services/project-service/utils'
+import { CreateProjectFile } from '../../services/utils'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 

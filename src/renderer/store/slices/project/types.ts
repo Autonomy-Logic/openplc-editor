@@ -81,8 +81,9 @@ type InstanceDTO = z.infer<typeof instanceDTOSchema>
  */
 const projectMetaSchema = z.object({
   name: z.string(),
-  type: z.enum(['plc-project']),
+  type: z.enum(['plc-project', 'plc-library']).default('plc-project'),
   path: z.string(),
+  buildPath: z.string(),
 })
 type ProjectMeta = z.infer<typeof projectMetaSchema>
 
@@ -116,107 +117,108 @@ type ProjectResponse = z.infer<typeof projectResponseSchema>
  * - This schema is used to define the actions that can be performed on the project slice
  */
 const projectActionsSchema = z.object({
-    /**
-     * Update/Set Project state
-     */
-    setProject: z.function().args(projectStateSchema).returns(z.void()),
-  
-    /**
-     * Meta Actions
-     */
-    updateMetaName: z.function().args(z.string()).returns(z.void()),
-    updateMetaPath: z.function().args(z.string()).returns(z.void()),
-  
-    /**
-     * POU Actions
-     */
-    createPou: z.function().args(pouDTOSchema).returns(projectResponseSchema),
-    updatePou: z
-      .function()
-      .args(z.object({ name: z.string(), content: bodySchema }))
-      .returns(z.void()),
-    deletePou: z.function().args(z.string()).returns(z.void()),
-  
-    /**
-     * Variables Table Actions
-     */
-    createVariable: z
-      .function()
-      .args(variableDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
-      .returns(projectResponseSchema),
-    updateVariable: z
-      .function()
-      .args(variableDTOSchema.omit({ data: true }).extend({ rowId: z.number(), data: PLCVariableSchema.partial() }))
-      .returns(projectResponseSchema),
-    deleteVariable: z
-      .function()
-      .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number() })))
-      .returns(z.void()),
-    rearrangeVariables: z
-      .function()
-      .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number(), newIndex: z.number() })))
-      .returns(z.void()),
+  /**
+   * Update/Set Project state
+   */
+  setProject: z.function().args(projectStateSchema).returns(z.void()),
 
-    /**
-     * Data Type Actions
-     */
-    createDatatype: z.function().args(PLCDataTypeSchema).returns(z.void()),
-    updateDatatype: z.function().args(z.string(), PLCDataTypeSchema.optional()).returns(z.void()),
-    createArrayDimension: z
+  /**
+   * Meta Actions
+   */
+  updateMetaName: z.function().args(z.string()).returns(z.void()),
+  updateMetaPath: z.function().args(z.string()).returns(z.void()),
+  updateMetaBuildPath: z.function().args(z.string()).returns(z.void()),
+
+  /**
+   * POU Actions
+   */
+  createPou: z.function().args(pouDTOSchema).returns(projectResponseSchema),
+  updatePou: z
+    .function()
+    .args(z.object({ name: z.string(), content: bodySchema }))
+    .returns(z.void()),
+  deletePou: z.function().args(z.string()).returns(z.void()),
+
+  /**
+   * Variables Table Actions
+   */
+  createVariable: z
+    .function()
+    .args(variableDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
+    .returns(projectResponseSchema),
+  updateVariable: z
+    .function()
+    .args(variableDTOSchema.omit({ data: true }).extend({ rowId: z.number(), data: PLCVariableSchema.partial() }))
+    .returns(projectResponseSchema),
+  deleteVariable: z
+    .function()
+    .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number() })))
+    .returns(z.void()),
+  rearrangeVariables: z
+    .function()
+    .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number(), newIndex: z.number() })))
+    .returns(z.void()),
+
+  /**
+   * Data Type Actions
+   */
+  createDatatype: z.function().args(PLCDataTypeSchema).returns(z.void()),
+  updateDatatype: z.function().args(z.string(), PLCDataTypeSchema.optional()).returns(z.void()),
+  createArrayDimension: z
     .function()
     .args(z.object({ name: z.string(), derivation: z.enum(['array', 'enumerated', 'structure']) })),
 
-    /**
-     * Task Actions
-     */
-    createTask: z
-      .function()
-      .args(taskDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
-      .returns(projectResponseSchema),
-    updateTask: z
-      .function()
-      .args(taskDTOSchema.merge(z.object({ rowId: z.number() })))
-      .returns(projectResponseSchema),
-    deleteTask: z
-      .function()
-      .args(z.object({ rowId: z.number() }))
-      .returns(z.void()),
-    rearrangeTasks: z
-      .function()
-      .args(z.object({ rowId: z.number(), newIndex: z.number() }))
-      .returns(z.void()),
-
-    /**
-     * Instance Actions
-     */
-    createInstance: z
-      .function()
-      .args(instanceDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
-      .returns(projectResponseSchema),
-    updateInstance: z
-      .function()
-      .args(instanceDTOSchema.merge(z.object({ rowId: z.number() })))
-      .returns(projectResponseSchema),
-    deleteInstance: z
-      .function()
-      .args(z.object({ rowId: z.number() }))
-      .returns(z.void()),
-    rearrangeInstances: z
-      .function()
-      .args(z.object({ rowId: z.number(), newIndex: z.number() }))
-      .returns(z.void()),
-  })
-  type ProjectActions = z.infer<typeof projectActionsSchema>
+  /**
+   * Task Actions
+   */
+  createTask: z
+    .function()
+    .args(taskDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
+    .returns(projectResponseSchema),
+  updateTask: z
+    .function()
+    .args(taskDTOSchema.merge(z.object({ rowId: z.number() })))
+    .returns(projectResponseSchema),
+  deleteTask: z
+    .function()
+    .args(z.object({ rowId: z.number() }))
+    .returns(z.void()),
+  rearrangeTasks: z
+    .function()
+    .args(z.object({ rowId: z.number(), newIndex: z.number() }))
+    .returns(z.void()),
 
   /**
-   * Project Slice
-   * - This type is used to define the project slice
+   * Instance Actions
    */
-  type ProjectSlice = {
-    project: ProjectState
-    projectActions: ProjectActions
-  }
+  createInstance: z
+    .function()
+    .args(instanceDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
+    .returns(projectResponseSchema),
+  updateInstance: z
+    .function()
+    .args(instanceDTOSchema.merge(z.object({ rowId: z.number() })))
+    .returns(projectResponseSchema),
+  deleteInstance: z
+    .function()
+    .args(z.object({ rowId: z.number() }))
+    .returns(z.void()),
+  rearrangeInstances: z
+    .function()
+    .args(z.object({ rowId: z.number(), newIndex: z.number() }))
+    .returns(z.void()),
+})
+type ProjectActions = z.infer<typeof projectActionsSchema>
 
-  export { projectMetaSchema, projectResponseSchema, projectStateSchema }
+/**
+ * Project Slice
+ * - This type is used to define the project slice
+ */
+type ProjectSlice = {
+  project: ProjectState
+  projectActions: ProjectActions
+}
 
-  export { InstanceDTO, PouDTO, ProjectMeta, ProjectResponse, ProjectSlice, ProjectState, TaskDTO, VariableDTO }
+export { projectMetaSchema, projectResponseSchema, projectStateSchema }
+
+export { InstanceDTO, PouDTO, ProjectMeta, ProjectResponse, ProjectSlice, ProjectState, TaskDTO, VariableDTO }
