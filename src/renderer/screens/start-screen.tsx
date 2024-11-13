@@ -48,7 +48,7 @@ const StartScreen = () => {
         const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
         if (ladderPous.length) {
           ladderPous.forEach((pou) => {
-            if (pou.data.body.language === 'ld') {
+            if (pou.data.body.derivation === 'ld') {
               addFlow(pou.data.body.value as FlowType)
             }
           })
@@ -101,7 +101,7 @@ const StartScreen = () => {
           const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
           if (ladderPous.length) {
             ladderPous.forEach((pou) => {
-              if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+              if (pou.data.body.derivation === 'ld') addFlow(pou.data.body.value as FlowType)
             })
           }
 
@@ -144,7 +144,7 @@ const StartScreen = () => {
         const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
         if (ladderPous.length) {
           ladderPous.forEach((pou) => {
-            if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+            if (pou.data.body.derivation === 'ld') addFlow(pou.data.body.value as FlowType)
           })
         }
 

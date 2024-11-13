@@ -111,7 +111,7 @@ export const RecentMenu = () => {
       const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
       if (ladderPous.length > 0) {
         ladderPous.forEach((pou) => {
-          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+          if (pou.data.body.derivation === 'ld') addFlow(pou.data.body.value as FlowType)
         })
       }
 

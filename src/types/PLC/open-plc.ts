@@ -99,25 +99,25 @@ const PLCTaskSchema = z.object({
 
 type PLCTask = z.infer<typeof PLCTaskSchema>
 
-const bodySchema = z.discriminatedUnion('language', [
+const bodySchema = z.discriminatedUnion('derivation', [
   z.object({
-    language: z.literal('il'),
+    derivation: z.literal('il'),
     value: z.string(),
   }),
   z.object({
-    language: z.literal('st'),
+    derivation: z.literal('st'),
     value: z.string(),
   }),
   z.object({
-    language: z.literal('ld'),
+    derivation: z.literal('ld'),
     value: zodFlowSchema,
   }),
   z.object({
-    language: z.literal('sfc'),
+    derivation: z.literal('sfc'),
     value: z.string(),
   }),
   z.object({
-    language: z.literal('fbd'),
+    derivation: z.literal('fbd'),
     value: z.string(),
   }),
 ])

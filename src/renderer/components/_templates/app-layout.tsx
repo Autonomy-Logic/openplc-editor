@@ -10,8 +10,6 @@ import Toaster from '../_features/[app]/toast/toaster'
 const AppLayout = (): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
-    project,
-    workspace,
     workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecents },
   } = useOpenPLCStore()
 
@@ -45,11 +43,6 @@ const AppLayout = (): ReactNode => {
       switchAppTheme()
     })
   }, [])
-
-  useEffect(() => {
-    console.log('project', project)
-    console.log('workspace', workspace)
-  }, [project, workspace])
 
   return (
     <>
