@@ -47,9 +47,16 @@ const VariablesEditor = () => {
    * Update the table data and the editor's variables when the editor or the pous change
    */
   useEffect(() => {
-    const variablesToTable = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
-    setTableData(variablesToTable)
-  }, [editor, pous])
+    const foundPou = pous.find((pou) => pou?.data?.name === editor?.meta?.name);
+  
+    if (foundPou) {
+     
+      setTableData(foundPou.data.variables);
+    } else {
+     
+      setTableData([]); 
+    }
+  }, [editor, pous]);
 
   /**
    * If the editor name is not the same as the current editor name
@@ -126,7 +133,15 @@ const VariablesEditor = () => {
       selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      createVariable({ scope: 'local', associatedPou: editor.meta.name, data: { ...variable } })
+      createVariable({
+        scope: 'local',
+        associatedPou: editor.meta.name,
+        data: {
+          ...variable,
+          id: '',
+          type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
+        },
+      })
       updateModelVariables({
         display: 'table',
         selectedRow: variables.length,
@@ -136,7 +151,11 @@ const VariablesEditor = () => {
     createVariable({
       scope: 'local',
       associatedPou: editor.meta.name,
-      data: { ...variable },
+      data: {
+        ...variable,
+        id: '',
+        type: variable.type.definition === 'derived' ? { definition: 'base-type', value: 'dint' } : variable.type,
+      },
       rowToInsert: selectedRow + 1,
     })
     updateModelVariables({
@@ -246,7 +265,11 @@ const VariablesEditor = () => {
               </TableActionButton>
               <TableActionButton
                 aria-label='Remove table row button'
-                disabled={parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED}
+                disabled={
+                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
+                  parseInt(editorVariables.selectedRow) ===
+                    tableData.findIndex((variable) => variable.type.definition === 'derived')
+                }
                 onClick={handleRemoveVariable}
               >
                 <MinusIcon />

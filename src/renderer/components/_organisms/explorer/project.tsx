@@ -22,7 +22,6 @@ const Project = () => {
     updateTabs(tabToBeCreated)
 
     const editor = getEditorFromEditors(tabToBeCreated.name)
-    console.log(editor)
     if (!editor) {
       const model = CreateEditorObjectFromTab(tabToBeCreated)
       addModel(model)
@@ -123,18 +122,6 @@ const Project = () => {
                 />
               ))}
           </ProjectTreeBranch>
-          <ProjectTreeBranch
-            branchTarget='resource'
-            onClick={() =>
-              handleCreateTab({
-                configuration: configuration,
-                name: 'resource',
-                path: `/data/configuration/resource`,
-                elementType: { type: 'resource' },
-              })
-            }
-          />
-
           <ProjectTreeBranch branchTarget='program'>
             {pous
               ?.filter(({ type }) => type === 'program')
@@ -153,6 +140,7 @@ const Project = () => {
                 />
               ))}
           </ProjectTreeBranch>
+
           <ProjectTreeBranch branchTarget='data-type'>
             {dataTypes
               ?.filter(({ derivation }) => derivation === 'array')
@@ -171,7 +159,6 @@ const Project = () => {
                   }
                 />
               ))}
-
             {dataTypes
               ?.filter(({ derivation }) => derivation === 'enumerated')
               .map(({  name }) => (
@@ -190,7 +177,6 @@ const Project = () => {
                   }
                 />
               ))}
-
             {dataTypes
               ?.filter(({ derivation }) => derivation === 'structure')
               .map(({ name }) => (
@@ -210,6 +196,18 @@ const Project = () => {
                 />
               ))}
           </ProjectTreeBranch>
+
+          <ProjectTreeBranch
+            branchTarget='resource'
+            onClick={() =>
+              handleCreateTab({
+                configuration: configuration,
+                name: 'resource',
+                path: `/data/configuration/resource`,
+                elementType: { type: 'resource' },
+              })
+            }
+          />
           <ProjectTreeBranch branchTarget='device'>{/** Will be filled with device */}</ProjectTreeBranch>
           {/** Maybe a divider component */}
           {/* <ProjectTreeBranch branchTarget='' label='Resources' /> */}

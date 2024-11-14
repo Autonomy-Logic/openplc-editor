@@ -2,17 +2,21 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { FlowType } from '@root/renderer/store/slices/flow/types'
-import { PLCProjectSchema } from '@root/types/PLC/open-plc'
+import type { FlowType } from '@root/renderer/store/slices/flow/types'
+import { PLCProjectSchema  } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 
 import { Modal, ModalContent } from '../../modal'
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
+  const navigate = useNavigate()
   const {
     project,
     workspace: { editingState },
@@ -21,8 +25,9 @@ export const FileMenu = () => {
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
+    editor,
   } = useOpenPLCStore()
-
+  const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
   const [modalOpen, setModalOpen] = useState(false)
   const [discardChanges, setDiscardChanges] = useState(false)
@@ -121,7 +126,7 @@ export const FileMenu = () => {
       })
 
       const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
-      if (ladderPous.length) {
+      if (ladderPous.length > 0) {
         ladderPous.forEach((pou) => {
           if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
         })
@@ -177,6 +182,19 @@ export const FileMenu = () => {
     }
   }
 
+  useEffect(() => {
+    setSelectedTab(editor.meta.name)
+  }, [editor])
+
+  const handleCloseProject = () => {
+  navigate('/')
+    clearEditor()
+    clearTabs()
+    setEditingState('unsaved')
+    setRecents([])
+  }
+  
+
   return (
     <MenuPrimitive.Menu>
       <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:file.label')}</MenuPrimitive.Trigger>
@@ -199,11 +217,11 @@ export const FileMenu = () => {
             <span>{i18n.t('menu:file.submenu.saveAs')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + S'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} onClick={() => void handleRemoveTab(selectedTab)}>
             <span>{i18n.t('menu:file.submenu.closeTab')}</span>
             <span className={ACCELERATOR}>{'Ctrl + W'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} onClick={() => void handleCloseProject()}>
             <span>{i18n.t('menu:file.submenu.closeProject')}</span>
             <span className={ACCELERATOR}>{'Ctrl  + W'}</span>
           </MenuPrimitive.Item>

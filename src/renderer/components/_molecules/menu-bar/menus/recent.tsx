@@ -2,6 +2,7 @@ import * as MenuPrimitive from '@radix-ui/react-menubar'
 import RecentProjectIcon from '@root/renderer/assets/icons/interface/Recent'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
+import type { FlowType } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
@@ -15,6 +16,7 @@ export const RecentMenu = () => {
     workspaceActions: { setEditingState, setRecents },
     tabsActions: { clearTabs },
     projectActions: { setProject },
+    flowActions: { addFlow },
   } = useOpenPLCStore()
   const { TRIGGER, CONTENT, ITEM } = MenuClasses
 
@@ -103,6 +105,14 @@ export const RecentMenu = () => {
         },
         data: data.content.data,
       })
+
+      const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
+      if (ladderPous.length > 0) {
+        ladderPous.forEach((pou) => {
+          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+        })
+      }
+
       toast({
         title: 'Project opened!',
         description: 'Your project was opened and loaded.',
@@ -128,7 +138,7 @@ export const RecentMenu = () => {
   }
   return (
     <MenuPrimitive.Menu>
-      <MenuPrimitive.Trigger className={TRIGGER}>recent</MenuPrimitive.Trigger>
+      <MenuPrimitive.Trigger className={TRIGGER}>Recent</MenuPrimitive.Trigger>
       <MenuPrimitive.Portal>
         <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
           {recentProjects.map((project) => (

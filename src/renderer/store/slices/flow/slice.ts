@@ -157,7 +157,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         }),
       )
     },
-    updateNode({ editorName, node, rungId }) {
+    updateNode({ editorName, node, nodeId, rungId }) {
       setState(
         produce(({ flows }: FlowState) => {
           const flow = flows.find((flow) => flow.name === editorName)
@@ -166,7 +166,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
-          const nodeIndex = rung.nodes.findIndex((n) => n.id === node.id)
+          const nodeIndex = rung.nodes.findIndex((n) => n.id === nodeId)
           if (nodeIndex === -1) return
 
           rung.nodes[nodeIndex] = node
@@ -187,7 +187,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         }),
       )
     },
-    updateEdge({ edge, editorName, rungId }) {
+    updateEdge({ edge, edgeId, editorName, rungId }) {
       setState(
         produce(({ flows }: FlowState) => {
           const flow = flows.find((flow) => flow.name === editorName)
@@ -196,7 +196,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
-          const edgeIndex = rung.edges.findIndex((e) => e.id === edge.id)
+          const edgeIndex = rung.edges.findIndex((e) => e.id === edgeId)
           if (edgeIndex === -1) return
 
           rung.edges[edgeIndex] = edge

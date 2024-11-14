@@ -3,6 +3,7 @@ import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { IProjectServiceResponse } from '../../services/project-service'
+import { CreateProjectFile } from '../../services/project-service/utils'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
@@ -19,6 +20,15 @@ type ISaveDataResponse = {
   }
 }
 
+type CreateProjectFileProps = {
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+  time: string
+  type: 'plc-project' | 'plc-library'
+  name: string
+  path: string
+}
+type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
+
 const rendererProcessBridge = {
   /**
    * Handlers for creating projects.
@@ -29,6 +39,28 @@ const rendererProcessBridge = {
     ipcRenderer.on('project:create-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
 
   createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
+  createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> =>
+    ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
+
+  /**
+   * Path picker
+   */
+
+  pathPicker: (): Promise<
+    | {
+        success: boolean
+        error: {
+          title: string
+          description: string
+        }
+        path?: undefined
+      }
+    | {
+        success: boolean
+        path: string
+        error?: undefined
+      }
+  > => ipcRenderer.invoke('project:path-picker'),
 
   /**
    * Handlers for opening projects.
@@ -40,6 +72,9 @@ const rendererProcessBridge = {
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
   openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
     ipcRenderer.invoke('project:open-by-path', projectPath),
+  openRecentAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+  openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> => ipcRenderer.invoke('open-external-link', link),
   /**
    * Handlers for opening projects.
    * As for the click and for the accelerator type.
@@ -47,7 +82,15 @@ const rendererProcessBridge = {
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
   saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
     ipcRenderer.invoke('project:save', dataToWrite),
-
+  closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
+  closeProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-project-accelerator', callback),
+  deletePouAccelerator:(callback:IpcRendererCallbacks) => ipcRenderer.on('workspace:delete-pou-accelerator', callback),
+  switchPerspective:(callback:IpcRendererCallbacks) => ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
+  removeDeletePouListener: ()=> ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
+  removeCloseTabListener: ()=> ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
+  findInProjectAccelerator:(callback:IpcRendererCallbacks) => ipcRenderer.on('project:find-in-project-accelerator', callback),
+  aboutModalAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('about:open-accelerator', callback),
+  aboutAccelerator:(callback:IpcRendererCallbacks) => ipcRenderer.on('website:about-accelerator', callback),
   /** -------------------------------------------------------------------------------------------- */
   // saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),

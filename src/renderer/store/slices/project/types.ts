@@ -1,120 +1,121 @@
 import {
-    bodySchema,
-    PLCDataTypeSchema,
-    PLCFunctionBlockSchema,
-    PLCFunctionSchema,
-    PLCInstanceSchema,
-    PLCProgramSchema,
-    PLCProjectDataSchema,
-    PLCTaskSchema,
-    PLCVariableSchema,
-  } from '@root/types/PLC/open-plc'
-  import { z } from 'zod'
-  
-  /**
-   * =====================================
-   * DTO Schemas
-   * =====================================
-   */
-  
-  /**
-   * variableDTOSchema
-   * - This schema is used to define the DTO for the variable
-   * - The variable DTO contains the scope, associatedPou, and the data
-   */
-  const variableDTOSchema = z.object({
-    scope: z.enum(['global', 'local']),
-    associatedPou: z.string().optional(),
-    data: PLCVariableSchema,
-  })
-  type VariableDTO = z.infer<typeof variableDTOSchema>
-  
-  /**
-   * pouDTOSchema
-   * - This schema is used to define the DTO for the POU
-   * - The POU DTO contains the type and the data
-   * - The type can be program, function, or function-block
-   */
-  const pouDTOSchema = z.discriminatedUnion('type', [
-    z.object({
-      type: z.literal('program'),
-      data: PLCProgramSchema,
-    }),
-    z.object({
-      type: z.literal('function'),
-      data: PLCFunctionSchema,
-    }),
-    z.object({
-      type: z.literal('function-block'),
-      data: PLCFunctionBlockSchema,
-    }),
-  ])
-  type PouDTO = z.infer<typeof pouDTOSchema>
-  
-  /**
-   * taskDTOSchema
-   * - This schema is used to define the DTO for the task
-   */
-  const taskDTOSchema = z.object({
-    data: PLCTaskSchema,
-  })
-  
-  type TaskDTO = z.infer<typeof taskDTOSchema>
-  
-  /**
-   * instanceDTOSchema
-   * - This schema is used to define the DTO for the instance
-   */
-  const instanceDTOSchema = z.object({
-    data: PLCInstanceSchema,
-  })
-  type InstanceDTO = z.infer<typeof instanceDTOSchema>
-  
-  /**
-   * =====================================
-   * Project Slice Schemas
-   * =====================================
-   */
-  
-  /**
-   * Project Meta Schema
-   */
-  const projectMetaSchema = z.object({
-    name: z.string(),
-    type: z.enum(['plc-project']),
-    path: z.string(),
-  })
-  type ProjectMeta = z.infer<typeof projectMetaSchema>
-  
-  /**
-   * Project State Schema
-   * - This schema is used to define the state of the project slice
-   * - It contains the meta information of the project and the project data
-   * - The project data is defined by the PLCProjectDataSchema
-   *   - The project data contains the data types, pous, and configuration
-   */
-  const projectStateSchema = z.object({
-    meta: projectMetaSchema,
-    data: PLCProjectDataSchema,
-  })
-  type ProjectState = z.infer<typeof projectStateSchema>
-  
-  /**
-   * Project Response Schema
-   * - This schema is used to define the response of the project slice
-   */
-  const projectResponseSchema = z.object({
-    ok: z.boolean(),
-    title: z.string().optional(),
-    message: z.string().optional(),
-  })
-  type ProjectResponse = z.infer<typeof projectResponseSchema>
-  
-  /**
-   * Project Action Schema
-   * - This schema is used to define the actions that can be performed on the project slice
-   */
-  const projectActionsSchema = z.object({
+  bodySchema,
+  PLCDataTypeSchema,
+  PLCFunctionBlockSchema,
+  PLCFunctionSchema,
+  PLCInstanceSchema,
+  PLCProgramSchema,
+  PLCProjectDataSchema,
+  PLCTaskSchema,
+  PLCVariableSchema,
+} from '@root/types/PLC/open-plc'
+import { z } from 'zod'
+
+/**
+ * =====================================
+ * DTO Schemas
+ * =====================================
+ */
+
+/**
+ * variableDTOSchema
+ * - This schema is used to define the DTO for the variable
+ * - The variable DTO contains the scope, associatedPou, and the data
+ */
+const variableDTOSchema = z.object({
+  scope: z.enum(['global', 'local']),
+  associatedPou: z.string().optional(),
+  data: PLCVariableSchema,
+})
+type VariableDTO = z.infer<typeof variableDTOSchema>
+
+/**
+ * pouDTOSchema
+ * - This schema is used to define the DTO for the POU
+ * - The POU DTO contains the type and the data
+ * - The type can be program, function, or function-block
+ */
+const pouDTOSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('program'),
+    data: PLCProgramSchema,
+  }),
+  z.object({
+    type: z.literal('function'),
+    data: PLCFunctionSchema,
+  }),
+  z.object({
+    type: z.literal('function-block'),
+    data: PLCFunctionBlockSchema,
+  }),
+])
+type PouDTO = z.infer<typeof pouDTOSchema>
+
+/**
+ * taskDTOSchema
+ * - This schema is used to define the DTO for the task
+ */
+const taskDTOSchema = z.object({
+  data: PLCTaskSchema,
+})
+
+type TaskDTO = z.infer<typeof taskDTOSchema>
+
+/**
+ * instanceDTOSchema
+ * - This schema is used to define the DTO for the instance
+ */
+const instanceDTOSchema = z.object({
+  data: PLCInstanceSchema,
+})
+type InstanceDTO = z.infer<typeof instanceDTOSchema>
+
+/**
+ * =====================================
+ * Project Slice Schemas
+ * =====================================
+ */
+
+/**
+ * Project Meta Schema
+ */
+const projectMetaSchema = z.object({
+  name: z.string(),
+  type: z.enum(['plc-project']),
+  path: z.string(),
+})
+type ProjectMeta = z.infer<typeof projectMetaSchema>
+
+/**
+ * Project State Schema
+ * - This schema is used to define the state of the project slice
+ * - It contains the meta information of the project and the project data
+ * - The project data is defined by the PLCProjectDataSchema
+ *   - The project data contains the data types, pous, and configuration
+ */
+const projectStateSchema = z.object({
+  meta: projectMetaSchema,
+  data: PLCProjectDataSchema,
+})
+type ProjectState = z.infer<typeof projectStateSchema>
+
+/**
+ * Project Response Schema
+ * - This schema is used to define the response of the project slice
+ */
+const projectResponseSchema = z.object({
+  ok: z.boolean(),
+  title: z.string().optional(),
+  message: z.string().optional(),
+  data: z.unknown().optional(),
+})
+type ProjectResponse = z.infer<typeof projectResponseSchema>
+
+/**
+ * Project Action Schema
+ * - This schema is used to define the actions that can be performed on the project slice
+ */
+const projectActionsSchema = z.object({
     /**
      * Update/Set Project state
      */

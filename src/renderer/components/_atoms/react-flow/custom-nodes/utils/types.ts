@@ -1,3 +1,5 @@
+import { PLCVariable } from '@root/types/PLC/open-plc'
+
 import { CustomHandleProps } from '../handle'
 
 export type BuilderBasicProps = {
@@ -15,4 +17,6 @@ export type BasicNodeData = {
   inputConnector: CustomHandleProps | undefined
   outputConnector: CustomHandleProps | undefined
   numericId: string
+  variable: { id?: string, name: string } | PLCVariable
+  executionOrder: number
 }

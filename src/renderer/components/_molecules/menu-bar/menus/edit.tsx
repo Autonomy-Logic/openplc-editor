@@ -1,11 +1,32 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
+import { useHandleRemoveTab } from '@root/renderer/hooks'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
+import { useEffect } from 'react'
 
 import { MenuClasses } from '../constants'
 
 export const EditMenu = () => {
+  const {
+    editor,
+    projectActions: { deletePou },
+    workspaceActions: { setModalOpen },
+  } = useOpenPLCStore()
+  const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
+
+  useEffect(() => {
+    setSelectedTab(editor.meta.name)
+  }, [editor])
+  const handleDeletePou = () => {
+    handleRemoveTab(selectedTab)
+    deletePou(selectedTab)
+  }
+  const findInProject = () => {
+    setModalOpen('findInProject', true)
+  }
+
   return (
     <MenuPrimitive.Menu>
       <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:edit.label')}</MenuPrimitive.Trigger>
@@ -46,7 +67,7 @@ export const EditMenu = () => {
             <span className={ACCELERATOR}>{'Ctrl + Shift + K'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Separator className={SEPARATOR} />
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} onClick={() => void findInProject()}>
             <span>{i18n.t('menu:edit.submenu.findInProject')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + F'}</span>
           </MenuPrimitive.Item>
@@ -60,8 +81,8 @@ export const EditMenu = () => {
             <span>{i18n.t('menu:edit.submenu.selectAll')}</span>
             <span className={ACCELERATOR}>{'Ctrl + A'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
-            <span>{i18n.t('menu:edit.submenu.delete')}</span>
+          <MenuPrimitive.Item className={ITEM} onClick={() => void handleDeletePou()}>
+            <span>{i18n.t('menu:edit.submenu.deletePou')}</span>
             <span className={ACCELERATOR}>{''}</span>
           </MenuPrimitive.Item>
         </MenuPrimitive.Content>
