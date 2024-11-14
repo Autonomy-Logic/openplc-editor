@@ -48,15 +48,16 @@ const VariableElement = ({ id, data }: VariableProps) => {
   const inputVariableRef = useRef<HTMLInputElement>(null)
   const [inputVariableFocus, setInputVariableFocus] = useState<boolean>(true)
 
-  const [variableName, setVariableName] = useState(data.variable.name)
-  const [wrongVariable, setWrongVariable] = useState<boolean>(false)
+  const [variableValue, setVariableValue] = useState(data.variable.name)
+  const [inputError, setInputError] = useState<boolean>(false)
+  const [isAVariable, setIsAVariable] = useState<boolean>(false)
 
   /**
    * useEffect to focus the variable input when the block is selected
    */
   useEffect(() => {
     if (data.variable && data.variable.name !== '') {
-      setVariableName(data.variable.name)
+      setVariableValue(data.variable.name)
       return
     }
 
@@ -66,26 +67,27 @@ const VariableElement = ({ id, data }: VariableProps) => {
   }, [])
 
   /**
-   * Update wrongVariable state when the table of variables is updated
+   * Update inputError state when the table of variables is updated
    */
   useEffect(() => {
     const { rung, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
-      variableName: variableName,
+      variableName: variableValue,
     })
 
     if (!variables.selected && !inputVariableRef) {
-      setWrongVariable(true)
-      return
+      setIsAVariable(false)
     }
 
     if (!rung) return
 
     const relatedBlock = rung.nodes.find((node) => node.id === data.block.id)
-    if (!relatedBlock) return
+    if (!relatedBlock) {
+      setInputError(true)
+      return
+    }
 
     handleSubmitVariableValue()
-    setWrongVariable(false)
   }, [pous])
 
   /**
@@ -94,15 +96,17 @@ const VariableElement = ({ id, data }: VariableProps) => {
   const handleSubmitVariableValue = () => {
     const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
-      variableName: variableName,
+      variableName: variableValue,
     })
     if (!rung || !node) return
     const variableNode = node as VariableNode
 
-    const variable = variables.selected
+    let variable: PLCVariable | { name: string } | undefined = variables.selected
     if (!variable) {
-      setWrongVariable(true)
-      return
+      setIsAVariable(false)
+      variable = { name: variableValue }
+    } else {
+      setIsAVariable(true)
     }
 
     updateNode({
@@ -119,7 +123,10 @@ const VariableElement = ({ id, data }: VariableProps) => {
     })
 
     const relatedBlock = rung.nodes.find((node) => node.id === variableNode.data.block.id)
-    if (!relatedBlock) return
+    if (!relatedBlock) {
+      setInputError(true)
+      return
+    }
 
     updateNode({
       editorName: editor.meta.name,
@@ -140,16 +147,16 @@ const VariableElement = ({ id, data }: VariableProps) => {
       },
     })
 
-    setWrongVariable(false)
+    setInputError(false)
   }
 
   return (
     <>
       <div className={cn('h-fit w-fit')}>
         <InputWithRef
-          value={variableName}
+          value={variableValue}
           onChange={(e) => {
-            setVariableName(e.target.value)
+            setVariableValue(e.target.value)
           }}
           style={{
             height: DEFAULT_VARIABLE_HEIGHT,
@@ -157,7 +164,8 @@ const VariableElement = ({ id, data }: VariableProps) => {
           }}
           placeholder='???'
           className={cn('bg-transparent text-sm outline-none', {
-            'text-red-500': wrongVariable,
+            'text-yellow-500': !isAVariable,
+            'text-red-500': inputError,
             'pl-2 text-left': data.variant === 'output',
             'pr-2 text-right': data.variant === 'input',
           })}
