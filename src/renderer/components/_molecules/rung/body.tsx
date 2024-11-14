@@ -161,7 +161,23 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       const [type, library, pouName] = blockType.split('/')
       if (type === 'system')
         pouLib = libraries.system.find((lib) => lib.name === library)?.pous.find((p) => p.name === pouName)
-
+      if (type === 'user') {
+        const lib = libraries.user.find((lib) => lib.name === library)
+        const pou = pous.find((pou) => pou.data.name === lib?.name)
+        if (!pou) return
+        console.log(pou);
+        pouLib = {
+          name: pou.data.name,
+          type: pou.type,
+          variables: pou.data.variables.map((variable) => ({
+            name: variable.name,
+            class: variable.class,
+            type: { definition: variable.type.definition, value: variable.type.value },
+          })),
+          documentation: pou.data.documentation,
+          extensible: false,
+        }
+      }
       // if (pouLib && pouRef && pouRef.type === 'function' && pouLib.type !== 'function') {
       //   const nodes = removePlaceholderNodes(rungLocal.nodes)
       //   setRungLocal((rung) => ({ ...rung, nodes }))

@@ -190,6 +190,16 @@ const Library = ({
                     onSelect={() => setSelectedFileKey(userLibrary.name)}
                     isSelected={selectedFileKey === userLibrary.name}
                     draggable
+                    onDragStart={(e) => {
+                      if (type === 'plc-textual') return
+                      // e.dataTransfer.setData('text/plain', meta.language === 'st' ? parsePouToStText(pou) : pou.body)
+                      else if (type === 'plc-graphical') {
+                        if (meta.language === 'ld') {
+                          e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
+                        }
+                        e.dataTransfer.setData('application/library', `user/${userLibrary.name}`)
+                      }
+                    }}
                   />
                 ))}
             </LibraryFolder>

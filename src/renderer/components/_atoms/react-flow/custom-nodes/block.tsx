@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
-
+//
 export type BlockVariant = {
   name: string
   type: string
