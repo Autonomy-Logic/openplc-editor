@@ -9,8 +9,8 @@ import { PLCProjectSchema  } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { Modal, ModalContent } from '../../modal'
 import { MenuClasses } from '../constants'
@@ -119,6 +119,7 @@ export const FileMenu = () => {
       setProject({
         meta: {
           name: data.content.meta.name,
+          //@ts-expect-error overlap
           type: data.content.meta.type,
           path: data.meta.path,
         },
