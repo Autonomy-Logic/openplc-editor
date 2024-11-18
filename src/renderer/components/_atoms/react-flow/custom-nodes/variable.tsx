@@ -60,10 +60,6 @@ const VariableElement = ({ id, data }: VariableProps) => {
       setVariableValue(data.variable.name)
       return
     }
-
-    if (inputVariableRef.current) {
-      inputVariableRef.current.focus()
-    }
   }, [])
 
   /**
@@ -75,8 +71,10 @@ const VariableElement = ({ id, data }: VariableProps) => {
       variableName: variableValue,
     })
 
-    if (!variables.selected && !inputVariableRef) {
+    if (!variables.selected || !inputVariableRef) {
       setIsAVariable(false)
+    } else {
+      setIsAVariable(true)
     }
 
     if (!rung) return
@@ -86,8 +84,6 @@ const VariableElement = ({ id, data }: VariableProps) => {
       setInputError(true)
       return
     }
-
-    handleSubmitVariableValue()
   }, [pous])
 
   /**
@@ -248,6 +244,7 @@ const buildVariableNode = ({
       deletable: false,
     },
     deletable: false,
+    selectable: true,
     draggable: false,
   }
 }

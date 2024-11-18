@@ -14,9 +14,9 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         produce(({ flows }: FlowState) => {
           const flowIndex = flows.findIndex((f) => f.name === flow.name)
           if (flowIndex === -1) {
-            flows.push(flow)
+            flows.push({ ...flow, updated: true })
           } else {
-            flows[flowIndex] = flow
+            flows[flowIndex] = { ...flow, updated: true }
           }
         }),
       )
@@ -31,6 +31,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           if (!flows.find((flow) => flow.name === editorName)) {
             flows.push({
               name: editorName,
+              updated: true,
               rungs: [],
             })
           }
@@ -84,6 +85,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           if (!flow) return
 
           flow.rungs = flow.rungs.filter((rung) => rung.id !== rungId)
+          flow.updated = true
         }),
       )
     },
@@ -97,6 +99,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           if (!rung) return
 
           rung.comment = comment
+          flow.updated = true
         }),
       )
     },
@@ -154,6 +157,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           if (!rung) return
 
           rung.nodes = nodes
+          flow.updated = true
         }),
       )
     },
@@ -170,6 +174,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           if (nodeIndex === -1) return
 
           rung.nodes[nodeIndex] = node
+          flow.updated = true
         }),
       )
     },
@@ -183,6 +188,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           if (!rung) return
 
           rung.nodes.push(node)
+          flow.updated = true
         }),
       )
     },
@@ -197,6 +203,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           if (!rung) return
 
           rung.edges = edges
+          flow.updated = true
         }),
       )
     },
@@ -213,6 +220,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           if (edgeIndex === -1) return
 
           rung.edges[edgeIndex] = edge
+          flow.updated = true
         }),
       )
     },
@@ -226,6 +234,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           if (!rung) return
 
           rung.edges.push(edge)
+          flow.updated = true
         }),
       )
     },
@@ -243,6 +252,18 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           if (!rung) return
 
           rung.flowViewport = flowViewport
+          flow.updated = true
+        }),
+      )
+    },
+
+    setFlowUpdated({ editorName, updated }) {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          flow.updated = updated
         }),
       )
     },

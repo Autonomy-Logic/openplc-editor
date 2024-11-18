@@ -349,7 +349,6 @@ export const getNodesInsideParallel = (
   rung: RungState,
   closeParallelNode: Node,
 ): { serial: Node[]; parallel: Node[] } => {
-  console.log('\t\tgetNodesInsideParallel')
 
   const openParallelNode = rung.nodes.find(
     (node) => node.id === closeParallelNode.data.parallelOpenReference,
@@ -358,10 +357,8 @@ export const getNodesInsideParallel = (
   const parallel: Node[] = []
 
   const openParallelEdges = rung.edges.filter((edge) => edge.source === openParallelNode.id)
-  console.log('\t\t\topenParallel', openParallelNode, openParallelEdges)
   for (const parallelEdge of openParallelEdges) {
     let nextEdge = parallelEdge
-    console.log('nextEdge', nextEdge)
     while (nextEdge && nextEdge.target !== closeParallelNode.id) {
       const node = rung.nodes.find((n) => n.id === nextEdge.target)
       if (!node) continue
