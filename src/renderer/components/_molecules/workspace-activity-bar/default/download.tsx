@@ -1,6 +1,7 @@
 import {DownloadIcon} from '@root/renderer/assets'
 import {ActivityBarButton} from '@root/renderer/components/_atoms/buttons'
 import {useOpenPLCStore} from '@root/renderer/store'
+import {useEffect} from "react";
 // import { parseProjectToXML } from '@root/utils/PLC/base-xml'
 import {v4 as uuidv4} from 'uuid'
 
@@ -20,11 +21,7 @@ const DownloadButton = () => {
     //   addLog({ id: uuidv4(), type: message.type, message: message.content.toString() })
     // }
 
-
-    // eslint-disable-next-line @typescript-eslint/require-await
-    const buildProgram = async (path: string) => {
-        window.bridge.retrieveXMLPathToCompiler(path)
-
+    useEffect(() => {
         window.bridge.listenToCompiler((event) => {
             const [port] = event.ports
             port.onmessage = (ev) => {
@@ -42,16 +39,16 @@ const DownloadButton = () => {
                 }
             }
         })
-    }
+    }, []);
 
+    const buildProgram = () => window.bridge.retrieveXMLPathToCompiler(project.meta.path)
 
     // const buttonClick = () => {
     //   // parseProjectToXML(project)
     //   void buildST()
     // }
     return (
-        // @ts-expect-error error with the React button props
-        <ActivityBarButton aria-label='Download' onClick={buildProgram(project.meta.path)}>
+        <ActivityBarButton aria-label='Download' onClick={buildProgram}>
             <DownloadIcon/>
         </ActivityBarButton>
     )
