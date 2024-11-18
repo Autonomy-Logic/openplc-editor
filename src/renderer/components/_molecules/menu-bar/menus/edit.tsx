@@ -88,7 +88,7 @@ export const EditMenu = () => {
             <span>{i18n.t('menu:edit.submenu.selectAll')}</span>
             <span className={ACCELERATOR}>{'Ctrl + A'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} onClick={() => setModalDeleteOpen(true)}>
+          <MenuPrimitive.Item className={ITEM} onClick={() => void handleDeletePou()}>
             <span>{i18n.t('menu:edit.submenu.deletePou')}</span>
             <span className={ACCELERATOR}>{''}</span>
           </MenuPrimitive.Item>
