@@ -1,4 +1,5 @@
 import {spawn} from 'child_process'
+import {MessagePortMain} from 'electron'
 // import {MessagePortMain} from 'electron';
 import {join} from 'path'
 
@@ -8,7 +9,7 @@ export type CompilerResponse = {
     error?: boolean
     message: {
         type: 'error' | 'warning' | 'info'
-        content: string
+        content: string | Buffer
     }
 }
 
@@ -33,16 +34,7 @@ const CompilerService = {
      * This is a mock implementation to be used as a presentation.
      * !! Do not use this on production !!
      */
-    compileSTProgram: (pathToProjectFile: string): CompilerResponse => {
-        // Construct a response object to be sent to the renderer process to display the compilation status to the user in the UI.
-        // TODO: This probably will be replaced when other communication method is implemented. - MessagePort
-        const responseObject: CompilerResponse = {
-            error: false,
-            message: {
-                type: 'info',
-                content: 'Compilation started',
-            },
-        }
+    compileSTProgram: (pathToProjectFile: string, port: MessagePortMain): void => {
         // Get the current environment and check if it's development
         const isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -73,10 +65,11 @@ const CompilerService = {
          */
         execCompilerScript.stdout.on('data', (data: Buffer) => {
             // const stream = []
-
-            data.forEach((asciiCode, index) => {
-                if(asciiCode === 13) console.log('Here ->', asciiCode, index)
-            })
+            port.postMessage({type: 'stdout', data: data.toString()})
+            // data.forEach((asciiCode, index) => {
+            //     console.log('Here ->', asciiCode, index)
+            // })
+            // console.log(data.toString())
             // Using this method we can iterate over the buffer and visualize the content as a [index, value] pair value.
             // for (const pair of data.entries()) {
             //   console.log(pair)
@@ -89,15 +82,17 @@ const CompilerService = {
             // }
         })
 
-        execCompilerScript.stderr.on('data', (data) => {
-            console.error(`stderr: ${data}`)
+        execCompilerScript.stderr.on('data', (data: Buffer) => {
+            port.postMessage({type: 'stderr', data: data.toString()})
+            // console.error(`stderr: ${data}`)
+            // data.forEach((asciiCode, index) => {
+            //     console.log('ASCII code ->', asciiCode, index)
+            // })
         })
 
         execCompilerScript.on('close', (code) => {
-            console.log(`child process exited with code ${code}`)
+            port.postMessage({type: 'close', code})
         })
-
-        return responseObject
     },
 }
 
