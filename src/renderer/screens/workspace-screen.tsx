@@ -28,11 +28,11 @@ const WorkspaceScreen = () => {
   const navigate = useNavigate()
   const {
     tabs,
-    workspace: { editingState,isCollapsed },
+    workspace: { editingState, isCollapsed },
     project,
     editor,
-    editorActions:{clearEditor},
-    workspaceActions: { setEditingState,setRecents,toggleCollapse },
+    editorActions: { clearEditor },
+    workspaceActions: { setEditingState, setRecents, toggleCollapse },
     tabsActions: { clearTabs },
     searchResults,
   } = useOpenPLCStore()
@@ -70,17 +70,17 @@ const WorkspaceScreen = () => {
     }
 
     if (editingState === 'save-request') {
+      toast({
+        title: 'Save changes',
+        description: 'Trying to save the changes in the project file.',
+        variant: 'warn',
+      })
       void handleSaveProject()
     }
   }, [editingState])
 
   window.bridge.saveProjectAccelerator((_event) => {
     setEditingState('save-request')
-    toast({
-      title: 'Save changes',
-      description: 'Trying to save the changes in the project file.',
-      variant: 'warn',
-    })
   })
 
   const variables = [
@@ -91,14 +91,13 @@ const WorkspaceScreen = () => {
   ]
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
- 
+
   const panelRef = useRef(null)
   const explorerPanelRef = useRef(null)
   const workspacePanelRef = useRef(null)
   const consolePanelRef = useRef(null)
   const [activeTab, setActiveTab] = useState('console')
   const hasSearchResults = searchResults.length > 0
-
 
   const togglePanel = () => {
     if (panelRef.current) {
@@ -121,34 +120,32 @@ const WorkspaceScreen = () => {
     })
   }, [isCollapsed])
 
-  useEffect(()=>{
-    const handleCloseProject=()=>{
+  useEffect(() => {
+    const handleCloseProject = () => {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
       setRecents([])
-      window.bridge.closeProjectAccelerator((_event)=> navigate('/'))
+      window.bridge.closeProjectAccelerator((_event) => navigate('/'))
     }
     handleCloseProject()
-  },[])
+  }, [])
 
-  const [isSwitchingPerspective, setIsSwitchingPerspective] = useState(false);
+  const [isSwitchingPerspective, setIsSwitchingPerspective] = useState(false)
 
   const handleSwitchPerspective = () => {
     if (!isSwitchingPerspective) {
-      setIsSwitchingPerspective(true);
-      toggleCollapse(); 
-  };
+      setIsSwitchingPerspective(true)
+      toggleCollapse()
+    }
   }
 
   useEffect(() => {
     window.bridge.switchPerspective((_event) => {
-      handleSwitchPerspective();
-    });
-  }, []);
+      handleSwitchPerspective()
+    })
+  }, [])
 
-
- 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <AboutModal />
@@ -200,7 +197,7 @@ const WorkspaceScreen = () => {
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
-                          <DataTypeEditor dataTypeName={editor.meta.name}  />{' '}
+                          <DataTypeEditor dataTypeName={editor.meta.name} />{' '}
                         </div>
                       )}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
