@@ -109,13 +109,13 @@ export const EditMenu = () => {
                 onClick={() => {
                   handleDeletePou()
                 }}
-                className='w-full rounded-lg bg-blue-500 px-4 py-2 text-center font-medium text-neutral-1000 dark:text-neutral-100'
+                className='w-full rounded-lg bg-blue-500 px-4 py-2 text-center font-medium text-white'
               >
                 Delete
               </button>
               <button
                 onClick={handleCloseModal}
-                className='w-full rounded-md px-4 px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100'
+                className='w-full rounded-md bg-neutral-100 px-4 px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100 '
               >
                 Cancel
               </button>
