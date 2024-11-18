@@ -10,8 +10,6 @@ type EnumDatatypeProps = ComponentPropsWithoutRef<'div'> & {
   data: PLCEnumeratedDatatype
 }
 const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
-  const ROWS_NOT_SELECTED = -1
-  const [enumTable, setEnumTable] = useState<{ selectedRow: string }>({ selectedRow: ROWS_NOT_SELECTED.toString() })
   const [initialValueData, setInitialValueData] = useState<string>('none')
 
   useEffect(() => {
@@ -68,12 +66,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
           </div>
         </div>
       </div>
-      <EnumeratedTable
-        name={data.name}
-        values={data.values}
-        handleRowClick={(row) => setEnumTable({ selectedRow: row.id })}
-        selectedRow={parseInt(enumTable.selectedRow)}
-      />
+      <EnumeratedTable name={data.name} values={data.values} />
     </div>
   )
 }

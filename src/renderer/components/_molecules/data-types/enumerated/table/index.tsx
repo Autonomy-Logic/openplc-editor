@@ -21,15 +21,14 @@ import { DescriptionCell } from './editable-cell'
 type DataTypeEnumeratedTableProps = {
   name: string
   values: PLCEnumeratedDatatype['values']
-  selectedRow: number
-  handleRowClick: (row: HTMLTableRowElement) => void
 }
 
-const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataTypeEnumeratedTableProps) => {
+const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
   const [focusIndex, setFocusIndex] = useState<number | null>(null)
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
   const [tableData, setTableData] = useState<PLCEnumeratedDatatype['values']>(values)
+  const [selectedRow, setSelectedRow] = useState<number>(-1)
 
   const {
     projectActions: { updateDatatype },
@@ -85,6 +84,11 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
 
   const updateDescriptions = (newValues: unknown[]) => {
     newValues.map((row) => ({ description: row.description }))
+  }
+
+  const handleSelectRow = (index: number) => {
+    setSelectedRow(index)
+    setFocusIndex(index)
   }
 
   const handleBlur = (rowIndex: number) => {
@@ -195,6 +199,7 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
 
         const newFocusIndex = focusIndex - 1
         setFocusIndex(newFocusIndex)
+        setSelectedRow(newFocusIndex)
 
         newRows.forEach(() => {
           const optionalSchema = {
@@ -204,14 +209,15 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
         })
 
         setBorders(newFocusIndex)
-        prevRows = newRows
+        return newRows
       }
       return prevRows
     })
   }
+
   useEffect(() => {
-    setTableData([...values])
-  }, [values, name])
+    setFocusIndex(selectedRow)
+  }, [selectedRow])
 
   const moveRowDown = () => {
     setTableData((prevRows) => {
@@ -223,6 +229,7 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
 
         const newFocusIndex = focusIndex + 1
         setFocusIndex(newFocusIndex)
+        setSelectedRow(newFocusIndex)
 
         newRows.forEach(() => {
           const optionalSchema = {
@@ -236,6 +243,10 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
       return prevRows
     })
   }
+
+  useEffect(() => {
+    setTableData([...values])
+  }, [values, name])
 
   const isMoveUpDisabled = focusIndex === null || focusIndex === 0 || focusIndex === -1
   const isMoveDownDisabled =
@@ -344,7 +355,7 @@ const EnumeratedTable = ({ name, values, selectedRow, handleRowClick }: DataType
               className='h-8'
               selected={selectedRow === index}
               ref={selectedRow === index ? tableBodyRowRef : null}
-              onClick={(e) => handleRowClick(e.currentTarget)}
+              onClick={() => handleSelectRow(index)}
             >
               {row.getVisibleCells().map((cell) => (
                 <TableCell
