@@ -31,14 +31,14 @@ const PLCArrayDatatypeSchema = z.object({
   name: z.string(),
   derivation: z.literal('array'),
   baseType: baseTypeSchema,
-  initialValue: z.string(),
+  initialValue: z.string().optional(),
   dimensions: z.array(z.object({ dimension: z.string() })),
 })
 
 const PLCEnumeratedDatatypeSchema = z.object({
   name: z.string(),
   derivation: z.literal('enumerated'),
-  initialValue: z.string(),
+  initialValue: z.string().optional(),
   values: z.array(z.object({ description: z.string() })),
 })
 

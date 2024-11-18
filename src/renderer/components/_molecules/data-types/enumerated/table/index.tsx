@@ -1,8 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
 import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
 import { StickArrowIcon } from '@root/renderer/assets'
@@ -25,16 +20,17 @@ type DataTypeEnumeratedTableProps = {
 
 const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
   const [focusIndex, setFocusIndex] = useState<number | null>(null)
-  const tableBodyRef = useRef<HTMLTableSectionElement>(null)
-  const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
   const [tableData, setTableData] = useState<PLCEnumeratedDatatype['values']>(values)
   const [selectedRow, setSelectedRow] = useState<number>(-1)
+
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null)
+  const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
   const {
     projectActions: { updateDatatype },
   } = useOpenPLCStore()
 
-  const columnHelper = createColumnHelper<{ description: unknown }>()
+  const columnHelper = createColumnHelper<{ description: string }>()
   const columns = React.useMemo(
     () => [
       columnHelper.accessor('description', {
@@ -49,8 +45,6 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
             onBlur={() => handleBlur(cellProps.row.index)}
             id={`description-input-${cellProps.row.index}`}
             autoFocus={cellProps.row.index === focusIndex}
-            name={name}
-            values={values}
             selectedRow={selectedRow}
             {...cellProps}
           />
@@ -62,7 +56,7 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
 
   useEffect(() => {
     setTableData([...values])
-  }, [values, name])
+  }, [values])
 
   useEffect(() => {
     if (focusIndex !== null) {
@@ -82,11 +76,24 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
     setFocusIndex(index)
   }
 
-  const updateDescriptions = (newValues: unknown[]) => {
+  const updateDescriptions = (newValues: PLCEnumeratedDatatype['values']) => {
     newValues.map((row) => ({ description: row.description }))
   }
 
   const handleSelectRow = (index: number) => {
+    if (focusIndex !== null) {
+      const inputElement = document.getElementById(`description-input-${focusIndex}`) as HTMLInputElement
+      if (inputElement) {
+        const inputValue = inputElement.value.trim()
+        if (inputValue !== tableData[focusIndex]?.description) {
+          setTableData((prevRows) => {
+            const newRows = [...prevRows]
+            newRows[focusIndex] = { ...newRows[focusIndex], description: inputValue }
+            return newRows
+          })
+        }
+      }
+    }
     setSelectedRow(index)
     setFocusIndex(index)
   }
@@ -189,68 +196,37 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
       return prevRows
     })
   }
-  const moveRowUp = () => {
-    setTableData((prevRows) => {
-      if (focusIndex !== null && focusIndex > 0) {
-        const newRows = [...prevRows]
-        const temp = newRows[focusIndex]
-        newRows[focusIndex] = newRows[focusIndex - 1]
-        newRows[focusIndex - 1] = temp
+  const moveRow = (direction: 'up' | 'down') => {
+    if (focusIndex === null) return
 
-        const newFocusIndex = focusIndex - 1
-        setFocusIndex(newFocusIndex)
-        setSelectedRow(newFocusIndex)
-
-        newRows.forEach(() => {
-          const optionalSchema = {
-            values: newRows.map((row) => ({ description: row?.description })),
-          }
-          updateDatatype(name, optionalSchema as PLCEnumeratedDatatype)
+    const inputElement = document.getElementById(`description-input-${focusIndex}`) as HTMLInputElement
+    if (inputElement) {
+      const inputValue = inputElement.value.trim()
+      if (inputValue !== tableData[focusIndex]?.description) {
+        setTableData((prevRows) => {
+          const newRows = [...prevRows]
+          newRows[focusIndex] = { ...newRows[focusIndex], description: inputValue }
+          return newRows
         })
-
-        setBorders(newFocusIndex)
-        return newRows
       }
-      return prevRows
-    })
-  }
+    }
 
-  useEffect(() => {
-    setFocusIndex(selectedRow)
-  }, [selectedRow])
-
-  const moveRowDown = () => {
     setTableData((prevRows) => {
-      if (focusIndex !== null && focusIndex < prevRows.length - 1) {
-        const newRows = [...prevRows]
-        const temp = newRows[focusIndex]
-        newRows[focusIndex] = newRows[focusIndex + 1]
-        newRows[focusIndex + 1] = temp
+      const newRows = [...prevRows]
+      const swapIndex = direction === 'up' ? focusIndex - 1 : focusIndex + 1
 
-        const newFocusIndex = focusIndex + 1
-        setFocusIndex(newFocusIndex)
-        setSelectedRow(newFocusIndex)
-
-        newRows.forEach(() => {
-          const optionalSchema = {
-            values: newRows.map((row) => ({ description: row?.description })),
-          }
-          updateDatatype(name, optionalSchema as PLCEnumeratedDatatype)
-        })
-        setBorders(newFocusIndex)
-        prevRows = newRows
+      if (swapIndex >= 0 && swapIndex < prevRows.length) {
+        ;[newRows[focusIndex], newRows[swapIndex]] = [newRows[swapIndex], newRows[focusIndex]]
+        setFocusIndex(swapIndex)
+        setSelectedRow(swapIndex)
       }
-      return prevRows
+      return newRows
     })
   }
 
   useEffect(() => {
     setTableData([...values])
-  }, [values, name])
-
-  const isMoveUpDisabled = focusIndex === null || focusIndex === 0 || focusIndex === -1
-  const isMoveDownDisabled =
-    focusIndex === null || focusIndex === tableData.length - 1 || tableData.length === 1 || focusIndex === -1
+  }, [values])
 
   const resetBorders = () => {
     const parent = tableBodyRef.current
@@ -272,24 +248,28 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
   const setBorders = (indexFocus: number | null) => {
     const parent = tableBodyRef.current
     if (!parent) return
-    ;[...parent.children].forEach((child, index) => {
-      if (index !== indexFocus) {
-        child.className = cn(child.className, '[&>td]:border-neutral-500 dark:[&>td]:border-neutral-500')
-      }
-    })
 
-    const currentRow = parent.children[indexFocus]
-    if (currentRow) {
-      currentRow.className = cn(
-        currentRow.className,
-        '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand',
-        '[&>td]:border-t-brand',
-        'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand',
-        'dark:[&>td]:border-t-brand',
-      )
+    const rows = Array.from(parent.children)
+
+    if (indexFocus !== null) {
+      rows.forEach((child, index) => {
+        if (index !== indexFocus) {
+          child.className = cn(child.className, '[&>td]:border-neutral-500 dark:[&>td]:border-neutral-500')
+        }
+      })
+
+      const currentRow = rows[indexFocus]
+      if (currentRow) {
+        currentRow.className = cn(
+          currentRow.className,
+          '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand',
+          '[&>td]:border-t-brand',
+          'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand',
+          'dark:[&>td]:border-t-brand',
+        )
+      }
     }
   }
-
   useEffect(() => {
     const parent = tableBodyRef.current
     if (!parent) return
@@ -334,13 +314,19 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
           <TableActionButton aria-label='Remove table row button' onClick={removeRow}>
             <MinusIcon className='stroke-[#0464FB]' />
           </TableActionButton>
-          <TableActionButton aria-label='Move table row up button' disabled={isMoveUpDisabled} onClick={moveRowUp}>
+          <TableActionButton
+            aria-label='Move table row up button'
+            disabled={focusIndex === null || focusIndex === 0 || focusIndex === -1}
+            onClick={() => moveRow('up')}
+          >
             <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
           </TableActionButton>
           <TableActionButton
             aria-label='Move table row down button'
-            disabled={isMoveDownDisabled}
-            onClick={moveRowDown}
+            disabled={
+              focusIndex === null || focusIndex === tableData.length - 1 || tableData.length === 1 || focusIndex === -1
+            }
+            onClick={() => moveRow('down')}
           >
             <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
           </TableActionButton>
