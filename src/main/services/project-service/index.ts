@@ -282,6 +282,7 @@ const _ProjectService = {
 
   saveProject: (data: { projectPath: string; projectData: PLCProject }): IProjectServiceResponse => {
     const { projectPath, projectData } = data
+
     if (!projectPath || !projectData) {
       return {
         success: false,
