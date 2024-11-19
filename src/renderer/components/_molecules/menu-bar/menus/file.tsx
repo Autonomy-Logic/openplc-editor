@@ -53,7 +53,7 @@ export const FileMenu = () => {
   }
 
   const handleCreateProject = async () => {
-    if (editingState === 'unsaved') {
+    if (editingState === 'unsaved' && discardChanges === false) {
       setModalOpen(true)
     }
     if ( editingState === 'saved' || discardChanges === true ) {
@@ -97,7 +97,7 @@ export const FileMenu = () => {
   }
 
   const handleOpenProject = async () => {
-    if (editingState === 'unsaved') {
+    if (editingState === 'unsaved' && discardChanges === false) {
       setModalOpen(true)
     }
     if (editingState === 'saved'||  discardChanges === true) {
