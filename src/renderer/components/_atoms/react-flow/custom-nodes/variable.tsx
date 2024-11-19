@@ -4,7 +4,6 @@ import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
-import { InputWithRef } from '../../input'
 import { BlockNodeData } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
@@ -45,7 +44,8 @@ const VariableElement = ({ id, data }: VariableProps) => {
     flowActions: { updateNode },
   } = useOpenPLCStore()
 
-  const inputVariableRef = useRef<HTMLInputElement>(null)
+  const inputVariableRef = useRef<HTMLTextAreaElement>(null)
+  const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
   const [inputVariableFocus, setInputVariableFocus] = useState<boolean>(true)
 
   const [variableValue, setVariableValue] = useState(data.variable.name)
@@ -85,6 +85,16 @@ const VariableElement = ({ id, data }: VariableProps) => {
       return
     }
   }, [pous])
+
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.style.height = 'auto'
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < DEFAULT_VARIABLE_HEIGHT ? inputVariableRef.current.scrollHeight : DEFAULT_VARIABLE_HEIGHT}px`
+      if (scrollableIndicatorRef.current)
+        scrollableIndicatorRef.current.style.display =
+          inputVariableRef.current.scrollHeight > DEFAULT_VARIABLE_HEIGHT ? 'block' : 'none'
+    }
+  }, [variableValue])
 
   /**
    * Handle with the variable input onBlur event
@@ -148,28 +158,43 @@ const VariableElement = ({ id, data }: VariableProps) => {
 
   return (
     <>
-      <div className={cn('h-fit w-fit')}>
-        <InputWithRef
+      <div
+        className={cn('relative flex w-fit items-center')}
+        style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}
+      >
+        <textarea
           value={variableValue}
           onChange={(e) => {
             setVariableValue(e.target.value)
           }}
           style={{
-            height: DEFAULT_VARIABLE_HEIGHT,
-            width: DEFAULT_VARIABLE_WIDTH,
+            scrollbarGutter: 'stable',
           }}
           placeholder='???'
-          className={cn('bg-transparent text-sm outline-none', {
+          className={cn('h-full w-full resize-none bg-transparent text-xs outline-none [&::-webkit-scrollbar]:hidden', {
             'text-yellow-500': !isAVariable,
             'text-red-500': inputError,
             'pl-2 text-left': data.variant === 'output',
             'pr-2 text-right': data.variant === 'input',
           })}
           onFocus={() => setInputVariableFocus(true)}
-          onBlur={() => inputVariableFocus && handleSubmitVariableValue()}
+          onBlur={() => {
+            if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
+            inputVariableFocus && handleSubmitVariableValue()
+          }}
           onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+          rows={1}
           ref={inputVariableRef}
         />
+        <div
+          className={cn(`pointer-events-none absolute text-xs`, {
+            '-left-3': data.variant === 'input',
+            '-right-3': data.variant === 'output',
+          })}
+          ref={scrollableIndicatorRef}
+        >
+          ↕
+        </div>
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
