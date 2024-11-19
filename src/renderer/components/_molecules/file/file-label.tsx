@@ -3,10 +3,11 @@ import { HTMLAttributes, ReactElement } from 'react'
 import { Label as FileLabel } from '../../_atoms'
 type FolderLabelProps = HTMLAttributes<HTMLParagraphElement> & {
   projectName?: string
-  lastModified?: string 
+  projectPath?: string
+  lastModified?: string
 }
 
-export default function Label({ projectName, lastModified, ...props }: FolderLabelProps): ReactElement {
+export default function Label({ projectPath, projectName, lastModified, ...props }: FolderLabelProps): ReactElement {
   return (
     <p
       id={projectName}
@@ -16,12 +17,17 @@ export default function Label({ projectName, lastModified, ...props }: FolderLab
       <FileLabel
         label={projectName}
         id={projectName}
-        className=' w-full text-ellipsis text-white overflow-hidden  whitespace-nowrap '
+        className=' w-full overflow-hidden text-ellipsis whitespace-nowrap font-bold text-white '
+      />
+      <FileLabel
+        label={projectPath}
+        id={projectPath}
+        className=' w-full overflow-hidden text-ellipsis whitespace-nowrap text-[0.6rem] text-white '
       />
       <FileLabel
         label={lastModified}
         id={lastModified}
-        className='overflow-hidden w-full text-white whitespace-nowrap text-[10px] opacity-40 '
+        className='w-full overflow-hidden whitespace-nowrap text-[10px] text-white opacity-40 '
       />
     </p>
   )

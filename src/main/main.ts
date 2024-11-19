@@ -19,7 +19,7 @@ import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { ProjectService, UserService } from './services'
+import { _ProjectService, UserService } from './services'
 import { CompilerService } from './services/compiler-service'
 
 class AppUpdater {
@@ -215,7 +215,10 @@ const createMainWindow = async () => {
   const menuBuilder = new MenuBuilder(mainWindow)
   menuBuilder.buildMenu()
 
-  const projectService = new ProjectService(mainWindow)
+  // const projectService = new ProjectService(mainWindow)
+  const projectService = _ProjectService
+  projectService.initialize(mainWindow)
+
 
   const mainIpcModule = new MainProcessBridge({
     mainWindow,
