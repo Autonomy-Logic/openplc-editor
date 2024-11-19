@@ -19,7 +19,7 @@ export const renderVariableBlock = <T>(rung: RungState, block: Node) => {
       : []
   const outputHandles =
     blockElement.data.outputHandles.length > 1
-      ? blockElement.data.outputHandles.slice(1, blockElement.data.inputHandles.length)
+      ? blockElement.data.outputHandles.slice(1, blockElement.data.outputHandles.length)
       : []
 
   inputHandles.forEach((inputHandle) => {
