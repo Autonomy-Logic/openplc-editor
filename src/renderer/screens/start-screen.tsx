@@ -21,6 +21,7 @@ const StartScreen = () => {
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
+    libraryActions: { addLibrary },
   } = useOpenPLCStore()
 
   const retrieveOpenProjectData = async () => {
@@ -51,6 +52,7 @@ const StartScreen = () => {
             }
           })
         }
+        data.content.data.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
 
         navigate('/workspace')
         toast({
@@ -100,6 +102,7 @@ const StartScreen = () => {
               if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
             })
           }
+          data.content.data.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
 
           navigate('/workspace')
           toast({

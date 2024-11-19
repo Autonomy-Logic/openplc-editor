@@ -179,7 +179,7 @@ const Library = ({
         </LibraryRoot>
         {filteredUserLibraries.length > 0 && (
           <LibraryRoot>
-            <LibraryFolder label='User Defined' initiallyOpen={true}>
+            <LibraryFolder label='User-defined POUs' initiallyOpen={true}>
               {filteredUserLibraries
                 .filter((userLibrary) => userLibrary.name.toLowerCase().includes(filterText))
                 .map((userLibrary) => (

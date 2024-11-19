@@ -18,6 +18,11 @@ type ICardProps = {
   closeContainer: Dispatch<SetStateAction<boolean>>
 }
 
+type DatatypeProps = {
+  name: string
+  derivation: 'array' | 'structure' | 'enumerated'
+}
+
 type IPouFormProps = {
   type: 'function' | 'function-block' | 'program'
   name: string
@@ -60,13 +65,16 @@ const Card = (props: ICardProps): ReactNode => {
     setIsOpen(false)
   }
 
-  const handleCreateDatatype = (derivation: 'enumerated' | 'structure' | 'array') => {
-    const data = CreateDatatypeObject(derivation)
-    createDatatype(data)
+  const handleCreateDatatype = (derivation: DatatypeProps['derivation']): void => {
+    const data: DatatypeProps = {
+      name: 'DefaultName',
+      derivation,
+    }
+    const createdData = CreateDatatypeObject(data)
+    createDatatype(createdData)
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
-
   return (
     <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
       <Popover.Trigger id={`create-${target}-trigger`} asChild>
