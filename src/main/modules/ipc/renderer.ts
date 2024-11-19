@@ -30,6 +30,7 @@ type CreateProjectFileProps = {
 }
 type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
 
+// @ts-ignore
 const rendererProcessBridge = {
     /**
      * Handlers for creating projects.
@@ -136,21 +137,15 @@ const rendererProcessBridge = {
      * This is a mock implementation to be used as a presentation.
      * !! Do not use this on production !!
      */
-    compileSTProgram: (pathToXMLFile: string): Promise<CompilerResponse> =>
-        ipcRenderer.invoke('compiler:compile-st-program', pathToXMLFile),
-    /**
-     * TODO: Implement this.
-     */
-    retrieveXMLPathToCompiler: (pathToXMLFile: string) => ipcRenderer.send('compiler:retrieve-xml-path', pathToXMLFile),
-    /**
-     * MOCK: This channel will be replaced with ```compiler:compile-st-program```
-     * @param callback
-     */
-    listenToCompiler: (callback: IpcRendererCallbacks) => ipcRenderer.on('port', (event => callback(event))),
-    getCompileStProgram: (element: unknown, callback: unknown) => {
-        const {port1, port2} = new MessageChannel()
+    // @ts-expect-error callback is from an any type
+    compileRequest: (xmlPath: string, callback) => {
+        const {port1: rendererProcessPort, port2: mainProcessPort} = new MessageChannel
 
-        ipcRenderer.postMessage('compiler:get-compile-st-program', element, [port1])
-    },
+        ipcRenderer.postMessage('compiler:build-st-program', xmlPath, [mainProcessPort])
+
+        rendererProcessPort.onmessage = (event) => callback(event.data)
+
+        rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
+    }
 }
 export default rendererProcessBridge

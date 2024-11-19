@@ -1,6 +1,5 @@
 import {spawn} from 'child_process'
-import {MessagePortMain} from 'electron'
-// import {MessagePortMain} from 'electron';
+import type {MessagePortMain} from 'electron'
 import {join} from 'path'
 
 import {CreateXMLFile} from '../../utils/xml-manager'
@@ -34,7 +33,7 @@ const CompilerService = {
      * This is a mock implementation to be used as a presentation.
      * !! Do not use this on production !!
      */
-    compileSTProgram: (pathToProjectFile: string, port: MessagePortMain): void => {
+    compileSTProgram: (pathToProjectFile: string, mainProcessPort: MessagePortMain): void => {
         // Get the current environment and check if it's development
         const isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -65,7 +64,7 @@ const CompilerService = {
          */
         execCompilerScript.stdout.on('data', (data: Buffer) => {
             // const stream = []
-            port.postMessage({type: 'stdout', data: data.toString()})
+            mainProcessPort.postMessage({type: 'default', data: data})
             // data.forEach((asciiCode, index) => {
             //     console.log('Here ->', asciiCode, index)
             // })
@@ -83,7 +82,7 @@ const CompilerService = {
         })
 
         execCompilerScript.stderr.on('data', (data: Buffer) => {
-            port.postMessage({type: 'stderr', data: data.toString()})
+            mainProcessPort.postMessage({type: 'error', data: data})
             // console.error(`stderr: ${data}`)
             // data.forEach((asciiCode, index) => {
             //     console.log('ASCII code ->', asciiCode, index)
@@ -91,7 +90,8 @@ const CompilerService = {
         })
 
         execCompilerScript.on('close', (code) => {
-            port.postMessage({type: 'close', code})
+            mainProcessPort.postMessage({type: 'info', code})
+            mainProcessPort.close()
         })
     },
 }

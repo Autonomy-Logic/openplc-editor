@@ -1,5 +1,5 @@
 import {TStoreType} from '@root/main/contracts/types/modules/store'
-import {app, Event, MessageChannelMain, nativeTheme, shell} from 'electron'
+import {app, Event, nativeTheme, shell} from 'electron'
 import {join} from 'path'
 import {platform} from 'process'
 
@@ -150,15 +150,9 @@ class MainProcessBridge implements MainIpcModule {
          * This is a mock implementation to be used as a presentation.
          * !! Do not use this on production !!
          */
-        this.ipcMain.on('compiler:compile-st-program', (_event, pathToXMLFile: string) => {
-
-            const {port1, port2} = new MessageChannelMain()
-
-            // Pass one port to the compiler service
-            this.compilerService.compileSTProgram(pathToXMLFile, port1)
-
-            // return the second port to the renderer process
-            _event.sender.postMessage('port', null, [port2])
+        this.ipcMain.on('compiler:build-st-program', (event, pathToXMLFile: string) => {
+            const [replyPort] = event.ports
+            this.compilerService.compileSTProgram(pathToXMLFile, replyPort)
         })
     }
 
