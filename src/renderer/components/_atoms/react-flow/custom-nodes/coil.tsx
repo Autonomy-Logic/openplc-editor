@@ -148,9 +148,14 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       variableName: coilVariableValue,
     })
 
-    if (!variables.selected && !inputFocus) {
+    const variable = variables.selected
+    if (!variable && !inputFocus) {
       setWrongVariable(true)
       return
+    }
+
+    if (variable && variable.name !== coilVariableValue) {
+      setCoilVariableValue(variable.name)
     }
 
     setWrongVariable(false)

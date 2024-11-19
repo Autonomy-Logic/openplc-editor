@@ -29,7 +29,10 @@ export const getPouVariablesRungNodeAndEdges = (
     node?.type === 'block'
       ? (node.data as BasicNodeData).variable.id !== undefined &&
         variable.id === (node.data as BasicNodeData).variable.id
-      : variable.name === data.variableName && variable.type.definition !== 'derived',
+      : (variable.name === data.variableName ||
+          ((node?.data as BasicNodeData).variable.id !== undefined &&
+            variable.id === (node?.data as BasicNodeData).variable.id)) &&
+        variable.type.definition !== 'derived',
   )
 
   const edgesThatNodeIsSource = rung?.edges.filter((edge) => edge.source === data.nodeId)

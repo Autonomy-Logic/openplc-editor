@@ -127,6 +127,9 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       setWrongVariable(true)
       return
     }
+    if (variable && variable.name !== contactVariableValue) {
+      setContactVariableValue(variable.name)
+    }
 
     setWrongVariable(false)
   }, [pous])
