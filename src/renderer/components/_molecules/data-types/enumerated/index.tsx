@@ -19,15 +19,15 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   return (
     <div
       aria-label='Enumerated data type container'
-      className='flex h-full w-full flex-col gap-4 bg-transparent'
+      className='flex h-full w-full flex-1 flex-col gap-4 overflow-hidden bg-transparent'
       {...rest}
     >
-      <div aria-label='Data type content actions container' className='flex h-fit w-full gap-8'>
+      <div aria-label='Data type content actions container' className='flex h-8 w-full gap-8'>
         <div aria-label='Enumerated base type container' className='flex w-1/2 flex-col gap-3'></div>
         <div aria-label='Enumerated initial value container' className='w-1/2'>
           <div
             aria-label='Enumerated data type initial value container'
-            className='flex h-fit w-full items-center justify-end'
+            className='h- flex w-full items-center justify-end'
           >
             <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100 '>
               Initial Value:
@@ -39,7 +39,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
               >
                 {initialValueData === 'none' ? '' : initialValueData}
               </SelectTrigger>
-              <SelectContent className='box h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'>
+              <SelectContent className='box h-fit  max-h-[200px] w-[--radix-select-trigger-width] overflow-auto  rounded-lg bg-white outline-none dark:bg-neutral-950'>
                 <SelectItem
                   value='none'
                   className='flex h-8 w-full cursor-pointer items-center  justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
@@ -66,6 +66,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
           </div>
         </div>
       </div>
+
       <EnumeratedTable name={data.name} values={data.values} />
     </div>
   )

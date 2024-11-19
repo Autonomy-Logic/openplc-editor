@@ -296,11 +296,8 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
   })
 
   return (
-    <>
-      <div
-        aria-label='Enum data type table actions container'
-        className='flex h-fit w-3/5 items-center justify-between'
-      >
+    <div className='flex w-full flex-col flex-auto overflow-hidden gap-4'>
+      <div aria-label='Enum data type table actions container' className='flex h-8 w-3/5 items-center justify-between'>
         <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
           Description
         </p>
@@ -332,33 +329,35 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
           </TableActionButton>
         </div>
       </div>
-      <Table context='data-type-enumerated'>
-        <TableBody ref={tableBodyRef}>
-          {table.getRowModel().rows.map((row, index) => (
-            <TableRow
-              id={`${index}`}
-              key={index}
-              className='h-8'
-              selected={selectedRow === index}
-              ref={selectedRow === index ? tableBodyRowRef : null}
-              onClick={() => handleSelectRow(index)}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <TableCell
-                  style={{ maxWidth: cell.column.columnDef.maxSize, minWidth: cell.column.columnDef.minSize }}
-                  key={cell.id}
-                >
-                  {flexRender(cell.column.columnDef.cell, {
-                    ...cell.getContext(),
-                    editable: selectedRow === index,
-                  })}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </>
+      <div className='flex h-fit  overflow-y-auto scroll-ml-1 w-[355px]'>
+        <Table context='data-type-enumerated'>
+          <TableBody ref={tableBodyRef}>
+            {table.getRowModel().rows.map((row, index) => (
+              <TableRow
+                id={`${index}`}
+                key={index}
+                className='h-8'
+                selected={selectedRow === index}
+                ref={selectedRow === index ? tableBodyRowRef : null}
+                onClick={() => handleSelectRow(index)}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell
+                    style={{ maxWidth: cell.column.columnDef.maxSize, minWidth: cell.column.columnDef.minSize }}
+                    key={cell.id}
+                  >
+                    {flexRender(cell.column.columnDef.cell, {
+                      ...cell.getContext(),
+                      editable: selectedRow === index,
+                    })}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
   )
 }
 

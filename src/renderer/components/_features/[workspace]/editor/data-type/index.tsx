@@ -36,12 +36,12 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   }
 
   return (
-    <div aria-label='Data type editor container' className='flex h-full w-full flex-col items-center p-2' {...rest}>
+    <div aria-label='Data type editor container' className=' h-full w-full flex flex-col gap-4  overflow-hidden' {...rest}>
       <div
         aria-label='Data type metadata container'
-        className='h-46 mb-4 flex w-full items-center gap-4 rounded-md bg-neutral-50 p-2 shadow-md dark:border dark:border-neutral-800 dark:bg-neutral-1000'
+        className='h-46  flex w-full items-center gap-4 rounded-md bg-neutral-50 p-2 shadow-md dark:border dark:border-neutral-800 dark:bg-neutral-1000'
       >
-        <div aria-label='Data type name container' className='flex h-fit w-1/2 items-center gap-2'>
+        <div aria-label='Data type name container' className='flex h-8 w-1/2 items-center gap-2'>
           <label
             htmlFor='data-type-name'
             className='mb-1 text-start font-caption text-xs font-medium text-neutral-950 dark:text-white'
@@ -61,7 +61,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
             />
           </div>
         </div>
-        <div aria-label='Data type derivation container' className='flex h-full w-1/2 items-center gap-2'>
+        <div aria-label='Data type derivation container' className='flex h-8 w-1/2 items-center gap-2'>
           <label
             aria-label='label for data-type-derivation'
             className='mb-1 text-start font-caption text-xs font-medium text-neutral-950 dark:text-white'
@@ -108,7 +108,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
           </Select>
         </div>
       </div>
-      <div aria-label='Data type content container' className='h-full w-full'>
+      <div aria-label='Data type content container' className='w-full h-full overflow-hidden'>
         {editorContent?.derivation === 'array' && <ArrayDataType data={editorContent} />}
         {editorContent?.derivation === 'enumerated' && <EnumeratorDataType data={editorContent} />}
       </div>
