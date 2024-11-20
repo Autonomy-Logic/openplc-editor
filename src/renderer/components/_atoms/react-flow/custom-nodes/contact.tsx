@@ -122,7 +122,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
    * Update wrongVariable state when the table of variables is updated
    */
   useEffect(() => {
-    const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
       variableName: contactVariableValue,
     })
@@ -136,8 +136,20 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       setWrongVariable(true)
       return
     }
-    if (variable && variable.name !== contactVariableValue) {
+    if (variable && node && rung && node.data.variable !== variable) {
       setContactVariableValue(variable.name)
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            variable,
+          },
+        },
+      })
     }
 
     setWrongVariable(false)
@@ -156,13 +168,25 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     if (!rung || !node) return
 
     const variable = variables.selected
-    if (!variable) {
+    if (
+      !variable ||
+      variable.name !== contactVariableValue ||
+      variable.type.definition !== 'base-type' ||
+      variable.type.value.toUpperCase() !== 'BOOL'
+    ) {
       setWrongVariable(true)
-      return
-    }
-
-    if (variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL') {
-      setWrongVariable(true)
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            variable: { name: contactVariableValue },
+          },
+        },
+      })
       return
     }
 

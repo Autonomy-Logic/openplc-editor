@@ -152,7 +152,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
    * Update wrongVariable state when the table of variables is updated
    */
   useEffect(() => {
-    const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
       variableName: coilVariableValue,
     })
@@ -163,8 +163,20 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       return
     }
 
-    if (variable && variable.name !== coilVariableValue) {
+    if (variable && node && rung && node.data.variable !== variable) {
       setCoilVariableValue(variable.name)
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            variable,
+          },
+        },
+      })
     }
 
     setWrongVariable(false)
@@ -183,8 +195,20 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     if (!rung || !node) return
 
     const variable = variables.selected
-    if (!variable) {
+    if (!variable || variable.name !== coilVariableValue) {
       setWrongVariable(true)
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            variable: { name: coilVariableValue },
+          },
+        },
+      })
       return
     }
 

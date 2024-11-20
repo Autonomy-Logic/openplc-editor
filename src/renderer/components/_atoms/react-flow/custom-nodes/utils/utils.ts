@@ -26,13 +26,20 @@ export const getPouVariablesRungNodeAndEdges = (
 
   const variables: PLCVariable[] = pou?.data.variables as PLCVariable[]
   const variable = variables.find((variable) =>
-    node?.type === 'block'
-      ? (node.data as BasicNodeData).variable.id !== undefined &&
-        variable.id === (node.data as BasicNodeData).variable.id
-      : (variable.name === data.variableName ||
-          ((node?.data as BasicNodeData).variable.id !== undefined &&
-            variable.id === (node?.data as BasicNodeData).variable.id)) &&
-        variable.type.definition !== 'derived',
+    // Check if the node exists
+    !node
+      ? undefined
+      : // Check if the node is a block
+        node?.type === 'block'
+        ? // If it is a block, check if the variable id is the same as the node variable id
+          (node.data as BasicNodeData).variable.id !== undefined &&
+          variable.id === (node.data as BasicNodeData).variable.id
+        : // If it is not a block, check if the block is synced with a variable
+          (node.data as BasicNodeData).variable.id !== undefined
+          // Get the variable by the variable id
+          ? variable.id === (node.data as BasicNodeData).variable.id && variable.type.definition !== 'derived'
+          // Get the variable by the variable name
+          : variable.name === data.variableName && variable.type.definition !== 'derived',
   )
 
   const edgesThatNodeIsSource = rung?.edges.filter((edge) => edge.source === data.nodeId)
