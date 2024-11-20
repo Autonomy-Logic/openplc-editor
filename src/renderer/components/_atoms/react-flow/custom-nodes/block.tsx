@@ -1,4 +1,5 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
@@ -19,7 +20,18 @@ export type BlockVariant = {
   documentation: string
   extensible: boolean
 }
-export type BlockNodeData<T> = BasicNodeData & { variant: T; executionControl: boolean }
+type variables = {
+  [key: string]: {
+    variable: PLCVariable | undefined
+    type: 'input' | 'output'
+  }
+}
+
+export type BlockNodeData<T> = BasicNodeData & {
+  variant: T
+  executionControl: boolean
+  connectedVariables: variables
+}
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
 type BlockBuilderProps<T> = BuilderBasicProps & { variant: T; executionControl?: boolean }
@@ -29,7 +41,7 @@ export const DEFAULT_BLOCK_HEIGHT = 128
 
 export const DEFAULT_BLOCK_CONNECTOR_X = DEFAULT_BLOCK_WIDTH
 export const DEFAULT_BLOCK_CONNECTOR_Y = 40
-export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 32
+export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 40
 
 export const DEFAULT_BLOCK_TYPE = {
   name: '???',
@@ -70,7 +82,7 @@ export const BlockNodeElement = <T extends object>({
     editorActions: { updateModelVariables },
     libraries,
     flows,
-    flowActions: { updateNode, updateEdge },
+    flowActions: { setNodes, setEdges },
     project: {
       data: { pous },
     },
@@ -209,6 +221,9 @@ export const BlockNodeElement = <T extends object>({
       }
     }
 
+    let newNodes = [...rung.nodes]
+    let newEdges = [...rung.edges]
+
     /**
      * Update the node with the new block node
      * The new block node have a new ID to not conflict with the old block node and to no occur any error of rendering
@@ -226,37 +241,43 @@ export const BlockNodeElement = <T extends object>({
       ...newBlockNode.data,
       variable: variable ?? { name: '' },
     }
-    updateNode({
-      rungId: rung.id,
-      nodeId: node.id,
-      node: newBlockNode,
-      editorName: editor.meta.name,
-    })
+
+    newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n))
+
     edges.source?.forEach((edge) => {
-      updateEdge({
-        editorName: editor.meta.name,
-        rungId: rung.id,
-        edgeId: edge.id,
-        edge: {
-          ...edge,
-          id: edge.id.replace(node.id, newBlockNode.id),
-          source: newBlockNode.id,
-          sourceHandle: newBlockNode.data.outputConnector.id,
-        },
-      })
+      const newEdge = {
+        ...edge,
+        id: edge.id.replace(node.id, newBlockNode.id),
+        source: newBlockNode.id,
+        sourceHandle: newBlockNode.data.outputConnector.id,
+      }
+      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
     edges.target?.forEach((edge) => {
-      updateEdge({
-        editorName: editor.meta.name,
-        rungId: rung.id,
-        edgeId: edge.id,
-        edge: {
-          ...edge,
-          id: edge.id.replace(node.id, newBlockNode.id),
-          target: newBlockNode.id,
-          targetHandle: newBlockNode.data.inputConnector.id,
-        },
-      })
+      const newEdge = {
+        ...edge,
+        id: edge.id.replace(node.id, newBlockNode.id),
+        target: newBlockNode.id,
+        targetHandle: newBlockNode.data.inputConnector.id,
+      }
+      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
+    })
+
+    const { nodes: variableNodes, edges: variableEdges } = updateVariableBlockPosition({
+      ...rung,
+      nodes: newNodes,
+      edges: newEdges,
+    })
+
+    setNodes({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodes: variableNodes,
+    })
+    setEdges({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      edges: variableEdges,
     })
 
     setWrongName(false)
@@ -571,6 +592,10 @@ export const buildBlockNode = <T extends object | undefined>({
       variable: { name: '' },
       executionOrder: 0,
       executionControl,
+      connectedVariables: {},
+      draggable: true,
+      selectable: true,
+      deletable: true,
     },
     width: DEFAULT_BLOCK_WIDTH,
     height,

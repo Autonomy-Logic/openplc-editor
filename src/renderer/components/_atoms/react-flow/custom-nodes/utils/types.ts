@@ -19,4 +19,7 @@ export type BasicNodeData = {
   numericId: string
   variable: { id?: string, name: string } | PLCVariable
   executionOrder: number
+  draggable: boolean
+  selectable: boolean
+  deletable: boolean
 }
