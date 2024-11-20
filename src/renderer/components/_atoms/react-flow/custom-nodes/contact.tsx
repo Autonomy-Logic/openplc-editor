@@ -11,7 +11,6 @@ import { Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 
-import { InputWithRef } from '../../input'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
@@ -92,8 +91,18 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
   const [contactVariableValue, setContactVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
-  const inputVariableRef = useRef<HTMLInputElement>(null)
+  const inputVariableRef = useRef<HTMLTextAreaElement>(null)
+  const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
   const [inputFocus, setInputFocus] = useState<boolean>(true)
+
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.style.height = 'auto'
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 32 ? inputVariableRef.current.scrollHeight : 32}px`
+      if (scrollableIndicatorRef.current)
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
+    }
+  }, [contactVariableValue])
 
   /**
    * useEffect to focus the variable input when the block is selected
@@ -137,7 +146,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitContactVarible = () => {
+  const handleSubmitContactVariable = () => {
     setInputFocus(false)
 
     const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
@@ -189,17 +198,24 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       >
         {contact.svg(wrongVariable)}
       </div>
-      <div className='absolute -left-[34px] -top-7 w-24'>
-        <InputWithRef
+      <div className='absolute -left-[34px] -top-[38px] flex h-8 w-24 items-center justify-center'>
+        <textarea
           value={contactVariableValue}
           onChange={(e) => setContactVariableValue(e.target.value)}
           placeholder='???'
-          className='w-full bg-transparent text-center text-sm outline-none'
+          className='w-full resize-none bg-transparent text-center text-xs outline-none [&::-webkit-scrollbar]:hidden'
           onFocus={() => setInputFocus(true)}
-          onBlur={() => inputFocus && handleSubmitContactVarible()}
+          onBlur={() => {
+            if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
+            inputFocus && handleSubmitContactVariable()
+          }}
           onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
           ref={inputVariableRef}
+          rows={1}
         />
+      </div>
+      <div className={cn('pointer-events-none absolute -right-[48px] -top-7 text-xs')} ref={scrollableIndicatorRef}>
+        ↕
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

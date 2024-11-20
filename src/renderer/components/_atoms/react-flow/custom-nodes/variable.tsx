@@ -52,6 +52,16 @@ const VariableElement = ({ id, data }: VariableProps) => {
   const [inputError, setInputError] = useState<boolean>(false)
   const [isAVariable, setIsAVariable] = useState<boolean>(false)
 
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.style.height = 'auto'
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < DEFAULT_VARIABLE_HEIGHT ? inputVariableRef.current.scrollHeight : DEFAULT_VARIABLE_HEIGHT}px`
+      if (scrollableIndicatorRef.current)
+        scrollableIndicatorRef.current.style.display =
+          inputVariableRef.current.scrollHeight > DEFAULT_VARIABLE_HEIGHT ? 'block' : 'none'
+    }
+  }, [variableValue])
+
   /**
    * useEffect to focus the variable input when the block is selected
    */
@@ -85,16 +95,6 @@ const VariableElement = ({ id, data }: VariableProps) => {
       return
     }
   }, [pous])
-
-  useEffect(() => {
-    if (inputVariableRef.current) {
-      inputVariableRef.current.style.height = 'auto'
-      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < DEFAULT_VARIABLE_HEIGHT ? inputVariableRef.current.scrollHeight : DEFAULT_VARIABLE_HEIGHT}px`
-      if (scrollableIndicatorRef.current)
-        scrollableIndicatorRef.current.style.display =
-          inputVariableRef.current.scrollHeight > DEFAULT_VARIABLE_HEIGHT ? 'block' : 'none'
-    }
-  }, [variableValue])
 
   /**
    * Handle with the variable input onBlur event
