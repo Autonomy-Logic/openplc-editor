@@ -1,5 +1,5 @@
 import { TStoreType } from '@root/main/contracts/types/modules/store'
-import { app, Event, nativeTheme } from 'electron'
+import { app, Event, nativeTheme, shell } from 'electron'
 import { join } from 'path'
 import { platform } from 'process'
 
@@ -33,6 +33,19 @@ class MainProcessBridge implements MainIpcModule {
     this.store = store
   }
   setupMainIpcListener() {
+    this.ipcMain.handle('open-external-link', async (_event, url: string) => {
+      console.log('Opening external link:', url)
+      try {
+        console.log('Opening external link:', url)
+        await shell.openExternal(url)
+        return { success: true }
+      } catch (error) {
+        console.log('Opening external link:', url)
+        console.error('Error opening external link:', error)
+        return { success: false, error }
+      }
+    })
+    
     this.ipcMain.handle('project:create', async () => {
       const response = await this.projectService.createProject()
       return response
@@ -82,7 +95,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('project:open-by-path', async (_event, projectPath: string) => {
       try {
         const response = await this.projectService.openProjectByPath(projectPath)
-
+        console.log(response)
         return response
       } catch (error) {
         console.error('Error opening project:', error)

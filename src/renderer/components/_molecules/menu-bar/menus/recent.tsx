@@ -138,7 +138,7 @@ export const RecentMenu = () => {
   }
   return (
     <MenuPrimitive.Menu>
-      <MenuPrimitive.Trigger className={TRIGGER}>recent</MenuPrimitive.Trigger>
+      <MenuPrimitive.Trigger className={TRIGGER}>Recent</MenuPrimitive.Trigger>
       <MenuPrimitive.Portal>
         <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
           {recentProjects.map((project) => (

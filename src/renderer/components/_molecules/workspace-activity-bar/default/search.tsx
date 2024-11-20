@@ -1,21 +1,38 @@
 import { SearchIcon } from '@root/renderer/assets'
-import { useState } from 'react'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { useEffect } from 'react'
 
 import { ActivityBarButton } from '../../../_atoms/buttons'
 import SearchInProject from '../../../_features/[workspace]/editor/search-in-project'
 import { Modal, ModalContent, ModalTitle, ModalTrigger } from '../../modal'
 
 export const SearchButton = () => {
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const {
+    workspaceActions: { setModalOpen },
+    workspace: { isModalOpen },
+  } = useOpenPLCStore()
 
   const handleModalClose = () => {
-    setIsModalOpen(false)
+    setModalOpen('findInProject',false)
+  }
+  const handleOpenChange = (open: boolean) => {
+    setModalOpen('findInProject', open)
   }
 
+  const isFindInProjectModalOpen = isModalOpen.some(
+    (modal: { modalName: string; modalState: boolean }) => modal.modalName === 'findInProject' && modal.modalState,
+  )
+
+  useEffect(() => {
+    window.bridge.findInProjectAccelerator((_event) => {
+      setModalOpen('findInProject',true)
+    })
+  }, [])
+
   return (
-    <Modal onOpenChange={setIsModalOpen} open={isModalOpen}>
+    <Modal onOpenChange={handleOpenChange} open={isFindInProjectModalOpen}>
       <ModalTrigger>
-        <ActivityBarButton aria-label='Search' onClick={() => setIsModalOpen(true)}>
+        <ActivityBarButton aria-label='Search'>
           <SearchIcon />
         </ActivityBarButton>
       </ModalTrigger>
