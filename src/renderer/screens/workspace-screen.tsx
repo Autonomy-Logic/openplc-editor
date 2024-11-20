@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
+import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
 import * as Tabs from '@radix-ui/react-tabs'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
@@ -12,9 +13,9 @@ import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { Search } from '../components/_features/[workspace]/search'
-import { Console } from '../components/_molecules/console'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import AboutModal from '../components/_organisms/about-modal'
+import { Console as ConsoleComponent } from '../components/_organisms/console'
 import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
@@ -28,11 +29,11 @@ const WorkspaceScreen = () => {
   const navigate = useNavigate()
   const {
     tabs,
-    workspace: { editingState,isCollapsed },
+    workspace: { editingState, isCollapsed },
     project,
     editor,
-    editorActions:{clearEditor},
-    workspaceActions: { setEditingState,setRecents,toggleCollapse },
+    editorActions: { clearEditor },
+    workspaceActions: { setEditingState, setRecents, toggleCollapse },
     tabsActions: { clearTabs },
     searchResults,
   } = useOpenPLCStore()
@@ -91,14 +92,13 @@ const WorkspaceScreen = () => {
   ]
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
- 
+
   const panelRef = useRef(null)
   const explorerPanelRef = useRef(null)
   const workspacePanelRef = useRef(null)
   const consolePanelRef = useRef(null)
   const [activeTab, setActiveTab] = useState('console')
   const hasSearchResults = searchResults.length > 0
-
 
   const togglePanel = () => {
     if (panelRef.current) {
@@ -121,34 +121,32 @@ const WorkspaceScreen = () => {
     })
   }, [isCollapsed])
 
-  useEffect(()=>{
-    const handleCloseProject=()=>{
+  useEffect(() => {
+    const handleCloseProject = () => {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
       setRecents([])
-      window.bridge.closeProjectAccelerator((_event)=> navigate('/'))
+      window.bridge.closeProjectAccelerator((_event) => navigate('/'))
     }
     handleCloseProject()
-  },[])
+  }, [])
 
-  const [isSwitchingPerspective, setIsSwitchingPerspective] = useState(false);
+  const [isSwitchingPerspective, setIsSwitchingPerspective] = useState(false)
 
   const handleSwitchPerspective = () => {
     if (!isSwitchingPerspective) {
-      setIsSwitchingPerspective(true);
-      toggleCollapse(); 
-  };
+      setIsSwitchingPerspective(true)
+      toggleCollapse()
+    }
   }
 
   useEffect(() => {
     window.bridge.switchPerspective((_event) => {
-      handleSwitchPerspective();
-    });
-  }, []);
+      handleSwitchPerspective()
+    })
+  }, [])
 
-
- 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <AboutModal />
@@ -200,7 +198,7 @@ const WorkspaceScreen = () => {
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1'>
-                          <DataTypeEditor dataTypeName={editor.meta.name}  />{' '}
+                          <DataTypeEditor dataTypeName={editor.meta.name} />{' '}
                         </div>
                       )}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
@@ -301,7 +299,7 @@ const WorkspaceScreen = () => {
                   <Tabs.Root
                     value={activeTab}
                     onValueChange={setActiveTab}
-                    className='flex h-full w-full flex-col gap-2 overflow-hidden'
+                    className='relative flex h-full w-full flex-col gap-2 overflow-hidden'
                   >
                     <Tabs.List className='flex h-7 w-64 gap-4'>
                       <Tabs.Trigger
@@ -330,7 +328,7 @@ const WorkspaceScreen = () => {
                       value='console'
                       className='h-full w-full overflow-hidden p-2 data-[state=inactive]:hidden'
                     >
-                      <Console />
+                      <ConsoleComponent />
                     </Tabs.Content>
                     <Tabs.Content
                       value='debug'
@@ -358,6 +356,7 @@ const WorkspaceScreen = () => {
                         </ResizablePanelGroup>
                       </Tabs.Content>
                     )}
+                    {activeTab === 'console' && <ClearConsoleButton />}
                   </Tabs.Root>
                 </ResizablePanel>
               </ResizablePanelGroup>

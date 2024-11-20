@@ -1,3 +1,4 @@
+export * from './console'
 export * from './editor'
 export * from './flow'
 export * from './library'
