@@ -17,6 +17,7 @@ export const RecentMenu = () => {
     tabsActions: { clearTabs },
     projectActions: { setProject },
     flowActions: { addFlow },
+    libraryActions: { addLibrary },
   } = useOpenPLCStore()
   const { TRIGGER, CONTENT, ITEM } = MenuClasses
 
@@ -112,6 +113,7 @@ export const RecentMenu = () => {
           if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
         })
       }
+      data.content.data.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
 
       toast({
         title: 'Project opened!',
