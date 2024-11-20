@@ -1,108 +1,105 @@
-import {spawn} from 'child_process'
-import type {MessagePortMain} from 'electron'
-import {join} from 'path'
+import { spawn } from 'child_process'
+import type { MessagePortMain } from 'electron'
+import { access, constants, mkdir } from 'fs/promises'
+import { join } from 'path'
 
-import {XmlGenerator} from '../../../utils/PLC/xml-generator'
-import {access, constants, mkdir} from "fs/promises";
-import {ProjectState} from "../../../renderer/store/slices";
-import {CreateXMLFile} from "../../../main/utils";
+import { CreateXMLFile } from '../../../main/utils'
+import { ProjectState } from '../../../renderer/store/slices'
+import { XmlGenerator } from '../../../utils/PLC/xml-generator'
 
 export type CompilerResponse = {
-    error?: boolean
-    message: {
-        type: 'error' | 'warning' | 'info'
-        content: string | Buffer
-    }
+  error?: boolean
+  message: {
+    type: 'error' | 'warning' | 'info'
+    content: string | Buffer
+  }
 }
 
 const CompilerService = {
-    createBuildDirectoryIfNotExist: async (pathToUserProject: string) => {
-        const normalizedUserProjectPath = pathToUserProject.replace('project.json', '')
-        const pathToBuildDirectory = join(normalizedUserProjectPath, 'build')
-        try {
-            await access(pathToBuildDirectory, constants.F_OK)
-            return {success: true, message: 'Directory already exists'}
-        } catch {
-            try {
-                await mkdir(pathToBuildDirectory, {recursive: true})
-                return {success: true, message: 'Directory created'}
-            } catch (err) {
-                // @ts-expect-error Unknown type is not being accepted.
-                return {success: false, message: `Error creating directory at ${pathToBuildDirectory}: ${err.message}`}
-            }
-        }
-    },
-    createXmlFile: async (pathToUserProject: string, dataToCreateXml: ProjectState['data']): Promise<{success: boolean, message: string}> =>
-        new Promise((resolve, reject) => {
-            const normalizedUserProjectPath = pathToUserProject.replace('project.json', '')
-            const pathToBuildDirectory = join(normalizedUserProjectPath, 'build')
-            const projectDataAsString = XmlGenerator(dataToCreateXml)
-            const result = CreateXMLFile(pathToBuildDirectory, projectDataAsString, 'plc')
-            /**
-             * This condition must be verified.
-             * The CreateXMLFile function return should be validated.
-             * ```It is possible that the success property is always true```
-             */
-            if (result.success) {
-                resolve({success: result.success, message: result.message})
-            } else {
-                reject({success: result.success, message: 'Xml file not created'})
-            }
-        })
-    ,
-    /**
-     * TODO:
-     * 1 - We need to retrieve the Python script output and split it into multiple messages chunks to be sent to the renderer process.
-     * 2 - We need to setup a communication channel between the renderer process and the main process, probably using MessagePort. Once ipc communication have limited functionality, we need to replace this mock implementation.
-     * 3 - Refactor the function to open the communication channel and send the messages, and close it when the flow ends.
-     */
+  createBuildDirectoryIfNotExist: async (pathToUserProject: string) => {
+    const normalizedUserProjectPath = pathToUserProject.replace('project.json', '')
+    const pathToBuildDirectory = join(normalizedUserProjectPath, 'build')
+    try {
+      await access(pathToBuildDirectory, constants.F_OK)
+      return { success: true, message: 'Directory already exists' }
+    } catch {
+      try {
+        await mkdir(pathToBuildDirectory, { recursive: true })
+        return { success: true, message: 'Directory created' }
+      } catch (err) {
+        // @ts-expect-error Unknown type is not being accepted.
+        return { success: false, message: `Error creating directory at ${pathToBuildDirectory}: ${err.message}` }
+      }
+    }
+  },
+  createXmlFile: async (
+    pathToUserProject: string,
+    dataToCreateXml: ProjectState['data'],
+  ): Promise<{ success: boolean; message: string }> =>
+    new Promise((resolve, reject) => {
+      const normalizedUserProjectPath = pathToUserProject.replace('project.json', '')
+      const pathToBuildDirectory = join(normalizedUserProjectPath, 'build')
+      const projectDataAsString = XmlGenerator(dataToCreateXml)
+      const result = CreateXMLFile(pathToBuildDirectory, projectDataAsString, 'plc')
+      /**
+       * This condition must be verified.
+       * The CreateXMLFile function return should be validated.
+       * ```It is possible that the success property is always true```
+       */
+      if (result.success) {
+        resolve({ success: result.success, message: result.message })
+      } else {
+        reject({ success: result.success, message: 'Xml file not created' })
+      }
+    }),
+  /**
+   * This is a mock implementation to be used as a presentation.
+   * !! Do not use this on production !!
+   */
+  compileSTProgram: (pathToProjectFile: string, mainProcessPort: MessagePortMain): void => {
+    // Get the current environment and check if it's development
+    const isDevelopment = process.env.NODE_ENV === 'development'
+
+    // Check if the current platform is Windows to execute the correct command based on the current operating system
+    const isWindows = process.platform === 'win32'
+
+    // Construct the path for the current working directory to be able to access the compiler
+    const workingDirectory = process.cwd()
+
+    // Construct the path for the st compiler script based on the current environment
+    const stCompilerPath = isDevelopment ? join(workingDirectory, 'assets', 'python', 'st-compiler', 'xml2st.py') : ''
+
+    // Remove the project.json file from the path to the xml file.
+    // This is necessary because on windows the path is handled differently from unix systems
+    const draftPath = pathToProjectFile.replace('project.json', '')
+
+    // Construct the path to the xml file
+    const pathToXMLFile = join(draftPath, 'build', 'plc.xml')
+
+    // Execute the st compiler script with the path to the xml file.
+    // TODO: This only works on development environment. Need to be added the path for the production environment
+    const execCompilerScript = spawn(isWindows ? 'py' : 'python3', [stCompilerPath, pathToXMLFile])
 
     /**
-     * This is a mock implementation to be used as a presentation.
-     * !! Do not use this on production !!
+     * The data object is a buffer with the content of the script output.
+     * Uses ASCII code to convert the buffer to a string.
+     * End of lines are separated by \r and \n characters. The ASCII code for \r is 13 and \n is 10.
      */
-    compileSTProgram: (pathToProjectFile: string, mainProcessPort: MessagePortMain): void => {
-        // Get the current environment and check if it's development
-        const isDevelopment = process.env.NODE_ENV === 'development'
+    execCompilerScript.stdout.on('data', (data: Buffer) => {
+      mainProcessPort.postMessage({ type: 'default', data: data })
+    })
 
-        // Check if the current platform is Windows to execute the correct command based on the current operating system
-        const isWindows = process.platform === 'win32'
+    execCompilerScript.stderr.on('data', (data: Buffer) => {
+      mainProcessPort.postMessage({ type: 'error', data: data })
+      // !! Watch for possible bugs with this implementation. !!
+      mainProcessPort.close()
+    })
 
-        // Construct the path for the current working directory to be able to access the compiler
-        const workingDirectory = process.cwd()
-
-        // Construct the path for the st compiler script based on the current environment
-        const stCompilerPath = isDevelopment ? join(workingDirectory, 'assets', 'python', 'st-compiler', 'xml2st.py') : ''
-
-        // Remove the project.json file from the path to the xml file.
-        // This is necessary because on windows the path is handled differently from unix systems
-        const draftPath = pathToProjectFile.replace('project.json', '')
-
-        // Construct the path to the xml file
-        const pathToXMLFile = join(draftPath, 'plc.xml')
-
-        // Execute the st compiler script with the path to the xml file.
-        // TODO: This only works on development environment. Need to be added the path for the production environment
-        const execCompilerScript = spawn(isWindows ? 'py' : 'python3', [stCompilerPath, pathToXMLFile])
-
-        /**
-         * The data object is a buffer with the content of the script output.
-         * Uses ASCII code to convert the buffer to a string.
-         * End of lines are separated by \r and \n characters. The ASCII code for \r is 13 and \n is 10.
-         */
-        execCompilerScript.stdout.on('data', (data: Buffer) => {
-            mainProcessPort.postMessage({type: 'default', data: data})
-        })
-
-        execCompilerScript.stderr.on('data', (data: Buffer) => {
-            mainProcessPort.postMessage({type: 'error', data: data})
-        })
-
-        execCompilerScript.on('close', (code) => {
-            mainProcessPort.postMessage({type: 'info', code})
-            mainProcessPort.close()
-        })
-    },
+    execCompilerScript.on('close', () => {
+      mainProcessPort.postMessage({ type: 'info', message: 'Script finished' })
+      mainProcessPort.close()
+    })
+  },
 }
 
-export {CompilerService}
+export { CompilerService }

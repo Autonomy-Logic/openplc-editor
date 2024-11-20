@@ -1,8 +1,8 @@
-import type {ProjectState} from "@root/renderer/store/slices";
-import {instanceToXml} from "@utils/PLC/instances-xml";
-import {parsePousToXML} from "@utils/PLC/pou-xml";
 import {create} from "xmlbuilder2";
 
+import type {ProjectState} from "../../renderer/store/slices";
+import {instanceToXml} from "../PLC/instances-xml";
+import {parsePousToXML} from "../PLC/pou-xml";
 import {getBaseXmlStructure} from "./base-xml";
 
 const XmlGenerator = (projectToGenerateXML: ProjectState['data']) => {

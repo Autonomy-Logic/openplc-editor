@@ -6,7 +6,7 @@ import {v4 as uuidv4} from 'uuid'
 type CompileResponseObject = {
     type: 'info' | 'warning' | 'error',
     data?: Buffer
-    code: number
+    message?: string
 }
 
 const DownloadButton = () => {
@@ -16,18 +16,18 @@ const DownloadButton = () => {
     } = useOpenPLCStore()
 
     const buildProgram = () => window.bridge.compileRequest(project.meta.path, (compileResponse: CompileResponseObject) => {
-        const {type: stdType, data, code} = compileResponse
+        const {type: stdType, data, message: stdMessage} = compileResponse
         const uint8Array = data
         if (!uint8Array) return
         const lines = BufferToStringArray(uint8Array)
         lines.forEach((line) => {
             addLog({id: uuidv4(), type: stdType, message: line})
         })
-        addLog({id: uuidv4(), type: 'info', message: `Script exited with code ${code}`})
+        stdMessage && addLog({id: uuidv4(), type: stdType, message: stdMessage})
     })
 
     const requestBuildProgram = async () => {
-        addLog({id: uuidv4(), type: 'warning', message: 'Build process started'})
+        addLog({id: uuidv4(), type: 'info', message: 'Build process started'})
         addLog({id: uuidv4(), type: 'warning', message: 'Verifying if build directory exist'})
         const { success, message: logMessage } = await window.bridge.createBuildDirectory(project.meta.path)
         if (success) {
@@ -47,6 +47,7 @@ const DownloadButton = () => {
     }
 
     return (
+        // eslint-disable-next-line @typescript-eslint/no-misused-promises
         <ActivityBarButton aria-label='Download' onClick={requestBuildProgram}>
             <DownloadIcon/>
         </ActivityBarButton>
