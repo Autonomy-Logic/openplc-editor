@@ -69,8 +69,6 @@ const getBaseXmlStructure = (): BaseXml => ({
  * @deprecated
  */
 export const parseProjectToXML = (project: ProjectState): string => {
-  console.log('=-=-=-= PARSING TO XML =-=-=-=')
-  console.log('Project:', project)
   let xmlResult = getBaseXmlStructure()
 
   /**

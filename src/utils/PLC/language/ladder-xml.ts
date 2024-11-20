@@ -318,7 +318,6 @@ const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLa
  * Entry point to parse nodes to XML
  */
 const ladderToXml = (rungs: RungState[]) => {
-  console.log('=-= PARSING LADDER TO XML =-=')
   const ladderXML: {
     body: {
       LD: LadderXML
