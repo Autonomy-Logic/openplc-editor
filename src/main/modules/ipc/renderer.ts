@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
 import {ipcRenderer, IpcRendererEvent} from 'electron'
 
+import {ProjectState} from "../../../renderer/store/slices";
 import {PLCProject} from '../../../types/PLC/open-plc'
-import {CompilerResponse} from '../../services/compiler-service'
 import {IProjectServiceResponse} from '../../services/project-service'
 import {CreateProjectFile} from '../../services/project-service/utils'
 
@@ -131,13 +131,13 @@ const rendererProcessBridge = {
     /**
      * Compiler Service
      */
-    writeXMLFile: (path: string, data: string, fileName: string) =>
-        ipcRenderer.invoke('compiler:write-xml-file', {path, data, fileName}),
+    createBuildDirectory: async (pathToUserProject: string): Promise<{success: boolean, message: string}> => ipcRenderer.invoke('compiler:create-build-directory', pathToUserProject),
+    createXmlFileToBuild: async (pathToUserProject: string, dataToCreateXml: ProjectState['data']):  Promise<{success: boolean, message: string}> => ipcRenderer.invoke('compiler:create-xml-file', pathToUserProject, dataToCreateXml),
     /**
      * This is a mock implementation to be used as a presentation.
      * !! Do not use this on production !!
      */
-    // @ts-expect-error callback is from an any type
+    // @ts-expect-error Callback is from an any type
     compileRequest: (xmlPath: string, callback) => {
         const {port1: rendererProcessPort, port2: mainProcessPort} = new MessageChannel
 

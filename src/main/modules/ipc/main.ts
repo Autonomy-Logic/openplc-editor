@@ -6,6 +6,7 @@ import {platform} from 'process'
 import {PLCProject} from '../../../types/PLC/open-plc'
 import {MainIpcModule, MainIpcModuleConstructor} from '../../contracts/types/modules/ipc/main'
 import {CreateProjectFile, GetProjectPath} from '../../services/project-service/utils'
+import {ProjectState} from "../../../renderer/store/slices";
 
 type IDataToWrite = {
     projectPath: string
@@ -138,14 +139,8 @@ class MainProcessBridge implements MainIpcModule {
         /**
          * Compiler Service
          */
-        this.ipcMain.handle('compiler:write-xml-file', (_event, arg: {
-            path: string;
-            data: string;
-            fileName: string
-        }) => {
-            return this.compilerService.writeXMLFile(arg.path, arg.data, arg.fileName)
-        })
-
+        this.ipcMain.handle('compiler:create-build-directory', (_ev, pathToUserProject: string) => this.compilerService.createBuildDirectoryIfNotExist(pathToUserProject))
+        this.ipcMain.handle('compiler:create-xml-file', (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data']) => this.compilerService.createXmlFile(pathToUserProject, dataToCreateXml))
         /**
          * This is a mock implementation to be used as a presentation.
          * !! Do not use this on production !!

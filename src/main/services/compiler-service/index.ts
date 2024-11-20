@@ -2,7 +2,10 @@ import {spawn} from 'child_process'
 import type {MessagePortMain} from 'electron'
 import {join} from 'path'
 
-import {CreateXMLFile} from '../../utils/xml-manager'
+import {XmlGenerator} from '../../../utils/PLC/xml-generator'
+import {access, constants, mkdir} from "fs/promises";
+import {ProjectState} from "../../../renderer/store/slices";
+import {CreateXMLFile} from "../../../main/utils";
 
 export type CompilerResponse = {
     error?: boolean
@@ -13,15 +16,40 @@ export type CompilerResponse = {
 }
 
 const CompilerService = {
-    writeXMLFile: (path: string, data: string, fileName: string) => {
-        const ok = CreateXMLFile({
-            path,
-            data,
-            fileName,
-        })
-        return ok
+    createBuildDirectoryIfNotExist: async (pathToUserProject: string) => {
+        const normalizedUserProjectPath = pathToUserProject.replace('project.json', '')
+        const pathToBuildDirectory = join(normalizedUserProjectPath, 'build')
+        try {
+            await access(pathToBuildDirectory, constants.F_OK)
+            return {success: true, message: 'Directory already exists'}
+        } catch {
+            try {
+                await mkdir(pathToBuildDirectory, {recursive: true})
+                return {success: true, message: 'Directory created'}
+            } catch (err) {
+                // @ts-expect-error Unknown type is not being accepted.
+                return {success: false, message: `Error creating directory at ${pathToBuildDirectory}: ${err.message}`}
+            }
+        }
     },
-
+    createXmlFile: async (pathToUserProject: string, dataToCreateXml: ProjectState['data']): Promise<{success: boolean, message: string}> =>
+        new Promise((resolve, reject) => {
+            const normalizedUserProjectPath = pathToUserProject.replace('project.json', '')
+            const pathToBuildDirectory = join(normalizedUserProjectPath, 'build')
+            const projectDataAsString = XmlGenerator(dataToCreateXml)
+            const result = CreateXMLFile(pathToBuildDirectory, projectDataAsString, 'plc')
+            /**
+             * This condition must be verified.
+             * The CreateXMLFile function return should be validated.
+             * ```It is possible that the success property is always true```
+             */
+            if (result.success) {
+                resolve({success: result.success, message: result.message})
+            } else {
+                reject({success: result.success, message: 'Xml file not created'})
+            }
+        })
+    ,
     /**
      * TODO:
      * 1 - We need to retrieve the Python script output and split it into multiple messages chunks to be sent to the renderer process.
@@ -63,30 +91,11 @@ const CompilerService = {
          * End of lines are separated by \r and \n characters. The ASCII code for \r is 13 and \n is 10.
          */
         execCompilerScript.stdout.on('data', (data: Buffer) => {
-            // const stream = []
             mainProcessPort.postMessage({type: 'default', data: data})
-            // data.forEach((asciiCode, index) => {
-            //     console.log('Here ->', asciiCode, index)
-            // })
-            // console.log(data.toString())
-            // Using this method we can iterate over the buffer and visualize the content as a [index, value] pair value.
-            // for (const pair of data.entries()) {
-            //   console.log(pair)
-            // }
-            // Using this method we can iterate over the buffer and visualize the content as an ASCII character.
-            // for (const bufferValue of data.values()) {
-            //     // Here we look for the end of line characters.
-            //     if (bufferValue === 13 || bufferValue === 10) {
-            //     }
-            // }
         })
 
         execCompilerScript.stderr.on('data', (data: Buffer) => {
             mainProcessPort.postMessage({type: 'error', data: data})
-            // console.error(`stderr: ${data}`)
-            // data.forEach((asciiCode, index) => {
-            //     console.log('ASCII code ->', asciiCode, index)
-            // })
         })
 
         execCompilerScript.on('close', (code) => {
