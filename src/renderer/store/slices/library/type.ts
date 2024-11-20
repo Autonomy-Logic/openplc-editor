@@ -42,7 +42,7 @@ const libraryStateSchema = z.object({
     ]), // This is the libraries that are built-in to the system
     user: z.array(z.object({
       name: z.string(),
-      type: z.enum(['function', 'function-block'])
+      type: z.enum(['function', 'function-block','program'])
     })), // This is the libraries that the user has installed
   }),
 })

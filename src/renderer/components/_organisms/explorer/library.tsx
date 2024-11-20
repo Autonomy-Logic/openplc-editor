@@ -37,7 +37,7 @@ type LibraryProps = {
   }[]
   filteredUserLibraries: {
     name: string
-    type: 'function' | 'function-block'
+    type: 'function' | 'function-block'| 'program'
   }[]
   setSelectedFileKey: (key: string) => void
   selectedFileKey: string | null
