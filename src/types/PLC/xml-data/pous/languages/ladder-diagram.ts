@@ -61,6 +61,7 @@ const rightPowerRailSchema = z.object({
     connection: z.array(
       z.object({
         '@refLocalId': z.string(),
+        '@formalParameter': z.string().optional(),
         position: z.array(
           z.object({
             '@x': z.number(),
@@ -98,7 +99,7 @@ const blockSchema = z.object({
     '@x': z.number(),
     '@y': z.number(),
   }),
-  inVariables: z.object({
+  inputVariables: z.object({
     variable: z.array(
       z.object({
         '@formalParameter': z.string(),
@@ -112,8 +113,8 @@ const blockSchema = z.object({
               '@refLocalId': z.string(), // was just @localId, but it seems to be a reference to other element @localId.
               position: z.array(
                 z.object({
-                  x: z.number(),
-                  y: z.number(),
+                  '@x': z.number(),
+                  '@y': z.number(),
                 }),
               ),
             }),
@@ -127,7 +128,7 @@ const blockSchema = z.object({
    * @wip This is a guess, we need to confirm this.
    */
   inOutVariables: z.string(),
-  outVariables: z.object({
+  outputVariables: z.object({
     variable: z.array(
       z.object({
         '@formalParameter': z.string(),
@@ -176,6 +177,7 @@ const contactSchema = z.object({
     connection: z.array(
       z.object({
         '@refLocalId': z.string(),
+        '@formalParameter': z.string().optional(),
         position: z.array(
           z.object({
             '@x': z.number(),
@@ -230,6 +232,7 @@ const coilSchema = z.object({
     connection: z.array(
       z.object({
         '@refLocalId': z.string(),
+        '@formalParameter': z.string().optional(),
         position: z.array(
           z.object({
             '@x': z.number(),
@@ -359,6 +362,7 @@ const outVariableSchema = z.object({
     connection: z.array(
       z.object({
         '@refLocalId': z.string(),
+        '@formalParameter': z.string().optional(),
         position: z.array(
           z.object({
             '@x': z.number(),
@@ -378,6 +382,7 @@ type OutVariableLadderXML = z.infer<typeof outVariableSchema>
 const ladderXMLSchema = z.object({
   leftPowerRail: z.array(leftPowerRailSchema),
   rightPowerRail: z.array(rightPowerRailSchema),
+  block: z.array(blockSchema),
   contact: z.array(contactSchema),
   coil: z.array(coilSchema),
   inVariable: z.array(inVariableSchema),
