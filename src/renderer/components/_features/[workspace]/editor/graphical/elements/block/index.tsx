@@ -16,6 +16,7 @@ import {
   ModalTitle,
   // ModalTrigger,
 } from '@root/renderer/components/_molecules'
+import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
 import { PLCPou } from '@root/types/PLC/open-plc'
@@ -62,7 +63,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
     editor,
     editorActions: { updateModelVariables },
     flows,
-    flowActions: { updateEdge, updateNode },
+    flowActions: { setNodes, setEdges },
     project: {
       data: { pous },
     },
@@ -198,7 +199,7 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       inputs: String(
         Math.max(
           Number(prevState.inputs) - 1,
-          (selectedFile as BlockVariant).variables.filter((variable) => variable.class === 'input').length || 2,
+          selectedFile && (selectedFile as BlockVariant).variables.filter((variable) => variable.class === 'input').length || 2,
         ),
       ),
     }))
@@ -381,37 +382,45 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       }
     }
 
-    updateNode({
-      nodeId: selectedNode.id,
-      node: newNode,
-      editorName: editor.meta.name,
-      rungId: rung.id,
-    })
+    let newNodes = [...rung.nodes]
+    let newEdges = [...rung.edges]
+
+    newNodes = newNodes.map((n) => (n.id === node.id ? newNode : n))
+
     edges.source?.forEach((edge) => {
-      updateEdge({
-        editorName: editor.meta.name,
-        rungId: rung.id,
-        edgeId: edge.id,
-        edge: {
-          ...edge,
-          id: edge.id.replace(node.id, newNode.id),
-          source: newNode.id,
-          sourceHandle: newNode.data.outputConnector.id,
-        },
-      })
+      const newEdge = {
+        ...edge,
+        id: edge.id.replace(node.id, newNode.id),
+        source: newNode.id,
+        sourceHandle: newNode.data.outputConnector.id,
+      }
+      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
     edges.target?.forEach((edge) => {
-      updateEdge({
-        editorName: editor.meta.name,
-        rungId: rung.id,
-        edgeId: edge.id,
-        edge: {
-          ...edge,
-          id: edge.id.replace(node.id, newNode.id),
-          target: newNode.id,
-          targetHandle: newNode.data.inputConnector.id,
-        },
-      })
+      const newEdge = {
+        ...edge,
+        id: edge.id.replace(node.id, newNode.id),
+        target: newNode.id,
+        targetHandle: newNode.data.inputConnector.id,
+      }
+      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
+    })
+
+    const { nodes: variableNodes, edges: variableEdges } = updateVariableBlockPosition({
+      ...rung,
+      nodes: newNodes,
+      edges: newEdges,
+    })
+
+    setNodes({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodes: variableNodes,
+    })
+    setEdges({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      edges: variableEdges,
     })
 
     handleCloseModal()

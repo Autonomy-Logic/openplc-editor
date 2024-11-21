@@ -1,3 +1,4 @@
+export * from './buffer-to-string-array'
 export { default as classNames } from './classNames'
 export { cn } from './cn'
 export { CONSTANTS } from './constants'
