@@ -381,7 +381,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
       return
     }
 
-    const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
     })
     const variable = variables.selected
@@ -390,7 +390,21 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
       return
     }
 
-    if (variable && variable.name !== blockVariableValue) setBlockVariableValue(variable.name ?? '')
+    if (variable && node && rung && node.data.variable !== variable) {
+      setBlockVariableValue(variable.name)
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            variable,
+          },
+        },
+      })
+    }
     setWrongVariable(false)
   }, [pous])
 
