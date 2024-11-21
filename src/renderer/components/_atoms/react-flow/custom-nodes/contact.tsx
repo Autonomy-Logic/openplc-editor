@@ -11,7 +11,6 @@ import { Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 
-import { InputWithRef } from '../../input'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
@@ -94,7 +93,8 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
   const [contactVariableValue, setContactVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
-  const inputVariableRef = useRef<HTMLInputElement>(null)
+  const inputVariableRef = useRef<HTMLTextAreaElement>(null)
+  const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
   const [inputFocus, setInputFocus] = useState<boolean>(true)
 
   const [isEditing, setIsEditing] = useState<boolean>(false)
@@ -102,6 +102,24 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
   const formattedContactVariableValue = searchQuery
     ? extractSearchQuery(contactVariableValue, searchQuery)
     : contactVariableValue
+
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.style.height = 'auto'
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 32 ? inputVariableRef.current.scrollHeight : 32}px`
+      if (scrollableIndicatorRef.current)
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
+    }
+  }, [contactVariableValue])
+
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.style.height = 'auto'
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 32 ? inputVariableRef.current.scrollHeight : 32}px`
+      if (scrollableIndicatorRef.current)
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
+    }
+  }, [contactVariableValue])
 
   /**
    * useEffect to focus the variable input when the block is selected
@@ -121,7 +139,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
    * Update wrongVariable state when the table of variables is updated
    */
   useEffect(() => {
-    const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
       variableName: contactVariableValue,
     })
@@ -135,6 +153,21 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       setWrongVariable(true)
       return
     }
+    if (variable && node && rung && node.data.variable !== variable) {
+      setContactVariableValue(variable.name)
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            variable,
+          },
+        },
+      })
+    }
 
     setWrongVariable(false)
   }, [pous])
@@ -142,7 +175,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitContactVarible = () => {
+  const handleSubmitContactVariable = () => {
     setInputFocus(false)
 
     const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
@@ -152,13 +185,25 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     if (!rung || !node) return
 
     const variable = variables.selected
-    if (!variable) {
+    if (
+      !variable ||
+      variable.name !== contactVariableValue ||
+      variable.type.definition !== 'base-type' ||
+      variable.type.value.toUpperCase() !== 'BOOL'
+    ) {
       setWrongVariable(true)
-      return
-    }
-
-    if (variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL') {
-      setWrongVariable(true)
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            variable: { name: contactVariableValue },
+          },
+        },
+      })
       return
     }
 
@@ -195,25 +240,32 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       >
         {contact.svg(wrongVariable)}
       </div>
-      <div className='absolute -left-[34px] -top-7 w-24'>
+      <div className='absolute -left-[34px] -top-[38px] flex h-8 w-24 items-center justify-center'>
         {isEditing ? (
-          <InputWithRef
+          <textarea
             value={contactVariableValue}
             onChange={(e) => setContactVariableValue(e.target.value)}
             placeholder='???'
-            className='w-full bg-transparent text-center text-sm outline-none'
+            className='w-full resize-none bg-transparent text-center text-xs outline-none [&::-webkit-scrollbar]:hidden'
             onFocus={() => setInputFocus(true)}
-            onBlur={() => inputFocus && handleSubmitContactVarible()}
+            onBlur={() => {
+              if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
+              inputFocus && handleSubmitContactVariable()
+            }}
             onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
             ref={inputVariableRef}
+            rows={1}
           />
         ) : (
           <p
             onClick={() => setIsEditing(true)}
-            className='w-full bg-transparent text-center text-sm outline-none'
+            className='w-full resize-none bg-transparent text-center text-xs outline-none [&::-webkit-scrollbar]:hidden'
             dangerouslySetInnerHTML={{ __html: formattedContactVariableValue || '???' }}
           />
         )}
+      </div>
+      <div className={cn('pointer-events-none absolute -right-[48px] -top-7 text-xs')} ref={scrollableIndicatorRef}>
+        ↕
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
@@ -261,6 +313,9 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
       numericId: generateNumericUUID(),
       variable: { name: '' },
       executionOrder: 0,
+      draggable: true,
+      selectable: true,
+      deletable: true,
     },
     width: DEFAULT_CONTACT_BLOCK_WIDTH,
     height: DEFAULT_CONTACT_BLOCK_HEIGHT,

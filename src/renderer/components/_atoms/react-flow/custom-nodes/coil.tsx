@@ -13,7 +13,6 @@ import { Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 
-import { InputWithRef } from '../../input'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
@@ -124,7 +123,8 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
   const [coilVariableValue, setCoilVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
-  const inputVariableRef = useRef<HTMLInputElement>(null)
+  const inputVariableRef = useRef<HTMLTextAreaElement>(null)
+  const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
   const [inputFocus, setInputFocus] = useState<boolean>(true)
 
   const [isEditing, setIsEditing] = useState<boolean>(false)
@@ -132,6 +132,24 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
   const formattedCoilVariableValue = searchQuery
     ? extractSearchQuery(coilVariableValue, searchQuery)
     : coilVariableValue
+
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.style.height = 'auto'
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 32 ? inputVariableRef.current.scrollHeight : 32}px`
+      if (scrollableIndicatorRef.current)
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
+    }
+  }, [coilVariableValue])
+
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.style.height = 'auto'
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 32 ? inputVariableRef.current.scrollHeight : 32}px`
+      if (scrollableIndicatorRef.current)
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
+    }
+  }, [coilVariableValue])
 
   /**
    * useEffect to focus the variable input when the block is selected
@@ -151,14 +169,31 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
    * Update wrongVariable state when the table of variables is updated
    */
   useEffect(() => {
-    const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
       variableName: coilVariableValue,
     })
 
-    if (!variables.selected && !inputFocus) {
+    const variable = variables.selected
+    if (!variable && !inputFocus) {
       setWrongVariable(true)
       return
+    }
+
+    if (variable && node && rung && node.data.variable !== variable) {
+      setCoilVariableValue(variable.name)
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            variable,
+          },
+        },
+      })
     }
 
     setWrongVariable(false)
@@ -177,8 +212,20 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     if (!rung || !node) return
 
     const variable = variables.selected
-    if (!variable) {
+    if (!variable || variable.name !== coilVariableValue) {
       setWrongVariable(true)
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            variable: { name: coilVariableValue },
+          },
+        },
+      })
       return
     }
 
@@ -215,25 +262,32 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       >
         {coil.svg(wrongVariable)}
       </div>
-      <div className='absolute -left-[31px] -top-7 w-24'>
+      <div className='absolute -left-[30px] -top-[38px] flex h-8 w-24 items-center justify-center'>
         {isEditing ? (
-          <InputWithRef
+          <textarea
             value={coilVariableValue}
             onChange={(e) => setCoilVariableValue(e.target.value)}
             placeholder='???'
-            className='w-full bg-transparent text-center text-sm outline-none'
+            className='w-full resize-none bg-transparent text-center text-xs outline-none [&::-webkit-scrollbar]:hidden'
             onFocus={() => setInputFocus(true)}
-            onBlur={() => inputFocus && handleSubmitCoilVariable()}
+            onBlur={() => {
+              if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
+              inputFocus && handleSubmitCoilVariable()
+            }}
             onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
             ref={inputVariableRef}
+            rows={1}
           />
         ) : (
           <p
             onClick={() => setIsEditing(true)}
-            className='w-full bg-transparent text-center text-sm outline-none'
+            className='w-full resize-none bg-transparent text-center text-xs outline-none [&::-webkit-scrollbar]:hidden'
             dangerouslySetInnerHTML={{ __html: formattedCoilVariableValue || '???' }}
           />
         )}
+      </div>
+      <div className={cn('pointer-events-none absolute -right-[48px] -top-7 text-xs')} ref={scrollableIndicatorRef}>
+        ↕
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
@@ -281,6 +335,9 @@ export const buildCoilNode = ({ id, posX, posY, handleX, handleY, variant }: Coi
       numericId: generateNumericUUID(),
       variable: { name: '' },
       executionOrder: 0,
+      draggable: true,
+      selectable: true,
+      deletable: true,
     },
     width: DEFAULT_COIL_BLOCK_WIDTH,
     height: DEFAULT_COIL_BLOCK_HEIGHT,

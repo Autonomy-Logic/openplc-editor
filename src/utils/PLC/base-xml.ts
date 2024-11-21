@@ -6,7 +6,7 @@ import formatDate from '../formatDate'
 import { instanceToXml } from './instances-xml'
 import { parsePousToXML } from './pou-xml'
 
-const baseXmlStructure = (): BaseXml => ({
+const getBaseXmlStructure = (): BaseXml => ({
   project: {
     '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
     '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema-instance',
@@ -64,10 +64,12 @@ const baseXmlStructure = (): BaseXml => ({
   },
 })
 
-export const parseProjectToXML = (project: ProjectState) => {
-  console.log('=-=-=-= PARSING TO XML =-=-=-=')
-  console.log('Project:', project)
-  let xmlResult = baseXmlStructure()
+/**
+ * This is not being used anymore.
+ * @deprecated
+ */
+export const parseProjectToXML = (project: ProjectState): string => {
+  let xmlResult = getBaseXmlStructure()
 
   /**
    * Parse POUs
@@ -85,19 +87,22 @@ export const parseProjectToXML = (project: ProjectState) => {
   doc.dec({ version: '1.0', encoding: 'utf-8' })
   const xml = doc.end({ prettyPrint: true })
   console.log('xml as object', xmlResult)
-  console.log(xml)
-  console.log('=-=-=-= FINISHED PARSE TO XML =-=-=-=')
-  console.log('=-=-=-= SAVING XML =-=-=-=')
-  window.bridge
-    .writeXMLFile(project.meta.path.replace('data.json', ''), xml, 'plc')
-    .then((res) => {
-      if (res) {
-        console.log('File saved', project.meta.path.replace('data.json', 'plc.xml'))
-        console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
-      }
-    })
-    .catch((err) => {
-      console.error('Error saving project:', err)
-      console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
-    })
+  return xml
+  // console.log('=-=-=-= FINISHED PARSE TO XML =-=-=-=')
+  // console.log('=-=-=-= SAVING XML =-=-=-=')
+  // window.bridge
+  //   .writeXMLFile(project.meta.path.replace('project.json', ''), xml, 'plc')
+  //   .then((res) => {
+  //     if (res) {
+  //       console.log('File saved', project.meta.path.replace('project.json', 'plc.xml'))
+  //       console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
+  //     }
+  //   })
+  //   .catch((err) => {
+  //     console.error('Error saving project:', err)
+  //     console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
+  //   })
+
 }
+
+export {getBaseXmlStructure}
