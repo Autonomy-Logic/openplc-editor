@@ -1,151 +1,75 @@
-// import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
-// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@root/renderer/components/_atoms'
-// import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 // import { useOpenPLCStore } from '@root/renderer/store'
-// import { PLCDataTypeDerivationSchema, PLCDataTypeStructureElement } from '@root/types/PLC/open-plc'
-// import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
-// import { useEffect, useState } from 'react'
-// import { z } from 'zod'
+import { PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
+import _ from 'lodash'
+import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
-// const Structure = PLCDataTypeDerivationSchema.options[2]
-// type PLCDataTypeStructure = z.infer<typeof Structure>
+import { EnumeratedTable } from '../enumerated/table'
 
-// const columnHelper = createColumnHelper<PLCDataTypeStructureElement>()
-// const columns = [
-//   columnHelper.accessor('id', {
-//     header: '#',
-//     size: 64,
-//     minSize: 32,
-//     maxSize: 64,
-//     enableResizing: true,
-//     cell: (props) => props.row.id,
-//   }),
-//   columnHelper.accessor('name', {
-//     header: 'Name',
-//     enableResizing: true,
-//     size: 150,
-//     minSize: 150,
-//     maxSize: 300,
-//   }),
-//   columnHelper.accessor('type.value', {
-//     header: 'Type',
-//     enableResizing: true,
-//     size: 150,
-//     minSize: 150,
-//     maxSize: 300,
-//   }),
-//   columnHelper.accessor('initialValue', {
-//     header: 'Initial Value',
-//     enableResizing: true,
-//     size: 150,
-//     minSize: 150,
-//     maxSize: 300,
-//   }),
-// ]
+type EnumDatatypeProps = ComponentPropsWithoutRef<'div'> & {
+  data: PLCEnumeratedDatatype
+}
+const StructureDataType = ({ data, ...rest }: EnumDatatypeProps) => {
+  const [initialValueData, setInitialValueData] = useState<string>('none')
 
-// const StructureDataType = () => {
-//   const {
-//     workspace: {
-//       projectData: { dataTypes },
-//     },
-//   } = useOpenPLCStore()
+  useEffect(() => {
+    setInitialValueData(data.initialValue || 'none')
+  }, [data.initialValue, data.name])
 
-//   const [dataTypesState, setDataTypesState] = useState<PLCDataTypeStructure['elements']>([])
+  return (
+    <div
+      aria-label='Enumerated data type container'
+      className='flex h-full w-full flex-1 flex-col gap-4 overflow-hidden bg-transparent'
+      {...rest}
+    >
+      <div aria-label='Data type content actions container' className='flex h-8 w-full gap-8'>
+        <div aria-label='Enumerated base type container' className='flex w-1/2 flex-col gap-3'></div>
+        <div aria-label='Enumerated initial value container' className='w-1/2'>
+          <div
+            aria-label='Enumerated data type initial value container'
+            className='h- flex w-full items-center justify-end'
+          >
+            <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100 '>
+              Initial Value:
+            </label>
+            <Select>
+              <SelectTrigger
+                withIndicator
+                className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 focus-within:border-brand focus:border-brand focus:outline-none dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
+              >
+                {initialValueData === 'none' ? '' : initialValueData}
+              </SelectTrigger>
+              <SelectContent className='box h-fit  max-h-[200px] w-[--radix-select-trigger-width] overflow-auto  rounded-lg bg-white outline-none dark:bg-neutral-950'>
+                <SelectItem
+                  value='none'
+                  className='flex h-8 w-full cursor-pointer items-center  justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  onClick={() => setInitialValueData('none')}
+                >
+                  <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                    {''}
+                  </span>
+                </SelectItem>
+                {data.values.map((value) => (
+                  <SelectItem
+                    key={value.description}
+                    value={value.description}
+                    className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                    onClick={() => setInitialValueData(value.description)}
+                  >
+                    <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                      {value.description}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
 
-//   useEffect(() => {
-//     const structureDataType = dataTypes.filter((dataType) => dataType.derivation.type === 'structure')
-//     structureDataType.forEach((dataType) => {
-//       if (dataType.derivation === 'structure') {
-//         setDataTypesState(dataType.derivation)
-//       }
-//     })
-//   }, [dataTypes])
+      <EnumeratedTable name={data.name} values={data.values} />
+    </div>
+  )
+}
 
-//   useEffect(() => {
-//     console.log('structure data type', dataTypesState)
-//   }, [dataTypesState])
-
-//   const table = useReactTable({
-//     columns: columns,
-//     data: dataTypesState,
-//     getCoreRowModel: getCoreRowModel(),
-//   })
-
-//   return (
-//     <div aria-label='Struct data type container' className='flex h-full w-full flex-col gap-4 bg-transparent'>
-//       <div aria-label='Struct data type content actions container' className='flex flex-col gap-8'>
-//         <div
-//           aria-label='Struct data type table actions container'
-//           className='flex h-full w-full items-center justify-between'
-//         >
-//           <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
-//             Elements
-//           </p>
-//           <div
-//             aria-label='Data type table actions buttons container'
-//             className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
-//           >
-//             <TableActionButton aria-label='Add table row button' onClick={() => console.log('Button clicked')}>
-//               <PlusIcon className='!stroke-brand' />
-//             </TableActionButton>
-//             <TableActionButton aria-label='Remove table row button' onClick={() => console.log('Button clicked')}>
-//               <MinusIcon />
-//             </TableActionButton>
-//             <TableActionButton aria-label='Move table row up button' onClick={() => console.log('Button clicked')}>
-//               <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
-//             </TableActionButton>
-//             <TableActionButton aria-label='Move table row down button' onClick={() => console.log('Button clicked')}>
-//               <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
-//             </TableActionButton>
-//           </div>
-//         </div>
-//       </div>
-
-//       <Table context='Variables' className='mr-1'>
-//         <TableHeader>
-//           {table.getHeaderGroups().map((headerGroup) => (
-//             <TableRow key={headerGroup.id}>
-//               {headerGroup.headers.map((header) => (
-//                 <TableHead
-//                   resizable={header.column.columnDef.enableResizing}
-//                   isResizing={header.column.getIsResizing()}
-//                   resizeHandler={header.getResizeHandler()}
-//                   style={{
-//                     width: header.getSize(),
-//                     maxWidth: header.column.columnDef.maxSize,
-//                     minWidth: header.column.columnDef.minSize,
-//                   }}
-//                   key={header.id}
-//                 >
-//                   {flexRender(header.column.columnDef.header, header.getContext())}
-//                 </TableHead>
-//               ))}
-//             </TableRow>
-//           ))}
-//         </TableHeader>
-//         <TableBody>
-//           {table.getRowModel().rows.map((row) => (
-//             <TableRow id={row.id} key={row.id} className='h-8 cursor-pointer'>
-//               {row.getVisibleCells().map((cell) => (
-//                 <TableCell
-//                   style={{
-//                     width: cell.column.getSize(),
-//                     maxWidth: cell.column.columnDef.maxSize,
-//                     minWidth: cell.column.columnDef.minSize,
-//                   }}
-//                   key={cell.id}
-//                 >
-//                   {flexRender(cell.column.columnDef.cell, {
-//                     ...cell.getContext(),
-//                   })}
-//                 </TableCell>
-//               ))}
-//             </TableRow>
-//           ))}
-//         </TableBody>
-//       </Table>
-//     </div>
-//   )
-// }
-
-// export { StructureDataType }
+export { StructureDataType }

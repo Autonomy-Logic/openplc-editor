@@ -41,14 +41,34 @@ const PLCEnumeratedDatatypeSchema = z.object({
   initialValue: z.string().optional(),
   values: z.array(z.object({ description: z.string() })),
 })
+const PLCStructureDatatypeSchema = z.object({
+  name: z.string(),
+  derivation: z.literal('structure'),
+  variables: z.array(
+    z.object({
+      name: z.string(),
+      type: z.object({
+        baseType: baseTypeSchema,
+      }),
+      initialValue: z
+        .object({
+          simpleValue: z.object({
+            value: z.string(),
+          }),
+        })
+        .optional(),
+    }),
+  ),
+})
 
 type PLCEnumeratedDatatype = z.infer<typeof PLCEnumeratedDatatypeSchema>
 type PLCArrayDatatype = z.infer<typeof PLCArrayDatatypeSchema>
+type PLCStructureDatatype = z.infer<typeof PLCStructureDatatypeSchema>
 
 const PLCDataTypeSchema = z.discriminatedUnion('derivation', [
   PLCEnumeratedDatatypeSchema,
   PLCArrayDatatypeSchema,
-  z.object({ name: z.string(), derivation: z.literal('structure') }),
+  PLCStructureDatatypeSchema,
 ])
 
 type PLCDataType = z.infer<typeof PLCDataTypeSchema>
@@ -235,6 +255,7 @@ export {
   PLCProjectDataSchema,
   PLCProjectMetaSchema,
   PLCProjectSchema,
+  PLCStructureDatatypeSchema,
   PLCTaskSchema,
   PLCVariableSchema,
 }
@@ -254,6 +275,7 @@ export type {
   PLCProject,
   PLCProjectData,
   PLCProjectMeta,
+  PLCStructureDatatype,
   PLCTask,
   PLCVariable,
 }
