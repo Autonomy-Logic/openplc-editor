@@ -93,6 +93,9 @@ export const builderPlaceholderNode = ({
       relatedNode,
       variable: { name: '' },
       executionOrder: 0,
+      draggable: false,
+      selectable: true,
+      deletable: true,
     },
     position: {
       x: posX,

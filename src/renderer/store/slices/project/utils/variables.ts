@@ -31,7 +31,26 @@ const variableNameValidation = (variableName: string) => {
  *
  * It is exported to be used at array-modal.tsx file present at src/renderer/components/_molecules/variables-table/elements.
  */
+const enumeratedValidation = ({ value }: { value: string }) => {
+  const regex =
+  /^([a-zA-Z0-9]+(?:[A-Z][a-z0-9]*)*)|([A-Z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)|([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*)$/
+  if (value === '') {
+    return {
+      ok: false,
+      title: 'Invalid enumerated value',
+      message: `The enumerated value can not be empty.`,
+    }
+  }
 
+  if (!regex.test(value)) {
+    return {
+      ok: false,
+      title: 'Invalid enumerated value',
+      message: `The enumerated value "${value}" is invalid. Valid names: CamelCase, PascalCase or SnakeCase.`,
+    }
+  }
+  return { ok: true }
+}
 const validateArrayValue = (value: string) => {
   const [left, right] = value.split('..').map(Number)
   return Number.isInteger(left) && Number.isInteger(right) && left < right
@@ -369,6 +388,7 @@ export {
   arrayValidation,
   createGlobalVariableValidation,
   createVariableValidation,
+  enumeratedValidation,
   updateGlobalVariableValidation,
   updateVariableValidation,
 }

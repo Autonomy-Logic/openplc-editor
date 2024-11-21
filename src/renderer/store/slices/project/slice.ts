@@ -1,6 +1,7 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
+import { v4 as uuidv4 } from 'uuid'
 import { StateCreator } from 'zustand'
 
 import { ProjectResponse, ProjectSlice } from './types'
@@ -91,13 +92,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             response = { ok: true, message: 'Pou created successfully' }
             console.log('pou created:', pouToBeCreated)
           }
-          if (dataTypeExists || pouExists) {
-            toast({
-              title: 'Invalid Pou',
-              description: `You can't create a Pou with this name.`,
-              variant: 'fail',
-            })
-          }
+           if  (dataTypeExists || pouExists)
+              {toast({
+                title: 'Invalid Pou',
+                description: `You can't create a Pou with this name.`,
+                variant: 'fail',
+              })}
         }),
       )
       return response
@@ -158,6 +158,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               variableToBeCreated.data = {
                 ...variableToBeCreated.data,
                 ...createVariableValidation(pou.data.variables, variableToBeCreated.data),
+                id: variableToBeCreated.data.id ? variableToBeCreated.data.id : uuidv4(),
               }
               if (variableToBeCreated.rowToInsert !== undefined) {
                 pou.data.variables.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)

@@ -13,12 +13,14 @@ export default function LadderEditor() {
     projectActions: { updatePou },
   } = useOpenPLCStore()
 
+  const flow = flows.find((flow) => flow.name === editor.meta.name)
+  const flowUpdated = flow?.updated
+
   /**
    * Update the flow state to project JSON
    */
   useEffect(() => {
-    const flow = flows.find((flow) => flow.name === editor.meta.name)
-    if (!flow) return
+    if (!flowUpdated) return
 
     const flowSchema = zodFlowSchema.safeParse(flow)
     if (!flowSchema.success) return
@@ -30,7 +32,8 @@ export default function LadderEditor() {
         value: flowSchema.data,
       },
     })
-  }, [flows.find((flow) => flow.name === editor.meta.name)])
+    flowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
+  }, [flowUpdated === true])
 
   const handleAddNewRung = () => {
     const defaultViewport: [number, number] = [1530, 250]

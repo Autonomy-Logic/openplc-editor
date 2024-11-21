@@ -1,27 +1,18 @@
 import { writeFile } from 'fs'
 import { join } from 'path'
 
-import { createDirectoryIfNotExists } from '../services/utils/create-directory-if-not-exists'
-
-type ICreateXMLFileProps = {
-  path: string
-  data: string
-  fileName: string
-}
-
-const CreateXMLFile = (args: ICreateXMLFileProps) => {
-  const { path, fileName, data } = args
-  createDirectoryIfNotExists(path)
-    .then(() => {
-      const normalizedPath = join(path, `${fileName}.xml`)
-      writeFile(normalizedPath, data, (error) => {
-        if (error) throw error
-      })
-      return { ok: true }
-    })
-    .catch(() => {
-      return { ok: false }
-    })
+/**
+ * Create a xml file with the given params.
+ * @param path - the path where the file must be created
+ * @param dataToWrite - the data to write in the file
+ * @param fileName - the file display name
+ */
+const CreateXMLFile = (path: string, dataToWrite: string, fileName: string) => {
+  const normalizedPath = join(path, `${fileName}.xml`)
+  writeFile(normalizedPath, dataToWrite, (error) => {
+    if (error) return { success: false, error}
+  })
+  return { success: true, message: 'Xml file created successfully' }
 }
 
 export { CreateXMLFile }

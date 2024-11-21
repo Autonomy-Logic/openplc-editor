@@ -3,8 +3,6 @@ import { BaseXml } from '@root/types/PLC/xml-data'
 import { PouInstance, TaskXML } from '@root/types/PLC/xml-data/task/task-diagram'
 
 export const instanceToXml = (xml: BaseXml, configuration: PLCConfiguration) => {
-  console.log('configuration:', configuration)
-
   const { instances, tasks, globalVariables } = configuration.resource
 
   tasks.forEach((task) => {
