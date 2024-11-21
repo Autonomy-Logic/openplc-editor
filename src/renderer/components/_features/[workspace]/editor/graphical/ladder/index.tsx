@@ -2,7 +2,7 @@ import { CreateRung } from '@root/renderer/components/_molecules/rung/create-run
 import { Rung } from '@root/renderer/components/_organisms/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { zodFlowSchema } from '@root/renderer/store/slices'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 export default function LadderEditor() {
@@ -11,7 +11,20 @@ export default function LadderEditor() {
     editor,
     flowActions,
     projectActions: { updatePou },
+    searchNodePosition,
   } = useOpenPLCStore()
+
+  const scrollableRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (scrollableRef.current) {
+      scrollableRef.current.scrollTo({
+        top: searchNodePosition.y,
+        left: searchNodePosition.x,
+        behavior: 'smooth',
+      })
+    }
+  }, [searchNodePosition])
 
   /**
    * Update the flow state to project JSON
@@ -43,7 +56,7 @@ export default function LadderEditor() {
   }
 
   return (
-    <div className='h-full w-full overflow-y-auto' style={{ scrollbarGutter: 'stable' }}>
+    <div className='h-full w-full overflow-y-auto' ref={scrollableRef} style={{ scrollbarGutter: 'stable' }}>
       <div className='flex flex-1 flex-col gap-4 px-2'>
         {flows
           .find((flow) => flow.name === editor.meta.name)

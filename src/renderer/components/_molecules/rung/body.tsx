@@ -28,6 +28,7 @@ import {
   searchNearestPlaceholder,
   // updateDiagramElementsPosition,
 } from './ladder-utils/elements'
+import { findNode } from './ladder-utils/nodes'
 
 type RungBodyProps = {
   rung: RungState
@@ -43,6 +44,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       data: { pous },
     },
     projectActions: { deleteVariable },
+    searchQuery,
+    searchActions: { setSearchNodePosition },
   } = useOpenPLCStore()
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
@@ -56,6 +59,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const flowRef = useRef<HTMLDivElement>(null)
+  const scrollableRef = useRef<HTMLDivElement>(null)
 
   /**
    * -- Which means, by default, the flow panel extent is:
@@ -154,6 +158,36 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       })),
     }))
   }, [selectedNodes.length])
+
+  useEffect(() => {
+    if (!searchQuery) return
+
+    const foundNode = rungLocal.nodes.find((node) => (node.data as BasicNodeData)?.variable?.name === searchQuery)
+
+    if (foundNode) {
+      const nodePosition = findNode(rungLocal, foundNode.id).node?.position
+
+      if (!nodePosition) return
+
+      const zoom = reactFlowInstance?.getZoom() ?? 1
+      const pan = reactFlowInstance?.toObject() ?? { x: 0, y: 0 }
+
+      const adjustedsearchNodePosition = {
+        x: nodePosition.x * zoom + ('x' in pan ? pan.x : 0),
+        y: nodePosition.y * zoom + ('y' in pan ? pan.y : 0),
+      }
+
+      setSearchNodePosition(adjustedsearchNodePosition)
+
+      scrollableRef.current?.scrollTo({
+        top: adjustedsearchNodePosition.y,
+        left: adjustedsearchNodePosition.x - 100,
+        behavior: 'smooth',
+      })
+    } else {
+      setSearchNodePosition({ x: 0, y: 0 })
+    }
+  }, [searchQuery, rungLocal, reactFlowInstance])
 
   const handleAddNode = (newNodeType: string = 'mockNode', blockType: string | undefined) => {
     let pouLib = undefined
@@ -369,7 +403,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   return (
     <div className='relative h-fit w-full rounded-b-lg border border-t-0 p-1 dark:border-neutral-800'>
-      <div aria-label='Rung body' className='h-full w-full overflow-x-auto'>
+      <div aria-label='Rung body' className='h-full w-full overflow-x-auto' ref={scrollableRef}>
         <div
           style={{
             height: flowPanelExtent[1][1] + 8,

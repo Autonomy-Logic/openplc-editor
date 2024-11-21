@@ -149,8 +149,7 @@ const Search = ({ items }: SearchProps) => {
                                       name: pou.name,
                                       path: `/data/pous/${pou.pouType}/${pou.name}`,
                                       elementType: { type: pou.pouType, language: pou.language },
-                                    }),
-                                      setSearchQuery(item.searchQuery)
+                                    })
                                   }}
                                 >
                                   {pou.variable &&
@@ -161,6 +160,7 @@ const Search = ({ items }: SearchProps) => {
                                           key={variableIndex}
                                           label={extractSearchQuery(variable, item.searchQuery)}
                                           hasVariable
+                                          onClick={() => setSearchQuery(variable)}
                                         />
                                       ))}
                                   {(pou.language === 'st' || pou.language === 'il') && (
