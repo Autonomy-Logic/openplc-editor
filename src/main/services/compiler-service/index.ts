@@ -33,12 +33,10 @@ const CompilerService = {
     }
   },
   createXmlFile: async (
-    pathToUserProject: string,
+    pathToBuildDirectory: string,
     dataToCreateXml: ProjectState['data'],
   ): Promise<{ success: boolean; message: string }> =>
     new Promise((resolve, reject) => {
-      const normalizedUserProjectPath = pathToUserProject.replace('project.json', '')
-      const pathToBuildDirectory = join(normalizedUserProjectPath, 'build')
       const projectDataAsString = XmlGenerator(dataToCreateXml)
       const result = CreateXMLFile(pathToBuildDirectory, projectDataAsString, 'plc')
       /**

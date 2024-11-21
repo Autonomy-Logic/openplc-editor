@@ -64,9 +64,11 @@ const CreateProjectFile = (dataToCreateProjectFile: CreateProjectFileProps) => {
     'project',
   )
 
-  if (!success) {
+  if (!success.ok) {
     return {
-      success: false,
+      success: {
+        ok: false,
+      },
       data: undefined,
     }
   }

@@ -33,7 +33,7 @@ const DownloadButton = () => {
         if (success) {
             addLog({id: uuidv4(), type: 'info', message: logMessage})
             addLog({id: uuidv4(), type: 'warning', message: 'Attempting to generate the xml file'})
-            const result = await window.bridge.createXmlFileToBuild(project.meta.path, project.data)
+            const result = await window.bridge.createXmlFileToBuild(project.meta.buildPath, project.data)
             if (result.success) {
                 addLog({id: uuidv4(), type: 'info', message: result.message})
                 addLog({id: uuidv4(), type: 'warning', message: 'Attempting to build the program'})

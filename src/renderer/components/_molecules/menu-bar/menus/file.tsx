@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useHandleRemoveTab } from '@root/renderer/hooks'

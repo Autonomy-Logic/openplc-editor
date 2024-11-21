@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { PouLanguageSources } from '@process:renderer/data'
 import { TimerIcon } from '@root/renderer/assets'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
