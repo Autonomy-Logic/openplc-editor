@@ -392,7 +392,10 @@ const blockToXml = (block: BlockNode<BlockVariant>, rung: RungState, offsetY: nu
 
     // Check if the handle is connected to an existing variable node
     const variableNode = rung.nodes.find(
-      (node) => node.type === 'variable' && (node as VariableNode).data.block.id === block.id,
+      (node) =>
+        node.type === 'variable' &&
+        (node as VariableNode).data.block.id === block.id &&
+        (node as VariableNode).data.block.handleId === handle.id,
     ) as Node<BasicNodeData>
     if (!variableNode) return undefined
 
@@ -559,6 +562,7 @@ const ladderToXml = (rungs: RungState[]) => {
           ladderXML.body.LD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung, offsetY))
           break
         case 'variable':
+          if ((node as VariableNode).data.variable.name === '') return
           if ((node as VariableNode).data.variant === 'input')
             ladderXML.body.LD.inVariable.push(inVariableToXML(node as VariableNode, offsetY))
           if ((node as VariableNode).data.variant === 'output')

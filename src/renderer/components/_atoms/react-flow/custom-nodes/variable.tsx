@@ -107,9 +107,6 @@ const VariableElement = ({ id, data }: VariableProps) => {
     if (!rung || !node) return
     const variableNode = node as VariableNode
 
-    console.log('node', node)
-    console.log('variables', variables.selected)
-
     let variable: PLCVariable | { name: string } | undefined = variables.selected
     if (!variable) {
       setIsAVariable(false)
