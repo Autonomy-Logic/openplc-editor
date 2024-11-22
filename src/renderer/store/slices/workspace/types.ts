@@ -13,6 +13,8 @@ const workspaceStateSchema = z.object({
     editingState: z.enum(['save-request', 'saved', 'unsaved']),
     systemConfigs: systemConfigsSchema,
     recents: z.array(z.object({ lastOpenedAt: z.string(), createdAt: z.string(), path: z.string() })),
+    isCollapsed: z.boolean(),
+    isModalOpen: z.array(z.object({ modalName: z.string(), modalState: z.boolean() })),
   }),
 })
 type WorkspaceState = z.infer<typeof workspaceStateSchema>
@@ -31,12 +33,9 @@ const workspaceActionsSchema = z.object({
 
   switchAppTheme: z.function().returns(z.void()),
   toggleMaximizedWindow: z.function().returns(z.void()),
-<<<<<<< Updated upstream
-=======
   toggleCollapse: z.function().returns(z.void()),
   setModalOpen: z.function().args(z.string(), z.boolean()).returns(z.void()),
   clearWorkspace: z.function().returns(z.void()),
->>>>>>> Stashed changes
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 
@@ -44,16 +43,5 @@ type WorkspaceSlice = WorkspaceState & {
   workspaceActions: WorkspaceActions
 }
 
-export {
-  systemConfigsSchema,
-  workspaceActionsSchema,
-  workspaceResponseSchema,
-  workspaceStateSchema,
-}
-export type {
-  SystemConfigs,
-  WorkspaceActions,
-  WorkspaceResponse,
-  WorkspaceSlice,
-  WorkspaceState,
-}
+export { systemConfigsSchema, workspaceActionsSchema, workspaceResponseSchema, workspaceStateSchema }
+export type { SystemConfigs, WorkspaceActions, WorkspaceResponse, WorkspaceSlice, WorkspaceState }

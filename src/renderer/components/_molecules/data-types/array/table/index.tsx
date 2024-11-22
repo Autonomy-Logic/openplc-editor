@@ -43,6 +43,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
         minSize: 350,
         maxSize: 900,
         enableResizing: true,
+
         cell: (cellProps) => (
           <DimensionCell
             key={cellProps.row.id}

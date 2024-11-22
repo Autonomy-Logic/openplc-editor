@@ -8,9 +8,9 @@ import { MenuClasses } from '../constants'
 export const DisplayMenu = () => {
   const {
     workspace: {
-      systemConfigs: { shouldUseDarkMode },
+      systemConfigs: { shouldUseDarkMode }
     },
-    workspaceActions: { switchAppTheme },
+    workspaceActions: { switchAppTheme, toggleCollapse },
   } = useOpenPLCStore()
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
@@ -22,6 +22,10 @@ export const DisplayMenu = () => {
   const handleChangeTheme = () => {
     window.bridge.winHandleUpdateTheme()
     switchAppTheme()
+  }
+
+  const switchPerspective = () => {
+    toggleCollapse()
   }
 
   return (
@@ -46,13 +50,9 @@ export const DisplayMenu = () => {
             <span>{i18n.t('menu:display.submenu.zoomOut')}</span>
             <span className={ACCELERATOR}>{'Ctrl + - '}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} onClick={() => switchPerspective()}>
             <span>{i18n.t('menu:display.submenu.switchPerspective')}</span>
             <span className={ACCELERATOR}>{'F12 '}</span>
-          </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
-            <span>{i18n.t('menu:display.submenu.resetPerspective')}</span>
-            <span className={ACCELERATOR}>{'Shift + F12 '}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} disabled>

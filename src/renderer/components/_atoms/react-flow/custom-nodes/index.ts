@@ -1,3 +1,5 @@
+import { Node } from '@xyflow/react'
+
 import * as blockNode from './block'
 import * as coilNode from './coil'
 import * as contactNode from './contact'
@@ -5,6 +7,7 @@ import * as mockNode from './mock-node'
 import * as parallelNode from './parallel'
 import * as placeholderNode from './placeholder'
 import * as powerRailNode from './power-rail'
+import * as variableNode from './variable'
 
 export const DEFAULT_NODES_GAP = 50
 
@@ -16,6 +19,7 @@ export const customNodeTypes = {
   parallelPlaceholder: placeholderNode.Placeholder,
   placeholder: placeholderNode.Placeholder,
   powerRail: powerRailNode.PowerRail,
+  variable: variableNode.VariableElement,
   mockNode: mockNode.MockNode,
 }
 
@@ -36,7 +40,7 @@ export const defaultCustomNodesStyles: CustomNodeTypes = {
   block: {
     width: blockNode.DEFAULT_BLOCK_WIDTH,
     height: blockNode.DEFAULT_BLOCK_HEIGHT,
-    gap: 80,
+    gap: 120,
     verticalGap: 80,
     handle: {
       x: blockNode.DEFAULT_BLOCK_CONNECTOR_X,
@@ -110,6 +114,17 @@ export const defaultCustomNodesStyles: CustomNodeTypes = {
       offsetY: 0,
     },
   },
+  variable: {
+    width: variableNode.DEFAULT_VARIABLE_WIDTH,
+    height: variableNode.DEFAULT_VARIABLE_HEIGHT,
+    gap: 30,
+    verticalGap: 0,
+    handle: {
+      x: variableNode.DEFAULT_VARIABLE_CONNECTOR_X,
+      y: variableNode.DEFAULT_VARIABLE_CONNECTOR_Y,
+      offsetY: variableNode.DEFAULT_VARIABLE_CONNECTOR_Y,
+    },
+  },
   mockNode: {
     width: 150,
     height: 40,
@@ -131,5 +146,10 @@ export const nodesBuilder = {
   parallelPlaceholder: placeholderNode.builderPlaceholderNode,
   placeholder: placeholderNode.builderPlaceholderNode,
   powerRail: powerRailNode.buildPowerRailNode,
+  variable: variableNode.buildVariableNode,
   mockNode: mockNode.buildMockNode,
+}
+
+export const checkIfElementIsNode = (element: unknown): element is Node => {
+  return (element as Node)?.data !== undefined
 }
