@@ -27,15 +27,24 @@ const Explorer = ({ collapse }: ExplorerProps): ReactElement => {
   const filteredUserLibraries = user.filter((userLibrary) => {
     if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
       if (editor.meta.pouType === 'program') {
-        return userLibrary.type === 'function' || userLibrary.type === 'function-block'
+        return (
+          (userLibrary.type === 'function' || userLibrary.type === 'function-block') &&
+          userLibrary.name !== editor.meta.name
+        );
       } else if (editor.meta.pouType === 'function') {
-        return userLibrary.type === 'function'
+        return userLibrary.type === 'function' && userLibrary.name !== editor.meta.name;
       } else if (editor.meta.pouType === 'function-block') {
-        return userLibrary.type === 'function' || userLibrary.type === 'function-block'
+        return (
+          (userLibrary.type === 'function' || userLibrary.type === 'function-block') &&
+          userLibrary.name !== editor.meta.name
+        );
       }
     }
-    return false
-  })
+
+    // Remove userLibrary if its name matches editor.meta.name (fallback case)
+    return userLibrary.name !== editor.meta.name;
+  });
+
 
   // System Libraries filtering with type and text filter
   const filteredLibraries = system.filter((library) =>
@@ -49,10 +58,6 @@ const Explorer = ({ collapse }: ExplorerProps): ReactElement => {
       .flatMap((library: { pous: { name: string; documentation?: string }[] }) => library.pous)
       .find((pou) => pou.name === selectedFileKey)?.documentation || null
 
-  console.log('AQUI AS LIBRARYS', filteredUserLibraries)
-  console.log('AQUI AS POUS', pous)
-  console.log('AQUI AS editor', editor)
-  console.log('AQUI AS SYSTEN', system)
 
   return (
     <ResizablePanel
