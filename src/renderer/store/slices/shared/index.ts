@@ -2,14 +2,10 @@
 import { PLCArrayDatatype, PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
-import { ConsoleSlice } from '../console'
 import { EditorSlice } from '../editor'
-import { FlowSlice } from '../flow'
 import { LibrarySlice } from '../library'
 import { ProjectSlice } from '../project'
-import { SearchSlice } from '../search'
 import { TabsSlice } from '../tabs'
-import { WorkspaceSlice } from '../workspace'
 import { CreateEditorObject, CreatePouObject } from './utils'
 
 type PropsToCreatePou = {
@@ -19,7 +15,6 @@ type PropsToCreatePou = {
 }
 
 export type SharedSlice = {
-  flushStore: () => void
   pouActions: {
     create: (propsToCreatePou: PropsToCreatePou) => boolean
     update: () => void
@@ -32,22 +27,10 @@ export type SharedSlice = {
   }
 }
 
-export const createSharedSlice: StateCreator<
-  EditorSlice & TabsSlice & ProjectSlice & ConsoleSlice & FlowSlice & LibrarySlice & WorkspaceSlice & SearchSlice,
-  [],
-  [],
-  SharedSlice
-> = (_setState, getState) => ({
-  flushStore: () => {
-    getState().consoleActions.clearLogs()
-    getState().editorActions.clearEditor()
-    getState().flowActions.clearFlow()
-    getState().libraryActions.clearLibraries()
-    getState().projectActions.clearProject()
-    getState().searchActions.clearSearchResults()
-    getState().tabsActions.clearTabs()
-    getState().workspaceActions.clearWorkspace()
-  },
+export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSlice & LibrarySlice, [], [], SharedSlice> = (
+  _setState,
+  getState,
+) => ({
   pouActions: {
     create: (propsToCreatePou: PropsToCreatePou) => {
       if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
@@ -77,6 +60,7 @@ export const createSharedSlice: StateCreator<
             language: propsToCreatePou.language,
           },
         })
+        propsToCreatePou.type !== 'program' && getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
         return true
       }
 
@@ -115,6 +99,7 @@ export const createSharedSlice: StateCreator<
             language: propsToCreatePou.language,
           },
         })
+        propsToCreatePou.type !== 'program' && getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
         return true
       }
       return false

@@ -16,14 +16,9 @@ type ActivityBarProps = {
 
 export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) => {
   const navigate = useNavigate()
-  const { editor, flushStore } = useOpenPLCStore()
+  const { editor } = useOpenPLCStore()
 
   const isLadderEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'ld'
-
-  const handleExitApplication = () => {
-    flushStore()
-    navigate('/')
-  }
 
   return (
     <>
@@ -37,7 +32,7 @@ export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) =
         )}
       </div>
       <div className='flex h-7 w-full flex-col gap-6'>
-        <ExitButton onClick={handleExitApplication} />
+        <ExitButton onClick={() => navigate('/')} />
       </div>
     </>
   )

@@ -33,9 +33,6 @@ const workspaceActionsSchema = z.object({
 
   switchAppTheme: z.function().returns(z.void()),
   toggleMaximizedWindow: z.function().returns(z.void()),
-  toggleCollapse: z.function().returns(z.void()),
-  setModalOpen: z.function().args(z.string(), z.boolean()).returns(z.void()),
-  clearWorkspace: z.function().returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 

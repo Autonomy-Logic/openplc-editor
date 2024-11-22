@@ -67,13 +67,6 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
         }),
       )
     },
-    clearLibraries: () => {
-      setState(
-        produce(({ libraries }: LibrarySlice) => {
-          libraries.user = []
-        }),
-      )
-    },
   },
 })
 

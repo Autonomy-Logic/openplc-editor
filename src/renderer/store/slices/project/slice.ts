@@ -540,30 +540,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
-    clearProject: () => {
-      setState(
-        produce((slice: ProjectSlice) => {
-          slice.project =  {
-            meta: {
-              name: '',
-              type: 'plc-project',
-              path: '',
-            },
-            data: {
-              dataTypes: [],
-              pous: [],
-              configuration: {
-                resource: {
-                  tasks: [],
-                  instances: [],
-                  globalVariables: [],
-                },
-              },
-            },
-          }
-        }),
-      )
-    }
   },
 })
 
