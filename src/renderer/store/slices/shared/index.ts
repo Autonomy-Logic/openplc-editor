@@ -2,10 +2,17 @@
 import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
+import { ConsoleSlice } from '../console'
 import { EditorSlice } from '../editor'
+<<<<<<< Updated upstream
+=======
+import { FlowSlice } from '../flow'
+>>>>>>> Stashed changes
 import { LibrarySlice } from '../library'
 import { ProjectSlice } from '../project'
+import { SearchSlice } from '../search'
 import { TabsSlice } from '../tabs'
+import { WorkspaceSlice } from '../workspace'
 import { CreateEditorObject, CreatePouObject } from './utils'
 
 type PropsToCreatePou = {
@@ -15,6 +22,7 @@ type PropsToCreatePou = {
 }
 
 export type SharedSlice = {
+  flushStore: () => void
   pouActions: {
     create: (propsToCreatePou: PropsToCreatePou) => boolean
     update: () => void
@@ -27,10 +35,29 @@ export type SharedSlice = {
   }
 }
 
+<<<<<<< Updated upstream
 export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSlice & LibrarySlice, [], [], SharedSlice> = (
   _setState,
   getState,
 ) => ({
+=======
+export const createSharedSlice: StateCreator<
+  EditorSlice & TabsSlice & ProjectSlice & ConsoleSlice & FlowSlice & LibrarySlice & WorkspaceSlice & SearchSlice,
+  [],
+  [],
+  SharedSlice
+> = (_setState, getState) => ({
+  flushStore: () => {
+    getState().consoleActions.clearLogs()
+    getState().editorActions.clearEditor()
+    getState().flowActions.clearFlow()
+    getState().libraryActions.clearLibraries()
+    getState().projectActions.clearProject()
+    getState().searchActions.clearSearchResults()
+    getState().tabsActions.clearTabs()
+    getState().workspaceActions.clearWorkspace()
+  },
+>>>>>>> Stashed changes
   pouActions: {
     create: (propsToCreatePou: PropsToCreatePou) => {
       if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
@@ -60,7 +87,10 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSl
             language: propsToCreatePou.language,
           },
         })
+<<<<<<< Updated upstream
         propsToCreatePou.type !== 'program' && getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
+=======
+>>>>>>> Stashed changes
         return true
       }
 
@@ -99,7 +129,10 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSl
             language: propsToCreatePou.language,
           },
         })
+<<<<<<< Updated upstream
         propsToCreatePou.type !== 'program' && getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
+=======
+>>>>>>> Stashed changes
         return true
       }
       return false

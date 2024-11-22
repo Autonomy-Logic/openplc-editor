@@ -54,7 +54,41 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
 
+<<<<<<< Updated upstream
    },
+=======
+    setModalOpen: (modalName: string, modalState: boolean): void => {
+      console.log(modalName, modalState)
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          const modalIndex = workspace.isModalOpen.findIndex((modal) => modal.modalName === modalName)
+
+          if (modalIndex !== -1) {
+            workspace.isModalOpen[modalIndex].modalState = modalState
+          } else {
+            workspace.isModalOpen.push({ modalName, modalState })
+          }
+        }),
+      )
+    },
+    clearWorkspace: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.editingState = 'unsaved'
+          workspace.systemConfigs = {
+            OS: '',
+            arch: '',
+            shouldUseDarkMode: false,
+            isWindowMaximized: false,
+          }
+          workspace.recents = []
+          workspace.isCollapsed = false
+          workspace.isModalOpen = []
+        }),
+      )
+    },
+  },
+>>>>>>> Stashed changes
 })
 
 export { createWorkspaceSlice }

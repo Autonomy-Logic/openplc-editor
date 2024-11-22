@@ -220,5 +220,12 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         }),
       )
     },
+    clearFlow: () => {
+      setState(
+        produce((slice: FlowSlice) => {
+          slice.flows = []
+        }),
+      )
+    }
   },
 })

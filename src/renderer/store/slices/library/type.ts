@@ -50,6 +50,7 @@ const libraryStateSchema = z.object({
 const libraryActionsSchema = z.object({
   addLibrary: z.function().args(z.string(), z.enum(['function', 'function-block'	])).returns(z.void()),
   removeLibrary: z.function().args(z.string()).returns(z.void()),
+  clearLibraries: z.function().returns(z.void()),
 })
 
 type LibraryState = z.infer<typeof libraryStateSchema>

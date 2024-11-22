@@ -41,6 +41,15 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
       setState((state) => ({
         searchResults: state.searchResults.filter((_, index) => index !== indexToRemove),
       })),
+    clearSearchResults: () =>
+      setState(
+        produce((slice: SearchSlice) => {
+          ;(slice.searchQuery = ''),
+            (slice.searchResults = []),
+            (slice.sensitiveCase = false),
+            (slice.regularExpression = false)
+        }),
+      ),
   },
 })
 
