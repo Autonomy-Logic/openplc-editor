@@ -47,14 +47,9 @@ const searchActionsSchema = z.object({
   setSensitiveCase: z.function().args(z.boolean()).returns(z.void()),
   setRegularExpression: z.function().args(z.boolean()).returns(z.void()),
   removeSearchResult: z.function().args(z.number()).returns(z.void()),
-<<<<<<< Updated upstream
-});
-type SearchActions = z.infer<typeof searchActionsSchema>;
-=======
   clearSearchResults: z.function().returns(z.void()),
 })
 type SearchActions = z.infer<typeof searchActionsSchema>
->>>>>>> Stashed changes
 
 type SearchSlice = SearchState & { searchActions: SearchActions };
 

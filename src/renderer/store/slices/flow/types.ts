@@ -138,12 +138,9 @@ type FlowActions = {
     rungId: string
     editorName: string
   }) => void
-<<<<<<< Updated upstream
-=======
 
   setFlowUpdated: ({ editorName, updated }: { editorName: string; updated: boolean }) => void
   clearFlow: () => void
->>>>>>> Stashed changes
 }
 
 /** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */

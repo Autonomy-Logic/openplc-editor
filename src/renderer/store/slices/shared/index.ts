@@ -4,10 +4,7 @@ import { StateCreator } from 'zustand'
 
 import { ConsoleSlice } from '../console'
 import { EditorSlice } from '../editor'
-<<<<<<< Updated upstream
-=======
 import { FlowSlice } from '../flow'
->>>>>>> Stashed changes
 import { LibrarySlice } from '../library'
 import { ProjectSlice } from '../project'
 import { SearchSlice } from '../search'
@@ -35,12 +32,6 @@ export type SharedSlice = {
   }
 }
 
-<<<<<<< Updated upstream
-export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSlice & LibrarySlice, [], [], SharedSlice> = (
-  _setState,
-  getState,
-) => ({
-=======
 export const createSharedSlice: StateCreator<
   EditorSlice & TabsSlice & ProjectSlice & ConsoleSlice & FlowSlice & LibrarySlice & WorkspaceSlice & SearchSlice,
   [],
@@ -57,7 +48,6 @@ export const createSharedSlice: StateCreator<
     getState().tabsActions.clearTabs()
     getState().workspaceActions.clearWorkspace()
   },
->>>>>>> Stashed changes
   pouActions: {
     create: (propsToCreatePou: PropsToCreatePou) => {
       if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
@@ -87,10 +77,6 @@ export const createSharedSlice: StateCreator<
             language: propsToCreatePou.language,
           },
         })
-<<<<<<< Updated upstream
-        propsToCreatePou.type !== 'program' && getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
-=======
->>>>>>> Stashed changes
         return true
       }
 
@@ -129,10 +115,6 @@ export const createSharedSlice: StateCreator<
             language: propsToCreatePou.language,
           },
         })
-<<<<<<< Updated upstream
-        propsToCreatePou.type !== 'program' && getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
-=======
->>>>>>> Stashed changes
         return true
       }
       return false

@@ -59,6 +59,7 @@ const Explorer = ({ collapse }: ExplorerProps): ReactElement => {
       .find((pou) => pou.name === selectedFileKey)?.documentation || null
 
 
+
   return (
     <ResizablePanel
       ref={collapse}

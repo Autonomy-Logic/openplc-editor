@@ -54,9 +54,6 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
 
-<<<<<<< Updated upstream
-   },
-=======
     setModalOpen: (modalName: string, modalState: boolean): void => {
       console.log(modalName, modalState)
       setState(
@@ -88,7 +85,6 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       )
     },
   },
->>>>>>> Stashed changes
 })
 
 export { createWorkspaceSlice }
