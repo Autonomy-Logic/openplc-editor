@@ -150,17 +150,17 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    * Add a new node to the rung
    */
   const handleAddNode = (newNodeType: string = 'mockNode', blockType: string | undefined) => {
-    let pouLib = undefined
+    let pouLibrary = undefined
     if (blockType) {
-      const [type, library, pouName] = blockType.split('/')
-      if (type === 'system')
-        pouLib = libraries.system.find((lib) => lib.name === library)?.pous.find((p) => p.name === pouName)
-      if (type === 'user') {
-        const lib = libraries.user.find((lib) => lib.name === library)
-        const pou = pous.find((pou) => pou.data.name === lib?.name)
+      const [blockLibraryType, blockLibrary, pouName] = blockType.split('/')
+      if (blockLibraryType === 'system')
+        pouLibrary = libraries.system.find((Library) => Library.name === blockLibrary)?.pous.find((p) => p.name === pouName)
+      if (blockLibraryType === 'user') {
+        const Library = libraries.user.find((Library) => Library.name === blockLibrary)
+        const pou = pous.find((pou) => pou.data.name === Library?.name)
         if (!pou) return
         console.log(pou);
-        pouLib = {
+        pouLibrary = {
           name: pou.data.name,
           type: pou.type,
           variables: pou.data.variables.map((variable) => ({
@@ -172,18 +172,9 @@ export const RungBody = ({ rung }: RungBodyProps) => {
           extensible: false,
         }
       }
-      // if (pouLib && pouRef && pouRef.type === 'function' && pouLib.type !== 'function') {
-      //   const nodes = removePlaceholderNodes(rungLocal.nodes)
-      //   setRungLocal((rung) => ({ ...rung, nodes }))
-      //   toast({
-      //     title: 'Can not add block',
-      //     description: `You can not add a ${pouLib.type} block to an function POU`,
-      //     variant: 'fail',
-      //   })
-      //   return
-      // }
 
-      if (!pouLib) {
+
+      if (!pouLibrary) {
         const nodes = removePlaceholderElements(rungLocal.nodes)
         setRungLocal((rung) => ({ ...rung, nodes }))
         toast({
@@ -197,7 +188,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
     const { nodes, edges } = addNewElement(rungLocal, {
       elementType: newNodeType,
-      blockVariant: pouLib,
+      blockVariant: pouLibrary,
     })
     flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes })
     flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges })
