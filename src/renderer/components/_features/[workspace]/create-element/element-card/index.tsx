@@ -99,9 +99,21 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     }
     if (data.derivation === 'structure') {
       const draft = {
-        name: data.name,
+        name: 'structure',
         derivation: data.derivation,
-        variable: [],
+        variable: [
+          {
+            name: 'name',
+            type: {
+              baseType: 'string',
+            },
+            initialValue: {
+              simpleValue: {
+                value: '',
+              },
+            },
+          },
+        ],
       } as PLCStructureDatatype
       const res = createDatatype(draft)
     }

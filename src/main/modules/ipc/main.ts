@@ -3,10 +3,10 @@ import {app, Event, nativeTheme, shell} from 'electron'
 import {join} from 'path'
 import {platform} from 'process'
 
+import {ProjectState} from "../../../renderer/store/slices";
 import {PLCProject} from '../../../types/PLC/open-plc'
 import {MainIpcModule, MainIpcModuleConstructor} from '../../contracts/types/modules/ipc/main'
 import {CreateProjectFile, GetProjectPath} from '../../services/project-service/utils'
-import {ProjectState} from "../../../renderer/store/slices";
 
 type IDataToWrite = {
     projectPath: string

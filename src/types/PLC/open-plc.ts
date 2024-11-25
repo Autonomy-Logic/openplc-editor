@@ -58,7 +58,7 @@ const PLCStructureDatatypeSchema = z.object({
         })
         .optional(),
     }),
-  ),
+  ).optional(),
 })
 
 type PLCEnumeratedDatatype = z.infer<typeof PLCEnumeratedDatatypeSchema>
