@@ -44,7 +44,7 @@ const PLCEnumeratedDatatypeSchema = z.object({
 const PLCStructureDatatypeSchema = z.object({
   name: z.string(),
   derivation: z.literal('structure'),
-  variables: z.array(
+  variable: z.array(
     z.object({
       name: z.string(),
       type: z.object({

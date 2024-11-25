@@ -1,18 +1,18 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import {CreatePouSources, PouLanguageSources} from '@process:renderer/data'
+import { CreatePouSources, PouLanguageSources } from '@process:renderer/data'
 import * as Popover from '@radix-ui/react-popover'
-import {ArrowIcon} from '@root/renderer/assets'
-import {InputWithRef, Select, SelectContent, SelectItem, SelectTrigger} from '@root/renderer/components/_atoms'
-import {DatatypeDerivationSources} from '@root/renderer/data/sources/data-type'
-import {useOpenPLCStore} from '@root/renderer/store'
-import {PLCArrayDatatype, PLCEnumeratedDatatype} from '@root/types/PLC/open-plc'
-import {cn, ConvertToLangShortenedFormat} from '@root/utils'
-import {startCase} from 'lodash'
-import {Dispatch, ReactNode, SetStateAction, useState} from 'react'
-import {Controller, SubmitHandler, useForm} from 'react-hook-form'
+import { ArrowIcon } from '@root/renderer/assets'
+import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { DatatypeDerivationSources } from '@root/renderer/data/sources/data-type'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
+import { cn, ConvertToLangShortenedFormat } from '@root/utils'
+import { startCase } from 'lodash'
+import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
+import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
-import {useToast} from '../../../[app]/toast/use-toast'
+import { useToast } from '../../../[app]/toast/use-toast'
 
 type ElementCardProps = {
   target: 'function' | 'function-block' | 'program' | 'data-type'
@@ -31,14 +31,14 @@ type CreateDataTypeFormProps = {
 }
 
 const ElementCard = (props: ElementCardProps): ReactNode => {
-  const {toast} = useToast()
-  const {target, closeContainer} = props
+  const { toast } = useToast()
+  const { target, closeContainer } = props
   const {
     control: pouControl,
     register: pouRegister,
     handleSubmit: handleSubmitPou,
     setError: pouSetError,
-    formState: {errors: pouErrors},
+    formState: { errors: pouErrors },
   } = useForm<CreatePouFormProps>()
 
   const {
@@ -49,12 +49,12 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
      * TODO: add validation
      */
     // setError: datatypeSetError,
-    formState: {errors: datatypeErrors},
+    formState: { errors: datatypeErrors },
   } = useForm<CreateDataTypeFormProps>()
 
   const {
-    pouActions: {create},
-    datatypeActions: {create: createDatatype},
+    pouActions: { create },
+    datatypeActions: { create: createDatatype },
   } = useOpenPLCStore()
   const [isOpen, setIsOpen] = useState(false)
 
@@ -62,7 +62,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     try {
       const pouWasCreated = create(data)
       if (!pouWasCreated) throw new TypeError()
-      toast({title: 'Pou created successfully', description: 'The POU has been created', variant: 'default'})
+      toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
       closeContainer((prev) => !prev)
       setIsOpen(false)
     } catch (_error) {
@@ -87,13 +87,22 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
         dimensions: [],
       } as PLCArrayDatatype
       const res = createDatatype(draft)
-    } else if (data.derivation === 'enumerated') {
+    }
+    if (data.derivation === 'enumerated') {
       const draft = {
         name: data.name,
         derivation: data.derivation,
         initialValue: '',
         values: [],
       } as PLCEnumeratedDatatype
+      const res = createDatatype(draft)
+    }
+    if (data.derivation === 'structure') {
+      const draft = {
+        name: data.name,
+        derivation: data.derivation,
+        variable: [],
+      } as PLCStructureDatatype
       const res = createDatatype(draft)
     }
     closeContainer((prev) => !prev)
@@ -116,16 +125,14 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
           className='relative flex h-7 w-full cursor-pointer  items-center justify-between gap-[6px] rounded-md px-[6px] py-[2px] hover:bg-neutral-100 data-[state=open]:bg-neutral-100 dark:hover:bg-neutral-900 dark:data-[state=open]:bg-neutral-900'
         >
           {CreatePouSources[target]}
-          <p
-            className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
+          <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
             {startCase(target)}
           </p>
-          <ArrowIcon size='md' direction='right'/>
+          <ArrowIcon size='md' direction='right' />
         </div>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content id={`create-${target}-content`} sideOffset={14} alignOffset={-7} align='start'
-                         side='right'>
+        <Popover.Content id={`create-${target}-content`} sideOffset={14} alignOffset={-7} align='start' side='right'>
           <div
             id='data-type-card-root'
             className='box flex h-fit w-[225px] flex-col gap-3 rounded-lg bg-white px-3 pb-3 pt-2 dark:bg-neutral-950'
@@ -138,12 +145,11 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                 >
                   <div className='flex w-full select-none items-center gap-2'>
                     {CreatePouSources[target]}
-                    <p
-                      className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
+                    <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
                       {startCase(target)}
                     </p>
                   </div>
-                  <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850'/>
+                  <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
                 </div>
                 <div id='pou-card-form'>
                   <form
@@ -157,8 +163,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                         className='flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
                       >
                         Data type name:
-                        {datatypeErrors.name?.type === 'required' &&
-                            <span className='text-red-500'>*</span>}
+                        {datatypeErrors.name?.type === 'required' && <span className='text-red-500'>*</span>}
                       </label>
                       <InputWithRef
                         {...datatypeRegister('name', {
@@ -171,18 +176,15 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                         className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
                       />
                       {datatypeErrors.name?.type === 'already-exists' && (
-                        <span
-                          className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
+                        <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
                           * data type name already exists
                         </span>
                       )}
-                      <span
-                        className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
+                      <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
                         ** Name must be at least 3 characters
                       </span>
                     </div>
-                    <div id='data-type-derivation-form-container'
-                         className='flex w-full flex-col gap-[6px] '>
+                    <div id='data-type-derivation-form-container' className='flex w-full flex-col gap-[6px] '>
                       <label
                         id='data-type-language-label'
                         htmlFor='data-type-language'
@@ -194,8 +196,8 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       <Controller
                         name='derivation'
                         control={datatypeControl}
-                        rules={{required: true}}
-                        render={({field: {value, onChange}}) => {
+                        rules={{ required: true }}
+                        render={({ field: { value, onChange } }) => {
                           return (
                             <Select value={value} onValueChange={onChange}>
                               <SelectTrigger
@@ -219,8 +221,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                       className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 focus:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus:bg-neutral-900'
                                       value={derivation.value.toLocaleLowerCase()}
                                     >
-                                      <span
-                                        className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
                                         {derivation.icon} <span>{derivation.value}</span>
                                       </span>
                                     </SelectItem>
@@ -256,23 +257,21 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
               </>
             ) : (
               <>
-                <div id='pou-card-label-container'
-                     className='flex h-8 w-full flex-col items-center justify-between'>
+                <div id='pou-card-label-container' className='flex h-8 w-full flex-col items-center justify-between'>
                   <div className='flex w-full select-none items-center gap-2'>
                     {CreatePouSources[target]}
-                    <p
-                      className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
+                    <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
                       {startCase(target)}
                     </p>
                   </div>
-                  <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850'/>
+                  <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
                 </div>
                 <div id='pou-card-form'>
                   <form
                     onSubmit={handleSubmitPou(handleCreatePou)}
                     className='flex h-fit w-full select-none flex-col gap-3'
                   >
-                    <input type='hidden' {...pouRegister('type')} value={target}/>
+                    <input type='hidden' {...pouRegister('type')} value={target} />
                     <div id='pou-name-form-container' className='flex w-full flex-col'>
                       <label
                         id='pou-name-label'
@@ -280,8 +279,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                         className='flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
                       >
                         POU name:
-                        {pouErrors.name?.type === 'required' &&
-                            <span className='text-red-500'>*</span>}
+                        {pouErrors.name?.type === 'required' && <span className='text-red-500'>*</span>}
                       </label>
                       <InputWithRef
                         {...pouRegister('name', {
@@ -294,18 +292,15 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                         className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
                       />
                       {pouErrors.name?.type === 'already-exists' && (
-                        <span
-                          className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
+                        <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
                           * POU name already exists
                         </span>
                       )}
-                      <span
-                        className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
+                      <span className='flex-1 text-start font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'>
                         ** Name must be at least 3 characters
                       </span>
                     </div>
-                    <div id='pou-language-form-container'
-                         className='flex w-full flex-col gap-[6px] '>
+                    <div id='pou-language-form-container' className='flex w-full flex-col gap-[6px] '>
                       <label
                         id='pou-language-label'
                         htmlFor='pou-language'
@@ -317,8 +312,8 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       <Controller
                         name='language'
                         control={pouControl}
-                        rules={{required: true}}
-                        render={({field: {value, onChange}}) => {
+                        rules={{ required: true }}
+                        render={({ field: { value, onChange } }) => {
                           return (
                             <Select value={value} onValueChange={onChange}>
                               <SelectTrigger
@@ -342,8 +337,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                       className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 focus:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus:bg-neutral-900'
                                       value={ConvertToLangShortenedFormat(lang.value)}
                                     >
-                                      <span
-                                        className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
                                         {lang.icon} <span>{lang.value}</span>
                                       </span>
                                     </SelectItem>
@@ -385,4 +379,4 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   )
 }
 
-export {ElementCard}
+export { ElementCard }

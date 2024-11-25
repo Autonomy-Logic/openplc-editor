@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-import { PLCArrayDatatype, PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
+import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
@@ -20,7 +20,7 @@ export type SharedSlice = {
     delete: () => void
   }
   datatypeActions: {
-    create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype) => boolean
+    create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => boolean
     update: () => void
     delete: () => void
   }
