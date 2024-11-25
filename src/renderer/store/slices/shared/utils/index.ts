@@ -53,13 +53,14 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
               : { language, value: 'This is the body of function' },
           variables: [],
           documentation: 'Doc for program',
-        }
+        },
+      }
   }
-}}
+}
 
 type DatatypeProps = {
   name: string
-  derivation: 'array' | 'structure'|'enumerated'
+  derivation: 'array' | 'structure' | 'enumerated'
 }
 
 const CreateDatatypeObject = (data: DatatypeProps): PLCDataType => {
@@ -70,10 +71,12 @@ const CreateDatatypeObject = (data: DatatypeProps): PLCDataType => {
         derivation: 'array',
         baseType: 'bool',
         initialValue: 'false',
-        dimensions: []
+        dimensions: [],
       }
     case 'enumerated':
       return {
+        values: [],
+        initialValue: '',
         name: data.name,
         derivation: data.derivation,
       }
@@ -81,13 +84,19 @@ const CreateDatatypeObject = (data: DatatypeProps): PLCDataType => {
       return {
         name: data.name,
         derivation: data.derivation,
+        variable: [
+          {
+            name: 'structure0',
+            type: { baseType: 'dint' },
+          },
+        ],
       }
-    }
+  }
 }
 
 // type CreateEditorObjectType = z.infer<typeof createEditorObjectSchema>
 
-const CreateEditorObject = (props: EditorModel): EditorModel => {
+const CreateEditorObject = (props: EditorModel): EditorModel => { 
   const model = editorModelSchema.parse(props)
   const { type, meta } = model
 
@@ -107,6 +116,7 @@ const CreateEditorObject = (props: EditorModel): EditorModel => {
       }
     case 'plc-datatype':
       return {
+        structure: model.structure,
         type,
         meta,
       }

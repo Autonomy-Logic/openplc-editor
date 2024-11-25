@@ -117,6 +117,20 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
+    updateModelStructure: (structure: { selectedRow: number; description: string }) =>
+      setState(
+        produce((state: EditorState) => {
+          const { editor } = state
+          if (editor.type === 'plc-datatype') {
+            editor.structure = {
+              ...editor.structure,
+              selectedRow: structure.selectedRow.toString(),
+              description: structure.description,
+            }
+          }
+        }),
+      ),
+
     updateModelLadder: ({ openRung }) =>
       setState(
         produce((state: EditorState) => {

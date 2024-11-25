@@ -314,11 +314,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     createDatatype: (dataToCreate) => {
       setState(
         produce(({ project }: ProjectSlice) => {
-          const { name } = dataToCreate
+          const { data } = dataToCreate
+          const { name } = data
           const dataExists = project.data.dataTypes.find((datatype) => datatype.name === name)
           const pouExists = project.data.pous.find((datatype) => datatype.data.name === name)
           if (!dataExists && !pouExists) {
-            project.data.dataTypes.push(dataToCreate)
+            project.data.dataTypes.push(data)
           } else {
             toast({
               title: 'Invalid array',

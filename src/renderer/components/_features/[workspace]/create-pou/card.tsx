@@ -60,8 +60,8 @@ const Card = (props: ICardProps): ReactNode => {
   }
 
   const handleCreateDatatype = (derivation: 'enumerated' | 'structure' | 'array') => {
-    const data = CreateDatatypeObject(derivation)
-    createDatatype(data)
+    const data = CreateDatatypeObject({ name: derivation, derivation })
+    createDatatype({ data })
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
