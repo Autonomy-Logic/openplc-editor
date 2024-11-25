@@ -55,7 +55,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const flowViewportRef = useRef<HTMLDivElement>(null)
-  const scrollableRef = useRef<HTMLDivElement>(null)
 
   /**
    * -- Which means, by default, the flow panel extent is:
@@ -170,7 +169,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
       setSearchNodePosition(adjustedsearchNodePosition)
 
-      scrollableRef.current?.scrollTo({
+      flowViewportRef.current?.scrollTo({
         top: adjustedsearchNodePosition.y,
         left: adjustedsearchNodePosition.x - 100,
         behavior: 'smooth',
