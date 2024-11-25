@@ -40,15 +40,21 @@ const libraryStateSchema = z.object({
       TimeLibrarySchema,
       TypeConversionLibrarySchema,
     ]), // This is the libraries that are built-in to the system
-    user: z.array(z.object({
-      name: z.string(),
-      type: z.enum(['function', 'function-block','program'])
-    })), // This is the libraries that the user has installed
+    user: z.array(
+      z.object({
+        name: z.string(),
+        type: z.enum(['function', 'function-block', 'program']),
+      }),
+    ), // This is the libraries that the user has installed
   }),
 })
 
 const libraryActionsSchema = z.object({
-  addLibrary: z.function().args(z.string(), z.enum(['function', 'function-block'	])).returns(z.void()),
+  addLibrary: z
+    .function()
+    .args(z.string(), z.enum(['function', 'function-block']))
+    .returns(z.void()),
+  clearUserLibraries: z.function().args().returns(z.void()),
   removeLibrary: z.function().args(z.string()).returns(z.void()),
 })
 
