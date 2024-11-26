@@ -1,6 +1,6 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { ArrowIcon } from '@root/renderer/assets'
-import type { PLCStructureDatatype, PLCVariable } from '@root/types/PLC/open-plc'
+import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { baseTypeSchema } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext } from '@tanstack/react-table'
@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 
 import { ArrayModal } from '../../../variables-table/elements/array-modal'
 
-type ISelectableCellProps = CellContext<PLCStructureDatatype, unknown> & { editable?: boolean }
+type ISelectableCellProps = CellContext<PLCVariable, unknown> & { editable?: boolean }
 
 const SelectableTypeCell = ({
   getValue,
@@ -28,16 +28,12 @@ const SelectableTypeCell = ({
       values: ['userDt1', 'userDt2', 'userDt3'],
     },
   ]
-  const variables = getValue<PLCStructureDatatype['variable']>()
-  const { value, definition } = getValue<PLCVariable['type']>()
-  const variable = variables?.[0]
-  const type = variable?.type
-
+  const { value = '', definition } = getValue<PLCVariable['type']>() || {}
   const [cellValue, setCellValue] = useState<PLCVariable['type']['value']>(value)
-  const [poppoverIsOpen, setPoppoverIsOpen] = useState(false)
-  const [arrayModalIsOpen, setArrayModalIsOpen] = useState(false)
-  const variableName = table.options.data[index].name
 
+  const [arrayModalIsOpen, setArrayModalIsOpen] = useState(false)
+  const [poppoverIsOpen, setPoppoverIsOpen] = useState(false)
+  const variableName = table.options.data[index].name
   const onSelect = (definition: PLCVariable['type']['definition'], value: PLCVariable['type']['value']) => {
     setCellValue(value)
     table.options.meta?.updateData(index, id, { definition, value })
@@ -45,7 +41,7 @@ const SelectableTypeCell = ({
 
   useEffect(() => {
     setCellValue(value)
-  }, [type])
+  }, [value])
 
   return (
     <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>

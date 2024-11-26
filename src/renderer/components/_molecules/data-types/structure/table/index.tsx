@@ -1,4 +1,4 @@
-// import { useOpenPLCStore } from '@root/renderer/store'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import {
@@ -11,10 +11,10 @@ import {
 import { useEffect, useRef } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../../_atoms'
-// import { EditableInitialValueCell, EditableNameCell } from './editable-cell'
+import { EditableNameCell } from './editable-cell'
 import { SelectableTypeCell } from './selectable-cell'
 
-const columnHelper = createColumnHelper<PLCStructureDatatype>()
+const columnHelper = createColumnHelper<PLCStructureDatatype['variable']>()
 
 const columns = [
   columnHelper.accessor('id', {
@@ -25,42 +25,43 @@ const columns = [
     enableResizing: true,
     cell: (props) => props.row.id,
   }),
-  //   columnHelper.accessor('name', {
-  //     header: 'Name',
-  //     enableResizing: true,
-  //     size: 300,
-  //     minSize: 150,
-  //     maxSize: 300,
-  //     cell: EditableNameCell,
-  //   }),
-  columnHelper.accessor('variable', {
+  columnHelper.accessor('name', {
+    header: 'Name',
+    enableResizing: true,
+    size: 300,
+    minSize: 150,
+    maxSize: 300,
+    cell: EditableNameCell,
+  }),
+  columnHelper.accessor('type', {
     header: 'Type',
     enableResizing: true,
     size: 300,
     minSize: 80,
     maxSize: 300,
-    cell:  SelectableTypeCell ,
+    cell: SelectableTypeCell,
   }),
-  //   columnHelper.accessor('initialValue', {
-  //     header: 'Location',
-  //     enableResizing: true,
-  //     size: 300,
-  //     minSize: 80,
-  //     maxSize: 300,
-  //     cell: EditableNameCell,
-  //   }),
+  columnHelper.accessor('initialValue', {
+    header: 'Initial Value',
+    enableResizing: true,
+    size: 300,
+    minSize: 80,
+    maxSize: 300,
+    cell: EditableNameCell,
+  }),
 ]
 
 type PLCStructureTableProps = {
-  tableData: PLCStructureDatatype[]
+  tableData: PLCStructureDatatype['variable']
   selectedRow: number
   handleRowClick: (row: HTMLTableRowElement) => void
 }
 
 const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructureTableProps) => {
-//   const {
-//     projectActions: { updateDatatype },
-//   } = useOpenPLCStore()
+  const {
+    projectActions: { _updateDatatype },
+    project: { data },
+  } = useOpenPLCStore()
 
   const tableHeaderRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
@@ -127,7 +128,7 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   })
-  // console.log('table data ', tableData)
+  console.log('data', data)
 
   return (
     <Table context='Structure' className='mr-1 w-full'>

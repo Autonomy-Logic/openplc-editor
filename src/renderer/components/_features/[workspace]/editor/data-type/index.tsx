@@ -2,12 +2,9 @@ import { InputWithRef } from '@root/renderer/components/_atoms'
 import { ArrayDataType } from '@root/renderer/components/_molecules/data-types/array'
 import { EnumeratorDataType } from '@root/renderer/components/_molecules/data-types/enumerated'
 import { StructureDataType } from '@root/renderer/components/_molecules/data-types/structure'
-// import { StructureDataType } from '@root/renderer/components/_molecules/data-types/structure'
 import { useOpenPLCStore } from '@root/renderer/store'
-// import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCDataType } from '@root/types/PLC/open-plc'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
-// import { StructureDataType } from '@root/renderer/components/_molecules/data-types/structure'
 
 type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
   dataTypeName: string
@@ -71,7 +68,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
       <div aria-label='Data type content container' className='h-full w-full overflow-hidden'>
         {editorContent?.derivation === 'array' && <ArrayDataType data={editorContent} />}
         {editorContent?.derivation === 'enumerated' && <EnumeratorDataType data={editorContent} />}
-        {editorContent?.derivation === 'structure' && <StructureDataType data={[editorContent]} />}
+        {editorContent?.derivation === 'structure' && <StructureDataType data={[editorContent.variable]} />}
       </div>
     </div>
   )

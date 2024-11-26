@@ -116,6 +116,7 @@ const PLCVariableSchema = z.object({
   debug: z.boolean(),
 })
 
+
 type PLCVariable = z.infer<typeof PLCVariableSchema>
 const PLCGlobalVariableSchema = PLCVariableSchema
 type PLCGlobalVariable = z.infer<typeof PLCGlobalVariableSchema>

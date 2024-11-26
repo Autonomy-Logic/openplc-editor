@@ -1,12 +1,12 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
-import type { PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
-import { InputWithRef } from '../../_atoms'
-import { useToast } from '../../_features/[app]/toast/use-toast'
+import { InputWithRef } from '../../../../_atoms'
+import { useToast } from '../../../../_features/[app]/toast/use-toast'
 
 declare module '@tanstack/react-table' {
   // This is a helper interface that adds the `updateData` property to the table meta.
@@ -16,29 +16,35 @@ declare module '@tanstack/react-table' {
   }
 }
 
-type IEditableCellProps = CellContext<PLCVariable, unknown> & { editable?: boolean }
+type IEditableCellProps = CellContext<PLCStructureDatatype, unknown> & { editable?: boolean }
 const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
-  const initialValue = getValue<string>()
+  const nameValue = getValue<PLCStructureDatatype['variable']>()
+  const initialValue = nameValue && 'name' in nameValue ? nameValue.name : ''
   const { toast } = useToast()
 
   const [cellValue, setCellValue] = useState(initialValue)
 
   const onBlur = () => {
     if (cellValue === initialValue) return
-    const res = table.options.meta?.updateData(index, id, cellValue)
+    const res = table.options.meta?.updateData(index, id, cellValue ?? '')
     if (res?.ok) return
-    setCellValue(initialValue)
+    setCellValue(initialValue ?? '')
     toast({ title: res?.title, description: res?.message, variant: 'fail' })
   }
 
   useEffect(() => {
-    setCellValue(initialValue)
+    if (initialValue !== undefined) {
+      setCellValue(initialValue)
+    }
   }, [initialValue])
 
   return (
     <InputWithRef
       value={cellValue}
-      onChange={(e) => setCellValue(e.target.value)}
+      onChange={(e) => {
+        setCellValue(e.target.value)
+        console.log('initialValue', initialValue, 'cellValue', cellValue, 'e.target.value', e.target.value)
+      }}
       onBlur={onBlur}
       className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !editable,
@@ -47,7 +53,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
   )
 }
 
-const EditableDocumentationCell = ({
+const EditableInitialValueCell = ({
   getValue,
   row: { index },
   column: { id },
@@ -97,4 +103,4 @@ const EditableDocumentationCell = ({
   )
 }
 
-export { EditableDocumentationCell, EditableNameCell }
+export { EditableInitialValueCell, EditableNameCell }

@@ -84,19 +84,14 @@ const CreateDatatypeObject = (data: DatatypeProps): PLCDataType => {
       return {
         name: data.name,
         derivation: data.derivation,
-        variable: [
-          {
-            name: 'structure0',
-            type: { baseType: 'dint' },
-          },
-        ],
+        variable: [],
       }
   }
 }
 
 // type CreateEditorObjectType = z.infer<typeof createEditorObjectSchema>
 
-const CreateEditorObject = (props: EditorModel): EditorModel => { 
+const CreateEditorObject = (props: EditorModel): EditorModel => {
   const model = editorModelSchema.parse(props)
   const { type, meta } = model
 

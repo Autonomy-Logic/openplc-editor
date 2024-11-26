@@ -9,7 +9,7 @@ import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 import { StructureTable } from './table'
 
 type StructureDatatypeProps = ComponentPropsWithoutRef<'div'> & {
-  data: PLCStructureDatatype[]
+  data: PLCStructureDatatype['variable']
 }
 const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
   const ROWS_NOT_SELECTED = -1
@@ -19,9 +19,9 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
       data: { dataTypes },
     },
     editorActions: { updateModelStructure },
-    projectActions: { createDatatype },
+    projectActions: { updateDatatype },
   } = useOpenPLCStore()
-  const [tableData, setTableData] = useState<PLCStructureDatatype[]>([])
+  const [tableData, setTableData] = useState<PLCStructureDatatype['variable']>([])
 
   const [editorStructure, setEditorStructure] = useState<StructureTableType>({
     selectedRow: ROWS_NOT_SELECTED.toString(),
@@ -29,7 +29,7 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
   })
 
   useEffect(() => {
-    const variablesToTable = data.filter((structure) => structure.derivation === 'structure')
+    const variablesToTable = data.filter((structure) => structure.name)
     setTableData(variablesToTable)
   }, [editor, data])
 
@@ -43,60 +43,22 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
     }
   }, [editor])
 
-  // console.log('tableData', tableData)
-  // console.log('data', data)
-  // console.log('dataTypes', dataTypes)
+  console.log('tableData', tableData, 'data', data, 'dataTypes', dataTypes)
 
   const handleCreateStructure = () => {
     const variables = dataTypes.filter(
       (dataType): dataType is PLCStructureDatatype => dataType.derivation === 'structure',
     )
-    const selectedRow = parseInt(editorStructure.selectedRow)
 
     if (variables.length === 0) {
-      createDatatype({
-        data: {
-          derivation: 'structure',
-          name: 'structure',
-          variable: [
-            {
-              name: 'structure0',
-              type: { baseType: 'dint' },
-            },
-          ],
-        },
-      })
-
-      return
-    }
-
-    const structureVariable: PLCStructureDatatype =
-      selectedRow === ROWS_NOT_SELECTED ? variables[variables.length - 1] : variables[selectedRow]
-
-    if (selectedRow === ROWS_NOT_SELECTED) {
-      createDatatype({
-        data: {
-          derivation: 'structure',
-          name: 'structure',
-          variable: structureVariable.variable,
-        },
-      })
-      updateModelStructure({
-        selectedRow: selectedRow + 1,
-      })
-      return
-    }
-    createDatatype({
-      data: {
+      updateDatatype('', {
         derivation: 'structure',
         name: 'structure',
-        variable: structureVariable.variable,
-      },
-      rowToInsert: selectedRow + 1,
-    })
-    updateModelStructure({
-      selectedRow: selectedRow + 1,
-    })
+        variable: [],
+      })
+
+      return
+    }
   }
 
   const handleRowClick = (row: HTMLTableRowElement) => {
@@ -104,8 +66,6 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
       selectedRow: parseInt(row.id),
     })
   }
-
-  // console.log('datatypes', dataTypes)
 
   return (
     <div
@@ -115,7 +75,7 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
     >
       <div aria-label='Data type content actions container' className='flex h-8 w-full gap-8'>
         <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
-          <span className='select-none'>Global Variables</span>
+          <span className='select-none'>Structure</span>
           <div
             aria-label='Variables editor table actions container'
             className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
