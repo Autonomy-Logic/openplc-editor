@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -61,11 +62,14 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
       const regex = new RegExp(`(${escapedSearchQuery})`, 'gi')
       const match = body.match(regex)
       if (match) {
-        return body.replace(
+        const highlightedHTML = body.replace(
           regex,
           (matched) => `<span class='text-brand-medium dark:text-brand-light'>${matched}</span>`,
         )
+
+        return DOMPurify.sanitize(highlightedHTML)
       }
+
       return body
     },
   },
