@@ -47,9 +47,12 @@ const PLCStructureDatatypeSchema = z.object({
   variable: z.array(
     z.object({
       name: z.string(),
-      type: z.object({
-        baseType: baseTypeSchema,
-      }),
+      type: z.discriminatedUnion('definition', [
+        z.object({
+          baseType: baseTypeSchema,
+          definition: z.literal('base-type'),
+        }),
+      ]),
       initialValue: z
         .object({
           simpleValue: z.object({
@@ -58,7 +61,7 @@ const PLCStructureDatatypeSchema = z.object({
         })
         .optional(),
     }),
-  ).optional(),
+  ),
 })
 
 type PLCEnumeratedDatatype = z.infer<typeof PLCEnumeratedDatatypeSchema>

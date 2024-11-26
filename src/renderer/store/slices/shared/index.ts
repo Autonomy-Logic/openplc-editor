@@ -106,23 +106,22 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSl
   },
   datatypeActions: {
     create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => {
-      const wrappedData = { data: propsToCreateDatatype }
-      getState().projectActions.createDatatype(wrappedData)
+      getState().projectActions.createDatatype({ data: propsToCreateDatatype })
       getState().editorActions.addModel({
+        type: 'plc-datatype',
+        meta: { name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation },
         structure: {
           selectedRow: '-1',
           description: '',
         },
-        type: 'plc-datatype',
-        meta: { name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation },
       })
       getState().editorActions.setEditor({
+        type: 'plc-datatype',
+        meta: { name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation },
         structure: {
           selectedRow: '-1',
           description: '',
         },
-        type: 'plc-datatype',
-        meta: { name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation },
       })
       getState().tabsActions.updateTabs({
         name: propsToCreateDatatype.name,

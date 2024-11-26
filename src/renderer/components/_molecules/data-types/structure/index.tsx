@@ -43,9 +43,9 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
     }
   }, [editor])
 
-  console.log('tableData', tableData)
-  console.log('data', data)
-  console.log('dataTypes', dataTypes)
+  // console.log('tableData', tableData)
+  // console.log('data', data)
+  // console.log('dataTypes', dataTypes)
 
   const handleCreateStructure = () => {
     const variables = dataTypes.filter(
@@ -104,6 +104,8 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
       selectedRow: parseInt(row.id),
     })
   }
+
+  // console.log('datatypes', dataTypes)
 
   return (
     <div

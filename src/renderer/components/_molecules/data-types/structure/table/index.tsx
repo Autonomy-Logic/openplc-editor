@@ -39,7 +39,7 @@ const columns = [
     size: 300,
     minSize: 80,
     maxSize: 300,
-    cell: SelectableTypeCell,
+    cell:  SelectableTypeCell ,
   }),
   //   columnHelper.accessor('initialValue', {
   //     header: 'Location',
@@ -127,7 +127,7 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   })
-  console.log('table data ', tableData)
+  // console.log('table data ', tableData)
 
   return (
     <Table context='Structure' className='mr-1 w-full'>
