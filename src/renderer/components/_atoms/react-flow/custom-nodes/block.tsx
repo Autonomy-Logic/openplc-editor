@@ -6,6 +6,7 @@ import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
+import DOMPurify from 'dompurify'
 
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
@@ -552,7 +553,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
             <p
               onClick={() => setIsEditing(true)}
               className='w-full bg-transparent text-center text-sm outline-none'
-              dangerouslySetInnerHTML={{ __html: formmatedBlockVariableValue || '???' }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(formmatedBlockVariableValue) || '???' }}
             />
           ))}
       </div>
