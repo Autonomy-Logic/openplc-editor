@@ -31,22 +31,25 @@ export const FileMenu = () => {
   const [modalOpen, setModalOpen] = useState(false)
   const [discardChanges, setDiscardChanges] = useState(false)
 
-  useEffect(() => {
-    const handleKeyDown = (event: { ctrlKey: unknown; key: string; preventDefault: () => void }) => {
-      if (
-        (event.ctrlKey && event.key === 'o' && editingState === 'unsaved') ||
-        (event.ctrlKey && event.key === 'n' && editingState === 'unsaved') ||
-        (event.ctrlKey && event.key === 'q' && editingState === 'unsaved')
-      ) {
-        event.preventDefault()
-        setModalOpen(true)
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [editingState])
+  // useEffect(() => {
+  //   const handleKeyDown = (event: { cmd: unknown; ctrlKey: unknown; key: string; preventDefault: () => void }) => {
+  //     if (
+  //       (event.ctrlKey && event.key === 'o' && editingState === 'unsaved') ||
+  //       (event.ctrlKey && event.key === 'n' && editingState === 'unsaved') ||
+  //       (event.ctrlKey && event.key === 'q' && editingState === 'unsaved') ||
+  //       (event.cmd && event.key === 'o' && editingState === 'unsaved') ||
+  //       (event.cmd && event.key === 'n' && editingState === 'unsaved') ||
+  //       (event.cmd && event.key === 'q' && editingState === 'unsaved') 
+  //     ) {
+  //       event.preventDefault()
+  //       setModalOpen(true)
+  //     }
+  //   }
+  //   window.addEventListener('keydown', handleKeyDown)
+  //   return () => {
+  //     window.removeEventListener('keydown', handleKeyDown)
+  //   }
+  // }, [editingState])
 
   const handleModalClose = () => {
     setModalOpen(false)

@@ -18,6 +18,7 @@ const WorkspaceMainContent = (props: IWorkspaceMainContentProps) => {
   } = useOpenPLCStore()
   const { children, ...res } = props
 
+
   useEffect(() => {
     // Bad code! - this is only for development purpose
     if (pous.length !== 0) {

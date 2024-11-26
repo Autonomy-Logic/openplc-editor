@@ -1,10 +1,14 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import * as Tabs from '@radix-ui/react-tabs'
+import { IProjectServiceResponse } from '@root/main/services'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { FlowType } from 'typescript'
 
 import { ExitIcon } from '../assets'
 import { toast } from '../components/_features/[app]/toast/use-toast'
@@ -28,11 +32,13 @@ const WorkspaceScreen = () => {
   const navigate = useNavigate()
   const {
     tabs,
-    workspace: { editingState,isCollapsed },
+    workspace: { editingState, isCollapsed },
     project,
     editor,
-    editorActions:{clearEditor},
-    workspaceActions: { setEditingState,setRecents,toggleCollapse },
+    editorActions: { clearEditor },
+    workspaceActions: { setEditingState, setRecents, toggleCollapse },
+    projectActions: { setProject },
+    flowActions: { addFlow },
     tabsActions: { clearTabs },
     searchResults,
   } = useOpenPLCStore()
@@ -57,7 +63,7 @@ const WorkspaceScreen = () => {
         _.debounce(() => setEditingState('saved'), 1000)()
         toast({
           title: 'Changes saved!',
-          description: 'The project was saved successfully!',
+          description: 'Salvou!',
           variant: 'default',
         })
       } else {
@@ -84,6 +90,45 @@ const WorkspaceScreen = () => {
     })
   })
 
+  window.bridge.openProjectAccelerator((_event, response: IProjectServiceResponse) => {
+    if (editingState === 'saved') {
+      const { data, error } = response
+      if (data) {
+        clearTabs()
+        setEditingState('unsaved')
+        setProject({
+          meta: {
+            name: data.content.meta.name,
+            //@ts-expect-error overlap
+            type: data.content.meta.type,
+            path: data.meta.path,
+          },
+          data: data.content.data,
+        })
+
+        const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
+        if (ladderPous.length) {
+          ladderPous.forEach((pou) => {
+            if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as unknown as FlowType)
+          })
+        }
+
+        navigate('/workspace')
+        toast({
+          title: 'Project opened!',
+          description: 'Your project was opened, and loaded.',
+          variant: 'default',
+        })
+      } else {
+        toast({
+          title: 'Cannot open the project.',
+          description: error?.description,
+          variant: 'fail',
+        })
+      }
+    }
+  })
+
   const variables = [
     { name: 'a', type: 'false' },
     { name: 'b', type: 'false' },
@@ -92,7 +137,7 @@ const WorkspaceScreen = () => {
   ]
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
- 
+
   const panelRef = useRef(null)
   const explorerPanelRef = useRef(null)
   const workspacePanelRef = useRef(null)
@@ -121,34 +166,32 @@ const WorkspaceScreen = () => {
     })
   }, [isCollapsed])
 
-  useEffect(()=>{
-    const handleCloseProject=()=>{
+  useEffect(() => {
+    const handleCloseProject = () => {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
       setRecents([])
-      window.bridge.closeProjectAccelerator((_event)=> navigate('/'))
+      window.bridge.closeProjectAccelerator((_event) => navigate('/'))
     }
     handleCloseProject()
-  },[])
+  }, [])
 
-  const [isSwitchingPerspective, setIsSwitchingPerspective] = useState(false);
+  const [isSwitchingPerspective, setIsSwitchingPerspective] = useState(false)
 
   const handleSwitchPerspective = () => {
     if (!isSwitchingPerspective) {
-      setIsSwitchingPerspective(true);
-      toggleCollapse(); 
-  };
+      setIsSwitchingPerspective(true)
+      toggleCollapse()
+    }
   }
 
   useEffect(() => {
     window.bridge.switchPerspective((_event) => {
-      handleSwitchPerspective();
-    });
-  }, []);
+      handleSwitchPerspective()
+    })
+  }, [])
 
-
- 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <AboutModal />
