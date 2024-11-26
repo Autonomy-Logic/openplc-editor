@@ -93,61 +93,58 @@ export const RecentMenu = () => {
   const handleOpenProject = async (projectPath: string) => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
     if (success && data) {
-      const {
-        meta: { path },
-        content: {
-          meta: { name, type },
-          data: { pous, ...projectData },
-        },
-      } = data
-
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
       setRecents([])
+
+      const projectMeta = {
+        name: data.content.meta.name,
+        type: data.content.meta.type,
+        path: data.meta.path,
+      }
+      const projectData = data.content.data
+
       setProject({
-        meta: { name, type, path },
+        meta: projectMeta,
         data: projectData,
       })
 
-      const ladderPous = pous.filter(({ data: { language } }) => language === 'ld')
+      const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
 
-      ladderPous.forEach(
-        ({
-          data: {
-            body: { language, value },
-          },
-        }) => {
-          if (language === 'ld') addFlow(value as FlowType)
-        },
-      )
+      if (ladderPous.length) {
+        ladderPous.forEach((pou) => {
+          if (pou.data.body.language === 'ld') {
+            addFlow(pou.data.body.value as FlowType)
+          }
+        })
+      }
 
-      pous.forEach(({ type, data: { name } }) => {
-        if (type !== 'program') addLibrary(name, type)
-      })
+      projectData.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
 
       toast({
         title: 'Project opened!',
         description: 'Your project was opened and loaded.',
         variant: 'default',
       })
-    } else if (error?.description.includes('Error reading project file.')) {
-      void getUserRecentProjects()
-      toast({
-        title: 'Path does not exist.',
-        description: `The path ${projectPath} does not exist on this computer.`,
-        variant: 'fail',
-      })
     } else {
-      void getUserRecentProjects()
-      toast({
-        title: 'Cannot open the project.',
-        description: error?.description,
-        variant: 'fail',
-      })
+      if (error?.description.includes('Error reading project file.')) {
+        void getUserRecentProjects()
+        toast({
+          title: 'Path does not exist.',
+          description: `The path ${projectPath} does not exist on this computer.`,
+          variant: 'fail',
+        })
+      } else {
+        void getUserRecentProjects(),
+          toast({
+            title: 'Cannot open the project.',
+            description: error?.description,
+            variant: 'fail',
+          })
+      }
     }
   }
-
   return (
     <MenuPrimitive.Menu>
       <MenuPrimitive.Trigger className={TRIGGER}>Recent</MenuPrimitive.Trigger>

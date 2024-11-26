@@ -44,7 +44,7 @@ const StartScreen = () => {
           data: projectData,
         })
 
-        const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
+        const ladderPous = projectData.pous.filter((pou: { data: { language: string } }) => pou.data.language === 'ld')
         if (ladderPous.length) {
           ladderPous.forEach((pou) => {
             if (pou.data.body.language === 'ld') {
@@ -53,7 +53,6 @@ const StartScreen = () => {
           })
         }
         data.content.data.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
-
         navigate('/workspace')
         toast({
           title: 'Project opened!',
@@ -87,22 +86,30 @@ const StartScreen = () => {
         if (data) {
           clearTabs()
           setEditingState('unsaved')
+          const projectMeta = {
+            name: data.content.meta.name,
+            type: data.content.meta.type,
+            path: data.meta.path,
+          }
+
+          const projectData = data.content.data
+
           setProject({
-            meta: {
-              name: data.content.meta.name,
-              type: data.content.meta.type,
-              path: data.meta.path,
-            },
-            data: data.content.data,
+            meta: projectMeta,
+            data: projectData,
           })
 
-          const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
+          const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
+
           if (ladderPous.length) {
             ladderPous.forEach((pou) => {
-              if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+              if (pou.data.body.language === 'ld') {
+                addFlow(pou.data.body.value as FlowType)
+              }
             })
           }
-          data.content.data.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
+
+          projectData.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
 
           navigate('/workspace')
           toast({
@@ -122,46 +129,54 @@ const StartScreen = () => {
     handleOpenProjectAccelerator()
   }, [])
 
- useEffect(()=>{
-  const handleOpenRecentAccelerator =()=>{
-    window.bridge.openRecentAccelerator((_event, response:IProjectServiceResponse)=> {
-      const { data, error } = response
-      if (data) {
-        clearTabs()
-        setEditingState('unsaved')
-        setProject({
-          meta: {
+  useEffect(() => {
+    const handleOpenRecentAccelerator = () => {
+      window.bridge.openRecentAccelerator((_event, response: IProjectServiceResponse) => {
+        const { data, error } = response
+        if (data) {
+          clearTabs()
+          setEditingState('unsaved')
+          const projectMeta = {
             name: data.content.meta.name,
             type: data.content.meta.type,
             path: data.meta.path,
-          },
-          data: data.content.data,
-        })
+          }
+          const projectData = data.content.data
 
-        const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
-        if (ladderPous.length) {
-          ladderPous.forEach((pou) => {
-            if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+          setProject({
+            meta: projectMeta,
+            data: projectData,
+          })
+
+          const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
+
+          if (ladderPous.length) {
+            ladderPous.forEach((pou) => {
+              if (pou.data.body.language === 'ld') {
+                addFlow(pou.data.body.value as FlowType)
+              }
+            })
+          }
+
+          projectData.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
+
+          navigate('/workspace')
+          toast({
+            title: 'Project opened!',
+            description: 'Your project was opened, and loaded.',
+            variant: 'default',
+          })
+        } else {
+          toast({
+            title: 'Cannot open the project.',
+            description: error?.description,
+            variant: 'fail',
           })
         }
-
-        navigate('/workspace')
-        toast({
-          title: 'Project opened!',
-          description: 'Your project was opened, and loaded.',
-          variant: 'default',
-        })
-      } else {
-        toast({
-          title: 'Cannot open the project.',
-          description: error?.description,
-          variant: 'fail',
-        })
-      }
-    })
-  }
-void  handleOpenRecentAccelerator()
- },[]) 
+      })
+    }
+    void handleOpenRecentAccelerator()
+  }, [])
 
   return (
     <>
