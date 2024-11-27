@@ -1,6 +1,6 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { ArrowIcon } from '@root/renderer/assets'
-import type { PLCStructureVariable, PLCVariable } from '@root/types/PLC/open-plc'
+import type { PLCStructureVariable } from '@root/types/PLC/open-plc'
 import { baseTypeSchema } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext } from '@tanstack/react-table'
@@ -19,29 +19,32 @@ const SelectableTypeCell = ({
   editable = true,
 }: ISelectableCellProps) => {
   const VariableTypes = [
-    {
-      definition: 'base-type',
-      values: baseTypeSchema.options,
-    },
-    {
-      definition: 'user-data-type',
-      values: ['userDt1', 'userDt2', 'userDt3'],
-    },
+    { definition: 'base-type', values: baseTypeSchema.options },
+    { definition: 'user-data-type', values: ['userDt1', 'userDt2', 'userDt3'] },
   ]
-  const { value: baseType, definition } = getValue<PLCStructureVariable['type']>() || {}
-  const [cellValue, setCellValue] = useState<PLCStructureVariable['type']['value']>(baseType)
 
+  const { value, definition } = getValue<PLCStructureVariable['type']>()
+  console.log('getValue -> value:', value, 'definition:', definition)
+
+  const [cellValue, setCellValue] = useState<PLCStructureVariable['type']['value']>(value)
   const [arrayModalIsOpen, setArrayModalIsOpen] = useState(false)
   const [poppoverIsOpen, setPoppoverIsOpen] = useState(false)
+
   const variableName = table.options.data[index].name
-  const onSelect = (definition: PLCVariable['type']['definition'], baseType: PLCStructureVariable['type']['value']) => {
-    setCellValue(baseType)
-    table.options.meta?.updateData(index, id, { definition, baseType })
+
+  const onSelect = (
+    definition: PLCStructureVariable['type']['definition'],
+    value: PLCStructureVariable['type']['value'],
+  ) => {
+    console.log('onSelect -> definition:', definition, 'value:', value)
+    setCellValue(value)
+    table.options.meta?.updateData(index, id, { definition, value })
   }
 
   useEffect(() => {
-    setCellValue(baseType)
-  }, [])
+    console.log('useEffect -> syncing cellValue with value:', value)
+    setCellValue(value)
+  }, [value])
 
   return (
     <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
@@ -67,7 +70,6 @@ const SelectableTypeCell = ({
           sideOffset={-20}
           className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
-          {/** Basic types, that includes the base types and the types created by the user */}
           {VariableTypes.map((scope) => (
             <PrimitiveDropdown.Sub key={scope.definition}>
               <PrimitiveDropdown.SubTrigger asChild>
@@ -86,7 +88,7 @@ const SelectableTypeCell = ({
                   {scope.values.map((value) => (
                     <PrimitiveDropdown.Item
                       key={value}
-                      onSelect={() => onSelect(scope.definition as PLCVariable['type']['definition'], value)}
+                      onSelect={() => onSelect(scope.definition as PLCStructureVariable['type']['definition'], value)}
                       className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                     >
                       <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
@@ -98,7 +100,6 @@ const SelectableTypeCell = ({
               </PrimitiveDropdown.Portal>
             </PrimitiveDropdown.Sub>
           ))}
-          {/** Array type trigger */}
           <PrimitiveDropdown.Item asChild>
             <ArrayModal
               variableName={variableName}

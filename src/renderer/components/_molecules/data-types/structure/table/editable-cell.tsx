@@ -1,6 +1,6 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
-import { PLCStructureDatatype, PLCStructureVariable } from '@root/types/PLC/open-plc'
+import {  PLCStructureVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
@@ -16,7 +16,7 @@ declare module '@tanstack/react-table' {
   }
 }
 
-type IEditableCellProps = CellContext<PLCStructureDatatype, unknown> & { editable?: boolean }
+type IEditableCellProps = CellContext<PLCStructureVariable, unknown> & { editable?: boolean }
 const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
   const initialValue = getValue<string | undefined>()
 

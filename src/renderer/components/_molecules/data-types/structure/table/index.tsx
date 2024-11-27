@@ -1,5 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCStructureDatatype } from '@root/types/PLC/open-plc'
+import { PLCStructureDatatype, PLCStructureVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import {
   createColumnHelper,
@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { EditableInitialValueCell, EditableNameCell } from './editable-cell'
 import { SelectableTypeCell } from './selectable-cell'
 
-const columnHelper = createColumnHelper<PLCStructureDatatype['variable']>()
+const columnHelper = createColumnHelper<PLCStructureVariable>()
 
 const columns = [
   columnHelper.accessor('id', {
@@ -130,16 +130,18 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
     getFilteredRowModel: getFilteredRowModel(),
     meta: {
       updateData: (rowIndex, columnId, value) => {
-        return updateDatatype(editor.meta.name, {
-         variable: tableData.map((row, index) => {
-           if (index === rowIndex) {
-             return {
-               ...row,
-               [columnId]: value,
-             }
-           }
-           return row
-         })
+        updateDatatype(editor.meta.name, {
+          derivation: 'structure',
+          name: editor.meta.name,
+          variable: tableData.map((variable, index) => {
+            if (index === rowIndex) {
+              return {
+                ...variable,
+                [columnId]: value,
+              }
+            }
+            return variable
+          }),
         })
       },
     },

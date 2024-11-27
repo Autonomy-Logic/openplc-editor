@@ -4,14 +4,11 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { StructureTableType } from '@root/renderer/store/slices'
 import { PLCStructureVariable } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
-import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { StructureTable } from './table'
 
-type StructureDatatypeProps = ComponentPropsWithoutRef<'div'> & {
-  data: PLCStructureVariable[]
-}
-const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
+const StructureDataType = () => {
   const ROWS_NOT_SELECTED = -1
   const {
     editor,
@@ -34,7 +31,7 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
     if (foundDataType && 'variable' in foundDataType) {
       setTableData(foundDataType.variable)
     }
-  }, [editor, dataTypes])
+  }, [dataTypes])
 
   useEffect(() => {
     const foundDataType = dataTypes.find((dataType) => dataType.derivation === 'structure')
@@ -44,6 +41,11 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
     }
   }, [editor])
 
+  useEffect(() => {
+    console.log('Editor Structure Updated:', editorStructure)
+    console.log('Table Data:', tableData)
+  }, [tableData, editorStructure])
+
   const handleRowClick = (row: HTMLTableRowElement) => {
     updateModelStructure({
       selectedRow: parseInt(row.id),
@@ -51,11 +53,13 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
   }
 
   const handleCreateStructureVariable = () => {
-    const structureVariables = data.filter((variable) => variable.name)
+    const structureVariables = tableData.filter((variable) => variable.name)
     const selectedRow = parseInt(editorStructure.selectedRow)
 
     if (structureVariables.length === 0) {
       updateDatatype(editor.meta.name, {
+        derivation: 'structure',
+        name: editor.meta.name,
         variable: [
           {
             name: '',
@@ -76,9 +80,12 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
 
     if (selectedRow === ROWS_NOT_SELECTED) {
       updateDatatype(editor.meta.name, {
+        derivation: 'structure',
+        name: editor.meta.name,
         variable: [
           ...structureVariables,
           {
+            name: '',
             initialValue: { simpleValue: { value: '' } },
             type:
               structureVariable.type.definition === 'derived'
@@ -92,10 +99,18 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
       })
     }
     updateDatatype(editor.meta.name, {
+      derivation: 'structure',
+      name: editor.meta.name,
       variable: [
-        ...structureVariables.slice(0, selectedRow + 1),
-        structureVariable,
-        ...structureVariables.slice(selectedRow + 1),
+        ...structureVariables,
+        {
+          name: '',
+          initialValue: { simpleValue: { value: '' } },
+          type:
+            structureVariable.type.definition === 'derived'
+              ? { definition: 'base-type', value: 'dint' }
+              : structureVariable.type,
+        },
       ],
     })
     updateModelStructure({
@@ -107,7 +122,6 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
     <div
       aria-label=' structure data type container'
       className='flex h-full w-full flex-1 flex-col gap-4 overflow-hidden bg-transparent'
-      {...rest}
     >
       <div aria-label='Data type content actions container' className='flex h-8 w-full gap-8'>
         <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
@@ -151,7 +165,7 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
         <div aria-label='structure initial value container' className='w-1/2'></div>
       </div>
       <StructureTable
-        tableData={data}
+        tableData={tableData}
         selectedRow={parseInt(editorStructure.selectedRow)}
         handleRowClick={handleRowClick}
       />

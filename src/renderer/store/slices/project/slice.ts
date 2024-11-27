@@ -340,11 +340,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     updateDatatype: (name, dataToUpdate) => {
       setState(
         produce(({ project }: ProjectSlice) => {
-          const datatypeToUpdateIndex = project.data.dataTypes.findIndex((datatype) => datatype.name === name)
-          if (datatypeToUpdateIndex === -1) return
-          Object.assign(project.data.dataTypes[datatypeToUpdateIndex], dataToUpdate)
+          const datatypeToUpdateIndex = project.data.dataTypes.findIndex((datatype) => datatype.name === name);
+          if (datatypeToUpdateIndex === -1) return;
+          console.log('Updating datatype', name, dataToUpdate);
+          Object.assign(project.data.dataTypes[datatypeToUpdateIndex], dataToUpdate); 
         }),
-      )
+      );
     },
     createArrayDimension: (dataToCreateDimension) => {
       setState(
