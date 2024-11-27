@@ -1,6 +1,6 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
-import { PLCStructureDatatype } from '@root/types/PLC/open-plc'
+import { PLCStructureDatatype, PLCStructureVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
@@ -18,8 +18,8 @@ declare module '@tanstack/react-table' {
 
 type IEditableCellProps = CellContext<PLCStructureDatatype, unknown> & { editable?: boolean }
 const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
-  const nameValue = getValue<PLCStructureDatatype['variable']>()
-  const initialValue = nameValue && 'name' in nameValue ? nameValue.name : ''
+  const initialValue = getValue<string | undefined>()
+
   const { toast } = useToast()
 
   const [cellValue, setCellValue] = useState(initialValue)
@@ -60,16 +60,16 @@ const EditableInitialValueCell = ({
   table,
   editable = true,
 }: IEditableCellProps) => {
-  const initialValue = getValue<string | undefined>()
+  const initialValue = getValue<PLCStructureVariable['initialValue'] | undefined>()
 
-  const [cellValue, setCellValue] = useState(initialValue ?? '')
+  const [cellValue, setCellValue] = useState(initialValue)
 
   const onBlur = () => {
     table.options.meta?.updateData(index, id, cellValue)
   }
 
   useEffect(() => {
-    setCellValue(initialValue ?? '')
+    setCellValue(initialValue)
   }, [initialValue])
 
   return (
@@ -80,7 +80,9 @@ const EditableInitialValueCell = ({
             'pointer-events-none': !editable,
           })}
         >
-          <p className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'>{cellValue}</p>
+          <p className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'>
+            {cellValue?.simpleValue?.value}
+          </p>
         </div>
       </PrimitivePopover.Trigger>
       <PrimitivePopover.Portal>
@@ -92,8 +94,16 @@ const EditableInitialValueCell = ({
           onInteractOutside={onBlur}
         >
           <textarea
-            value={cellValue}
-            onChange={(e) => setCellValue(e.target.value)}
+            value={cellValue?.simpleValue?.value ?? ''}
+            onChange={(e) => {
+              setCellValue({
+                ...cellValue,
+                simpleValue: {
+                  ...cellValue?.simpleValue,
+                  value: e.target.value,
+                },
+              })
+            }}
             rows={5}
             className='w-full max-w-[375px] flex-1 resize-none  bg-transparent text-start text-neutral-900 outline-none  dark:text-neutral-100'
           />

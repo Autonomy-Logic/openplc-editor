@@ -11,7 +11,7 @@ import {
 import { useEffect, useRef } from 'react'
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../../_atoms'
-import { EditableNameCell } from './editable-cell'
+import { EditableInitialValueCell, EditableNameCell } from './editable-cell'
 import { SelectableTypeCell } from './selectable-cell'
 
 const columnHelper = createColumnHelper<PLCStructureDatatype['variable']>()
@@ -47,7 +47,7 @@ const columns = [
     size: 300,
     minSize: 80,
     maxSize: 300,
-    cell: EditableNameCell,
+    cell: EditableInitialValueCell,
   }),
 ]
 
@@ -59,7 +59,8 @@ type PLCStructureTableProps = {
 
 const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructureTableProps) => {
   const {
-    // projectActions: { _updateDatatype },
+    editor,
+    projectActions: { updateDatatype },
     project: { data },
   } = useOpenPLCStore()
 
@@ -127,6 +128,21 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    meta: {
+      updateData: (rowIndex, columnId, value) => {
+        return updateDatatype(editor.meta.name, {
+         variable: tableData.map((row, index) => {
+           if (index === rowIndex) {
+             return {
+               ...row,
+               [columnId]: value,
+             }
+           }
+           return row
+         })
+        })
+      },
+    },
   })
 
   console.log('data', data, 'tableData', tableData)

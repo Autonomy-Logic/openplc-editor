@@ -19,7 +19,7 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
       data: { dataTypes },
     },
     editorActions: { updateModelStructure },
-    projectActions: { _updateDatatype },
+    projectActions: { updateDatatype },
   } = useOpenPLCStore()
   const [tableData, setTableData] = useState<PLCStructureVariable[]>([])
 
@@ -34,7 +34,7 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
     if (foundDataType && 'variable' in foundDataType) {
       setTableData(foundDataType.variable)
     }
-  }, [editor])
+  }, [editor, dataTypes])
 
   useEffect(() => {
     const foundDataType = dataTypes.find((dataType) => dataType.derivation === 'structure')
@@ -47,6 +47,59 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
   const handleRowClick = (row: HTMLTableRowElement) => {
     updateModelStructure({
       selectedRow: parseInt(row.id),
+    })
+  }
+
+  const handleCreateStructureVariable = () => {
+    const structureVariables = data.filter((variable) => variable.name)
+    const selectedRow = parseInt(editorStructure.selectedRow)
+
+    if (structureVariables.length === 0) {
+      updateDatatype(editor.meta.name, {
+        variable: [
+          {
+            name: '',
+            type: { definition: 'base-type', value: 'dint' },
+            initialValue: { simpleValue: { value: '' } },
+          },
+        ],
+      })
+      updateModelStructure({
+        selectedRow: 0,
+      })
+      return
+    }
+    const structureVariable: PLCStructureVariable =
+      selectedRow === ROWS_NOT_SELECTED
+        ? structureVariables[structureVariables.length - 1]
+        : structureVariables[selectedRow]
+
+    if (selectedRow === ROWS_NOT_SELECTED) {
+      updateDatatype(editor.meta.name, {
+        variable: [
+          ...structureVariables,
+          {
+            initialValue: { simpleValue: { value: '' } },
+            type:
+              structureVariable.type.definition === 'derived'
+                ? { definition: 'base-type', value: 'dint' }
+                : structureVariable.type,
+          },
+        ],
+      })
+      updateModelStructure({
+        selectedRow: structureVariables.length,
+      })
+    }
+    updateDatatype(editor.meta.name, {
+      variable: [
+        ...structureVariables.slice(0, selectedRow + 1),
+        structureVariable,
+        ...structureVariables.slice(selectedRow + 1),
+      ],
+    })
+    updateModelStructure({
+      selectedRow: selectedRow + 1,
     })
   }
 
@@ -64,7 +117,7 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
             className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
           >
             {/** This can be reviewed */}
-            <TableActionButton aria-label='Add table row button' onClick={() => {}}>
+            <TableActionButton aria-label='Add table row button' onClick={() => handleCreateStructureVariable()}>
               <PlusIcon className='!stroke-brand' />
             </TableActionButton>
             <TableActionButton
