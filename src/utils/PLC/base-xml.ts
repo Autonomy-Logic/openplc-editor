@@ -88,21 +88,6 @@ export const parseProjectToXML = (project: ProjectState): string => {
   const xml = doc.end({ prettyPrint: true })
   console.log('xml as object', xmlResult)
   return xml
-  // console.log('=-=-=-= FINISHED PARSE TO XML =-=-=-=')
-  // console.log('=-=-=-= SAVING XML =-=-=-=')
-  // window.bridge
-  //   .writeXMLFile(project.meta.path.replace('project.json', ''), xml, 'plc')
-  //   .then((res) => {
-  //     if (res) {
-  //       console.log('File saved', project.meta.path.replace('project.json', 'plc.xml'))
-  //       console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
-  //     }
-  //   })
-  //   .catch((err) => {
-  //     console.error('Error saving project:', err)
-  //     console.log('=-=-=-= FINISHED SAVING XML =-=-=-=')
-  //   })
-
 }
 
 export {getBaseXmlStructure}

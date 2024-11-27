@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { StateCreator } from 'zustand'
 
 import { ProjectResponse, ProjectSlice } from './types'
-import { createInstanceValidation, updateInstancevalidation } from './utils/instances'
+import { createInstanceValidation, updateInstanceValidation } from './utils/instances'
 import { createTaskValidation, updateTaskValidation } from './utils/tasks'
 import {
   createGlobalVariableValidation,
@@ -20,6 +20,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       name: '',
       type: 'plc-project',
       path: '',
+      buildPath: '',
     },
     data: {
       dataTypes: [],
@@ -61,6 +62,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce(({ project }: ProjectSlice) => {
           project.meta.path = path
+        }),
+      )
+    },
+    updateMetaBuildPath: (buildPath: string): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          project.meta.buildPath = buildPath
         }),
       )
     },
@@ -496,7 +504,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           const { rowId } = dataToBeUpdated
           switch (rowId) {
             case rowId: {
-              const validationResponse = updateInstancevalidation(
+              const validationResponse = updateInstanceValidation(
                 project.data.configuration.resource.instances,
                 dataToBeUpdated.data,
               )

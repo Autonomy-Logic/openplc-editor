@@ -71,17 +71,17 @@ const WorkspaceScreen = () => {
     }
 
     if (editingState === 'save-request') {
+      toast({
+        title: 'Save changes',
+        description: 'Trying to save the changes in the project file.',
+        variant: 'warn',
+      })
       void handleSaveProject()
     }
   }, [editingState])
 
   window.bridge.saveProjectAccelerator((_event) => {
     setEditingState('save-request')
-    toast({
-      title: 'Save changes',
-      description: 'Trying to save the changes in the project file.',
-      variant: 'warn',
-    })
   })
 
   const variables = [

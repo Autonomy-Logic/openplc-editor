@@ -8,7 +8,10 @@ export const LadderToolbox = () => {
 
   return (
     <>
-      <BlockButton onDragStart={(event) => handleDragStart(event, 'block')} onDragEnd={(_event) => console.log('drag end ladder toolbox')} />
+      <BlockButton
+        onDragStart={(event) => handleDragStart(event, 'block')}
+        // onDragEnd={(_event) => console.log('drag end ladder toolbox')}
+      />
       <CoilButton onDragStart={(event) => handleDragStart(event, 'coil')} />
       <ContactButton onDragStart={(event) => handleDragStart(event, 'contact')} />
     </>

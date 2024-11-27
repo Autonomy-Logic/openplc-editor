@@ -11,7 +11,7 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
   const {
     workspace: { recents },
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecents },
+    workspaceActions: { setEditingState, setRecents, setDirPath },
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
@@ -95,24 +95,26 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
 
     if (success && data) {
+      clearEditor()
+      clearTabs()
       setEditingState('unsaved')
       setRecents([])
+      setDirPath(data.meta.directoryPath)
       setProject({
         meta: {
           name: data.content.meta.name,
           type: data.content.meta.type,
-          path: data.meta.path,
+          path: data.meta.projectPath,
+          buildPath: data.meta.buildPath,
         },
         data: data.content.data,
       })
-      clearEditor()
-      clearTabs()
       navigate('/workspace')
 
       const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
       if (ladderPous.length > 0) {
         ladderPous.forEach((pou) => {
-          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+          if (pou.data.body.derivation === 'ld') addFlow(pou.data.body.value as FlowType)
         })
       }
 
@@ -152,7 +154,11 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
             className='overflow-hidden '
             key={project.path}
           >
-            <FileElement.Label projectName={project.path} lastModified={projectTimes[project.path]} />
+            <FileElement.Label
+              projectName={project.projectName}
+              projectPath={project.path}
+              lastModified={projectTimes[project.path]}
+            />
             <FileElement.Shape />
           </FileElement.Root>
         ))}

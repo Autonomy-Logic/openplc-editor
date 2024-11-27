@@ -6,7 +6,7 @@ import { _ProjectService, ProjectService } from './services'
 
 /**
  * Wip: Interface for mac machines menu.
- */ 
+ */
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string
   submenu?: DarwinMenuItemConstructorOptions[] | Menu
@@ -74,32 +74,30 @@ export default class MenuBuilder {
 
   handleCloseTab() {
     this.mainWindow.webContents.send('workspace:close-tab-accelerator')
-    
   }
 
-  handleCloseProject(){
+  handleCloseProject() {
     this.mainWindow.webContents.send('workspace:close-project-accelerator')
   }
 
-  handleDeletePou(){
+  handleDeletePou() {
     this.mainWindow.webContents.send('workspace:delete-pou-accelerator')
-   
   }
 
   handleSwitchPerspective() {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
   }
-handleOpenExternalLink(link:string) {
- void shell.openExternal(link)
-}
+  handleOpenExternalLink(link: string) {
+    void shell.openExternal(link)
+  }
 
-handleOpenAboutModal() {
-  this.mainWindow.webContents.send('about:open-accelerator')
-}
+  handleOpenAboutModal() {
+    this.mainWindow.webContents.send('about:open-accelerator')
+  }
 
-handleFindInProject(){
-  this.mainWindow.webContents.send('project:find-in-project-accelerator')
-}
+  handleFindInProject() {
+    this.mainWindow.webContents.send('project:find-in-project-accelerator')
+  }
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -362,7 +360,7 @@ handleFindInProject(){
       ],
     }
 
-    return [defaultDarwinMenu,subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
+    return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
   }
 
   // Wip: Constructing a default machines menu.
@@ -384,7 +382,7 @@ handleFindInProject(){
             accelerator: 'Ctrl+O',
             click: () => void this.handleOpenProject(),
           },
-             {
+          {
             type: 'separator',
           },
           {
@@ -398,7 +396,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
-            
+
             accelerator: 'Ctrl+W',
             click: () => this.handleCloseTab(),
           },
@@ -525,7 +523,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:edit.submenu.deletePou'),
-            accelerator:"delete",
+            accelerator: 'delete',
             click: () => this.handleDeletePou(),
           },
         ],
@@ -596,7 +594,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:help.submenu.about'),
-            accelerator : 'F1',
+            accelerator: 'F1',
             click: () => this.handleOpenAboutModal(),
           },
         ],
@@ -608,9 +606,10 @@ handleFindInProject(){
           const projectPath = projectEntry.path.startsWith(homeDir)
             ? projectEntry.path.replace(homeDir, '~')
             : projectEntry.path
+          const projectName = projectEntry.projectName
 
           return {
-            label: projectPath,
+            label: `${projectName} (${projectPath})`,
             click: () => {
               this.handleOpenProjectByPath(projectEntry.path)
               console.log('Opened project from path:', projectEntry.path)

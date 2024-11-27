@@ -11,8 +11,11 @@ type SystemConfigs = z.infer<typeof systemConfigsSchema>
 const workspaceStateSchema = z.object({
   workspace: z.object({
     editingState: z.enum(['save-request', 'saved', 'unsaved']),
+    dirPath: z.string(),
     systemConfigs: systemConfigsSchema,
-    recents: z.array(z.object({ lastOpenedAt: z.string(), createdAt: z.string(), path: z.string() })),
+    recents: z.array(
+      z.object({ lastOpenedAt: z.string(), createdAt: z.string(), path: z.string(), projectName: z.string() }),
+    ),
     isCollapsed: z.boolean(),
     isModalOpen: z.array(z.object({ modalName: z.string(), modalState: z.boolean() })),
   }),
@@ -28,6 +31,7 @@ type WorkspaceResponse = z.infer<typeof workspaceResponseSchema>
 
 const workspaceActionsSchema = z.object({
   setEditingState: z.function().args(workspaceStateSchema.shape.workspace.shape.editingState).returns(z.void()),
+  setDirPath: z.function().args(z.string()).returns(z.void()),
   setRecents: z.function().args(workspaceStateSchema.shape.workspace.shape.recents).returns(z.void()),
   setSystemConfigs: z.function().args(systemConfigsSchema).returns(z.void()),
 

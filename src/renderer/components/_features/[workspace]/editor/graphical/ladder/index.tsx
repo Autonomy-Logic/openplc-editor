@@ -28,7 +28,7 @@ export default function LadderEditor() {
     updatePou({
       name: editor.meta.name,
       content: {
-        language: 'ld',
+        derivation: 'ld',
         value: flowSchema.data,
       },
     })

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useHandleRemoveTab } from '@root/renderer/hooks'
@@ -18,7 +19,7 @@ export const FileMenu = () => {
   const {
      project,
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecents },
+    workspaceActions: { setEditingState, setRecents, setDirPath },
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
@@ -30,27 +31,21 @@ export const FileMenu = () => {
   const handleCreateProject = async () => {
     const { success, data, error } = await window.bridge.createProject()
     if (success && data) {
-      setProject({
-        meta: {
-          path: data.meta.path,
-          name: 'new-project',
-          type: 'plc-project',
-        },
-        data: data.content.data,
-      })
-      setEditingState('unsaved')
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
       setRecents([])
+      setDirPath(data.meta.directoryPath)
       setProject({
         meta: {
           name: 'new-project',
           type: 'plc-project',
-          path: data.meta.path,
+          path: data.meta.projectPath,
+          buildPath: data.meta.buildPath,
         },
         data: data.content.data,
       })
+
 
       toast({
         title: 'The project was created successfully!',
@@ -69,24 +64,17 @@ export const FileMenu = () => {
   const handleOpenProject = async () => {
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
-      setProject({
-        meta: {
-          path: data.meta.path,
-          name: 'new-project',
-          type: 'plc-project',
-        },
-        data: data.content.data,
-      })
-      setEditingState('unsaved')
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
       setRecents([])
+      setDirPath(data.meta.directoryPath)
       setProject({
         meta: {
           name: data.content.meta.name,
           type: data.content.meta.type,
-          path: data.meta.path,
+          path: data.meta.projectPath,
+          buildPath: data.meta.buildPath,
         },
         data: data.content.data,
       })
@@ -94,7 +82,7 @@ export const FileMenu = () => {
       const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
       if (ladderPous.length > 0) {
         ladderPous.forEach((pou) => {
-          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+          if (pou.data.body.derivation === 'ld') addFlow(pou.data.body.value as FlowType)
         })
       }
 
@@ -157,7 +145,7 @@ export const FileMenu = () => {
     setEditingState('unsaved')
     setRecents([])
   }
-  
+
 
   return (
     <MenuPrimitive.Menu>

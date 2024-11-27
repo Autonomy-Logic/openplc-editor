@@ -43,7 +43,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   function handleWriteInPou(value: string | undefined) {
     if (!value) return
-    updatePou({ name, content: { language, value } })
+    updatePou({ name, content: { derivation: language, value } })
   }
 
   const monacoEditorUserOptions: monacoEditorOptionsType = {

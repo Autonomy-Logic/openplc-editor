@@ -91,7 +91,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
   pous.forEach((pou) => {
     const interfaceResult = parseInterface(pou)
 
-    switch (pou.data.body.language) {
+    switch (pou.data.body.derivation) {
       case 'il': {
         const result = ilToXML(pou.data.body.value)
         xml.project.types.pous.pou.push({
