@@ -2,14 +2,14 @@ import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { StructureTableType } from '@root/renderer/store/slices'
-import { PLCStructureDatatype } from '@root/types/PLC/open-plc'
+import { PLCStructureVariable } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
 import { StructureTable } from './table'
 
 type StructureDatatypeProps = ComponentPropsWithoutRef<'div'> & {
-  data: PLCStructureDatatype['variable']
+  data: PLCStructureVariable[]
 }
 const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
   const ROWS_NOT_SELECTED = -1
@@ -19,9 +19,9 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
       data: { dataTypes },
     },
     editorActions: { updateModelStructure },
-    projectActions: { updateDatatype },
+    projectActions: { _updateDatatype },
   } = useOpenPLCStore()
-  const [tableData, setTableData] = useState<PLCStructureDatatype['variable']>([])
+  const [tableData, setTableData] = useState<PLCStructureVariable[]>([])
 
   const [editorStructure, setEditorStructure] = useState<StructureTableType>({
     selectedRow: ROWS_NOT_SELECTED.toString(),
@@ -29,37 +29,20 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
   })
 
   useEffect(() => {
-    const variablesToTable = data.filter((structure) => structure.name)
-    setTableData(variablesToTable)
-  }, [editor, data])
+    const foundDataType = dataTypes.find((dataType) => dataType.derivation === 'structure')
 
-  useEffect(() => {
-    if (editor.type === 'plc-datatype' && editor.meta.derivation === 'structure') {
-      const { description, selectedRow } = editor.structure
-      setEditorStructure({
-        selectedRow: selectedRow,
-        description: description,
-      })
+    if (foundDataType && 'variable' in foundDataType) {
+      setTableData(foundDataType.variable)
     }
   }, [editor])
 
-  console.log('tableData', tableData, 'data', data, 'dataTypes', dataTypes)
-
-  const handleCreateStructure = () => {
-    const variables = dataTypes.filter(
-      (dataType): dataType is PLCStructureDatatype => dataType.derivation === 'structure',
-    )
-
-    if (variables.length === 0) {
-      updateDatatype('', {
-        derivation: 'structure',
-        name: 'structure',
-        variable: [],
-      })
-
-      return
+  useEffect(() => {
+    const foundDataType = dataTypes.find((dataType) => dataType.derivation === 'structure')
+    if (editor.type === 'plc-datatype' && foundDataType && 'variable' in foundDataType) {
+      const { description, selectedRow } = editor.structure
+      setEditorStructure({ description: description, selectedRow: selectedRow })
     }
-  }
+  }, [editor])
 
   const handleRowClick = (row: HTMLTableRowElement) => {
     updateModelStructure({
@@ -81,7 +64,7 @@ const StructureDataType = ({ data, ...rest }: StructureDatatypeProps) => {
             className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
           >
             {/** This can be reviewed */}
-            <TableActionButton aria-label='Add table row button' onClick={handleCreateStructure}>
+            <TableActionButton aria-label='Add table row button' onClick={() => {}}>
               <PlusIcon className='!stroke-brand' />
             </TableActionButton>
             <TableActionButton

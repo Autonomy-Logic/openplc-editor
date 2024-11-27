@@ -59,7 +59,7 @@ type PLCStructureTableProps = {
 
 const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructureTableProps) => {
   const {
-    projectActions: { _updateDatatype },
+    // projectActions: { _updateDatatype },
     project: { data },
   } = useOpenPLCStore()
 
@@ -128,8 +128,8 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   })
-  console.log('data', data)
 
+  console.log('data', data, 'tableData', tableData)
   return (
     <Table context='Structure' className='mr-1 w-full'>
       <TableHeader ref={tableHeaderRef}>

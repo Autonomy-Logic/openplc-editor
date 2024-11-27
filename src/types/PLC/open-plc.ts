@@ -41,37 +41,62 @@ const PLCEnumeratedDatatypeSchema = z.object({
   initialValue: z.string().optional(),
   values: z.array(z.object({ description: z.string() })),
 })
+
+const PLCStructureVariableSchema = z.object({
+  name: z.string(),
+  type: z.discriminatedUnion('definition', [
+    z.object({
+      definition: z.literal('base-type'),
+      value: baseTypeSchema,
+    }),
+    z.object({
+      definition: z.literal('user-data-type'),
+      /** In fact this will be filled by the data types created by the user
+       *  This is a mock type just for a presentation.
+       * @deprecated
+       */
+      value: z.enum(['userDt1', 'userDt2', 'userDt3']),
+    }),
+    z.object({
+      definition: z.literal('array'),
+      value: z.string(),
+      data: z.object({
+        /** This must also include the data types created by the user */
+        baseType: baseTypeSchema,
+        dimensions: z.array(z.string()),
+      }),
+    }),
+    z.object({
+      /**
+       * This should be ommited at variable table type options
+       */
+      definition: z.literal('derived'),
+      value: z.string(),
+    }),
+  ]),
+  initialValue: z
+    .object({
+      simpleValue: z.object({
+        value: z.string(),
+      }),
+    })
+    .optional(),
+})
 const PLCStructureDatatypeSchema = z.object({
   name: z.string(),
   derivation: z.literal('structure'),
-  variable: z.array(
-    z.object({
-      name: z.string(),
-      type: z.discriminatedUnion('definition', [
-        z.object({
-          baseType: baseTypeSchema,
-          definition: z.literal('base-type'),
-        }),
-      ]),
-      initialValue: z
-        .object({
-          simpleValue: z.object({
-            value: z.string(),
-          }),
-        })
-        .optional(),
-    }),
-  ),
+  variable: z.array(PLCStructureVariableSchema),
 })
 
 type PLCEnumeratedDatatype = z.infer<typeof PLCEnumeratedDatatypeSchema>
 type PLCArrayDatatype = z.infer<typeof PLCArrayDatatypeSchema>
 type PLCStructureDatatype = z.infer<typeof PLCStructureDatatypeSchema>
+type PLCStructureVariable = z.infer<typeof PLCStructureVariableSchema>
 
 const PLCDataTypeSchema = z.discriminatedUnion('derivation', [
+  PLCStructureDatatypeSchema,
   PLCEnumeratedDatatypeSchema,
   PLCArrayDatatypeSchema,
-  PLCStructureDatatypeSchema,
 ])
 
 type PLCDataType = z.infer<typeof PLCDataTypeSchema>
@@ -115,7 +140,6 @@ const PLCVariableSchema = z.object({
   documentation: z.string(),
   debug: z.boolean(),
 })
-
 
 type PLCVariable = z.infer<typeof PLCVariableSchema>
 const PLCGlobalVariableSchema = PLCVariableSchema
@@ -260,6 +284,7 @@ export {
   PLCProjectMetaSchema,
   PLCProjectSchema,
   PLCStructureDatatypeSchema,
+  PLCStructureVariableSchema,
   PLCTaskSchema,
   PLCVariableSchema,
 }
@@ -280,6 +305,7 @@ export type {
   PLCProjectData,
   PLCProjectMeta,
   PLCStructureDatatype,
+  PLCStructureVariable,
   PLCTask,
   PLCVariable,
 }

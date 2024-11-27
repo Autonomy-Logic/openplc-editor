@@ -68,7 +68,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
       <div aria-label='Data type content container' className='h-full w-full overflow-hidden'>
         {editorContent?.derivation === 'array' && <ArrayDataType data={editorContent} />}
         {editorContent?.derivation === 'enumerated' && <EnumeratorDataType data={editorContent} />}
-        {editorContent?.derivation === 'structure' && <StructureDataType data={[editorContent.variable]} />}
+        {editorContent?.derivation === 'structure' && <StructureDataType data={editorContent.variable} />}
       </div>
     </div>
   )
