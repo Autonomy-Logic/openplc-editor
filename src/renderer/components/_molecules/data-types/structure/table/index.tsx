@@ -20,33 +20,26 @@ const columns = [
   columnHelper.accessor('id', {
     header: '#',
     size: 64,
-    minSize: 32,
-    maxSize: 64,
+
     enableResizing: true,
     cell: (props) => props.row.id,
   }),
   columnHelper.accessor('name', {
     header: 'Name',
-    enableResizing: true,
-    size: 300,
-    minSize: 150,
-    maxSize: 300,
+    size: 150,
+
     cell: EditableNameCell,
   }),
   columnHelper.accessor('type', {
     header: 'Type',
-    enableResizing: true,
-    size: 300,
-    minSize: 80,
-    maxSize: 300,
+    size: 64,
+
     cell: SelectableTypeCell,
   }),
   columnHelper.accessor('initialValue', {
     header: 'Initial Value',
-    enableResizing: true,
-    size: 300,
-    minSize: 80,
-    maxSize: 300,
+    size: 64,
+
     cell: EditableInitialValueCell,
   }),
 ]
@@ -61,7 +54,6 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
   const {
     editor,
     projectActions: { updateDatatype },
-    project: { data },
   } = useOpenPLCStore()
 
   const tableHeaderRef = useRef<HTMLTableSectionElement>(null)
@@ -123,8 +115,6 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
     debugTable: true,
     defaultColumn: {
       size: 128,
-      minSize: 80,
-      maxSize: 128,
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -147,9 +137,8 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
     },
   })
 
-  console.log('data', data, 'tableData', tableData)
   return (
-    <Table context='Structure' className='mr-1 w-full'>
+    <Table context='Structure' className='mr-1 w-[50%]'>
       <TableHeader ref={tableHeaderRef}>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow className='select-none' key={headerGroup.id}>
