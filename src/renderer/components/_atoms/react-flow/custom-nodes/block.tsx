@@ -1,3 +1,5 @@
+import { Pencil1Icon } from '@radix-ui/react-icons'
+import { TrashCanIcon } from '@root/renderer/assets/icons/interface/TrashCan'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -341,7 +343,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     },
     projectActions: { createVariable, updateVariable },
     flows,
-    flowActions: { updateNode },
+    flowActions: { removeNodes, updateNode },
   } = useOpenPLCStore()
 
   const { documentation, type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
@@ -500,6 +502,19 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     setWrongVariable(false)
   }
 
+  const handleDeleteNode = () => {
+    const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
+    })
+    if (!rung || !node) return
+
+    removeNodes({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodes: [node],
+    })
+  }
+
   return (
     <div
       className={cn('relative', {
@@ -539,6 +554,15 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
           />
         )}
       </div>
+      {selected && (
+        <div className='absolute -bottom-6 right-0 flex items-center justify-center gap-1'>
+          <Pencil1Icon className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850' />
+          <TrashCanIcon
+            className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
+            onClick={handleDeleteNode}
+          />
+        </div>
+      )}
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}

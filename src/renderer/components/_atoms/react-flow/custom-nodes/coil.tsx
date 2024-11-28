@@ -1,3 +1,4 @@
+import { Pencil1Icon } from '@radix-ui/react-icons'
 import {
   DefaultCoil,
   FallingEdgeCoil,
@@ -6,6 +7,7 @@ import {
   RisingEdgeCoil,
   SetCoil,
 } from '@root/renderer/assets/icons/flow/Coil'
+import { TrashCanIcon } from '@root/renderer/assets/icons/interface/TrashCan'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
@@ -114,7 +116,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       data: { pous },
     },
     flows,
-    flowActions: { updateNode },
+    flowActions: { removeNodes, updateNode },
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
@@ -227,6 +229,19 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     setWrongVariable(false)
   }
 
+  const handleDeleteNode = () => {
+    const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
+    })
+    if (!rung || !node) return
+
+    removeNodes({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodes: [node],
+    })
+  }
+
   return (
     <div
       className={cn('relative', {
@@ -263,6 +278,15 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       <div className={cn('pointer-events-none absolute -right-[48px] -top-7 text-xs')} ref={scrollableIndicatorRef}>
         ↕
       </div>
+      {selected && (
+        <div className='absolute -bottom-7 flex items-center justify-center gap-1'>
+          <Pencil1Icon className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850' />
+          <TrashCanIcon
+            className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
+            onClick={handleDeleteNode}
+          />
+        </div>
+      )}
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}

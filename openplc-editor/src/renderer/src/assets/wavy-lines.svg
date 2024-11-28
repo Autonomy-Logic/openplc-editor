@@ -5,7 +5,7 @@
       <stop stop-color="hsl(331, 90%, 56%)" stop-opacity="1" offset="100%"></stop>
     </linearGradient>
   </defs>
-  <g stroke-width="1" stroke="url(#oooscillate-grad)" fill="none" stroke-linecap="round">
+  <g strokeWidth="1" stroke="url(#oooscillate-grad)" fill="none" strokeLinecap="round">
     <path d="M 0 448 Q 355.5 -100 711 400 Q 1066.5 900 1422 448" opacity="0.05"></path>
     <path d="M 0 420 Q 355.5 -100 711 400 Q 1066.5 900 1422 420" opacity="0.11"></path>
     <path d="M 0 392 Q 355.5 -100 711 400 Q 1066.5 900 1422 392" opacity="0.18"></path>

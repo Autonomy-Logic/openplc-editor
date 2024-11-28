@@ -1,4 +1,5 @@
 import { defaultCustomNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
+import { removeElements } from '@root/renderer/components/_molecules/rung/ladder-utils/elements'
 import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
@@ -14,9 +15,9 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         produce(({ flows }: FlowState) => {
           const flowIndex = flows.findIndex((f) => f.name === flow.name)
           if (flowIndex === -1) {
-            flows.push({ ...flow, updated: true })
+            flows.push({ ...flow })
           } else {
-            flows[flowIndex] = { ...flow, updated: true }
+            flows[flowIndex] = { ...flow }
           }
         }),
       )
@@ -188,6 +189,22 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           if (!rung) return
 
           rung.nodes.push(node)
+          flow.updated = true
+        }),
+      )
+    },
+    removeNodes({ editorName, nodes, rungId }) {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+
+          const { nodes: newNodes, edges: newEdges } = removeElements(rung, nodes)
+          rung.nodes = newNodes
+          rung.edges = newEdges
           flow.updated = true
         }),
       )
