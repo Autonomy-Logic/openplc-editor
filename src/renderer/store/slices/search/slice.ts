@@ -57,7 +57,7 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
       )
     },
 
-    extractSearchQuery: (body: string, searchQuery: string) => {
+    extractSearchQuery: (body: string, searchQuery: string): string => {
       const escapedSearchQuery = escapeRegExp(searchQuery)
       const regex = new RegExp(`(${escapedSearchQuery})`, 'gi')
       const match = body.match(regex)
