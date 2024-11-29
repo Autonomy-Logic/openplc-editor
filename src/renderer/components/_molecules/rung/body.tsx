@@ -4,7 +4,7 @@ import type { RungState } from '@root/renderer/store/slices'
 import type { PLCVariable } from '@root/types/PLC'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
-import { parseInt } from 'lodash'
+import { differenceWith, isEqual, parseInt } from 'lodash'
 import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FlowPanel } from '../../_atoms/react-flow'
@@ -107,21 +107,17 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   }, [rung.nodes])
 
   /**
-   * Update the selected nodes array when the nodes array changes
-   */
-  useEffect(() => {
-    const selectedNodes = rungLocal.nodes.filter((node) => node.selected && node.selectable)
-    setSelectedNodes(selectedNodes)
-  }, [
-    rungLocal.nodes.filter(
-      (node) => node.selected && node.type !== 'placeholder' && node.type !== 'parallelPlaceholder',
-    ).length > 0,
-  ])
-
-  /**
    * Disable dragging for all nodes when multiple nodes are selected
    */
   useEffect(() => {
+    // Update the selected nodes in the rung state
+    flowActions.setSelectedNodes({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodes: selectedNodes,
+    })
+
+    // Disable dragging for all nodes when multiple nodes are selected
     if (selectedNodes.length > 1) {
       setRungLocal((rung) => ({
         ...rung,
@@ -144,7 +140,11 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         draggable: (node.data as BasicNodeData).draggable === false ? false : true,
       })),
     }))
-  }, [selectedNodes.length])
+  }, [
+    selectedNodes.length > 0
+      ? differenceWith(selectedNodes, rung.selectedNodes || [], (a, b) => isEqual(a, b)).length > 0
+      : differenceWith(rung.selectedNodes || [], selectedNodes, (a, b) => isEqual(a, b)).length > 0,
+  ])
 
   /**
    * Add a new node to the rung
@@ -154,12 +154,14 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     if (blockType) {
       const [blockLibraryType, blockLibrary, pouName] = blockType.split('/')
       if (blockLibraryType === 'system')
-        pouLibrary = libraries.system.find((Library) => Library.name === blockLibrary)?.pous.find((p) => p.name === pouName)
+        pouLibrary = libraries.system
+          .find((Library) => Library.name === blockLibrary)
+          ?.pous.find((p) => p.name === pouName)
       if (blockLibraryType === 'user') {
         const Library = libraries.user.find((Library) => Library.name === blockLibrary)
         const pou = pous.find((pou) => pou.data.name === Library?.name)
         if (!pou) return
-        console.log(pou);
+        console.log(pou)
         pouLibrary = {
           name: pou.data.name,
           type: pou.type,
@@ -172,7 +174,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
           extensible: false,
         }
       }
-
 
       if (!pouLibrary) {
         const nodes = removePlaceholderElements(rungLocal.nodes)

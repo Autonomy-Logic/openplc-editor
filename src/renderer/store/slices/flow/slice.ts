@@ -209,6 +209,20 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         }),
       )
     },
+    setSelectedNodes({ nodes, rungId, editorName }) {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+
+          if (!rung.selectedNodes) rung.selectedNodes = []
+          rung.selectedNodes = nodes
+        }),
+      )
+    },
 
     setEdges({ edges, editorName, rungId }) {
       setState(

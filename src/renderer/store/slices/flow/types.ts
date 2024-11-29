@@ -64,6 +64,7 @@ type RungState = {
   comment: string
   defaultBounds: number[]
   flowViewport: number[]
+  selectedNodes?: Node[]
   nodes: Node[]
   edges: Edge[]
 }
@@ -135,6 +136,7 @@ type FlowActions = {
   }) => void
   addNode: ({ node, rungId, editorName }: { node: Node; rungId: string; editorName: string }) => void
   removeNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
+  setSelectedNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
 
   setEdges: ({ edges, rungId, editorName }: { edges: Edge[]; rungId: string; editorName: string }) => void
   updateEdge: ({
