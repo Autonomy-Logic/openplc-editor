@@ -16,7 +16,7 @@ const StructureDataType = () => {
       data: { dataTypes },
     },
     editorActions: { updateModelStructure },
-    projectActions: { updateDatatype },
+    projectActions: { updateDatatype, rearrangeStructureVariables },
   } = useOpenPLCStore()
   const [tableData, setTableData] = useState<PLCStructureVariable[]>([])
 
@@ -138,6 +138,45 @@ const StructureDataType = () => {
     }
   }
 
+  const handleDeleteStructureVariable = () => {
+    const structureVariables = tableData.filter((variable) => variable.name || variable.type)
+    const selectedRow = parseInt(editorStructure.selectedRow)
+
+    if (selectedRow === ROWS_NOT_SELECTED || selectedRow >= structureVariables.length) {
+      return
+    }
+
+    const updatedVariables = [...structureVariables.slice(0, selectedRow), ...structureVariables.slice(selectedRow + 1)]
+
+    updateDatatype(editor.meta.name, {
+      derivation: 'structure',
+      name: editor.meta.name,
+      variable: updatedVariables,
+    })
+
+    let newSelectedRow = selectedRow - 1
+    if (newSelectedRow < 0 && updatedVariables.length > 0) {
+      newSelectedRow = 0
+    } else if (updatedVariables.length === 0) {
+      newSelectedRow = ROWS_NOT_SELECTED
+    }
+
+    updateModelStructure({
+      selectedRow: newSelectedRow,
+    })
+  }
+
+  const handleRearrangeStructureVariables = (index: number, row?: number) => {
+    rearrangeStructureVariables({
+      associatedDataType: editor.meta.name,
+      rowId: row ?? parseInt(editorStructure.selectedRow),
+      newIndex: (row ?? parseInt(editorStructure.selectedRow)) + index,
+    })
+    updateModelStructure({
+      selectedRow: parseInt(editorStructure.selectedRow) + index,
+    })
+  }
+
   return (
     <div
       aria-label=' structure data type container'
@@ -157,11 +196,12 @@ const StructureDataType = () => {
             <TableActionButton
               aria-label='Remove table row button'
               disabled={parseInt(editorStructure.selectedRow) === ROWS_NOT_SELECTED}
-              onClick={() => {}}
+              onClick={() => handleDeleteStructureVariable()}
             >
               <MinusIcon />
             </TableActionButton>
             <TableActionButton
+              onClick={() => handleRearrangeStructureVariables(-1)}
               aria-label='Move table row up button'
               disabled={
                 parseInt(editorStructure.selectedRow) === ROWS_NOT_SELECTED ||
@@ -171,6 +211,7 @@ const StructureDataType = () => {
               <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
             </TableActionButton>
             <TableActionButton
+              onClick={() => handleRearrangeStructureVariables(1)}
               aria-label='Move table row down button'
               disabled={
                 parseInt(editorStructure.selectedRow) === ROWS_NOT_SELECTED ||

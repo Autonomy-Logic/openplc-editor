@@ -278,6 +278,40 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
+
+    rearrangeStructureVariables: (variableToBeRearranged): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const dataType = project.data.dataTypes.find(
+            (datatype) => datatype.name === variableToBeRearranged.associatedDataType,
+          )
+
+          if (!dataType || dataType.derivation !== 'structure' || !dataType.variable) {
+            console.error(`Data type ${variableToBeRearranged.associatedDataType} not found or invalid`)
+            return
+          }
+
+          const { rowId, newIndex } = variableToBeRearranged
+
+          if (rowId < 0 || rowId >= dataType.variable.length) {
+            console.error('Invalid rowId for rearrangement')
+            return
+          }
+
+          const [removed] = dataType.variable.splice(rowId, 1)
+
+          if (newIndex < 0 || newIndex > dataType.variable.length) {
+            console.error('Invalid newIndex for rearrangement')
+            return
+          }
+
+          dataType.variable.splice(newIndex, 0, removed)
+
+          console.log('Variables rearranged:', dataType.variable)
+        }),
+      )
+    },
+
     rearrangeVariables: (variableToBeRearranged): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
@@ -340,12 +374,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     updateDatatype: (name, dataToUpdate) => {
       setState(
         produce(({ project }: ProjectSlice) => {
-          const datatypeToUpdateIndex = project.data.dataTypes.findIndex((datatype) => datatype.name === name);
-          if (datatypeToUpdateIndex === -1) return;
-          console.log('Updating datatype', name, dataToUpdate);
-          Object.assign(project.data.dataTypes[datatypeToUpdateIndex], dataToUpdate); 
+          const datatypeToUpdateIndex = project.data.dataTypes.findIndex((datatype) => datatype.name === name)
+          if (datatypeToUpdateIndex === -1) return
+          console.log('Updating datatype', name, dataToUpdate)
+          Object.assign(project.data.dataTypes[datatypeToUpdateIndex], dataToUpdate)
         }),
-      );
+      )
     },
     createArrayDimension: (dataToCreateDimension) => {
       setState(

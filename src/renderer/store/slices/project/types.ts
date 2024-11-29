@@ -6,6 +6,7 @@ import {
   PLCInstanceSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
+  PLCStructureVariableSchema,
   PLCTaskSchema,
   PLCVariableSchema,
 } from '@root/types/PLC/open-plc'
@@ -26,6 +27,11 @@ const variableDTOSchema = z.object({
   scope: z.enum(['global', 'local']),
   associatedPou: z.string().optional(),
   data: PLCVariableSchema,
+})
+
+const structureVariableDTOSchema = z.object({
+  associatedDataType: z.string().optional(),
+  data: PLCStructureVariableSchema,
 })
 type VariableDTO = z.infer<typeof variableDTOSchema>
 
@@ -161,7 +167,10 @@ const projectActionsSchema = z.object({
     .function()
     .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number(), newIndex: z.number() })))
     .returns(z.void()),
-
+  rearrangeStructureVariables: z
+    .function()
+    .args(structureVariableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number(), newIndex: z.number() })))
+    .returns(z.void()),
   /**
    * Data Type Actions
    */
