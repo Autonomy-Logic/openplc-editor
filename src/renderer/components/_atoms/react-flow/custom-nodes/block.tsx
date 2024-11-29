@@ -1,4 +1,5 @@
 import { Pencil1Icon } from '@radix-ui/react-icons'
+import { ProhibitedIcon } from '@root/renderer/assets/icons/interface/Prohibited'
 import { TrashCanIcon } from '@root/renderer/assets/icons/interface/TrashCan'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
@@ -343,7 +344,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     },
     projectActions: { createVariable, updateVariable },
     flows,
-    flowActions: { removeNodes, updateNode },
+    flowActions: { removeNodes, updateNode, setSelectedNodes },
   } = useOpenPLCStore()
 
   const { documentation, type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
@@ -515,6 +516,19 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     })
   }
 
+  const handleDeselectNode = () => {
+    const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
+    })
+    if (!rung || !node) return
+
+    setSelectedNodes({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodes: (rung.selectedNodes || []).filter((selectedNode) => selectedNode.id !== node.id),
+    })
+  }
+
   return (
     <div
       className={cn('relative', {
@@ -555,8 +569,12 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
         )}
       </div>
       {selected && (
-        <div className='absolute -bottom-6 right-0 flex items-center justify-center gap-1'>
+        <div className='absolute -bottom-6 right-0 flex items-center justify-center gap-2'>
           <Pencil1Icon className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850' />
+          <ProhibitedIcon
+            className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
+            onClick={handleDeselectNode}
+          />
           <TrashCanIcon
             className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
             onClick={handleDeleteNode}

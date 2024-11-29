@@ -45,7 +45,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
   const [rungLocal, setRungLocal] = useState<RungState>(rung)
-  const [selectedNodes, setSelectedNodes] = useState<FlowNode[]>([])
 
   const [modalNode, setModalNode] = useState<FlowNode | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -102,49 +101,23 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    // console.log(`Rung ${rung.id} nodes changed`, rung)
     setRungLocal(rung)
   }, [rung.nodes])
 
   /**
-   * Disable dragging for all nodes when multiple nodes are selected
+   *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
+    if (differenceWith(rungLocal.selectedNodes || [], rung.selectedNodes || [], (a, b) => isEqual(a, b)).length === 0)
+      return
+
     // Update the selected nodes in the rung state
     flowActions.setSelectedNodes({
       editorName: editor.meta.name,
       rungId: rung.id,
-      nodes: selectedNodes,
+      nodes: rungLocal.selectedNodes || [],
     })
-
-    // Disable dragging for all nodes when multiple nodes are selected
-    if (selectedNodes.length > 1) {
-      setRungLocal((rung) => ({
-        ...rung,
-        nodes: rung.nodes.map((node) => {
-          if (selectedNodes.map((n) => n.id).includes(node.id)) {
-            return {
-              ...node,
-              draggable: false,
-            }
-          }
-          return node
-        }),
-      }))
-      return
-    }
-    setRungLocal((rung) => ({
-      ...rung,
-      nodes: rung.nodes.map((node) => ({
-        ...node,
-        draggable: (node.data as BasicNodeData).draggable === false ? false : true,
-      })),
-    }))
-  }, [
-    selectedNodes.length > 0
-      ? differenceWith(selectedNodes, rung.selectedNodes || [], (a, b) => isEqual(a, b)).length > 0
-      : differenceWith(rung.selectedNodes || [], selectedNodes, (a, b) => isEqual(a, b)).length > 0,
-  ])
+  }, [rungLocal.selectedNodes])
 
   /**
    * Add a new node to the rung
@@ -411,6 +384,13 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     [rung, rungLocal],
   )
 
+  const onSelectionChange = useCallback(
+    (selectedNodes: FlowNode[]) => {
+      setRungLocal((rung) => ({ ...rung, selectedNodes }))
+    },
+    [rung.selectedNodes, rungLocal.selectedNodes],
+  )
+
   return (
     <div className='relative h-fit w-full rounded-b-lg border border-t-0 p-1 dark:border-neutral-800'>
       <div aria-label='Rung body' className='h-full w-full overflow-x-auto' ref={flowViewportRef}>
@@ -452,7 +432,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
                 handleNodeDoubleClick(node)
               },
               onSelectionChange: (selectedNodes) => {
-                setSelectedNodes(selectedNodes.nodes)
+                onSelectionChange(selectedNodes.nodes)
               },
 
               onDragEnter: onDragEnterViewport,

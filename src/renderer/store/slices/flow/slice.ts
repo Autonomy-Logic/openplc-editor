@@ -1,4 +1,5 @@
 import { defaultCustomNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
+import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 import { removeElements } from '@root/renderer/components/_molecules/rung/ladder-utils/elements'
 import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import { produce } from 'immer'
@@ -218,8 +219,42 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
+          const selectedNodes = nodes
           if (!rung.selectedNodes) rung.selectedNodes = []
-          rung.selectedNodes = nodes
+          rung.selectedNodes = selectedNodes
+
+          if (selectedNodes.length > 1) {
+            rung.nodes = rung.nodes.map((node) => {
+              if (selectedNodes.find((n) => n.id === node.id)) {
+                return {
+                  ...node,
+                  selected: true,
+                  draggable: false,
+                }
+              }
+              return {
+                ...node,
+                selected: false,
+                draggable: false,
+              }
+            })
+            return
+          }
+
+          rung.nodes = rung.nodes.map((node) => {
+            if (selectedNodes.find((n) => n.id === node.id)) {
+              return {
+                ...node,
+                selected: true,
+                draggable: false,
+              }
+            }
+            return {
+              ...node,
+              selected: false,
+              draggable: (node.data as BasicNodeData).draggable,
+            }
+          })
         }),
       )
     },

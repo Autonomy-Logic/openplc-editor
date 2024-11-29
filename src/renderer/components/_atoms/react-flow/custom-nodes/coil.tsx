@@ -7,6 +7,7 @@ import {
   RisingEdgeCoil,
   SetCoil,
 } from '@root/renderer/assets/icons/flow/Coil'
+import { ProhibitedIcon } from '@root/renderer/assets/icons/interface/Prohibited'
 import { TrashCanIcon } from '@root/renderer/assets/icons/interface/TrashCan'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
@@ -116,7 +117,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       data: { pous },
     },
     flows,
-    flowActions: { removeNodes, updateNode },
+    flowActions: { removeNodes, updateNode, setSelectedNodes },
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
@@ -242,6 +243,19 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     })
   }
 
+  const handleDeselectNode = () => {
+    const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
+    })
+    if (!rung || !node) return
+
+    setSelectedNodes({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodes: (rung.selectedNodes || []).filter((selectedNode) => selectedNode.id !== node.id),
+    })
+  }
+
   return (
     <div
       className={cn('relative', {
@@ -279,8 +293,12 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
         ↕
       </div>
       {selected && (
-        <div className='absolute -bottom-7 flex items-center justify-center gap-1'>
+        <div className='absolute -bottom-7 -right-4 flex items-center justify-center gap-2'>
           <Pencil1Icon className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850' />
+          <ProhibitedIcon
+            className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
+            onClick={handleDeselectNode}
+          />
           <TrashCanIcon
             className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
             onClick={handleDeleteNode}
