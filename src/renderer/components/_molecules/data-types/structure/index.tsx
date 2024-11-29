@@ -26,12 +26,16 @@ const StructureDataType = () => {
   })
 
   useEffect(() => {
-    const foundDataType = dataTypes.find((dataType) => dataType.derivation === 'structure')
+    const foundDataType = dataTypes.find(
+      (dataType) => dataType.derivation === 'structure' && dataType.name === editor.meta.name,
+    )
 
     if (foundDataType && 'variable' in foundDataType) {
       setTableData(foundDataType.variable)
+    } else {
+      return
     }
-  }, [dataTypes])
+  }, [editor, dataTypes])
 
   useEffect(() => {
     const foundDataType = dataTypes.find((dataType) => dataType.derivation === 'structure')
@@ -40,7 +44,6 @@ const StructureDataType = () => {
       setEditorStructure({ description: description, selectedRow: selectedRow })
     }
   }, [editor])
-
 
   const handleRowClick = (row: HTMLTableRowElement) => {
     updateModelStructure({
@@ -181,11 +184,13 @@ const StructureDataType = () => {
         <div aria-label='structure base type container' className='flex w-1/2 flex-col gap-3'></div>
         <div aria-label='structure initial value container' className='w-1/2'></div>
       </div>
-      <StructureTable
-        tableData={tableData}
-        selectedRow={parseInt(editorStructure.selectedRow)}
-        handleRowClick={handleRowClick}
-      />
+      <div className='flex h-full w-full flex-1 flex-col overflow-hidden'>
+        <StructureTable
+          tableData={tableData}
+          selectedRow={parseInt(editorStructure.selectedRow)}
+          handleRowClick={handleRowClick}
+        />
+      </div>
     </div>
   )
 }

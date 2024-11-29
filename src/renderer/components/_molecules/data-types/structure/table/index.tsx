@@ -118,38 +118,38 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-  meta: {
-  updateData: (rowIndex, columnId, value) => {
-    try {
-      updateDatatype(editor.meta.name, {
-        derivation: 'structure',
-        name: editor.meta.name,
-        variable: tableData.map((variable, index) => {
-          if (index === rowIndex) {
-            return {
-              ...variable,
-              [columnId]: value,
-            };
+    meta: {
+      updateData: (rowIndex, columnId, value) => {
+        try {
+          updateDatatype(editor.meta.name, {
+            derivation: 'structure',
+            name: editor.meta.name,
+            variable: tableData.map((variable, index) => {
+              if (index === rowIndex) {
+                return {
+                  ...variable,
+                  [columnId]: value,
+                }
+              }
+              return variable
+            }),
+          })
+          return { ok: true, message: 'Data updated successfully.' }
+        } catch (error) {
+          console.error('Failed to update data:', error)
+          return {
+            ok: false,
+            title: 'Update Failed',
+            message: 'An error occurred while updating the data.',
+            data: error,
           }
-          return variable;
-        }),
-      });
-      return { ok: true, message: 'Data updated successfully.' }; 
-    } catch (error) {
-      console.error('Failed to update data:', error);
-      return { 
-        ok: false, 
-        title: 'Update Failed', 
-        message: 'An error occurred while updating the data.', 
-        data: error 
-      };
-    }
-  },
-},
+        }
+      },
+    },
   })
 
   return (
-    <Table context='Structure' className='mr-1 w-[50%]'>
+    <Table context='Structure' className='mr-1 flex h-fit w-[50%]  scroll-ml-1 overflow-y-auto '>
       <TableHeader ref={tableHeaderRef}>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow className='select-none' key={headerGroup.id}>
