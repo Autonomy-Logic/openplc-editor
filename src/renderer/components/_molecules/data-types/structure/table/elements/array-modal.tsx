@@ -51,17 +51,19 @@ export const ArrayModal = ({
     const structureVariables = dataTypes.filter(
       (dataType) => dataType.derivation === 'structure' && 'variable' in dataType,
     )
-    const findStructureVariable = structureVariables.find((variable) => variable.name === variableName)
-    const structureVariable = findStructureVariable?.variable.find((variable) => variable.name === variableName)
-    console.log('structureVariable:', structureVariable)
-    if (structureVariable?.type?.definition && structureVariable.type.definition === 'array') {
-      console.log('array modal -> structureVariable:', structureVariable)
-      setDimensions(structureVariable.type.data.dimensions || [])
-      setTypeValue(structureVariable.type.data.baseType || 'dint')
-    } else {
-      console.log('Não encontrou a definição de array ou estruturaVariable:', structureVariable)
-      setDimensions([])
-      setTypeValue('dint')
+    if (structureVariables.name === name) {
+      const findStructureVariable = structureVariables.find((variable) => variable.name === variableName)
+      const structureVariable = findStructureVariable?.variable.find((variable) => variable.name === variableName)
+      console.log('structureVariable:', structureVariable)
+      if (structureVariable?.type?.definition && structureVariable.type.definition === 'array') {
+        console.log('array modal -> structureVariable:', structureVariable)
+        setDimensions(structureVariable.type.data.dimensions)
+        setTypeValue(structureVariable.type.data.baseType)
+      } else {
+        console.log('Não encontrou a definição de array ou estruturaVariable:', structureVariable)
+        setDimensions([])
+        setTypeValue('dint')
+      }
     }
   }, [name, variableName, dataTypes])
 
@@ -159,7 +161,7 @@ export const ArrayModal = ({
     }
 
     updateDatatype(name, {
-      name: variableName,
+      name,
       variable: updatedVariables,
       derivation: 'structure',
     })
