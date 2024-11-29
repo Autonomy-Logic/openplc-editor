@@ -53,8 +53,10 @@ const StructureDataType = () => {
   }
 
   const handleCreateStructureVariable = () => {
-    const structureVariables = tableData.filter((variable) => variable.name)
+    const structureVariables = tableData.filter((variable) => variable.name || variable.type)
     const selectedRow = parseInt(editorStructure.selectedRow)
+
+    const isDuplicate = (name: string) => name !== '' && structureVariables.some((variable) => variable.name === name)
 
     if (structureVariables.length === 0) {
       updateDatatype(editor.meta.name, {
@@ -73,12 +75,13 @@ const StructureDataType = () => {
       })
       return
     }
+
     const structureVariable: PLCStructureVariable =
       selectedRow === ROWS_NOT_SELECTED
         ? structureVariables[structureVariables.length - 1]
         : structureVariables[selectedRow]
 
-    if (selectedRow === ROWS_NOT_SELECTED) {
+    if (!structureVariable || !structureVariable.type) {
       updateDatatype(editor.meta.name, {
         derivation: 'structure',
         name: editor.meta.name,
@@ -86,36 +89,54 @@ const StructureDataType = () => {
           ...structureVariables,
           {
             name: '',
+            type: { definition: 'base-type', value: 'dint' },
             initialValue: { simpleValue: { value: '' } },
-            type:
-              structureVariable.type.definition === 'derived'
-                ? { definition: 'base-type', value: 'dint' }
-                : structureVariable.type,
           },
         ],
       })
       updateModelStructure({
         selectedRow: structureVariables.length,
       })
+      return
     }
-    updateDatatype(editor.meta.name, {
-      derivation: 'structure',
-      name: editor.meta.name,
-      variable: [
-        ...structureVariables,
-        {
-          name: '',
-          initialValue: { simpleValue: { value: '' } },
-          type:
-            structureVariable.type.definition === 'derived'
-              ? { definition: 'base-type', value: 'dint' }
-              : structureVariable.type,
-        },
-      ],
-    })
-    updateModelStructure({
-      selectedRow: selectedRow + 1,
-    })
+
+    const newVariable = {
+      name: '',
+      initialValue: { simpleValue: { value: '' } },
+      type: structureVariable.type,
+    }
+
+    if (selectedRow === ROWS_NOT_SELECTED) {
+      if (isDuplicate(newVariable.name)) {
+        console.warn('A variable with the same name already exists.')
+        return
+      }
+      updateDatatype(editor.meta.name, {
+        derivation: 'structure',
+        name: editor.meta.name,
+        variable: [...structureVariables, newVariable],
+      })
+      updateModelStructure({
+        selectedRow: structureVariables.length,
+      })
+    } else {
+      if (isDuplicate(newVariable.name)) {
+        console.warn('A variable with the same name already exists.')
+        return
+      }
+      updateDatatype(editor.meta.name, {
+        derivation: 'structure',
+        name: editor.meta.name,
+        variable: [
+          ...structureVariables.slice(0, selectedRow + 1),
+          newVariable,
+          ...structureVariables.slice(selectedRow + 1),
+        ],
+      })
+      updateModelStructure({
+        selectedRow: selectedRow + 1,
+      })
+    }
   }
 
   return (

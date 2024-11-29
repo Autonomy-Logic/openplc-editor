@@ -118,23 +118,34 @@ const StructureTable = ({ tableData, selectedRow, handleRowClick }: PLCStructure
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    meta: {
-      updateData: (rowIndex, columnId, value) => {
-        updateDatatype(editor.meta.name, {
-          derivation: 'structure',
-          name: editor.meta.name,
-          variable: tableData.map((variable, index) => {
-            if (index === rowIndex) {
-              return {
-                ...variable,
-                [columnId]: value,
-              }
-            }
-            return variable
-          }),
-        })
-      },
-    },
+  meta: {
+  updateData: (rowIndex, columnId, value) => {
+    try {
+      updateDatatype(editor.meta.name, {
+        derivation: 'structure',
+        name: editor.meta.name,
+        variable: tableData.map((variable, index) => {
+          if (index === rowIndex) {
+            return {
+              ...variable,
+              [columnId]: value,
+            };
+          }
+          return variable;
+        }),
+      });
+      return { ok: true, message: 'Data updated successfully.' }; 
+    } catch (error) {
+      console.error('Failed to update data:', error);
+      return { 
+        ok: false, 
+        title: 'Update Failed', 
+        message: 'An error occurred while updating the data.', 
+        data: error 
+      };
+    }
+  },
+},
   })
 
   return (

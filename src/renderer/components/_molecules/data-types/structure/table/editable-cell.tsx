@@ -1,6 +1,6 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
-import {  PLCStructureVariable } from '@root/types/PLC/open-plc'
+import { PLCStructureVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
@@ -21,13 +21,29 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
   const initialValue = getValue<string | undefined>()
 
   const { toast } = useToast()
-
   const [cellValue, setCellValue] = useState(initialValue)
 
   const onBlur = () => {
     if (cellValue === initialValue) return
+
+    const existingNames = table
+      .getRowModel()
+      .rows.map((row) => row.getValue<string>('name'))
+      .filter(Boolean)
+
+    if (existingNames.includes(cellValue ?? '')) {
+      toast({
+        title: 'invalid name',
+        description: `There is already a variable with the name "${cellValue}".`,
+        variant: 'fail',
+      })
+      setCellValue(initialValue ?? '')
+      return
+    }
+
     const res = table.options.meta?.updateData(index, id, cellValue ?? '')
     if (res?.ok) return
+
     setCellValue(initialValue ?? '')
     toast({ title: res?.title, description: res?.message, variant: 'fail' })
   }
@@ -41,10 +57,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
   return (
     <InputWithRef
       value={cellValue}
-      onChange={(e) => {
-        setCellValue(e.target.value)
-        console.log('initialValue', initialValue, 'cellValue', cellValue, 'e.target.value', e.target.value)
-      }}
+      onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
       className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !editable,
