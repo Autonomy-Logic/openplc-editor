@@ -7,7 +7,7 @@ import type { CellContext } from '@tanstack/react-table'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
-import { ArrayModal } from '../../../variables-table/elements/array-modal'
+import { ArrayModal } from './elements/array-modal'
 
 type ISelectableCellProps = CellContext<PLCStructureVariable, unknown> & { editable?: boolean }
 
@@ -24,7 +24,6 @@ const SelectableTypeCell = ({
   ]
 
   const { value, definition } = getValue<PLCStructureVariable['type']>()
-  console.log('getValue -> value:', value, 'definition:', definition)
 
   const [cellValue, setCellValue] = useState<PLCStructureVariable['type']['value']>(value)
   const [arrayModalIsOpen, setArrayModalIsOpen] = useState(false)
@@ -36,13 +35,12 @@ const SelectableTypeCell = ({
     definition: PLCStructureVariable['type']['definition'],
     value: PLCStructureVariable['type']['value'],
   ) => {
-    console.log('onSelect -> definition:', definition, 'value:', value)
     setCellValue(value)
     table.options.meta?.updateData(index, id, { definition, value })
   }
 
   useEffect(() => {
-    console.log('useEffect -> syncing cellValue with value:', value)
+
     setCellValue(value)
   }, [value])
 

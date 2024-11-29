@@ -41,10 +41,6 @@ const StructureDataType = () => {
     }
   }, [editor])
 
-  useEffect(() => {
-    console.log('Editor Structure Updated:', editorStructure)
-    console.log('Table Data:', tableData)
-  }, [tableData, editorStructure])
 
   const handleRowClick = (row: HTMLTableRowElement) => {
     updateModelStructure({
