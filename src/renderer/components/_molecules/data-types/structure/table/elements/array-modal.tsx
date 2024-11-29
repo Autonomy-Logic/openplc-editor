@@ -55,14 +55,10 @@ export const ArrayModal = ({
       const findStructureVariable = structureVariables.find((variable) => variable.name === variableName)
       const structureVariable = findStructureVariable?.variable.find((variable) => variable.name === variableName)
       console.log('structureVariable:', structureVariable)
-      if (structureVariable?.type?.definition && structureVariable.type.definition === 'array') {
+      if (structureVariable.type.definition === 'array') {
         console.log('array modal -> structureVariable:', structureVariable)
         setDimensions(structureVariable.type.data.dimensions)
         setTypeValue(structureVariable.type.data.baseType)
-      } else {
-        console.log('Não encontrou a definição de array ou estruturaVariable:', structureVariable)
-        setDimensions([])
-        setTypeValue('dint')
       }
     }
   }, [name, variableName, dataTypes])
@@ -124,46 +120,39 @@ export const ArrayModal = ({
       })
       return
     }
+
     const formattedArrayName = `ARRAY [${dimensionToSave.join(', ')}] OF ${typeValue.toUpperCase()}`
 
-    const structureVariables =
-      dataTypes.find((dataType) => dataType.derivation === 'structure' && 'variable' in dataType)?.variable || []
+    const structure = dataTypes.find((dataType) => dataType.derivation === 'structure' && dataType.name === name)
 
-    const updatedVariables = structureVariables.map((variable) => {
-      if (variable.name === variableName) {
-        return {
-          ...variable,
-          type: {
-            definition: 'array',
-            value: formattedArrayName,
-            data: {
-              baseType: typeValue,
-              dimensions,
-            },
-          },
-        }
-      }
-      return variable
-    })
-
-    if (!updatedVariables.some((variable) => variable.name === variableName)) {
-      updatedVariables.push({
-        name: variableName,
-        type: {
-          definition: 'array',
-          value: formattedArrayName,
-          data: {
-            baseType: typeValue,
-            dimensions,
-          },
-        },
+    if (!structure || !('variable' in structure)) {
+      toast({
+        title: 'Structure not found',
+        description: `The structure '${name}' was not found.`,
+        variant: 'fail',
       })
+      return
     }
 
+    const updatedVariables = structure.variable.map((variable) =>
+      variable.name === variableName
+        ? {
+            ...variable,
+            type: {
+              definition: 'array',
+              value: formattedArrayName,
+              data: {
+                baseType: typeValue,
+                dimensions,
+              },
+            },
+          }
+        : variable,
+    )
+
     updateDatatype(name, {
-      name,
+      ...structure,
       variable: updatedVariables,
-      derivation: 'structure',
     })
 
     setArrayModalIsOpen(false)
