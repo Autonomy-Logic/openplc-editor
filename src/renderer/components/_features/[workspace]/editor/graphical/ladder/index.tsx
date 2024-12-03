@@ -45,6 +45,10 @@ export default function LadderEditor() {
         value: flowSchema.data,
       },
     })
+    /**
+     * TODO: Verify if this is method is declared
+     */
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     flowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
   }, [flowUpdated === true])
 
