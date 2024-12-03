@@ -39,15 +39,14 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       data: { pous },
     },
     projectActions: { deleteVariable },
+    modals,
+    modalActions: { closeModal, openModal },
   } = useOpenPLCStore()
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
   const [rungLocal, setRungLocal] = useState<RungState>(rung)
-
-  const [modalNode, setModalNode] = useState<FlowNode | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const flowViewportRef = useRef<HTMLDivElement>(null)
@@ -101,6 +100,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
+    // console.log('rung', rung)
     setRungLocal(rung)
   }, [rung.nodes])
 
@@ -134,7 +134,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         const Library = libraries.user.find((Library) => Library.name === blockLibrary)
         const pou = pous.find((pou) => pou.data.name === Library?.name)
         if (!pou) return
-        console.log(pou)
         pouLibrary = {
           name: pou.data.name,
           type: pou.type,
@@ -248,16 +247,20 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    * Handle the double click of a node
    */
   const handleNodeDoubleClick = (node: FlowNode) => {
-    setModalNode(node)
-    setModalOpen(true)
+    const modalToOpen =
+      node.type === 'block'
+        ? 'block-ladder-element'
+        : node.type === 'coil'
+          ? 'coil-ladder-element'
+          : 'contact-ladder-element'
+    openModal(modalToOpen, node)
   }
 
   /**
    * Handle the close of the modal
    */
   const handleModalClose = () => {
-    setModalNode(null)
-    setModalOpen(false)
+    closeModal()
   }
 
   /**
@@ -281,16 +284,11 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    */
   const onDragEnterViewport = useCallback<DragEventHandler>(
     (event) => {
+      event.preventDefault()
       // Check if the dragged element is not a ladder block
       if (!event.dataTransfer.types.includes('application/reactflow/ladder-blocks')) {
         return
       }
-
-      event.preventDefault()
-
-      // if (!flowViewportRef.current || !relatedTarget || !flowViewportRef.current.contains(relatedTarget as Node)) {
-      //   return
-      // }
 
       // If it is a ladder block and the dragged element is a child of the flow viewport, render the placeholder elements
       const copyRungLocal = { ...rungLocal }
@@ -361,8 +359,8 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    */
   const onDrop = useCallback<DragEventHandler>(
     (event) => {
-      // Check if there is a ladder block in the dragged data
       event.preventDefault()
+      // Check if there is a ladder block in the dragged data
       const blockType =
         event.dataTransfer.getData('application/reactflow/ladder-blocks') === ''
           ? undefined
@@ -386,6 +384,13 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onSelectionChange = useCallback(
     (selectedNodes: FlowNode[]) => {
+      const selectedPlaceholderNodes = rungLocal.selectedNodes?.filter(
+        (node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder',
+      )
+      if (!selectedPlaceholderNodes || selectedPlaceholderNodes.length > 0) {
+        return
+      }
+
       setRungLocal((rung) => ({ ...rung, selectedNodes }))
     },
     [rung.selectedNodes, rungLocal.selectedNodes],
@@ -460,30 +465,25 @@ export const RungBody = ({ rung }: RungBodyProps) => {
         </div>
       </div>
       <Portal.Root>
-        {modalNode?.type === 'block' && (
+        {modals['block-ladder-element']?.open && (
           <BlockElement
             onClose={handleModalClose}
-            selectedNode={modalNode as BlockNode<object>}
-            isOpen={modalOpen}
-            onOpenChange={setModalOpen}
+            selectedNode={modals['block-ladder-element'].data as BlockNode<object>}
+            isOpen={modals['block-ladder-element'].open}
           />
         )}
-        {modalNode?.type === 'contact' && (
+        {modals['contact-ladder-element']?.open && (
           <ContactElement
             onClose={handleModalClose}
-            node={modalNode as ContactNode}
-            rungId={rungLocal.id}
-            isOpen={modalOpen}
-            onOpenChange={setModalOpen}
+            node={modals['contact-ladder-element'].data as ContactNode}
+            isOpen={modals['contact-ladder-element'].open}
           />
         )}
-        {modalNode?.type === 'coil' && (
+        {modals['coil-ladder-element']?.open && (
           <CoilElement
             onClose={handleModalClose}
-            node={modalNode as CoilNode}
-            rungId={rungLocal.id}
-            isOpen={modalOpen}
-            onOpenChange={setModalOpen}
+            node={modals['coil-ladder-element'].data as CoilNode}
+            isOpen={modals['coil-ladder-element'].open}
           />
         )}
       </Portal.Root>

@@ -246,7 +246,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
               return {
                 ...node,
                 selected: true,
-                draggable: false,
+                draggable: (node.data as BasicNodeData).draggable,
               }
             }
             return {

@@ -118,6 +118,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     },
     flows,
     flowActions: { removeNodes, updateNode, setSelectedNodes },
+    modalActions: { openModal },
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
@@ -256,6 +257,15 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     })
   }
 
+  const handleOpenModal = () => {
+    const { node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
+    })
+    if (!node) return
+
+    openModal('coil-ladder-element', node)
+  }
+
   return (
     <div
       className={cn('relative', {
@@ -294,7 +304,10 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       </div>
       {selected && (
         <div className='absolute -bottom-7 -right-4 flex items-center justify-center gap-2'>
-          <Pencil1Icon className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850' />
+          <Pencil1Icon
+            className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
+            onClick={handleOpenModal}
+          />
           <ProhibitedIcon
             className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
             onClick={handleDeselectNode}

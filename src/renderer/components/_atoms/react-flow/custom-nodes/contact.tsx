@@ -88,6 +88,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     },
     flows,
     flowActions: { removeNodes, updateNode, setSelectedNodes },
+    modalActions: { openModal },
   } = useOpenPLCStore()
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
@@ -234,6 +235,15 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     })
   }
 
+  const handleOpenModal = () => {
+    const { node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: id,
+    })
+    if (!node) return
+
+    openModal('contact-ladder-element', node)
+  }
+
   return (
     <div
       className={cn('relative', {
@@ -272,7 +282,10 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       </div>
       {selected && (
         <div className='absolute -bottom-7 -left-4 flex items-center justify-center gap-1'>
-          <Pencil1Icon className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850' />
+          <Pencil1Icon
+            className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
+            onClick={handleOpenModal}
+          />
           <ProhibitedIcon
             className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
             onClick={handleDeselectNode}
