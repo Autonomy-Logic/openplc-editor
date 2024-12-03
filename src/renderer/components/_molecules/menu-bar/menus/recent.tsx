@@ -17,6 +17,7 @@ export const RecentMenu = () => {
     tabsActions: { clearTabs },
     projectActions: { setProject },
     flowActions: { addFlow },
+    libraryActions: { addLibrary },
   } = useOpenPLCStore()
   const { TRIGGER, CONTENT, ITEM } = MenuClasses
 
@@ -91,27 +92,35 @@ export const RecentMenu = () => {
 
   const handleOpenProject = async (projectPath: string) => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
-
     if (success && data) {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
       setRecents([])
+
+      const projectMeta = {
+        name: data.content.meta.name,
+        type: data.content.meta.type,
+        path: data.meta.path,
+      }
+      const projectData = data.content.data
+
       setProject({
-        meta: {
-          name: data.content.meta.name,
-          type: data.content.meta.type,
-          path: data.meta.path,
-        },
-        data: data.content.data,
+        meta: projectMeta,
+        data: projectData,
       })
 
-      const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
-      if (ladderPous.length > 0) {
+      const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
+
+      if (ladderPous.length) {
         ladderPous.forEach((pou) => {
-          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+          if (pou.data.body.language === 'ld') {
+            addFlow(pou.data.body.value as FlowType)
+          }
         })
       }
+
+      projectData.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
 
       toast({
         title: 'Project opened!',

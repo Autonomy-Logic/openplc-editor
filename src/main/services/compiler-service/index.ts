@@ -67,7 +67,7 @@ const CompilerService = {
     const workingDirectory = process.cwd()
 
     // Construct the path for the st compiler script based on the current environment
-    const stCompilerPath = isDevelopment ? join(workingDirectory, 'assets', 'python', 'st-compiler', 'xml2st.py') : ''
+    const stCompilerPath = isDevelopment ? join(workingDirectory, 'assets', 'st-compiler', 'xml2st.py') : ''
 
     // Remove the project.json file from the path to the xml file.
     // This is necessary because on windows the path is handled differently from unix systems

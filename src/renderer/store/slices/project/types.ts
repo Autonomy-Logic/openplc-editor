@@ -92,7 +92,7 @@ type InstanceDTO = z.infer<typeof instanceDTOSchema>
  */
 const projectMetaSchema = z.object({
   name: z.string(),
-  type: z.enum(['plc-project']),
+  type: z.enum(['plc-project','plc-library']),
   path: z.string(),
 })
 type ProjectMeta = z.infer<typeof projectMetaSchema>

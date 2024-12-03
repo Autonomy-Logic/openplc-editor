@@ -3,6 +3,7 @@ import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
+import { LibrarySlice } from '../library'
 import { ProjectSlice } from '../project'
 import { TabsSlice } from '../tabs'
 import { CreateEditorObject, CreatePouObject } from './utils'
@@ -26,10 +27,12 @@ export type SharedSlice = {
   }
 }
 
-export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSlice, [], [], SharedSlice> = (
-  _setState,
-  getState,
-) => ({
+export const createSharedSlice: StateCreator<
+  EditorSlice & TabsSlice & ProjectSlice & LibrarySlice,
+  [],
+  [],
+  SharedSlice
+> = (_setState, getState) => ({
   pouActions: {
     create: (propsToCreatePou: PropsToCreatePou) => {
       if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
@@ -59,6 +62,8 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSl
             language: propsToCreatePou.language,
           },
         })
+        propsToCreatePou.type !== 'program' &&
+          getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
         return true
       }
 
@@ -97,6 +102,8 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSl
             language: propsToCreatePou.language,
           },
         })
+        propsToCreatePou.type !== 'program' &&
+          getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
         return true
       }
       return false
@@ -106,7 +113,7 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSl
   },
   datatypeActions: {
     create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => {
-      getState().projectActions.createDatatype({ data: propsToCreateDatatype })
+      getState().projectActions.createDatatype(propsToCreateDatatype)
       getState().editorActions.addModel({
         type: 'plc-datatype',
         meta: { name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation },
