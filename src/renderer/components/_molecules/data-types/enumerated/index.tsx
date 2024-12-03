@@ -1,5 +1,4 @@
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
-// import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
