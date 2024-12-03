@@ -128,6 +128,47 @@ const WorkspaceScreen = () => {
       }
     }
   })
+  
+  window.bridge.createProjectAccelerator((_event, response: IProjectServiceResponse)  => {
+    if ( editingState === 'saved') {
+      const { data, error } = response
+      if (data) {
+      setProject({
+        meta: {
+          path: data.meta.path,
+          name: 'new-project',
+          type: 'plc-project',
+        },
+        data: data.content.data,
+      })
+      setEditingState('unsaved')
+      clearEditor()
+      clearTabs()
+      setEditingState('unsaved')
+      setRecents([])
+      setProject({
+        meta: {
+          name: 'new-project',
+          type: 'plc-project',
+          path: data.meta.path,
+        },
+        data: data.content.data,
+      })
+
+      toast({
+        title: 'The project was created successfully!',
+        description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
+        variant: 'default',
+      })
+    }
+    else   
+      toast({
+          title: 'Cannot create a project!',
+          description: error?.description,
+          variant: 'fail',
+        })
+  }}
+  )
 
   const variables = [
     { name: 'a', type: 'false' },
