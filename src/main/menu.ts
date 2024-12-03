@@ -2,11 +2,11 @@
 import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
 import { i18n } from '../utils/i18n'
-import { _ProjectService, ProjectService } from './services'
+import { ProjectService } from './services'
 
 /**
  * Wip: Interface for mac machines menu.
- */ 
+ */
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string
   submenu?: DarwinMenuItemConstructorOptions[] | Menu
@@ -17,9 +17,9 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
  * @class MenuBuilder
  */
 export default class MenuBuilder {
-  mainWindow: BrowserWindow
+  private mainWindow: BrowserWindow;
 
-  projectService: typeof _ProjectService
+  private projectService: ProjectService;
 
   developOptions: MenuItemConstructorOptions[] = [
     { type: 'separator' },
@@ -29,8 +29,8 @@ export default class MenuBuilder {
   ]
 
   constructor(mainWindow: BrowserWindow) {
-    this.mainWindow = mainWindow
-    this.projectService = new ProjectService(mainWindow)
+    this.mainWindow = mainWindow;
+    this.projectService = new ProjectService(mainWindow); // Use 'this' aqui
   }
 
   async buildMenu(): Promise<Menu> {
@@ -74,7 +74,7 @@ export default class MenuBuilder {
 
   handleCloseTab() {
     this.mainWindow.webContents.send('workspace:close-tab-accelerator')
-    
+
   }
 
   handleCloseProject(){
@@ -83,7 +83,7 @@ export default class MenuBuilder {
 
   handleDeletePou(){
     this.mainWindow.webContents.send('workspace:delete-pou-accelerator')
-   
+
   }
 
   handleSwitchPerspective() {
@@ -398,7 +398,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
-            
+
             accelerator: 'Ctrl+W',
             click: () => this.handleCloseTab(),
           },
