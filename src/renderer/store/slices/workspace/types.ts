@@ -30,9 +30,10 @@ const workspaceActionsSchema = z.object({
   setEditingState: z.function().args(workspaceStateSchema.shape.workspace.shape.editingState).returns(z.void()),
   setRecents: z.function().args(workspaceStateSchema.shape.workspace.shape.recents).returns(z.void()),
   setSystemConfigs: z.function().args(systemConfigsSchema).returns(z.void()),
-
   switchAppTheme: z.function().returns(z.void()),
   toggleMaximizedWindow: z.function().returns(z.void()),
+  toggleCollapse: z.function().returns(z.void()),
+  setModalOpen: z.function().args(z.string(), z.boolean()).returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 
