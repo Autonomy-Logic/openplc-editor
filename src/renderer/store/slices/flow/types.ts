@@ -64,6 +64,7 @@ type RungState = {
   comment: string
   defaultBounds: number[]
   flowViewport: number[]
+  selectedNodes?: Node[]
   nodes: Node[]
   edges: Edge[]
 }
@@ -79,7 +80,9 @@ type FlowState = {
 }
 
 type FlowActions = {
+  clearFlows: () => void
   addFlow: (flow: FlowType) => void
+  removeFlow: (flowId: string) => void
 
   /**
    * Control the rungs of the flow
@@ -134,6 +137,8 @@ type FlowActions = {
     editorName: string
   }) => void
   addNode: ({ node, rungId, editorName }: { node: Node; rungId: string; editorName: string }) => void
+  removeNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
+  setSelectedNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
 
   setEdges: ({ edges, rungId, editorName }: { edges: Edge[]; rungId: string; editorName: string }) => void
   updateEdge: ({
@@ -161,6 +166,8 @@ type FlowActions = {
     rungId: string
     editorName: string
   }) => void
+
+  setFlowUpdated: ({ editorName, updated }: { editorName: string; updated: boolean }) => void
 }
 
 /** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */

@@ -34,6 +34,8 @@ const WorkspaceScreen = () => {
     editor,
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setRecents, toggleCollapse },
+    projectActions: { clearProjects },
+    flowActions: { clearFlows },
     tabsActions: { clearTabs },
     searchResults,
   } = useOpenPLCStore()
@@ -123,11 +125,15 @@ const WorkspaceScreen = () => {
 
   useEffect(() => {
     const handleCloseProject = () => {
-      clearEditor()
-      clearTabs()
-      setEditingState('unsaved')
-      setRecents([])
-      window.bridge.closeProjectAccelerator((_event) => navigate('/'))
+      window.bridge.closeProjectAccelerator((_event) => {
+        clearEditor()
+        clearTabs()
+        clearProjects()
+        clearFlows()
+        setEditingState('unsaved')
+        setRecents([])
+        navigate('/')
+      })
     }
     handleCloseProject()
   }, [])
@@ -197,7 +203,7 @@ const WorkspaceScreen = () => {
                     <>
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-datatype' && (
-                        <div aria-label='Datatypes editor container' className='flex h-full gap-2 w-full flex-1'>
+                        <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1 gap-2'>
                           <DataTypeEditor dataTypeName={editor.meta.name} />{' '}
                         </div>
                       )}

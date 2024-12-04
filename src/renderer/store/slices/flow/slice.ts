@@ -1,4 +1,6 @@
 import { defaultCustomNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
+import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
+import { removeElements } from '@root/renderer/components/_molecules/rung/ladder-utils/elements'
 import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
@@ -9,15 +11,28 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
   flows: [],
 
   flowActions: {
+    clearFlows: () => {
+      setState({ flows: [] })
+    },
     addFlow: (flow) => {
       setState(
         produce(({ flows }: FlowState) => {
           const flowIndex = flows.findIndex((f) => f.name === flow.name)
           if (flowIndex === -1) {
-            flows.push({ ...flow, updated: true })
+            flows.push({ ...flow })
           } else {
-            flows[flowIndex] = { ...flow, updated: true }
+            flows[flowIndex] = { ...flow }
           }
+        }),
+      )
+    },
+    removeFlow: (flowId) => {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flowIndex = flows.findIndex((f) => f.name === flowId)
+          if (flowIndex === -1) return
+
+          flows.splice(flowIndex, 1)
         }),
       )
     },
@@ -189,6 +204,70 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
 
           rung.nodes.push(node)
           flow.updated = true
+        }),
+      )
+    },
+    removeNodes({ editorName, nodes, rungId }) {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+
+          const { nodes: newNodes, edges: newEdges } = removeElements(rung, nodes)
+          rung.nodes = newNodes
+          rung.edges = newEdges
+          flow.updated = true
+        }),
+      )
+    },
+    setSelectedNodes({ nodes, rungId, editorName }) {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const rung = flow.rungs.find((rung) => rung.id === rungId)
+          if (!rung) return
+
+          const selectedNodes = nodes
+          if (!rung.selectedNodes) rung.selectedNodes = []
+          rung.selectedNodes = selectedNodes
+
+          if (selectedNodes.length > 1) {
+            rung.nodes = rung.nodes.map((node) => {
+              if (selectedNodes.find((n) => n.id === node.id)) {
+                return {
+                  ...node,
+                  selected: true,
+                  draggable: false,
+                }
+              }
+              return {
+                ...node,
+                selected: false,
+                draggable: false,
+              }
+            })
+            return
+          }
+
+          rung.nodes = rung.nodes.map((node) => {
+            if (selectedNodes.find((n) => n.id === node.id)) {
+              return {
+                ...node,
+                selected: true,
+                draggable: (node.data as BasicNodeData).draggable,
+              }
+            }
+            return {
+              ...node,
+              selected: false,
+              draggable: (node.data as BasicNodeData).draggable,
+            }
+          })
         }),
       )
     },
