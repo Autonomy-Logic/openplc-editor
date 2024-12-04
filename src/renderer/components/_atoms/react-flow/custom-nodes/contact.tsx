@@ -5,6 +5,7 @@ import {
   RisingEdgeContact,
 } from '@root/renderer/assets/icons/flow/Contact'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
@@ -85,7 +86,6 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     },
     flows,
     flowActions: { updateNode },
-    searchActions: { extractSearchQuery },
     searchQuery,
   } = useOpenPLCStore()
 

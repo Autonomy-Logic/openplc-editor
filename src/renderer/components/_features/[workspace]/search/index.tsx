@@ -2,6 +2,7 @@ import { CloseIcon } from '@root/renderer/assets'
 import { Accordion } from '@root/renderer/components/_atoms/accordion'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
 
 import {
@@ -45,7 +46,7 @@ interface SearchProps {
 
 const Search = ({ items }: SearchProps) => {
   const {
-    searchActions: { extractSearchQuery, removeSearchResult, setSearchQuery },
+    searchActions: { removeSearchResult, setSearchQuery },
     sensitiveCase,
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },

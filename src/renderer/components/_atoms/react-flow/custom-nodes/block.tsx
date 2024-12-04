@@ -1,6 +1,7 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -342,7 +343,6 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     projectActions: { createVariable, updateVariable },
     flows,
     flowActions: { updateNode },
-    searchActions: { extractSearchQuery },
     searchQuery,
   } = useOpenPLCStore()
 

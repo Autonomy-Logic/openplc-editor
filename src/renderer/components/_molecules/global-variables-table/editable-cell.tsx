@@ -1,6 +1,7 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'
@@ -23,7 +24,6 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
   const { toast } = useToast()
 
   const {
-    searchActions: { extractSearchQuery },
     searchQuery,
   } = useOpenPLCStore()
 

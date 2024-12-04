@@ -2,6 +2,7 @@ import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '@components
 import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
 import React, { useEffect, useState } from 'react'
 
@@ -16,7 +17,6 @@ const Project = () => {
     projectActions: { updateMetaName },
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
-    searchActions: { extractSearchQuery },
     searchQuery,
   } = useOpenPLCStore()
   const handleCreateTab = ({ elementType, name, path }: TabsProps) => {

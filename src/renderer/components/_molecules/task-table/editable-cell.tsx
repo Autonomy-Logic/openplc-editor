@@ -1,5 +1,6 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { ProjectResponse } from '@root/renderer/store/slices/project'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import type { PLCTask } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'
@@ -24,7 +25,6 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
   const { toast } = useToast()
 
   const {
-    searchActions: { extractSearchQuery },
     searchQuery,
   } = useOpenPLCStore()
 

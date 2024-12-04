@@ -1,12 +1,7 @@
-import DOMPurify from 'dompurify'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import { SearchSlice } from './type'
-
-const escapeRegExp = (string: string) => {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
 
 const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setState) => ({
   searchQuery: '',
@@ -49,28 +44,12 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
         searchResults: state.searchResults.filter((_, index) => index !== indexToRemove),
       })),
 
-    setSearchNodePosition: (searchNodePosition) => {
+    setSearchNodePosition: (searchNodePosition: { x: number; y: number }) => {
       setState(
         produce((state: SearchSlice) => {
           state.searchNodePosition = searchNodePosition
         }),
       )
-    },
-
-    extractSearchQuery: (body: string, searchQuery: string): string => {
-      const escapedSearchQuery = escapeRegExp(searchQuery)
-      const regex = new RegExp(`(${escapedSearchQuery})`, 'gi')
-      const match = body.match(regex)
-      if (match) {
-        const highlightedHTML = body.replace(
-          regex,
-          (matched) => `<span class='text-brand-medium dark:text-brand-light'>${matched}</span>`,
-        )
-
-        return DOMPurify.sanitize(highlightedHTML)
-      }
-
-      return body
     },
   },
 })

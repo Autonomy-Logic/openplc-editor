@@ -2,6 +2,7 @@ import { InputWithRef } from '@root/renderer/components/_atoms'
 import { ArrayDataType } from '@root/renderer/components/_molecules/data-types/array'
 import { EnumeratorDataType } from '@root/renderer/components/_molecules/data-types/enumerated'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 // import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCDataType } from '@root/types/PLC/open-plc'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
@@ -16,7 +17,6 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     project: {
       data: { dataTypes },
     },
-    searchActions: { extractSearchQuery },
     searchQuery,
   } = useOpenPLCStore()
   const [editorContent, setEditorContent] = useState<PLCDataType>()
@@ -36,10 +36,10 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = e.target
-    setEditorContent((prevContent) => ({
+    setEditorContent((prevContent) => prevContent ? {
       ...prevContent,
       name: value,
-    }))
+    } : prevContent)
   }
 
   return (

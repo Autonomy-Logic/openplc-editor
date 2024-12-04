@@ -50,9 +50,8 @@ const searchActionsSchema = z.object({
     .function()
     .args(z.object({ x: z.number(), y: z.number() }))
     .returns(z.void()),
-  extractSearchQuery: z.function().args(z.string(), z.string()).returns(z.string()),
-});
-type SearchActions = z.infer<typeof searchActionsSchema>;
+})
+type SearchActions = z.infer<typeof searchActionsSchema>
 
 type SearchSlice = SearchState & { searchActions: SearchActions }
 

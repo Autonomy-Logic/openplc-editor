@@ -7,6 +7,7 @@ import {
   SetCoil,
 } from '@root/renderer/assets/icons/flow/Coil'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
@@ -115,7 +116,6 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     },
     flows,
     flowActions: { updateNode },
-    searchActions: { extractSearchQuery },
     searchQuery,
   } = useOpenPLCStore()
 
