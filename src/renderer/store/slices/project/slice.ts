@@ -347,24 +347,39 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
      * Data Type Actions
      */
     createDatatype: (dataToCreate) => {
+      let response = { ok: true, message: '', data: null };
+    
       setState(
         produce(({ project }: ProjectSlice) => {
-          const { data } = dataToCreate
-          const { name } = data
-          const dataExists = project.data.dataTypes.find((datatype) => datatype.name === name)
-          const pouExists = project.data.pous.find((datatype) => datatype.data.name === name)
+          const { data } = dataToCreate;
+          const { name } = data;
+    
+          const dataExists = project.data.dataTypes.find((datatype) => datatype.name === name);
+          const pouExists = project.data.pous.find((datatype) => datatype.data.name === name);
+    
           if (!dataExists && !pouExists) {
-            project.data.dataTypes.push(data)
+            project.data.dataTypes.push(data);
+            response.message = 'Datatype created successfully.';
+            response.ok = true;
           } else {
+            response = {
+              ok: false,
+              message: `You can't create a POU and Data type with the same name.`,
+              data: null,
+            };
+    
             toast({
               title: 'Invalid array',
-              description: `You can't create a Pou and Data type with the same name.`,
+              description: response.message,
               variant: 'fail',
-            })
+            });
           }
         }),
-      )
+      );
+    
+      return response;
     },
+    
     // TODO: Review requirements.
     /**
      * Function to update a unique data type.

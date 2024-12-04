@@ -113,7 +113,7 @@ export const createSharedSlice: StateCreator<
   },
   datatypeActions: {
     create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => {
-      getState().projectActions.createDatatype(propsToCreateDatatype)
+      getState().projectActions.createDatatype({ data: propsToCreateDatatype })
       getState().editorActions.addModel({
         type: 'plc-datatype',
         meta: { name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation },
