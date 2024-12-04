@@ -1,13 +1,16 @@
 import { TitleBar } from '@root/renderer/components/_organisms/title-bar'
+import useProjectModal from '@root/renderer/hooks/use-project-modal'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { ReactNode, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 
 import Toaster from '../_features/[app]/toast/toaster'
+import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 
 // type IAppLayoutProps = ComponentPropsWithoutRef<'div'>
 const AppLayout = (): ReactNode => {
+  const { isOpen, closeModal } = useProjectModal()
   const [isLinux, setIsLinux] = useState(true)
   const {
     workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecents },
@@ -55,6 +58,7 @@ const AppLayout = (): ReactNode => {
       >
         <Outlet />
         <Toaster />
+        <ProjectModal isOpen={isOpen} onClose={closeModal} />
       </main>
     </>
   )

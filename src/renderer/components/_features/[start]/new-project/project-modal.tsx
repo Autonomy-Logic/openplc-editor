@@ -35,6 +35,7 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   }
 
   useEffect(() => {
+    console.log("abre aqui o");
     setCurrentStep(1)
     resetFormData()
     setEditingState('unsaved')
