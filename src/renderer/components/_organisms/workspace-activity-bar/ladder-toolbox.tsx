@@ -18,6 +18,8 @@ export const LadderToolbox = () => {
 
     setSelectedNodes(
       flow.rungs.flatMap((rung) => {
+        console.log('rung.id', rung.id)
+        console.log('rung.selectedNodes', rung.selectedNodes)
         return rung.selectedNodes || []
       }),
     )
@@ -35,8 +37,12 @@ export const LadderToolbox = () => {
         editorName: editor.meta.name,
         rungId: rung.id,
       })
+      flowActions.setSelectedNodes({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodes: [],
+      })
     })
-    setSelectedNodes([])
   }
 
   return (

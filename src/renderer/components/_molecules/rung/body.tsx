@@ -174,6 +174,11 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     const { nodes: newNodes, edges: newEdges } = removeElements({ ...rungLocal }, nodes)
     flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: newNodes })
     flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: newEdges })
+    flowActions.setSelectedNodes({
+      editorName: editor.meta.name,
+      rungId: rungLocal.id,
+      nodes: [],
+    })
 
     const blockNodes = nodes.filter((node) => node.type === 'block')
     if (blockNodes.length > 0) {
@@ -384,16 +389,16 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onSelectionChange = useCallback(
     (selectedNodes: FlowNode[]) => {
-      const selectedPlaceholderNodes = rungLocal.selectedNodes?.filter(
+      const selectedPlaceholderNodes = selectedNodes?.filter(
         (node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder',
       )
-      if (!selectedPlaceholderNodes || selectedPlaceholderNodes.length > 0) {
+      if (selectedPlaceholderNodes && selectedPlaceholderNodes.length > 0) {
         return
       }
 
       setRungLocal((rung) => ({ ...rung, selectedNodes }))
     },
-    [rung.selectedNodes, rungLocal.selectedNodes],
+    [rung, rungLocal],
   )
 
   return (
