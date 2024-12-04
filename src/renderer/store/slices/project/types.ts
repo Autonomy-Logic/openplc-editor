@@ -120,6 +120,7 @@ const projectActionsSchema = z.object({
      * Update/Set Project state
      */
     setProject: z.function().args(projectStateSchema).returns(z.void()),
+    clearProjects: z.function().args(z.void()).returns(z.void()),
 
     /**
      * Meta Actions

@@ -222,7 +222,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       >
         {contact.svg(wrongVariable)}
       </div>
-      <div className='absolute -left-[34px] -top-[38px] flex h-8 w-24 items-center justify-center'>
+      <div className='absolute -left-[32px] -top-[38px] flex h-8 w-24 items-center justify-center'>
         <textarea
           value={contactVariableValue}
           onChange={(e) => setContactVariableValue(e.target.value)}

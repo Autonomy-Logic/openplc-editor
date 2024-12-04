@@ -1,3 +1,4 @@
+import { TrashCanIcon } from '@root/renderer/assets'
 import { StickArrowIcon } from '@root/renderer/assets/icons/interface/StickArrow'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungState } from '@root/renderer/store/slices'
@@ -15,7 +16,7 @@ export const RungHeader = ({ rung, isOpen, onClick }: RungHeaderProps) => {
     editor: {
       meta: { name: editorName },
     },
-    flowActions: { addComment },
+    flowActions: { addComment, removeRung },
   } = useOpenPLCStore()
 
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
@@ -34,6 +35,10 @@ export const RungHeader = ({ rung, isOpen, onClick }: RungHeaderProps) => {
   useEffect(() => {
     setTextAreaValue(rung.comment ?? '')
   }, [rung.comment])
+
+  const handleRemoveRung = () => {
+    removeRung(editorName, rung.id)
+  }
 
   return (
     <div
@@ -57,7 +62,14 @@ export const RungHeader = ({ rung, isOpen, onClick }: RungHeaderProps) => {
           onBlur={() => addComment({ editorName, rungId: rung.id, comment: textAreaValue })}
         />
       </div>
-      <div>
+      <div className='flex flex-row gap-1'>
+        <button
+          aria-label='Delete body button'
+          onClick={handleRemoveRung}
+          className='h-fit rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+        >
+          <TrashCanIcon className='h-5 w-5 stroke-[#0464FB] dark:stroke-brand-light' />
+        </button>
         <button
           aria-label='Expand body button'
           onClick={onClick}

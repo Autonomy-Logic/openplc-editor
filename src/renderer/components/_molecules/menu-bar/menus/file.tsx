@@ -31,21 +31,38 @@ export const FileMenu = () => {
   const { openModal } = useProjectModal()
 
   const handleCreateProject = async () => {
-    openModal()
+    const { success, data, error } = await window.bridge.createProject()
+    if (success && data) {
+      clearEditor()
+      clearTabs()
+      setEditingState('unsaved')
+      setRecents([])
+      setProject({
+        meta: {
+          name: 'new-project',
+          type: 'plc-project',
+          path: data.meta.path,
+        },
+        data: data.content.data,
+      })
+
+      toast({
+        title: 'The project was created successfully!',
+        description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
+        variant: 'default',
+      })
+    } else {
+      toast({
+        title: 'Cannot create a project!',
+        description: error?.description,
+        variant: 'fail',
+      })
+    }
   }
 
   const handleOpenProject = async () => {
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
-      setProject({
-        meta: {
-          path: data.meta.path,
-          name: 'new-project',
-          type: 'plc-project',
-        },
-        data: data.content.data,
-      })
-      setEditingState('unsaved')
       clearEditor()
       clearTabs()
       setEditingState('unsaved')

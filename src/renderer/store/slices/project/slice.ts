@@ -46,6 +46,28 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
+    clearProjects: (): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          project.meta = {
+            name: '',
+            type: 'plc-project',
+            path: '',
+          }
+          project.data = {
+            dataTypes: [],
+            pous: [],
+            configuration: {
+              resource: {
+                tasks: [],
+                instances: [],
+                globalVariables: [],
+              },
+            },
+          }
+        }),
+      )
+    },
 
     /**
      * Meta Actions
@@ -84,12 +106,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             response = { ok: true, message: 'Pou created successfully' }
             console.log('pou created:', pouToBeCreated)
           }
-           if  (dataTypeExists || pouExists)
-              {toast({
-                title: 'Invalid Pou',
-                description: `You can't create a Pou with this name.`,
-                variant: 'fail',
-              })}
+          if (dataTypeExists || pouExists) {
+            toast({
+              title: 'Invalid Pou',
+              description: `You can't create a Pou with this name.`,
+              variant: 'fail',
+            })
+          }
         }),
       )
       return response

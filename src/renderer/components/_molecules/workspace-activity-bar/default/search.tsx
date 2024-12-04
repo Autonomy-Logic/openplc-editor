@@ -8,15 +8,15 @@ import { Modal, ModalContent, ModalTitle, ModalTrigger } from '../../modal'
 
 export const SearchButton = () => {
   const {
-    workspaceActions: { setModalOpen },
+    // workspaceActions: { setModalOpen },
     workspace: { isModalOpen },
   } = useOpenPLCStore()
 
   const handleModalClose = () => {
-    setModalOpen('findInProject',false)
+    // setModalOpen('findInProject',false)
   }
-  const handleOpenChange = (open: boolean) => {
-    setModalOpen('findInProject', open)
+  const handleOpenChange = (_open: boolean) => {
+    // setModalOpen('findInProject', open)
   }
 
   const isFindInProjectModalOpen = isModalOpen.some(
@@ -25,7 +25,7 @@ export const SearchButton = () => {
 
   useEffect(() => {
     window.bridge.findInProjectAccelerator((_event) => {
-      setModalOpen('findInProject',true)
+      // setModalOpen('findInProject',true)
     })
   }, [])
 
