@@ -47,6 +47,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
   const [rungLocal, setRungLocal] = useState<RungState>(rung)
+  const [dragging, setDragging] = useState(false)
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const flowViewportRef = useRef<HTMLDivElement>(null)
@@ -108,7 +109,13 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    if (differenceWith(rungLocal.selectedNodes || [], rung.selectedNodes || [], (a, b) => isEqual(a, b)).length === 0)
+    console.log('rungLocal', rungLocal.selectedNodes)
+    console.log('rung', rung.selectedNodes)
+    if (
+      rungLocal.selectedNodes &&
+      rungLocal.selectedNodes.length > 0 &&
+      differenceWith(rungLocal.selectedNodes || [], rung.selectedNodes || [], (a, b) => isEqual(a, b)).length === 0
+    )
       return
 
     // Update the selected nodes in the rung state
@@ -211,6 +218,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    */
   const handleNodeStartDrag = (node: FlowNode) => {
     const result = onElementDragStart(rungLocal, node)
+    setDragging(true)
     setRungLocal((rung) => ({ ...rung, nodes: result.nodes, edges: result.edges }))
   }
 
@@ -244,6 +252,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    */
   const handleNodeDragStop = (node: FlowNode) => {
     const result = onElementDrop(rungLocal, rung, node)
+    setDragging(false)
     flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: result.nodes })
     flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: result.edges })
   }
@@ -298,6 +307,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       // If it is a ladder block and the dragged element is a child of the flow viewport, render the placeholder elements
       const copyRungLocal = { ...rungLocal }
       const nodes = renderPlaceholderElements(copyRungLocal)
+      setDragging(true)
       setRungLocal((rung) => ({ ...rung, nodes }))
     },
     [rung, rungLocal],
@@ -317,6 +327,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
       // If it is, remove the placeholder elements`
       const nodes = removePlaceholderElements(rungLocal.nodes)
+      setDragging(false)
       setRungLocal((rung) => ({ ...rung, nodes }))
     },
     [rung, rungLocal],
@@ -382,6 +393,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
           : event.dataTransfer.getData('application/library')
 
       // Then add the node to the rung
+      setDragging(false)
       handleAddNode(blockType, library)
     },
     [rung, rungLocal],
@@ -389,16 +401,16 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   const onSelectionChange = useCallback(
     (selectedNodes: FlowNode[]) => {
-      const selectedPlaceholderNodes = selectedNodes?.filter(
+      const selectedPlaceholderNodes = selectedNodes.filter(
         (node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder',
       )
-      if (selectedPlaceholderNodes && selectedPlaceholderNodes.length > 0) {
+      if (dragging || (selectedPlaceholderNodes && selectedPlaceholderNodes.length > 0)) {
         return
       }
 
       setRungLocal((rung) => ({ ...rung, selectedNodes }))
     },
-    [rung, rungLocal],
+    [rungLocal, dragging],
   )
 
   return (
