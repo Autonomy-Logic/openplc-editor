@@ -109,8 +109,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    console.log('rungLocal', rungLocal.selectedNodes)
-    console.log('rung', rung.selectedNodes)
     if (
       rungLocal.selectedNodes &&
       rungLocal.selectedNodes.length > 0 &&
