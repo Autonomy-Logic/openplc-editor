@@ -36,10 +36,14 @@ const CompilerService = {
     pathToUserProject: string,
     dataToCreateXml: ProjectState['data'],
   ): Promise<{ success: boolean; message: string }> =>
-    new Promise((resolve, reject) => {
+    new Promise((resolve) => {
       const normalizedUserProjectPath = pathToUserProject.replace('project.json', '')
       const pathToBuildDirectory = join(normalizedUserProjectPath, 'build')
-      const projectDataAsString = XmlGenerator(dataToCreateXml)
+      const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml)
+      if (!projectDataAsString) {
+        resolve({ success: false, message: message })
+        return
+      }
       const result = CreateXMLFile(pathToBuildDirectory, projectDataAsString, 'plc')
       /**
        * This condition must be verified.
@@ -49,7 +53,7 @@ const CompilerService = {
       if (result.success) {
         resolve({ success: result.success, message: result.message })
       } else {
-        reject({ success: result.success, message: 'Xml file not created' })
+        resolve({ success: result.success, message: 'Xml file not created' })
       }
     }),
   /**

@@ -11,6 +11,9 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
   flows: [],
 
   flowActions: {
+    clearFlows: () => {
+      setState({ flows: [] })
+    },
     addFlow: (flow) => {
       setState(
         produce(({ flows }: FlowState) => {
@@ -20,6 +23,16 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           } else {
             flows[flowIndex] = { ...flow }
           }
+        }),
+      )
+    },
+    removeFlow: (flowId) => {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flowIndex = flows.findIndex((f) => f.name === flowId)
+          if (flowIndex === -1) return
+
+          flows.splice(flowIndex, 1)
         }),
       )
     },

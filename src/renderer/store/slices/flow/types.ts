@@ -80,7 +80,9 @@ type FlowState = {
 }
 
 type FlowActions = {
+  clearFlows: () => void
   addFlow: (flow: FlowType) => void
+  removeFlow: (flowId: string) => void
 
   /**
    * Control the rungs of the flow

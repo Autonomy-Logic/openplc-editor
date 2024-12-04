@@ -55,7 +55,7 @@ const libraryActionsSchema = z.object({
     .args(z.string(), z.enum(['function', 'function-block']))
     .returns(z.void()),
   clearUserLibraries: z.function().args().returns(z.void()),
-  removeLibrary: z.function().args(z.string()).returns(z.void()),
+  removeUserLibrary: z.function().args(z.string()).returns(z.void()),
 })
 
 type LibraryState = z.infer<typeof libraryStateSchema>

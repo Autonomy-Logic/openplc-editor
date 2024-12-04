@@ -16,7 +16,7 @@ import { MenuClasses } from '../constants'
 export const FileMenu = () => {
   const navigate = useNavigate()
   const {
-     project,
+    project,
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setRecents },
     projectActions: { setProject },
@@ -30,15 +30,6 @@ export const FileMenu = () => {
   const handleCreateProject = async () => {
     const { success, data, error } = await window.bridge.createProject()
     if (success && data) {
-      setProject({
-        meta: {
-          path: data.meta.path,
-          name: 'new-project',
-          type: 'plc-project',
-        },
-        data: data.content.data,
-      })
-      setEditingState('unsaved')
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
@@ -69,15 +60,6 @@ export const FileMenu = () => {
   const handleOpenProject = async () => {
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
-      setProject({
-        meta: {
-          path: data.meta.path,
-          name: 'new-project',
-          type: 'plc-project',
-        },
-        data: data.content.data,
-      })
-      setEditingState('unsaved')
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
@@ -151,13 +133,12 @@ export const FileMenu = () => {
   }, [editor])
 
   const handleCloseProject = () => {
-  navigate('/')
+    navigate('/')
     clearEditor()
     clearTabs()
     setEditingState('unsaved')
     setRecents([])
   }
-  
 
   return (
     <MenuPrimitive.Menu>

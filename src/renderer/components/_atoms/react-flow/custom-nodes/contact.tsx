@@ -1,12 +1,9 @@
-import { Pencil1Icon } from '@radix-ui/react-icons'
 import {
   DefaultContact,
   FallingEdgeContact,
   NegatedContact,
   RisingEdgeContact,
 } from '@root/renderer/assets/icons/flow/Contact'
-import { ProhibitedIcon } from '@root/renderer/assets/icons/interface/Prohibited'
-import { TrashCanIcon } from '@root/renderer/assets/icons/interface/TrashCan'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
@@ -87,8 +84,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       data: { pous },
     },
     flows,
-    flowActions: { removeNodes, updateNode, setSelectedNodes },
-    modalActions: { openModal },
+    flowActions: { updateNode },
   } = useOpenPLCStore()
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
@@ -209,41 +205,6 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     setWrongVariable(false)
   }
 
-  const handleDeleteNode = () => {
-    const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
-      nodeId: id,
-    })
-    if (!rung || !node) return
-
-    removeNodes({
-      editorName: editor.meta.name,
-      rungId: rung.id,
-      nodes: [node],
-    })
-  }
-
-  const handleDeselectNode = () => {
-    const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
-      nodeId: id,
-    })
-    if (!rung || !node) return
-
-    setSelectedNodes({
-      editorName: editor.meta.name,
-      rungId: rung.id,
-      nodes: (rung.selectedNodes || []).filter((selectedNode) => selectedNode.id !== node.id),
-    })
-  }
-
-  const handleOpenModal = () => {
-    const { node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
-      nodeId: id,
-    })
-    if (!node) return
-
-    openModal('contact-ladder-element', node)
-  }
-
   return (
     <div
       className={cn('relative', {
@@ -280,22 +241,6 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       <div className={cn('pointer-events-none absolute -right-[48px] -top-7 text-xs')} ref={scrollableIndicatorRef}>
         ↕
       </div>
-      {selected && (
-        <div className='absolute -bottom-7 -left-4 flex items-center justify-center gap-1'>
-          <Pencil1Icon
-            className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
-            onClick={handleOpenModal}
-          />
-          <ProhibitedIcon
-            className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
-            onClick={handleDeselectNode}
-          />
-          <TrashCanIcon
-            className='h-4 w-4 stroke-neutral-850 hover:stroke-neutral-50 dark:stroke-neutral-50 dark:hover:stroke-neutral-850'
-            onClick={handleDeleteNode}
-          />
-        </div>
-      )}
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}

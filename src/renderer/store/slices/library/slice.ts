@@ -67,10 +67,13 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
         }),
       )
     },
-    removeLibrary: (libraryName) => {
+    removeUserLibrary: (libraryName) => {
       setState(
         produce(({ libraries: { user: userLibraries } }: LibrarySlice) => {
-          return (userLibraries = userLibraries.filter((library) => library.name !== libraryName))
+          const libraryIndex = userLibraries.findIndex((library) => library.name === libraryName)
+          if (libraryIndex === -1) return
+
+          userLibraries.splice(libraryIndex, 1)
         }),
       )
     },

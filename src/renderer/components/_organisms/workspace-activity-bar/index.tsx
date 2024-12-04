@@ -19,12 +19,16 @@ export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) =
   const {
     editor,
     libraryActions: { clearUserLibraries },
+    flowActions: { clearFlows },
+    projectActions: { clearProjects },
   } = useOpenPLCStore()
 
   const isLadderEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'ld'
 
   const handleExitApplication = () => {
     clearUserLibraries()
+    clearFlows()
+    clearProjects()
     navigate('/')
   }
   return (
