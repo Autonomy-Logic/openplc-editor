@@ -1,6 +1,7 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -342,6 +343,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     projectActions: { createVariable, updateVariable },
     flows,
     flowActions: { updateNode },
+    searchQuery,
   } = useOpenPLCStore()
 
   const { documentation, type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
@@ -351,6 +353,12 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
 
   const inputVariableRef = useRef<HTMLInputElement>(null)
   const [inputVariableFocus, setInputVariableFocus] = useState<boolean>(true)
+
+  const [isEditing, setIsEditing] = useState<boolean>(false)
+
+  const formmatedBlockVariableValue = searchQuery
+    ? extractSearchQuery(blockVariableValue, searchQuery)
+    : blockVariableValue
 
   /**
    * useEffect to focus the variable input when the correct block type is selected
@@ -498,6 +506,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
       },
     })
     setWrongVariable(false)
+    setIsEditing(false)
   }
 
   return (
@@ -526,18 +535,26 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
           width: DEFAULT_BLOCK_WIDTH,
         }}
       >
-        {(data.variant as BlockVariant).type !== 'function' && (data.variant as BlockVariant).type !== 'generic' && (
-          <InputWithRef
-            value={blockVariableValue}
-            onChange={(e) => setBlockVariableValue(e.target.value)}
-            placeholder='???'
-            className='w-full bg-transparent text-center text-sm outline-none'
-            onFocus={() => setInputVariableFocus(true)}
-            onBlur={() => inputVariableFocus && handleSubmitBlockVariable()}
-            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-            ref={inputVariableRef}
-          />
-        )}
+        {(data.variant as BlockVariant).type !== 'function' &&
+          (data.variant as BlockVariant).type !== 'generic' &&
+          (isEditing ? (
+            <InputWithRef
+              value={blockVariableValue}
+              onChange={(e) => setBlockVariableValue(e.target.value)}
+              placeholder='???'
+              className='w-full bg-transparent text-center text-sm outline-none'
+              onFocus={() => setInputVariableFocus(true)}
+              onBlur={() => inputVariableFocus && handleSubmitBlockVariable()}
+              onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+              ref={inputVariableRef}
+            />
+          ) : (
+            <p
+              onClick={() => setIsEditing(true)}
+              className='w-full bg-transparent text-center text-sm outline-none'
+              dangerouslySetInnerHTML={{ __html: formmatedBlockVariableValue || '???' }}
+            />
+          ))}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

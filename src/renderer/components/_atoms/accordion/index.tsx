@@ -56,7 +56,7 @@ const AccordionContent = forwardRef<HTMLDivElement, AccordionPrimitive.Accordion
   ({ children, className, ...props }, forwardedRef) => (
     <AccordionPrimitive.Content
       className={cn(
-        'overflow-hidden border-t border-slate-200 dark:border-neutral-950 bg-slate-100 transition-all duration-300 ease-in-out data-[state=closed]:animate-slideUp data-[state=open]:animate-slideDown dark:bg-neutral-900',
+        'overflow-hidden border-t border-slate-200 bg-slate-100 transition-all duration-300 ease-in-out data-[state=closed]:animate-slideUp data-[state=open]:animate-slideDown dark:border-neutral-950 dark:bg-neutral-900',
         className,
       )}
       {...props}
@@ -80,7 +80,13 @@ const Accordion = ({ items, defaultValue, type = 'single', collapsible = true }:
     <AccordionPrimitive.Root type={type} collapsible={collapsible} className='w-full'>
       {items.map((item, index) => (
         <AccordionItem key={index} value={item.title as string}>
-          <AccordionTrigger onClick={() => handleOpenChange(item.title as string)}>{item.title}</AccordionTrigger>
+          <AccordionTrigger
+            onClick={() => {
+              handleOpenChange(item.title as string)
+            }}
+          >
+            {item.title}
+          </AccordionTrigger>
           <AccordionContent>{item.content}</AccordionContent>
         </AccordionItem>
       ))}

@@ -1,8 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as Checkbox from '@radix-ui/react-checkbox'
 import { CheckIcon } from '@radix-ui/react-icons'
 import { InputWithRef } from '@root/renderer/components/_atoms'
@@ -87,6 +82,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
   const [regularExpressionOption, setRegularExpressionOption] = useState(false)
   const [disabledSensitiveCaseOption, setDisabledSensitiveCaseOption] = useState(false)
   const [disabledRegularExpressionOption, setDisabledRegularExpressionOption] = useState(false)
+  const [typedSearchQuery, setTypedSearchQuery] = useState('')
 
   const { toast } = useToast()
   const {
@@ -310,9 +306,22 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       )
     })
 
+    const resourceInstances = data.configuration.resource.instances.filter((instance) => {
+      const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
+      return (
+        resourceMatchesFilter &&
+        (regularExpressionOption
+          ? countOccurrences(instance.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
+          : sensitiveCaseOption
+            ? instance.name.includes(searchQuery)
+            : instance.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    })
+
     const resource = {
       globalVariable: resourceGlobalVar.map((variable) => variable.name).join(', '),
       task: resourceTasks.map((task) => task.name).join(', '),
+      instance: resourceInstances.map((instance) => instance.name).join(', '),
     }
 
     const totalMatches =
@@ -336,7 +345,8 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       }, 0) +
       filteredDataTypes.length +
       resourceGlobalVar.length +
-      resourceTasks.length
+      resourceTasks.length +
+      resourceInstances.length
 
     const formattedResults = {
       searchQuery,
@@ -369,7 +379,6 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       })
     } else {
       setSearchResults(formattedResults)
-      setSearchQuery('')
       onClose()
     }
   }
@@ -389,8 +398,12 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
           <p className='text-base font-medium text-neutral-950 dark:text-white'>Pattern to Search</p>
           <InputWithRef
             className='h-[30px] w-full rounded-lg border border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-100'
-            value={searchQuery}
-            onChange={handleSearchQueryChange}
+            value={typedSearchQuery}
+            placeholder='Search'
+            onBlur={handleSearchQueryChange}
+            onChange={(event) => {
+              setTypedSearchQuery(event.target.value)
+            }}
           />
         </div>
         <div className='flex flex-col justify-between'>

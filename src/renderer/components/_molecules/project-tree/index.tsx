@@ -114,9 +114,8 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
             'truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
-        >
-          {label}
-        </span>
+          dangerouslySetInnerHTML={{ __html: label || '' }}
+        />
       </div>
 
       {children && branchIsOpen && (
@@ -180,9 +179,8 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
             'ml-1 truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
-        >
-          {label}
-        </span>
+          dangerouslySetInnerHTML={{ __html: label || '' }}
+        />
       </div>
 
       {children && branchIsOpen && (
@@ -244,9 +242,8 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
           'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
           name === label && 'font-medium text-neutral-1000 dark:text-white',
         )}
-      >
-        {label}
-      </span>
+        dangerouslySetInnerHTML={{ __html: label || '' }}
+      />
     </li>
   )
 }

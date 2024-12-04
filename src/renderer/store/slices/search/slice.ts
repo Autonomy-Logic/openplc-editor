@@ -8,6 +8,7 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
   searchResults: [],
   sensitiveCase: false,
   regularExpression: false,
+  searchNodePosition: { x: 0, y: 0 },
 
   searchActions: {
     setSearchQuery: (searchQuery) => {
@@ -42,6 +43,14 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
       setState((state) => ({
         searchResults: state.searchResults.filter((_, index) => index !== indexToRemove),
       })),
+
+    setSearchNodePosition: (searchNodePosition: { x: number; y: number }) => {
+      setState(
+        produce((state: SearchSlice) => {
+          state.searchNodePosition = searchNodePosition
+        }),
+      )
+    },
   },
 })
 

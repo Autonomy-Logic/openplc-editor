@@ -10,12 +10,14 @@ export const SearchButton = () => {
   const {
     workspaceActions: { setModalOpen },
     workspace: { isModalOpen },
+    searchActions: { setSearchQuery },
   } = useOpenPLCStore()
 
   const handleModalClose = () => {
     setModalOpen('findInProject',false)
   }
   const handleOpenChange = (open: boolean) => {
+    setSearchQuery('')
     setModalOpen('findInProject', open)
   }
 
