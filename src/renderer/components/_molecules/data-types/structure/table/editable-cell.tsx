@@ -17,24 +17,42 @@ declare module '@tanstack/react-table' {
 }
 
 type IEditableCellProps = CellContext<PLCStructureVariable, unknown> & { editable?: boolean }
-const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
+const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: IEditableCellProps) => {
   const initialValue = getValue<string | undefined>()
-
   const { toast } = useToast()
   const [cellValue, setCellValue] = useState(initialValue)
 
   const onBlur = () => {
-    if (!cellValue?.trim()) {
-      toast({ title: 'Invalid name', description: 'Name cannot be empty', variant: 'fail' })
+    const existingVariableNames = table
+      .getRowModel()
+      .rows.map((row) => row.original.name)
+      .filter((name) => name !== initialValue) 
+
+    const validateVariableName = (name: string, existingVariables: string[], currentName: string) => {
+      if (!name.trim()) {
+        return { valid: false, message: 'The name cannot be empty' }
+      }
+
+      if (name !== currentName && existingVariables.includes(name)) {
+        return { valid: false, message: `The name '${name}' already exists` }
+      }
+
+      return { valid: true }
+    }
+
+    const validation = validateVariableName(cellValue ?? '', existingVariableNames, initialValue)
+
+    if (!validation.valid) {
+      toast({ title: 'Erro', description: validation.message, variant: 'fail' })
       setCellValue(initialValue)
       return
     }
 
-    if (cellValue === initialValue) return
     const res = table.options.meta?.updateData(index, id, cellValue)
-    if (res?.ok) return
-    setCellValue(initialValue)
-    toast({ title: res?.title, description: res?.message, variant: 'fail' })
+    if (!res?.ok) {
+      toast({ title: res?.title, description: res?.message, variant: 'fail' })
+      setCellValue(initialValue)
+    }
   }
 
   useEffect(() => {
@@ -46,9 +64,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
       value={cellValue}
       onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
-        'pointer-events-none': !editable,
-      })}
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
     />
   )
 }
