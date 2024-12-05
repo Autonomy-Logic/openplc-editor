@@ -9,12 +9,10 @@ import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_fea
 import DisplayRecentProjects from '../components/_organisms/display-recent-projects'
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
 import { StartMainContent, StartSideContent } from '../components/_templates'
-import useProjectModal from '../hooks/use-project-modal'
 import { useOpenPLCStore } from '../store'
 import { FlowType } from '../store/slices/flow/types'
 
 const StartScreen = () => {
-  const { openModal } = useProjectModal()
   const { toast } = useToast()
   const navigate = useNavigate()
   const {
@@ -23,10 +21,11 @@ const StartScreen = () => {
     tabsActions: { clearTabs },
     flowActions: { addFlow },
     libraryActions: { addLibrary },
+    modalActions: { openModal },
   } = useOpenPLCStore()
 
   const handleCreateProject = async () => {
-    openModal()
+    openModal('create-project', null)
   }
 
   const retrieveOpenProjectData = async () => {

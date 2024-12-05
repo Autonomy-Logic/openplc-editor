@@ -13,7 +13,9 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   const {
     workspaceActions: { setEditingState },
     tabsActions: { clearTabs },
+    modalActions: { onOpenChange },
   } = useOpenPLCStore()
+
   const resetFormData = NewProjectStore((state) => state.resetFormData)
   const [currentStep, setCurrentStep] = useState(1)
 
@@ -35,7 +37,6 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   }
 
   useEffect(() => {
-    console.log("abre aqui o");
     setCurrentStep(1)
     resetFormData()
     setEditingState('unsaved')
@@ -56,7 +57,7 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   }
 
   return (
-    <Modal open={isOpen} onOpenChange={handleClose}>
+    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('create-project', open)}>
       <ModalContent onClose={handleClose} className='flex h-[450px] flex-col justify-between p-6'>
         <ModalTitle className='absolute -top-10 opacity-0' />
         {renderStep()}

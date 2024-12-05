@@ -17,8 +17,12 @@ const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState
       open: false,
       data: null,
     },
-  },
 
+    'create-project': {
+      open: false,
+      data: null,
+    },
+  },
   modalActions: {
     openModal: (modal, data) => {
       setState(

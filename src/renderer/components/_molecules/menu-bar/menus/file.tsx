@@ -1,10 +1,6 @@
-/* eslint-disable @typescript-eslint/require-await */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useHandleRemoveTab } from '@root/renderer/hooks'
-import useProjectModal from '@root/renderer/hooks/use-project-modal'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { FlowType } from '@root/renderer/store/slices/flow/types'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
@@ -25,39 +21,13 @@ export const FileMenu = () => {
     tabsActions: { clearTabs },
     flowActions: { addFlow },
     editor,
+    modalActions: { openModal },
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
-  const { openModal } = useProjectModal()
 
-  const handleCreateProject = async () => {
-    const { success, data, error } = await window.bridge.createProject()
-    if (success && data) {
-      clearEditor()
-      clearTabs()
-      setEditingState('unsaved')
-      setRecents([])
-      setProject({
-        meta: {
-          name: 'new-project',
-          type: 'plc-project',
-          path: data.meta.path,
-        },
-        data: data.content.data,
-      })
-
-      toast({
-        title: 'The project was created successfully!',
-        description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
-        variant: 'default',
-      })
-    } else {
-      toast({
-        title: 'Cannot create a project!',
-        description: error?.description,
-        variant: 'fail',
-      })
-    }
+  const handleCreateProject = () => {
+    openModal('create-project', null)
   }
 
   const handleOpenProject = async () => {

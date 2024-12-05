@@ -1,5 +1,4 @@
 import { TitleBar } from '@root/renderer/components/_organisms/title-bar'
-import useProjectModal from '@root/renderer/hooks/use-project-modal'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { ReactNode, useEffect, useState } from 'react'
@@ -10,9 +9,10 @@ import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 
 // type IAppLayoutProps = ComponentPropsWithoutRef<'div'>
 const AppLayout = (): ReactNode => {
-  const { isOpen, closeModal } = useProjectModal()
   const [isLinux, setIsLinux] = useState(true)
   const {
+    modals,
+    modalActions: { closeModal },
     workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecents },
   } = useOpenPLCStore()
 
@@ -46,6 +46,9 @@ const AppLayout = (): ReactNode => {
       switchAppTheme()
     })
   }, [])
+  const handleModalClose = () => {
+    closeModal()
+  }
 
   return (
     <>
@@ -58,7 +61,9 @@ const AppLayout = (): ReactNode => {
       >
         <Outlet />
         <Toaster />
-        <ProjectModal isOpen={isOpen} onClose={closeModal} />
+        {modals['create-project']?.open && (
+          <ProjectModal onClose={handleModalClose} isOpen={modals['create-project'].open} />
+        )}
       </main>
     </>
   )
