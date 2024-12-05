@@ -23,8 +23,8 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const [baseType, setBaseType] = useState<string>(data.baseType)
 
   useEffect(() => {
-    setInitialValueData(data.initialValue)
-  }, [data.initialValue, data.name])
+    setInitialValueData(data.initialValue || '')
+  }, [])
 
   useEffect(() => {
     setBaseType(data.baseType)
