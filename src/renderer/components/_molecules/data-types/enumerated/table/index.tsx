@@ -16,9 +16,10 @@ import { DescriptionCell } from './editable-cell'
 type DataTypeEnumeratedTableProps = {
   name: string
   values: PLCEnumeratedDatatype['values']
+  initialValue?: string
 }
 
-const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
+const EnumeratedTable = ({ name, values, initialValue }: DataTypeEnumeratedTableProps) => {
   const [focusIndex, setFocusIndex] = useState<number | null>(null)
   const [tableData, setTableData] = useState<PLCEnumeratedDatatype['values']>(values)
   const [selectedRow, setSelectedRow] = useState<number>(-1)
@@ -51,7 +52,7 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
         ),
       }),
     ],
-    [focusIndex, values, name, selectedRow],
+    [focusIndex, values, name, selectedRow, initialValue],
   )
 
   useEffect(() => {
@@ -155,6 +156,7 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
             const optionalSchema = {
               name: name,
               values: newRows.map((row) => ({ description: row.description })),
+              initialValue: initialValue,
             }
             updateDatatype(name, optionalSchema as PLCDataType)
             updateDescriptions(newRows)
@@ -166,6 +168,25 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
       })
     }
   }
+
+  useEffect(() => {
+    if (initialValue !== '') {
+      updateDatatype(name, {
+        values,
+        derivation: 'enumerated',
+        name,
+        initialValue: initialValue,
+      })
+    } else {
+      updateDatatype(name, {
+        initialValue: '',
+        values,
+        derivation: 'enumerated',
+        name,
+      })
+    }
+  }, [initialValue])
+
   const addNewRow = () => {
     setTableData((prevRows) => {
       const newRows = [...prevRows, { description: '' }]
@@ -182,6 +203,7 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
 
         updateDatatype(name, {
           values: newRows.map((row) => ({ description: row?.description })),
+          initialValue: initialValue,
         } as PLCEnumeratedDatatype)
 
         let newFocusIndex = focusIndex
@@ -296,7 +318,7 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
   })
 
   return (
-    <div className='flex w-full flex-col flex-auto overflow-hidden gap-4'>
+    <div className='flex w-full flex-auto flex-col gap-4 overflow-hidden'>
       <div aria-label='Enum data type table actions container' className='flex h-8 w-3/5 items-center justify-between'>
         <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
           Description
@@ -329,7 +351,7 @@ const EnumeratedTable = ({ name, values }: DataTypeEnumeratedTableProps) => {
           </TableActionButton>
         </div>
       </div>
-      <div className='flex h-fit  overflow-y-auto scroll-ml-1 w-[355px]'>
+      <div className='flex h-fit  w-[355px] scroll-ml-1 overflow-y-auto'>
         <Table context='data-type-enumerated'>
           <TableBody ref={tableBodyRef}>
             {table.getRowModel().rows.map((row, index) => (
