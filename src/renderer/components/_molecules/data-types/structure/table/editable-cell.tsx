@@ -24,34 +24,21 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
   const [cellValue, setCellValue] = useState(initialValue)
 
   const onBlur = () => {
-    if (cellValue === initialValue) return
-
-    const existingNames = table
-      .getRowModel()
-      .rows.map((row) => row.getValue<string>('name'))
-      .filter(Boolean)
-
-    if (existingNames.includes(cellValue ?? '')) {
-      toast({
-        title: 'invalid name',
-        description: `There is already a variable with the name "${cellValue}".`,
-        variant: 'fail',
-      })
-      setCellValue(initialValue ?? '')
+    if (!cellValue?.trim()) {
+      toast({ title: 'Invalid name', description: 'Name cannot be empty', variant: 'fail' })
+      setCellValue(initialValue)
       return
     }
 
-    const res = table.options.meta?.updateData(index, id, cellValue ?? '')
+    if (cellValue === initialValue) return
+    const res = table.options.meta?.updateData(index, id, cellValue)
     if (res?.ok) return
-
-    setCellValue(initialValue ?? '')
+    setCellValue(initialValue)
     toast({ title: res?.title, description: res?.message, variant: 'fail' })
   }
 
   useEffect(() => {
-    if (initialValue !== undefined) {
-      setCellValue(initialValue)
-    }
+    setCellValue(initialValue)
   }, [initialValue])
 
   return (

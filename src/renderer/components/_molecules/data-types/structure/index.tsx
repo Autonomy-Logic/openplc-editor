@@ -1,5 +1,6 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { StructureTableType } from '@root/renderer/store/slices'
 import { PLCStructureVariable } from '@root/types/PLC/open-plc'
@@ -55,22 +56,30 @@ const StructureDataType = () => {
     const structureVariables = tableData.filter((variable) => variable.name || variable.type)
     const selectedRow = parseInt(editorStructure.selectedRow)
 
-    const isDuplicate = (name: string) => name !== '' && structureVariables.some((variable) => variable.name === name)
+    const getNextVariableName = (baseName: string) => {
+      let newName = baseName
+      let counter = 1
 
-    if (structureVariables.length === 0) {
-      updateDatatype(editor.meta.name, {
-        derivation: 'structure',
-        name: editor.meta.name,
-        variable: [
-          {
-            name: '',
-            type: { definition: 'base-type', value: 'dint' },
-            initialValue: { simpleValue: { value: '' } },
-          },
-        ],
-      })
-      updateModelStructure({
-        selectedRow: 0,
+      while (structureVariables.some((variable) => variable.name === newName)) {
+        newName = `${baseName}_${counter}`
+        counter++
+      }
+
+      return newName
+    }
+
+    const selectedVariableName =
+      selectedRow === ROWS_NOT_SELECTED
+        ? structureVariables[structureVariables.length - 1]?.name || 'structureVar'
+        : structureVariables[selectedRow]?.name || 'structureVar'
+
+    const baseName = selectedVariableName.replace(/_\d+$/, '')
+
+    if (structureVariables.some((variable) => variable.name === '')) {
+      toast({
+        title: 'Invalid name',
+        description: 'Name cannot be empty',
+        variant: 'fail',
       })
       return
     }
@@ -87,7 +96,7 @@ const StructureDataType = () => {
         variable: [
           ...structureVariables,
           {
-            name: '',
+            name: getNextVariableName(baseName),
             type: { definition: 'base-type', value: 'dint' },
             initialValue: { simpleValue: { value: '' } },
           },
@@ -100,16 +109,12 @@ const StructureDataType = () => {
     }
 
     const newVariable = {
-      name: '',
+      name: getNextVariableName(baseName),
       initialValue: { simpleValue: { value: '' } },
       type: structureVariable.type,
     }
 
     if (selectedRow === ROWS_NOT_SELECTED) {
-      if (isDuplicate(newVariable.name)) {
-        console.warn('A variable with the same name already exists.')
-        return
-      }
       updateDatatype(editor.meta.name, {
         derivation: 'structure',
         name: editor.meta.name,
@@ -119,10 +124,6 @@ const StructureDataType = () => {
         selectedRow: structureVariables.length,
       })
     } else {
-      if (isDuplicate(newVariable.name)) {
-        console.warn('A variable with the same name already exists.')
-        return
-      }
       updateDatatype(editor.meta.name, {
         derivation: 'structure',
         name: editor.meta.name,
