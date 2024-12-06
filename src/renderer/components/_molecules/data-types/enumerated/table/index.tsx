@@ -185,7 +185,7 @@ const EnumeratedTable = ({ name, values, initialValue }: DataTypeEnumeratedTable
         name,
       })
     }
-  }, [initialValue])
+  }, [initialValue,name])
 
   const addNewRow = () => {
     setTableData((prevRows) => {

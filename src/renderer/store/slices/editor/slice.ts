@@ -167,6 +167,19 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       return false
     },
 
+    updateEditorModel: (currentEditor: string, newEditor: string) => {
+      if (currentEditor === newEditor) return
+      setState(
+        produce((state: EditorState) => {
+          const { editor, editors } = state
+          const oldEditorModel = editors.findIndex((model) => model.meta.name === currentEditor)
+          if (oldEditorModel === -1) return
+          Object.assign(editors[oldEditorModel], { meta: { name: newEditor } })
+          Object.assign(editor, { meta: { name: newEditor } })
+        }),
+      )
+    },
+
     setEditor: (newEditor) =>
       setState(
         produce((state: EditorState) => {

@@ -28,7 +28,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   useEffect(() => {
     setBaseType(data.baseType)
-  }, [data.baseType, data.name])
+  }, [data.baseType])
 
   const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
     setInitialValueData(e.target.value)

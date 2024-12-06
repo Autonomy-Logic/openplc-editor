@@ -15,6 +15,9 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     project: {
       data: { dataTypes },
     },
+    tabsActions: { updateTabName },
+    editorActions: { updateEditorModel },
+    projectActions: { updateDatatype },
   } = useOpenPLCStore()
   const [editorContent, setEditorContent] = useState<PLCDataType>()
 
@@ -28,10 +31,20 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = e.target
+    console.log('Data type name changed to:', value)
     setEditorContent((prevContent) => ({
       ...prevContent,
       name: value,
     }))
+  }
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { value } = e.target
+    if (dataTypeName !== value) {
+      updateDatatype(dataTypeName, { name: value } as PLCDataType)
+      updateEditorModel(dataTypeName, value)
+      updateTabName(dataTypeName, value)
+    }
   }
 
   return (
@@ -58,6 +71,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
             <InputWithRef
               value={editorContent?.name}
               onChange={handleChange}
+              onBlur={handleBlur}
               id='data-type-name'
               aria-label='data-type-name'
               className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
