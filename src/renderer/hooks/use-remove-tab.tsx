@@ -21,7 +21,7 @@ const useHandleRemoveTab = () => {
       sortTabs(updatedTabs)
       return
     }
-    
+
     setSelectedTab(nextTab.name)
 
     const editor = getEditorFromEditors(nextTab.name)

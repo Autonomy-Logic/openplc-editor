@@ -343,7 +343,6 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     flows,
     flowActions: { updateNode },
   } = useOpenPLCStore()
-
   const { documentation, type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
