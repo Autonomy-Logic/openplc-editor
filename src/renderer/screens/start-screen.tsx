@@ -134,6 +134,15 @@ const StartScreen = () => {
   }, [])
 
   useEffect(() => {
+    const handleCreateProjectAccelerator = () => {
+      window.bridge.createProjectAccelerator(() => {
+        openModal('create-project', null)
+      })
+    }
+    handleCreateProjectAccelerator()
+  }, [])
+
+  useEffect(() => {
     const handleOpenRecentAccelerator = () => {
       window.bridge.openRecentAccelerator((_event, response: IProjectServiceResponse) => {
         const { data, error } = response

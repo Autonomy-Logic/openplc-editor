@@ -48,9 +48,9 @@ export default class MenuBuilder {
     return menu
   }
 
-  async handleCreateProject() {
-    const response = await this.projectService.createProject()
-    this.mainWindow.webContents.send('project:create-accelerator', response)
+   handleCreateProject() {
+
+    this.mainWindow.webContents.send('project:create-accelerator')
   }
 
   async handleOpenProject() {
@@ -377,7 +377,7 @@ handleFindInProject(){
           {
             label: i18n.t('menu:file.submenu.new'),
             accelerator: 'Ctrl+N',
-            click: () => void this.handleCreateProject(),
+            click: () => this.handleCreateProject(),
           },
           {
             label: i18n.t('menu:file.submenu.open'),
