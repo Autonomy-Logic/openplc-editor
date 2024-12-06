@@ -1,151 +1,240 @@
-// import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
-// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@root/renderer/components/_atoms'
-// import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
-// import { useOpenPLCStore } from '@root/renderer/store'
-// import { PLCDataTypeDerivationSchema, PLCDataTypeStructureElement } from '@root/types/PLC/open-plc'
-// import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
-// import { useEffect, useState } from 'react'
-// import { z } from 'zod'
+import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
+import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { StructureTableType } from '@root/renderer/store/slices'
+import { PLCStructureVariable } from '@root/types/PLC/open-plc'
+import _ from 'lodash'
+import { useEffect, useState } from 'react'
 
-// const Structure = PLCDataTypeDerivationSchema.options[2]
-// type PLCDataTypeStructure = z.infer<typeof Structure>
+import { StructureTable } from './table'
 
-// const columnHelper = createColumnHelper<PLCDataTypeStructureElement>()
-// const columns = [
-//   columnHelper.accessor('id', {
-//     header: '#',
-//     size: 64,
-//     minSize: 32,
-//     maxSize: 64,
-//     enableResizing: true,
-//     cell: (props) => props.row.id,
-//   }),
-//   columnHelper.accessor('name', {
-//     header: 'Name',
-//     enableResizing: true,
-//     size: 150,
-//     minSize: 150,
-//     maxSize: 300,
-//   }),
-//   columnHelper.accessor('type.value', {
-//     header: 'Type',
-//     enableResizing: true,
-//     size: 150,
-//     minSize: 150,
-//     maxSize: 300,
-//   }),
-//   columnHelper.accessor('initialValue', {
-//     header: 'Initial Value',
-//     enableResizing: true,
-//     size: 150,
-//     minSize: 150,
-//     maxSize: 300,
-//   }),
-// ]
+const StructureDataType = () => {
+  const ROWS_NOT_SELECTED = -1
+  const {
+    editor,
+    project: {
+      data: { dataTypes },
+    },
+    editorActions: { updateModelStructure },
+    projectActions: { updateDatatype, rearrangeStructureVariables },
+  } = useOpenPLCStore()
+  const [tableData, setTableData] = useState<PLCStructureVariable[]>([])
 
-// const StructureDataType = () => {
-//   const {
-//     workspace: {
-//       projectData: { dataTypes },
-//     },
-//   } = useOpenPLCStore()
+  const [editorStructure, setEditorStructure] = useState<StructureTableType>({
+    selectedRow: ROWS_NOT_SELECTED.toString(),
+    description: '',
+  })
 
-//   const [dataTypesState, setDataTypesState] = useState<PLCDataTypeStructure['elements']>([])
+  useEffect(() => {
+    const foundDataType = dataTypes.find(
+      (dataType) => dataType.derivation === 'structure' && dataType.name === editor.meta.name,
+    )
 
-//   useEffect(() => {
-//     const structureDataType = dataTypes.filter((dataType) => dataType.derivation.type === 'structure')
-//     structureDataType.forEach((dataType) => {
-//       if (dataType.derivation === 'structure') {
-//         setDataTypesState(dataType.derivation)
-//       }
-//     })
-//   }, [dataTypes])
+    if (foundDataType && 'variable' in foundDataType) {
+      setTableData(foundDataType.variable)
+    } else {
+      return
+    }
+  }, [editor, dataTypes])
 
-//   useEffect(() => {
-//     console.log('structure data type', dataTypesState)
-//   }, [dataTypesState])
+  useEffect(() => {
+    const foundDataType = dataTypes.find((dataType) => dataType.derivation === 'structure')
+    if (editor.type === 'plc-datatype' && foundDataType && 'variable' in foundDataType) {
+      const { description, selectedRow } = editor.structure
+      setEditorStructure({ description: description, selectedRow: selectedRow })
+    }
+  }, [editor])
 
-//   const table = useReactTable({
-//     columns: columns,
-//     data: dataTypesState,
-//     getCoreRowModel: getCoreRowModel(),
-//   })
+  const handleRowClick = (row: HTMLTableRowElement) => {
+    updateModelStructure({
+      selectedRow: parseInt(row.id),
+    })
+  }
 
-//   return (
-//     <div aria-label='Struct data type container' className='flex h-full w-full flex-col gap-4 bg-transparent'>
-//       <div aria-label='Struct data type content actions container' className='flex flex-col gap-8'>
-//         <div
-//           aria-label='Struct data type table actions container'
-//           className='flex h-full w-full items-center justify-between'
-//         >
-//           <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
-//             Elements
-//           </p>
-//           <div
-//             aria-label='Data type table actions buttons container'
-//             className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
-//           >
-//             <TableActionButton aria-label='Add table row button' onClick={() => console.log('Button clicked')}>
-//               <PlusIcon className='!stroke-brand' />
-//             </TableActionButton>
-//             <TableActionButton aria-label='Remove table row button' onClick={() => console.log('Button clicked')}>
-//               <MinusIcon />
-//             </TableActionButton>
-//             <TableActionButton aria-label='Move table row up button' onClick={() => console.log('Button clicked')}>
-//               <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
-//             </TableActionButton>
-//             <TableActionButton aria-label='Move table row down button' onClick={() => console.log('Button clicked')}>
-//               <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
-//             </TableActionButton>
-//           </div>
-//         </div>
-//       </div>
+  const handleCreateStructureVariable = () => {
+    const structureVariables = tableData.filter((variable) => variable.name || variable.type)
+    const selectedRow = parseInt(editorStructure.selectedRow)
 
-//       <Table context='Variables' className='mr-1'>
-//         <TableHeader>
-//           {table.getHeaderGroups().map((headerGroup) => (
-//             <TableRow key={headerGroup.id}>
-//               {headerGroup.headers.map((header) => (
-//                 <TableHead
-//                   resizable={header.column.columnDef.enableResizing}
-//                   isResizing={header.column.getIsResizing()}
-//                   resizeHandler={header.getResizeHandler()}
-//                   style={{
-//                     width: header.getSize(),
-//                     maxWidth: header.column.columnDef.maxSize,
-//                     minWidth: header.column.columnDef.minSize,
-//                   }}
-//                   key={header.id}
-//                 >
-//                   {flexRender(header.column.columnDef.header, header.getContext())}
-//                 </TableHead>
-//               ))}
-//             </TableRow>
-//           ))}
-//         </TableHeader>
-//         <TableBody>
-//           {table.getRowModel().rows.map((row) => (
-//             <TableRow id={row.id} key={row.id} className='h-8 cursor-pointer'>
-//               {row.getVisibleCells().map((cell) => (
-//                 <TableCell
-//                   style={{
-//                     width: cell.column.getSize(),
-//                     maxWidth: cell.column.columnDef.maxSize,
-//                     minWidth: cell.column.columnDef.minSize,
-//                   }}
-//                   key={cell.id}
-//                 >
-//                   {flexRender(cell.column.columnDef.cell, {
-//                     ...cell.getContext(),
-//                   })}
-//                 </TableCell>
-//               ))}
-//             </TableRow>
-//           ))}
-//         </TableBody>
-//       </Table>
-//     </div>
-//   )
-// }
+    const getNextVariableName = (baseName: string) => {
+      let newName = baseName
+      let counter = 1
 
-// export { StructureDataType }
+      while (structureVariables.some((variable) => variable.name === newName)) {
+        newName = `${baseName}_${counter}`
+        counter++
+      }
+
+      return newName
+    }
+
+    const selectedVariableName =
+      selectedRow === ROWS_NOT_SELECTED
+        ? structureVariables[structureVariables.length - 1]?.name || 'structureVar'
+        : structureVariables[selectedRow]?.name || 'structureVar'
+
+    const baseName = selectedVariableName.replace(/_\d+$/, '')
+
+    if (structureVariables.some((variable) => variable.name === '')) {
+      toast({
+        title: 'Invalid name',
+        description: 'Name cannot be empty',
+        variant: 'fail',
+      })
+      return
+    }
+
+    const structureVariable: PLCStructureVariable =
+      selectedRow === ROWS_NOT_SELECTED
+        ? structureVariables[structureVariables.length - 1]
+        : structureVariables[selectedRow]
+
+    if (!structureVariable || !structureVariable.type) {
+      updateDatatype(editor.meta.name, {
+        derivation: 'structure',
+        name: editor.meta.name,
+        variable: [
+          ...structureVariables,
+          {
+            name: getNextVariableName(baseName),
+            type: { definition: 'base-type', value: 'dint' },
+            initialValue: { simpleValue: { value: '' } },
+          },
+        ],
+      })
+      updateModelStructure({
+        selectedRow: structureVariables.length,
+      })
+      return
+    }
+
+    const newVariable = {
+      name: getNextVariableName(baseName),
+      initialValue: { simpleValue: { value: '' } },
+      type: structureVariable.type,
+    }
+
+    if (selectedRow === ROWS_NOT_SELECTED) {
+      updateDatatype(editor.meta.name, {
+        derivation: 'structure',
+        name: editor.meta.name,
+        variable: [...structureVariables, newVariable],
+      })
+      updateModelStructure({
+        selectedRow: structureVariables.length,
+      })
+    } else {
+      updateDatatype(editor.meta.name, {
+        derivation: 'structure',
+        name: editor.meta.name,
+        variable: [
+          ...structureVariables.slice(0, selectedRow + 1),
+          newVariable,
+          ...structureVariables.slice(selectedRow + 1),
+        ],
+      })
+      updateModelStructure({
+        selectedRow: selectedRow + 1,
+      })
+    }
+  }
+
+  const handleDeleteStructureVariable = () => {
+    const structureVariables = tableData.filter((variable) => variable.name || variable.type)
+    const selectedRow = parseInt(editorStructure.selectedRow)
+
+    if (selectedRow === ROWS_NOT_SELECTED || selectedRow >= structureVariables.length) {
+      return
+    }
+
+    const updatedVariables = [...structureVariables.slice(0, selectedRow), ...structureVariables.slice(selectedRow + 1)]
+
+    updateDatatype(editor.meta.name, {
+      derivation: 'structure',
+      name: editor.meta.name,
+      variable: updatedVariables,
+    })
+
+    let newSelectedRow = selectedRow - 1
+    if (newSelectedRow < 0 && updatedVariables.length > 0) {
+      newSelectedRow = 0
+    } else if (updatedVariables.length === 0) {
+      newSelectedRow = ROWS_NOT_SELECTED
+    }
+
+    updateModelStructure({
+      selectedRow: newSelectedRow,
+    })
+  }
+
+  const handleRearrangeStructureVariables = (index: number, row?: number) => {
+    rearrangeStructureVariables({
+      associatedDataType: editor.meta.name,
+      rowId: row ?? parseInt(editorStructure.selectedRow),
+      newIndex: (row ?? parseInt(editorStructure.selectedRow)) + index,
+    })
+    updateModelStructure({
+      selectedRow: parseInt(editorStructure.selectedRow) + index,
+    })
+  }
+
+  return (
+    <div
+      aria-label=' structure data type container'
+      className='flex h-full w-full flex-1 flex-col gap-4 overflow-hidden bg-transparent'
+    >
+      <div aria-label='Data type content actions container' className='flex h-8 w-full gap-8'>
+        <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
+          <span className='select-none'>Structure</span>
+          <div
+            aria-label='Variables editor table actions container'
+            className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
+          >
+            {/** This can be reviewed */}
+            <TableActionButton aria-label='Add table row button' onClick={() => handleCreateStructureVariable()}>
+              <PlusIcon className='!stroke-brand' />
+            </TableActionButton>
+            <TableActionButton
+              aria-label='Remove table row button'
+              disabled={parseInt(editorStructure.selectedRow) === ROWS_NOT_SELECTED}
+              onClick={() => handleDeleteStructureVariable()}
+            >
+              <MinusIcon />
+            </TableActionButton>
+            <TableActionButton
+              onClick={() => handleRearrangeStructureVariables(-1)}
+              aria-label='Move table row up button'
+              disabled={
+                parseInt(editorStructure.selectedRow) === ROWS_NOT_SELECTED ||
+                parseInt(editorStructure.selectedRow) === 0
+              }
+            >
+              <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
+            </TableActionButton>
+            <TableActionButton
+              onClick={() => handleRearrangeStructureVariables(1)}
+              aria-label='Move table row down button'
+              disabled={
+                parseInt(editorStructure.selectedRow) === ROWS_NOT_SELECTED ||
+                parseInt(editorStructure.selectedRow) === tableData.length - 1
+              }
+            >
+              <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
+            </TableActionButton>
+          </div>
+        </div>
+        <div aria-label='structure base type container' className='flex w-1/2 flex-col gap-3'></div>
+        <div aria-label='structure initial value container' className='w-1/2'></div>
+      </div>
+      <div className='flex h-full w-full flex-1 flex-col overflow-hidden'>
+        <StructureTable
+          tableData={tableData}
+          selectedRow={parseInt(editorStructure.selectedRow)}
+          handleRowClick={handleRowClick}
+        />
+      </div>
+    </div>
+  )
+}
+
+export { StructureDataType }
