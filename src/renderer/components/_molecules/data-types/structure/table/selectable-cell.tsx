@@ -1,5 +1,6 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { ArrowIcon } from '@root/renderer/assets'
+import { useOpenPLCStore } from '@root/renderer/store'
 import type { PLCStructureVariable } from '@root/types/PLC/open-plc'
 import { baseTypeSchema } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
@@ -18,10 +19,17 @@ const SelectableTypeCell = ({
   table,
   editable = true,
 }: ISelectableCellProps) => {
+  const {
+    project: {
+      data: { dataTypes },
+    },
+  } = useOpenPLCStore()
+
   const VariableTypes = [
     { definition: 'base-type', values: baseTypeSchema.options },
-    { definition: 'user-data-type', values: ['userDt1', 'userDt2', 'userDt3'] },
+    { definition: 'user-data-type', values: dataTypes.map((dataType) => dataType.name) }, 
   ]
+  
 
   const { value, definition } = getValue<PLCStructureVariable['type']>()
 
@@ -37,10 +45,10 @@ const SelectableTypeCell = ({
   ) => {
     setCellValue(value)
     table.options.meta?.updateData(index, id, { definition, value })
+    
   }
 
   useEffect(() => {
-
     setCellValue(value)
   }, [value])
 

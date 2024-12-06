@@ -55,7 +55,7 @@ const PLCStructureVariableSchema = z.object({
        *  This is a mock type just for a presentation.
        * @deprecated
        */
-      value: z.enum(['userDt1', 'userDt2', 'userDt3']),
+      value: z.string(),
     }),
     z.object({
       definition: z.literal('array'),
@@ -116,7 +116,7 @@ const PLCVariableSchema = z.object({
        *  This is a mock type just for a presentation.
        * @deprecated
        */
-      value: z.enum(['userDt1', 'userDt2', 'userDt3']),
+      value: z.string(),
     }),
     z.object({
       definition: z.literal('array'),
