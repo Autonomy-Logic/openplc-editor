@@ -93,6 +93,17 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
         }),
       )
     },
+    setRungs: ({ editorName, rungs }) => {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          flow.rungs = rungs
+          flow.updated = true
+        }),
+      )
+    },
     removeRung: (editorName, rungId) => {
       setState(
         produce(({ flows }: FlowState) => {

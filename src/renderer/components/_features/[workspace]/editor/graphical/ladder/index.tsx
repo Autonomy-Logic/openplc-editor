@@ -1,3 +1,4 @@
+import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd'
 import { CreateRung } from '@root/renderer/components/_molecules/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -49,12 +50,31 @@ export default function LadderEditor() {
     })
   }
 
+  const onDragEnd = (result: DropResult) => {
+    if (!result.destination) return
+
+    const sourceIndex = result.source.index
+    const destinationIndex = result.destination.index
+
+    const rungs = [...(flow?.rungs || [])]
+    const [removed] = rungs.splice(sourceIndex, 1)
+    rungs.splice(destinationIndex, 0, removed)
+
+    flowActions.setRungs({ editorName: editor.meta.name, rungs })
+  }
+
   return (
     <div className='h-full w-full overflow-y-auto' style={{ scrollbarGutter: 'stable' }}>
       <div className='flex flex-1 flex-col gap-4 px-2'>
-        {flows
-          .find((flow) => flow.name === editor.meta.name)
-          ?.rungs.map((rung, index) => <Rung key={index} id={index.toString()} rung={rung} />)}
+        <DragDropContext onDragEnd={onDragEnd}>
+          <Droppable droppableId='rungs' type='list' direction='vertical'>
+            {(provided) => (
+              <div className='flex flex-1 flex-col' ref={provided.innerRef} {...provided.droppableProps}>
+                {flow?.rungs.map((rung, index) => <Rung key={rung.id} id={rung.id} rung={rung} index={index} />)}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
         <CreateRung onClick={handleAddNewRung} />
       </div>
     </div>

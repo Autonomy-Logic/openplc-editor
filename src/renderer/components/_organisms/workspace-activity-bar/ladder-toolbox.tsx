@@ -18,8 +18,6 @@ export const LadderToolbox = () => {
 
     setSelectedNodes(
       flow.rungs.flatMap((rung) => {
-        console.log('rung.id', rung.id)
-        console.log('rung.selectedNodes', rung.selectedNodes)
         return rung.selectedNodes || []
       }),
     )
