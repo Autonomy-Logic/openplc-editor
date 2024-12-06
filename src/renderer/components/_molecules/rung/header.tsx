@@ -1,3 +1,4 @@
+import { DraggableProvidedDragHandleProps } from '@hello-pangea/dnd'
 import { TrashCanIcon } from '@root/renderer/assets'
 import { StickArrowIcon } from '@root/renderer/assets/icons/interface/StickArrow'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -8,10 +9,11 @@ import { useEffect, useRef, useState } from 'react'
 type RungHeaderProps = {
   rung: RungState
   isOpen: boolean
+  draggableHandleProps: DraggableProvidedDragHandleProps | null
   onClick: () => void
 }
 
-export const RungHeader = ({ rung, isOpen, onClick }: RungHeaderProps) => {
+export const RungHeader = ({ rung, isOpen, draggableHandleProps, onClick }: RungHeaderProps) => {
   const {
     editor: {
       meta: { name: editorName },
@@ -49,6 +51,7 @@ export const RungHeader = ({ rung, isOpen, onClick }: RungHeaderProps) => {
           'rounded-b-none border-b-0': isOpen,
         },
       )}
+      {...draggableHandleProps}
     >
       <div className='flex w-full items-center rounded-lg border border-transparent px-1'>
         <textarea
