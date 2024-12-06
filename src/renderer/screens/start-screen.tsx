@@ -1,11 +1,11 @@
+/* eslint-disable @typescript-eslint/require-await */
 import { IProjectServiceResponse } from '@root/main/services/project-service'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'
 import { useToast } from '../components/_features/[app]/toast/use-toast'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
-import { ProjectModal } from '../components/_features/[start]/new-project/project-modal'
 import DisplayRecentProjects from '../components/_organisms/display-recent-projects'
 import { ProjectFilterBar } from '../components/_organisms/project-filter-bar'
 import { StartMainContent, StartSideContent } from '../components/_templates'
@@ -13,7 +13,6 @@ import { useOpenPLCStore } from '../store'
 import { FlowType } from '../store/slices/flow/types'
 
 const StartScreen = () => {
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const { toast } = useToast()
   const navigate = useNavigate()
   const {
@@ -22,7 +21,12 @@ const StartScreen = () => {
     tabsActions: { clearTabs },
     flowActions: { addFlow },
     libraryActions: { addLibrary },
+    modalActions: { openModal },
   } = useOpenPLCStore()
+
+  const handleCreateProject = async () => {
+    openModal('create-project', null)
+  }
 
   const retrieveOpenProjectData = async () => {
     try {
@@ -130,6 +134,15 @@ const StartScreen = () => {
   }, [])
 
   useEffect(() => {
+    const handleCreateProjectAccelerator = () => {
+      window.bridge.createProjectAccelerator(() => {
+        openModal('create-project', null)
+      })
+    }
+    handleCreateProjectAccelerator()
+  }, [])
+
+  useEffect(() => {
     const handleOpenRecentAccelerator = () => {
       window.bridge.openRecentAccelerator((_event, response: IProjectServiceResponse) => {
         const { data, error } = response
@@ -183,7 +196,7 @@ const StartScreen = () => {
       <StartSideContent>
         <MenuRoot>
           <MenuSection id='1'>
-            <MenuItem onClick={() => setIsModalOpen(true)}>
+            <MenuItem onClick={() => void handleCreateProject()}>
               <PlusIcon className='stroke-white' /> New Project
             </MenuItem>
             <MenuItem ghosted onClick={handleOpenProject}>
@@ -205,7 +218,6 @@ const StartScreen = () => {
         <ProjectFilterBar />
         <DisplayRecentProjects />
       </StartMainContent>
-      <ProjectModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </>
   )
 }

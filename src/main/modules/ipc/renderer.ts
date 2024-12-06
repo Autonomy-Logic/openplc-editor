@@ -30,7 +30,6 @@ type CreateProjectFileProps = {
 }
 type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
 
-// @ts-ignore
 const rendererProcessBridge = {
     /**
      * Handlers for creating projects.
@@ -38,7 +37,7 @@ const rendererProcessBridge = {
      */
 
     createProjectAccelerator: (callback: IpcRendererCallbacks) =>
-        ipcRenderer.on('project:create-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+        ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
 
     createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
     createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> =>

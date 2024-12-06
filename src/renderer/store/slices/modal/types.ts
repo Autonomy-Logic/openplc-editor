@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const modalTypes = z.enum(['block-ladder-element', 'coil-ladder-element', 'contact-ladder-element'])
+const modalTypes = z.enum(['block-ladder-element', 'coil-ladder-element', 'contact-ladder-element', 'create-project'])
 type ModalTypes = z.infer<typeof modalTypes>
 
 const modalsState = z.record(
@@ -13,15 +13,14 @@ const modalsState = z.record(
 type ModalsState = z.infer<typeof modalsState>
 
 const modalActions = z.object({
-  openModal: z.function().args(modalTypes, z.unknown().optional()),
-  onOpenChange: z.function().args(modalTypes, z.boolean()),
-  closeModal: z.function(),
+  openModal: z.function().args(modalTypes, z.unknown().optional()).returns(z.void()),
+  onOpenChange: z.function().args(modalTypes, z.boolean()).returns(z.void()),
+  closeModal: z.function().returns(z.void()),
   getModalState: z
     .function()
     .args(modalTypes)
     .returns(z.object({ open: z.boolean(), data: z.any().optional() })),
 })
-
 const modalSlice = z.object({
   modals: modalsState,
   modalActions: modalActions,
