@@ -257,7 +257,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
 
   /**
    * Handle the double click of a node
-   */
+   *///
   const handleNodeDoubleClick = (node: FlowNode) => {
     const modalToOpen =
       node.type === 'block'
