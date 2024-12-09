@@ -8,7 +8,7 @@ import { Step2 } from './steps/second-step'
 import { Step3 } from './steps/third-step'
 import { NewProjectStore } from './store'
 
-const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+const ProjectModal = ({ isOpen }: { isOpen: boolean }) => {
   const navigate = useNavigate()
   const {
     workspaceActions: { setEditingState },
@@ -28,12 +28,16 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
   }
 
   const handleClose = () => {
-    onClose()
+    onOpenChange('create-project', false)
   }
 
   const handleFinishForm = () => {
-    onClose()
-    navigate('/workspace')
+    try {
+      onOpenChange('create-project', false)
+      navigate('/workspace')
+    } catch (error) {
+      console.error('Navigation failed:', error)
+    }
   }
 
   useEffect(() => {
@@ -42,7 +46,6 @@ const ProjectModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
     setEditingState('unsaved')
     clearTabs()
   }, [])
-
   const renderStep = () => {
     switch (currentStep) {
       case 1:

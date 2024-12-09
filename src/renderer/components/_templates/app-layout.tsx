@@ -12,7 +12,7 @@ const AppLayout = (): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
     modals,
-    modalActions: { closeModal, openModal },
+    modalActions: { openModal },
     workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecents },
   } = useOpenPLCStore()
 
@@ -46,14 +46,13 @@ const AppLayout = (): ReactNode => {
       switchAppTheme()
     })
   }, [])
-  const handleModalClose = () => {
-    closeModal()
-  }
+
   useEffect(() => {
     const handleCreateProjectAccelerator = () => {
       window.bridge.createProjectAccelerator(() => openModal('create-project', null))
     }
     handleCreateProjectAccelerator()
+
   }, [])
 
   return (
@@ -67,9 +66,7 @@ const AppLayout = (): ReactNode => {
       >
         <Outlet />
         <Toaster />
-        {modals['create-project']?.open && (
-          <ProjectModal onClose={handleModalClose} isOpen={modals['create-project'].open} />
-        )}
+        {modals?.['create-project']?.open === true && <ProjectModal isOpen={modals['create-project'].open} />}
       </main>
     </>
   )

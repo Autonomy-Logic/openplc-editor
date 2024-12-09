@@ -27,7 +27,15 @@ export const FileMenu = () => {
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
   const handleCreateProject = () => {
-    openModal('create-project', null)
+    try {
+      openModal('create-project', null)
+    } catch (_error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to open project creation modal',
+        variant: 'fail',
+      })
+    }
   }
 
   const handleOpenProject = async () => {

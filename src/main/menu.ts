@@ -30,7 +30,7 @@ export default class MenuBuilder {
 
   constructor(mainWindow: BrowserWindow) {
     this.mainWindow = mainWindow;
-    this.projectService = new ProjectService(mainWindow); // Use 'this' aqui
+    this.projectService = new ProjectService(mainWindow);
   }
 
   async buildMenu(): Promise<Menu> {

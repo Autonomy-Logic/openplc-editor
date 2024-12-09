@@ -2,7 +2,6 @@ import { CompilerService } from '@root/main/services/compiler-service'
 import { BrowserWindow, Event, IpcMain } from 'electron/main'
 
 import { ProjectService } from '../../../../services'
-// import { ProjectDto } from '../../services/project.service'
 import { TStoreType } from '../store'
 
 export type MainIpcModule = {
@@ -16,7 +15,6 @@ export type MainIpcModule = {
     handleUpdateTheme: () => void
     getStoreValue: (_: Event, key: keyof TStoreType) => TStoreType
     createPou: () => void
-    // saveProject: (event: Event, arg: ProjectDto) => { ok: boolean; reason: { title: string; description: string } }
   }
 }
 
