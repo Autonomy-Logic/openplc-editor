@@ -1,5 +1,4 @@
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
-// import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
@@ -10,11 +9,11 @@ type EnumDatatypeProps = ComponentPropsWithoutRef<'div'> & {
   data: PLCEnumeratedDatatype
 }
 const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
-  const [initialValueData, setInitialValueData] = useState<string>('none')
+  const [initialValueData, setInitialValueData] = useState<string>('')
 
   useEffect(() => {
-    setInitialValueData(data.initialValue || 'none')
-  }, [data.initialValue, data.name])
+    setInitialValueData(data.initialValue || '')
+  }, [])
 
   return (
     <div
@@ -32,22 +31,23 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
             <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100 '>
               Initial Value:
             </label>
-            <Select>
+            <Select
+              onValueChange={(value) => (value === 'none' ? setInitialValueData('') : setInitialValueData(value))}
+              value={initialValueData === '' ? '' : initialValueData}
+            >
               <SelectTrigger
                 withIndicator
                 className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 focus-within:border-brand focus:border-brand focus:outline-none dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
               >
-                {initialValueData === 'none' ? '' : initialValueData}
+                {initialValueData === '' ? '' : initialValueData}
               </SelectTrigger>
-              <SelectContent className='box h-fit  max-h-[200px] w-[--radix-select-trigger-width] overflow-auto  rounded-lg bg-white outline-none dark:bg-neutral-950'>
+              <SelectContent className='box h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'>
                 <SelectItem
                   value='none'
-                  className='flex h-8 w-full cursor-pointer items-center  justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                  onClick={() => setInitialValueData('none')}
+                  className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  onClick={() => setInitialValueData('')}
                 >
-                  <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                    {''}
-                  </span>
+                  <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'></span>
                 </SelectItem>
                 {data.values.map((value) => (
                   <SelectItem
@@ -67,7 +67,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
         </div>
       </div>
 
-      <EnumeratedTable name={data.name} values={data.values} />
+      <EnumeratedTable name={data.name} values={data.values} initialValue={initialValueData} />
     </div>
   )
 }

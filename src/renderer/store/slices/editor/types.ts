@@ -23,6 +23,11 @@ const editorGlobalVariablesSchema = z.discriminatedUnion('display', [
   z.object({ display: z.literal('code') }),
 ])
 
+const editorStructureSchema = z.object({
+  description: z.string(),
+  selectedRow: z.string(),
+})
+
 const taskSchema = z.discriminatedUnion('display', [
   z.object({
     display: z.literal('table'),
@@ -95,6 +100,7 @@ const editorModelSchema = z.discriminatedUnion('type', [
       name: z.string(),
       derivation: z.enum(['enumerated', 'structure', 'array']),
     }),
+    structure: editorStructureSchema,
   }),
   z.object({
     type: z.literal('plc-resource'),
@@ -124,7 +130,7 @@ const editorStateSchema = z.object({
 const editorActionsSchema = z.object({
   addModel: z.function().args(editorModelSchema).returns(z.void()),
   removeModel: z.function().args(z.string()).returns(z.void()),
-
+  updateEditorModel: z.function().args(z.string(), z.string()).returns(z.void()),
   updateModelVariables: z
     .function()
     .args(
@@ -136,6 +142,12 @@ const editorActionsSchema = z.object({
       }),
     )
     .returns(z.void()),
+  updateModelStructure: z.function().args(
+    z.object({
+      selectedRow: z.number().optional(),
+      description: z.string().optional(),
+    }),
+  ),
   updateModelTasks: z
     .function()
     .args(z.object({ selectedRow: z.number(), display: z.enum(['code', 'table']) }))
@@ -158,6 +170,7 @@ const editorActionsSchema = z.object({
   getEditorFromEditors: z.function().args(z.string()).returns(editorModelSchema.or(z.null())),
 })
 
+type StructureTableType = z.infer<typeof editorStructureSchema>
 /** The variables, the data that we display in the app. */
 type VariablesTable = z.infer<typeof editorVariablesSchema>
 type GlobalVariablesTableType = z.infer<typeof editorGlobalVariablesSchema>
@@ -185,6 +198,7 @@ export type {
   GlobalVariablesTableType,
   GraphicalType,
   InstanceType,
+  StructureTableType,
   TaskType,
   VariablesTable,
 }
