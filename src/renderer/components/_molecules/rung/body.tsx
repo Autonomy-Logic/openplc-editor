@@ -2,6 +2,7 @@ import * as Portal from '@radix-ui/react-portal'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RungState } from '@root/renderer/store/slices'
 import type { PLCVariable } from '@root/types/PLC'
+import { cn } from '@root/utils'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
 import { differenceWith, isEqual, parseInt } from 'lodash'
@@ -27,9 +28,10 @@ import {
 
 type RungBodyProps = {
   rung: RungState
+  className?: string
 }
 
-export const RungBody = ({ rung }: RungBodyProps) => {
+export const RungBody = ({ rung, className }: RungBodyProps) => {
   const {
     flowActions,
     libraries,
@@ -412,7 +414,13 @@ export const RungBody = ({ rung }: RungBodyProps) => {
   )
 
   return (
-    <div className='relative h-fit w-full rounded-b-lg border border-t-0 p-1 dark:border-neutral-800'>
+    <div
+      className={cn(
+        'relative h-fit w-full p-1',
+        // 'rounded-b-lg border border-t-0 dark:border-neutral-800',
+        className,
+      )}
+    >
       <div aria-label='Rung body' className='h-full w-full overflow-x-auto' ref={flowViewportRef}>
         <div
           style={{

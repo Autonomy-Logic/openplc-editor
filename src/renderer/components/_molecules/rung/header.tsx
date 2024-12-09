@@ -10,10 +10,11 @@ type RungHeaderProps = {
   rung: RungState
   isOpen: boolean
   draggableHandleProps: DraggableProvidedDragHandleProps | null
+  className: string
   onClick: () => void
 }
 
-export const RungHeader = ({ rung, isOpen, draggableHandleProps, onClick }: RungHeaderProps) => {
+export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onClick }: RungHeaderProps) => {
   const {
     editor: {
       meta: { name: editorName },
@@ -44,14 +45,16 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, onClick }: Rung
 
   return (
     <div
+      {...draggableHandleProps}
       aria-label='Rung header'
       className={cn(
-        'flex w-full flex-row gap-2 rounded-lg border bg-neutral-50 p-1 dark:border-neutral-800 dark:bg-neutral-900',
+        'flex w-full flex-row gap-2 bg-neutral-50 p-1 dark:bg-neutral-900',
+        // 'rounded-lg border dark:border-neutral-800',
         {
           'rounded-b-none border-b-0': isOpen,
         },
+        className,
       )}
-      {...draggableHandleProps}
     >
       <div className='flex w-full items-center rounded-lg border border-transparent px-1'>
         <textarea
