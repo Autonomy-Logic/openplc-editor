@@ -18,7 +18,7 @@ export const Rung = ({ index, id, rung }: RungProps) => {
   } = useOpenPLCStore()
 
   const [isOpen, setIsOpen] = useState<boolean>(true)
-  const flow = flows.find((flow) => flow.rungs.includes(rung)) || { rungs: [] }
+  const flow = flows.find((flow) => flow.rungs.some((r) => r.id === rung.id)) || { rungs: [] }
 
   const handleOpenSection = () => {
     setIsOpen(!isOpen)

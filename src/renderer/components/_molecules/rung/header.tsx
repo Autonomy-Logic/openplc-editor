@@ -45,7 +45,7 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
 
   return (
     <div
-      {...draggableHandleProps}
+      {...(draggableHandleProps ?? {})}
       aria-label='Rung header'
       className={cn(
         'flex w-full flex-row gap-2 bg-neutral-50 p-1 dark:bg-neutral-900',
