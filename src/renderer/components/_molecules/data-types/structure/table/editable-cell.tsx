@@ -1,4 +1,3 @@
-import * as PrimitivePopover from '@radix-ui/react-popover'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
 import { PLCStructureVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
@@ -26,7 +25,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: I
     const existingVariableNames = table
       .getRowModel()
       .rows.map((row) => row.original.name)
-      .filter((name) => name !== initialValue) 
+      .filter((name) => name !== initialValue)
 
     const validateVariableName = (name: string, existingVariables: string[], currentName: string) => {
       if (!name.trim()) {
@@ -76,7 +75,7 @@ const EditableInitialValueCell = ({
   table,
   editable = true,
 }: IEditableCellProps) => {
-  const initialValue = getValue<PLCStructureVariable['initialValue'] | undefined>()
+  const initialValue = getValue<PLCStructureVariable['initialValue']>()
 
   const [cellValue, setCellValue] = useState(initialValue)
 
@@ -89,43 +88,21 @@ const EditableInitialValueCell = ({
   }, [initialValue])
 
   return (
-    <PrimitivePopover.Root>
-      <PrimitivePopover.Trigger asChild>
-        <div
-          className={cn('flex h-full w-full cursor-text items-center justify-center p-2', {
-            'pointer-events-none': !editable,
-          })}
-        >
-          <p className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'>
-            {cellValue?.simpleValue?.value}
-          </p>
-        </div>
-      </PrimitivePopover.Trigger>
-      <PrimitivePopover.Portal>
-        <PrimitivePopover.Content
-          align='center'
-          side='bottom'
-          sideOffset={-32}
-          className='box h-fit w-[175px] rounded-lg bg-white p-2 lg:w-[275px] 2xl:w-[375px] dark:bg-neutral-950'
-          onInteractOutside={onBlur}
-        >
-          <textarea
-            value={cellValue?.simpleValue?.value ?? ''}
-            onChange={(e) => {
-              setCellValue({
-                ...cellValue,
-                simpleValue: {
-                  ...cellValue?.simpleValue,
-                  value: e.target.value,
-                },
-              })
-            }}
-            rows={5}
-            className='w-full max-w-[375px] flex-1 resize-none  bg-transparent text-start text-neutral-900 outline-none  dark:text-neutral-100'
-          />
-        </PrimitivePopover.Content>
-      </PrimitivePopover.Portal>
-    </PrimitivePopover.Root>
+    <InputWithRef
+      value={cellValue?.simpleValue.value ?? ''}
+      onChange={(e) =>
+        setCellValue((prev) => ({
+          ...prev,
+          simpleValue: {
+            value: e.target.value,
+          },
+        }))
+      }
+      onBlur={onBlur}
+      className={cn(
+        `flex w-full flex-1 bg-transparent p-2 text-center outline-none ${!editable ? 'pointer-events-none' : ''}`,
+      )}
+    />
   )
 }
 
