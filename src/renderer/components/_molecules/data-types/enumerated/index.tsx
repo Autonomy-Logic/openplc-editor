@@ -12,7 +12,6 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   const [initialValueData, setInitialValueData] = useState<string>('')
 
   useEffect(() => {
-
     setInitialValueData(data.initialValue || '')
   }, [])
 
@@ -32,7 +31,10 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
             <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100 '>
               Initial Value:
             </label>
-            <Select onValueChange={(value) => value === 'none' ? setInitialValueData('') : setInitialValueData(value)} value={initialValueData === '' ? '' : initialValueData}>
+            <Select
+              onValueChange={(value) => (value === 'none' ? setInitialValueData('') : setInitialValueData(value))}
+              value={initialValueData === '' ? '' : initialValueData}
+            >
               <SelectTrigger
                 withIndicator
                 className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 focus-within:border-brand focus:border-brand focus:outline-none dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
@@ -45,9 +47,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
                   className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
                   onClick={() => setInitialValueData('')}
                 >
-                  <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                    None
-                  </span>
+                  <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'></span>
                 </SelectItem>
                 {data.values.map((value) => (
                   <SelectItem
@@ -73,4 +73,3 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
 }
 
 export { EnumeratorDataType }
-
