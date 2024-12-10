@@ -99,6 +99,20 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           const flow = flows.find((flow) => flow.name === editorName)
           if (!flow) return
 
+          if (!Array.isArray(rungs)) return
+          // Validate each rung has required structure
+          if (
+            !rungs.every(
+              (rung) =>
+                rung.id &&
+                Array.isArray(rung.nodes) &&
+                Array.isArray(rung.edges) &&
+                rung.nodes.some((node) => node.id === 'left-rail') &&
+                rung.nodes.some((node) => node.id === 'right-rail'),
+            )
+          )
+            return
+
           flow.rungs = rungs
           flow.updated = true
         }),

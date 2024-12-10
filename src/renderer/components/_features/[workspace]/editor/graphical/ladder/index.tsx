@@ -58,15 +58,32 @@ export default function LadderEditor() {
 
   const onDragEnd = (result: DropResult) => {
     if (!result.destination) return
+    if (!flow) {
+      console.error('Flow is undefined')
+      return
+    }
 
     const sourceIndex = result.source.index
     const destinationIndex = result.destination.index
+    if (
+      sourceIndex < 0 ||
+      destinationIndex < 0 ||
+      sourceIndex >= flow.rungs.length ||
+      destinationIndex >= flow.rungs.length
+    ) {
+      console.error('Invalid source or destination index')
+      return
+    }
 
     const auxRungs = [...(flow?.rungs || [])]
     const [removed] = auxRungs.splice(sourceIndex, 1)
     auxRungs.splice(destinationIndex, 0, removed)
 
-    flowActions.setRungs({ editorName: editor.meta.name, rungs: auxRungs })
+    try {
+      flowActions.setRungs({ editorName: editor.meta.name, rungs: auxRungs })
+    } catch (error) {
+      console.error('Failed to update rungs:', error)
+    }
   }
 
   return (
