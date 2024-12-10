@@ -1,5 +1,8 @@
-appId: com.electron.app
-productName: openplc-editor
+appId: autonomy-logic.openplc-editor
+productName: OpenPLC Editor
+asar: true
+
+
 directories:
   buildResources: build
 files:

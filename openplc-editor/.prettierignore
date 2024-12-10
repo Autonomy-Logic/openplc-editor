@@ -1,3 +1,6 @@
+# Ignore artifacts
+build
+coverage
 out
 dist
 pnpm-lock.yaml
