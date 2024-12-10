@@ -19,8 +19,8 @@ export type ContactNode = Node<BasicNodeData & { variant: 'default' | 'negated' 
 type ContactProps = NodeProps<ContactNode>
 type ContactBuilderProps = BuilderBasicProps & { variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }
 
-export const DEFAULT_CONTACT_BLOCK_WIDTH = 28
-export const DEFAULT_CONTACT_BLOCK_HEIGHT = 28
+export const DEFAULT_CONTACT_BLOCK_WIDTH = 24
+export const DEFAULT_CONTACT_BLOCK_HEIGHT = 24
 
 export const DEFAULT_CONTACT_CONNECTOR_X = DEFAULT_CONTACT_BLOCK_WIDTH
 export const DEFAULT_CONTACT_CONNECTOR_Y = DEFAULT_CONTACT_BLOCK_HEIGHT / 2

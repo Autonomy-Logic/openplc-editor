@@ -47,7 +47,7 @@ export default function LadderEditor() {
   }, [flow?.rungs])
 
   const handleAddNewRung = () => {
-    const defaultViewport: [number, number] = [1530, 250]
+    const defaultViewport: [number, number] = [300, 100]
     flowActions.startLadderRung({
       editorName: editor.meta.name,
       rungId: `rung_${editor.meta.name}_${uuidv4()}`,

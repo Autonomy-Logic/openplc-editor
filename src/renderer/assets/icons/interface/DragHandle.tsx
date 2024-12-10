@@ -1,9 +1,9 @@
 export const DragHandleIcon = (props: React.SVGProps<SVGSVGElement>) => {
   return (
     <svg
-      fill='#000000'
-      width='800px'
-      height='800px'
+      fill='currentColor'
+      width='1em'
+      height='1em'
       viewBox='0 0 36 36'
       version='1.1'
       preserveAspectRatio='xMidYMid meet'
