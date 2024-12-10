@@ -41,7 +41,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const { value } = e.target
     if (dataTypeName !== value) {
-      updateDatatype(dataTypeName, { name: value } as PLCDataType)
+      updateDatatype(dataTypeName, { derivation: editorContent?.derivation, name: value } as PLCDataType)
       updateEditorModel(dataTypeName, value)
       updateTabName(dataTypeName, value)
     }
