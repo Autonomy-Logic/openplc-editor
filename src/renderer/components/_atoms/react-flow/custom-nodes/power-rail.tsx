@@ -9,7 +9,7 @@ type PowerRailProps = NodeProps<PowerRailNode>
 type PowerRailBuilderProps = BuilderBasicProps & { connector: 'left' | 'right' }
 
 export const DEFAULT_POWER_RAIL_WIDTH = 3
-export const DEFAULT_POWER_RAIL_HEIGHT = 200
+export const DEFAULT_POWER_RAIL_HEIGHT = 40
 
 export const DEFAULT_POWER_RAIL_CONNECTOR_X = DEFAULT_POWER_RAIL_WIDTH
 export const DEFAULT_POWER_RAIL_CONNECTOR_Y = DEFAULT_POWER_RAIL_HEIGHT / 2

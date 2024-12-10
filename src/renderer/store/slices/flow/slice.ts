@@ -59,18 +59,18 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
             nodesBuilder.powerRail({
               id: 'left-rail',
               posX: 0,
-              posY: 0,
+              posY: 40,
               connector: 'right',
               handleX: powerRail.width,
-              handleY: powerRail.height / 2,
+              handleY: 40 + powerRail.height / 2,
             }),
             nodesBuilder.powerRail({
               id: 'right-rail',
-              posX: 1530 - powerRail.width,
-              posY: 0,
+              posX: defaultBounds[0],
+              posY: 40,
               connector: 'left',
               handleX: defaultBounds[0] - powerRail.width,
-              handleY: powerRail.height / 2,
+              handleY: 40 + powerRail.height / 2,
             }),
           ]
           flow.rungs.push({
@@ -90,6 +90,31 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
               },
             ],
           })
+        }),
+      )
+    },
+    setRungs: ({ editorName, rungs }) => {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          if (!Array.isArray(rungs)) return
+          // Validate each rung has required structure
+          if (
+            !rungs.every(
+              (rung) =>
+                rung.id &&
+                Array.isArray(rung.nodes) &&
+                Array.isArray(rung.edges) &&
+                rung.nodes.some((node) => node.id === 'left-rail') &&
+                rung.nodes.some((node) => node.id === 'right-rail'),
+            )
+          )
+            return
+
+          flow.rungs = rungs
+          flow.updated = true
         }),
       )
     },

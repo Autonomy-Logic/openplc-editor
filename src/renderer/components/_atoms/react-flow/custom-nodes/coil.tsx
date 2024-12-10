@@ -27,8 +27,8 @@ type CoilBuilderProps = BuilderBasicProps & {
   variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' | 'set' | 'reset'
 }
 
-export const DEFAULT_COIL_BLOCK_WIDTH = 34
-export const DEFAULT_COIL_BLOCK_HEIGHT = 28
+export const DEFAULT_COIL_BLOCK_WIDTH = 28
+export const DEFAULT_COIL_BLOCK_HEIGHT = 24
 
 export const DEFAULT_COIL_CONNECTOR_X = DEFAULT_COIL_BLOCK_WIDTH
 export const DEFAULT_COIL_CONNECTOR_Y = DEFAULT_COIL_BLOCK_HEIGHT / 2
