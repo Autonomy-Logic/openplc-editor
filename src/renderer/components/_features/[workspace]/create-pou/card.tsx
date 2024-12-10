@@ -71,10 +71,11 @@ const Card = (props: ICardProps): ReactNode => {
       derivation,
     }
     const createdData = CreateDatatypeObject(data)
-    createDatatype(createdData)
+    createDatatype({ data: createdData })
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
+
   return (
     <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
       <Popover.Trigger id={`create-${target}-trigger`} asChild>
