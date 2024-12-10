@@ -59,10 +59,6 @@ const Breadcrumbs = () => {
   const typeOrIcon = getPouTypeOrDataTypeOrResource()
   const [icon, text] = getIconOrLanguage()
 
-  useEffect(() => {
-    console.log(typeOrIcon)
-  }, [dataTypes])
-
   return (
     <NavigationPanelBreadcrumbs
       crumb={{
