@@ -6,7 +6,7 @@ import { LanguageIcon, LanguageIconType, PouIcon, PouIconType } from '@process:r
 import { ArrayIcon, EnumIcon, StructureIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import _ from 'lodash'
-import { ComponentProps, useEffect } from 'react'
+import { ComponentProps } from 'react'
 
 type INavigationPanelBreadcrumbsProps = ComponentProps<'ol'> & {
   crumb: {
