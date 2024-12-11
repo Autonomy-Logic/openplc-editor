@@ -59,18 +59,18 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
             nodesBuilder.powerRail({
               id: 'left-rail',
               posX: 0,
-              posY: 40,
+              posY: defaultBounds[1] / 2 - powerRail.height / 2,
               connector: 'right',
               handleX: powerRail.width,
-              handleY: 40 + powerRail.height / 2,
+              handleY: defaultBounds[1] / 2,
             }),
             nodesBuilder.powerRail({
               id: 'right-rail',
               posX: defaultBounds[0],
-              posY: 40,
+              posY: defaultBounds[1] / 2 - powerRail.height / 2,
               connector: 'left',
               handleX: defaultBounds[0] - powerRail.width,
-              handleY: 40 + powerRail.height / 2,
+              handleY: defaultBounds[1] / 2,
             }),
           ]
           flow.rungs.push({

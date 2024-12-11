@@ -128,9 +128,9 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
   useEffect(() => {
     if (inputVariableRef.current) {
       inputVariableRef.current.style.height = 'auto'
-      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 32 ? inputVariableRef.current.scrollHeight : 32}px`
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 24 ? inputVariableRef.current.scrollHeight : 24}px`
       if (scrollableIndicatorRef.current)
-        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 24 ? 'block' : 'none'
     }
   }, [coilVariableValue])
 
@@ -229,39 +229,42 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
 
   return (
     <div
-      className={cn('relative', {
+      className={cn({
         'opacity-40': id.startsWith('copycat'),
       })}
     >
       <div
         className={cn(
-          'rounded-[1px] border border-transparent hover:outline hover:outline-2 hover:outline-offset-[5px] hover:outline-brand',
+          'relative rounded-[1px] border border-transparent hover:outline hover:outline-2 hover:outline-offset-[3px] hover:outline-brand',
           {
-            'outline outline-2 outline-offset-[5px] outline-brand': selected,
+            'outline outline-2 outline-offset-[3px] outline-brand': selected,
           },
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
       >
+        <div className='absolute -left-[28px] -top-[24px] flex h-3 w-[84px] items-center justify-center'>
+          <textarea
+            value={coilVariableValue}
+            onChange={(e) => setCoilVariableValue(e.target.value)}
+            placeholder='???'
+            className='w-full resize-none bg-transparent text-center text-cp-sm outline-none [&::-webkit-scrollbar]:hidden'
+            onFocus={() => setInputFocus(true)}
+            onBlur={() => {
+              if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
+              inputFocus && handleSubmitCoilVariable()
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+            ref={inputVariableRef}
+            rows={1}
+          />
+        </div>
+        <div
+          className={cn('pointer-events-none absolute -right-[38px] -top-[24px] text-cp-sm')}
+          ref={scrollableIndicatorRef}
+        >
+          ↕
+        </div>
         {coil.svg(wrongVariable)}
-      </div>
-      <div className='absolute -left-[30px] -top-[38px] flex h-8 w-24 items-center justify-center'>
-        <textarea
-          value={coilVariableValue}
-          onChange={(e) => setCoilVariableValue(e.target.value)}
-          placeholder='???'
-          className='w-full resize-none bg-transparent text-center text-xs outline-none [&::-webkit-scrollbar]:hidden'
-          onFocus={() => setInputFocus(true)}
-          onBlur={() => {
-            if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
-            inputFocus && handleSubmitCoilVariable()
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-          ref={inputVariableRef}
-          rows={1}
-        />
-      </div>
-      <div className={cn('pointer-events-none absolute -right-[48px] -top-7 text-xs')} ref={scrollableIndicatorRef}>
-        ↕
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
