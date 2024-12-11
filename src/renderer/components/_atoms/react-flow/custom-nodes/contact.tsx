@@ -221,12 +221,12 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
         style={{ width: DEFAULT_CONTACT_BLOCK_WIDTH, height: DEFAULT_CONTACT_BLOCK_HEIGHT }}
       >
         {contact.svg(wrongVariable)}
-        <div className='absolute -left-[24px] -top-[24px] flex h-3 w-[72px] items-center justify-center'>
+        <div className='absolute -left-[24px] -top-[26px] flex h-3 w-[72px] items-center justify-center'>
           <textarea
             value={contactVariableValue}
             onChange={(e) => setContactVariableValue(e.target.value)}
             placeholder='???'
-            className='w-full resize-none bg-transparent text-center text-cp-sm outline-none [&::-webkit-scrollbar]:hidden'
+            className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
             onFocus={() => setInputFocus(true)}
             onBlur={() => {
               if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
@@ -238,7 +238,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
           />
         </div>
         <div
-          className={cn('pointer-events-none absolute -right-[36px] -top-[24px] text-cp-sm')}
+          className={cn('pointer-events-none absolute -right-[36px] -top-[27px] text-cp-sm')}
           ref={scrollableIndicatorRef}
         >
           ↕

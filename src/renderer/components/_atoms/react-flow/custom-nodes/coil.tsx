@@ -242,12 +242,12 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
       >
-        <div className='absolute -left-[28px] -top-[24px] flex h-3 w-[84px] items-center justify-center'>
+        <div className='absolute -left-[28px] -top-[26px] flex h-3 w-[84px] items-center justify-center'>
           <textarea
             value={coilVariableValue}
             onChange={(e) => setCoilVariableValue(e.target.value)}
             placeholder='???'
-            className='w-full resize-none bg-transparent text-center text-cp-sm outline-none [&::-webkit-scrollbar]:hidden'
+            className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
             onFocus={() => setInputFocus(true)}
             onBlur={() => {
               if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
@@ -259,7 +259,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
           />
         </div>
         <div
-          className={cn('pointer-events-none absolute -right-[38px] -top-[24px] text-cp-sm')}
+          className={cn('pointer-events-none absolute -right-[38px] -top-[27px] text-cp-sm')}
           ref={scrollableIndicatorRef}
         >
           ↕
