@@ -78,7 +78,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
       height: 40,
     }
     const bounds = getNodesBounds([zeroPositionNode, ...rung.nodes])
-    const [defaultWidth, defaultHeight] = rung?.defaultBounds ?? [1530, 200]
+    const [defaultWidth, defaultHeight] = rung.defaultBounds
 
     // If the bounds are less than the default extent, set the panel extent to the default extent
     if (bounds.width < defaultWidth) bounds.width = defaultWidth
