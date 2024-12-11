@@ -37,7 +37,7 @@ type LibraryProps = {
   }[]
   filteredUserLibraries: {
     name: string
-    type: 'function' | 'function-block'| 'program'
+    type: 'function' | 'function-block' | 'program'
   }[]
   setSelectedFileKey: (key: string) => void
   selectedFileKey: string | null
@@ -164,7 +164,10 @@ const Library = ({
                     draggable
                     onDragStart={(e) => {
                       if (type === 'plc-textual')
-                        e.dataTransfer.setData('text/plain', meta.language === 'st' ? parsePouToStText(pou) : pou.body)
+                        e.dataTransfer.setData(
+                          'text/plain',
+                          meta.language === 'st' || meta.language === 'il' ? parsePouToStText(pou) : pou.body,
+                        )
                       else if (type === 'plc-graphical') {
                         if (meta.language === 'ld') {
                           e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
