@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-import { PLCArrayDatatype, PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
+import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
@@ -21,16 +21,18 @@ export type SharedSlice = {
     delete: () => void
   }
   datatypeActions: {
-    create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype) => boolean
+    create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => boolean
     update: () => void
     delete: () => void
   }
 }
 
-export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSlice & LibrarySlice, [], [], SharedSlice> = (
-  _setState,
-  getState,
-) => ({
+export const createSharedSlice: StateCreator<
+  EditorSlice & TabsSlice & ProjectSlice & LibrarySlice,
+  [],
+  [],
+  SharedSlice
+> = (_setState, getState) => ({
   pouActions: {
     create: (propsToCreatePou: PropsToCreatePou) => {
       if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
@@ -60,7 +62,8 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSl
             language: propsToCreatePou.language,
           },
         })
-        propsToCreatePou.type !== 'program' && getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
+        propsToCreatePou.type !== 'program' &&
+          getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
         return true
       }
 
@@ -99,7 +102,8 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSl
             language: propsToCreatePou.language,
           },
         })
-        propsToCreatePou.type !== 'program' && getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
+        propsToCreatePou.type !== 'program' &&
+          getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
         return true
       }
       return false
@@ -108,15 +112,23 @@ export const createSharedSlice: StateCreator<EditorSlice & TabsSlice & ProjectSl
     delete: () => {},
   },
   datatypeActions: {
-    create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype) => {
-      getState().projectActions.createDatatype(propsToCreateDatatype)
+    create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => {
+      getState().projectActions.createDatatype({ data: propsToCreateDatatype })
       getState().editorActions.addModel({
         type: 'plc-datatype',
         meta: { name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation },
+        structure: {
+          selectedRow: '-1',
+          description: '',
+        },
       })
       getState().editorActions.setEditor({
         type: 'plc-datatype',
         meta: { name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation },
+        structure: {
+          selectedRow: '-1',
+          description: '',
+        },
       })
       getState().tabsActions.updateTabs({
         name: propsToCreateDatatype.name,
