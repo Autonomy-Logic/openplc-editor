@@ -112,9 +112,9 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
    */
   useEffect(() => {
     if (
-      rungLocal.selectedNodes &&
-      rungLocal.selectedNodes.length > 0 &&
-      differenceWith(rungLocal.selectedNodes || [], rung.selectedNodes || [], (a, b) => isEqual(a, b)).length === 0
+      !rungLocal.selectedNodes ||
+      (rungLocal.selectedNodes.length > 0 &&
+        differenceWith(rungLocal.selectedNodes || [], rung.selectedNodes || [], (a, b) => isEqual(a, b)).length === 0)
     )
       return
 

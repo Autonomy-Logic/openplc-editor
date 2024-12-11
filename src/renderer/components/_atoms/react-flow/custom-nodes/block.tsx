@@ -1,5 +1,6 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
+import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/diagram'
+// import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
@@ -257,12 +258,11 @@ export const BlockNodeElement = <T extends object>({
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
-    console.log('newNodes', newNodes)
-    const { nodes: variableNodes, edges: variableEdges } = updateVariableBlockPosition({
+    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition({
       ...rung,
       nodes: newNodes,
       edges: newEdges,
-    })
+    }, [rung.defaultBounds[0], rung.defaultBounds[1]])
 
     setNodes({
       editorName: editor.meta.name,

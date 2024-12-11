@@ -16,7 +16,8 @@ import {
   ModalTitle,
   // ModalTrigger,
 } from '@root/renderer/components/_molecules'
-import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
+import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/diagram'
+// import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
 import { PLCPou } from '@root/types/PLC/open-plc'
@@ -409,11 +410,11 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
-    const { nodes: variableNodes, edges: variableEdges } = updateVariableBlockPosition({
+    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition({
       ...rung,
       nodes: newNodes,
       edges: newEdges,
-    })
+    }, [rung.defaultBounds[0], rung.defaultBounds[1]])
 
     setNodes({
       editorName: editor.meta.name,
@@ -542,6 +543,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
               <BlockNodeElement
                 data={node.data}
                 height={node.height || 0}
+                width={node.width || 0}
                 selected={false}
                 disabled={true}
                 scale={310 / ((node.height || 310) <= 310 ? 310 : node.height || 310)}
