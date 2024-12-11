@@ -39,8 +39,7 @@ type BlockBuilderProps<T> = BuilderBasicProps & { variant: T; executionControl?:
 export const DEFAULT_BLOCK_WIDTH = 216
 export const DEFAULT_BLOCK_HEIGHT = 128
 
-export const DEFAULT_BLOCK_CONNECTOR_X = DEFAULT_BLOCK_WIDTH
-export const DEFAULT_BLOCK_CONNECTOR_Y = 40
+export const DEFAULT_BLOCK_CONNECTOR_Y = 36
 export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 40
 
 export const DEFAULT_BLOCK_TYPE = {
@@ -50,14 +49,7 @@ export const DEFAULT_BLOCK_TYPE = {
     { name: '???', class: 'input', type: { definition: 'base-type', value: 'BOOL' } },
     { name: '???', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
   ],
-  documentation: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam aliquam tristique tincidunt. Duis elementum
-            tortor sem, non convallis orci facilisis at. Suspendisse id bibendum nisl. Mauris ac massa diam. Mauris
-            ultrices massa justo, sed vehicula tellus rhoncus eget. Suspendisse lacinia nec dolor vitae sollicitudin.
-            Interdum et malesuada fames ac ante ipsum primis in faucibus. Quisque rutrum, tellus eu maximus cursus,
-            metus urna eleifend ex, vitae accumsan nisl neque luctus diam. Quisque vel dui vel eros lobortis maximus non
-            eget mauris. Aenean aliquet, justo id tempor placerat, ipsum purus molestie justo, sed euismod est arcu
-            fermentum odio. Nullam et mauris leo. Aenean magna ex, sollicitudin at consequat non, cursus nec elit. Morbi
-            sodales porta elementum.`,
+  documentation: '',
 }
 
 export const BlockNodeElement = <T extends object>({
@@ -65,6 +57,7 @@ export const BlockNodeElement = <T extends object>({
   data,
   disabled = false,
   height,
+  width,
   selected,
   wrongVariable = false,
   scale = 1,
@@ -72,6 +65,7 @@ export const BlockNodeElement = <T extends object>({
   nodeId?: string
   data: BlockNodeData<T>
   height: number
+  width: number
   selected: boolean
   disabled?: boolean
   wrongVariable?: boolean
@@ -263,6 +257,7 @@ export const BlockNodeElement = <T extends object>({
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
+    console.log('newNodes', newNodes)
     const { nodes: variableNodes, edges: variableEdges } = updateVariableBlockPosition({
       ...rung,
       nodes: newNodes,
@@ -294,7 +289,7 @@ export const BlockNodeElement = <T extends object>({
         },
       )}
       style={{
-        width: DEFAULT_BLOCK_WIDTH,
+        width: width,
         height: height,
         transform: `scale(${scale})`,
       }}
@@ -304,7 +299,7 @@ export const BlockNodeElement = <T extends object>({
         onChange={(e) => setBlockNameValue(e.target.value.toUpperCase())}
         maxLength={20}
         placeholder='???'
-        className='w-full bg-transparent p-1 text-center text-sm outline-none'
+        className='w-full bg-transparent p-1 text-center text-xs outline-none'
         disabled={disabled}
         onFocus={() => setInputNameFocus(true)}
         onBlur={() => inputNameFocus && handleNameInputOnBlur()}
@@ -314,8 +309,8 @@ export const BlockNodeElement = <T extends object>({
       {inputConnectors.map((connector, index) => (
         <div
           key={index}
-          className='absolute text-sm'
-          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 11, left: 7 }}
+          className='absolute text-xs'
+          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, left: 6 }}
         >
           {connector}
         </div>
@@ -323,8 +318,8 @@ export const BlockNodeElement = <T extends object>({
       {outputConnectors.map((connector, index) => (
         <div
           key={index}
-          className='absolute text-sm'
-          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 11, right: 7 }}
+          className='absolute text-xs'
+          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, right: 6 }}
         >
           {connector}
         </div>
@@ -333,7 +328,7 @@ export const BlockNodeElement = <T extends object>({
   )
 }
 
-export const Block = <T extends object>({ data, dragging, height, selected, id }: BlockProps<T>) => {
+export const Block = <T extends object>({ data, dragging, height, width, selected, id }: BlockProps<T>) => {
   const {
     editor,
     project: {
@@ -512,17 +507,20 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
               nodeId={id}
               data={data}
               height={height ?? DEFAULT_BLOCK_HEIGHT}
+              width={width ?? DEFAULT_BLOCK_WIDTH}
               selected={selected ?? false}
               wrongVariable={wrongVariable}
             />
           </TooltipTrigger>
-          {!dragging && <TooltipContent side='right'>{documentation}</TooltipContent>}
+          {!dragging && documentation && documentation !== '' && (
+            <TooltipContent side='right'>{documentation}</TooltipContent>
+          )}
         </Tooltip>
       </TooltipProvider>
       <div
-        className='absolute -top-7'
+        className='absolute -top-6'
         style={{
-          width: DEFAULT_BLOCK_WIDTH,
+          width: width ?? DEFAULT_BLOCK_WIDTH,
         }}
       >
         {(data.variant as BlockVariant).type !== 'function' && (data.variant as BlockVariant).type !== 'generic' && (
@@ -530,7 +528,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
             value={blockVariableValue}
             onChange={(e) => setBlockVariableValue(e.target.value)}
             placeholder='???'
-            className='w-full bg-transparent text-center text-sm outline-none'
+            className='w-full bg-transparent text-center text-xs outline-none'
             onFocus={() => setInputVariableFocus(true)}
             onBlur={() => inputVariableFocus && handleSubmitBlockVariable()}
             onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
@@ -588,7 +586,7 @@ export const buildBlockNode = <T extends object | undefined>({
     variantLib.variables = variantLib.variables.filter((variable) => variable.name !== 'EN' && variable.name !== 'ENO')
   }
 
-  const { handles, leftHandles, rightHandles, height } = getBlockSize(variantLib, { x: handleX, y: handleY })
+  const { handles, leftHandles, rightHandles, height, width } = getBlockSize(variantLib, { x: handleX, y: handleY })
 
   return {
     id,
@@ -610,10 +608,10 @@ export const buildBlockNode = <T extends object | undefined>({
       selectable: true,
       deletable: true,
     },
-    width: DEFAULT_BLOCK_WIDTH,
+    width,
     height,
     measured: {
-      width: DEFAULT_BLOCK_WIDTH,
+      width,
       height,
     },
     draggable: true,
@@ -635,6 +633,27 @@ export const getBlockSize = (
   const outputConnectors = variant.variables
     .filter((variable) => variable.class === 'output')
     .map((variable) => variable.name)
+
+  const blocKHeight =
+    DEFAULT_BLOCK_CONNECTOR_Y +
+    Math.max(inputConnectors.length, outputConnectors.length) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
+
+  let variableInputWidth = 0
+  let variableOutputWidth = 0
+  const blockNameWidth = variant.name.length * 12
+  inputConnectors.forEach((input) => {
+    const inputWidth = input.length * 12
+    if (inputWidth > variableInputWidth) variableInputWidth = inputWidth
+  })
+  outputConnectors.forEach((output) => {
+    const outputWidth = output.length * 12
+    if (outputWidth > variableOutputWidth) variableOutputWidth = outputWidth
+  })
+
+  const blockWidth = Math.min(
+    Math.max(variableInputWidth + 18 + variableOutputWidth, blockNameWidth),
+    DEFAULT_BLOCK_WIDTH,
+  )
 
   const leftHandles = inputConnectors.map((connector, index) =>
     buildHandle({
@@ -659,9 +678,9 @@ export const getBlockSize = (
       position: Position.Right,
       type: 'source',
       isConnectable: false,
-      glbX: handlePosition.x + DEFAULT_BLOCK_CONNECTOR_X,
+      glbX: handlePosition.x + blockWidth,
       glbY: handlePosition.y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-      relX: DEFAULT_BLOCK_CONNECTOR_X,
+      relX: blockWidth,
       relY: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
       style: {
         top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
@@ -672,14 +691,11 @@ export const getBlockSize = (
 
   const handles = [...leftHandles, ...rightHandles]
 
-  const blocKHeight =
-    DEFAULT_BLOCK_CONNECTOR_Y +
-    Math.max(inputConnectors.length, outputConnectors.length) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
-
   return {
     handles,
     leftHandles,
     rightHandles,
     height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
+    width: blockWidth,
   }
 }

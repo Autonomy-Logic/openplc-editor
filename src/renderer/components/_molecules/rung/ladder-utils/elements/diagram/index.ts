@@ -38,7 +38,7 @@ export const changeRailBounds = (rung: RungState, defaultBounds: [number, number
       const nodeStyle = getDefaultNodeStyle({ node })
       return {
         minX: Math.min(acc.minX, node.position.x),
-        maxX: Math.max(acc.maxX, node.position.x + nodeStyle.width + 2 * nodeStyle.gap + railStyle.gap),
+        maxX: Math.max(acc.maxX, node.position.x + (node.width || 0) + 2 * nodeStyle.gap + railStyle.gap),
       }
     },
     { minX: 0, maxX: 0 },

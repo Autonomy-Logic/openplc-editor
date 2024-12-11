@@ -103,7 +103,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    // console.log('rung', rung)
+    console.log('rung', rung)
     setRungLocal(rung)
   }, [rung.nodes])
 

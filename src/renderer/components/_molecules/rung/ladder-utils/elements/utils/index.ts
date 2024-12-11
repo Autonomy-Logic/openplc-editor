@@ -48,11 +48,11 @@ export const getPreviousElementsByEdge = (
       (node as ParallelNode).data.type === 'close' &&
       e.targetHandle === (node as ParallelNode).data.parallelInputConnector?.id
     ) {
-      lastNodes.nodes.parallel.push({...n})
+      lastNodes.nodes.parallel.push({ ...n })
       return
     }
 
-    lastNodes.nodes.serial.push({...n})
+    lastNodes.nodes.serial.push({ ...n })
   })
   lastNodes.edges = connectedEdges
   lastNodes.nodes.all = [...lastNodes.nodes.serial, ...lastNodes.nodes.parallel]
@@ -143,12 +143,12 @@ export const getNodePositionBasedOnPreviousNode = (
   const offsetY = newNodeStyle.handle.y
 
   const position = {
-    posX: previousElement.position.x + previousElementStyle.width + gap,
+    posX: previousElement.position.x + (previousElement.width || 0) + gap,
     posY:
       previousElement.type === (typeof newElement === 'string' ? newElement : newElement.type)
         ? previousElement.position.y
         : previousElementOutputHandle.glbPosition.y - offsetY,
-    handleX: previousElement.position.x + previousElementStyle.width + gap,
+    handleX: previousElement.position.x + (previousElement.width || 0) + gap,
     handleY: previousElementOutputHandle.glbPosition.y,
   }
 
@@ -349,7 +349,6 @@ export const getNodesInsideParallel = (
   rung: RungState,
   closeParallelNode: Node,
 ): { serial: Node[]; parallel: Node[] } => {
-
   const openParallelNode = rung.nodes.find(
     (node) => node.id === closeParallelNode.data.parallelOpenReference,
   ) as ParallelNode
@@ -408,7 +407,7 @@ export const getPlaceholderPositionBasedOnNode = (node: Node, side: 'left' | 'bo
       return {
         posX:
           node.position.x +
-          getDefaultNodeStyle({ node }).width +
+          (node.width || 0) +
           getDefaultNodeStyle({ nodeType: 'placeholder' }).gap -
           getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         posY:
@@ -416,7 +415,7 @@ export const getPlaceholderPositionBasedOnNode = (node: Node, side: 'left' | 'bo
           getDefaultNodeStyle({ nodeType: 'placeholder' }).handle.y,
         handleX:
           node.position.x +
-          getDefaultNodeStyle({ node }).width +
+          (node.width || 0) +
           getDefaultNodeStyle({ nodeType: 'placeholder' }).gap -
           getDefaultNodeStyle({ nodeType: 'placeholder' }).width,
         handleY: ((node.data.outputConnector ?? node.data.inputConnector) as CustomHandleProps)?.glbPosition.y,
@@ -425,20 +424,20 @@ export const getPlaceholderPositionBasedOnNode = (node: Node, side: 'left' | 'bo
       return {
         posX:
           node.position.x +
-          getDefaultNodeStyle({ node }).width / 2 -
+          (node.width || 0) / 2 -
           getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         posY:
           node.position.y +
-          (node?.height ?? 0) -
+          (node.height || 0) -
           getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
           getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
         handleX:
           node.position.x +
-          getDefaultNodeStyle({ node }).width / 2 -
+          (node.width || 0) / 2 -
           getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         handleY:
           node.position.y +
-          (node?.height ?? 0) -
+          (node.height || 0) -
           getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
           getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
       }
