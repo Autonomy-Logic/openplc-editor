@@ -35,13 +35,24 @@ type LibraryProps = {
       }[]
     }[]
   }[]
+  filteredUserLibraries: {
+    name: string
+    type: 'function' | 'function-block'| 'program'
+  }[]
   setSelectedFileKey: (key: string) => void
   selectedFileKey: string | null
   filterText: string
   setFilterText: (text: string) => void
 }
 
-const Library = ({  filterText, setFilterText, setSelectedFileKey, selectedFileKey , filteredLibraries }: LibraryProps) => {
+const Library = ({
+  filterText,
+  setFilterText,
+  setSelectedFileKey,
+  selectedFileKey,
+  filteredLibraries,
+  filteredUserLibraries,
+}: LibraryProps) => {
   const {
     editor: { type, meta },
   } = useOpenPLCStore()
@@ -166,6 +177,34 @@ const Library = ({  filterText, setFilterText, setSelectedFileKey, selectedFileK
             </LibraryFolder>
           ))}
         </LibraryRoot>
+        {filteredUserLibraries.length > 0 && (
+          <LibraryRoot>
+            <LibraryFolder label='User-defined POUs' initiallyOpen={true}>
+              {filteredUserLibraries
+                .filter((userLibrary) => userLibrary.name.toLowerCase().includes(filterText))
+                .map((userLibrary) => (
+                  <LibraryFile
+                    key={userLibrary.name}
+                    label={userLibrary.name}
+                    onClick={() => setSelectedFileKey(userLibrary.name)}
+                    onSelect={() => setSelectedFileKey(userLibrary.name)}
+                    isSelected={selectedFileKey === userLibrary.name}
+                    draggable
+                    onDragStart={(e) => {
+                      if (type === 'plc-textual') return
+                      // e.dataTransfer.setData('text/plain', meta.language === 'st' ? parsePouToStText(pou) : pou.body)
+                      else if (type === 'plc-graphical') {
+                        if (meta.language === 'ld') {
+                          e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
+                        }
+                        e.dataTransfer.setData('application/library', `user/${userLibrary.name}`)
+                      }
+                    }}
+                  />
+                ))}
+            </LibraryFolder>
+          </LibraryRoot>
+        )}
       </div>
     </div>
   )

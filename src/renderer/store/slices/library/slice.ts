@@ -50,17 +50,30 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
    * TODO: Create and implement the logic for the functions below
    */
   libraryActions: {
-    addLibrary: (libraryName) => {
+    addLibrary: (libraryName, libraryType) => {
       setState(
-        produce(({ libraries }: LibrarySlice) => {
-          libraries.user.push(libraryName)
+        produce(({ libraries: { user: userLibraries } }: LibrarySlice) => {
+          const libraryAlreadyExists = userLibraries.some((library) => library.name === libraryName)
+          if (!libraryAlreadyExists) {
+            userLibraries.push({ name: libraryName, type: libraryType })
+          }
         }),
       )
     },
-    removeLibrary: (libraryName) => {
+    clearUserLibraries: () => {
       setState(
-        produce(({ libraries }: LibrarySlice) => {
-          libraries.user = libraries.user.filter((library) => library !== libraryName)
+        produce((slice: LibrarySlice) => {
+          slice.libraries.user = []
+        }),
+      )
+    },
+    removeUserLibrary: (libraryName) => {
+      setState(
+        produce(({ libraries: { user: userLibraries } }: LibrarySlice) => {
+          const libraryIndex = userLibraries.findIndex((library) => library.name === libraryName)
+          if (libraryIndex === -1) return
+
+          userLibraries.splice(libraryIndex, 1)
         }),
       )
     },

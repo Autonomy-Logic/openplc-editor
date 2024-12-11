@@ -64,12 +64,14 @@ type RungState = {
   comment: string
   defaultBounds: number[]
   flowViewport: number[]
+  selectedNodes?: Node[]
   nodes: Node[]
   edges: Edge[]
 }
 
 type FlowType = {
   name: string
+  updated: boolean
   rungs: RungState[]
 }
 
@@ -78,10 +80,12 @@ type FlowState = {
 }
 
 type FlowActions = {
+  clearFlows: () => void
   addFlow: (flow: FlowType) => void
+  removeFlow: (flowId: string) => void
 
   /**
-   * Controll the rungs of the flow
+   * Control the rungs of the flow
    */
   startLadderRung: ({
     editorName,
@@ -98,7 +102,7 @@ type FlowActions = {
   addComment: ({ editorName, rungId, comment }: { editorName: string; rungId: string; comment: string }) => void
 
   /**
-   * Controll the rungs transactions
+   * Control the rungs transactions
    */
   onNodesChange: ({
     changes,
@@ -121,13 +125,37 @@ type FlowActions = {
   onConnect: ({ changes, rungId, editorName }: { changes: Connection; rungId: string; editorName: string }) => void
 
   setNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
-  updateNode: ({ node, nodeId, rungId, editorName }: { node: Node; nodeId: string, rungId: string; editorName: string }) => void
+  updateNode: ({
+    node,
+    nodeId,
+    rungId,
+    editorName,
+  }: {
+    node: Node
+    nodeId: string
+    rungId: string
+    editorName: string
+  }) => void
+  addNode: ({ node, rungId, editorName }: { node: Node; rungId: string; editorName: string }) => void
+  removeNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
+  setSelectedNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
 
   setEdges: ({ edges, rungId, editorName }: { edges: Edge[]; rungId: string; editorName: string }) => void
-  updateEdge: ({ edge, edgeId, rungId, editorName }: { edge: Edge; edgeId: string, rungId: string; editorName: string }) => void
+  updateEdge: ({
+    edge,
+    edgeId,
+    rungId,
+    editorName,
+  }: {
+    edge: Edge
+    edgeId: string
+    rungId: string
+    editorName: string
+  }) => void
+  addEdge: ({ edge, rungId, editorName }: { edge: Edge; rungId: string; editorName: string }) => void
 
   /**
-   * Controll the flow viewport of the rung
+   * Control the flow viewport of the rung
    */
   updateFlowViewport: ({
     flowViewport,
@@ -138,6 +166,8 @@ type FlowActions = {
     rungId: string
     editorName: string
   }) => void
+
+  setFlowUpdated: ({ editorName, updated }: { editorName: string; updated: boolean }) => void
 }
 
 /** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */
@@ -145,7 +175,7 @@ type FlowSlice = FlowState & {
   flowActions: FlowActions
 }
 
-export { FlowActions, FlowSlice, FlowState, FlowType,RungState }
+export { FlowActions, FlowSlice, FlowState, FlowType, RungState }
 
 /**
  * Zod exports

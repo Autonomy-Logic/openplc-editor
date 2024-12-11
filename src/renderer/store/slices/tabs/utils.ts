@@ -62,6 +62,10 @@ const CreateEditorModelObject = (
         name,
         derivation,
       },
+      structure: {
+        selectedRow: '-1',
+        description: '',
+      },
     })
     return editor
   }

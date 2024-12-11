@@ -6,7 +6,7 @@ import { ArrowIcon } from '@root/renderer/assets'
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { DatatypeDerivationSources } from '@root/renderer/data/sources/data-type'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
+import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { cn, ConvertToLangShortenedFormat } from '@root/utils'
 import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
@@ -72,23 +72,43 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     }
   }
 
-  const handleCancelCreatePou = () => {
+  const handleCancelCreateElement = () => {
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
 
   const handleCreateDatatype: SubmitHandler<CreateDataTypeFormProps> = (data) => {
-    const draft = {
-      name: data.name,
-      derivation: data.derivation,
-      baseType: 'bool',
-      initialValue: '',
-      dimensions: [],
-    } as PLCArrayDatatype
-    const res = createDatatype(draft)
+    if (data.derivation === 'array') {
+      const draft = {
+        name: data.name,
+        derivation: data.derivation,
+        baseType: 'bool',
+        initialValue: '',
+        dimensions: [],
+      } as PLCArrayDatatype
+      const res = createDatatype(draft)
+    }
+    if (data.derivation === 'enumerated') {
+      const draft = {
+        name: data.name,
+        derivation: data.derivation,
+        initialValue: '',
+        values: [],
+      } as PLCEnumeratedDatatype
+      const res = createDatatype(draft)
+    }
+    if (data.derivation === 'structure') {
+      const draft = {
+        name: data.name,
+        derivation: data.derivation,
+        variable: [],
+      } as PLCStructureDatatype
+      const res = createDatatype(draft)
+    }
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
+
   const handleMouseEnter = () => {
     setIsOpen(true)
   }
@@ -214,6 +234,15 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       />
                     </div>
                     <div id='form-button-container' className='flex w-full justify-between'>
+                      <Popover.Close asChild>
+                        <button
+                          type='button'
+                          className='h-7 w-[88px] rounded-md bg-neutral-100 font-caption text-cp-sm font-medium  !text-neutral-1000 hover:bg-neutral-200 dark:bg-white dark:hover:bg-neutral-100'
+                          onClick={handleCancelCreateElement}
+                        >
+                          Cancel
+                        </button>
+                      </Popover.Close>
                       <button
                         type='submit'
                         className={cn(
@@ -222,15 +251,6 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                       >
                         Create
                       </button>
-                      <Popover.Close asChild>
-                        <button
-                          type='button'
-                          className='h-7 w-[88px] rounded-md bg-neutral-100 font-caption text-cp-sm font-medium  !text-neutral-1000 hover:bg-neutral-200 dark:bg-white dark:hover:bg-neutral-100'
-                          onClick={handleCancelCreatePou}
-                        >
-                          Cancel
-                        </button>
-                      </Popover.Close>
                     </div>
                   </form>
                 </div>
@@ -334,7 +354,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                         <button
                           type='button'
                           className='h-7 w-[88px] rounded-md bg-neutral-100 font-caption text-cp-sm font-medium  !text-neutral-1000 hover:bg-neutral-200 dark:bg-white dark:hover:bg-neutral-100'
-                          onClick={handleCancelCreatePou}
+                          onClick={handleCancelCreateElement}
                         >
                           Cancel
                         </button>

@@ -1,10 +1,14 @@
-import { PLCGlobalVariable, PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCGlobalVariable, PLCStructureVariable, PLCVariable } from '@root/types/PLC/open-plc'
 
 import { ProjectResponse } from '../types'
 
 /**
  * This is a validation to check if the variable name already exists.
  **/
+
+const checkIfStructureVariableExists = (variables: PLCStructureVariable[], name: string) => {
+  return variables.some((variable) => variable.name === name)
+}
 const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
   return variables.some((variable) => variable.name === name)
 }
@@ -31,7 +35,26 @@ const variableNameValidation = (variableName: string) => {
  *
  * It is exported to be used at array-modal.tsx file present at src/renderer/components/_molecules/variables-table/elements.
  */
+const enumeratedValidation = ({ value }: { value: string }) => {
+  const regex =
+    /^([a-zA-Z0-9]+(?:[A-Z][a-z0-9]*)*)|([A-Z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)|([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*)$/
+  if (value === '') {
+    return {
+      ok: false,
+      title: 'Invalid enumerated value',
+      message: `The enumerated value can not be empty.`,
+    }
+  }
 
+  if (!regex.test(value)) {
+    return {
+      ok: false,
+      title: 'Invalid enumerated value',
+      message: `The enumerated value "${value}" is invalid. Valid names: CamelCase, PascalCase or SnakeCase.`,
+    }
+  }
+  return { ok: true }
+}
 const validateArrayValue = (value: string) => {
   const [left, right] = value.split('..').map(Number)
   return Number.isInteger(left) && Number.isInteger(right) && left < right
@@ -231,6 +254,47 @@ const createVariableValidation = (
  * If the variable name is invalid, create a response.
  * If the variable name already exists, create or change a response.
  **/
+
+const updateStructureVariableValidation = (
+  variables: PLCStructureVariable[],
+  dataToBeUpdated: Partial<PLCStructureVariable>,
+) => {
+  let response: ProjectResponse = { ok: true }
+
+  if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
+    const { name } = dataToBeUpdated
+    if (name === '') {
+      console.error('Variable name is empty')
+      response = {
+        ok: false,
+        title: 'Variable name is empty.',
+        message: 'Please make sure that the name is not empty.',
+      }
+      return response
+    }
+
+    if (checkIfStructureVariableExists(variables, name)) {
+      console.error(`Variable "${name}" already exists`)
+      response = {
+        ok: false,
+        title: 'Variable already exists',
+        message: 'Please make sure that the name is unique.',
+      }
+      return response
+    }
+
+    if (!variableNameValidation(name)) {
+      console.error(`Variable "${name}" name is invalid`)
+      response = {
+        ok: false,
+        title: 'Variable name is invalid.',
+        message: 'Please make sure that the name is valid.',
+      }
+      return response
+    }
+  }
+}
+
 const updateVariableValidation = (
   variables: PLCVariable[],
   dataToBeUpdated: Partial<PLCVariable>,
@@ -369,6 +433,8 @@ export {
   arrayValidation,
   createGlobalVariableValidation,
   createVariableValidation,
+  enumeratedValidation,
   updateGlobalVariableValidation,
+  updateStructureVariableValidation,
   updateVariableValidation,
 }

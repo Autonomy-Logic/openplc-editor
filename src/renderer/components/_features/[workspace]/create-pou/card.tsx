@@ -18,6 +18,11 @@ type ICardProps = {
   closeContainer: Dispatch<SetStateAction<boolean>>
 }
 
+type DatatypeProps = {
+  name: string
+  derivation: 'array' | 'structure' | 'enumerated'
+}
+
 type IPouFormProps = {
   type: 'function' | 'function-block' | 'program'
   name: string
@@ -42,7 +47,8 @@ const Card = (props: ICardProps): ReactNode => {
 
   const submitData: SubmitHandler<IPouFormProps> = (data) => {
     try {
-      const pouWasCreated = create.pou(data)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const pouWasCreated = create(data)
       if (!pouWasCreated) throw new TypeError()
       toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
       closeContainer((prev) => !prev)
@@ -59,9 +65,13 @@ const Card = (props: ICardProps): ReactNode => {
     setIsOpen(false)
   }
 
-  const handleCreateDatatype = (derivation: 'enumerated' | 'structure' | 'array') => {
-    const data = CreateDatatypeObject(derivation)
-    createDatatype(data)
+  const handleCreateDatatype = (derivation: DatatypeProps['derivation']): void => {
+    const data: DatatypeProps = {
+      name: 'DefaultName',
+      derivation,
+    }
+    const createdData = CreateDatatypeObject(data)
+    createDatatype({ data: createdData })
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }

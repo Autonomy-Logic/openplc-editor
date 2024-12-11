@@ -37,6 +37,12 @@ export const createTabsSlice: StateCreator<TabsSlice, [], [], TabsSlice> = (setS
         }),
       )
     },
+    updateTabName: (oldName: string, newName: string) => {
+      setState((state) => {
+        const updatedTabs = state.tabs.map((tab) => (tab.name === oldName ? { ...tab, name: newName } : tab))
+        return { ...state, tabs: updatedTabs }
+      })
+    },
     clearTabs: () => {
       setState(
         produce((slice: TabsSlice) => {

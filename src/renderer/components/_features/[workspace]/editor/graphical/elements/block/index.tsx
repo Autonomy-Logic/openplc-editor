@@ -16,10 +16,11 @@ import {
   ModalTitle,
   // ModalTrigger,
 } from '@root/renderer/components/_molecules'
+import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
 import { PLCPou } from '@root/types/PLC/open-plc'
-import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import ArrowButtonGroup from '../arrow-button-group'
@@ -27,7 +28,6 @@ import { ModalBlockLibrary } from './library'
 
 type BlockElementProps<T> = {
   isOpen: boolean
-  onOpenChange: Dispatch<SetStateAction<boolean>>
   onClose?: () => void
   selectedNode: BlockNode<T>
 }
@@ -57,18 +57,20 @@ const searchLibraryByPouName = (
   return libraryBlock
 }
 
-const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selectedNode }: BlockElementProps<T>) => {
+const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: BlockElementProps<T>) => {
   const {
     editor,
     editorActions: { updateModelVariables },
     flows,
-    flowActions: { updateEdge, updateNode },
+    flowActions: { setNodes, setEdges },
     project: {
       data: { pous },
     },
     projectActions: { updateVariable, deleteVariable },
     libraries,
+    modalActions: { onOpenChange },
   } = useOpenPLCStore()
+
   const maxInputs = 20
 
   const inputNameRef = useRef<HTMLInputElement>(null)
@@ -198,7 +200,9 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       inputs: String(
         Math.max(
           Number(prevState.inputs) - 1,
-          (selectedFile as BlockVariant).variables.filter((variable) => variable.class === 'input').length || 2,
+          (selectedFile &&
+            (selectedFile as BlockVariant).variables.filter((variable) => variable.class === 'input').length) ||
+            2,
         ),
       ),
     }))
@@ -381,37 +385,45 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
       }
     }
 
-    updateNode({
-      nodeId: selectedNode.id,
-      node: newNode,
-      editorName: editor.meta.name,
-      rungId: rung.id,
-    })
+    let newNodes = [...rung.nodes]
+    let newEdges = [...rung.edges]
+
+    newNodes = newNodes.map((n) => (n.id === node.id ? newNode : n))
+
     edges.source?.forEach((edge) => {
-      updateEdge({
-        editorName: editor.meta.name,
-        rungId: rung.id,
-        edgeId: edge.id,
-        edge: {
-          ...edge,
-          id: edge.id.replace(node.id, newNode.id),
-          source: newNode.id,
-          sourceHandle: newNode.data.outputConnector.id,
-        },
-      })
+      const newEdge = {
+        ...edge,
+        id: edge.id.replace(node.id, newNode.id),
+        source: newNode.id,
+        sourceHandle: newNode.data.outputConnector.id,
+      }
+      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
     edges.target?.forEach((edge) => {
-      updateEdge({
-        editorName: editor.meta.name,
-        rungId: rung.id,
-        edgeId: edge.id,
-        edge: {
-          ...edge,
-          id: edge.id.replace(node.id, newNode.id),
-          target: newNode.id,
-          targetHandle: newNode.data.inputConnector.id,
-        },
-      })
+      const newEdge = {
+        ...edge,
+        id: edge.id.replace(node.id, newNode.id),
+        target: newNode.id,
+        targetHandle: newNode.data.inputConnector.id,
+      }
+      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
+    })
+
+    const { nodes: variableNodes, edges: variableEdges } = updateVariableBlockPosition({
+      ...rung,
+      nodes: newNodes,
+      edges: newEdges,
+    })
+
+    setNodes({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodes: variableNodes,
+    })
+    setEdges({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      edges: variableEdges,
     })
 
     handleCloseModal()
@@ -422,11 +434,17 @@ const BlockElement = <T extends object>({ isOpen, onOpenChange, onClose, selecte
     'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
 
   return (
-    <Modal open={isOpen} onOpenChange={onOpenChange}>
+    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('block-ladder-element', open)}>
       {/* <ModalTrigger>Open</ModalTrigger> */}
       <ModalContent
-        onEscapeKeyDown={handleCloseModal}
-        onInteractOutside={handleCloseModal}
+        onEscapeKeyDown={(event) => {
+          event.preventDefault()
+          handleCloseModal()
+        }}
+        onPointerDownOutside={(event) => {
+          event.preventDefault()
+          handleCloseModal()
+        }}
         className='h-[739px] w-[625px] select-none flex-col gap-8 px-14 py-4'
       >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Block Properties</ModalTitle>

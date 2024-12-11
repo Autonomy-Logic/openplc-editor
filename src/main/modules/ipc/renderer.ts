@@ -1,130 +1,150 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
-import { ipcRenderer, IpcRendererEvent } from 'electron'
+import {ipcRenderer, IpcRendererEvent} from 'electron'
 
-import { PLCProject } from '../../../types/PLC/open-plc'
-import { IProjectServiceResponse } from '../../services/project-service'
-import { CreateProjectFile } from '../../services/project-service/utils'
+import {ProjectState} from "../../../renderer/store/slices";
+import {PLCProject} from '../../../types/PLC/open-plc'
+import {IProjectServiceResponse} from '../../services/project-service'
+import {CreateProjectFile} from '../../services/project-service/utils'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
 type IDataToWrite = {
-  projectPath: string
-  projectData: PLCProject
+    projectPath: string
+    projectData: PLCProject
 }
 
 type ISaveDataResponse = {
-  success: boolean
-  reason: {
-    title: string
-    description: string
-  }
+    success: boolean
+    reason: {
+        title: string
+        description: string
+    }
 }
 
 type CreateProjectFileProps = {
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
-  time: string
-  type: 'plc-project' | 'plc-library'
-  name: string
-  path: string
+    language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+    time: string
+    type: 'plc-project' | 'plc-library'
+    name: string
+    path: string
 }
 type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
 
 const rendererProcessBridge = {
-  /**
-   * Handlers for creating projects.
-   * As for the click and for the accelerator type.
-   */
+    /**
+     * Handlers for creating projects.
+     * As for the click and for the accelerator type.
+     */
 
-  createProjectAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:create-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+    createProjectAccelerator: (callback: IpcRendererCallbacks) =>
+        ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
 
-  createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
-  createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> =>
-    ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
+    createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
+    createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> =>
+        ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
 
-  /**
-   * Path picker
-   */
+    /**
+     * Path picker
+     */
 
-  pathPicker: (): Promise<
-    | {
+    pathPicker: (): Promise<
+        | {
         success: boolean
         error: {
-          title: string
-          description: string
+            title: string
+            description: string
         }
         path?: undefined
-      }
-    | {
+    }
+        | {
         success: boolean
         path: string
         error?: undefined
-      }
-  > => ipcRenderer.invoke('project:path-picker'),
+    }
+    > => ipcRenderer.invoke('project:path-picker'),
 
-  /**
-   * Handlers for opening projects.
-   * As for the click and for the accelerator type.
-   */
-  openProjectAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+    /**
+     * Handlers for opening projects.
+     * As for the click and for the accelerator type.
+     */
+    openProjectAccelerator: (callback: IpcRendererCallbacks) =>
+        ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
 
-  openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
-  openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
-    ipcRenderer.invoke('project:open-by-path', projectPath),
-  openRecentAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
-  openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> => ipcRenderer.invoke('open-external-link', link),
-  /**
-   * Handlers for opening projects.
-   * As for the click and for the accelerator type.
-   */
-  saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
-  saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
-    ipcRenderer.invoke('project:save', dataToWrite),
-  closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
-  closeProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-project-accelerator', callback),
-  deletePouAccelerator:(callback:IpcRendererCallbacks) => ipcRenderer.on('workspace:delete-pou-accelerator', callback),
-  switchPerspective:(callback:IpcRendererCallbacks) => ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
-  removeDeletePouListener: ()=> ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
-  removeCloseTabListener: ()=> ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
-  findInProjectAccelerator:(callback:IpcRendererCallbacks) => ipcRenderer.on('project:find-in-project-accelerator', callback),
-  aboutModalAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('about:open-accelerator', callback),
-  aboutAccelerator:(callback:IpcRendererCallbacks) => ipcRenderer.on('website:about-accelerator', callback),
-  /** -------------------------------------------------------------------------------------------- */
-  // saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
-  getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
-  setStoreValue: (key: string, val: string) => ipcRenderer.send('app:store-set', key, val),
-  /**
-   * Send the OS information to the renderer process
-   * !IMPORTANT: This return type must be refactored to match the Node.js API
-   */
-  getRecents: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
-  getSystemInfo: (): Promise<{
-    OS: 'linux' | 'darwin' | 'win32' | ''
-    architecture: 'x64' | 'arm' | ''
-    prefersDarkMode: boolean
-    isWindowMaximized: boolean
-  }> => ipcRenderer.invoke('system:get-system-info'),
-  retrieveRecents: (): Promise<{ path: string; lastOpenedAt: string; createdAt: string }[]> =>
-    ipcRenderer.invoke('app:store-retrieve-recents'),
-  closeWindow: () => ipcRenderer.send('window-controls:close'),
-  minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
-  maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
-  isMaximizedWindow: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('window-controls:toggle-maximized', (_event) => callback(_event)),
-  reloadWindow: () => ipcRenderer.send('window:reload'),
-  handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
-  winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
+    openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
+    openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
+        ipcRenderer.invoke('project:open-by-path', projectPath),
+    openRecentAccelerator: (callback: IpcRendererCallbacks) =>
+        ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+    openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> =>
+        ipcRenderer.invoke('open-external-link', link),
+    /**
+     * Handlers for opening projects.
+     * As for the click and for the accelerator type.
+     */
+    saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
+    saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
+        ipcRenderer.invoke('project:save', dataToWrite),
+    closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
+    closeProjectAccelerator: (callback: IpcRendererCallbacks) =>
+        ipcRenderer.on('workspace:close-project-accelerator', callback),
+    deletePouAccelerator: (callback: IpcRendererCallbacks) =>
+        ipcRenderer.on('workspace:delete-pou-accelerator', callback),
+    switchPerspective: (callback: IpcRendererCallbacks) =>
+        ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
+    removeDeletePouListener: () => ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
+    removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
+    findInProjectAccelerator: (callback: IpcRendererCallbacks) =>
+        ipcRenderer.on('project:find-in-project-accelerator', callback),
+    aboutModalAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('about:open-accelerator', callback),
+    aboutAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('website:about-accelerator', callback),
+    /** -------------------------------------------------------------------------------------------- */
+    // saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
+    getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
+    setStoreValue: (key: string, val: string) => ipcRenderer.send('app:store-set', key, val),
+    /**
+     * Send the OS information to the renderer process
+     * !IMPORTANT: This return type must be refactored to match the Node.js API
+     */
+    getRecents: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
+    getSystemInfo: (): Promise<{
+        OS: 'linux' | 'darwin' | 'win32' | ''
+        architecture: 'x64' | 'arm' | ''
+        prefersDarkMode: boolean
+        isWindowMaximized: boolean
+    }> => ipcRenderer.invoke('system:get-system-info'),
+    retrieveRecents: (): Promise<{ path: string; lastOpenedAt: string; createdAt: string }[]> =>
+        ipcRenderer.invoke('app:store-retrieve-recents'),
+    closeWindow: () => ipcRenderer.send('window-controls:close'),
+    minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
+    maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),
+    isMaximizedWindow: (callback: IpcRendererCallbacks) =>
+        ipcRenderer.on('window-controls:toggle-maximized', (_event) => callback(_event)),
+    reloadWindow: () => ipcRenderer.send('window:reload'),
+    handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
+    winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
 
-  // WIP: Refactoring
-  // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),
-  // createPou: (callback: any) => ipcRenderer.on('pou:create', callback),
+    // WIP: Refactoring
+    // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),
+    // createPou: (callback: any) => ipcRenderer.on('pou:create', callback),
 
-  /**
-   * Compiler Service
-   */
-  writeXMLFile: (path: string, data: string, fileName: string) =>
-    ipcRenderer.invoke('compiler:write-xml-file', { path, data, fileName }),
+    /**
+     * Compiler Service
+     */
+    createBuildDirectory: async (pathToUserProject: string): Promise<{success: boolean, message: string}> => ipcRenderer.invoke('compiler:create-build-directory', pathToUserProject),
+    createXmlFileToBuild: async (pathToUserProject: string, dataToCreateXml: ProjectState['data']):  Promise<{success: boolean, message: string}> => ipcRenderer.invoke('compiler:create-xml-file', pathToUserProject, dataToCreateXml),
+    /**
+     * This is a mock implementation to be used as a presentation.
+     * !! Do not use this on production !!
+     */
+    // @ts-expect-error Callback is from an any type
+    compileRequest: (xmlPath: string, callback) => {
+        const {port1: rendererProcessPort, port2: mainProcessPort} = new MessageChannel
+
+        ipcRenderer.postMessage('compiler:build-st-program', xmlPath, [mainProcessPort])
+
+        rendererProcessPort.onmessage = (event) => callback(event.data)
+
+        rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
+    }
 }
 export default rendererProcessBridge

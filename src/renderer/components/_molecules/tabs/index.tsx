@@ -11,11 +11,11 @@ const Tabs = () => {
   const {
     tabs,
     editor,
-    tabsActions: { sortTabs},
-    projectActions: {
-      deletePou
-    },
+    tabsActions: { sortTabs },
+    projectActions: { deletePou },
     editorActions: { setEditor, getEditorFromEditors },
+    flowActions: { removeFlow },
+    libraryActions: { removeUserLibrary },
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const hasTabs = tabs.length > 0
@@ -44,10 +44,11 @@ const Tabs = () => {
     setEditor(candidate)
   }
 
-
-  const handleDeletePou =(pouName: string) => {
+  const handleDeletePou = (pouName: string) => {
     handleRemoveTab(pouName)
     deletePou(pouName)
+    removeFlow(pouName)
+    removeUserLibrary(pouName)
   }
 
   const handleDragStart = ({ tab, idx }: { tab: TabsProps; idx: number }) => {
@@ -62,15 +63,17 @@ const Tabs = () => {
   useEffect(() => {
     setSelectedTab(editor.meta.name)
   }, [editor.meta.name])
-  
+
+  useEffect(() => {}, [tabs])
+
   useEffect(() => {
     window.bridge.closeTabAccelerator((_event) => handleRemoveTab(selectedTab))
     window.bridge.deletePouAccelerator((_event) => handleDeletePou(selectedTab))
     return () => {
-     void window.bridge.removeCloseTabListener(); 
-     void window.bridge.removeDeletePouListener();
-    };
-  });
+      void window.bridge.removeCloseTabListener()
+      void window.bridge.removeDeletePouListener()
+    }
+  })
 
   return (
     <TabList>

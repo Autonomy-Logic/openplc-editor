@@ -23,10 +23,13 @@ const WorkspaceMainContent = (props: IWorkspaceMainContentProps) => {
     // Bad code! - this is only for development purpose
     if (pous.length !== 0) {
       const handleCreateTab = () => {
+        const mainPou = pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
+        if (!mainPou) return
+
         const tabToBeCreated: TabsProps = {
-          name: pous[0].data.name,
+          name: mainPou.data.name,
           path: '/data/pous/program/main',
-          elementType: { type: 'program', language: pous[0].data.language },
+          elementType: { type: 'program', language: mainPou.data.language },
         }
         updateTabs(tabToBeCreated)
         const model = CreateEditorObjectFromTab(tabToBeCreated)

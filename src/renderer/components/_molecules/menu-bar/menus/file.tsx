@@ -1,11 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { FlowType } from '@root/renderer/store/slices/flow/types'
-import { PLCProjectSchema  } from '@root/types/PLC/open-plc'
+import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
@@ -25,6 +23,7 @@ export const FileMenu = () => {
     tabsActions: { clearTabs },
     flowActions: { addFlow },
     editor,
+    modalActions: { openModal },
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
@@ -39,7 +38,7 @@ export const FileMenu = () => {
   //       (event.ctrlKey && event.key === 'q' && editingState === 'unsaved') ||
   //       (event.cmd && event.key === 'o' && editingState === 'unsaved') ||
   //       (event.cmd && event.key === 'n' && editingState === 'unsaved') ||
-  //       (event.cmd && event.key === 'q' && editingState === 'unsaved') 
+  //       (event.cmd && event.key === 'q' && editingState === 'unsaved')
   //     ) {
   //       event.preventDefault()
   //       setModalOpen(true)
@@ -59,97 +58,93 @@ export const FileMenu = () => {
     if (editingState === 'unsaved' && discardChanges === false) {
       setModalOpen(true)
     }
-    if ( editingState === 'saved' || discardChanges === true ) {
-    const { success, data, error } = await window.bridge.createProject()
+    if (editingState === 'saved' || discardChanges === true) {
+      const { success, data } = await window.bridge.createProject()
       if (success && data) {
-      setProject({
-        meta: {
-          path: data.meta.path,
-          name: 'new-project',
-          type: 'plc-project',
-        },
-        data: data.content.data,
-      })
-      setEditingState('unsaved')
-      clearEditor()
-      clearTabs()
-      setEditingState('unsaved')
-      setRecents([])
-      setProject({
-        meta: {
-          name: 'new-project',
-          type: 'plc-project',
-          path: data.meta.path,
-        },
-        data: data.content.data,
-      })
-
-      toast({
-        title: 'The project was created successfully!',
-        description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
-        variant: 'default',
-      })
-    }
-    else   
-      toast({
-          title: 'Cannot create a project!',
-          description: error?.description,
+        setProject({
+          meta: {
+            path: data.meta.path,
+            name: 'new-project',
+            type: 'plc-project',
+          },
+          data: data.content.data,
+        })
+        setEditingState('unsaved')
+        clearEditor()
+        clearTabs()
+        setEditingState('unsaved')
+        setRecents([])
+        setProject({
+          meta: {
+            name: 'new-project',
+            type: 'plc-project',
+            path: data.meta.path,
+          },
+          data: data.content.data,
+        })
+      }
+      try {
+        openModal('create-project', null)
+      } catch (_error) {
+        toast({
+          title: 'Error',
+          description: 'Failed to open project creation modal',
           variant: 'fail',
         })
-  }
+      }
+    }
   }
 
   const handleOpenProject = async () => {
     if (editingState === 'unsaved' && discardChanges === false) {
       setModalOpen(true)
     }
-    if (editingState === 'saved'||  discardChanges === true) {
+    if (editingState === 'saved' || discardChanges === true) {
       const { success, data, error } = await window.bridge.openProject()
       if (success && data) {
-      setProject({
-        meta: {
-          path: data.meta.path,
-          name: 'new-project',
-          type: 'plc-project',
-        },
-        data: data.content.data,
-      })
-      setEditingState('unsaved')
-      clearEditor()
-      clearTabs()
-      setRecents([])
-      setProject({
-        meta: {
-          name: data.content.meta.name,
-          //@ts-expect-error overlap
-          type: data.content.meta.type,
-          path: data.meta.path,
-        },
-        data: data.content.data,
-      })
+        setProject({
+          meta: {
+            path: data.meta.path,
+            name: 'new-project',
+            type: 'plc-project',
+          },
+          data: data.content.data,
+        })
+        setEditingState('unsaved')
+        clearEditor()
+        clearTabs()
+        setRecents([])
+        setProject({
+          meta: {
+            name: data.content.meta.name,
+            //@ts-expect-error overlap
+            type: data.content.meta.type,
+            path: data.meta.path,
+          },
+          data: data.content.data,
+        })
 
-      const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
-      if (ladderPous.length > 0) {
-        ladderPous.forEach((pou) => {
-          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+        const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
+        if (ladderPous.length > 0) {
+          ladderPous.forEach((pou) => {
+            if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
+          })
+        }
+
+        toast({
+          title: 'Project opened!',
+          description: 'Your project was opened, and loaded.',
+          variant: 'default',
+        })
+      } else {
+        toast({
+          title: 'Cannot open the project.',
+          description: error?.description,
+          variant: 'fail',
         })
       }
-
-      toast({
-        title: 'Project opened!',
-        description: 'Your project was opened, and loaded.',
-        variant: 'default',
-      })
-    }
-    else {
-      toast({
-        title: 'Cannot open the project.',
-        description: error?.description,
-        variant: 'fail',
-      })
     }
   }
-}
 
   const handleSaveProject = async () => {
     const projectData = PLCProjectSchema.safeParse(project)
@@ -190,109 +185,109 @@ export const FileMenu = () => {
   }, [editor])
 
   const handleCloseProject = () => {
-  navigate('/')
+    navigate('/')
     clearEditor()
     clearTabs()
     setEditingState('unsaved')
     setRecents([])
   }
-  
 
   return (
-    <MenuPrimitive.Menu>
-      <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:file.label')}</MenuPrimitive.Trigger>
-      <MenuPrimitive.Portal>
-        <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
-          <MenuPrimitive.Item className={ITEM} onClick={() => void handleCreateProject()}>
-            <span>{i18n.t('menu:file.submenu.new')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + N'}</span>
-          </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} onClick={() => void handleOpenProject()}>
-            <span>{i18n.t('menu:file.submenu.open')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + O'}</span>
-          </MenuPrimitive.Item>
-          <MenuPrimitive.Separator className={SEPARATOR} />
-          <MenuPrimitive.Item className={ITEM} onClick={() => void handleSaveProject()}>
-            <span>{i18n.t('menu:file.submenu.save')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + S'}</span>
-          </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
-            <span>{i18n.t('menu:file.submenu.saveAs')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + Shift + S'}</span>
-          </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} onClick={() => void handleRemoveTab(selectedTab)}>
-            <span>{i18n.t('menu:file.submenu.closeTab')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + W'}</span>
-          </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} onClick={() => void handleCloseProject()}>
-            <span>{i18n.t('menu:file.submenu.closeProject')}</span>
-            <span className={ACCELERATOR}>{'Ctrl  + W'}</span>
-          </MenuPrimitive.Item>
-          <MenuPrimitive.Separator className={SEPARATOR} />
-          <MenuPrimitive.Item className={ITEM} disabled>
-            <span>{i18n.t('menu:file.submenu.pageSetup')}</span>
-            <span className={ACCELERATOR}>"Ctrl + Alt + P"</span>
-          </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
-            <span>{i18n.t('menu:file.submenu.preview')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + Shift + P'}</span>
-          </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
-            <span>{i18n.t('menu:file.submenu.print')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + P'}</span>
-          </MenuPrimitive.Item>
-          <MenuPrimitive.Separator className={SEPARATOR} />
-          <MenuPrimitive.Item className={ITEM} disabled>
-            <span>{i18n.t('menu:file.submenu.updates')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + U'}</span>
-          </MenuPrimitive.Item>
-          <MenuPrimitive.Separator className={SEPARATOR} />
-          <MenuPrimitive.Item className={ITEM}>
-            <span>{i18n.t('menu:file.submenu.quit')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + Q'}</span>
-          </MenuPrimitive.Item>
-        </MenuPrimitive.Content>
-      </MenuPrimitive.Portal>
-      {modalOpen && (
-        <Modal open={modalOpen} onOpenChange={setModalOpen}>
-          <ModalContent
-            onClose={handleModalClose}
-            className='flex max-h-80 flex w-[340px] select-none flex-col justify-evenly rounded-lg items-center'
-          >
-            <p className='text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100'>
-            Do you want to save the changes you made at this file?
-            </p>
+    <>
+      <MenuPrimitive.Menu>
+        <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:file.label')}</MenuPrimitive.Trigger>
+        <MenuPrimitive.Portal>
+          <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
+            <MenuPrimitive.Item className={ITEM} onClick={() => void handleCreateProject()}>
+              <span>{i18n.t('menu:file.submenu.new')}</span>
+              <span className={ACCELERATOR}>{'Ctrl + N'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item className={ITEM} onClick={() => void handleOpenProject()}>
+              <span>{i18n.t('menu:file.submenu.open')}</span>
+              <span className={ACCELERATOR}>{'Ctrl + O'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Separator className={SEPARATOR} />
+            <MenuPrimitive.Item className={ITEM} onClick={() => void handleSaveProject()}>
+              <span>{i18n.t('menu:file.submenu.save')}</span>
+              <span className={ACCELERATOR}>{'Ctrl + S'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item className={ITEM} disabled>
+              <span>{i18n.t('menu:file.submenu.saveAs')}</span>
+              <span className={ACCELERATOR}>{'Ctrl + Shift + S'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item className={ITEM} onClick={() => void handleRemoveTab(selectedTab)}>
+              <span>{i18n.t('menu:file.submenu.closeTab')}</span>
+              <span className={ACCELERATOR}>{'Ctrl + W'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item className={ITEM} onClick={() => void handleCloseProject()}>
+              <span>{i18n.t('menu:file.submenu.closeProject')}</span>
+              <span className={ACCELERATOR}>{'Ctrl  + W'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Separator className={SEPARATOR} />
+            <MenuPrimitive.Item className={ITEM} disabled>
+              <span>{i18n.t('menu:file.submenu.pageSetup')}</span>
+              <span className={ACCELERATOR}>"Ctrl + Alt + P"</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item className={ITEM} disabled>
+              <span>{i18n.t('menu:file.submenu.preview')}</span>
+              <span className={ACCELERATOR}>{'Ctrl + Shift + P'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item className={ITEM} disabled>
+              <span>{i18n.t('menu:file.submenu.print')}</span>
+              <span className={ACCELERATOR}>{'Ctrl + P'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Separator className={SEPARATOR} />
+            <MenuPrimitive.Item className={ITEM} disabled>
+              <span>{i18n.t('menu:file.submenu.updates')}</span>
+              <span className={ACCELERATOR}>{'Ctrl + U'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Separator className={SEPARATOR} />
+            <MenuPrimitive.Item className={ITEM}>
+              <span>{i18n.t('menu:file.submenu.quit')}</span>
+              <span className={ACCELERATOR}>{'Ctrl + Q'}</span>
+            </MenuPrimitive.Item>
+          </MenuPrimitive.Content>
+        </MenuPrimitive.Portal>
+        {modalOpen && (
+          <Modal open={modalOpen} onOpenChange={setModalOpen}>
+            <ModalContent
+              onClose={handleModalClose}
+              className='flex flex max-h-80 w-[340px] select-none flex-col items-center justify-evenly rounded-lg'
+            >
+              <p className='text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100'>
+                Do you want to save the changes you made at this file?
+              </p>
 
-            <div className='flex flex-col w-[200px] space-y-2 text-sm'>
-            <button
-                onClick={() => {
-                  void handleSaveProject()
-                  handleModalClose()
-                }}
-                className='w-full py-2 rounded-lg bg-blue-500 text-center px-4 font-medium text-neutral-1000 dark:text-neutral-100'
-              >
-                Save
-              </button>
-              <button
-                onClick={() => {
-                  setDiscardChanges(true)
-                  handleModalClose()
-                }}
-                className='w-full py-2 rounded-md px-4 dark:bg-neutral-850 dark:text-neutral-100'
-              >
-                Discart changes
-              </button>
-              <button
-                onClick={handleModalClose}
-                className='w-full py-2 rounded-md px-4 dark:bg-neutral-850 px-4 dark:text-neutral-100'
-              >
-                Cancel
-              </button>
-             
-            </div>
-          </ModalContent>
-        </Modal>
-      )}
-    </MenuPrimitive.Menu>
+              <div className='flex w-[200px] flex-col space-y-2 text-sm'>
+                <button
+                  onClick={() => {
+                    void handleSaveProject()
+                    handleModalClose()
+                  }}
+                  className='w-full rounded-lg bg-blue-500 px-4 py-2 text-center font-medium text-neutral-1000 dark:text-neutral-100'
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setDiscardChanges(true)
+                    handleModalClose()
+                  }}
+                  className='w-full rounded-md px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100'
+                >
+                  Discart changes
+                </button>
+                <button
+                  onClick={handleModalClose}
+                  className='w-full rounded-md px-4 px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100'
+                >
+                  Cancel
+                </button>
+              </div>
+            </ModalContent>
+          </Modal>
+        )}
+      </MenuPrimitive.Menu>
+    </>
   )
 }

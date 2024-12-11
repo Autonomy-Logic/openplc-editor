@@ -12,7 +12,9 @@ export const EditMenu = () => {
   const {
     editor,
     projectActions: { deletePou },
-    workspaceActions: { setModalOpen },
+    // workspaceActions: { setModalOpen },
+    flowActions: { removeFlow },
+    libraryActions: { removeUserLibrary },
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
@@ -25,13 +27,15 @@ export const EditMenu = () => {
   const handleDeletePou = () => {
     handleRemoveTab(selectedTab)
     deletePou(selectedTab)
+    removeFlow(selectedTab)
+    removeUserLibrary(selectedTab)
   }
 
   const handleCloseModal = () => {
     setModalDeleteOpen(false)
   }
   const findInProject = () => {
-    setModalOpen('findInProject', true)
+    // setModalOpen('findInProject', true)
   }
 
   return (

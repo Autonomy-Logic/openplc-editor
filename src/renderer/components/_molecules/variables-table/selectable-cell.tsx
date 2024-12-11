@@ -1,5 +1,6 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { ArrowIcon, DebuggerIcon } from '@root/renderer/assets'
+import { useOpenPLCStore } from '@root/renderer/store'
 import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { baseTypeSchema } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
@@ -12,17 +13,6 @@ import { ArrayModal } from './elements/array-modal'
 
 type ISelectableCellProps = CellContext<PLCVariable, unknown> & { editable?: boolean }
 
-const VariableTypes = [
-  {
-    definition: 'base-type',
-    values: baseTypeSchema.options,
-  },
-  {
-    definition: 'user-data-type',
-    values: ['userDt1', 'userDt2', 'userDt3'],
-  },
-]
-
 const SelectableTypeCell = ({
   getValue,
   row: { index },
@@ -30,6 +20,20 @@ const SelectableTypeCell = ({
   table,
   editable = true,
 }: ISelectableCellProps) => {
+  const {
+    project: {
+      data: { dataTypes },
+    },
+  } = useOpenPLCStore()
+
+  const VariableTypes = [
+    {
+      definition: 'base-type',
+      values: baseTypeSchema.options,
+    },
+    { definition: 'user-data-type', values: dataTypes.map((dataType) => dataType.name) },
+  ]
+
   const { value, definition } = getValue<PLCVariable['type']>()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState<PLCVariable['type']['value']>(value)

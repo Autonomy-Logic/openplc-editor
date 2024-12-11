@@ -62,9 +62,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-
     setModalOpen: (modalName: string, modalState: boolean): void => {
-      console.log(modalName, modalState)
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           const modalIndex = workspace.isModalOpen.findIndex((modal) => modal.modalName === modalName)
@@ -77,7 +75,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-  },
+   },
 })
 
 export { createWorkspaceSlice }

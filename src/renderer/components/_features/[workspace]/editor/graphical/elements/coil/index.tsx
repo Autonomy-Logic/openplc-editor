@@ -1,20 +1,24 @@
 import { CoilNode, DEFAULT_COIL_TYPES } from '@root/renderer/components/_atoms/react-flow/custom-nodes/coil'
+import { getPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils'
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { Dispatch, SetStateAction, useState } from 'react'
+import { useState } from 'react'
 
 type CoilElementProps = {
   isOpen: boolean
-  onOpenChange: Dispatch<SetStateAction<boolean>>
   onClose?: () => void
   node: CoilNode
-  rungId: string
 }
 
-const CoilElement = ({ isOpen, onOpenChange, onClose, node, rungId }: CoilElementProps) => {
+const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
   const {
     editor,
+    flows,
+    project: {
+      data: { pous },
+    },
     flowActions: { updateNode },
+    modalActions: { onOpenChange },
   } = useOpenPLCStore()
 
   const [selectedModifier, setSelectedModifier] = useState<string | null>(node?.data.variant as string)
@@ -35,9 +39,14 @@ const CoilElement = ({ isOpen, onOpenChange, onClose, node, rungId }: CoilElemen
   }
 
   const handleConfirmAlteration = () => {
+    const { rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      nodeId: node.id,
+    })
+    if (!rung) return
+
     updateNode({
       editorName: editor.meta.name,
-      rungId,
+      rungId: rung.id,
       nodeId: node.id,
       node: {
         ...node,
@@ -51,10 +60,16 @@ const CoilElement = ({ isOpen, onOpenChange, onClose, node, rungId }: CoilElemen
   }
 
   return (
-    <Modal open={isOpen} onOpenChange={onOpenChange}>
+    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('coil-ladder-element', open)}>
       <ModalContent
-        onEscapeKeyDown={handleCloseModal}
-        onInteractOutside={handleCloseModal}
+        onEscapeKeyDown={(event) => {
+          event.preventDefault()
+          handleCloseModal()
+        }}
+        onPointerDownOutside={(event) => {
+          event.preventDefault()
+          handleCloseModal()
+        }}
         className='h-[400px] w-[468px] select-none flex-col justify-between px-8 py-4'
       >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Edit Coil Values</ModalTitle>

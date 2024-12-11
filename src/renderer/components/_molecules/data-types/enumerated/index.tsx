@@ -1,78 +1,73 @@
-import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
-import { Table, TableBody} from '@root/renderer/components/_atoms'
-import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
-import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCDataType } from '@root/types/PLC/open-plc'
-import { useEffect, useState } from 'react'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
+import _ from 'lodash'
+import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
-import { EnumeratorDTInitialValueContainer } from './initial-value'
+import { EnumeratedTable } from './table'
 
-const EnumeratorDataType = () => {
-  const {
-    project: {
-      data: { dataTypes },
-    },
-  } = useOpenPLCStore()
-
-  const [dataTypesState, setDataTypesState] = useState<PLCDataType>()
+type EnumDatatypeProps = ComponentPropsWithoutRef<'div'> & {
+  data: PLCEnumeratedDatatype
+}
+const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
+  const [initialValueData, setInitialValueData] = useState<string>('')
 
   useEffect(() => {
-    const enumeratedDataType = dataTypes.find((dataType) => dataType.derivation === 'enumerated')
-    setDataTypesState(enumeratedDataType)
-  }, [dataTypes])
-
-  useEffect(() => {
-    console.log('enumerated data type', dataTypesState)
-  }, [dataTypesState])
+    setInitialValueData(data.initialValue || '')
+  }, [])
 
   return (
-    <div aria-label='Enumerate data type container' className='flex h-full w-full flex-col gap-4 bg-transparent'>
-      <div aria-label='Data type content actions container' className='flex h-fit w-full gap-8'>
-        <div
-          aria-label='Enum data type table actions container'
-          className='flex h-full w-1/2 items-center justify-between'
-        >
-          <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
-            Values
-          </p>
+    <div
+      aria-label='Enumerated data type container'
+      className='flex h-full w-full flex-1 flex-col gap-4 overflow-hidden bg-transparent'
+      {...rest}
+    >
+      <div aria-label='Data type content actions container' className='flex h-8 w-full gap-8'>
+        <div aria-label='Enumerated base type container' className='flex w-1/2 flex-col gap-3'></div>
+        <div aria-label='Enumerated initial value container' className='w-1/2'>
           <div
-            aria-label='Data type table actions buttons container'
-            className='flex h-full w-fit items-center justify-evenly *:rounded-md *:p-1'
+            aria-label='Enumerated data type initial value container'
+            className='h- flex w-full items-center justify-end'
           >
-            <TableActionButton aria-label='Add table row button' onClick={() => console.log('Button clicked')}>
-              <PlusIcon className='!stroke-brand' />
-            </TableActionButton>
-            <TableActionButton aria-label='Remove table row button' onClick={() => console.log('Button clicked')}>
-              <MinusIcon />
-            </TableActionButton>
-            <TableActionButton aria-label='Move table row up button' onClick={() => console.log('Button clicked')}>
-              <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
-            </TableActionButton>
-            <TableActionButton aria-label='Move table row down button' onClick={() => console.log('Button clicked')}>
-              <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
-            </TableActionButton>
+            <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100 '>
+              Initial Value:
+            </label>
+            <Select
+              onValueChange={(value) => (value === 'none' ? setInitialValueData('') : setInitialValueData(value))}
+              value={initialValueData === '' ? '' : initialValueData}
+            >
+              <SelectTrigger
+                withIndicator
+                className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 focus-within:border-brand focus:border-brand focus:outline-none dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
+              >
+                {initialValueData === '' ? '' : initialValueData}
+              </SelectTrigger>
+              <SelectContent className='box h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'>
+                <SelectItem
+                  value='none'
+                  className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  onClick={() => setInitialValueData('')}
+                >
+                  <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'></span>
+                </SelectItem>
+                {data.values.map((value) => (
+                  <SelectItem
+                    key={value.description}
+                    value={value.description}
+                    className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                    onClick={() => setInitialValueData(value.description)}
+                  >
+                    <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                      {value.description}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </div>
-        <div className='w-1/2'>
-          <EnumeratorDTInitialValueContainer />
         </div>
       </div>
 
-      <Table aria-label='Enumerated data type table' className='w-1/2'>
-        <TableBody>
-          {dataTypesState?.derivation === 'enumerated' &&
-          <p>Derivation Editor</p>
-            // dataTypesState.derivation.values.map((dimension, index) => (
-            //   <TableRow
-            //     key={index}
-            //     className='[&:first-child>*]:rounded-t-md [&:first-child>*]:border-t [&:first-child>*]:border-t-neutral-500'
-            //   >
-            //     <TableCell className='p-2'>{dimension}</TableCell>
-            //   </TableRow>
-            // ))
-            }
-        </TableBody>
-      </Table>
+      <EnumeratedTable name={data.name} values={data.values} initialValue={initialValueData} />
     </div>
   )
 }

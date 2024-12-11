@@ -16,10 +16,21 @@ type ActivityBarProps = {
 
 export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) => {
   const navigate = useNavigate()
-  const { editor } = useOpenPLCStore()
+  const {
+    editor,
+    libraryActions: { clearUserLibraries },
+    flowActions: { clearFlows },
+    projectActions: { clearProjects },
+  } = useOpenPLCStore()
 
   const isLadderEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'ld'
 
+  const handleExitApplication = () => {
+    clearUserLibraries()
+    clearFlows()
+    clearProjects()
+    navigate('/')
+  }
   return (
     <>
       <div className='my-5 flex h-fit w-full flex-col items-center gap-10'>
@@ -32,7 +43,7 @@ export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) =
         )}
       </div>
       <div className='flex h-7 w-full flex-col gap-6'>
-        <ExitButton onClick={() => navigate('/')} />
+        <ExitButton onClick={handleExitApplication} />
       </div>
     </>
   )
