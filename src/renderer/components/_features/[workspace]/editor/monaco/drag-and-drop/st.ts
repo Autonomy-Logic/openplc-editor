@@ -22,5 +22,5 @@ export const parsePouToStText = (pou: {
     })
   const lastOutputVariable = outputVariables.pop()
 
-  return `${pou.name} (\n\t${inputVariables.length > 0 ? inputVariables.join(',\n\t') + ',\n\t' : ''}${outputVariables.length > 0 ? outputVariables.join(',\n\t') + ',\n\t' : ''}${lastOutputVariable}\n);`
+  return `${pou.name} (\n${inputVariables.length > 0 ? '    ' + inputVariables.join(',\n    ') + ',\n' : ''}${outputVariables.length > 0 ? '    ' + outputVariables.join(',\n    ') + ',\n' : ''}    ${lastOutputVariable}\n);`
 }
