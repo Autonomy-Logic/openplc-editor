@@ -21,7 +21,7 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
           body:
             language === 'ld'
               ? { language, value: { name, rungs: [] } }
-              : { language, value: 'This is the body of function' },
+              : { language, value: '' },
           returnType: 'BOOL',
           variables: [],
           documentation: 'Doc for function',
@@ -36,7 +36,7 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
           body:
             language === 'ld'
               ? { language, value: { name, rungs: [] } }
-              : { language, value: 'This is the body of function' },
+              : { language, value: '' },
           variables: [],
           documentation: 'Doc for function block',
         },
@@ -50,7 +50,7 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
           body:
             language === 'ld'
               ? { language, value: { name, rungs: [] } }
-              : { language, value: 'This is the body of function' },
+              : { language, value: '' },
           variables: [],
           documentation: 'Doc for program',
         },
