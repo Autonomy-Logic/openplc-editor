@@ -71,9 +71,12 @@ const CompilerService = {
     const workingDirectory = process.cwd()
 
     // Construct the path for the st compiler script based on the current environment
-    const stCompilerPath = isDevelopment
-      ? join(workingDirectory, 'assets', 'st-compiler', 'dist', 'xml2st', 'xml2st.exe')
-      : join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.py') // This is the path for the production environment - TODO: Should be modified to match the compiled program
+    const windowsCompilerPath = isDevelopment
+      ? join(workingDirectory, 'resources', 'st-compiler', 'xml2st.py')
+      : join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.exe')
+    const unixCompilerPath = isDevelopment
+      ? join(workingDirectory, 'resources', 'st-compiler', 'xml2st.py')
+      : join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.py') // TODO: This must be modified to match the correct OS extension
 
     // Remove the project.json file from the path to the xml file.
     // This is necessary because on windows the path is handled differently from unix systems
@@ -85,8 +88,13 @@ const CompilerService = {
     // Execute the st compiler script with the path to the xml file.
     // CAUTION!!!!
     // TODO: This only works on development environment. Need to be added the path for the production environment
-    const windowsCommand = spawn(stCompilerPath, [pathToXMLFile])
-    const unixCommand = spawn('python3', [stCompilerPath, pathToXMLFile])
+    const windowsCommand = isDevelopment
+      ? spawn('py', [windowsCompilerPath, pathToXMLFile])
+      : spawn(windowsCompilerPath, [pathToXMLFile])
+    const unixCommand = isDevelopment
+      ? spawn('python3', [unixCompilerPath, pathToXMLFile])
+      : spawn(unixCompilerPath, [pathToXMLFile])
+
     const execCompilerScript = isWindows ? windowsCommand : unixCommand
 
     /**
