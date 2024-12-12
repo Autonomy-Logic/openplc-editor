@@ -643,7 +643,8 @@ export const getBlockSize = (
 
   const blocKHeight =
     DEFAULT_BLOCK_CONNECTOR_Y +
-    Math.max(inputConnectors.length, outputConnectors.length) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
+    Math.max(inputConnectors.length - 1, outputConnectors.length - 1) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET +
+    4
 
   let variableInputWidth = 0
   let variableOutputWidth = 0
