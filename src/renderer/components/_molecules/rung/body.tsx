@@ -103,7 +103,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    console.log('rung', rung)
+    // console.log('rung', rung)
     setRungLocal(rung)
   }, [rung.nodes])
 
@@ -113,17 +113,17 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
   useEffect(() => {
     if (
       dragging ||
-      !rungLocal.selectedNodes ||
       (rungLocal.selectedNodes.length > 0 &&
-        differenceWith(rungLocal.selectedNodes || [], rung.selectedNodes || [], (a, b) => isEqual(a, b)).length === 0)
-    )
+        differenceWith(rungLocal.selectedNodes, rung.selectedNodes, (a, b) => isEqual(a, b)).length === 0)
+    ) {
       return
+    }
 
     // Update the selected nodes in the rung state
     flowActions.setSelectedNodes({
       editorName: editor.meta.name,
       rungId: rung.id,
-      nodes: rungLocal.selectedNodes || [],
+      nodes: rungLocal.selectedNodes,
     })
   }, [rungLocal.selectedNodes])
 
@@ -301,10 +301,10 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
       setRungLocal((rung) => ({
         ...rung,
         nodes: applyNodeChanges(changes, rung.nodes),
-        selectedNodes,
+        selectedNodes: selectedNodes,
       }))
     },
-    [rungLocal],
+    [rungLocal, rung],
   )
 
   /**
@@ -408,22 +408,11 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
           : event.dataTransfer.getData('application/library')
 
       // Then add the node to the rung
-      // setDragging(false)
+      setDragging(false)
       handleAddNode(blockType, library)
     },
     [rung, rungLocal],
   )
-
-  // const onSelectionChange = useCallback((selectedNodes: FlowNode[]) => {
-  //   console.log('onSelectionChange', selectedNodes, rung.selectedNodes)
-
-  //   const selectedPlaceholderNodes = selectedNodes.filter(
-  //     (node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder',
-  //   )
-  //   if (dragging || (selectedPlaceholderNodes && selectedPlaceholderNodes.length > 0)) {
-  //     return
-  //   }
-  // }, [])
 
   return (
     <div
