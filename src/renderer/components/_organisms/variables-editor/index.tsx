@@ -48,13 +48,13 @@ const VariablesEditor = () => {
    */
   useEffect(() => {
     const foundPou = pous.find((pou) => pou?.data?.name === editor?.meta?.name);
-  
+
     if (foundPou) {
-     
+
       setTableData(foundPou.data.variables);
     } else {
-     
-      setTableData([]); 
+
+      setTableData([]);
     }
   }, [editor, pous]);
 
@@ -209,7 +209,7 @@ const VariablesEditor = () => {
             >
               <label
                 htmlFor='description'
-                className='w-fit text-base font-medium text-neutral-1000 dark:text-neutral-300'
+                className='w-fit text-xs font-medium text-neutral-1000 dark:text-neutral-300'
               >
                 Description :
               </label>
@@ -224,7 +224,7 @@ const VariablesEditor = () => {
             >
               <label
                 htmlFor='class-filter'
-                className='w-fit text-base font-medium text-neutral-1000 dark:text-neutral-300'
+                className='w-fit text-xs font-medium text-neutral-1000 dark:text-neutral-300'
               >
                 Class Filter :
               </label>

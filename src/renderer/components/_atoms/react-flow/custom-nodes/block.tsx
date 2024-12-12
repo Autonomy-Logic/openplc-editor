@@ -258,11 +258,14 @@ export const BlockNodeElement = <T extends object>({
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
-    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition({
-      ...rung,
-      nodes: newNodes,
-      edges: newEdges,
-    }, [rung.defaultBounds[0], rung.defaultBounds[1]])
+    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
+      {
+        ...rung,
+        nodes: newNodes,
+        edges: newEdges,
+      },
+      [rung.defaultBounds[0], rung.defaultBounds[1]],
+    )
 
     setNodes({
       editorName: editor.meta.name,
@@ -343,8 +346,18 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
-  const inputVariableRef = useRef<HTMLInputElement>(null)
+  const inputVariableRef = useRef<HTMLTextAreaElement>(null)
+  const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
   const [inputVariableFocus, setInputVariableFocus] = useState<boolean>(true)
+
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.style.height = 'auto'
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 13 ? inputVariableRef.current.scrollHeight : 13}px`
+      if (scrollableIndicatorRef.current)
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 13 ? 'block' : 'none'
+    }
+  }, [blockVariableValue])
 
   /**
    * useEffect to focus the variable input when the correct block type is selected
@@ -513,27 +526,38 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
             />
           </TooltipTrigger>
           {!dragging && documentation && documentation !== '' && (
-            <TooltipContent side='right'>{documentation}</TooltipContent>
+            <TooltipContent side='right' className='text-xs'>
+              {documentation}
+            </TooltipContent>
           )}
         </Tooltip>
       </TooltipProvider>
       <div
-        className='absolute -top-6'
+        className='absolute -top-4'
         style={{
           width: width ?? DEFAULT_BLOCK_WIDTH,
         }}
       >
         {(data.variant as BlockVariant).type !== 'function' && (data.variant as BlockVariant).type !== 'generic' && (
-          <InputWithRef
-            value={blockVariableValue}
-            onChange={(e) => setBlockVariableValue(e.target.value)}
-            placeholder='???'
-            className='w-full bg-transparent text-center text-xs outline-none'
-            onFocus={() => setInputVariableFocus(true)}
-            onBlur={() => inputVariableFocus && handleSubmitBlockVariable()}
-            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-            ref={inputVariableRef}
-          />
+          <div className='flex w-full flex-row'>
+            <textarea
+              value={blockVariableValue}
+              onChange={(e) => setBlockVariableValue(e.target.value)}
+              placeholder='???'
+              className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
+              onFocus={() => setInputVariableFocus(true)}
+              onBlur={() => {
+                if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
+                inputVariableFocus && handleSubmitBlockVariable()
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+              ref={inputVariableRef}
+              rows={1}
+            />
+            <div className={cn('pointer-events-none text-cp-sm')} ref={scrollableIndicatorRef}>
+              ↕
+            </div>
+          </div>
         )}
       </div>
       {data.handles.map((handle, index) => (

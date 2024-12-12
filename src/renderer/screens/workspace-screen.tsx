@@ -2,6 +2,7 @@
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
 import * as Tabs from '@radix-ui/react-tabs'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
+import { cn } from '@root/utils'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
@@ -193,8 +194,28 @@ const WorkspaceScreen = () => {
                   order={1}
                   minSize={15}
                   defaultSize={75}
-                  className='relative  flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950'
+                  className={cn(
+                    'relative  flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white px-4 py-4 dark:border-neutral-800 dark:bg-neutral-950',
+                    {
+                      'py-0 pb-4': isVariablesPanelCollapsed,
+                    },
+                  )}
                 >
+                  {isVariablesPanelCollapsed && (
+                    <div className='flex w-full justify-center'>
+                      <button
+                        className='flex w-auto items-center rounded-lg border-brand bg-neutral-50 px-2 py-1 dark:bg-neutral-900'
+                        onClick={togglePanel}
+                      >
+                        <p className='text-xs font-medium text-brand-medium dark:text-brand-light'>Expand Table</p>
+                        <ExitIcon
+                          size='sm'
+                          className='-rotate-90 select-none fill-brand-medium  stroke-brand dark:fill-brand-light dark:stroke-brand-light'
+                        />
+                      </button>
+                    </div>
+                  )}
+
                   {/**
                    * TODO: Need to be refactored.
                    * Must handle 3 types of editors: Textual editor, data type editor and graphical editor
@@ -235,28 +256,11 @@ const WorkspaceScreen = () => {
                             className={`${isVariablesPanelCollapsed && ' !hidden '}  flex  w-full bg-brand-light `}
                           />
 
-                          {isVariablesPanelCollapsed && (
-                            <div className='flex w-full justify-center'>
-                              <button
-                                className='flex w-auto items-center rounded-lg border-brand bg-neutral-50 px-2 py-1 dark:bg-neutral-900'
-                                onClick={togglePanel}
-                              >
-                                <p className='text-xs font-medium text-brand-medium dark:text-brand-light'>
-                                  Expand Table
-                                </p>
-                                <ExitIcon
-                                  size='sm'
-                                  className='-rotate-90 select-none fill-brand-medium  stroke-brand dark:fill-brand-light dark:stroke-brand-light'
-                                />
-                              </button>
-                            </div>
-                          )}
-
                           <ResizablePanel
                             defaultSize={75}
                             id='textualEditorPanel'
                             order={2}
-                            className='mt-6 flex-1 flex-grow rounded-md'
+                            className='mt-4 flex-1 flex-grow rounded-md'
                           >
                             {editor['type'] === 'plc-textual' ? (
                               <MonacoEditor

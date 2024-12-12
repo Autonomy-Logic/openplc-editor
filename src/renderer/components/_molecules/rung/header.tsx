@@ -62,7 +62,7 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
       <div className='flex w-full items-center rounded-lg border border-transparent px-1'>
         <textarea
           aria-label='Rung name and description'
-          className='w-full resize-none overflow-hidden bg-transparent text-xs opacity-50 outline-none focus:opacity-100'
+          className='w-full resize-none overflow-hidden bg-transparent text-xs outline-none'
           placeholder='Start typing to add a comment to this rung'
           ref={textAreaRef}
           rows={1}
