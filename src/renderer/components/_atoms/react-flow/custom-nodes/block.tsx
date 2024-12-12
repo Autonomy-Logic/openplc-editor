@@ -31,6 +31,7 @@ type variables = {
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
+  lockExecutionControl: boolean
   connectedVariables: variables
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
@@ -586,30 +587,11 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
-  const variantLib = { ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) }
-  if (executionControl) {
-    const executionControlVariable = variantLib.variables.some(
-      (variable) => variable.name === 'EN' || variable.name === 'ENO',
-    )
-    if (!executionControlVariable) {
-      variantLib.variables = [
-        {
-          name: 'EN',
-          class: 'input',
-          type: { definition: 'generic-type', value: 'ANY_BOOL' },
-        },
-        {
-          name: 'ENO',
-          class: 'output',
-          type: { definition: 'generic-type', value: 'ANY_BOOL' },
-        },
-        ...variantLib.variables,
-      ]
-    }
-  } else {
-    variantLib.variables = variantLib.variables.filter((variable) => variable.name !== 'EN' && variable.name !== 'ENO')
-  }
-
+  const {
+    variant: variantLib,
+    executionControl: executionControlAux,
+    lockExecutionControl,
+  } = getBlockVariantAndExecutionControl({ ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) }, executionControl)
   const { handles, leftHandles, rightHandles, height, width } = getBlockSize(variantLib, { x: handleX, y: handleY })
 
   return {
@@ -626,7 +608,8 @@ export const buildBlockNode = <T extends object | undefined>({
       variant: variantLib,
       variable: { name: '' },
       executionOrder: 0,
-      executionControl,
+      executionControl: executionControlAux,
+      lockExecutionControl,
       connectedVariables: {},
       draggable: true,
       selectable: true,
@@ -721,5 +704,55 @@ export const getBlockSize = (
     rightHandles,
     height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
     width: blockWidth,
+  }
+}
+
+const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionControl: boolean) => {
+  const variant = { ...variantLib }
+
+  const inputConnectors = variant.variables
+    .filter((variable) => variable.class === 'input')
+    .map((variable) => ({
+      name: variable.name,
+      type: variable.type,
+    }))
+  const outputConnectors = variant.variables
+    .filter((variable) => variable.class === 'output')
+    .map((variable) => ({
+      name: variable.name,
+      type: variable.type,
+    }))
+
+  const mustHaveExecutionControlEnabled =
+    inputConnectors[0].type.value !== 'BOOL' || outputConnectors[0].type.value !== 'BOOL'
+
+  if (executionControl || mustHaveExecutionControlEnabled) {
+    const executionControlVariable = variant.variables.some(
+      (variable) => variable.name === 'EN' || variable.name === 'ENO',
+    )
+
+    if (!executionControlVariable) {
+      variant.variables = [
+        {
+          name: 'EN',
+          class: 'input',
+          type: { definition: 'generic-type', value: 'BOOL' },
+        },
+        {
+          name: 'ENO',
+          class: 'output',
+          type: { definition: 'generic-type', value: 'BOOL' },
+        },
+        ...variant.variables,
+      ]
+    }
+  } else {
+    variant.variables = variant.variables.filter((variable) => variable.name !== 'EN' && variable.name !== 'ENO')
+  }
+
+  return {
+    variant: variant,
+    executionControl: executionControl || mustHaveExecutionControlEnabled,
+    lockExecutionControl: mustHaveExecutionControlEnabled,
   }
 }

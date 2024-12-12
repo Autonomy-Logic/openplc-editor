@@ -184,11 +184,11 @@ const WorkspaceScreen = () => {
             <ResizableHandle
               id='workspaceHandle'
               hitAreaMargins={{ coarse: 3, fine: 3 }}
-              className={` absolute bottom-0  top-0 z-[99] my-[2px] w-[4px] py-2 transition-colors  duration-200  data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700 `}
+              className='absolute bottom-0 top-0 z-[99] my-[2px] w-[4px] py-2 transition-colors duration-200 data-[resize-handle-active="pointer"]:bg-brand-light data-[resize-handle-state="hover"]:bg-brand-light data-[resize-handle-active="pointer"]:dark:bg-neutral-700  data-[resize-handle-state="hover"]:dark:bg-neutral-700'
             />
             <div id='workspaceContentPanel' className='flex h-full flex-1 grow flex-col gap-2 overflow-hidden'>
               {tabs.length > 0 && <Navigation />}
-              <ResizablePanelGroup id='editorPanelGroup' className={`flex h-full  gap-2`} direction='vertical'>
+              <ResizablePanelGroup id='editorPanelGroup' className={`flex h-full gap-2`} direction='vertical'>
                 <ResizablePanel
                   id='editorPanel'
                   order={1}
@@ -204,7 +204,7 @@ const WorkspaceScreen = () => {
                   {isVariablesPanelCollapsed && (
                     <div className='flex w-full justify-center'>
                       <button
-                        className='flex w-auto items-center rounded-lg border-brand bg-neutral-50 px-2 py-1 dark:bg-neutral-900'
+                        className='flex w-auto items-center rounded-b-lg border-brand bg-neutral-50 px-2 py-1 dark:bg-neutral-900'
                         onClick={togglePanel}
                       >
                         <p className='text-xs font-medium text-brand-medium dark:text-brand-light'>Expand Table</p>
@@ -232,7 +232,7 @@ const WorkspaceScreen = () => {
                         <ResizablePanelGroup
                           id='editorContentPanelGroup'
                           direction='vertical'
-                          className='flex flex-1 flex-col gap-2'
+                          className='flex flex-1 flex-col'
                         >
                           <ResizablePanel
                             ref={panelRef}

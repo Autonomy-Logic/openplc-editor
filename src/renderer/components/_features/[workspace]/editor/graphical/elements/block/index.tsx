@@ -79,9 +79,10 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
   const [node, setNode] = useState<BlockNode<object>>(selectedNode)
   const blockVariant = node.data.variant as BlockVariant
+  const lockExecutionControl = node.data.lockExecutionControl
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
-  const [selectedFile, setSelectedFile] = useState<T | null>(null)
+  const [selectedFile, setSelectedFile] = useState<T | null>(selectedNode.data.variant)
   const [formState, setFormState] = useState<{
     name: string
     inputs: string
@@ -101,6 +102,8 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const isBlockDifferent = selectedNode !== node
 
   useEffect(() => {
+    if (!selectedFileKey) return
+
     const [type, selectedLibrary, selectedPou] = selectedFileKey?.split('/') || []
     if (type === 'system' && selectedLibrary && selectedPou) {
       const library = libraries.system.find((library) => library.name === selectedLibrary)
@@ -112,7 +115,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }, [selectedFileKey])
 
   useEffect(() => {
-    if (selectedFile) {
+    if (selectedFile && selectedFile !== selectedNode.data.variant) {
       const newNode = buildBlockNode({
         id: node.id,
         posX: node.position.x,
@@ -135,7 +138,12 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       const formInputs: string = newNodeDataVariant.variables
         .filter((variable) => variable.class === 'input' && variable.name !== 'EN')
         .length.toString()
-      setFormState((prevState) => ({ ...prevState, name: formName, inputs: formInputs }))
+      setFormState((prevState) => ({
+        ...prevState,
+        name: formName,
+        inputs: formInputs,
+        executionControl: newNode.data.executionControl,
+      }))
     }
   }, [selectedFile])
 
@@ -306,6 +314,8 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleExecutionControlChange = (checked: boolean) => {
+    if (lockExecutionControl) return
+
     setFormState((prevState) => ({ ...prevState, executionControl: checked }))
 
     const newNode = buildBlockNode({
@@ -410,11 +420,14 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
-    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition({
-      ...rung,
-      nodes: newNodes,
-      edges: newEdges,
-    }, [rung.defaultBounds[0], rung.defaultBounds[1]])
+    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
+      {
+        ...rung,
+        nodes: newNodes,
+        edges: newEdges,
+      },
+      [rung.defaultBounds[0], rung.defaultBounds[1]],
+    )
 
     setNodes({
       editorName: editor.meta.name,
@@ -520,6 +533,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
                 onDecrement={() => handleExecutionOrderDecrement()}
               />
             </div>
+
             <div className='flex items-center gap-2'>
               <label htmlFor='executionControlSwitch' className={labelStyle}>
                 Execution Control:
@@ -533,6 +547,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
                 <Switch.Thumb className='block h-[14px] w-[14px] translate-x-0.5 rounded-full bg-white shadow-[0_0_4_1px] transition-all duration-150 will-change-transform data-[state=checked]:translate-x-[14px]' />
               </Switch.Root>
             </div>
+
             <label htmlFor='block-preview' className={labelStyle}>
               Preview
             </label>
