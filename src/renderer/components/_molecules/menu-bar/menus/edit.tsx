@@ -103,7 +103,7 @@ export const EditMenu = () => {
             className='flex max-h-80 w-[300px] select-none flex-col items-center justify-evenly rounded-lg'
           >
             <p className='text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100'>
-              Are you sure you want delete this POU?
+              Are you sure you want to delete this item?
             </p>
 
             <div className='flex w-[200px] flex-col space-y-2 text-sm'>
