@@ -2,7 +2,7 @@
  * Base webpack config used across other specific configs
  */
 
-import path, { join } from 'path'
+import { join } from 'path'
 import TsconfigPathsPlugins from 'tsconfig-paths-webpack-plugin'
 import webpack from 'webpack'
 
@@ -53,10 +53,10 @@ const configuration: webpack.Configuration = {
 				configFile: join(__dirname, '../../tsconfig.json'),
 			}),
 		],
-		fallback: {
-			path: require.resolve('path-browserify'),
-			url: require.resolve('url/'),
-		},
+		// fallback: {
+		// 	path: require.resolve('path-browserify'),
+		// 	url: require.resolve('url/'),
+		// },
 	},
 
 	plugins: [

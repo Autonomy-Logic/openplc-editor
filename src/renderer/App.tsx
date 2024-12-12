@@ -1,11 +1,20 @@
 import 'tailwindcss/tailwind.css'
 import './styles/globals.css'
 
-import { RouterProvider } from '@providers/index'
+// import { RouterProvider } from '@providers/index'
+// import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { AppLayout } from './components/_templates'
+import { StartScreen, WorkspaceScreen } from './screens'
+import { useOpenPLCStore } from './store'
 
 export default function App() {
+  const {
+    project: {
+      meta: { path },
+    },
+  } = useOpenPLCStore()
   {
     /** Manage routing and navigation within the app. */
   }
-  return <RouterProvider />
+  return <AppLayout>{path === '' ? <StartScreen /> : <WorkspaceScreen />}</AppLayout>
 }

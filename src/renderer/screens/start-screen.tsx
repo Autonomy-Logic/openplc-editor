@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/require-await */
 import { IProjectServiceResponse } from '@root/main/services/project-service'
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'
 import { useToast } from '../components/_features/[app]/toast/use-toast'
@@ -14,7 +13,6 @@ import { FlowType } from '../store/slices/flow/types'
 
 const StartScreen = () => {
   const { toast } = useToast()
-  const navigate = useNavigate()
   const {
     workspaceActions: { setEditingState },
     projectActions: { setProject },
@@ -57,7 +55,7 @@ const StartScreen = () => {
           })
         }
         data.content.data.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
-        navigate('/workspace')
+        
         toast({
           title: 'Project opened!',
           description: 'Your project was opened and loaded successfully.',
@@ -114,8 +112,6 @@ const StartScreen = () => {
           }
 
           projectData.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
-
-          navigate('/workspace')
           toast({
             title: 'Project opened!',
             description: 'Your project was opened, and loaded.',
@@ -173,7 +169,6 @@ const StartScreen = () => {
 
           projectData.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
 
-          navigate('/workspace')
           toast({
             title: 'Project opened!',
             description: 'Your project was opened, and loaded.',

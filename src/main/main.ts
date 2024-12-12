@@ -13,7 +13,6 @@ import { autoUpdater } from 'electron-updater'
 import { platform, release } from 'os'
 import path from 'path'
 
-import { resolveHtmlPath } from '../utils/resolveHtmlPath'
 // TODO: Refactor this type declaration
 import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
@@ -21,6 +20,7 @@ import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
 import { ProjectService, UserService } from './services'
 import { CompilerService } from './services/compiler-service'
+import { resolveHtmlPath } from './utils'
 
 class AppUpdater {
   constructor() {
@@ -31,7 +31,7 @@ class AppUpdater {
 }
 
 export let mainWindow: BrowserWindow | null = null
-export let splash: BrowserWindow | null = null
+// export let splash: BrowserWindow | null = null
 
 if (process.env.NODE_ENV === 'production') {
   async function loadSourceMapSupport(): Promise<void> {
@@ -113,21 +113,21 @@ const createMainWindow = async () => {
    */
   const { bounds } = store.get('window')
 
-  splash = new BrowserWindow({
-    width: 580,
-    height: 366,
-    resizable: false,
-    frame: false,
-    webPreferences: {
-      sandbox: false,
-    },
-  })
+  // splash = new BrowserWindow({
+  //   width: 580,
+  //   height: 366,
+  //   resizable: false,
+  //   frame: false,
+  //   webPreferences: {
+  //     sandbox: false,
+  //   },
+  // })
 
-  splash
-    .loadURL(`file://${path.join(__dirname, './modules/preload/scripts/loading/splash.html')}`)
-    .then(() => console.log('Splash screen loaded successfully'))
-    .catch((error) => console.error('Error loading splash screen:', error))
-  splash.setIgnoreMouseEvents(false)
+  // splash
+  //   .loadURL(`file://${path.join(__dirname, './modules/preload/scripts/loading/splash.html')}`)
+  //   .then(() => console.log('Splash screen loaded successfully'))
+  //   .catch((error) => console.error('Error loading splash screen:', error))
+  // splash.setIgnoreMouseEvents(false)
   // Create the main window instance.
   mainWindow = new BrowserWindow({
     minWidth: 1124,
@@ -144,12 +144,15 @@ const createMainWindow = async () => {
     },
   })
 
+  // Load the Url or index.html file;
+  void mainWindow.loadURL(resolveHtmlPath('index.html'))
+
   // Send a message to the renderer process when the content finishes loading;
 
   mainWindow.webContents.on('did-finish-load', () => {
-    if (splash) {
-      splash?.destroy()
-    }
+    // if (splash) {
+    //   splash?.destroy()
+    // }
     mainWindow?.show()
     mainWindow?.webContents.send('main-process-message', new Date().toLocaleString())
   })
@@ -176,12 +179,9 @@ const createMainWindow = async () => {
     mainWindow.maximize()
   }
 
-  // Load the Url or index.html file;
-  void mainWindow.loadURL(resolveHtmlPath(''))
-
   // Open devtools if the app is not packaged;
   // if (isDebug) {
-  // 	mainWindow.webContents.openDevTools()
+  	mainWindow.webContents.openDevTools()
   // }
 
   mainWindow.once('ready-to-show', () => {
@@ -191,7 +191,7 @@ const createMainWindow = async () => {
     if (process.env.START_MINIMIZED) {
       mainWindow.minimize()
     }
-    splash?.close()
+    // splash?.close()
     mainWindow.show()
   })
 

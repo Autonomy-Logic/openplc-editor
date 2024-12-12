@@ -1,7 +1,6 @@
 import { OpenPLCIcon } from '@process:renderer/assets/icons/oplc'
 import { MenuBar } from '@process:renderer/components/_molecules/menu-bar'
 import { useOpenPLCStore } from '@process:renderer/store'
-import { useLocation } from 'react-router-dom'
 
 export const TitleBarLeftSlot = () => {
   /**
@@ -11,14 +10,17 @@ export const TitleBarLeftSlot = () => {
     workspace: {
       systemConfigs: { OS },
     },
+    project: {
+      meta: { path },
+    },
   } = useOpenPLCStore()
   const isMac = OS === 'darwin'
 
   /**
    * Get information about the current location to perform conditional rendering
    */
-  const navigation = useLocation()
-  const path = navigation.pathname
+  // const navigation = useLocation()
+  // const path = navigation.pathname
 
   /**
    * Create a template for macOS systems
@@ -29,7 +31,7 @@ export const TitleBarLeftSlot = () => {
    * Create a template for windows and other systems
    */
   const DefaultTemplate = () =>
-    path.includes('/workspace') ? (
+    path !== '' ? (
       <>
         <OpenPLCIcon />
         <MenuBar />

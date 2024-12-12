@@ -1,16 +1,16 @@
-import path from 'path';
-import webpack from 'webpack';
-import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
-import { merge } from 'webpack-merge';
+import { join } from 'path'
+import webpack from 'webpack'
+import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
+import { merge } from 'webpack-merge'
 
-import checkNodeEnv from '../../scripts/check-node-env';
-import baseConfig from './webpack.config.base';
-import webpackPaths from './webpack.paths';
+import checkNodeEnv from '../../scripts/check-node-env'
+import baseConfig from './webpack.config.base'
+import webpackPaths from './webpack.paths'
 
 // When an ESLint server is running, we can't set the NODE_ENV so we'll check if it's
 // at the dev webpack config is not accidentally run in a production environment
 if (process.env.NODE_ENV === 'production') {
-  checkNodeEnv('development');
+  checkNodeEnv('development')
 }
 
 const configuration: webpack.Configuration = {
@@ -20,7 +20,7 @@ const configuration: webpack.Configuration = {
 
   target: 'electron-preload',
 
-  entry: path.join(webpackPaths.srcMainPath, '/modules/preload/index.ts'),
+  entry: join(webpackPaths.srcMainPath, '/modules/preload/index.ts'),
 
   output: {
     path: webpackPaths.dllPath,
@@ -67,6 +67,6 @@ const configuration: webpack.Configuration = {
   },
 
   watch: true,
-};
+}
 
-export default merge(baseConfig, configuration);
+export default merge(baseConfig, configuration)

@@ -7,12 +7,10 @@ import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
-  const navigate = useNavigate()
   const {
     project,
     editorActions: { clearEditor },
@@ -114,7 +112,6 @@ export const FileMenu = () => {
   }, [editor])
 
   const handleCloseProject = () => {
-    navigate('/')
     clearEditor()
     clearTabs()
     setEditingState('unsaved')
