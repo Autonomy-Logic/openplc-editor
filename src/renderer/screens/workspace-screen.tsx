@@ -133,13 +133,15 @@ const WorkspaceScreen = () => {
 
   useEffect(() => {
     const handleCloseProject = () => {
-      clearEditor()
-      clearTabs()
-      clearProjects()
-      clearFlows()
-      setEditingState('unsaved')
-      setRecents([])
-      window.bridge.closeProjectAccelerator((_event) => navigate('/'))
+      window.bridge.closeProjectAccelerator((_event) => {
+        clearEditor()
+        clearTabs()
+        clearProjects()
+        clearFlows()
+        setEditingState('unsaved')
+        setRecents([])
+        navigate('/')
+      })
     }
     handleCloseProject()
   }, [])
