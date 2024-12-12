@@ -20,7 +20,7 @@ export const CustomHandle = ({ id, className, style, type, position, isConnectab
       type={type}
       isConnectable={isConnectable}
       style={style}
-      className={cn('border-neutral-700', className)}
+      className={cn('opacity-0', className)}
     />
   )
 }
