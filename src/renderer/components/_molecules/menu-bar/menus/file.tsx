@@ -197,7 +197,7 @@ export const FileMenu = () => {
               className='flex flex max-h-80 w-[340px] select-none flex-col items-center justify-evenly rounded-lg'
             >
               <p className='text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100'>
-                Do you want to save the changes you made at this file?
+                There are unsaved changes in your project. Do you want to save before closing?
               </p>
 
               <div className='flex w-[200px] flex-col space-y-2 text-sm'>
@@ -208,7 +208,7 @@ export const FileMenu = () => {
                   }}
                   className='w-full rounded-lg bg-blue-500 px-4 py-2 text-center font-medium text-neutral-1000 dark:text-neutral-100'
                 >
-                  Save
+                 Save and Close
                 </button>
                 <button
                   onClick={() => {
@@ -217,7 +217,7 @@ export const FileMenu = () => {
                   }}
                   className='w-full rounded-md px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100'
                 >
-                  Discart changes
+                  Close Without Saving
                 </button>
                 <button
                   onClick={handleModalClose}
