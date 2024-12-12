@@ -72,7 +72,7 @@ const CompilerService = {
 
     // Construct the path for the st compiler script based on the current environment
     const stCompilerPath = isDevelopment
-      ? join(workingDirectory, 'assets', 'st-compiler', 'xml2st.py')
+      ? join(workingDirectory, 'assets', 'st-compiler', 'dist', 'xml2st', 'xml2st.exe')
       : join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.py') // This is the path for the production environment - TODO: Should be modified to match the compiled program
 
     // Remove the project.json file from the path to the xml file.
@@ -83,8 +83,11 @@ const CompilerService = {
     const pathToXMLFile = join(draftPath, 'build', 'plc.xml')
 
     // Execute the st compiler script with the path to the xml file.
+    // CAUTION!!!!
     // TODO: This only works on development environment. Need to be added the path for the production environment
-    const execCompilerScript = spawn(isWindows ? 'py' : 'python3', [stCompilerPath, pathToXMLFile])
+    const windowsCommand = spawn(stCompilerPath, [pathToXMLFile])
+    const unixCommand = spawn('python3', [stCompilerPath, pathToXMLFile])
+    const execCompilerScript = isWindows ? windowsCommand : unixCommand
 
     /**
      * The data object is a buffer with the content of the script output.
