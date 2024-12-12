@@ -342,7 +342,34 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
     flows,
     flowActions: { updateNode },
   } = useOpenPLCStore()
-  const { documentation, type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const {
+    documentation: variantDocumentation,
+    type: blockType,
+    variables: blockVariables,
+  } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const documentation = `${variantDocumentation}
+
+  -- INPUT --
+  ${blockVariables
+    .filter((variable) => variable.class === 'input')
+    .map(
+      (variable, index) =>
+        `${variable.name}: ${variable.type.value}${
+          index < blockVariables.filter((variable) => variable.class === 'input').length - 1 ? '\n' : ''
+        }`,
+    )
+    .join('')}
+
+  -- OUTPUT --
+    ${blockVariables
+      .filter((variable) => variable.class === 'output')
+      .map(
+        (variable, index) =>
+          `${variable.name}: ${variable.type.value}${
+            index < blockVariables.filter((variable) => variable.class === 'output').length - 1 ? '\n' : ''
+          }`,
+      )
+      .join('')}`
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
@@ -528,7 +555,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
           </TooltipTrigger>
           {!dragging && documentation && documentation !== '' && (
             <TooltipContent side='right' className='text-xs'>
-              {documentation}
+              <span className='whitespace-pre-line'>{documentation}</span>
             </TooltipContent>
           )}
         </Tooltip>
@@ -641,10 +668,10 @@ export const getBlockSize = (
     .filter((variable) => variable.class === 'output')
     .map((variable) => variable.name)
 
-  const blocKHeight =
+  const blockHeight =
     DEFAULT_BLOCK_CONNECTOR_Y +
-    Math.max(inputConnectors.length - 1, outputConnectors.length - 1) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET +
-    4
+    24 +
+    Math.max(inputConnectors.length - 1, outputConnectors.length - 1) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
 
   let variableInputWidth = 0
   let variableOutputWidth = 0
@@ -703,7 +730,7 @@ export const getBlockSize = (
     handles,
     leftHandles,
     rightHandles,
-    height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
+    height: blockHeight,
     width: blockWidth,
   }
 }

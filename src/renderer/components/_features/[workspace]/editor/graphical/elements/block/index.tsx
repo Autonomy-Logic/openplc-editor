@@ -82,7 +82,32 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const lockExecutionControl = node.data.lockExecutionControl
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
-  const [selectedFile, setSelectedFile] = useState<T | null>(selectedNode.data.variant)
+  const [selectedFile, setSelectedFile] = useState<T | null>(null)
+  const [documentation, setDocumentation] = useState<string | null>(
+    `${blockVariant.documentation}
+
+    INPUT:
+    ${blockVariant.variables
+      .filter((variable) => variable.class === 'input')
+      .map(
+        (variable, index) =>
+          `${variable.name}: ${variable.type.value}${
+            index < blockVariant.variables.filter((variable) => variable.class === 'input').length - 1 ? '\n' : ''
+          }`,
+      )
+      .join('')}
+
+    OUTPUT:
+    ${blockVariant.variables
+      .filter((variable) => variable.class === 'output')
+      .map(
+        (variable, index) =>
+          `${variable.name}: ${variable.type.value}${
+            index < blockVariant.variables.filter((variable) => variable.class === 'output').length - 1 ? '\n' : ''
+          }`,
+      )
+      .join('')}`,
+  )
   const [formState, setFormState] = useState<{
     name: string
     inputs: string
@@ -133,17 +158,48 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
           variable: selectedNode.data.variable,
         },
       })
+
       const newNodeDataVariant = newNode.data.variant as BlockVariant
       const formName: string = newNodeDataVariant.name
       const formInputs: string = newNodeDataVariant.variables
         .filter((variable) => variable.class === 'input' && variable.name !== 'EN')
         .length.toString()
+
       setFormState((prevState) => ({
         ...prevState,
         name: formName,
         inputs: formInputs,
         executionControl: newNode.data.executionControl,
       }))
+      setDocumentation(
+        `${newNodeDataVariant.documentation}
+
+        INPUT:
+        ${newNodeDataVariant.variables
+          .filter((variable) => variable.class === 'input')
+          .map(
+            (variable, index) =>
+              `${variable.name}: ${variable.type.value}${
+                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'input').length - 1
+                  ? '\n'
+                  : ''
+              }`,
+          )
+          .join('')}
+
+        OUTPUT:
+        ${newNodeDataVariant.variables
+          .filter((variable) => variable.class === 'output')
+          .map(
+            (variable, index) =>
+              `${variable.name}: ${variable.type.value}${
+                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'output').length - 1
+                  ? '\n'
+                  : ''
+              }`,
+          )
+          .join('')}`,
+      )
     }
   }, [selectedFile])
 
@@ -467,13 +523,10 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
             <div className='flex h-full w-full flex-col gap-2'>
               <label className={labelStyle}>Type:</label>
               <ModalBlockLibrary selectedFileKey={selectedFileKey} setSelectedFileKey={setSelectedFileKey} />
-              <div className='border-neural-100 h-full max-h-[119px] overflow-hidden rounded-lg border px-2 py-4 text-xs font-normal text-neutral-950 dark:border-neutral-850 dark:text-neutral-100'>
-                <p className='h-full overflow-y-auto dark:text-neutral-100'>
-                  {
-                    // @ts-expect-error - selectedFile is not null and it is a generic type of pous
-                    selectedFile ? selectedFile.documentation : null
-                  }
-                </p>
+              <div className='border-neural-100 h-full max-h-[119px] overflow-hidden rounded-lg border px-1 py-4 text-xs font-normal text-neutral-950 dark:border-neutral-850 dark:text-neutral-100'>
+                <div className='h-full overflow-y-auto'>
+                  <span className='h-full whitespace-pre-line px-1 dark:text-neutral-100'>{documentation}</span>
+                </div>
               </div>
             </div>
           </div>
