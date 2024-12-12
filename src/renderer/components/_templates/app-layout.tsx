@@ -3,7 +3,6 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 
-// import { Outlet } from 'react-router-dom'
 import Toaster from '../_features/[app]/toast/toaster'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 

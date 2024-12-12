@@ -1,8 +1,6 @@
 import 'tailwindcss/tailwind.css'
 import './styles/globals.css'
 
-// import { RouterProvider } from '@providers/index'
-// import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/_templates'
 import { StartScreen, WorkspaceScreen } from './screens'
 import { useOpenPLCStore } from './store'

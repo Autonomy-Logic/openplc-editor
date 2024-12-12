@@ -14,11 +14,7 @@ const TitleBarCenterSlot = () => {
     },
   } = useOpenPLCStore()
   const isMac = OS === 'darwin'
-  /**
-   * Get information about the current location to perform conditional rendering
-   */
-  // const navigation = useLocation()
-  // const path = navigation.pathname
+
   /**
    * Create a template for macOS systems
    */

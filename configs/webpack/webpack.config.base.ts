@@ -53,10 +53,6 @@ const configuration: webpack.Configuration = {
 				configFile: join(__dirname, '../../tsconfig.json'),
 			}),
 		],
-		// fallback: {
-		// 	path: require.resolve('path-browserify'),
-		// 	url: require.resolve('url/'),
-		// },
 	},
 
 	plugins: [
