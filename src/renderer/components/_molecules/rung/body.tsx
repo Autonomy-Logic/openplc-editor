@@ -112,6 +112,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
    */
   useEffect(() => {
     if (
+      dragging ||
       !rungLocal.selectedNodes ||
       (rungLocal.selectedNodes.length > 0 &&
         differenceWith(rungLocal.selectedNodes || [], rung.selectedNodes || [], (a, b) => isEqual(a, b)).length === 0)
@@ -284,9 +285,23 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
    */
   const onNodesChange: OnNodesChange<FlowNode> = useCallback(
     (changes) => {
+      const selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
+      changes.forEach((change) => {
+        if (change.type) {
+          const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
+          if (!change.selected) {
+            const index = selectedNodes.findIndex((n) => n.id === change.id)
+            if (index !== -1) selectedNodes.splice(index, 1)
+            return
+          }
+          selectedNodes.push(node)
+        }
+      })
+
       setRungLocal((rung) => ({
         ...rung,
         nodes: applyNodeChanges(changes, rung.nodes),
+        selectedNodes,
       }))
     },
     [rungLocal],
@@ -393,25 +408,22 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
           : event.dataTransfer.getData('application/library')
 
       // Then add the node to the rung
-      setDragging(false)
+      // setDragging(false)
       handleAddNode(blockType, library)
     },
     [rung, rungLocal],
   )
 
-  const onSelectionChange = useCallback(
-    (selectedNodes: FlowNode[]) => {
-      const selectedPlaceholderNodes = selectedNodes.filter(
-        (node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder',
-      )
-      if (dragging || (selectedPlaceholderNodes && selectedPlaceholderNodes.length > 0)) {
-        return
-      }
+  // const onSelectionChange = useCallback((selectedNodes: FlowNode[]) => {
+  //   console.log('onSelectionChange', selectedNodes, rung.selectedNodes)
 
-      setRungLocal((rung) => ({ ...rung, selectedNodes }))
-    },
-    [rungLocal, dragging],
-  )
+  //   const selectedPlaceholderNodes = selectedNodes.filter(
+  //     (node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder',
+  //   )
+  //   if (dragging || (selectedPlaceholderNodes && selectedPlaceholderNodes.length > 0)) {
+  //     return
+  //   }
+  // }, [])
 
   return (
     <div
@@ -459,9 +471,6 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
               onNodeDoubleClick: (_event, node) => {
                 handleNodeDoubleClick(node)
               },
-              onSelectionChange: (selectedNodes) => {
-                onSelectionChange(selectedNodes.nodes)
-              },
 
               onDragEnter: onDragEnterViewport,
               onDragLeave: onDragLeaveViewport,
@@ -478,7 +487,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
               zoomOnPinch: false,
               zoomOnScroll: false,
               preventScrolling: false,
-              nodeDragThreshold: 15,
+              nodeDragThreshold: 25,
 
               proOptions: {
                 hideAttribution: true,

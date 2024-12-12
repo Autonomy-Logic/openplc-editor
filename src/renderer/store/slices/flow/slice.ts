@@ -18,10 +18,16 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
       setState(
         produce(({ flows }: FlowState) => {
           const flowIndex = flows.findIndex((f) => f.name === flow.name)
+          const rungs = flow.rungs.map((rung) => ({
+            ...rung,
+            selectedNodes: [],
+          }))
+          const newFlow = { ...flow, rungs }
+
           if (flowIndex === -1) {
-            flows.push({ ...flow })
+            flows.push(newFlow)
           } else {
-            flows[flowIndex] = { ...flow }
+            flows[flowIndex] = newFlow
           }
         }),
       )
@@ -89,6 +95,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
                 type: 'smoothstep',
               },
             ],
+            selectedNodes: [],
           })
         }),
       )

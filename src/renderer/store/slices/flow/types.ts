@@ -64,7 +64,7 @@ type RungState = {
   comment: string
   defaultBounds: number[]
   flowViewport: number[]
-  selectedNodes?: Node[]
+  selectedNodes: Node[]
   nodes: Node[]
   edges: Edge[]
 }
