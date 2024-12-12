@@ -180,9 +180,9 @@ const createMainWindow = async () => {
   }
 
   // Open devtools if the app is not packaged;
-  // if (isDebug) {
-  	mainWindow.webContents.openDevTools()
-  // }
+  if (isDebug) {
+    mainWindow.webContents.openDevTools()
+  }
 
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow) {
@@ -241,8 +241,6 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
   process.exit(0)
 }
-
-// console.log(userService.getSetting('window'))
 
 // Quit the app when all windows are closed;
 app.on('window-all-closed', () => {
