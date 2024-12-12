@@ -5,6 +5,7 @@ import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
+import { ImperativePanelHandle } from 'react-resizable-panels'
 import { useNavigate } from 'react-router-dom'
 
 import { ExitIcon } from '../assets'
@@ -95,10 +96,15 @@ const WorkspaceScreen = () => {
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
 
-  const panelRef = useRef(null)
-  const explorerPanelRef = useRef(null)
-  const workspacePanelRef = useRef(null)
-  const consolePanelRef = useRef(null)
+  type PanelMethods = {
+    collapse: () => void
+    expand: () => void
+  } & ImperativePanelHandle
+
+  const panelRef = useRef<ImperativePanelHandle | null>(null)
+  const explorerPanelRef = useRef<PanelMethods | null>(null)
+  const workspacePanelRef = useRef<PanelMethods | null>(null)
+  const consolePanelRef = useRef<PanelMethods | null>(null)
   const [activeTab, setActiveTab] = useState('console')
   const hasSearchResults = searchResults.length > 0
 
@@ -119,21 +125,21 @@ const WorkspaceScreen = () => {
   useEffect(() => {
     const action = isCollapsed ? 'collapse' : 'expand'
     ;[explorerPanelRef, workspacePanelRef, consolePanelRef].forEach((ref) => {
-      if (ref.current) ref.current[action]()
+      if (ref.current && typeof ref.current[action] === 'function') {
+        ref.current[action]()
+      }
     })
   }, [isCollapsed])
 
   useEffect(() => {
     const handleCloseProject = () => {
-      window.bridge.closeProjectAccelerator((_event) => {
-        clearEditor()
-        clearTabs()
-        clearProjects()
-        clearFlows()
-        setEditingState('unsaved')
-        setRecents([])
-        navigate('/')
-      })
+      clearEditor()
+      clearTabs()
+      clearProjects()
+      clearFlows()
+      setEditingState('unsaved')
+      setRecents([])
+      window.bridge.closeProjectAccelerator((_event) => navigate('/'))
     }
     handleCloseProject()
   }, [])

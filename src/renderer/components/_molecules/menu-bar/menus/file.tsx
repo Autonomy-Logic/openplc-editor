@@ -6,15 +6,17 @@ import type { FlowType } from '@root/renderer/store/slices/flow/types'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { Modal, ModalContent } from '../../modal'
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
   const navigate = useNavigate()
   const {
     project,
+    workspace: { editingState },
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setRecents },
     projectActions: { setProject },
@@ -25,16 +27,27 @@ export const FileMenu = () => {
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
+  const [modalOpen, setModalOpen] = useState(false)
+  const [discardChanges, setDiscardChanges] = useState(false)
+
+  const handleModalClose = () => {
+    setModalOpen(false)
+  }
 
   const handleCreateProject = () => {
-    try {
-      openModal('create-project', null)
-    } catch (_error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to open project creation modal',
-        variant: 'fail',
-      })
+    if (editingState === 'unsaved' && discardChanges === false) {
+      setModalOpen(true)
+    }
+    if (editingState === 'saved' || discardChanges === true) {
+      try {
+        openModal('create-project', null)
+      } catch (_error) {
+        toast({
+          title: 'Error',
+          description: 'Failed to open project creation modal',
+          variant: 'fail',
+        })
+      }
     }
   }
 
@@ -177,6 +190,45 @@ export const FileMenu = () => {
             </MenuPrimitive.Item>
           </MenuPrimitive.Content>
         </MenuPrimitive.Portal>
+        {modalOpen && (
+          <Modal open={modalOpen} onOpenChange={setModalOpen}>
+            <ModalContent
+              onClose={handleModalClose}
+              className='flex flex max-h-80 w-[340px] select-none flex-col items-center justify-evenly rounded-lg'
+            >
+              <p className='text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100'>
+                Do you want to save the changes you made at this file?
+              </p>
+
+              <div className='flex w-[200px] flex-col space-y-2 text-sm'>
+                <button
+                  onClick={() => {
+                    void handleSaveProject()
+                    handleModalClose()
+                  }}
+                  className='w-full rounded-lg bg-blue-500 px-4 py-2 text-center font-medium text-neutral-1000 dark:text-neutral-100'
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setDiscardChanges(true)
+                    handleModalClose()
+                  }}
+                  className='w-full rounded-md px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100'
+                >
+                  Discart changes
+                </button>
+                <button
+                  onClick={handleModalClose}
+                  className='w-full rounded-md px-4 px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100'
+                >
+                  Cancel
+                </button>
+              </div>
+            </ModalContent>
+          </Modal>
+        )}
       </MenuPrimitive.Menu>
     </>
   )
