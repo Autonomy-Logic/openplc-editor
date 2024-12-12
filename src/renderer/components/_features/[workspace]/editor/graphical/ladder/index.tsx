@@ -3,7 +3,7 @@ import { CreateRung } from '@root/renderer/components/_molecules/rung/create-run
 import { Rung } from '@root/renderer/components/_organisms/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { zodFlowSchema } from '@root/renderer/store/slices'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 export default function LadderEditor() {
@@ -15,9 +15,8 @@ export default function LadderEditor() {
   } = useOpenPLCStore()
 
   const flow = flows.find((flow) => flow.name === editor.meta.name)
+  const rungs = flow?.rungs || []
   const flowUpdated = flow?.updated
-
-  const [rungs, setRungs] = useState(flow?.rungs || [])
 
   /**
    * Update the flow state to project JSON
@@ -41,10 +40,6 @@ export default function LadderEditor() {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     flowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
   }, [flowUpdated === true])
-
-  useEffect(() => {
-    setRungs(flow?.rungs || [])
-  }, [flow?.rungs])
 
   const handleAddNewRung = () => {
     const defaultViewport: [number, number] = [300, 100]
@@ -76,6 +71,8 @@ export default function LadderEditor() {
     }
 
     const auxRungs = [...(flow?.rungs || [])]
+    // Store the original state for recovery
+    const originalRungs = [...auxRungs]
     const [removed] = auxRungs.splice(sourceIndex, 1)
     auxRungs.splice(destinationIndex, 0, removed)
 
@@ -83,6 +80,10 @@ export default function LadderEditor() {
       flowActions.setRungs({ editorName: editor.meta.name, rungs: auxRungs })
     } catch (error) {
       console.error('Failed to update rungs:', error)
+      // Recover the original state
+      flowActions.setRungs({ editorName: editor.meta.name, rungs: originalRungs })
+      // Notify the user
+      console.error('Failed to reorder rungs. The operation has been reverted.')
     }
   }
 
