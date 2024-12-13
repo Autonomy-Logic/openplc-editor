@@ -27,6 +27,7 @@
   },
   "browserslist": [],
   "dependencies": {
+    "@hello-pangea/dnd": "^17.0.0",
     "@hookform/resolvers": "^3.3.2",
     "@monaco-editor/react": "^4.6.0",
     "@radix-ui/react-accordion": "^1.2.1",

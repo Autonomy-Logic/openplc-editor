@@ -20,8 +20,8 @@ export type ContactNode = Node<BasicNodeData & { variant: 'default' | 'negated' 
 type ContactProps = NodeProps<ContactNode>
 type ContactBuilderProps = BuilderBasicProps & { variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }
 
-export const DEFAULT_CONTACT_BLOCK_WIDTH = 28
-export const DEFAULT_CONTACT_BLOCK_HEIGHT = 28
+export const DEFAULT_CONTACT_BLOCK_WIDTH = 24
+export const DEFAULT_CONTACT_BLOCK_HEIGHT = 24
 
 export const DEFAULT_CONTACT_CONNECTOR_X = DEFAULT_CONTACT_BLOCK_WIDTH
 export const DEFAULT_CONTACT_CONNECTOR_Y = DEFAULT_CONTACT_BLOCK_HEIGHT / 2
@@ -106,18 +106,18 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
   useEffect(() => {
     if (inputVariableRef.current) {
       inputVariableRef.current.style.height = 'auto'
-      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 32 ? inputVariableRef.current.scrollHeight : 32}px`
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 24 ? inputVariableRef.current.scrollHeight : 24}px`
       if (scrollableIndicatorRef.current)
-        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 24 ? 'block' : 'none'
     }
   }, [contactVariableValue])
 
   useEffect(() => {
     if (inputVariableRef.current) {
       inputVariableRef.current.style.height = 'auto'
-      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 32 ? inputVariableRef.current.scrollHeight : 32}px`
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 24 ? inputVariableRef.current.scrollHeight : 24}px`
       if (scrollableIndicatorRef.current)
-        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 24 ? 'block' : 'none'
     }
   }, [contactVariableValue])
 
@@ -130,7 +130,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       return
     }
 
-    if (inputVariableRef.current) {
+    if (inputVariableRef.current && selected) {
       inputVariableRef.current.focus()
     }
   }, [])
@@ -225,47 +225,51 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
 
   return (
     <div
-      className={cn('relative', {
+      className={cn({
         'opacity-40': id.startsWith('copycat'),
       })}
     >
       <div
         className={cn(
-          'rounded-[1px] border border-transparent hover:outline hover:outline-2 hover:outline-offset-[5px] hover:outline-brand',
+          'relative rounded-[1px] border border-transparent hover:outline hover:outline-2 hover:outline-offset-[3px] hover:outline-brand',
           {
-            'outline outline-2 outline-offset-[5px] outline-brand': selected,
+            'outline outline-2 outline-offset-[3px] outline-brand': selected,
           },
         )}
         style={{ width: DEFAULT_CONTACT_BLOCK_WIDTH, height: DEFAULT_CONTACT_BLOCK_HEIGHT }}
       >
         {contact.svg(wrongVariable)}
-      </div>
-      <div className='absolute -left-[32px] -top-[38px] flex h-8 w-24 items-center justify-center'>
-        {isEditing ? (
+        <div className='absolute -left-[24px] -top-[26px] flex h-3 w-[72px] items-center justify-center'>
+          {isEditing ? (
           <textarea
-            value={contactVariableValue}
-            onChange={(e) => setContactVariableValue(e.target.value)}
-            placeholder='???'
-            className='w-full resize-none bg-transparent text-center text-xs outline-none [&::-webkit-scrollbar]:hidden'
-            onFocus={() => setInputFocus(true)}
-            onBlur={() => {
-              if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
-              inputFocus && handleSubmitContactVariable()
-            }}
-            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-            ref={inputVariableRef}
-            rows={1}
-          />
-        ) : (
+              value={contactVariableValue}
+              onChange={(e) => setContactVariableValue(e.target.value)}
+              placeholder='???'
+              className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
+              onFocus={() => setInputFocus(true)}
+              onBlur={() => {
+                if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
+                inputFocus && handleSubmitContactVariable()
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+              ref={inputVariableRef}
+              rows={1}
+            spellCheck={false}
+            />
+          ) : (
           <p
             onClick={() => setIsEditing(true)}
-            className='w-full resize-none bg-transparent text-center text-xs outline-none [&::-webkit-scrollbar]:hidden'
+            className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
             dangerouslySetInnerHTML={{ __html: formattedContactVariableValue || '???' }}
           />
         )}
       </div>
-      <div className={cn('pointer-events-none absolute -right-[48px] -top-7 text-xs')} ref={scrollableIndicatorRef}>
-        ↕
+        <div
+          className={cn('pointer-events-none absolute -right-[36px] -top-[27px] text-cp-sm')}
+          ref={scrollableIndicatorRef}
+        >
+          ↕
+        </div>
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

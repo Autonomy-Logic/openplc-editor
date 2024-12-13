@@ -18,10 +18,16 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
       setState(
         produce(({ flows }: FlowState) => {
           const flowIndex = flows.findIndex((f) => f.name === flow.name)
+          const rungs = flow.rungs.map((rung) => ({
+            ...rung,
+            selectedNodes: [],
+          }))
+          const newFlow = { ...flow, rungs }
+
           if (flowIndex === -1) {
-            flows.push({ ...flow })
+            flows.push(newFlow)
           } else {
-            flows[flowIndex] = { ...flow }
+            flows[flowIndex] = newFlow
           }
         }),
       )
@@ -59,18 +65,18 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
             nodesBuilder.powerRail({
               id: 'left-rail',
               posX: 0,
-              posY: 0,
+              posY: defaultBounds[1] / 2 - powerRail.height / 2,
               connector: 'right',
               handleX: powerRail.width,
-              handleY: powerRail.height / 2,
+              handleY: defaultBounds[1] / 2,
             }),
             nodesBuilder.powerRail({
               id: 'right-rail',
-              posX: 1530 - powerRail.width,
-              posY: 0,
+              posX: defaultBounds[0],
+              posY: defaultBounds[1] / 2 - powerRail.height / 2,
               connector: 'left',
               handleX: defaultBounds[0] - powerRail.width,
-              handleY: powerRail.height / 2,
+              handleY: defaultBounds[1] / 2,
             }),
           ]
           flow.rungs.push({
@@ -89,7 +95,33 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
                 type: 'smoothstep',
               },
             ],
+            selectedNodes: [],
           })
+        }),
+      )
+    },
+    setRungs: ({ editorName, rungs }) => {
+      setState(
+        produce(({ flows }: FlowState) => {
+          const flow = flows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          if (!Array.isArray(rungs)) return
+          // Validate each rung has required structure
+          if (
+            !rungs.every(
+              (rung) =>
+                rung.id &&
+                Array.isArray(rung.nodes) &&
+                Array.isArray(rung.edges) &&
+                rung.nodes.some((node) => node.id === 'left-rail') &&
+                rung.nodes.some((node) => node.id === 'right-rail'),
+            )
+          )
+            return
+
+          flow.rungs = rungs
+          flow.updated = true
         }),
       )
     },
