@@ -284,7 +284,11 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
         ? 'block-ladder-element'
         : node.type === 'coil'
           ? 'coil-ladder-element'
-          : 'contact-ladder-element'
+          : node.type === 'contact'
+            ? 'contact-ladder-element'
+            : undefined
+    if (!modalToOpen) return
+
     openModal(modalToOpen, node)
   }
 

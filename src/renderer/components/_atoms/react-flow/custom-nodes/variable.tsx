@@ -1,5 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCVariable } from '@root/types/PLC'
+import { genericTypeSchema, PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
@@ -8,6 +8,7 @@ import { BlockNodeData, BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
+// import { z } from 'zod'
 
 export type VariableNode = Node<
   BasicNodeData & {
@@ -86,11 +87,25 @@ const VariableElement = ({ id, data }: VariableProps) => {
     if (!variables.selected || !inputVariableRef) {
       setIsAVariable(false)
     } else {
-      if (variables.selected.type.value.toUpperCase() !== data.block.variableType.type.value.toUpperCase()) {
+      const variable = variables.selected
+      // Validation for generic types
+      if (data.block.variableType.type.value.toUpperCase().includes('ANY')) {
+        const type = { ...genericTypeSchema.shape }
+        const variableTypes = Object.values(
+          type[data.block.variableType.type.value.toUpperCase() as keyof typeof type].options,
+        )
+        if (!variableTypes.includes(variable.type.value.toUpperCase())) setInputError(true)
+        else setInputError(false)
+      }
+      // Validation for specific types
+      else if (variable.type.value.toUpperCase() !== data.block.variableType.type.value.toUpperCase()) {
         setInputError(true)
-      } else {
+      }
+      // Otherwise, no error
+      else {
         setInputError(false)
       }
+
       setIsAVariable(true)
     }
 
@@ -119,9 +134,6 @@ const VariableElement = ({ id, data }: VariableProps) => {
       setIsAVariable(false)
       variable = { name: variableValue }
     } else {
-      if ((variable as PLCVariable).type.value.toUpperCase() !== data.block.variableType.type.value.toUpperCase()) {
-        setInputError(true)
-      }
       setIsAVariable(true)
     }
 
