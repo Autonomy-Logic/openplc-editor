@@ -58,7 +58,7 @@ export const LadderToolbox = () => {
        *    -- src/renderer/components/_molecules/rung/header.tsx
        *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
        */
-      const blockNodes = rung.nodes.filter((node) => node.type === 'block')
+      const blockNodes = selectedNodes.filter((node) => node.type === 'block')
       if (blockNodes.length > 0) {
         let variables: PLCVariable[] = []
         if (pou) variables = [...pou.data.variables] as PLCVariable[]
