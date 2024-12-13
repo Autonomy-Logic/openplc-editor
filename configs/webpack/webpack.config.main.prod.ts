@@ -2,6 +2,7 @@
  * Webpack config for production electron main process
  */
 
+import HtmlWebpackPlugin from 'html-webpack-plugin'
 import { join } from 'path'
 import TerserPlugin from 'terser-webpack-plugin'
 import webpack from 'webpack'
@@ -63,6 +64,12 @@ const configuration: webpack.Configuration = {
       NODE_ENV: 'production',
       DEBUG_PROD: false,
       START_MINIMIZED: false,
+    }),
+    new HtmlWebpackPlugin({
+      filename: join('splash.html'),
+      template: join(webpackPaths.srcMainPath, 'modules', 'preload', 'splash-screen', 'splash.html'),
+      isBrowser: false,
+      isDevelopment: false,
     }),
 
     new webpack.DefinePlugin({

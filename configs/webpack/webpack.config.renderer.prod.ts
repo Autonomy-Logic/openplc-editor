@@ -133,7 +133,6 @@ const configuration: webpack.Configuration = {
       analyzerMode: process.env.ANALYZE === 'true' ? 'server' : 'disabled',
       analyzerPort: 8889,
     }),
-
     new HtmlWebpackPlugin({
       filename: 'index.html',
       template: join(webpackPaths.srcRendererPath, 'index.ejs'),

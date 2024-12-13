@@ -11,7 +11,7 @@ import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
 import { autoUpdater } from 'electron-updater'
 import { platform, release } from 'os'
-import path from 'path'
+import path, { resolve } from 'path'
 
 // TODO: Refactor this type declaration
 import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
@@ -118,17 +118,26 @@ const createMainWindow = async () => {
     height: 366,
     resizable: false,
     frame: false,
+    show: false,
     webPreferences: {
       sandbox: false,
     },
   })
 
+  const splashPath = app.isPackaged
+    ? resolve(__dirname, '../main/splash.html')
+    : 'src/main/modules/preload/splash-screen/splash.html'
   // TODO: Fix production path - Refactor folder structure
   splash
-    .loadFile('src/main/resources/splash-screen/splash.html')
+    .loadFile(splashPath)
     .then(() => console.log('Splash screen loaded successfully'))
     .catch((error) => console.error('Error loading splash screen:', error))
   splash.setIgnoreMouseEvents(false)
+  splash.webContents.on('did-finish-load', () => {
+    splash?.show()
+  })
+
+  splash.webContents.openDevTools()
   // Create the main window instance.
   mainWindow = new BrowserWindow({
     minWidth: 1124,
@@ -181,9 +190,9 @@ const createMainWindow = async () => {
   }
 
   // Open devtools if the app is not packaged;
-  if (isDebug) {
-    mainWindow.webContents.openDevTools()
-  }
+  // if (isDebug) {
+  mainWindow.webContents.openDevTools()
+  // }
 
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow) {
