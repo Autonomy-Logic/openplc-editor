@@ -113,7 +113,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       return
     }
 
-    if (inputVariableRef.current) {
+    if (inputVariableRef.current && selected) {
       inputVariableRef.current.focus()
     }
   }, [])

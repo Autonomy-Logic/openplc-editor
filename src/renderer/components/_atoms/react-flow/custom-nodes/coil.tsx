@@ -143,7 +143,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       return
     }
 
-    if (inputVariableRef.current) {
+    if (inputVariableRef.current && selected) {
       inputVariableRef.current.focus()
     }
   }, [])

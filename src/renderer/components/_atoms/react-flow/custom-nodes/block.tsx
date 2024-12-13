@@ -288,8 +288,8 @@ export const BlockNodeElement = <T extends object>({
         'relative flex flex-col rounded-md border border-neutral-850 bg-white text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
         {
           'hover:border-transparent hover:ring-2 hover:ring-brand': !disabled,
+          'border-transparent ring-1 ring-red-500': wrongVariable || wrongName,
           'border-transparent ring-2 ring-brand': selected,
-          'border-transparent ring-2 ring-red-500': wrongVariable || wrongName,
         },
       )}
       style={{
@@ -349,27 +349,27 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
   } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
   const documentation = `${variantDocumentation}
 
-  -- INPUT --
-  ${blockVariables
-    .filter((variable) => variable.class === 'input')
-    .map(
-      (variable, index) =>
-        `${variable.name}: ${variable.type.value}${
-          index < blockVariables.filter((variable) => variable.class === 'input').length - 1 ? '\n' : ''
-        }`,
-    )
-    .join('')}
+        -- INPUT --
+        ${blockVariables
+          .filter((variable) => variable.class === 'input')
+          .map(
+            (variable, index) =>
+              `${variable.name}: ${variable.type.value}${
+                index < blockVariables.filter((variable) => variable.class === 'input').length - 1 ? '\n' : ''
+              }`,
+          )
+          .join('')}
 
-  -- OUTPUT --
-    ${blockVariables
-      .filter((variable) => variable.class === 'output')
-      .map(
-        (variable, index) =>
-          `${variable.name}: ${variable.type.value}${
-            index < blockVariables.filter((variable) => variable.class === 'output').length - 1 ? '\n' : ''
-          }`,
-      )
-      .join('')}`
+        -- OUTPUT --
+          ${blockVariables
+            .filter((variable) => variable.class === 'output')
+            .map(
+              (variable, index) =>
+                `${variable.name}: ${variable.type.value}${
+                  index < blockVariables.filter((variable) => variable.class === 'output').length - 1 ? '\n' : ''
+                }`,
+            )
+            .join('')}`
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
@@ -396,7 +396,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
       return
     }
 
-    if (inputVariableRef.current) {
+    if (inputVariableRef.current && selected) {
       switch (blockType) {
         case 'function-block':
           inputVariableRef.current.focus()
@@ -553,7 +553,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
               wrongVariable={wrongVariable}
             />
           </TooltipTrigger>
-          {!dragging && documentation && documentation !== '' && (
+          {!dragging && blockType !== 'generic' && documentation && (
             <TooltipContent side='right' className='text-xs'>
               <span className='whitespace-pre-line'>{documentation}</span>
             </TooltipContent>

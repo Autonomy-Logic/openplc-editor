@@ -95,17 +95,19 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
     })
   }
 
-  useEffect(() => {
-    updateFlowPanelExtent(rungLocal)
-  }, [rungLocal.nodes.length])
-
   /**
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    // console.log('rung', rung)
+    console.log('rung', rung)
     setRungLocal(rung)
+    updateFlowPanelExtent(rung)
   }, [rung.nodes])
+
+  // useEffect(() => {
+  //   console.log('rungLocal.nodes.length', rungLocal.nodes)
+  //   updateFlowPanelExtent(rungLocal)
+  // }, [rungLocal.nodes.length])
 
   /**
    *  Update the local rung state when the rung state changes
@@ -134,10 +136,12 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
     let pouLibrary = undefined
     if (blockType) {
       const [blockLibraryType, blockLibrary, pouName] = blockType.split('/')
+
       if (blockLibraryType === 'system')
         pouLibrary = libraries.system
           .find((Library) => Library.name === blockLibrary)
           ?.pous.find((p) => p.name === pouName)
+
       if (blockLibraryType === 'user') {
         const Library = libraries.user.find((Library) => Library.name === blockLibrary)
         const pou = pous.find((pou) => pou.data.name === Library?.name)
