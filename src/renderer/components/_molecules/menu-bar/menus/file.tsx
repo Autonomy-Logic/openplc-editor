@@ -192,48 +192,47 @@ export const FileMenu = () => {
           </MenuPrimitive.Content>
         </MenuPrimitive.Portal>
         {modalOpen && (
-        <Modal open={modalOpen} onOpenChange={setModalOpen}>
-        <ModalContent className="flex h-[420px] w-[340px] select-none flex-col items-center justify-evenly rounded-lg">
-          <div className="flex h-[350px] select-none flex-col items-center gap-6">
-            <WarningIcon className="mr-2 mt-2 h-[73px] w-[73px]" />
-            <div>
-              <p className="text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100">
-                There are unsaved changes in your project. Do you want to save before closing?
-              </p>
-            </div>
+          <Modal open={modalOpen} onOpenChange={setModalOpen}>
+            <ModalContent className='flex h-[420px] w-[340px] select-none flex-col items-center justify-evenly rounded-lg'>
+              <div className='flex h-[350px] select-none flex-col items-center gap-6'>
+                <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px]' />
+                <div>
+                  <p className='text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100'>
+                    There are unsaved changes in your project. Do you want to save before closing?
+                  </p>
+                </div>
 
-            <div className="flex w-[300px] flex-col text-sm">
-              <div className="flex flex-col gap-2 mb-6">
-                <button
-                  onClick={() => {
-                    void handleSaveProject();
-                    handleModalClose();
-                  }}
-                  className="w-full rounded-lg bg-blue-500 px-4 py-2 text-center font-medium text-neutral-1000 dark:text-neutral-100"
-                >
-                  Save and Close
-                </button>
-                <button
-                  onClick={() => {
-                    setDiscardChanges(true);
-                    handleModalClose();
-                  }}
-                  className="w-full rounded-md px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100"
-                >
-                  Close Without Saving
-                </button>
+                <div className='flex w-[300px] flex-col text-sm'>
+                  <div className='mb-6 flex flex-col gap-2'>
+                    <button
+                      onClick={() => {
+                        void handleSaveProject()
+                        handleModalClose()
+                      }}
+                      className='w-full rounded-lg bg-brand px-4 py-2 text-center font-medium text-white '
+                    >
+                      Save and Close
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDiscardChanges(true)
+                        handleModalClose()
+                      }}
+                      className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+                    >
+                      Close Without Saving
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleModalClose}
+                    className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={handleModalClose}
-                className="w-full rounded-md px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </ModalContent>
-      </Modal>
-
+            </ModalContent>
+          </Modal>
         )}
       </MenuPrimitive.Menu>
     </>
