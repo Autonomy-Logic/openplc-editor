@@ -39,9 +39,9 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
         }),
       )
     },
-    removeSearchResult: (indexToRemove: number) =>
+    removeSearchResult: (itemID: string) =>
       setState((state) => ({
-        searchResults: state.searchResults.filter((_, index) => index !== indexToRemove),
+        searchResults: state.searchResults.filter((item) => item.searchID !== itemID),
       })),
 
     setSearchNodePosition: (searchNodePosition: { x: number; y: number }) => {

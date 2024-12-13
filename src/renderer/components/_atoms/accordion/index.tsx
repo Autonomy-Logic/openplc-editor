@@ -1,17 +1,16 @@
 import * as AccordionPrimitive from '@radix-ui/react-accordion'
 import { ChevronDownIcon } from '@radix-ui/react-icons'
 import { cn } from '@root/utils'
-import { forwardRef, useState } from 'react'
+import { forwardRef, useEffect, useRef, useState } from 'react'
 
 interface AccordionItemProps {
   title: React.ReactNode
   content: React.ReactNode
+  searchID: string
 }
 
 interface AccordionProps {
   items: AccordionItemProps[]
-  defaultValue?: string
-  type?: 'single' | 'multiple'
   collapsible?: boolean
 }
 
@@ -69,24 +68,33 @@ const AccordionContent = forwardRef<HTMLDivElement, AccordionPrimitive.Accordion
 
 AccordionContent.displayName = 'AccordionContent'
 
-const Accordion = ({ items, defaultValue, type = 'single', collapsible = true }: AccordionProps) => {
-  const [openItem, setOpenItem] = useState<string | null>(defaultValue || null)
+const Accordion = ({ items }: AccordionProps) => {
+  const [openItems, setOpenItems] = useState<string[]>([])
+  const prevItemsLength = useRef<number>(items.length)
 
-  const handleOpenChange = (value: string) => {
-    setOpenItem(value === openItem ? null : value)
+  useEffect(() => {
+    if (items.length > prevItemsLength.current) {
+      setOpenItems([items[items.length - 1].searchID])
+    } else if (prevItemsLength.current === 1) {
+      setOpenItems([items[0].searchID])
+    }
+    prevItemsLength.current = items.length
+  }, [items.length])
+
+  const handleValueChange = (value: string[]) => {
+    setOpenItems(value)
   }
 
   return (
-    <AccordionPrimitive.Root type={type} collapsible={collapsible} className='w-full'>
-      {items.map((item, index) => (
-        <AccordionItem key={index} value={item.title as string}>
-          <AccordionTrigger
-            onClick={() => {
-              handleOpenChange(item.title as string)
-            }}
-          >
-            {item.title}
-          </AccordionTrigger>
+    <AccordionPrimitive.Root
+      type='multiple'
+      value={openItems}
+      onValueChange={handleValueChange}
+      className='flex w-full flex-col gap-1'
+    >
+      {items.map((item) => (
+        <AccordionItem key={item.searchID} value={item.searchID}>
+          <AccordionTrigger>{item.title}</AccordionTrigger>
           <AccordionContent>{item.content}</AccordionContent>
         </AccordionItem>
       ))}

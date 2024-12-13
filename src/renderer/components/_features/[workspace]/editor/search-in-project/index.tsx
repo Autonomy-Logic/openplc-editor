@@ -3,6 +3,7 @@ import { CheckIcon } from '@radix-ui/react-icons'
 import { InputWithRef } from '@root/renderer/components/_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useEffect, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 
 import { useToast } from '../../../[app]/toast/use-toast'
 
@@ -78,7 +79,7 @@ const RadioOption = ({
 export default function SearchInProject({ onClose }: SearchInProjectModalProps) {
   const [selectedScope, setSelectedScope] = useState('whole project')
   const [checkedOptions, setCheckedOptions] = useState<{ [key: string]: boolean }>({})
-  const [sensitiveCaseOption, setsensitiveCaseOption] = useState(false)
+  const [sensitiveCaseOption, setSensitiveCaseOption] = useState(false)
   const [regularExpressionOption, setRegularExpressionOption] = useState(false)
   const [disabledSensitiveCaseOption, setDisabledSensitiveCaseOption] = useState(false)
   const [disabledRegularExpressionOption, setDisabledRegularExpressionOption] = useState(false)
@@ -211,20 +212,16 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
               : variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
         )
 
-        const bodyMatches = ['st', 'il'].includes(pou.data.language)
-          ? regularExpressionOption
-            ? countOccurrences(
-                pou.data.body.value as string,
-                searchQuery,
-                sensitiveCaseOption,
-                regularExpressionOption,
-              ) > 0
-            : sensitiveCaseOption
-              ? (pou.data.body.value as string).includes(searchQuery)
-              : (pou.data.body.value as string).toLowerCase().includes(searchQuery.toLowerCase())
-          : false
-
-        return pouTypeMatchesFilter && (pouMatches || variableMatches || bodyMatches)
+        return pouTypeMatchesFilter && (pouMatches || variableMatches || (['st', 'il'].includes(pou.data.language) && (() => {
+          try {
+            const regex = new RegExp(searchQuery, sensitiveCaseOption ? 'g' : 'gi')
+            const matches = (pou.data.body.value as string).match(regex)
+            return matches ? matches.length > 0 : false
+          } catch (error) {
+            console.error('Invalid regex or error processing body:', error)
+            return false
+          }
+        })()))
       })
       .reduce(
         (acc, pou) => {
@@ -238,7 +235,16 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
             name: pou.data.name,
             language: pou.data.language,
             pouType: pou.type,
-            body: typeof pou.data.body === 'string' ? pou.data.body : JSON.stringify(pou.data.body),
+            body: (['st', 'il'].includes(pou.data.language) && (() => {
+              try {
+                const regex = new RegExp(`\\b(${searchQuery}\\w*)`, sensitiveCaseOption ? 'g' : 'gi')
+                const matches = (pou.data.body.value as string).match(regex)
+                return matches ? matches.join(', ') : ''
+              } catch (error) {
+                console.error('Invalid regex or error processing body:', error)
+                return ''
+              }
+            })()) || '',
             variable: pou.data.variables
               .filter((variable) =>
                 regularExpressionOption
@@ -349,6 +355,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       resourceInstances.length
 
     const formattedResults = {
+      searchID: uuidv4(),
       searchQuery,
       projectName: meta.name,
       functions: {
@@ -412,7 +419,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
             label='Case Sensitive'
             checked={sensitiveCaseOption}
             onChange={() => {
-              setsensitiveCaseOption(!sensitiveCaseOption)
+              setSensitiveCaseOption(!sensitiveCaseOption)
               setSensitiveCase(!sensitiveCaseOption)
               setDisabledRegularExpressionOption(!disabledRegularExpressionOption)
             }}

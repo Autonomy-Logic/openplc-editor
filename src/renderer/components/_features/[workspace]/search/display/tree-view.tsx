@@ -16,6 +16,7 @@ import {
   STIcon,
   StructureIcon,
 } from '@root/renderer/assets'
+import { CommentIcon } from '@root/renderer/assets/icons/interface/Comment'
 import ZapIcon from '@root/renderer/assets/icons/interface/Zap'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
@@ -310,9 +311,15 @@ const ProjectSearchTreeVariableBranch = ({ leafLang, label, children, ...res }: 
 type IProjectSearchTreeVariableLeafProps = ComponentPropsWithoutRef<'li'> & {
   label?: string | null
   hasVariable?: boolean
+  hasComment?: boolean
 }
 
-const ProjectSearchTreeVariableLeaf = ({ label, hasVariable, ...res }: IProjectSearchTreeVariableLeafProps) => {
+const ProjectSearchTreeVariableLeaf = ({
+  label,
+  hasVariable,
+  hasComment,
+  ...res
+}: IProjectSearchTreeVariableLeafProps) => {
   return (
     label && (
       <li
@@ -321,7 +328,8 @@ const ProjectSearchTreeVariableLeaf = ({ label, hasVariable, ...res }: IProjectS
         )}
         {...res}
       >
-        {hasVariable ? <ZapIcon className='flex-shrink-0' /> : <div className='w-5' />}
+        {hasVariable && <ZapIcon className='flex-shrink-0' />}
+        {hasComment && <CommentIcon className='h-5 w-5 flex-shrink-0' />}
         <span
           className={cn(
             'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-medium text-neutral-1000 dark:text-white',

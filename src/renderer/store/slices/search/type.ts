@@ -28,6 +28,7 @@ const projectSchema = z.object({
   projectName: z.string(),
   functions: searchModelSchema,
   searchCounts: z.number().optional(),
+  searchID: z.string(),
 })
 type Project = z.infer<typeof projectSchema>
 
@@ -45,7 +46,7 @@ const searchActionsSchema = z.object({
   setSearchResults: z.function().args(projectSchema).returns(z.void()),
   setSensitiveCase: z.function().args(z.boolean()).returns(z.void()),
   setRegularExpression: z.function().args(z.boolean()).returns(z.void()),
-  removeSearchResult: z.function().args(z.number()).returns(z.void()),
+  removeSearchResult: z.function().args(z.string()).returns(z.void()),
   setSearchNodePosition: z
     .function()
     .args(z.object({ x: z.number(), y: z.number() }))
