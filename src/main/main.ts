@@ -120,24 +120,24 @@ const createMainWindow = async () => {
     frame: false,
     show: false,
     webPreferences: {
-      sandbox: false,
+      sandbox: true,
     },
   })
 
   const splashPath = app.isPackaged
     ? resolve(__dirname, '../main/splash.html')
     : 'src/main/modules/preload/splash-screen/splash.html'
-  // TODO: Fix production path - Refactor folder structure
   splash
     .loadFile(splashPath)
     .then(() => console.log('Splash screen loaded successfully'))
     .catch((error) => console.error('Error loading splash screen:', error))
+
   splash.setIgnoreMouseEvents(false)
-  splash.webContents.on('did-finish-load', () => {
+
+  splash.once('ready-to-show', () => {
     splash?.show()
   })
 
-  splash.webContents.openDevTools()
   // Create the main window instance.
   mainWindow = new BrowserWindow({
     minWidth: 1124,
@@ -157,15 +157,6 @@ const createMainWindow = async () => {
   // Load the Url or index.html file;
   void mainWindow.loadURL(resolveHtmlPath('index.html'))
 
-  // Send a message to the renderer process when the content finishes loading;
-
-  mainWindow.webContents.on('did-finish-load', () => {
-    if (splash) {
-      splash?.destroy()
-    }
-    mainWindow?.show()
-    mainWindow?.webContents.send('main-process-message', new Date().toLocaleString())
-  })
   // Save window bounds on resize, close, and move events
   const saveBounds = () => {
     store.set('window.bounds', mainWindow?.getBounds())
@@ -190,10 +181,11 @@ const createMainWindow = async () => {
   }
 
   // Open devtools if the app is not packaged;
-  // if (isDebug) {
-  mainWindow.webContents.openDevTools()
-  // }
+  if (isDebug) {
+    mainWindow.webContents.openDevTools()
+  }
 
+  // Listen to the ready event to show the window gracefully;
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow) {
       throw new Error('"mainWindow" is not defined')
@@ -201,8 +193,10 @@ const createMainWindow = async () => {
     if (process.env.START_MINIMIZED) {
       mainWindow.minimize()
     }
-    splash?.close()
-    mainWindow.show()
+    setTimeout(() => {
+      splash?.close()
+      mainWindow?.show()
+    }, 10000)
   })
 
   mainWindow.on('closed', () => {
