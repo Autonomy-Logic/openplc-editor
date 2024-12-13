@@ -581,6 +581,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
               onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
               ref={inputVariableRef}
               rows={1}
+              spellCheck={false}
             />
             <div className={cn('pointer-events-none text-cp-sm')} ref={scrollableIndicatorRef}>
               ↕

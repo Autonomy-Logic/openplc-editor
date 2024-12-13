@@ -1,13 +1,14 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCVariable } from '@root/types/PLC'
+import { genericTypeSchema, PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
-import { BlockNodeData } from './block'
+import { BlockNodeData, BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
+// import { z } from 'zod'
 
 export type VariableNode = Node<
   BasicNodeData & {
@@ -15,6 +16,7 @@ export type VariableNode = Node<
     block: {
       id: string
       handleId: string
+      variableType: BlockVariant['variables'][0]
     }
   }
 >
@@ -24,6 +26,7 @@ type VariableBuilderProps = BuilderBasicProps & {
   block: {
     id: string
     handleId: string
+    variableType: BlockVariant['variables'][0]
   }
   variable: PLCVariable | undefined
 }
@@ -33,6 +36,32 @@ export const DEFAULT_VARIABLE_HEIGHT = 32
 
 export const DEFAULT_VARIABLE_CONNECTOR_X = DEFAULT_VARIABLE_WIDTH
 export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
+
+const validateVariableType = (
+  selectedType: string,
+  expectedType: BlockVariant['variables'][0],
+): { isValid: boolean; error?: string } => {
+  const upperSelectedType = selectedType.toUpperCase()
+  const upperExpectedType = expectedType.type.value.toUpperCase()
+
+  // Handle generic types
+  if (upperExpectedType.includes('ANY')) {
+    const validTypes = Object.values(
+      genericTypeSchema.shape[upperExpectedType as keyof typeof genericTypeSchema.shape].options,
+    )
+    return {
+      isValid: validTypes.includes(upperSelectedType),
+      error: validTypes.includes(upperSelectedType) ? undefined : `Expected one of: ${validTypes.join(', ')}`,
+    }
+  }
+
+  // Handle specific types
+  return {
+    isValid: upperSelectedType === upperExpectedType,
+    error:
+      upperSelectedType === upperExpectedType ? undefined : `Expected: ${upperExpectedType}, Got: ${upperSelectedType}`,
+  }
+}
 
 const VariableElement = ({ id, data }: VariableProps) => {
   const {
@@ -84,6 +113,10 @@ const VariableElement = ({ id, data }: VariableProps) => {
     if (!variables.selected || !inputVariableRef) {
       setIsAVariable(false)
     } else {
+      const variable = variables.selected
+      const validation = validateVariableType(variable.type.value, data.block.variableType)
+      setInputError(!validation.isValid)
+
       setIsAVariable(true)
     }
 
@@ -170,7 +203,7 @@ const VariableElement = ({ id, data }: VariableProps) => {
           style={{
             scrollbarGutter: 'stable',
           }}
-          placeholder='???'
+          placeholder={`(*${data.block.variableType.type.value}*)`}
           className={cn(
             'h-full w-full resize-none bg-transparent text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden',
             {
@@ -188,6 +221,7 @@ const VariableElement = ({ id, data }: VariableProps) => {
           onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
           rows={1}
           ref={inputVariableRef}
+          spellCheck={false}
         />
         <div
           className={cn(`pointer-events-none absolute text-xs`, {
