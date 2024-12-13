@@ -198,6 +198,7 @@ const VariableElement = ({ id, data }: VariableProps) => {
           onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
           rows={1}
           ref={inputVariableRef}
+          spellCheck={false}
         />
         <div
           className={cn(`pointer-events-none absolute text-xs`, {

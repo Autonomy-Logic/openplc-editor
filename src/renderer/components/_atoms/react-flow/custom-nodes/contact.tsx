@@ -235,6 +235,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
             onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
             ref={inputVariableRef}
             rows={1}
+            spellCheck={false}
           />
         </div>
         <div

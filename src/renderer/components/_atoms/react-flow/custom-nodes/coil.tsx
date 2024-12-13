@@ -256,6 +256,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
             onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
             ref={inputVariableRef}
             rows={1}
+            spellCheck={false}
           />
         </div>
         <div
