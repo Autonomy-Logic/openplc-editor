@@ -3,6 +3,7 @@ import { CreateRung } from '@root/renderer/components/_molecules/rung/create-run
 import { Rung } from '@root/renderer/components/_organisms/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { zodFlowSchema } from '@root/renderer/store/slices'
+import { cn } from '@root/utils'
 import { useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -96,7 +97,9 @@ export default function LadderEditor() {
               <div
                 ref={provided.innerRef}
                 {...provided.droppableProps}
-                className='h-fit rounded-lg border dark:border-neutral-800'
+                className={cn({
+                  'h-fit rounded-lg border dark:border-neutral-800': rungs.length > 0,
+                })}
               >
                 {rungs.map((rung, index) => (
                   <Rung key={rung.id} id={rung.id} index={index} rung={rung} />
