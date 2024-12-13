@@ -575,36 +575,36 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
           width: width ?? DEFAULT_BLOCK_WIDTH,
         }}
       >
-        {(data.variant as BlockVariant).type !== 'function' &&
-          (data.variant as BlockVariant).type !== 'generic' &&
-          (isEditing ? (
-            <div className='flex w-full flex-row'>
-            <textarea
+        {(data.variant as BlockVariant).type !== 'function' && (data.variant as BlockVariant).type !== 'generic' && (
+          <div className='flex w-full flex-row'>
+            {isEditing ? (
+              <textarea
                 value={blockVariableValue}
                 onChange={(e) => setBlockVariableValue(e.target.value)}
                 placeholder='???'
                 className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
                 onFocus={() => setInputVariableFocus(true)}
                 onBlur={() => {
-                if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
-                inputVariableFocus && handleSubmitBlockVariable()
-              }}
+                  if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
+                  inputVariableFocus && handleSubmitBlockVariable()
+                }}
                 onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
                 ref={inputVariableRef}
-              rows={1}
-              spellCheck={false}
+                rows={1}
+                spellCheck={false}
               />
+            ) : (
+              <p
+                onClick={() => setIsEditing(true)}
+                className='w-full bg-transparent text-center text-sm outline-none'
+                dangerouslySetInnerHTML={{ __html: formattedBlockVariableValue || '???' }}
+              />
+            )}
             <div className={cn('pointer-events-none text-cp-sm')} ref={scrollableIndicatorRef}>
               ↕
             </div>
           </div>
-          ) : (
-            <p
-              onClick={() => setIsEditing(true)}
-              className='w-full bg-transparent text-center text-sm outline-none'
-              dangerouslySetInnerHTML={{ __html: formattedBlockVariableValue || '???' }}
-            />
-          ))}
+        )}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
