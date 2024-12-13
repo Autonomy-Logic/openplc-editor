@@ -38,10 +38,14 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = e.target
-    setEditorContent((prevContent) => prevContent ? {
-      ...prevContent,
-      name: value,
-    } : prevContent)
+    setEditorContent((prevContent) =>
+      prevContent
+        ? {
+            ...prevContent,
+            name: value,
+          }
+        : prevContent,
+    )
   }
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -75,14 +79,23 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
             aria-label='Data type name input container'
             className='h-[30px] w-full max-w-[385px] rounded-lg border border-neutral-400 bg-white focus-within:border-brand dark:border-neutral-800 dark:bg-neutral-950'
           >
-            <InputWithRef
-              value={editorContent?.name}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              id='data-type-name'
-              aria-label='data-type-name'
-              className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
-            />
+            {isEditing ? (
+              <InputWithRef
+                value={editorContent?.name}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                id='data-type-name'
+                aria-label='data-type-name'
+                className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
+              />
+            ) : (
+              <p
+                aria-label='Data type name'
+                className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
+                onClick={handleStartEditing}
+                dangerouslySetInnerHTML={{ __html: extractSearchQuery(editorContent?.name || '', searchQuery) }}
+              />
+            )}
           </div>
         </div>
       </div>
