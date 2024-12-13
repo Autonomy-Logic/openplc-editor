@@ -1,5 +1,5 @@
 import { defaultCustomNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
-import { BlockNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
+import { BlockNode, BlockVariant } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
 import { RungState } from '@root/renderer/store/slices'
 import { Edge, Node } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
@@ -12,6 +12,7 @@ export const renderVariableBlock = <T>(rung: RungState, block: Node) => {
   const variableElementStyle = defaultCustomNodesStyles.variable
 
   const blockElement = block as BlockNode<T>
+  const blockVariant = blockElement.data.variant as BlockVariant
 
   const inputHandles =
     blockElement.data.inputHandles.length > 1
@@ -27,6 +28,17 @@ export const renderVariableBlock = <T>(rung: RungState, block: Node) => {
       inputHandle.id && inputHandle.id in blockElement.data.connectedVariables
         ? blockElement.data.connectedVariables[inputHandle.id]
         : undefined
+    let variableType: BlockVariant['variables'][0] = {
+      name: '',
+      class: '',
+      type: {
+        definition: '',
+        value: '',
+      },
+    }
+    blockVariant.variables.forEach((variable) => {
+      if (variable.name === inputHandle.id) variableType = variable
+    })
 
     const variableElement = nodesBuilder.variable({
       id: `variable_${uuidv4()}`,
@@ -38,6 +50,7 @@ export const renderVariableBlock = <T>(rung: RungState, block: Node) => {
       block: {
         id: blockElement.id,
         handleId: inputHandle.id as string,
+        variableType,
       },
       variable: connectedVariable ? connectedVariable.variable : undefined,
     })
@@ -52,6 +65,17 @@ export const renderVariableBlock = <T>(rung: RungState, block: Node) => {
 
   outputHandles.forEach((outputHandle) => {
     const connectedVariable = blockElement.data.connectedVariables[outputHandle.id as string]
+    let variableType: BlockVariant['variables'][0] = {
+      name: '',
+      class: '',
+      type: {
+        definition: '',
+        value: '',
+      },
+    }
+    blockVariant.variables.forEach((variable) => {
+      if (variable.name === outputHandle.id) variableType = variable
+    })
 
     const variableElement = nodesBuilder.variable({
       id: `variable_${uuidv4()}`,
@@ -63,6 +87,7 @@ export const renderVariableBlock = <T>(rung: RungState, block: Node) => {
       block: {
         id: blockElement.id,
         handleId: outputHandle.id as string,
+        variableType,
       },
       variable: connectedVariable ? connectedVariable.variable : undefined,
     })

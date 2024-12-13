@@ -4,7 +4,7 @@ import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
-import { BlockNodeData } from './block'
+import { BlockNodeData, BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
@@ -15,6 +15,7 @@ export type VariableNode = Node<
     block: {
       id: string
       handleId: string
+      variableType: BlockVariant['variables'][0]
     }
   }
 >
@@ -24,6 +25,7 @@ type VariableBuilderProps = BuilderBasicProps & {
   block: {
     id: string
     handleId: string
+    variableType: BlockVariant['variables'][0]
   }
   variable: PLCVariable | undefined
 }
@@ -84,6 +86,11 @@ const VariableElement = ({ id, data }: VariableProps) => {
     if (!variables.selected || !inputVariableRef) {
       setIsAVariable(false)
     } else {
+      if (variables.selected.type.value.toUpperCase() !== data.block.variableType.type.value.toUpperCase()) {
+        setInputError(true)
+      } else {
+        setInputError(false)
+      }
       setIsAVariable(true)
     }
 
@@ -112,6 +119,9 @@ const VariableElement = ({ id, data }: VariableProps) => {
       setIsAVariable(false)
       variable = { name: variableValue }
     } else {
+      if ((variable as PLCVariable).type.value.toUpperCase() !== data.block.variableType.type.value.toUpperCase()) {
+        setInputError(true)
+      }
       setIsAVariable(true)
     }
 
@@ -170,7 +180,7 @@ const VariableElement = ({ id, data }: VariableProps) => {
           style={{
             scrollbarGutter: 'stable',
           }}
-          placeholder='???'
+          placeholder={`(*${data.block.variableType.type.value}*)`}
           className={cn(
             'h-full w-full resize-none bg-transparent text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden',
             {
