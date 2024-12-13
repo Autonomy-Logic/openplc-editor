@@ -5,11 +5,14 @@ import { ReactNode, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 
 import Toaster from '../_features/[app]/toast/toaster'
+import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 
 // type IAppLayoutProps = ComponentPropsWithoutRef<'div'>
 const AppLayout = (): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
+    modals,
+    modalActions: { openModal },
     workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecents },
   } = useOpenPLCStore()
 
@@ -44,6 +47,14 @@ const AppLayout = (): ReactNode => {
     })
   }, [])
 
+  useEffect(() => {
+    const handleCreateProjectAccelerator = () => {
+      window.bridge.createProjectAccelerator(() => openModal('create-project', null))
+    }
+    handleCreateProjectAccelerator()
+
+  }, [])
+
   return (
     <>
       {!isLinux && <TitleBar />}
@@ -55,6 +66,7 @@ const AppLayout = (): ReactNode => {
       >
         <Outlet />
         <Toaster />
+        {modals?.['create-project']?.open === true && <ProjectModal isOpen={modals['create-project'].open} />}
       </main>
     </>
   )

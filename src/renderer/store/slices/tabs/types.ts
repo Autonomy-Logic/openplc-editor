@@ -47,6 +47,7 @@ const tabsActionsSchema = z.object({
   sortTabs: z.function().args(z.array(tabsPropsSchema)).returns(z.void()),
   removeTab: z.function().args(z.string()).returns(z.void()),
   clearTabs: z.function().returns(z.void()),
+  updateTabName: z.function().args(z.string(), z.string()).returns(z.void()),
 })
 
 /** The state, the source of truth that drives our app. - Concept based on Redux */

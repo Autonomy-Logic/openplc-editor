@@ -24,6 +24,7 @@ const Breadcrumbs = () => {
     editor: { meta },
     project: {
       meta: { name },
+      data: { dataTypes },
     },
   } = useOpenPLCStore()
 
@@ -38,15 +39,16 @@ const Breadcrumbs = () => {
     | null => {
     if ('pouType' in meta) {
       return [meta.pouType] as ['program' | 'function' | 'function-block']
-    } else if ('derivation' in meta) {
+    } else if (dataTypes.find((datatype) => datatype.name === meta.name)) {
       return ['data-type']
     }
     return ['resource']
   }
 
   const getIconOrLanguage = (): [React.ElementType, string] => {
-    if ('derivation' in meta) {
-      return [derivationIcons[meta.derivation], _.startCase(meta.derivation)]
+    const dataTypeDerivation = dataTypes.find((datatype) => datatype.name === meta.name)?.derivation
+    if (dataTypeDerivation) {
+      return [derivationIcons[dataTypeDerivation], dataTypeDerivation]
     }
     if ('language' in meta) {
       return [LanguageIcon[meta.language], meta.language]

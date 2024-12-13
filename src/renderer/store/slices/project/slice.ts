@@ -46,6 +46,28 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
+    clearProjects: (): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          project.meta = {
+            name: '',
+            type: 'plc-project',
+            path: '',
+          }
+          project.data = {
+            dataTypes: [],
+            pous: [],
+            configuration: {
+              resource: {
+                tasks: [],
+                instances: [],
+                globalVariables: [],
+              },
+            },
+          }
+        }),
+      )
+    },
 
     /**
      * Meta Actions
@@ -84,12 +106,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             response = { ok: true, message: 'Pou created successfully' }
             console.log('pou created:', pouToBeCreated)
           }
-           if  (dataTypeExists || pouExists)
-              {toast({
-                title: 'Invalid Pou',
-                description: `You can't create a Pou with this name.`,
-                variant: 'fail',
-              })}
+          if (dataTypeExists || pouExists) {
+            toast({
+              title: 'Invalid Pou',
+              description: `You can't create a Pou with this name.`,
+              variant: 'fail',
+            })
+          }
         }),
       )
       return response
@@ -277,6 +300,40 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
+
+    rearrangeStructureVariables: (variableToBeRearranged): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const dataType = project.data.dataTypes.find(
+            (datatype) => datatype.name === variableToBeRearranged.associatedDataType,
+          )
+
+          if (!dataType || dataType.derivation !== 'structure' || !dataType.variable) {
+            console.error(`Data type ${variableToBeRearranged.associatedDataType} not found or invalid`)
+            return
+          }
+
+          const { rowId, newIndex } = variableToBeRearranged
+
+          if (rowId < 0 || rowId >= dataType.variable.length) {
+            console.error('Invalid rowId for rearrangement')
+            return
+          }
+
+          const [removed] = dataType.variable.splice(rowId, 1)
+
+          if (newIndex < 0 || newIndex > dataType.variable.length) {
+            console.error('Invalid newIndex for rearrangement')
+            return
+          }
+
+          dataType.variable.splice(newIndex, 0, removed)
+
+          console.log('Variables rearranged:', dataType.variable)
+        }),
+      )
+    },
+
     rearrangeVariables: (variableToBeRearranged): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
@@ -312,23 +369,39 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
      * Data Type Actions
      */
     createDatatype: (dataToCreate) => {
+      let response = { ok: true, message: '', data: null };
+    
       setState(
         produce(({ project }: ProjectSlice) => {
-          const { name } = dataToCreate
-          const dataExists = project.data.dataTypes.find((datatype) => datatype.name === name)
-          const pouExists = project.data.pous.find((datatype) => datatype.data.name === name)
+          const { data } = dataToCreate;
+          const { name } = data;
+    
+          const dataExists = project.data.dataTypes.find((datatype) => datatype.name === name);
+          const pouExists = project.data.pous.find((datatype) => datatype.data.name === name);
+    
           if (!dataExists && !pouExists) {
-            project.data.dataTypes.push(dataToCreate)
+            project.data.dataTypes.push(data);
+            response.message = 'Datatype created successfully.';
+            response.ok = true;
           } else {
+            response = {
+              ok: false,
+              message: `You can't create a POU and Data type with the same name.`,
+              data: null,
+            };
+    
             toast({
               title: 'Invalid array',
-              description: `You can't create a Pou and Data type with the same name.`,
+              description: response.message,
               variant: 'fail',
-            })
+            });
           }
         }),
-      )
+      );
+    
+      return response;
     },
+    
     // TODO: Review requirements.
     /**
      * Function to update a unique data type.
@@ -340,6 +413,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce(({ project }: ProjectSlice) => {
           const datatypeToUpdateIndex = project.data.dataTypes.findIndex((datatype) => datatype.name === name)
           if (datatypeToUpdateIndex === -1) return
+          console.log('Updating datatype', name, dataToUpdate)
           Object.assign(project.data.dataTypes[datatypeToUpdateIndex], dataToUpdate)
         }),
       )
