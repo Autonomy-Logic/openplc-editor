@@ -171,12 +171,15 @@ const VariableElement = ({ id, data }: VariableProps) => {
             scrollbarGutter: 'stable',
           }}
           placeholder='???'
-          className={cn('h-full w-full resize-none bg-transparent text-xs outline-none [&::-webkit-scrollbar]:hidden', {
-            'text-yellow-500': !isAVariable,
-            'text-red-500': inputError,
-            'pl-2 text-left': data.variant === 'output',
-            'pr-2 text-right': data.variant === 'input',
-          })}
+          className={cn(
+            'h-full w-full resize-none bg-transparent text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden',
+            {
+              'text-yellow-500': !isAVariable,
+              'text-red-500': inputError,
+              'pl-2 text-left': data.variant === 'output',
+              'pr-2 text-right': data.variant === 'input',
+            },
+          )}
           onFocus={() => setInputVariableFocus(true)}
           onBlur={() => {
             if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
@@ -188,8 +191,8 @@ const VariableElement = ({ id, data }: VariableProps) => {
         />
         <div
           className={cn(`pointer-events-none absolute text-xs`, {
-            '-left-3': data.variant === 'input',
-            '-right-3': data.variant === 'output',
+            '-left-2': data.variant === 'input',
+            '-right-2': data.variant === 'output',
           })}
           ref={scrollableIndicatorRef}
         >

@@ -43,7 +43,7 @@ export const defaultCustomNodesStyles: CustomNodeTypes = {
     gap: 120,
     verticalGap: 80,
     handle: {
-      x: blockNode.DEFAULT_BLOCK_CONNECTOR_X,
+      x: blockNode.DEFAULT_BLOCK_WIDTH,
       y: blockNode.DEFAULT_BLOCK_CONNECTOR_Y,
       offsetY: blockNode.DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
     },
@@ -51,7 +51,7 @@ export const defaultCustomNodesStyles: CustomNodeTypes = {
   coil: {
     width: coilNode.DEFAULT_COIL_BLOCK_WIDTH,
     height: coilNode.DEFAULT_COIL_BLOCK_HEIGHT,
-    gap: 55,
+    gap: 45,
     verticalGap: 80,
     handle: {
       x: coilNode.DEFAULT_COIL_CONNECTOR_X,
@@ -62,7 +62,7 @@ export const defaultCustomNodesStyles: CustomNodeTypes = {
   contact: {
     width: contactNode.DEFAULT_CONTACT_BLOCK_WIDTH,
     height: contactNode.DEFAULT_CONTACT_BLOCK_HEIGHT,
-    gap: 55,
+    gap: 45,
     verticalGap: 80,
     handle: {
       x: contactNode.DEFAULT_CONTACT_CONNECTOR_X,
@@ -106,7 +106,7 @@ export const defaultCustomNodesStyles: CustomNodeTypes = {
   powerRail: {
     width: powerRailNode.DEFAULT_POWER_RAIL_WIDTH,
     height: powerRailNode.DEFAULT_POWER_RAIL_HEIGHT,
-    gap: 20,
+    gap: 10,
     verticalGap: 0,
     handle: {
       x: powerRailNode.DEFAULT_POWER_RAIL_CONNECTOR_X,

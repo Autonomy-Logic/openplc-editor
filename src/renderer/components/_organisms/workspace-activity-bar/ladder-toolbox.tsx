@@ -1,8 +1,7 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { Node } from '@xyflow/react'
-import { useEffect, useState } from 'react'
 
+// import { useEffect } from 'react'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { TrashCanButton } from '../../_molecules/workspace-activity-bar/default'
 import { BlockButton, CoilButton, ContactButton } from '../../_molecules/workspace-activity-bar/ladder'
@@ -11,19 +10,11 @@ export const LadderToolbox = () => {
   const { editor, flows, flowActions } = useOpenPLCStore()
 
   const flow = flows.find((flow) => flow.name === editor.meta.name)
-  const [selectedNodes, setSelectedNodes] = useState<Node[]>([])
+  const selectedNodes = flow?.rungs.flatMap((rung) => rung.selectedNodes) || []
 
-  useEffect(() => {
-    if (!flow) return
-
-    setSelectedNodes(
-      flow.rungs.flatMap((rung) => {
-        console.log('rung.id', rung.id)
-        console.log('rung.selectedNodes', rung.selectedNodes)
-        return rung.selectedNodes || []
-      }),
-    )
-  }, [flow])
+  // useEffect(() => {
+  //   console.log('FLOW UPDATED', flow?.rungs.flatMap((rung) => rung.selectedNodes))
+  // }, [flow])
 
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>, iconType: string) => {
     event.dataTransfer.setData('application/reactflow/ladder-blocks', iconType)

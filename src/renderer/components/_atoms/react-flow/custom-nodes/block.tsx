@@ -1,5 +1,6 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
+import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/diagram'
+// import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
@@ -30,6 +31,7 @@ type variables = {
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
+  lockExecutionControl: boolean
   connectedVariables: variables
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
@@ -39,8 +41,7 @@ type BlockBuilderProps<T> = BuilderBasicProps & { variant: T; executionControl?:
 export const DEFAULT_BLOCK_WIDTH = 216
 export const DEFAULT_BLOCK_HEIGHT = 128
 
-export const DEFAULT_BLOCK_CONNECTOR_X = DEFAULT_BLOCK_WIDTH
-export const DEFAULT_BLOCK_CONNECTOR_Y = 40
+export const DEFAULT_BLOCK_CONNECTOR_Y = 36
 export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 40
 
 export const DEFAULT_BLOCK_TYPE = {
@@ -50,14 +51,7 @@ export const DEFAULT_BLOCK_TYPE = {
     { name: '???', class: 'input', type: { definition: 'base-type', value: 'BOOL' } },
     { name: '???', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
   ],
-  documentation: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam aliquam tristique tincidunt. Duis elementum
-            tortor sem, non convallis orci facilisis at. Suspendisse id bibendum nisl. Mauris ac massa diam. Mauris
-            ultrices massa justo, sed vehicula tellus rhoncus eget. Suspendisse lacinia nec dolor vitae sollicitudin.
-            Interdum et malesuada fames ac ante ipsum primis in faucibus. Quisque rutrum, tellus eu maximus cursus,
-            metus urna eleifend ex, vitae accumsan nisl neque luctus diam. Quisque vel dui vel eros lobortis maximus non
-            eget mauris. Aenean aliquet, justo id tempor placerat, ipsum purus molestie justo, sed euismod est arcu
-            fermentum odio. Nullam et mauris leo. Aenean magna ex, sollicitudin at consequat non, cursus nec elit. Morbi
-            sodales porta elementum.`,
+  documentation: '',
 }
 
 export const BlockNodeElement = <T extends object>({
@@ -65,6 +59,7 @@ export const BlockNodeElement = <T extends object>({
   data,
   disabled = false,
   height,
+  width,
   selected,
   wrongVariable = false,
   scale = 1,
@@ -72,6 +67,7 @@ export const BlockNodeElement = <T extends object>({
   nodeId?: string
   data: BlockNodeData<T>
   height: number
+  width: number
   selected: boolean
   disabled?: boolean
   wrongVariable?: boolean
@@ -263,11 +259,14 @@ export const BlockNodeElement = <T extends object>({
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
-    const { nodes: variableNodes, edges: variableEdges } = updateVariableBlockPosition({
-      ...rung,
-      nodes: newNodes,
-      edges: newEdges,
-    })
+    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
+      {
+        ...rung,
+        nodes: newNodes,
+        edges: newEdges,
+      },
+      [rung.defaultBounds[0], rung.defaultBounds[1]],
+    )
 
     setNodes({
       editorName: editor.meta.name,
@@ -289,12 +288,12 @@ export const BlockNodeElement = <T extends object>({
         'relative flex flex-col rounded-md border border-neutral-850 bg-white text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
         {
           'hover:border-transparent hover:ring-2 hover:ring-brand': !disabled,
+          'border-transparent ring-1 ring-red-500': wrongVariable || wrongName,
           'border-transparent ring-2 ring-brand': selected,
-          'border-transparent ring-2 ring-red-500': wrongVariable || wrongName,
         },
       )}
       style={{
-        width: DEFAULT_BLOCK_WIDTH,
+        width: width,
         height: height,
         transform: `scale(${scale})`,
       }}
@@ -304,7 +303,7 @@ export const BlockNodeElement = <T extends object>({
         onChange={(e) => setBlockNameValue(e.target.value.toUpperCase())}
         maxLength={20}
         placeholder='???'
-        className='w-full bg-transparent p-1 text-center text-sm outline-none'
+        className='w-full bg-transparent p-1 text-center text-xs outline-none'
         disabled={disabled}
         onFocus={() => setInputNameFocus(true)}
         onBlur={() => inputNameFocus && handleNameInputOnBlur()}
@@ -314,8 +313,8 @@ export const BlockNodeElement = <T extends object>({
       {inputConnectors.map((connector, index) => (
         <div
           key={index}
-          className='absolute text-sm'
-          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 11, left: 7 }}
+          className='absolute text-xs'
+          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, left: 6 }}
         >
           {connector}
         </div>
@@ -323,8 +322,8 @@ export const BlockNodeElement = <T extends object>({
       {outputConnectors.map((connector, index) => (
         <div
           key={index}
-          className='absolute text-sm'
-          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 11, right: 7 }}
+          className='absolute text-xs'
+          style={{ top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET - 10, right: 6 }}
         >
           {connector}
         </div>
@@ -333,7 +332,7 @@ export const BlockNodeElement = <T extends object>({
   )
 }
 
-export const Block = <T extends object>({ data, dragging, height, selected, id }: BlockProps<T>) => {
+export const Block = <T extends object>({ data, dragging, height, width, selected, id }: BlockProps<T>) => {
   const {
     editor,
     project: {
@@ -343,13 +342,50 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
     flows,
     flowActions: { updateNode },
   } = useOpenPLCStore()
-  const { documentation, type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const {
+    documentation: variantDocumentation,
+    type: blockType,
+    variables: blockVariables,
+  } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const documentation = `${variantDocumentation}
+
+        -- INPUT --
+        ${blockVariables
+          .filter((variable) => variable.class === 'input')
+          .map(
+            (variable, index) =>
+              `${variable.name}: ${variable.type.value}${
+                index < blockVariables.filter((variable) => variable.class === 'input').length - 1 ? '\n' : ''
+              }`,
+          )
+          .join('')}
+
+        -- OUTPUT --
+          ${blockVariables
+            .filter((variable) => variable.class === 'output')
+            .map(
+              (variable, index) =>
+                `${variable.name}: ${variable.type.value}${
+                  index < blockVariables.filter((variable) => variable.class === 'output').length - 1 ? '\n' : ''
+                }`,
+            )
+            .join('')}`
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
-  const inputVariableRef = useRef<HTMLInputElement>(null)
+  const inputVariableRef = useRef<HTMLTextAreaElement>(null)
+  const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
   const [inputVariableFocus, setInputVariableFocus] = useState<boolean>(true)
+
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.style.height = 'auto'
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 13 ? inputVariableRef.current.scrollHeight : 13}px`
+      if (scrollableIndicatorRef.current)
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 13 ? 'block' : 'none'
+    }
+  }, [blockVariableValue])
 
   /**
    * useEffect to focus the variable input when the correct block type is selected
@@ -360,7 +396,7 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
       return
     }
 
-    if (inputVariableRef.current) {
+    if (inputVariableRef.current && selected) {
       switch (blockType) {
         case 'function-block':
           inputVariableRef.current.focus()
@@ -512,30 +548,44 @@ export const Block = <T extends object>({ data, dragging, height, selected, id }
               nodeId={id}
               data={data}
               height={height ?? DEFAULT_BLOCK_HEIGHT}
+              width={width ?? DEFAULT_BLOCK_WIDTH}
               selected={selected ?? false}
               wrongVariable={wrongVariable}
             />
           </TooltipTrigger>
-          {!dragging && <TooltipContent side='right'>{documentation}</TooltipContent>}
+          {!dragging && blockType !== 'generic' && documentation && (
+            <TooltipContent side='right' className='text-xs'>
+              <span className='whitespace-pre-line'>{documentation}</span>
+            </TooltipContent>
+          )}
         </Tooltip>
       </TooltipProvider>
       <div
-        className='absolute -top-7'
+        className='absolute -top-4'
         style={{
-          width: DEFAULT_BLOCK_WIDTH,
+          width: width ?? DEFAULT_BLOCK_WIDTH,
         }}
       >
         {(data.variant as BlockVariant).type !== 'function' && (data.variant as BlockVariant).type !== 'generic' && (
-          <InputWithRef
-            value={blockVariableValue}
-            onChange={(e) => setBlockVariableValue(e.target.value)}
-            placeholder='???'
-            className='w-full bg-transparent text-center text-sm outline-none'
-            onFocus={() => setInputVariableFocus(true)}
-            onBlur={() => inputVariableFocus && handleSubmitBlockVariable()}
-            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-            ref={inputVariableRef}
-          />
+          <div className='flex w-full flex-row'>
+            <textarea
+              value={blockVariableValue}
+              onChange={(e) => setBlockVariableValue(e.target.value)}
+              placeholder='???'
+              className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
+              onFocus={() => setInputVariableFocus(true)}
+              onBlur={() => {
+                if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
+                inputVariableFocus && handleSubmitBlockVariable()
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+              ref={inputVariableRef}
+              rows={1}
+            />
+            <div className={cn('pointer-events-none text-cp-sm')} ref={scrollableIndicatorRef}>
+              ↕
+            </div>
+          </div>
         )}
       </div>
       {data.handles.map((handle, index) => (
@@ -564,31 +614,12 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
-  const variantLib = { ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) }
-  if (executionControl) {
-    const executionControlVariable = variantLib.variables.some(
-      (variable) => variable.name === 'EN' || variable.name === 'ENO',
-    )
-    if (!executionControlVariable) {
-      variantLib.variables = [
-        {
-          name: 'EN',
-          class: 'input',
-          type: { definition: 'generic-type', value: 'ANY_BOOL' },
-        },
-        {
-          name: 'ENO',
-          class: 'output',
-          type: { definition: 'generic-type', value: 'ANY_BOOL' },
-        },
-        ...variantLib.variables,
-      ]
-    }
-  } else {
-    variantLib.variables = variantLib.variables.filter((variable) => variable.name !== 'EN' && variable.name !== 'ENO')
-  }
-
-  const { handles, leftHandles, rightHandles, height } = getBlockSize(variantLib, { x: handleX, y: handleY })
+  const {
+    variant: variantLib,
+    executionControl: executionControlAux,
+    lockExecutionControl,
+  } = getBlockVariantAndExecutionControl({ ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) }, executionControl)
+  const { handles, leftHandles, rightHandles, height, width } = getBlockSize(variantLib, { x: handleX, y: handleY })
 
   return {
     id,
@@ -604,16 +635,17 @@ export const buildBlockNode = <T extends object | undefined>({
       variant: variantLib,
       variable: { name: '' },
       executionOrder: 0,
-      executionControl,
+      executionControl: executionControlAux,
+      lockExecutionControl,
       connectedVariables: {},
       draggable: true,
       selectable: true,
       deletable: true,
     },
-    width: DEFAULT_BLOCK_WIDTH,
+    width,
     height,
     measured: {
-      width: DEFAULT_BLOCK_WIDTH,
+      width,
       height,
     },
     draggable: true,
@@ -635,6 +667,28 @@ export const getBlockSize = (
   const outputConnectors = variant.variables
     .filter((variable) => variable.class === 'output')
     .map((variable) => variable.name)
+
+  const blockHeight =
+    DEFAULT_BLOCK_CONNECTOR_Y +
+    24 +
+    Math.max(inputConnectors.length - 1, outputConnectors.length - 1) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
+
+  let variableInputWidth = 0
+  let variableOutputWidth = 0
+  const blockNameWidth = variant.name.length * 12
+  inputConnectors.forEach((input) => {
+    const inputWidth = input.length * 12
+    if (inputWidth > variableInputWidth) variableInputWidth = inputWidth
+  })
+  outputConnectors.forEach((output) => {
+    const outputWidth = output.length * 12
+    if (outputWidth > variableOutputWidth) variableOutputWidth = outputWidth
+  })
+
+  const blockWidth = Math.min(
+    Math.max(variableInputWidth + 18 + variableOutputWidth, blockNameWidth),
+    DEFAULT_BLOCK_WIDTH,
+  )
 
   const leftHandles = inputConnectors.map((connector, index) =>
     buildHandle({
@@ -659,9 +713,9 @@ export const getBlockSize = (
       position: Position.Right,
       type: 'source',
       isConnectable: false,
-      glbX: handlePosition.x + DEFAULT_BLOCK_CONNECTOR_X,
+      glbX: handlePosition.x + blockWidth,
       glbY: handlePosition.y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
-      relX: DEFAULT_BLOCK_CONNECTOR_X,
+      relX: blockWidth,
       relY: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
       style: {
         top: DEFAULT_BLOCK_CONNECTOR_Y + index * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET,
@@ -672,14 +726,61 @@ export const getBlockSize = (
 
   const handles = [...leftHandles, ...rightHandles]
 
-  const blocKHeight =
-    DEFAULT_BLOCK_CONNECTOR_Y +
-    Math.max(inputConnectors.length, outputConnectors.length) * DEFAULT_BLOCK_CONNECTOR_Y_OFFSET
-
   return {
     handles,
     leftHandles,
     rightHandles,
-    height: DEFAULT_BLOCK_HEIGHT < blocKHeight ? blocKHeight : DEFAULT_BLOCK_HEIGHT,
+    height: blockHeight,
+    width: blockWidth,
+  }
+}
+
+const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionControl: boolean) => {
+  const variant = { ...variantLib }
+
+  const inputConnectors = variant.variables
+    .filter((variable) => variable.class === 'input')
+    .map((variable) => ({
+      name: variable.name,
+      type: variable.type,
+    }))
+  const outputConnectors = variant.variables
+    .filter((variable) => variable.class === 'output')
+    .map((variable) => ({
+      name: variable.name,
+      type: variable.type,
+    }))
+
+  const mustHaveExecutionControlEnabled =
+    inputConnectors[0].type.value !== 'BOOL' || outputConnectors[0].type.value !== 'BOOL'
+
+  if (executionControl || mustHaveExecutionControlEnabled) {
+    const executionControlVariable = variant.variables.some(
+      (variable) => variable.name === 'EN' || variable.name === 'ENO',
+    )
+
+    if (!executionControlVariable) {
+      variant.variables = [
+        {
+          name: 'EN',
+          class: 'input',
+          type: { definition: 'generic-type', value: 'BOOL' },
+        },
+        {
+          name: 'ENO',
+          class: 'output',
+          type: { definition: 'generic-type', value: 'BOOL' },
+        },
+        ...variant.variables,
+      ]
+    }
+  } else {
+    variant.variables = variant.variables.filter((variable) => variable.name !== 'EN' && variable.name !== 'ENO')
+  }
+
+  return {
+    variant: variant,
+    executionControl: executionControl || mustHaveExecutionControlEnabled,
+    lockExecutionControl: mustHaveExecutionControlEnabled,
   }
 }

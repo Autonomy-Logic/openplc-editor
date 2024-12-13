@@ -1,3 +1,4 @@
+import { cn } from '@root/utils'
 import { Handle, HandleProps } from '@xyflow/react'
 
 export type CustomHandleProps = HandleProps & {
@@ -11,8 +12,17 @@ export type CustomHandleProps = HandleProps & {
   }
 }
 
-export const CustomHandle = ({ id, style, type, position, isConnectable }: CustomHandleProps) => {
-  return <Handle id={id} position={position} type={type} isConnectable={isConnectable} style={style} />
+export const CustomHandle = ({ id, className, style, type, position, isConnectable }: CustomHandleProps) => {
+  return (
+    <Handle
+      id={id}
+      position={position}
+      type={type}
+      isConnectable={isConnectable}
+      style={style}
+      className={cn('opacity-0', className)}
+    />
+  )
 }
 
 type BuildHandleProps = HandleProps & {

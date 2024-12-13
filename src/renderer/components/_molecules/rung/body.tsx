@@ -2,6 +2,7 @@ import * as Portal from '@radix-ui/react-portal'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RungState } from '@root/renderer/store/slices'
 import type { PLCVariable } from '@root/types/PLC'
+import { cn } from '@root/utils'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
 import { applyNodeChanges, getNodesBounds } from '@xyflow/react'
 import { differenceWith, isEqual, parseInt } from 'lodash'
@@ -27,9 +28,10 @@ import {
 
 type RungBodyProps = {
   rung: RungState
+  className?: string
 }
 
-export const RungBody = ({ rung }: RungBodyProps) => {
+export const RungBody = ({ rung, className }: RungBodyProps) => {
   const {
     flowActions,
     libraries,
@@ -76,7 +78,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
       height: 40,
     }
     const bounds = getNodesBounds([zeroPositionNode, ...rung.nodes])
-    const [defaultWidth, defaultHeight] = rung?.defaultBounds ?? [1530, 200]
+    const [defaultWidth, defaultHeight] = rung.defaultBounds
 
     // If the bounds are less than the default extent, set the panel extent to the default extent
     if (bounds.width < defaultWidth) bounds.width = defaultWidth
@@ -93,34 +95,37 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     })
   }
 
-  useEffect(() => {
-    updateFlowPanelExtent(rungLocal)
-  }, [rungLocal.nodes.length])
-
   /**
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    // console.log('rung', rung)
+    console.log('rung', rung)
     setRungLocal(rung)
+    updateFlowPanelExtent(rung)
   }, [rung.nodes])
+
+  // useEffect(() => {
+  //   console.log('rungLocal.nodes.length', rungLocal.nodes)
+  //   updateFlowPanelExtent(rungLocal)
+  // }, [rungLocal.nodes.length])
 
   /**
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
     if (
-      rungLocal.selectedNodes &&
-      rungLocal.selectedNodes.length > 0 &&
-      differenceWith(rungLocal.selectedNodes || [], rung.selectedNodes || [], (a, b) => isEqual(a, b)).length === 0
-    )
+      dragging ||
+      (rungLocal.selectedNodes.length > 0 &&
+        differenceWith(rungLocal.selectedNodes, rung.selectedNodes, (a, b) => isEqual(a, b)).length === 0)
+    ) {
       return
+    }
 
     // Update the selected nodes in the rung state
     flowActions.setSelectedNodes({
       editorName: editor.meta.name,
       rungId: rung.id,
-      nodes: rungLocal.selectedNodes || [],
+      nodes: rungLocal.selectedNodes,
     })
   }, [rungLocal.selectedNodes])
 
@@ -131,10 +136,12 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     let pouLibrary = undefined
     if (blockType) {
       const [blockLibraryType, blockLibrary, pouName] = blockType.split('/')
+
       if (blockLibraryType === 'system')
         pouLibrary = libraries.system
           .find((Library) => Library.name === blockLibrary)
           ?.pous.find((p) => p.name === pouName)
+
       if (blockLibraryType === 'user') {
         const Library = libraries.user.find((Library) => Library.name === blockLibrary)
         const pou = pous.find((pou) => pou.data.name === Library?.name)
@@ -282,12 +289,26 @@ export const RungBody = ({ rung }: RungBodyProps) => {
    */
   const onNodesChange: OnNodesChange<FlowNode> = useCallback(
     (changes) => {
+      const selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
+      changes.forEach((change) => {
+        if (change.type) {
+          const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
+          if (!change.selected) {
+            const index = selectedNodes.findIndex((n) => n.id === change.id)
+            if (index !== -1) selectedNodes.splice(index, 1)
+            return
+          }
+          selectedNodes.push(node)
+        }
+      })
+
       setRungLocal((rung) => ({
         ...rung,
         nodes: applyNodeChanges(changes, rung.nodes),
+        selectedNodes: selectedNodes,
       }))
     },
-    [rungLocal],
+    [rungLocal, rung],
   )
 
   /**
@@ -397,22 +418,14 @@ export const RungBody = ({ rung }: RungBodyProps) => {
     [rung, rungLocal],
   )
 
-  const onSelectionChange = useCallback(
-    (selectedNodes: FlowNode[]) => {
-      const selectedPlaceholderNodes = selectedNodes.filter(
-        (node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder',
-      )
-      if (dragging || (selectedPlaceholderNodes && selectedPlaceholderNodes.length > 0)) {
-        return
-      }
-
-      setRungLocal((rung) => ({ ...rung, selectedNodes }))
-    },
-    [rungLocal, dragging],
-  )
-
   return (
-    <div className='relative h-fit w-full rounded-b-lg border border-t-0 p-1 dark:border-neutral-800'>
+    <div
+      className={cn(
+        'relative h-fit w-full p-1',
+        // 'rounded-b-lg border border-t-0 dark:border-neutral-800',
+        className,
+      )}
+    >
       <div aria-label='Rung body' className='h-full w-full overflow-x-auto' ref={flowViewportRef}>
         <div
           style={{
@@ -451,9 +464,6 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               onNodeDoubleClick: (_event, node) => {
                 handleNodeDoubleClick(node)
               },
-              onSelectionChange: (selectedNodes) => {
-                onSelectionChange(selectedNodes.nodes)
-              },
 
               onDragEnter: onDragEnterViewport,
               onDragLeave: onDragLeaveViewport,
@@ -470,7 +480,7 @@ export const RungBody = ({ rung }: RungBodyProps) => {
               zoomOnPinch: false,
               zoomOnScroll: false,
               preventScrolling: false,
-              nodeDragThreshold: 15,
+              nodeDragThreshold: 25,
 
               proOptions: {
                 hideAttribution: true,
