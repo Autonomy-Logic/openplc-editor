@@ -168,6 +168,11 @@ const configuration: ICustomConfiguration = {
     new ReactRefreshWebpackPlugin(),
 
     new HtmlWebpackPlugin({
+      filename: join('splash.html'),
+      template: join(webpackPaths.srcMainPath, 'resources', 'splash-screen', 'splash.html'),
+    }),
+
+    new HtmlWebpackPlugin({
       filename: join('index.html'),
       template: join(webpackPaths.srcRendererPath, 'index.ejs'),
       minify: {

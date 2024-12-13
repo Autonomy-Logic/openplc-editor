@@ -31,7 +31,7 @@ class AppUpdater {
 }
 
 export let mainWindow: BrowserWindow | null = null
-// export let splash: BrowserWindow | null = null
+export let splash: BrowserWindow | null = null
 
 if (process.env.NODE_ENV === 'production') {
   async function loadSourceMapSupport(): Promise<void> {
@@ -113,21 +113,22 @@ const createMainWindow = async () => {
    */
   const { bounds } = store.get('window')
 
-  // splash = new BrowserWindow({
-  //   width: 580,
-  //   height: 366,
-  //   resizable: false,
-  //   frame: false,
-  //   webPreferences: {
-  //     sandbox: false,
-  //   },
-  // })
+  splash = new BrowserWindow({
+    width: 580,
+    height: 366,
+    resizable: false,
+    frame: false,
+    webPreferences: {
+      sandbox: false,
+    },
+  })
 
-  // splash
-  //   .loadURL(`file://${path.join(__dirname, './modules/preload/scripts/loading/splash.html')}`)
-  //   .then(() => console.log('Splash screen loaded successfully'))
-  //   .catch((error) => console.error('Error loading splash screen:', error))
-  // splash.setIgnoreMouseEvents(false)
+  // TODO: Fix production path - Refactor folder structure
+  splash
+    .loadFile('src/main/resources/splash-screen/splash.html')
+    .then(() => console.log('Splash screen loaded successfully'))
+    .catch((error) => console.error('Error loading splash screen:', error))
+  splash.setIgnoreMouseEvents(false)
   // Create the main window instance.
   mainWindow = new BrowserWindow({
     minWidth: 1124,
@@ -150,9 +151,9 @@ const createMainWindow = async () => {
   // Send a message to the renderer process when the content finishes loading;
 
   mainWindow.webContents.on('did-finish-load', () => {
-    // if (splash) {
-    //   splash?.destroy()
-    // }
+    if (splash) {
+      splash?.destroy()
+    }
     mainWindow?.show()
     mainWindow?.webContents.send('main-process-message', new Date().toLocaleString())
   })
@@ -191,7 +192,7 @@ const createMainWindow = async () => {
     if (process.env.START_MINIMIZED) {
       mainWindow.minimize()
     }
-    // splash?.close()
+    splash?.close()
     mainWindow.show()
   })
 

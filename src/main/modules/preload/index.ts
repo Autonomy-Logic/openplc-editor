@@ -1,4 +1,4 @@
-import './scripts/loading/index'
+import '../../resources/splash-screen/index'
 
 import { contextBridge } from 'electron'
 
