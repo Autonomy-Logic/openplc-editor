@@ -37,6 +37,32 @@ export const DEFAULT_VARIABLE_HEIGHT = 32
 export const DEFAULT_VARIABLE_CONNECTOR_X = DEFAULT_VARIABLE_WIDTH
 export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
 
+const validateVariableType = (
+  selectedType: string,
+  expectedType: BlockVariant['variables'][0],
+): { isValid: boolean; error?: string } => {
+  const upperSelectedType = selectedType.toUpperCase()
+  const upperExpectedType = expectedType.type.value.toUpperCase()
+
+  // Handle generic types
+  if (upperExpectedType.includes('ANY')) {
+    const validTypes = Object.values(
+      genericTypeSchema.shape[upperExpectedType as keyof typeof genericTypeSchema.shape].options,
+    )
+    return {
+      isValid: validTypes.includes(upperSelectedType),
+      error: validTypes.includes(upperSelectedType) ? undefined : `Expected one of: ${validTypes.join(', ')}`,
+    }
+  }
+
+  // Handle specific types
+  return {
+    isValid: upperSelectedType === upperExpectedType,
+    error:
+      upperSelectedType === upperExpectedType ? undefined : `Expected: ${upperExpectedType}, Got: ${upperSelectedType}`,
+  }
+}
+
 const VariableElement = ({ id, data }: VariableProps) => {
   const {
     editor,
@@ -88,23 +114,8 @@ const VariableElement = ({ id, data }: VariableProps) => {
       setIsAVariable(false)
     } else {
       const variable = variables.selected
-      // Validation for generic types
-      if (data.block.variableType.type.value.toUpperCase().includes('ANY')) {
-        const type = { ...genericTypeSchema.shape }
-        const variableTypes = Object.values(
-          type[data.block.variableType.type.value.toUpperCase() as keyof typeof type].options,
-        )
-        if (!variableTypes.includes(variable.type.value.toUpperCase())) setInputError(true)
-        else setInputError(false)
-      }
-      // Validation for specific types
-      else if (variable.type.value.toUpperCase() !== data.block.variableType.type.value.toUpperCase()) {
-        setInputError(true)
-      }
-      // Otherwise, no error
-      else {
-        setInputError(false)
-      }
+      const validation = validateVariableType(variable.type.value, data.block.variableType)
+      setInputError(!validation.isValid)
 
       setIsAVariable(true)
     }
