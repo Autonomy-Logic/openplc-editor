@@ -4,8 +4,11 @@ import { DragHandleIcon } from '@root/renderer/assets/icons/interface/DragHandle
 import { StickArrowIcon } from '@root/renderer/assets/icons/interface/StickArrow'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungState } from '@root/renderer/store/slices'
+import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
+
+import { BasicNodeData } from '../../_atoms/react-flow/custom-nodes/utils/types'
 
 type RungHeaderProps = {
   rung: RungState
@@ -17,11 +20,17 @@ type RungHeaderProps = {
 
 export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onClick }: RungHeaderProps) => {
   const {
-    editor: {
-      meta: { name: editorName },
+    editor,
+    editorActions: { updateModelVariables },
+    project: {
+      data: { pous },
     },
+    projectActions: { deleteVariable },
     flowActions: { addComment, removeRung },
   } = useOpenPLCStore()
+
+  const editorName = editor.meta.name
+  const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
 
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
   const [textAreaValue, setTextAreaValue] = useState<string>(rung.comment ?? '')
@@ -41,6 +50,31 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
   }, [rung.comment])
 
   const handleRemoveRung = () => {
+    const blockNodes = rung.nodes.filter((node) => node.type === 'block')
+    if (blockNodes.length > 0) {
+      let variables: PLCVariable[] = []
+      if (pouRef) variables = pouRef.data.variables as PLCVariable[]
+
+      blockNodes.forEach((blockNode) => {
+        const variableIndex = variables.findIndex(
+          (variable) => variable.id === (blockNode.data as BasicNodeData).variable.id,
+        )
+        if (variableIndex !== -1)
+          deleteVariable({
+            rowId: variableIndex,
+            scope: 'local',
+            associatedPou: editor.meta.name,
+          })
+        if (
+          editor.type === 'plc-graphical' &&
+          editor.variable.display === 'table' &&
+          parseInt(editor.variable.selectedRow) === variableIndex
+        ) {
+          updateModelVariables({ display: 'table', selectedRow: -1 })
+        }
+      })
+    }
+
     removeRung(editorName, rung.id)
   }
 
