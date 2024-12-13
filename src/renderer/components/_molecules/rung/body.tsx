@@ -192,10 +192,21 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
       nodes: [],
     })
 
+    /**
+     * Remove the variable associated with the block node
+     * If the editor is a graphical editor and the variable display is set to table, update the model variables
+     * If the variable is the selected row, set the selected row to -1
+    *
+     * !IMPORTANT: This function must be used inside of components, because the functions deleteVariable and updateModelVariables are just available at the useOpenPLCStore hook
+     * -- This block of code references at project:
+     *    -- src/renderer/components/_molecules/rung/body.tsx
+     *    -- src/renderer/components/_molecules/rung/header.tsx
+     *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
+     */
     const blockNodes = nodes.filter((node) => node.type === 'block')
     if (blockNodes.length > 0) {
       let variables: PLCVariable[] = []
-      if (pouRef) variables = pouRef.data.variables as PLCVariable[]
+      if (pouRef) variables = [...pouRef.data.variables] as PLCVariable[]
 
       blockNodes.forEach((blockNode) => {
         const variableIndex = variables.findIndex(
@@ -214,6 +225,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
         ) {
           updateModelVariables({ display: 'table', selectedRow: -1 })
         }
+        variables.splice(variableIndex, 1)
       })
     }
   }
@@ -264,7 +276,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
 
   /**
    * Handle the double click of a node
-   *///
+   */ //
   const handleNodeDoubleClick = (node: FlowNode) => {
     const modalToOpen =
       node.type === 'block'

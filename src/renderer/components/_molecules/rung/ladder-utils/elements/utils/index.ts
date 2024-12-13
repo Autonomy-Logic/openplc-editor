@@ -422,19 +422,13 @@ export const getPlaceholderPositionBasedOnNode = (node: Node, side: 'left' | 'bo
       }
     case 'bottom':
       return {
-        posX:
-          node.position.x +
-          (node.width || 0) / 2 -
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
+        posX: node.position.x + (node.width || 0) / 2 - getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         posY:
           node.position.y +
           (node.height || 0) -
           getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).handle.y +
           getDefaultNodeStyle({ nodeType: 'parallelPlaceholder' }).gap,
-        handleX:
-          node.position.x +
-          (node.width || 0) / 2 -
-          getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
+        handleX: node.position.x + (node.width || 0) / 2 - getDefaultNodeStyle({ nodeType: 'placeholder' }).width / 2,
         handleY:
           node.position.y +
           (node.height || 0) -
