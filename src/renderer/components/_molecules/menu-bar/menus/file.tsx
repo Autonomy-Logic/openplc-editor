@@ -1,4 +1,5 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
+import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -191,43 +192,48 @@ export const FileMenu = () => {
           </MenuPrimitive.Content>
         </MenuPrimitive.Portal>
         {modalOpen && (
-          <Modal open={modalOpen} onOpenChange={setModalOpen}>
-            <ModalContent
-              onClose={handleModalClose}
-              className='flex flex max-h-80 w-[340px] select-none flex-col items-center justify-evenly rounded-lg'
-            >
-              <p className='text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100'>
+        <Modal open={modalOpen} onOpenChange={setModalOpen}>
+        <ModalContent className="flex h-[420px] w-[340px] select-none flex-col items-center justify-evenly rounded-lg">
+          <div className="flex h-[350px] select-none flex-col items-center gap-6">
+            <WarningIcon className="mr-2 mt-2 h-[73px] w-[73px]" />
+            <div>
+              <p className="text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100">
                 There are unsaved changes in your project. Do you want to save before closing?
               </p>
+            </div>
 
-              <div className='flex w-[200px] flex-col space-y-2 text-sm'>
+            <div className="flex w-[300px] flex-col text-sm">
+              <div className="flex flex-col gap-2 mb-6">
                 <button
                   onClick={() => {
-                    void handleSaveProject()
-                    handleModalClose()
+                    void handleSaveProject();
+                    handleModalClose();
                   }}
-                  className='w-full rounded-lg bg-blue-500 px-4 py-2 text-center font-medium text-neutral-1000 dark:text-neutral-100'
+                  className="w-full rounded-lg bg-blue-500 px-4 py-2 text-center font-medium text-neutral-1000 dark:text-neutral-100"
                 >
-                 Save and Close
+                  Save and Close
                 </button>
                 <button
                   onClick={() => {
-                    setDiscardChanges(true)
-                    handleModalClose()
+                    setDiscardChanges(true);
+                    handleModalClose();
                   }}
-                  className='w-full rounded-md px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100'
+                  className="w-full rounded-md px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100"
                 >
                   Close Without Saving
                 </button>
-                <button
-                  onClick={handleModalClose}
-                  className='w-full rounded-md px-4 px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100'
-                >
-                  Cancel
-                </button>
               </div>
-            </ModalContent>
-          </Modal>
+              <button
+                onClick={handleModalClose}
+                className="w-full rounded-md px-4 py-2 dark:bg-neutral-850 dark:text-neutral-100"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </ModalContent>
+      </Modal>
+
         )}
       </MenuPrimitive.Menu>
     </>
