@@ -21,6 +21,7 @@ import { updateDiagramElementsPosition } from '@root/renderer/components/_molecu
 import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
 import { PLCPou } from '@root/types/PLC/open-plc'
+import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -174,7 +175,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       setDocumentation(
         `${newNodeDataVariant.documentation}
 
-        INPUT:
+        -- INPUT --
         ${newNodeDataVariant.variables
           .filter((variable) => variable.class === 'input')
           .map(
@@ -187,7 +188,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
           )
           .join('')}
 
-        OUTPUT:
+        -- OUTPUT --
         ${newNodeDataVariant.variables
           .filter((variable) => variable.class === 'output')
           .map(
@@ -592,7 +593,12 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
                 Execution Control:
               </label>
               <Switch.Root
-                className='relative h-4 w-[29px] cursor-pointer rounded-full bg-neutral-300 shadow-[0_4_4_1px] outline-none transition-all duration-150 data-[state=checked]:bg-brand dark:bg-neutral-850'
+                className={cn(
+                  'relative h-4 w-[29px] cursor-pointer rounded-full bg-neutral-300 shadow-[0_4_4_1px] outline-none transition-all duration-150 data-[state=checked]:bg-brand dark:bg-neutral-850',
+                  {
+                    'cursor-not-allowed opacity-50': lockExecutionControl,
+                  },
+                )}
                 id='executionControlSwitch'
                 onCheckedChange={handleExecutionControlChange}
                 checked={formState.executionControl}
