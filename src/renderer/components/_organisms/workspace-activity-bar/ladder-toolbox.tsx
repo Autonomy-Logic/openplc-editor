@@ -67,12 +67,14 @@ export const LadderToolbox = () => {
           const variableIndex = variables.findIndex(
             (variable) => variable.id === (blockNode.data as BasicNodeData).variable.id,
           )
-          if (variableIndex !== -1)
+          if (variableIndex !== -1) {
             deleteVariable({
               rowId: variableIndex,
               scope: 'local',
               associatedPou: editor.meta.name,
             })
+            variables.splice(variableIndex, 1)
+          }
           if (
             editor.type === 'plc-graphical' &&
             editor.variable.display === 'table' &&
@@ -80,7 +82,6 @@ export const LadderToolbox = () => {
           ) {
             updateModelVariables({ display: 'table', selectedRow: -1 })
           }
-          variables.splice(variableIndex, 1)
         })
       }
     })

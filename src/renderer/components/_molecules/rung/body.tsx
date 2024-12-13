@@ -196,7 +196,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
      * Remove the variable associated with the block node
      * If the editor is a graphical editor and the variable display is set to table, update the model variables
      * If the variable is the selected row, set the selected row to -1
-    *
+     *
      * !IMPORTANT: This function must be used inside of components, because the functions deleteVariable and updateModelVariables are just available at the useOpenPLCStore hook
      * -- This block of code references at project:
      *    -- src/renderer/components/_molecules/rung/body.tsx
@@ -212,12 +212,14 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
         const variableIndex = variables.findIndex(
           (variable) => variable.id === (blockNode.data as BasicNodeData).variable.id,
         )
-        if (variableIndex !== -1)
+        if (variableIndex !== -1) {
           deleteVariable({
             rowId: variableIndex,
             scope: 'local',
             associatedPou: editor.meta.name,
           })
+          variables.splice(variableIndex, 1)
+        }
         if (
           editor.type === 'plc-graphical' &&
           editor.variable.display === 'table' &&
@@ -225,7 +227,6 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
         ) {
           updateModelVariables({ display: 'table', selectedRow: -1 })
         }
-        variables.splice(variableIndex, 1)
       })
     }
   }
