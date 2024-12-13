@@ -6,7 +6,7 @@ import { _ProjectService, ProjectService } from './services'
 
 /**
  * Wip: Interface for mac machines menu.
- */ 
+ */
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string
   submenu?: DarwinMenuItemConstructorOptions[] | Menu
@@ -74,7 +74,7 @@ export default class MenuBuilder {
 
   handleCloseTab() {
     this.mainWindow.webContents.send('workspace:close-tab-accelerator')
-    
+
   }
 
   handleCloseProject(){
@@ -83,7 +83,7 @@ export default class MenuBuilder {
 
   handleDeletePou(){
     this.mainWindow.webContents.send('workspace:delete-pou-accelerator')
-   
+
   }
 
   handleSwitchPerspective() {
@@ -398,7 +398,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
-            
+
             accelerator: 'Ctrl+W',
             click: () => this.handleCloseTab(),
           },
@@ -525,7 +525,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:edit.submenu.deletePou'),
-            accelerator:"delete",
+            accelerator:"Ctrl+Shift+delete",
             click: () => this.handleDeletePou(),
           },
         ],
