@@ -128,9 +128,9 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
   useEffect(() => {
     if (inputVariableRef.current) {
       inputVariableRef.current.style.height = 'auto'
-      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 24 ? inputVariableRef.current.scrollHeight : 24}px`
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 32 ? inputVariableRef.current.scrollHeight : 24}px`
       if (scrollableIndicatorRef.current)
-        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 24 ? 'block' : 'none'
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
     }
   }, [coilVariableValue])
 

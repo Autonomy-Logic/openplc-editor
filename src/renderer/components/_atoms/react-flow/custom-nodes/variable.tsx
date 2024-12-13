@@ -1,5 +1,7 @@
 import { useOpenPLCStore } from '@root/renderer/store'
+import { baseTypes } from '@root/shared/data'
 import { genericTypeSchema, PLCVariable } from '@root/types/PLC'
+import { PLCBasetypes } from '@root/types/PLC/units/base-types'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
@@ -44,6 +46,14 @@ const validateVariableType = (
   const upperSelectedType = selectedType.toUpperCase()
   const upperExpectedType = expectedType.type.value.toUpperCase()
 
+  if (upperExpectedType === 'ANY') {
+    const isValidBaseType = baseTypes.includes(upperSelectedType as PLCBasetypes)
+    return {
+      isValid: isValidBaseType,
+      error: isValidBaseType ? undefined : `Expected one of: ${baseTypes.join(', ')}`,
+    }
+  }
+
   // Handle generic types
   if (upperExpectedType.includes('ANY')) {
     const validTypes = Object.values(
@@ -67,7 +77,7 @@ const VariableElement = ({ id, data }: VariableProps) => {
   const {
     editor,
     project: {
-      data: { pous },
+      data: { pous, dataTypes },
     },
     flows,
     flowActions: { updateNode },
@@ -114,7 +124,13 @@ const VariableElement = ({ id, data }: VariableProps) => {
       setIsAVariable(false)
     } else {
       const variable = variables.selected
+
       const validation = validateVariableType(variable.type.value, data.block.variableType)
+      if (!validation.isValid && dataTypes.length > 0) {
+        const userDataTypes = dataTypes.map((dataType) => dataType.name)
+        validation.isValid = userDataTypes.includes(variable.type.value)
+        validation.error = undefined
+      }
       setInputError(!validation.isValid)
 
       setIsAVariable(true)
