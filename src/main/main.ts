@@ -185,6 +185,8 @@ const createMainWindow = async () => {
     mainWindow.webContents.openDevTools()
   }
 
+  splash.on('closed', () => (splash = null))
+
   // Listen to the ready event to show the window gracefully;
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow) {
@@ -194,7 +196,11 @@ const createMainWindow = async () => {
       mainWindow.minimize()
     }
     setTimeout(() => {
-      splash?.close()
+      if (splash === null) {
+        mainWindow?.destroy()
+        return
+      }
+      splash.close()
       mainWindow?.show()
     }, 10000)
   })
