@@ -5,6 +5,7 @@ import {
   RisingEdgeContact,
 } from '@root/renderer/assets/icons/flow/Contact'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
@@ -85,6 +86,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     },
     flows,
     flowActions: { updateNode },
+    searchQuery,
   } = useOpenPLCStore()
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
@@ -94,6 +96,21 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
   const inputVariableRef = useRef<HTMLTextAreaElement>(null)
   const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
   const [inputFocus, setInputFocus] = useState<boolean>(true)
+
+  const [isEditing, setIsEditing] = useState<boolean>(false)
+
+  const formattedContactVariableValue = searchQuery
+    ? extractSearchQuery(contactVariableValue, searchQuery)
+    : contactVariableValue
+
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.style.height = 'auto'
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 24 ? inputVariableRef.current.scrollHeight : 24}px`
+      if (scrollableIndicatorRef.current)
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 24 ? 'block' : 'none'
+    }
+  }, [contactVariableValue])
 
   useEffect(() => {
     if (inputVariableRef.current) {
@@ -203,6 +220,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       },
     })
     setWrongVariable(false)
+    setIsEditing(false)
   }
 
   return (
@@ -222,22 +240,30 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       >
         {contact.svg(wrongVariable)}
         <div className='absolute -left-[24px] -top-[26px] flex h-3 w-[72px] items-center justify-center'>
+          {isEditing ? (
           <textarea
-            value={contactVariableValue}
-            onChange={(e) => setContactVariableValue(e.target.value)}
-            placeholder='???'
-            className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
-            onFocus={() => setInputFocus(true)}
-            onBlur={() => {
-              if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
-              inputFocus && handleSubmitContactVariable()
-            }}
-            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-            ref={inputVariableRef}
-            rows={1}
+              value={contactVariableValue}
+              onChange={(e) => setContactVariableValue(e.target.value)}
+              placeholder='???'
+              className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
+              onFocus={() => setInputFocus(true)}
+              onBlur={() => {
+                if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
+                inputFocus && handleSubmitContactVariable()
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+              ref={inputVariableRef}
+              rows={1}
             spellCheck={false}
+            />
+          ) : (
+          <p
+            onClick={() => setIsEditing(true)}
+            className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
+            dangerouslySetInnerHTML={{ __html: formattedContactVariableValue || '???' }}
           />
-        </div>
+        )}
+      </div>
         <div
           className={cn('pointer-events-none absolute -right-[36px] -top-[27px] text-cp-sm')}
           ref={scrollableIndicatorRef}

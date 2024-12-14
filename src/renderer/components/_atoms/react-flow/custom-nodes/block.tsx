@@ -2,6 +2,7 @@ import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/diagram'
 // import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -341,6 +342,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
     projectActions: { createVariable, updateVariable },
     flows,
     flowActions: { updateNode },
+    searchQuery,
   } = useOpenPLCStore()
   const {
     documentation: variantDocumentation,
@@ -386,6 +388,12 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
         scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 26 ? 'block' : 'none'
     }
   }, [blockVariableValue])
+
+  const [isEditing, setIsEditing] = useState<boolean>(false)
+
+  const formattedBlockVariableValue = searchQuery
+    ? extractSearchQuery(blockVariableValue, searchQuery)
+    : blockVariableValue
 
   /**
    * useEffect to focus the variable input when the correct block type is selected
@@ -533,6 +541,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
       },
     })
     setWrongVariable(false)
+    setIsEditing(false)
   }
 
   return (
@@ -568,21 +577,29 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
       >
         {(data.variant as BlockVariant).type !== 'function' && (data.variant as BlockVariant).type !== 'generic' && (
           <div className='flex w-full flex-row'>
-            <textarea
-              value={blockVariableValue}
-              onChange={(e) => setBlockVariableValue(e.target.value)}
-              placeholder='???'
-              className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
-              onFocus={() => setInputVariableFocus(true)}
-              onBlur={() => {
-                if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
-                inputVariableFocus && handleSubmitBlockVariable()
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-              ref={inputVariableRef}
-              rows={1}
-              spellCheck={false}
-            />
+            {isEditing ? (
+              <textarea
+                value={blockVariableValue}
+                onChange={(e) => setBlockVariableValue(e.target.value)}
+                placeholder='???'
+                className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
+                onFocus={() => setInputVariableFocus(true)}
+                onBlur={() => {
+                  if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
+                  inputVariableFocus && handleSubmitBlockVariable()
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+                ref={inputVariableRef}
+                rows={1}
+                spellCheck={false}
+              />
+            ) : (
+              <p
+                onClick={() => setIsEditing(true)}
+                className='w-full bg-transparent text-center text-sm outline-none'
+                dangerouslySetInnerHTML={{ __html: formattedBlockVariableValue || '???' }}
+              />
+            )}
             <div className={cn('pointer-events-none text-cp-sm')} ref={scrollableIndicatorRef}>
               ↕
             </div>

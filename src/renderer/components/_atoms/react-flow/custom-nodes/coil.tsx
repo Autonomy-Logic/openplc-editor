@@ -7,6 +7,7 @@ import {
   SetCoil,
 } from '@root/renderer/assets/icons/flow/Coil'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
@@ -115,6 +116,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     },
     flows,
     flowActions: { updateNode },
+    searchQuery,
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
@@ -124,6 +126,21 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
   const inputVariableRef = useRef<HTMLTextAreaElement>(null)
   const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
   const [inputFocus, setInputFocus] = useState<boolean>(true)
+
+  const [isEditing, setIsEditing] = useState<boolean>(false)
+
+  const formattedCoilVariableValue = searchQuery
+    ? extractSearchQuery(coilVariableValue, searchQuery)
+    : coilVariableValue
+
+  useEffect(() => {
+    if (inputVariableRef.current) {
+      inputVariableRef.current.style.height = 'auto'
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 24 ? inputVariableRef.current.scrollHeight : 24}px`
+      if (scrollableIndicatorRef.current)
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 24 ? 'block' : 'none'
+    }
+  }, [coilVariableValue])
 
   useEffect(() => {
     if (inputVariableRef.current) {
@@ -225,6 +242,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       },
     })
     setWrongVariable(false)
+    setIsEditing(false)
   }
 
   return (
@@ -243,22 +261,30 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
       >
         <div className='absolute -left-[28px] -top-[26px] flex h-3 w-[84px] items-center justify-center'>
+          {isEditing ? (
           <textarea
-            value={coilVariableValue}
-            onChange={(e) => setCoilVariableValue(e.target.value)}
-            placeholder='???'
-            className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
-            onFocus={() => setInputFocus(true)}
-            onBlur={() => {
-              if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
-              inputFocus && handleSubmitCoilVariable()
-            }}
-            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-            ref={inputVariableRef}
-            rows={1}
+              value={coilVariableValue}
+              onChange={(e) => setCoilVariableValue(e.target.value)}
+              placeholder='???'
+              className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
+              onFocus={() => setInputFocus(true)}
+              onBlur={() => {
+                if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
+                inputFocus && handleSubmitCoilVariable()
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+              ref={inputVariableRef}
+              rows={1}
             spellCheck={false}
+            />
+          ) : (
+          <p
+            onClick={() => setIsEditing(true)}
+            className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
+            dangerouslySetInnerHTML={{ __html: formattedCoilVariableValue || '???' }}
           />
-        </div>
+        )}
+      </div>
         <div
           className={cn('pointer-events-none absolute -right-[38px] -top-[27px] text-cp-sm')}
           ref={scrollableIndicatorRef}

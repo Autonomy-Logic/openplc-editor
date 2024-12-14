@@ -25,6 +25,7 @@ import {
   renderPlaceholderElements,
   searchNearestPlaceholder,
 } from './ladder-utils/elements/placeholder'
+import { findNode } from './ladder-utils/nodes'
 
 type RungBodyProps = {
   rung: RungState
@@ -43,6 +44,8 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
     projectActions: { deleteVariable },
     modals,
     modalActions: { closeModal, openModal },
+    searchQuery,
+    searchActions: { setSearchNodePosition },
   } = useOpenPLCStore()
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
@@ -99,7 +102,6 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    // console.log('rung', rung)
     setRungLocal(rung)
     updateFlowPanelExtent(rung)
   }, [rung.nodes])
@@ -128,6 +130,36 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
       nodes: rungLocal.selectedNodes,
     })
   }, [rungLocal.selectedNodes])
+
+  useEffect(() => {
+    if (!searchQuery) return
+
+    const foundNode = rungLocal.nodes.find((node) => (node.data as BasicNodeData)?.variable?.name === searchQuery)
+
+    if (foundNode) {
+      const nodePosition = findNode(rungLocal, foundNode.id).node?.position
+
+      if (!nodePosition) return
+
+      const zoom = reactFlowInstance?.getZoom() ?? 1
+      const pan = reactFlowInstance?.toObject() ?? { x: 0, y: 0 }
+
+      const adjustedSearchNodePosition = {
+        x: nodePosition.x * zoom + ('x' in pan ? pan.x : 0),
+        y: nodePosition.y * zoom + ('y' in pan ? pan.y : 0),
+      }
+
+      setSearchNodePosition(adjustedSearchNodePosition)
+
+      flowViewportRef.current?.scrollTo({
+        top: adjustedSearchNodePosition.y,
+        left: adjustedSearchNodePosition.x - 100,
+        behavior: 'smooth',
+      })
+    } else {
+      setSearchNodePosition({ x: 0, y: 0 })
+    }
+  }, [searchQuery, rungLocal, reactFlowInstance])
 
   /**
    * Add a new node to the rung
