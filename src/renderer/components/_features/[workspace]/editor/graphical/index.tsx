@@ -20,9 +20,9 @@ const GraphicalEditor = ({ language }: GraphicalEditorProps) => {
   const EditorComponent = editorComponents[language]
 
   return (
-    <div className='h-full w-full overflow-y-auto '>
+    <div className='h-full w-full overflow-y-auto'>
       {/* <div className='h-[1800px]'> */}
-        <EditorComponent />
+      <EditorComponent />
       {/* </div> */}
     </div>
   )
