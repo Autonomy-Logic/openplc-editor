@@ -1,5 +1,4 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { useNavigate } from 'react-router-dom'
 
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { ExitButton } from '../../_molecules/workspace-activity-bar/default'
@@ -15,7 +14,6 @@ type ActivityBarProps = {
 }
 
 export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) => {
-  const navigate = useNavigate()
   const {
     editor,
     libraryActions: { clearUserLibraries },
@@ -29,7 +27,6 @@ export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) =
     clearUserLibraries()
     clearFlows()
     clearProjects()
-    navigate('/')
   }
   return (
     <>

@@ -6,7 +6,6 @@ import { cn } from '@root/utils'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 import { ExitIcon } from '../assets'
 import { toast } from '../components/_features/[app]/toast/use-toast'
@@ -27,7 +26,6 @@ import { WorkspaceMainContent, WorkspaceSideContent } from '../components/_templ
 import { useOpenPLCStore } from '../store'
 
 const WorkspaceScreen = () => {
-  const navigate = useNavigate()
   const {
     tabs,
     workspace: { editingState, isCollapsed },
@@ -133,7 +131,6 @@ const WorkspaceScreen = () => {
         clearFlows()
         setEditingState('unsaved')
         setRecents([])
-        navigate('/')
       })
     }
     handleCloseProject()

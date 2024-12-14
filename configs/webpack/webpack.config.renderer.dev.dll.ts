@@ -3,7 +3,7 @@
  */
 
 import ESLintPlugin from 'eslint-webpack-plugin'
-import path from 'path'
+import { join } from 'path'
 import webpack from 'webpack'
 import { merge } from 'webpack-merge'
 
@@ -48,7 +48,7 @@ const configuration: webpack.Configuration = {
 
   plugins: [
     new webpack.DllPlugin({
-      path: path.join(dist, '[name].json'),
+      path: join(dist, '[name].json'),
       name: '[name]',
     }),
 

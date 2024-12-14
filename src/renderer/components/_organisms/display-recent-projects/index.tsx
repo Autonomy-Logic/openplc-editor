@@ -3,7 +3,6 @@ import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { FlowType } from '@root/renderer/store/slices'
 import { ComponentProps, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 export type IDisplayRecentProjectProps = ComponentProps<'section'>
 
@@ -17,7 +16,6 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
     flowActions: { addFlow },
     libraryActions: { addLibrary },
   } = useOpenPLCStore()
-  const navigate = useNavigate()
 
   const [recentProjects, setRecentProjects] = useState(recents)
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
@@ -123,7 +121,6 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
 
       projectData.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
 
-      navigate('/workspace')
       toast({
         title: 'Project opened!',
         description: 'Your project was opened and loaded.',

@@ -7,7 +7,7 @@ import EslintPlugin from 'eslint-webpack-plugin'
 import fs from 'fs'
 import HtmlWebpackPlugin from 'html-webpack-plugin'
 import MonacoEditorWebpackPlugin from 'monaco-editor-webpack-plugin'
-import path from 'path'
+import { join, resolve } from 'path'
 import webpack from 'webpack'
 import { merge } from 'webpack-merge'
 
@@ -22,7 +22,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const port = process.env.PORT || 1212
-const manifest = path.resolve(webpackPaths.dllPath, 'renderer.json')
+const manifest = resolve(webpackPaths.dllPath, 'renderer.json')
 const skipDLLs =
   module.parent?.filename.includes('webpack.config.renderer.dev.dll') ||
   module.parent?.filename.includes('webpack.config.eslint')
@@ -53,7 +53,7 @@ const configuration: ICustomConfiguration = {
   entry: [
     `webpack-dev-server/client?http://localhost:${port}/dist`,
     'webpack/hot/only-dev-server',
-    path.join(webpackPaths.srcRendererPath, 'index.tsx'),
+    join(webpackPaths.srcRendererPath, 'index.tsx'),
   ],
 
   output: {
@@ -168,8 +168,8 @@ const configuration: ICustomConfiguration = {
     new ReactRefreshWebpackPlugin(),
 
     new HtmlWebpackPlugin({
-      filename: path.join('index.html'),
-      template: path.join(webpackPaths.srcRendererPath, 'index.ejs'),
+      filename: join('index.html'),
+      template: join(webpackPaths.srcRendererPath, 'index.ejs'),
       minify: {
         collapseWhitespace: true,
         removeAttributeQuotes: true,

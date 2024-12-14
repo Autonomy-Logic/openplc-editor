@@ -1,7 +1,6 @@
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 import { Step1 } from './steps/first-step'
 import { Step2 } from './steps/second-step'
@@ -9,7 +8,6 @@ import { Step3 } from './steps/third-step'
 import { NewProjectStore } from './store'
 
 const ProjectModal = ({ isOpen }: { isOpen: boolean }) => {
-  const navigate = useNavigate()
   const {
     workspaceActions: { setEditingState },
     tabsActions: { clearTabs },
@@ -34,7 +32,6 @@ const ProjectModal = ({ isOpen }: { isOpen: boolean }) => {
   const handleFinishForm = () => {
     try {
       onOpenChange('create-project', false)
-      navigate('/workspace')
     } catch (error) {
       console.error('Navigation failed:', error)
     }
