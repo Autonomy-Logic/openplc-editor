@@ -15,6 +15,7 @@ const workspaceStateSchema = z.object({
     recents: z.array(z.object({ lastOpenedAt: z.string(), createdAt: z.string(), path: z.string() })),
     isCollapsed: z.boolean(),
     isModalOpen: z.array(z.object({ modalName: z.string(), modalState: z.boolean() })),
+    discardChanges: z.boolean(),
   }),
 })
 type WorkspaceState = z.infer<typeof workspaceStateSchema>

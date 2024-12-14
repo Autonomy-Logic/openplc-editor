@@ -28,28 +28,24 @@ export const FileMenu = () => {
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
-  const [discardChanges, setDiscardChanges] = useState(false)
-  const handleDiscardChanges = (value: boolean) => {
-    setDiscardChanges(value)
-  }
+
+  const [validationValue, setValidationValue] = useState<'create-project' | 'open-project'>('create-project')
+
   const handleCreateProject = () => {
-    if (editingState === 'unsaved' && discardChanges === false) {
+    if (editingState === 'unsaved') {
       openModal('save-changes-project', null)
-    }
-    if (editingState === 'saved' || discardChanges === true) {
-      try {
-        openModal('create-project', null)
-      } catch (_error) {
-        toast({
-          title: 'Error',
-          description: 'Failed to open project creation modal',
-          variant: 'fail',
-        })
-      }
+      setValidationValue('create-project')
+    } else {
+      openModal('create-project', null)
     }
   }
 
   const handleOpenProject = async () => {
+    if (editingState === 'unsaved') {
+      openModal('save-changes-project', null)
+      setValidationValue('open-project')
+      return
+    }
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
       clearEditor()
@@ -189,7 +185,7 @@ export const FileMenu = () => {
           </MenuPrimitive.Content>
         </MenuPrimitive.Portal>
         {modals?.['save-changes-project']?.open === true && (
-          <SaveChangesModal isOpen={modals['save-changes-project'].open} onDiscardChanges={handleDiscardChanges} />
+          <SaveChangesModal isOpen={modals['save-changes-project'].open} validationContext={validationValue} />
         )}
       </MenuPrimitive.Menu>
     </>

@@ -15,6 +15,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     recents: [],
     isCollapsed: false,
     isModalOpen: [],
+    discardChanges: false,
   },
 
   workspaceActions: {
@@ -62,6 +63,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    toggleDiscardChanges: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.discardChanges = !workspace.discardChanges
+        }),
+      )
+    },
     setModalOpen: (modalName: string, modalState: boolean): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
@@ -75,7 +83,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-   },
+  },
 })
 
 export { createWorkspaceSlice }

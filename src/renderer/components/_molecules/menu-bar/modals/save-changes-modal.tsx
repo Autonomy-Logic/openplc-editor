@@ -1,34 +1,158 @@
 import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { FlowType } from '@root/renderer/store/slices/flow'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
+import { ComponentPropsWithoutRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { Modal, ModalContent } from '../../modal'
 
-interface SaveChangesModalProps {
+type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
-  onDiscardChanges: (value: boolean) => void
+  validationContext: 'create-project' | 'open-project' | 'exit'
 }
 
-const SaveChangesModal = ({ isOpen, onDiscardChanges }: SaveChangesModalProps) => {
+const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModalProps) => {
   const {
     project,
     workspaceActions: { setEditingState },
     modalActions: { onOpenChange, openModal },
+    tabsActions: { clearTabs },
+    projectActions: { setProject, clearProjects },
+    flowActions: { addFlow, clearFlows },
+    libraryActions: { addLibrary, clearUserLibraries },
   } = useOpenPLCStore()
+  const navigate = useNavigate()
 
   const handleSaveCloseProject = async () => {
     await handleSaveProject()
     onOpenChange('save-changes-project', false)
-    openModal('create-project', null)
-  }
+    if (validationContext === 'exit') {
+      clearUserLibraries()
+      clearFlows()
+      clearProjects()
+      navigate('/')
+      return
+    }
+    if (validationContext === 'create-project') {
+      openModal('create-project', null)
+      return
+    }
+    if (validationContext === 'open-project') {
+      try {
+        const { success, data, error } = await window.bridge.openProject()
+        if (success && data) {
+          clearTabs()
+          setEditingState('unsaved')
 
-  const handleCloseWithoutSaving = () => {
-    setEditingState('unsaved')
+          const projectMeta = {
+            name: data.content.meta.name,
+            type: data.content.meta.type,
+            path: data.meta.path,
+          }
+
+          const projectData = data.content.data
+
+          setProject({
+            meta: projectMeta,
+            data: projectData,
+          })
+
+          const ladderPous = projectData.pous.filter(
+            (pou: { data: { language: string } }) => pou.data.language === 'ld',
+          )
+          if (ladderPous.length) {
+            ladderPous.forEach((pou) => {
+              if (pou.data.body.language === 'ld') {
+                addFlow(pou.data.body.value as FlowType)
+              }
+            })
+          }
+          data.content.data.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
+          toast({
+            title: 'Project opened!',
+            description: 'Your project was opened and loaded successfully.',
+            variant: 'default',
+          })
+        } else {
+          toast({
+            title: 'Cannot open the project.',
+            description: error?.description || 'Failed to open the project.',
+            variant: 'fail',
+          })
+        }
+      } catch (_error) {
+        toast({
+          title: 'An error occurred.',
+          description: 'There was a problem opening the project.',
+          variant: 'fail',
+        })
+      }
+    }
+  }
+  const handleCloseWithoutSaving = async () => {
     onOpenChange('save-changes-project', false)
-    openModal('create-project', null)
-    onDiscardChanges(true)
+    if (validationContext === 'exit') {
+      navigate('/')
+      return
+    }
+    if (validationContext === 'create-project') {
+      openModal('create-project', null)
+      return
+    }
+    if (validationContext === 'open-project') {
+      try {
+        const { success, data, error } = await window.bridge.openProject()
+        if (success && data) {
+          clearTabs()
+          setEditingState('unsaved')
+
+          const projectMeta = {
+            name: data.content.meta.name,
+            type: data.content.meta.type,
+            path: data.meta.path,
+          }
+
+          const projectData = data.content.data
+
+          setProject({
+            meta: projectMeta,
+            data: projectData,
+          })
+
+          const ladderPous = projectData.pous.filter(
+            (pou: { data: { language: string } }) => pou.data.language === 'ld',
+          )
+          if (ladderPous.length) {
+            ladderPous.forEach((pou) => {
+              if (pou.data.body.language === 'ld') {
+                addFlow(pou.data.body.value as FlowType)
+              }
+            })
+          }
+          data.content.data.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
+          toast({
+            title: 'Project opened!',
+            description: 'Your project was opened and loaded successfully.',
+            variant: 'default',
+          })
+        } else {
+          toast({
+            title: 'Cannot open the project.',
+            description: error?.description || 'Failed to open the project.',
+            variant: 'fail',
+          })
+        }
+      } catch (_error) {
+        toast({
+          title: 'An error occurred.',
+          description: 'There was a problem opening the project.',
+          variant: 'fail',
+        })
+      }
+    }
   }
 
   const handleSaveProject = async () => {
@@ -66,7 +190,7 @@ const SaveChangesModal = ({ isOpen, onDiscardChanges }: SaveChangesModalProps) =
   }
 
   return (
-    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('save-changes-project', open)}>
+    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('save-changes-project', open)} {...rest}>
       <ModalContent className='flex h-[420px] w-[340px] select-none flex-col items-center justify-evenly rounded-lg'>
         <div className='flex h-[350px] select-none flex-col items-center gap-6'>
           <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px]' />
@@ -88,7 +212,7 @@ const SaveChangesModal = ({ isOpen, onDiscardChanges }: SaveChangesModalProps) =
               </button>
               <button
                 onClick={() => {
-                  handleCloseWithoutSaving()
+                  void handleCloseWithoutSaving()
                 }}
                 className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
               >
