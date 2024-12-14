@@ -26,6 +26,10 @@ const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState
       open: false,
       data: null,
     },
+    'confirm-delete-POUs': {
+      open: false,
+      data: null,
+    },
   },
 
   modalActions: {

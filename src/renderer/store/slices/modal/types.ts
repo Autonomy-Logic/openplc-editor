@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const modalTypes = z.enum(['block-ladder-element', 'coil-ladder-element', 'contact-ladder-element', 'create-project','save-changes-project'])
+const modalTypes = z.enum(['block-ladder-element', 'coil-ladder-element', 'contact-ladder-element', 'create-project','save-changes-project','confirm-delete-POUs'])
 type ModalTypes = z.infer<typeof modalTypes>
 
 const modalsState = z.record(

@@ -2,6 +2,7 @@ import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
+import _ from 'lodash'
 
 import { Modal, ModalContent } from '../../modal'
 
