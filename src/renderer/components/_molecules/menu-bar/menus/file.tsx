@@ -1,5 +1,4 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
-import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -10,8 +9,8 @@ import _ from 'lodash'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { Modal, ModalContent } from '../../modal'
 import { MenuClasses } from '../constants'
+import { SaveChangesModal } from '../modals/save-changes-modal'
 
 export const FileMenu = () => {
   const navigate = useNavigate()
@@ -24,20 +23,18 @@ export const FileMenu = () => {
     tabsActions: { clearTabs },
     flowActions: { addFlow },
     editor,
+    modals,
     modalActions: { openModal },
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
-  const [modalOpen, setModalOpen] = useState(false)
   const [discardChanges, setDiscardChanges] = useState(false)
-
-  const handleModalClose = () => {
-    setModalOpen(false)
+  const handleDiscardChanges = (value: boolean) => {
+    setDiscardChanges(value)
   }
-
   const handleCreateProject = () => {
     if (editingState === 'unsaved' && discardChanges === false) {
-      setModalOpen(true)
+      openModal('save-changes-project', null)
     }
     if (editingState === 'saved' || discardChanges === true) {
       try {
@@ -191,48 +188,8 @@ export const FileMenu = () => {
             </MenuPrimitive.Item>
           </MenuPrimitive.Content>
         </MenuPrimitive.Portal>
-        {modalOpen && (
-          <Modal open={modalOpen} onOpenChange={setModalOpen}>
-            <ModalContent className='flex h-[420px] w-[340px] select-none flex-col items-center justify-evenly rounded-lg'>
-              <div className='flex h-[350px] select-none flex-col items-center gap-6'>
-                <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px]' />
-                <div>
-                  <p className='text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100'>
-                    There are unsaved changes in your project. Do you want to save before closing?
-                  </p>
-                </div>
-
-                <div className='flex w-[300px] flex-col text-sm'>
-                  <div className='mb-6 flex flex-col gap-2'>
-                    <button
-                      onClick={() => {
-                        void handleSaveProject()
-                        handleModalClose()
-                      }}
-                      className='w-full rounded-lg bg-brand px-4 py-2 text-center font-medium text-white '
-                    >
-                      Save and Close
-                    </button>
-                    <button
-                      onClick={() => {
-                        setDiscardChanges(true)
-                        handleModalClose()
-                      }}
-                      className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
-                    >
-                      Close Without Saving
-                    </button>
-                  </div>
-                  <button
-                    onClick={handleModalClose}
-                    className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </ModalContent>
-          </Modal>
+        {modals?.['save-changes-project']?.open === true && (
+          <SaveChangesModal isOpen={modals['save-changes-project'].open} onDiscardChanges={handleDiscardChanges} />
         )}
       </MenuPrimitive.Menu>
     </>

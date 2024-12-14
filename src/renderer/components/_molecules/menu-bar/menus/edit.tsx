@@ -112,7 +112,7 @@ export const EditMenu = () => {
                   onClick={() => {
                     handleDeletePou()
                   }}
-                  className='w-full rounded-lg bg-brand bg-brand px-4 py-2 text-center font-medium text-white'
+                  className='w-full rounded-lg bg-brand px-4 py-2 text-center font-medium text-white'
                 >
                   Delete
                 </button>
