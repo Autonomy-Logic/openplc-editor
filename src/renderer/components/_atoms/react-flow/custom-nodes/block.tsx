@@ -383,9 +383,9 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
   useEffect(() => {
     if (inputVariableRef.current) {
       inputVariableRef.current.style.height = 'auto'
-      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 13 ? inputVariableRef.current.scrollHeight : 13}px`
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 26 ? inputVariableRef.current.scrollHeight : 13}px`
       if (scrollableIndicatorRef.current)
-        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 13 ? 'block' : 'none'
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 26 ? 'block' : 'none'
     }
   }, [blockVariableValue])
 
