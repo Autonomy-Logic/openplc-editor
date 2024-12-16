@@ -64,19 +64,18 @@ const CompilerService = {
     // Get the current environment and check if it's development
     const isDevelopment = process.env.NODE_ENV === 'development'
 
-    // Check if the current platform is Windows to execute the correct command based on the current operating system
+    // Check the current platform to execute the correct command based on the current operating system
     const isWindows = process.platform === 'win32'
+    const isMac = process.platform === 'darwin'
+    const isLinux = process.platform === 'linux'
 
     // Construct the path for the current working directory to be able to access the compiler
     const workingDirectory = process.cwd()
 
+    const developmentCompilerPath = join(workingDirectory, 'resources', 'st-compiler', 'xml2st.py')
     // Construct the path for the st compiler script based on the current environment
-    const windowsCompilerPath = isDevelopment
-      ? join(workingDirectory, 'resources', 'st-compiler', 'xml2st.py')
-      : join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.exe')
-    const unixCompilerPath = isDevelopment
-      ? join(workingDirectory, 'resources', 'st-compiler', 'xml2st.py')
-      : join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.py') // TODO: This must be modified to match the correct OS extension
+    const windowsOrLinuxCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.exe')
+    const darwinCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.py') // TODO: This must be modified to match the correct OS extension
 
     // Remove the project.json file from the path to the xml file.
     // This is necessary because on windows the path is handled differently from unix systems
@@ -85,34 +84,43 @@ const CompilerService = {
     // Construct the path to the xml file
     const pathToXMLFile = join(draftPath, 'build', 'plc.xml')
 
+    let execCompilerScript
     // Execute the st compiler script with the path to the xml file.
     // CAUTION!!!!
     // TODO: This only works on development environment. Need to be added the path for the production environment
-    const windowsCommand = isDevelopment
-      ? spawn('py', [windowsCompilerPath, pathToXMLFile])
-      : spawn(windowsCompilerPath, [pathToXMLFile])
-    const unixCommand = isDevelopment
-      ? spawn('python3', [unixCompilerPath, pathToXMLFile])
-      : spawn(unixCompilerPath, [pathToXMLFile])
+    if (isDevelopment) {
+      if (isWindows) {
+        execCompilerScript = spawn('py', [developmentCompilerPath, pathToXMLFile])
+      } else if (isMac || isLinux) {
+        execCompilerScript = spawn('python3', [developmentCompilerPath, pathToXMLFile])
+      }
+    } else {
+      if (isWindows) {
+        execCompilerScript = spawn(windowsOrLinuxCompilerPath, [pathToXMLFile])
+      } else if (isMac) {
+        execCompilerScript = spawn(darwinCompilerPath, [pathToXMLFile])
+      } else if (isLinux) {
+        execCompilerScript = spawn(windowsOrLinuxCompilerPath, [pathToXMLFile])
+      }
+    }
 
-    const execCompilerScript = isWindows ? windowsCommand : unixCommand
-
+    console.log('Script ->', execCompilerScript)
     /**
      * The data object is a buffer with the content of the script output.
      * Uses ASCII code to convert the buffer to a string.
      * End of lines are separated by \r and \n characters. The ASCII code for \r is 13 and \n is 10.
      */
-    execCompilerScript.stdout.on('data', (data: Buffer) => {
+    execCompilerScript?.stdout.on('data', (data: Buffer) => {
       mainProcessPort.postMessage({ type: 'default', data: data })
     })
 
-    execCompilerScript.stderr.on('data', (data: Buffer) => {
+    execCompilerScript?.stderr.on('data', (data: Buffer) => {
       mainProcessPort.postMessage({ type: 'error', data: data })
       // !! Watch for possible bugs with this implementation. !!
       mainProcessPort.close()
     })
 
-    execCompilerScript.on('close', () => {
+    execCompilerScript?.on('close', () => {
       mainProcessPort.postMessage({ type: 'info', message: 'Script finished' })
       mainProcessPort.close()
     })

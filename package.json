@@ -24,7 +24,8 @@
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
     "test:unit": "jest --watch",
-    "test": "jest --collectCoverage --"
+    "test": "jest --collectCoverage --",
+    "build:python": "ts-node scripts/build-python-compiler.ts"
   },
   "browserslist": [],
   "dependencies": {
