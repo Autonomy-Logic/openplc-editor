@@ -18,6 +18,18 @@ type CreateProjectFileProps = {
   name: string
   path: string
 }
+{
+  /** TODO: Need to be implemented - Sequential Functional Chart and Functional Block Diagram */
+}
+const BlockedLanguagesStyles = {
+  'Sequential Functional Chart':
+    'hover:bg-white dark:hover:bg-neutral-950 cursor-not-allowed pointer-events-none opacity-30',
+  'Functional Block Diagram':
+    'hover:bg-white dark:hover:bg-neutral-950 cursor-not-allowed pointer-events-none opacity-30',
+  'Ladder Diagram': '',
+  'Structured Text': '',
+  'Instruction List': '',
+} as const
 
 const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: () => void; onClose: () => void }) => {
   type FormData = {
@@ -37,7 +49,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
     projectActions: { setProject },
     workspaceActions: { setEditingState },
     tabsActions: { clearTabs },
-    editorActions: { clearEditor }
+    editorActions: { clearEditor },
   } = useOpenPLCStore()
 
   const handleFormSubmit: SubmitHandler<FormData> = async (data) => {
@@ -61,7 +73,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
         setProject({
           meta: {
             name: allData.name,
-            type: allData.type,
+            type: allData.type as 'plc-project' | 'plc-library',
             path: allData.path + '/project.json',
           },
           data: result.data.content.data,
@@ -135,7 +147,10 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
                         return (
                           <SelectItem
                             key={lang.value}
-                            className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                            className={cn(
+                              `${BlockedLanguagesStyles[lang.value]}`,
+                              'relative flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900',
+                            )}
                             value={ConvertToLangShortenedFormat(lang.value)}
                           >
                             <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>

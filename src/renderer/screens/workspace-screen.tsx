@@ -315,12 +315,13 @@ const WorkspaceScreen = () => {
                       >
                         Console
                       </Tabs.Trigger>
-                      <Tabs.Trigger
+                      {/** TODO: Need to be implemented */}
+                      {/* <Tabs.Trigger
                         value='debug'
                         className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
                       >
                         Debugger
-                      </Tabs.Trigger>
+                      </Tabs.Trigger> */}
                       {hasSearchResults && (
                         <Tabs.Trigger
                           value='search'

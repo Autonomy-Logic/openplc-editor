@@ -15,7 +15,14 @@ const PouLanguageSources = [
     icon: <LDIcon />,
     value: 'Ladder Diagram',
   },
-
+  {
+    icon: <STIcon />,
+    value: 'Structured Text',
+  },
+  {
+    icon: <ILIcon />,
+    value: 'Instruction List',
+  },
   {
     icon: <SFCIcon />,
     value: 'Sequential Functional Chart',
@@ -25,16 +32,7 @@ const PouLanguageSources = [
     icon: <FBDIcon />,
     value: 'Functional Block Diagram',
   },
-
-  {
-    icon: <STIcon />,
-    value: 'Structured Text',
-  },
-  {
-    icon: <ILIcon />,
-    value: 'Instruction List',
-  },
-]
+] as const
 
 const CreatePouSources = {
   function: <FunctionIcon size='sm' />,

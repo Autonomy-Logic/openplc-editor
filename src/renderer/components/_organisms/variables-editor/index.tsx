@@ -47,16 +47,14 @@ const VariablesEditor = () => {
    * Update the table data and the editor's variables when the editor or the pous change
    */
   useEffect(() => {
-    const foundPou = pous.find((pou) => pou?.data?.name === editor?.meta?.name);
+    const foundPou = pous.find((pou) => pou?.data?.name === editor?.meta?.name)
 
     if (foundPou) {
-
-      setTableData(foundPou.data.variables);
+      setTableData(foundPou.data.variables)
     } else {
-
-      setTableData([]);
+      setTableData([])
     }
-  }, [editor, pous]);
+  }, [editor, pous])
 
   /**
    * If the editor name is not the same as the current editor name
@@ -315,7 +313,7 @@ const VariablesEditor = () => {
               'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
             )}
           />
-
+          {/** TODO: Need to be implemented */}
           <CodeIcon
             aria-label='Variables code visualization'
             onClick={() => handleVisualizationTypeChange('code')}
@@ -323,7 +321,7 @@ const VariablesEditor = () => {
             currentVisible={editorVariables.display === 'code'}
             className={cn(
               editorVariables.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-              'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
+              'disabled pointer-events-none rounded-r-md opacity-30 transition-colors ease-in-out hover:cursor-not-allowed',
             )}
           />
         </div>

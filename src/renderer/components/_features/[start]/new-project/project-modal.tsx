@@ -58,7 +58,7 @@ const ProjectModal = ({ isOpen }: { isOpen: boolean }) => {
 
   return (
     <Modal open={isOpen} onOpenChange={(open) => onOpenChange('create-project', open)}>
-      <ModalContent onClose={handleClose} className='flex h-[450px] flex-col justify-between p-6'>
+      <ModalContent onClose={handleClose} className='flex h-[400px] flex-col justify-between p-6'>
         <ModalTitle className='absolute -top-10 opacity-0' />
         {renderStep()}
       </ModalContent>
