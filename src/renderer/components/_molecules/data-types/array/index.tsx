@@ -13,21 +13,29 @@ type ArrayDatatypeProps = ComponentPropsWithoutRef<'div'> & {
 }
 
 const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
-  const baseTypes = baseTypeSchema.options
   const {
+    editor,
     projectActions: { updateDatatype },
+    project: {
+      data: { dataTypes },
+    },
   } = useOpenPLCStore()
+  const baseTypes = baseTypeSchema.options
+  const allTypes = [
+    ...baseTypes,
+    ...dataTypes.map((type) => (type.name !== editor.meta.name ? type.name : '')).filter((type) => type !== ''),
+  ]
   const ROWS_NOT_SELECTED = -1
   const [arrayTable, setArrayTable] = useState<{ selectedRow: string }>({ selectedRow: ROWS_NOT_SELECTED.toString() })
   const [initialValueData, setInitialValueData] = useState<string>('')
-  const [baseType, setBaseType] = useState<string>(data.baseType)
+  const [baseType, setBaseType] = useState<string>(data.baseType.value)
 
   useEffect(() => {
     setInitialValueData(data.initialValue || '')
   }, [])
 
   useEffect(() => {
-    setBaseType(data.baseType)
+    setBaseType(data.baseType.value)
   }, [data.baseType])
 
   const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -42,7 +50,17 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const onSelectValueChange = (selectedValue: string) => {
     setBaseType(selectedValue)
     _.debounce(() => {
-      const updatedData = { ...data, baseType: selectedValue }
+      let isBaseType = false
+      baseTypes.forEach((type) => {
+        if (type === selectedValue) isBaseType = true
+      })
+      const updatedData = {
+        ...data,
+        baseType: {
+          value: selectedValue,
+          definition: isBaseType ? 'base-type' : 'user-data-type',
+        },
+      }
       updateDatatype(data.name, updatedData as PLCArrayDatatype)
     }, 100)()
   }
@@ -71,7 +89,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
                 sideOffset={-28}
                 className='box h-fit w-[--radix-select-trigger-width] rounded-lg bg-white outline-none dark:bg-neutral-950'
               >
-                {baseTypes.map((type) => {
+                {allTypes.map((type) => {
                   return (
                     <SelectItem
                       value={type}

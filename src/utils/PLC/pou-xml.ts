@@ -15,13 +15,46 @@ export const parseInterface = (pou: PLCPou) => {
 
   const xml: InterfaceXML = {}
   variables.forEach((variable) => {
+    // const variableIsDerived = variable.type.definition === 'derived' || variable.type.definition === 'user-data-type'
+
+    let vType = {}
+    if (variable.type.definition === 'array') {
+      console.log(variable.type.data.dimensions)
+      vType = {
+        array: {
+          dimensions: variable.type.data.dimensions.map((dimension) => {
+            const lower = dimension.dimension.split('..')[0]
+            const upper = dimension.dimension.split('..')[1]
+            return {
+              '@lower': lower,
+              '@upper': upper,
+            }
+          }),
+          baseType: {
+            [variable.type.data.baseType.definition === 'user-data-type'
+              ? 'derived'
+              : variable.type.data.baseType.value.toUpperCase()]:
+              variable.type.data.baseType.definition === 'user-data-type'
+                ? { '@name': variable.type.data.baseType.value }
+                : '',
+          },
+        },
+      }
+    } else if (variable.type.definition === 'derived' || variable.type.definition === 'user-data-type') {
+      vType = {
+        derived: {
+          '@name': variable.type.value,
+        },
+      }
+    } else {
+      vType = {
+        [variable.type.value.toUpperCase()]: '',
+      }
+    }
+
     const v: VariableXML = {
       '@name': variable.name,
-      type: {
-        // !BAD CODE
-        [variable.type.definition === 'derived' ? 'derived' : variable.type.value.toUpperCase()]:
-          variable.type.definition === 'derived' ? { '@name': variable.type.value } : '',
-      },
+      type: vType,
     }
 
     if (variable.location) v['@address'] = variable.location

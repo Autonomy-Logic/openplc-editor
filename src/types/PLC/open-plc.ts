@@ -30,7 +30,16 @@ type BaseType = z.infer<typeof baseTypeSchema>
 const PLCArrayDatatypeSchema = z.object({
   name: z.string(),
   derivation: z.literal('array'),
-  baseType: baseTypeSchema,
+  baseType: z.discriminatedUnion('definition', [
+    z.object({
+      definition: z.literal('base-type'),
+      value: baseTypeSchema,
+    }),
+    z.object({
+      definition: z.literal('user-data-type'),
+      value: z.string(),
+    }),
+  ]),
   initialValue: z.string().optional(),
   dimensions: z.array(z.object({ dimension: z.string() })),
 })
@@ -51,10 +60,6 @@ const PLCStructureVariableSchema = z.object({
     }),
     z.object({
       definition: z.literal('user-data-type'),
-      /** In fact this will be filled by the data types created by the user
-       *  This is a mock type just for a presentation.
-       * @deprecated
-       */
       value: z.string(),
     }),
     z.object({
@@ -62,8 +67,17 @@ const PLCStructureVariableSchema = z.object({
       value: z.string(),
       data: z.object({
         /** This must also include the data types created by the user */
-        baseType: baseTypeSchema,
-        dimensions: z.array(z.string()),
+        baseType: z.discriminatedUnion('definition', [
+          z.object({
+            definition: z.literal('base-type'),
+            value: baseTypeSchema,
+          }),
+          z.object({
+            definition: z.literal('user-data-type'),
+            value: z.string(),
+          }),
+        ]),
+        dimensions: z.array(z.object({ dimension: z.string() })),
       }),
     }),
     z.object({
@@ -112,10 +126,6 @@ const PLCVariableSchema = z.object({
     }),
     z.object({
       definition: z.literal('user-data-type'),
-      /** In fact this will be filled by the data types created by the user
-       *  This is a mock type just for a presentation.
-       * @deprecated
-       */
       value: z.string(),
     }),
     z.object({
@@ -123,13 +133,22 @@ const PLCVariableSchema = z.object({
       value: z.string(),
       data: z.object({
         /** This must also include the data types created by the user */
-        baseType: baseTypeSchema,
-        dimensions: z.array(z.string()),
+        baseType: z.discriminatedUnion('definition', [
+          z.object({
+            definition: z.literal('base-type'),
+            value: baseTypeSchema,
+          }),
+          z.object({
+            definition: z.literal('user-data-type'),
+            value: z.string(),
+          }),
+        ]),
+        dimensions: z.array(z.object({ dimension: z.string() })),
       }),
     }),
     z.object({
       /**
-       * This should be ommited at variable table type options
+       * This should be omitted at variable table type options
        */
       definition: z.literal('derived'),
       value: z.string(),
