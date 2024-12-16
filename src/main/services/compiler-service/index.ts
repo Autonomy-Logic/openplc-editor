@@ -67,15 +67,15 @@ const CompilerService = {
     // Check the current platform to execute the correct command based on the current operating system
     const isWindows = process.platform === 'win32'
     const isMac = process.platform === 'darwin'
-    const isLinux = process.platform === 'linux'
+    const isLinux = process.platform === 'linux' // Works for Fedora and Debian/Ubuntu based systems
 
     // Construct the path for the current working directory to be able to access the compiler
     const workingDirectory = process.cwd()
 
     const developmentCompilerPath = join(workingDirectory, 'resources', 'st-compiler', 'xml2st.py')
     // Construct the path for the st compiler script based on the current environment
-    const windowsOrLinuxCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.exe')
-    const darwinCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.py') // TODO: This must be modified to match the correct OS extension
+    const windowsOrLinuxCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.exe') // In Fedora the generated compiler doesn't have an explicit extension and it cause some bugs
+    const darwinCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.py')
 
     // Remove the project.json file from the path to the xml file.
     // This is necessary because on windows the path is handled differently from unix systems
@@ -84,10 +84,10 @@ const CompilerService = {
     // Construct the path to the xml file
     const pathToXMLFile = join(draftPath, 'build', 'plc.xml')
 
+    // Create a variable to execute the st compiler script
     let execCompilerScript
-    // Execute the st compiler script with the path to the xml file.
-    // CAUTION!!!!
-    // TODO: This only works on development environment. Need to be added the path for the production environment
+
+    // Execute the st compiler script with the path to the xml file, based on the environment and OS.
     if (isDevelopment) {
       if (isWindows) {
         execCompilerScript = spawn('py', [developmentCompilerPath, pathToXMLFile])
@@ -104,7 +104,6 @@ const CompilerService = {
       }
     }
 
-    console.log('Script ->', execCompilerScript)
     /**
      * The data object is a buffer with the content of the script output.
      * Uses ASCII code to convert the buffer to a string.

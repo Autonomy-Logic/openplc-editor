@@ -24,8 +24,7 @@
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
     "test:unit": "jest --watch",
-    "test": "jest --collectCoverage --",
-    "build:python": "ts-node scripts/build-python-compiler.ts"
+    "test": "jest --collectCoverage --"
   },
   "browserslist": [],
   "dependencies": {
@@ -150,8 +149,8 @@
     "webpack-merge": "^5.9.0"
   },
   "engines": {
-    "node": ">=18.x <=20.x",
-    "npm": ">=9.x <=10.x"
+    "node": ">=20.x",
+    "npm": ">=10.x"
   },
   "electronmon": {
     "patterns": [
