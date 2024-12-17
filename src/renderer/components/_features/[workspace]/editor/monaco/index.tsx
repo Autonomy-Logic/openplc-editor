@@ -5,8 +5,9 @@ import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_m
 import { useOpenPLCStore } from '@process:renderer/store'
 import type { LibraryState } from '@root/renderer/store/slices'
 import * as monaco from 'monaco-editor'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 
+import { toast } from '../../../[app]/toast/use-toast'
 import { parsePouToStText } from './drag-and-drop/st'
 
 type monacoEditorProps = {
@@ -34,6 +35,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const editorRef = useRef<null | monaco.editor.IStandaloneCodeEditor>(null)
   const monacoRef = useRef<null | typeof monaco>(null)
   const {
+    editor,
     workspace: {
       systemConfigs: { shouldUseDarkMode },
     },
@@ -41,7 +43,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       data: { pous },
     },
     libraries: sliceLibraries,
-    projectActions: { updatePou },
+    projectActions: { updatePou, createVariable },
   } = useOpenPLCStore()
 
   const [isOpen, setIsOpen] = useState<boolean>(false)
@@ -98,6 +100,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     const draftModelData = editorModel?.getValue()
 
+    console.log('libraries: ', libraries)
+    console.log('libraryToUse: ', libraryToUse)
+    console.log('Pou to append: ', pouToAppend)
+    console.log('Editor model: ', editorModel)
+    console.log('Draft model data: ', draftModelData)
+
     /**
      * TODO: Adicionar o conteudo na posicão do cursor
      */
@@ -112,17 +120,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
        */
       setIsOpen(true)
     }
-
-    console.log('libraries', libraries)
-    console.log('libraryToUse', libraryToUse)
-    console.log('pouToAppend', pouToAppend)
-    console.log('editorModel', editorModel)
-    console.log('draftModelData', draftModelData)
   }
-
-  useEffect(() => {
-    console.log('contentToDrop', contentToDrop)
-  }, [contentToDrop])
 
   const handleRenamePou = () => {
     if (!contentToDrop || !editorRef.current) return
@@ -144,6 +142,30 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     setIsOpen(false)
     setNewName('')
+
+    const res = createVariable({
+      data: {
+        name: newName,
+        type: {
+          definition: 'derived',
+          value: contentToDrop.name,
+        },
+        class: 'local',
+        location: '',
+        documentation: '',
+        debug: false,
+      },
+      scope: 'local',
+      associatedPou: editor.meta.name,
+    })
+    if (!res.ok) {
+      toast({
+        title: res.title,
+        description: res.message,
+        variant: 'fail',
+      })
+      return
+    }
   }
 
   const handleCancelRenamePou = () => {
