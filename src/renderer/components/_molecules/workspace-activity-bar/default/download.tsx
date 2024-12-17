@@ -1,13 +1,13 @@
 import { DownloadIcon } from '@root/renderer/assets'
 import { ActivityBarButton } from '@root/renderer/components/_atoms/buttons'
 import { useOpenPLCStore } from '@root/renderer/store'
-// import { BufferToStringArray } from '@root/utils'
+import { BufferToStringArray } from '@root/utils'
 import { v4 as uuidv4 } from 'uuid'
-// type CompileResponseObject = {
-//   type: 'info' | 'warning' | 'error'
-//   data?: Buffer
-//   message?: string
-// }
+type CompileResponseObject = {
+  type: 'info' | 'warning' | 'error'
+  data?: Buffer
+  message?: string
+}
 
 const DownloadButton = () => {
   const {
@@ -15,17 +15,17 @@ const DownloadButton = () => {
     consoleActions: { addLog },
   } = useOpenPLCStore()
 
-  // const buildProgram = () =>
-  //   window.bridge.compileRequest(project.meta.path, (compileResponse: CompileResponseObject) => {
-  //     const { type: stdType, data, message: stdMessage } = compileResponse
-  //     const uint8Array = data
-  //     if (!uint8Array) return
-  //     const lines = BufferToStringArray(uint8Array)
-  //     lines.forEach((line) => {
-  //       addLog({ id: uuidv4(), type: stdType, message: line })
-  //     })
-  //     stdMessage && addLog({ id: uuidv4(), type: stdType, message: stdMessage })
-  //   })
+  const buildProgram = () =>
+    window.bridge.compileRequest(project.meta.path, (compileResponse: CompileResponseObject) => {
+      const { type: stdType, data, message: stdMessage } = compileResponse
+      const uint8Array = data
+      if (!uint8Array) return
+      const lines = BufferToStringArray(uint8Array)
+      lines.forEach((line) => {
+        addLog({ id: uuidv4(), type: stdType, message: line })
+      })
+      stdMessage && addLog({ id: uuidv4(), type: stdType, message: stdMessage })
+    })
 
   const requestBuildProgram = async () => {
     addLog({ id: uuidv4(), type: 'info', message: 'Build process started' })
@@ -38,7 +38,7 @@ const DownloadButton = () => {
       if (result.success) {
         addLog({ id: uuidv4(), type: 'info', message: result.message })
         addLog({ id: uuidv4(), type: 'warning', message: 'Attempting to build the program' })
-        // buildProgram()
+        buildProgram()
       } else {
         addLog({ id: uuidv4(), type: 'error', message: result.message })
         if (result.message.includes('Main POU not found')) {
