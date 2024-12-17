@@ -26,92 +26,23 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
   } = useOpenPLCStore()
   const navigate = useNavigate()
 
-  const handleSaveCloseProject = async () => {
+  const onClose = () => {
     closeModal()
-    await handleSaveProject()
-    if (validationContext === 'exit') {
-      clearUserLibraries()
-      clearFlows()
-      clearProjects()
-      navigate('/')
-      return
-    }
-    if (validationContext === 'create-project') {
-      openModal('create-project', null)
-      clearUserLibraries()
-      clearFlows()
-      clearProjects()
-      navigate('/')
-      return
-    }
-    if (validationContext === 'open-project') {
-      try {
-        const { success, data, error } = await window.bridge.openProject()
-        if (success && data) {
-          clearTabs()
-          setEditingState('unsaved')
-
-          const projectMeta = {
-            name: data.content.meta.name,
-            type: data.content.meta.type,
-            path: data.meta.path,
-          }
-
-          const projectData = data.content.data
-
-          setProject({
-            meta: projectMeta,
-            data: projectData,
-          })
-
-          const ladderPous = projectData.pous.filter(
-            (pou: { data: { language: string } }) => pou.data.language === 'ld',
-          )
-          if (ladderPous.length) {
-            ladderPous.forEach((pou) => {
-              if (pou.data.body.language === 'ld') {
-                addFlow(pou.data.body.value as FlowType)
-              }
-            })
-          }
-          data.content.data.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
-          toast({
-            title: 'Project opened!',
-            description: 'Your project was opened and loaded successfully.',
-            variant: 'default',
-          })
-        } else {
-          toast({
-            title: 'Cannot open the project.',
-            description: error?.description || 'Failed to open the project.',
-            variant: 'fail',
-          })
-        }
-      } catch (_error) {
-        toast({
-          title: 'An error occurred.',
-          description: 'There was a problem opening the project.',
-          variant: 'fail',
-        })
+    clearUserLibraries()
+    clearFlows()
+    clearProjects()
+    navigate('/')
+  }
+  const handleCloseProject = async (operation: 'save' | 'not-saving') => {
+    onClose()
+    if (operation === 'save') {
+      const { success } = await handleSaveProject()
+      if (!success) {
+        return
       }
     }
-  }
-
-  const handleCloseWithoutSaving = async () => {
-    closeModal()
-    if (validationContext === 'exit') {
-      clearUserLibraries()
-      clearFlows()
-      clearProjects()
-      navigate('/')
-      return
-    }
     if (validationContext === 'create-project') {
       openModal('create-project', null)
-      clearUserLibraries()
-      clearFlows()
-      clearProjects()
-      navigate('/')
       return
     }
     if (validationContext === 'open-project') {
@@ -175,7 +106,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
         description: 'The project data is not valid.',
         variant: 'fail',
       })
-      return
+      return { success: projectData.success }
     }
 
     const { success, reason } = await window.bridge.saveProject({
@@ -199,6 +130,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
         variant: 'fail',
       })
     }
+    return { success, reason }
   }
 
   return (
@@ -216,7 +148,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
             <div className='mb-6 flex flex-col gap-2'>
               <button
                 onClick={() => {
-                  void handleSaveCloseProject()
+                  void handleCloseProject('save')
                 }}
                 className='w-full rounded-lg bg-brand px-4 py-2 text-center font-medium text-white '
               >
@@ -224,7 +156,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
               </button>
               <button
                 onClick={() => {
-                  void handleCloseWithoutSaving()
+                  void handleCloseProject('not-saving')
                 }}
                 className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
               >
