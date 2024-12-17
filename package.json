@@ -149,8 +149,8 @@
     "webpack-merge": "^5.9.0"
   },
   "engines": {
-    "node": ">=18.x <=20.x",
-    "npm": ">=9.x <=10.x"
+    "node": ">=20.x",
+    "npm": ">=10.x"
   },
   "electronmon": {
     "patterns": [

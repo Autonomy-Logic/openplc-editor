@@ -1,3 +1,5 @@
+import { cn } from '@root/utils'
+
 import {
   DebuggerButton,
   DownloadButton,
@@ -18,8 +20,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       <SearchButton />
       <ZoomButton {...zoom} />
       <DownloadButton />
-      <PlayButton />
-      <DebuggerButton />
+      {/** TODO: Need to be implemented */}
+      <PlayButton className={cn('disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent')} />
+      {/** TODO: Need to be implemented */}
+      <DebuggerButton className={cn('disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent')} />
     </>
   )
 }
