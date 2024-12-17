@@ -32,7 +32,9 @@ export const parseInterface = (pou: PLCPou) => {
           baseType: {
             [variable.type.data.baseType.definition === 'user-data-type'
               ? 'derived'
-              : variable.type.data.baseType.value.toUpperCase()]:
+              : variable.type.data.baseType.value === 'string'
+                ? variable.type.data.baseType.value
+                : variable.type.data.baseType.value.toUpperCase()]:
               variable.type.data.baseType.definition === 'user-data-type'
                 ? { '@name': variable.type.data.baseType.value }
                 : '',
@@ -47,7 +49,7 @@ export const parseInterface = (pou: PLCPou) => {
       }
     } else {
       vType = {
-        [variable.type.value.toUpperCase()]: '',
+        [variable.type.value === 'string' ? variable.type.value : variable.type.value.toUpperCase()]: '',
       }
     }
 
