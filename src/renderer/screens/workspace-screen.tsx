@@ -165,26 +165,40 @@ const WorkspaceScreen = () => {
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.stopPropagation()
-    setIsModalOpen(true)
 
     const data = event.dataTransfer.getData('application/library')
     setLibPath(data)
 
     console.log('dropped data:', data)
-    const pathParts = data.split('/') // Divide o path em partes usando "/"
+    const pathParts = data.split('/')
     const middlePart = pathParts[1]
     const lastPart = pathParts[pathParts.length - 1]
 
     const libSystem = libraries.system.find((lib) => lib.name === middlePart)
-    const libPous = libSystem?.pous.find((lib) => lib.name === lastPart)
-
     console.log('libSystem:', libSystem)
+    if (!libSystem) {
+      console.warn('Library not found:', middlePart)
+      return
+    }
+
+    const libPous = libSystem.pous.find((lib) => lib.name === lastPart)
+
+    if (!libPous) {
+      return
+    }
+
+    if (libPous.type === 'function') {
+      return
+    }
+
+    setIsModalOpen(true)
+
     console.log('libPous:', libPous)
+
     if (editor.type === 'plc-textual') {
       const parseToText =
         editor.meta.language === 'st' || editor.meta.language === 'il' ? parsePouToStText(libPous) : libPous?.body
       console.log('parseToText:', parseToText)
-      // meta.language === 'st' || meta.language === 'il' ? parsePouToStText(pou) : pou.body
     }
   }
 
