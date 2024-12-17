@@ -12,7 +12,7 @@ import {
 } from '@root/renderer/components/_molecules/modal'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { arrayValidation } from '@root/renderer/store/slices/workspace/utils/variables'
-import { BaseType, baseTypeSchema } from '@root/types/PLC/open-plc'
+import { BaseType, baseTypeSchema, PLCStructureVariable } from '@root/types/PLC/open-plc'
 import { useEffect, useState } from 'react'
 
 import { ArrayDimensionsInput } from './array-input'
@@ -41,25 +41,26 @@ export const ArrayModal = ({
     projectActions: { updateDatatype },
   } = useOpenPLCStore()
 
-  const types = baseTypeSchema.options
+  const baseTypes = baseTypeSchema.options
+  const allTypes = [
+    ...baseTypes,
+    ...dataTypes.map((type) => (type.name !== name ? type.name : '')).filter((type) => type !== ''),
+  ]
 
   const [selectedInput, setSelectedInput] = useState<string>('')
   const [dimensions, setDimensions] = useState<string[]>([])
-  const [typeValue, setTypeValue] = useState<BaseType>('dint')
+  const [typeValue, setTypeValue] = useState<string>('dint')
 
   useEffect(() => {
-    const structureVariables = dataTypes.filter(
-      (dataType) => dataType.derivation === 'structure' && 'variable' in dataType,
-    )
-    if (structureVariables.name === name) {
-      const findStructureVariable = structureVariables.find((variable) => variable.name === variableName)
-      const structureVariable = findStructureVariable?.variable.find((variable) => variable.name === variableName)
-      console.log('structureVariable:', structureVariable)
-      if (structureVariable.type.definition === 'array') {
-        console.log('array modal -> structureVariable:', structureVariable)
-        setDimensions(structureVariable.type.data.dimensions)
-        setTypeValue(structureVariable.type.data.baseType)
-      }
+    const structure = dataTypes.filter((dataType) => dataType.name === name && dataType.derivation === 'structure')[0]
+    if (structure.derivation !== 'structure') return
+
+    const variable = structure.variable.find((variable) => variable.name === variableName)
+    if (!variable) return
+
+    if (variable.type.definition === 'array') {
+      setDimensions(variable.type.data.dimensions.map((dimension) => dimension.dimension))
+      setTypeValue(variable.type.data.baseType.value)
     }
   }, [name, variableName, dataTypes])
 
@@ -134,21 +135,29 @@ export const ArrayModal = ({
       return
     }
 
-    const updatedVariables = structure.variable.map((variable) =>
-      variable.name === variableName
-        ? {
-            ...variable,
-            type: {
-              definition: 'array',
-              value: formattedArrayName,
-              data: {
-                baseType: typeValue,
-                dimensions,
+    const updatedVariables: PLCStructureVariable[] = structure.variable.map((variable) => {
+      if (variable.name === variableName) {
+        let isBaseType = false
+        baseTypes.forEach((type) => {
+          if (type === typeValue) isBaseType = true
+        })
+        return {
+          ...variable,
+          type: {
+            definition: 'array',
+            value: formattedArrayName,
+            data: {
+              baseType: {
+                definition: isBaseType ? 'base-type' : 'user-data-type',
+                value: typeValue,
               },
+              dimensions: dimensionToSave.map((value) => ({ dimension: value })),
             },
-          }
-        : variable,
-    )
+          },
+        }
+      }
+      return variable
+    })
 
     updateDatatype(name, {
       ...structure,
@@ -172,12 +181,7 @@ export const ArrayModal = ({
       >
         <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>Array</span>
       </ModalTrigger>
-      <ModalContent
-        onEscapeKeyDown={handleCancel}
-        onPointerDownOutside={handleCancel}
-        onInteractOutside={handleCancel}
-        onClose={handleCancel}
-      >
+      <ModalContent onEscapeKeyDown={handleCancel} onPointerDownOutside={handleCancel} onInteractOutside={handleCancel}>
         <ModalHeader>
           <ModalTitle>Array type definition</ModalTitle>
         </ModalHeader>
@@ -203,7 +207,7 @@ export const ArrayModal = ({
                   sideOffset={-28}
                   className='box z-[999] h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
                 >
-                  {types.map((type) => (
+                  {allTypes.map((type) => (
                     <SelectItem
                       value={type}
                       className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
@@ -268,14 +272,14 @@ export const ArrayModal = ({
           </div>
         </div>
         <ModalFooter className='flex items-center justify-around'>
-          <Button className='h-8 justify-center text-xs' onClick={() => handleSave()}>
-            Save
-          </Button>
           <Button
             onClick={() => handleCancel()}
             className='h-8 justify-center bg-neutral-100 text-xs text-neutral-1000 hover:bg-neutral-300 focus:bg-neutral-200'
           >
             Cancel
+          </Button>
+          <Button className='h-8 justify-center text-xs' onClick={() => handleSave()}>
+            Save
           </Button>
         </ModalFooter>
       </ModalContent>

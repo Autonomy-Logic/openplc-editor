@@ -4,6 +4,7 @@ import type { ProjectState } from '../../renderer/store/slices'
 import { instanceToXml } from '../PLC/instances-xml'
 import { parsePousToXML } from '../PLC/pou-xml'
 import { getBaseXmlStructure } from './base-xml'
+import { parseDataTypesToXML } from './data-type-xml'
 
 const XmlGenerator = (projectToGenerateXML: ProjectState['data']) => {
   let xmlResult = getBaseXmlStructure()
@@ -14,10 +15,15 @@ const XmlGenerator = (projectToGenerateXML: ProjectState['data']) => {
   const pous = projectToGenerateXML.pous
 
   const mainPou = pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
-  if (!mainPou)
-    return { ok: false, message: 'Main POU not found.', data: undefined }
+  if (!mainPou) return { ok: false, message: 'Main POU not found.', data: undefined }
 
   xmlResult = parsePousToXML(xmlResult, pous)
+
+  /**
+   * Parse data types
+   */
+  const dataTypes = projectToGenerateXML.dataTypes
+  xmlResult = parseDataTypesToXML(xmlResult, dataTypes)
 
   /**
    * Parse instances

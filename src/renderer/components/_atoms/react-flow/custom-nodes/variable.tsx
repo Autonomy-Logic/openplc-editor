@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { BlockNodeData, BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
-import { getPouVariablesRungNodeAndEdges } from './utils'
+import { getPouVariablesRungNodeAndEdges, getVariableByName } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
 // import { z } from 'zod'
 
@@ -115,15 +115,60 @@ const VariableElement = ({ id, data }: VariableProps) => {
    * Update inputError state when the table of variables is updated
    */
   useEffect(() => {
-    const { rung, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const {
+      node: variableNode,
+      rung,
+      variables,
+    } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
       variableName: variableValue,
     })
+    if (!rung || !variableNode) return
 
-    if (!variables.selected || !inputVariableRef) {
+    const variable = variables.selected
+    if (!variable || !inputVariableRef) {
       setIsAVariable(false)
     } else {
-      const variable = variables.selected
+      if (variable.name !== (variableNode as VariableNode).data.variable.name) {
+        setVariableValue(variable.name)
+        updateNode({
+          editorName: editor.meta.name,
+          rungId: rung.id,
+          nodeId: variableNode.id,
+          node: {
+            ...variableNode,
+            data: {
+              ...variableNode.data,
+              variable: variable,
+            },
+          },
+        })
+
+        const relatedBlock = rung.nodes.find((node) => node.id === (variableNode as VariableNode).data.block.id)
+        if (!relatedBlock) {
+          setInputError(true)
+          return
+        }
+
+        updateNode({
+          editorName: editor.meta.name,
+          rungId: rung.id,
+          nodeId: relatedBlock.id,
+          node: {
+            ...relatedBlock,
+            data: {
+              ...relatedBlock.data,
+              connectedVariables: {
+                ...(relatedBlock.data as BlockNodeData<object>).connectedVariables,
+                [(variableNode as VariableNode).data.block.handleId]: {
+                  variable: variable,
+                  type: variableNode.data.variant,
+                },
+              },
+            },
+          },
+        })
+      }
 
       const validation = validateVariableType(variable.type.value, data.block.variableType)
       if (!validation.isValid && dataTypes.length > 0) {
@@ -132,7 +177,6 @@ const VariableElement = ({ id, data }: VariableProps) => {
         validation.error = undefined
       }
       setInputError(!validation.isValid)
-
       setIsAVariable(true)
     }
 
@@ -149,14 +193,16 @@ const VariableElement = ({ id, data }: VariableProps) => {
    * Handle with the variable input onBlur event
    */
   const handleSubmitVariableValue = () => {
-    const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { pou, rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
-      variableName: variableValue,
     })
-    if (!rung || !node) return
+    if (!pou || !rung || !node) return
     const variableNode = node as VariableNode
 
-    let variable: PLCVariable | { name: string } | undefined = variables.selected
+    let variable: PLCVariable | { name: string } | undefined = getVariableByName(
+      pou.data.variables as PLCVariable[],
+      variableValue,
+    )
     if (!variable) {
       setIsAVariable(false)
       variable = { name: variableValue }

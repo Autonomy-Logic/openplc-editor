@@ -11,7 +11,8 @@ const extractSearchQuery = (body: string, searchQuery: string): string => {
   if (match) {
     const highlightedHTML = body.replace(
       regex,
-      (matched) => `<span class='text-brand-medium dark:text-brand-light'>${matched}</span>`,
+      (matched) =>
+        `<span class='bg-brand-light dark:bg-brand-medium-dark border-0 rounded-sm'>${matched}</span>`,
     )
 
     return DOMPurify.sanitize(highlightedHTML)

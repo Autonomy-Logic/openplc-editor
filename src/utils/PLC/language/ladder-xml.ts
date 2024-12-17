@@ -441,7 +441,7 @@ const blockToXml = (block: BlockNode<BlockVariant>, rung: RungState, offsetY: nu
   return {
     '@localId': block.data.numericId,
     '@typeName': block.data.variant.name,
-    '@instanceName': block.data.variable.name,
+    '@instanceName': block.data.variant.type === 'function-block' ? block.data.variable.name : undefined,
     '@width': block.width as number,
     '@height': block.height as number,
     '@executionOrderId': block.data.executionOrder,

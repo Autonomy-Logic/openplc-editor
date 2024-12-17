@@ -9,7 +9,7 @@ import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
-import type { ReactNode } from 'react'
+import type { ReactNode, UIEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
 
 import { buildHandle, CustomHandle } from './handle'
@@ -93,33 +93,39 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
   const [contactVariableValue, setContactVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
+  const inputWrapperRef = useRef<HTMLDivElement>(null)
   const inputVariableRef = useRef<HTMLTextAreaElement>(null)
   const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
   const [inputFocus, setInputFocus] = useState<boolean>(true)
 
-  const [isEditing, setIsEditing] = useState<boolean>(false)
-
+  const highlightDivRef = useRef<HTMLDivElement>(null)
+  const [scrollValue, setScrollValue] = useState<number>(0)
   const formattedContactVariableValue = searchQuery
     ? extractSearchQuery(contactVariableValue, searchQuery)
     : contactVariableValue
 
   useEffect(() => {
-    if (inputVariableRef.current) {
+    if (inputVariableRef.current && highlightDivRef.current && inputWrapperRef.current) {
+      // height
       inputVariableRef.current.style.height = 'auto'
-      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 24 ? inputVariableRef.current.scrollHeight : 24}px`
-      if (scrollableIndicatorRef.current)
-        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 24 ? 'block' : 'none'
+      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 32 ? inputVariableRef.current.scrollHeight : 24}px`
+      highlightDivRef.current.style.height = 'auto'
+      highlightDivRef.current.style.height = inputVariableRef.current.style.height
+      // top
+      highlightDivRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-30px' : '-24px'
+      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-30px' : '-24px'
+      // scrollable indicator
+      if (scrollableIndicatorRef.current) {
+        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
+      }
     }
   }, [contactVariableValue])
 
   useEffect(() => {
-    if (inputVariableRef.current) {
-      inputVariableRef.current.style.height = 'auto'
-      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 32 ? inputVariableRef.current.scrollHeight : 24}px`
-      if (scrollableIndicatorRef.current)
-        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
+    if (highlightDivRef.current) {
+      highlightDivRef.current.scrollTop = scrollValue
     }
-  }, [contactVariableValue])
+  }, [scrollValue])
 
   /**
    * useEffect to focus the variable input when the block is selected
@@ -220,7 +226,10 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       },
     })
     setWrongVariable(false)
-    setIsEditing(false)
+  }
+
+  const onScrollHandler = (e: UIEvent<HTMLTextAreaElement>) => {
+    setScrollValue(e.currentTarget.scrollTop)
   }
 
   return (
@@ -239,33 +248,38 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
         style={{ width: DEFAULT_CONTACT_BLOCK_WIDTH, height: DEFAULT_CONTACT_BLOCK_HEIGHT }}
       >
         {contact.svg(wrongVariable)}
-        <div className='absolute -left-[24px] -top-[26px] flex h-3 w-[72px] items-center justify-center'>
-          {isEditing ? (
-          <textarea
-              value={contactVariableValue}
-              onChange={(e) => setContactVariableValue(e.target.value)}
-              placeholder='???'
-              className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
-              onFocus={() => setInputFocus(true)}
-              onBlur={() => {
-                if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
-                inputFocus && handleSubmitContactVariable()
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-              ref={inputVariableRef}
-              rows={1}
-            spellCheck={false}
-            />
-          ) : (
-          <p
-            onClick={() => setIsEditing(true)}
-            className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
-            dangerouslySetInnerHTML={{ __html: formattedContactVariableValue || '???' }}
-          />
-        )}
-      </div>
         <div
-          className={cn('pointer-events-none absolute -right-[36px] -top-[27px] text-cp-sm')}
+          className='-z-1 pointer-events-none absolute -left-[24px] -top-[24px] w-[72px] overflow-y-scroll [&::-webkit-scrollbar]:hidden'
+          ref={highlightDivRef}
+        >
+          <div
+            className='h-full w-full whitespace-pre-wrap break-words text-center text-xs leading-3 text-transparent'
+            dangerouslySetInnerHTML={{ __html: formattedContactVariableValue }}
+          />
+        </div>
+        <div className='absolute -left-[24px] -top-[24px] w-[72px]' ref={inputWrapperRef}>
+          <textarea
+            value={contactVariableValue}
+            onChange={(e) => setContactVariableValue(e.target.value)}
+            placeholder='???'
+            className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
+            onFocus={() => setInputFocus(true)}
+            onBlur={() => {
+              if (inputVariableRef.current && highlightDivRef.current) {
+                inputVariableRef.current.scrollTop = 0
+                highlightDivRef.current.scrollTop = 0
+              }
+              inputFocus && handleSubmitContactVariable()
+            }}
+            onScroll={(e) => onScrollHandler(e)}
+            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+            ref={inputVariableRef}
+            rows={1}
+            spellCheck={false}
+          />
+        </div>
+        <div
+          className={cn('pointer-events-none absolute -right-[36px] -top-[24px] text-cp-sm')}
           ref={scrollableIndicatorRef}
         >
           ↕
@@ -329,6 +343,6 @@ export const buildContactNode = ({ id, posX, posY, handleX, handleY, variant }: 
     },
     draggable: true,
     selectable: true,
-    selected: false,
+    selected: true,
   }
 }
