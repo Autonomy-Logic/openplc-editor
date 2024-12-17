@@ -1,4 +1,5 @@
 import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useEffect } from 'react'
@@ -19,10 +20,24 @@ const ConfirmDeletePousModal = ({ isOpen }: { isOpen: boolean }) => {
     setSelectedTab(editor.meta.name)
   }, [editor])
   const handleDeletePou = () => {
-    handleRemoveTab(selectedTab)
-    deletePou(selectedTab)
-    removeFlow(selectedTab)
-    removeUserLibrary(selectedTab)
+    try {
+      handleRemoveTab(selectedTab)
+      deletePou(selectedTab)
+      removeFlow(selectedTab)
+      removeUserLibrary(selectedTab)
+      toast({
+        title: 'Pou deleted success!',
+        description: 'Your POUs were successfully deleted.',
+        variant: 'default',
+      })
+    } catch (error) {
+      toast({
+        title: 'Error deleting Pou',
+        description: 'An error occurred while deleting the POUs. Please try again.',
+        variant: 'fail',
+      })
+      console.error('Error deleting POUs:', error)
+    }
     onOpenChange('confirm-delete-POUs', false)
   }
 
