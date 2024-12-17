@@ -146,6 +146,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     setNewName('')
   }
 
+  const handleCancelRenamePou = () => {
+    setIsOpen(false)
+    setNewName('')
+  }
+
   // console.log('Editor instance: ', editorRef.current?.getModel()?.uri.path)
   // console.log('Monaco instance: ', monacoRef.current?.editor.getEditors())
 
@@ -166,21 +171,31 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         />
       </div>
       <Modal open={isOpen} onOpenChange={setIsOpen}>
-        <ModalContent className='flex max-h-56 w-fit select-none flex-col justify-between gap-2 rounded-lg p-8'>
-          <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Set a name</ModalTitle>
+        <ModalContent className='flex h-56 w-96 select-none flex-col justify-between gap-2 rounded-lg p-8'>
+          <ModalTitle className='text-sm font-medium text-neutral-950 dark:text-white'>
+            Please enter a name for the block
+          </ModalTitle>
+          <label htmlFor='Block name' className='text-xs text-neutral-600 dark:text-neutral-50'>
+            Block name
+          </label>
           <input
-            className='text-sm text-neutral-600 dark:text-neutral-50'
+            id='Block name'
+            className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
           />
           <div className='flex h-8 w-full justify-evenly gap-7'>
-            <button className='h-full w-[236px] rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
+            <button
+              onClick={handleCancelRenamePou}
+              className='h-full w-[236px] rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+            >
               Cancel
             </button>
             <button
               type='button'
-              className='h-full w-[236px] rounded-lg bg-brand text-center font-medium text-white'
+              className={`h-8 w-52 rounded-lg bg-brand text-white ${!newName || newName === '' ? 'cursor-not-allowed opacity-50' : ''}`}
               onClick={handleRenamePou}
+              disabled={!newName || newName === ''}
             >
               Ok
             </button>
