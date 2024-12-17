@@ -1,11 +1,11 @@
 import './configs'
 
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
-import {Modal, ModalContent, ModalTitle} from '@process:renderer/components/_molecules/modal'
+import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_molecules/modal'
 import { useOpenPLCStore } from '@process:renderer/store'
 import type { LibraryState } from '@root/renderer/store/slices'
 import * as monaco from 'monaco-editor'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { parsePouToStText } from './drag-and-drop/st'
 
@@ -17,15 +17,15 @@ type monacoEditorProps = {
 
 type _qualquerCoisa = {
   name: string
-language: string
-type: string
-body: string
-documentation: string
-variables: {
-  name: string
-  class: string
-  type: { definition: string; value: string }
-}[]
+  language: string
+  type: string
+  body: string
+  documentation: string
+  variables: {
+    name: string
+    class: string
+    type: { definition: string; value: string }
+  }[]
 }
 type monacoEditorOptionsType = monaco.editor.IStandaloneEditorConstructionOptions
 
@@ -45,6 +45,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   } = useOpenPLCStore()
 
   const [isOpen, setIsOpen] = useState<boolean>(false)
+  const [contentToDrop, setContentToDrop] = useState<_qualquerCoisa>()
+  const [newName, setNewName] = useState<string>('')
 
   function handleEditorDidMount(
     editor: null | monaco.editor.IStandaloneCodeEditor,
@@ -90,6 +92,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const libraryToUse = libraries.find((library) => library.name === libraryName)
 
     const pouToAppend = libraryToUse?.pous?.find((pou) => pou.name === pouName)
+    setContentToDrop(pouToAppend)
 
     const editorModel = editorRef.current?.getModel()
 
@@ -98,7 +101,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     /**
      * TODO: Adicionar o conteudo na posicão do cursor
      */
-    if(pouToAppend?.type === 'function'){
+    if (pouToAppend?.type === 'function') {
       const newModelData = draftModelData?.concat(parsePouToStText(pouToAppend as _qualquerCoisa))
       editorModel?.setValue(newModelData as string)
       return
@@ -109,6 +112,38 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
        */
       setIsOpen(true)
     }
+
+    console.log('libraries', libraries)
+    console.log('libraryToUse', libraryToUse)
+    console.log('pouToAppend', pouToAppend)
+    console.log('editorModel', editorModel)
+    console.log('draftModelData', draftModelData)
+  }
+
+  useEffect(() => {
+    console.log('contentToDrop', contentToDrop)
+  }, [contentToDrop])
+
+  const handleRenamePou = () => {
+    if (!contentToDrop || !editorRef.current) return
+
+    const renamedContent = { ...contentToDrop, name: newName }
+
+    console.log('Novo conteúdo renomeado:', renamedContent)
+
+    const editorModel = editorRef.current.getModel()
+
+    const contentToInsert = parsePouToStText(renamedContent)
+
+    if (editorModel) {
+      const draftModelData = editorModel.getValue()
+      const newModelData = draftModelData ? `${draftModelData}\n${contentToInsert}` : contentToInsert
+
+      editorModel.setValue(newModelData)
+    }
+
+    setIsOpen(false)
+    setNewName('')
   }
 
   // console.log('Editor instance: ', editorRef.current?.getModel()?.uri.path)
@@ -116,36 +151,43 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   return (
     <>
-
-    <div id='editor drop handler' className='w-full h-full' onDrop={handleDrop}>
-    <PrimitiveEditor
-      options={monacoEditorUserOptions}
-      height='100%'
-      width='100%'
-      path={path}
-      language={language}
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      defaultValue={pous.find((pou) => pou.data.name === name)?.data.body.value as string}
-      onMount={handleEditorDidMount}
-      onChange={handleWriteInPou}
-      theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
-      />
+      <div id='editor drop handler' className='h-full w-full' onDrop={handleDrop}>
+        <PrimitiveEditor
+          options={monacoEditorUserOptions}
+          height='100%'
+          width='100%'
+          path={path}
+          language={language}
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          defaultValue={pous.find((pou) => pou.data.name === name)?.data.body.value as string}
+          onMount={handleEditorDidMount}
+          onChange={handleWriteInPou}
+          theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
+        />
       </div>
       <Modal open={isOpen} onOpenChange={setIsOpen}>
         <ModalContent className='flex max-h-56 w-fit select-none flex-col justify-between gap-2 rounded-lg p-8'>
           <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Set a name</ModalTitle>
-          <input className='text-sm text-neutral-600 dark:text-neutral-50' />
+          <input
+            className='text-sm text-neutral-600 dark:text-neutral-50'
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+          />
           <div className='flex h-8 w-full justify-evenly gap-7'>
             <button className='h-full w-[236px] rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
               Cancel
             </button>
-            <button type='submit' className='h-full w-[236px] rounded-lg bg-brand text-center font-medium text-white'>
+            <button
+              type='button'
+              className='h-full w-[236px] rounded-lg bg-brand text-center font-medium text-white'
+              onClick={handleRenamePou}
+            >
               Ok
             </button>
           </div>
         </ModalContent>
       </Modal>
-      </>
+    </>
   )
 }
 export { MonacoEditor }
