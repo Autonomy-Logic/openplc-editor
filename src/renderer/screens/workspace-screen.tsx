@@ -5,14 +5,18 @@ import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
+// import { SubmitHandler, useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 
 import { ExitIcon } from '../assets'
+// import { InputWithRef } from '../components/_atoms'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
+import { parsePouToStText } from '../components/_features/[workspace]/editor/monaco/drag-and-drop/st'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { Search } from '../components/_features/[workspace]/search'
+import { Modal, ModalContent, ModalTitle } from '../components/_molecules'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import AboutModal from '../components/_organisms/about-modal'
 import { Console as ConsoleComponent } from '../components/_organisms/console'
@@ -38,7 +42,11 @@ const WorkspaceScreen = () => {
     flowActions: { clearFlows },
     tabsActions: { clearTabs },
     searchResults,
+    libraries,
   } = useOpenPLCStore()
+
+  // const { register, handleSubmit } = useForm<{ blockName: string; blockData: string }>
+
   useEffect(() => {
     const handleSaveProject = async () => {
       const projectData = PLCProjectSchema.safeParse(project)
@@ -94,7 +102,8 @@ const WorkspaceScreen = () => {
   ]
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
-
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [libPath, setLibPath] = useState('')
   const panelRef = useRef(null)
   const explorerPanelRef = useRef(null)
   const workspacePanelRef = useRef(null)
@@ -152,6 +161,32 @@ const WorkspaceScreen = () => {
       handleSwitchPerspective()
     })
   }, [])
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setIsModalOpen(true)
+
+    const data = event.dataTransfer.getData('application/library')
+    setLibPath(data)
+
+    console.log('dropped data:', data)
+    const pathParts = data.split('/') // Divide o path em partes usando "/"
+    const middlePart = pathParts[1]
+    const lastPart = pathParts[pathParts.length - 1]
+
+    const libSystem = libraries.system.find((lib) => lib.name === middlePart)
+    const libPous = libSystem?.pous.find((lib) => lib.name === lastPart)
+
+    console.log('libSystem:', libSystem)
+    console.log('libPous:', libPous)
+    if (editor.type === 'plc-textual') {
+      const parseToText =
+        editor.meta.language === 'st' || editor.meta.language === 'il' ? parsePouToStText(libPous) : libPous?.body
+      console.log('parseToText:', parseToText)
+      // meta.language === 'st' || meta.language === 'il' ? parsePouToStText(pou) : pou.body
+    }
+  }
 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
@@ -253,6 +288,7 @@ const WorkspaceScreen = () => {
                           )}
 
                           <ResizablePanel
+                            onDrop={editor.type === 'plc-textual' ? handleDrop : undefined}
                             defaultSize={75}
                             id='textualEditorPanel'
                             order={2}
@@ -370,6 +406,20 @@ const WorkspaceScreen = () => {
           </ResizablePanel>
         </ResizablePanelGroup>
       </WorkspaceMainContent>
+      <Modal open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <ModalContent className='flex max-h-56 w-fit select-none flex-col justify-between gap-2 rounded-lg p-8'>
+          <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Set a name</ModalTitle>
+          <input className='text-sm text-neutral-600 dark:text-neutral-50' value={libPath} />
+          <div className='flex h-8 w-full justify-evenly gap-7'>
+            <button className='h-full w-[236px] rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'>
+              Cancel
+            </button>
+            <button type='submit' className='h-full w-[236px] rounded-lg bg-brand text-center font-medium text-white'>
+              Ok
+            </button>
+          </div>
+        </ModalContent>
+      </Modal>
     </div>
   )
 }
