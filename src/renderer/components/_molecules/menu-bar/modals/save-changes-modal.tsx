@@ -11,14 +11,14 @@ import { Modal, ModalContent } from '../../modal'
 
 type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
-  validationContext: 'create-project' | 'open-project' | 'exit'
+  validationContext: string
 }
 
 const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModalProps) => {
   const {
     project,
     workspaceActions: { setEditingState },
-    modalActions: { onOpenChange, openModal },
+    modalActions: { closeModal, onOpenChange, openModal },
     tabsActions: { clearTabs },
     projectActions: { setProject, clearProjects },
     flowActions: { addFlow, clearFlows },
@@ -27,8 +27,8 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
   const navigate = useNavigate()
 
   const handleSaveCloseProject = async () => {
+    closeModal()
     await handleSaveProject()
-    onOpenChange('save-changes-project', false)
     if (validationContext === 'exit') {
       clearUserLibraries()
       clearFlows()
@@ -38,6 +38,10 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     }
     if (validationContext === 'create-project') {
       openModal('create-project', null)
+      clearUserLibraries()
+      clearFlows()
+      clearProjects()
+      navigate('/')
       return
     }
     if (validationContext === 'open-project') {
@@ -92,14 +96,22 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
       }
     }
   }
+
   const handleCloseWithoutSaving = async () => {
-    onOpenChange('save-changes-project', false)
+    closeModal()
     if (validationContext === 'exit') {
+      clearUserLibraries()
+      clearFlows()
+      clearProjects()
       navigate('/')
       return
     }
     if (validationContext === 'create-project') {
       openModal('create-project', null)
+      clearUserLibraries()
+      clearFlows()
+      clearProjects()
+      navigate('/')
       return
     }
     if (validationContext === 'open-project') {
@@ -168,12 +180,12 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
 
     const { success, reason } = await window.bridge.saveProject({
       projectPath: project.meta.path,
-      //@ts-expect-error overlap
-      projectData: project.data,
+      projectData: projectData.data,
     })
 
     if (success) {
       _.debounce(() => setEditingState('saved'), 1000)()
+      setEditingState('saved')
       toast({
         title: 'Changes saved!',
         description: 'The project was saved successfully!',
@@ -208,7 +220,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
                 }}
                 className='w-full rounded-lg bg-brand px-4 py-2 text-center font-medium text-white '
               >
-                Save and Close
+                Save and close
               </button>
               <button
                 onClick={() => {
@@ -216,7 +228,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
                 }}
                 className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
               >
-                Close Without Saving
+                Close without saving
               </button>
             </div>
             <button

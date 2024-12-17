@@ -6,7 +6,7 @@ import type { FlowType } from '@root/renderer/store/slices/flow/types'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { MenuClasses } from '../constants'
@@ -29,12 +29,9 @@ export const FileMenu = () => {
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
-  const [validationValue, setValidationValue] = useState<'create-project' | 'open-project'>('create-project')
-
   const handleCreateProject = () => {
     if (editingState === 'unsaved') {
-      openModal('save-changes-project', null)
-      setValidationValue('create-project')
+      openModal('save-changes-project', 'create-project')
     } else {
       openModal('create-project', null)
     }
@@ -42,8 +39,7 @@ export const FileMenu = () => {
 
   const handleOpenProject = async () => {
     if (editingState === 'unsaved') {
-      openModal('save-changes-project', null)
-      setValidationValue('open-project')
+      openModal('save-changes-project', 'open-project')
       return
     }
     const { success, data, error } = await window.bridge.openProject()
@@ -185,7 +181,10 @@ export const FileMenu = () => {
           </MenuPrimitive.Content>
         </MenuPrimitive.Portal>
         {modals?.['save-changes-project']?.open === true && (
-          <SaveChangesModal isOpen={modals['save-changes-project'].open} validationContext={validationValue} />
+          <SaveChangesModal
+            isOpen={modals['save-changes-project'].open}
+            validationContext={modals['save-changes-project'].data as string}
+          />
         )}
       </MenuPrimitive.Menu>
     </>
