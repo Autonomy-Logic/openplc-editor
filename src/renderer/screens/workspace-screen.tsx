@@ -41,7 +41,6 @@ const WorkspaceScreen = () => {
   useEffect(() => {
     const handleSaveProject = async () => {
       const projectData = PLCProjectSchema.safeParse(project)
-      console.log('projectData', projectData)
       if (!projectData.success) {
         toast({
           title: 'Error in the save request!',

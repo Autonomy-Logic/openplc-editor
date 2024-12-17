@@ -19,7 +19,6 @@ export const parseInterface = (pou: PLCPou) => {
 
     let vType = {}
     if (variable.type.definition === 'array') {
-      console.log(variable.type.data.dimensions)
       vType = {
         array: {
           dimensions: variable.type.data.dimensions.map((dimension) => {

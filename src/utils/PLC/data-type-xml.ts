@@ -2,10 +2,6 @@ import { PLCDataType } from '@root/types/PLC/open-plc'
 import { BaseXml } from '@root/types/PLC/xml-data'
 
 export const parseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
-
-  console.log('dataTypes', dataTypes)
-  console.log('XML', xml)
-
   dataTypes.forEach((dataType) => {
     switch (dataType.derivation) {
       case 'array':
