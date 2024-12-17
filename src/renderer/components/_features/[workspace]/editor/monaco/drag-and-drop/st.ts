@@ -9,7 +9,7 @@ export const parsePouToStText = (pou: {
     class: string
     type: { definition: string; value: string }
   }[]
-}) => {
+}, variableName?: string) => {
   const inputVariables = pou.variables
     .filter((variable) => variable.class === 'input')
     .map((variable) => {
@@ -22,5 +22,5 @@ export const parsePouToStText = (pou: {
     })
   const lastOutputVariable = outputVariables.pop()
 
-  return `${pou.name} (\n${inputVariables.length > 0 ? '    ' + inputVariables.join(',\n    ') + ',\n' : ''}${outputVariables.length > 0 ? '    ' + outputVariables.join(',\n    ') + ',\n' : ''}    ${lastOutputVariable}\n);`
+  return `\n${variableName ? variableName : pou.name} (\n${inputVariables.length > 0 ? '    ' + inputVariables.join(',\n    ') + ',\n' : ''}${outputVariables.length > 0 ? '    ' + outputVariables.join(',\n    ') + ',\n' : ''}    ${lastOutputVariable}\n);`
 }
