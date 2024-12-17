@@ -17,9 +17,9 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
  * @class MenuBuilder
  */
 export default class MenuBuilder {
-  private mainWindow: BrowserWindow;
+  private mainWindow: BrowserWindow
 
-  private projectService: ProjectService;
+  private projectService: ProjectService
 
   developOptions: MenuItemConstructorOptions[] = [
     { type: 'separator' },
@@ -29,8 +29,8 @@ export default class MenuBuilder {
   ]
 
   constructor(mainWindow: BrowserWindow) {
-    this.mainWindow = mainWindow;
-    this.projectService = new ProjectService(mainWindow);
+    this.mainWindow = mainWindow
+    this.projectService = new ProjectService(mainWindow)
   }
 
   async buildMenu(): Promise<Menu> {
@@ -47,9 +47,7 @@ export default class MenuBuilder {
 
     return menu
   }
-
-   handleCreateProject() {
-
+  handleCreateProject() {
     this.mainWindow.webContents.send('project:create-accelerator')
   }
 
@@ -74,32 +72,30 @@ export default class MenuBuilder {
 
   handleCloseTab() {
     this.mainWindow.webContents.send('workspace:close-tab-accelerator')
-
   }
 
-  handleCloseProject(){
+  handleCloseProject() {
     this.mainWindow.webContents.send('workspace:close-project-accelerator')
   }
 
-  handleDeletePou(){
+  handleDeletePou() {
     this.mainWindow.webContents.send('workspace:delete-pou-accelerator')
-
   }
 
   handleSwitchPerspective() {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
   }
-handleOpenExternalLink(link:string) {
- void shell.openExternal(link)
-}
+  handleOpenExternalLink(link: string) {
+    void shell.openExternal(link)
+  }
 
-handleOpenAboutModal() {
-  this.mainWindow.webContents.send('about:open-accelerator')
-}
+  handleOpenAboutModal() {
+    this.mainWindow.webContents.send('about:open-accelerator')
+  }
 
-handleFindInProject(){
-  this.mainWindow.webContents.send('project:find-in-project-accelerator')
-}
+  handleFindInProject() {
+    this.mainWindow.webContents.send('project:find-in-project-accelerator')
+  }
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -362,7 +358,7 @@ handleFindInProject(){
       ],
     }
 
-    return [defaultDarwinMenu,subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
+    return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
   }
 
   // Wip: Constructing a default machines menu.
@@ -384,7 +380,7 @@ handleFindInProject(){
             accelerator: 'Ctrl+O',
             click: () => void this.handleOpenProject(),
           },
-             {
+          {
             type: 'separator',
           },
           {
@@ -525,7 +521,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:edit.submenu.deletePou'),
-            accelerator:"delete",
+            accelerator: 'delete',
             click: () => this.handleDeletePou(),
           },
         ],
@@ -596,7 +592,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:help.submenu.about'),
-            accelerator : 'F1',
+            accelerator: 'F1',
             click: () => this.handleOpenAboutModal(),
           },
         ],

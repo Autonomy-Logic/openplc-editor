@@ -12,7 +12,6 @@ const AppLayout = (): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
     modals,
-    modalActions: { openModal },
     workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecents },
   } = useOpenPLCStore()
 
@@ -45,14 +44,6 @@ const AppLayout = (): ReactNode => {
     window.bridge.handleUpdateTheme((_event) => {
       switchAppTheme()
     })
-  }, [])
-
-  useEffect(() => {
-    const handleCreateProjectAccelerator = () => {
-      window.bridge.createProjectAccelerator(() => openModal('create-project', null))
-    }
-    handleCreateProjectAccelerator()
-
   }, [])
 
   return (

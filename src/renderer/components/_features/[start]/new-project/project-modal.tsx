@@ -13,7 +13,7 @@ const ProjectModal = ({ isOpen }: { isOpen: boolean }) => {
   const {
     workspaceActions: { setEditingState },
     tabsActions: { clearTabs },
-    modalActions: { onOpenChange },
+    modalActions: { closeModal, onOpenChange },
   } = useOpenPLCStore()
 
   const resetFormData = NewProjectStore((state) => state.resetFormData)
@@ -29,6 +29,7 @@ const ProjectModal = ({ isOpen }: { isOpen: boolean }) => {
 
   const handleClose = () => {
     onOpenChange('create-project', false)
+    closeModal()
   }
 
   const handleFinishForm = () => {

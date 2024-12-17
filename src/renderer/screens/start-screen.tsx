@@ -135,10 +135,15 @@ const StartScreen = () => {
 
   useEffect(() => {
     const handleCreateProjectAccelerator = () => {
-      window.bridge.createProjectAccelerator(() => {
-        openModal('create-project', null)
+      window.bridge.createProjectAccelerator((editingState: string) => {
+        if (editingState !== 'unsaved') {
+          openModal('create-project', null)
+        } else {
+          openModal('save-changes-project', 'create-project')
+        }
       })
     }
+
     handleCreateProjectAccelerator()
   }, [])
 
