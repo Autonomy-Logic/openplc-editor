@@ -563,7 +563,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
             handleSubmit={handleSubmitBlockVariable}
             inputHeight={{
               height: 13,
-              scrollLimiter: 26,
+              scrollLimiter: 14,
             }}
             ref={inputVariableRef}
           />
