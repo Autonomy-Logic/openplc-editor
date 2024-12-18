@@ -13,6 +13,8 @@ const AppLayout = (): ReactNode => {
   const {
     modals,
     workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecents },
+    modalActions: { openModal },
+    workspace: { editingState },
   } = useOpenPLCStore()
 
   useEffect(() => {
@@ -44,6 +46,20 @@ const AppLayout = (): ReactNode => {
     window.bridge.handleUpdateTheme((_event) => {
       switchAppTheme()
     })
+  }, [])
+
+  useEffect(() => {
+    const handleCreateProjectAccelerator = () => {
+      window.bridge.createProjectAccelerator(() => {
+        if (editingState !== 'unsaved') {
+          openModal('create-project', null)
+        } else {
+          openModal('save-changes-project', 'create-project')
+        }
+      })
+    }
+
+    handleCreateProjectAccelerator()
   }, [])
 
   return (
