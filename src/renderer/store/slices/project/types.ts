@@ -92,7 +92,7 @@ type InstanceDTO = z.infer<typeof instanceDTOSchema>
  */
 const projectMetaSchema = z.object({
   name: z.string(),
-  type: z.enum(['plc-project','plc-library']),
+  type: z.enum(['plc-project', 'plc-library']),
   path: z.string(),
 })
 type ProjectMeta = z.infer<typeof projectMetaSchema>
@@ -131,7 +131,7 @@ const projectActionsSchema = z.object({
    * Update/Set Project state
    */
   setProject: z.function().args(projectStateSchema).returns(z.void()),
-    clearProjects: z.function().args(z.void()).returns(z.void()),
+  clearProjects: z.function().args(z.void()).returns(z.void()),
 
   /**
    * Meta Actions
@@ -148,6 +148,7 @@ const projectActionsSchema = z.object({
     .args(z.object({ name: z.string(), content: bodySchema }))
     .returns(z.void()),
   deletePou: z.function().args(z.string()).returns(z.void()),
+  updatePouDocumentation: z.function().args(z.string(), z.string()).returns(z.void()),
 
   /**
    * Variables Table Actions

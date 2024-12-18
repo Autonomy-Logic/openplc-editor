@@ -21,7 +21,7 @@ const VariablesEditor = () => {
       data: { pous },
     },
     editorActions: { updateModelVariables },
-    projectActions: { createVariable, deleteVariable, rearrangeVariables },
+    projectActions: { createVariable, deleteVariable, rearrangeVariables, updatePouDocumentation },
   } = useOpenPLCStore()
 
   /**
@@ -196,12 +196,16 @@ const VariablesEditor = () => {
     })
   }
 
+  const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) =>
+    updatePouDocumentation(editor.meta.name, event.target.value)
+
   return (
     <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
       <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
         {editorVariables.display === 'table' ? (
           <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
             <div
+              id='Pou documentation'
               aria-label='Variables editor table description container'
               className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
             >
@@ -213,6 +217,7 @@ const VariablesEditor = () => {
               </label>
               <InputWithRef
                 id='description'
+                onBlur={handleDescriptionChange}
                 className='h-full w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
               />
             </div>
