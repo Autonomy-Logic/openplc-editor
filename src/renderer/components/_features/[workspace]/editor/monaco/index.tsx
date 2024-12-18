@@ -3,7 +3,6 @@ import './configs'
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_molecules/modal'
 import { useOpenPLCStore } from '@process:renderer/store'
-import type { LibraryState } from '@root/renderer/store/slices'
 import * as monaco from 'monaco-editor'
 import { useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
@@ -81,23 +80,25 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const handleDrop = (ev: React.DragEvent<HTMLDivElement>) => {
     ev.preventDefault()
     ev.stopPropagation()
-
+    let pouToAppend
     const pouPath = ev.dataTransfer.getData('application/library')
 
     const [scope, libraryName, pouName] = pouPath.split('/')
 
     const libraryScope = scope as 'system' | 'user'
-    const libraries = sliceLibraries[libraryScope] as LibraryState['libraries']['system']
-
-    const libraryToUse = libraries.find((library) => library.name === libraryName)
-
-    const pouToAppend = libraryToUse?.pous?.find((pou) => pou.name === pouName)
-    setContentToDrop(pouToAppend)
+    if (libraryScope === 'system') {
+      const libraries = sliceLibraries.system
+      const libraryToUse = libraries.find((library) => library.name === libraryName)
+      pouToAppend = libraryToUse?.pous.find((pou) => pou.name === pouName)
+    } else {
+      const libraries = sliceLibraries.user
+      const libraryToUse = libraries.find((library) => library.name === libraryName)
+      pouToAppend = libraryToUse
+    }
+    setContentToDrop(pouToAppend as PouToText)
 
     const editorModel = editorRef.current?.getModel()
 
-    const cursorPosition = editorRef.current?.getPosition()
-    console.log('cursorPosition', cursorPosition)
     const draftModelData = editorModel?.getValue()
     if (pouToAppend?.type === 'function') {
       const newModelData = draftModelData?.concat(parsePouToStText(pouToAppend as PouToText))
@@ -176,7 +177,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       associatedPou: editor.meta.name,
     })
 
-    console.log('Resposta: ', res)
     if (!res.ok) {
       toast({
         title: res.title,

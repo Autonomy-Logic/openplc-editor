@@ -192,8 +192,8 @@ const Library = ({
                     isSelected={selectedFileKey === userLibrary.name}
                     draggable
                     onDragStart={(e) => {
-                      if (type === 'plc-textual') return
-                      // e.dataTransfer.setData('text/plain', meta.language === 'st' ? parsePouToStText(pou) : pou.body)
+                      if (type === 'plc-textual')
+                        e.dataTransfer.setData('application/library', `user/${userLibrary.name}`)
                       else if (type === 'plc-graphical') {
                         if (meta.language === 'ld') {
                           e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
