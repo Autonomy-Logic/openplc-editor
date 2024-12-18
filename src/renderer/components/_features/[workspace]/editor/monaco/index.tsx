@@ -129,7 +129,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const uniqueName = checkIfVariableExists(existingNames, newName)
 
     const renamedContent = { ...contentToDrop, name: uniqueName }
-    console.log('Novo conteúdo renomeado:', renamedContent)
 
     const editorModel = editorRef.current.getModel()
     const contentToInsert = parsePouToStText(renamedContent)
@@ -170,7 +169,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       })
       return
     }
-    console.log('pous: ', pous)
   }
 
   const handleCancelRenamePou = () => {

@@ -265,11 +265,7 @@ const VariablesEditor = () => {
               </TableActionButton>
               <TableActionButton
                 aria-label='Remove table row button'
-                disabled={
-                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                  parseInt(editorVariables.selectedRow) ===
-                    tableData.findIndex((variable) => variable.type.definition === 'derived')
-                }
+                disabled={parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED}
                 onClick={handleRemoveVariable}
               >
                 <MinusIcon />
