@@ -243,12 +243,21 @@ const VariableElement = ({ id, data }: VariableProps) => {
     <>
       <div style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}>
         <HighlightedTextArea
-          className={cn({
+          textAreaClassName={cn({
             'text-yellow-500': !isAVariable,
             'text-red-500': inputError,
             'text-left': data.variant === 'output',
             'text-right': data.variant === 'input',
           })}
+          highlightClassName={cn({
+            'text-left': data.variant === 'output',
+            'text-right': data.variant === 'input',
+          })}
+          scrollableIndicatorClassName={cn({
+            '-right-3': data.variant === 'output',
+            '-left-3': data.variant === 'input',
+          })}
+          placeholder={`(*${data.block.variableType.type.value}*)`}
           textAreaValue={variableValue}
           setTextAreaValue={setVariableValue}
           handleSubmit={handleSubmitVariableValue}

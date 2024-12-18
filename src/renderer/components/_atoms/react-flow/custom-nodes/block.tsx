@@ -551,7 +551,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
         </Tooltip>
       </TooltipProvider>
       <div
-        className='absolute -top-4'
+        className='absolute -top-2'
         style={{
           width: width ?? DEFAULT_BLOCK_WIDTH,
         }}
@@ -563,7 +563,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
             handleSubmit={handleSubmitBlockVariable}
             inputHeight={{
               height: 13,
-              scrollLimiter: 13,
+              scrollLimiter: 26,
             }}
             ref={inputVariableRef}
           />

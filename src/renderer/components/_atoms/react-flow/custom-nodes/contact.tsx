@@ -99,7 +99,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
       // top
-      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-32px' : '-16px'
+      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-20px' : '-16px'
     }
   }, [contactVariableValue])
 
@@ -220,7 +220,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
         style={{ width: DEFAULT_CONTACT_BLOCK_WIDTH, height: DEFAULT_CONTACT_BLOCK_HEIGHT }}
       >
         {contact.svg(wrongVariable)}
-        <div className='absolute -left-[24px] -top-[16px] w-[72px]' ref={inputWrapperRef}>
+        <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
           <HighlightedTextArea
             textAreaValue={contactVariableValue}
             setTextAreaValue={setContactVariableValue}

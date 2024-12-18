@@ -127,7 +127,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
 
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
-      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-32px' : '-16px'
+      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-20px' : '-16px'
     }
   }, [coilVariableValue])
 
@@ -238,7 +238,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
       >
         {coil.svg(wrongVariable)}
-        <div className='absolute -left-[24px] -top-[16px] w-[72px]' ref={inputWrapperRef}>
+        <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
           <HighlightedTextArea
             textAreaValue={coilVariableValue}
             setTextAreaValue={setCoilVariableValue}
