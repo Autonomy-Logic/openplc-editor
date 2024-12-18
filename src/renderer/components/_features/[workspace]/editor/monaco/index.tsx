@@ -17,7 +17,7 @@ type monacoEditorProps = {
   language: 'il' | 'st'
 }
 
-type _qualquerCoisa = {
+type PouToText = {
   name: string
   language: string
   type: string
@@ -48,7 +48,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   } = useOpenPLCStore()
 
   const [isOpen, setIsOpen] = useState<boolean>(false)
-  const [contentToDrop, setContentToDrop] = useState<_qualquerCoisa>()
+  const [contentToDrop, setContentToDrop] = useState<PouToText>()
   const [newName, setNewName] = useState<string>('')
 
   function handleEditorDidMount(
@@ -98,7 +98,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     const draftModelData = editorModel?.getValue()
     if (pouToAppend?.type === 'function') {
-      const newModelData = draftModelData?.concat(parsePouToStText(pouToAppend as _qualquerCoisa))
+      const newModelData = draftModelData?.concat(parsePouToStText(pouToAppend as PouToText))
       editorModel?.setValue(newModelData as string)
       return
     } else {
