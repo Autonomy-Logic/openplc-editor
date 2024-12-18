@@ -121,12 +121,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const handleRenamePou = () => {
     if (!contentToDrop || !editorRef.current) return
 
-    const existingNames = pous.flatMap((pou) => pou.data.variables.map((variable) => variable.name))
+    const currentEditor = pous.find((pou) => pou.data.name === editor.meta.name)
+    if (!currentEditor) return
+
+    const existingNames = currentEditor.data.variables.map((variable) => variable.name)
 
     const uniqueName = checkIfVariableExists(existingNames, newName)
 
     const renamedContent = { ...contentToDrop, name: uniqueName }
-
     console.log('Novo conteúdo renomeado:', renamedContent)
 
     const editorModel = editorRef.current.getModel()
@@ -158,6 +160,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       scope: 'local',
       associatedPou: editor.meta.name,
     })
+
     console.log('Resposta: ', res)
     if (!res.ok) {
       toast({
