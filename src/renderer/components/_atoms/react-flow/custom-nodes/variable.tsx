@@ -1,18 +1,16 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { baseTypes } from '@root/shared/data'
 import { genericTypeSchema, PLCVariable } from '@root/types/PLC'
 import { PLCBasetypes } from '@root/types/PLC/units/base-types'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
-import type { UIEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
 
+import { HighlightedTextArea } from '../../highlighted-textarea'
 import { BlockNodeData, BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges, getVariableByName } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
-// import { z } from 'zod'
 
 export type VariableNode = Node<
   BasicNodeData & {
@@ -83,38 +81,13 @@ const VariableElement = ({ id, data }: VariableProps) => {
     },
     flows,
     flowActions: { updateNode },
-    searchQuery,
   } = useOpenPLCStore()
 
   const inputVariableRef = useRef<HTMLTextAreaElement>(null)
-  const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
-  const [inputVariableFocus, setInputVariableFocus] = useState<boolean>(true)
 
   const [variableValue, setVariableValue] = useState(data.variable.name)
   const [inputError, setInputError] = useState<boolean>(false)
   const [isAVariable, setIsAVariable] = useState<boolean>(false)
-
-  const highlightDivRef = useRef<HTMLDivElement>(null)
-  const [scrollValue, setScrollValue] = useState<number>(0)
-  const formattedBlockVariableValue = searchQuery ? extractSearchQuery(variableValue, searchQuery) : variableValue
-
-  useEffect(() => {
-    if (inputVariableRef.current && highlightDivRef.current) {
-      inputVariableRef.current.style.height = 'auto'
-      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < DEFAULT_VARIABLE_HEIGHT ? inputVariableRef.current.scrollHeight : DEFAULT_VARIABLE_HEIGHT}px`
-      highlightDivRef.current.style.height = 'auto'
-      highlightDivRef.current.style.height = inputVariableRef.current.style.height
-      if (scrollableIndicatorRef.current)
-        scrollableIndicatorRef.current.style.display =
-          inputVariableRef.current.scrollHeight > DEFAULT_VARIABLE_HEIGHT ? 'block' : 'none'
-    }
-  }, [variableValue])
-
-  useEffect(() => {
-    if (highlightDivRef.current) {
-      highlightDivRef.current.scrollTop = scrollValue
-    }
-  }, [scrollValue])
 
   /**
    * useEffect to focus the variable input when the block is selected
@@ -266,72 +239,25 @@ const VariableElement = ({ id, data }: VariableProps) => {
     setInputError(false)
   }
 
-  const onScrollHandler = (e: UIEvent<HTMLTextAreaElement>) => {
-    setScrollValue(e.currentTarget.scrollTop)
-  }
-
   return (
     <>
-      <div
-        className={cn('relative flex items-center')}
-        style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}
-      >
-        <div
-          className='-z-1 pointer-events-none absolute w-full overflow-y-scroll [&::-webkit-scrollbar]:hidden'
-          ref={highlightDivRef}
-        >
-          <div
-            className={cn(
-              'h-full w-full whitespace-pre-wrap break-words text-center text-xs leading-3 text-transparent',
-              {
-                'text-left': data.variant === 'output',
-                'text-right': data.variant === 'input',
-              },
-            )}
-            dangerouslySetInnerHTML={{ __html: formattedBlockVariableValue }}
-          />
-        </div>
-        <textarea
-          value={variableValue}
-          onChange={(e) => {
-            setVariableValue(e.target.value)
-          }}
-          style={{
-            scrollbarGutter: 'stable',
-          }}
-          placeholder={`(*${data.block.variableType.type.value}*)`}
-          className={cn(
-            'absolute h-full w-full resize-none bg-transparent text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden',
-            {
-              'text-yellow-500': !isAVariable,
-              'text-red-500': inputError,
-              'text-left': data.variant === 'output',
-              'text-right': data.variant === 'input',
-            },
-          )}
-          onFocus={() => setInputVariableFocus(true)}
-          onBlur={() => {
-            if (inputVariableRef.current && highlightDivRef.current) {
-              inputVariableRef.current.scrollTop = 0
-              highlightDivRef.current.scrollTop = 0
-            }
-            inputVariableFocus && handleSubmitVariableValue()
-          }}
-          onScroll={(e) => onScrollHandler(e)}
-          onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-          rows={1}
-          ref={inputVariableRef}
-          spellCheck={false}
-        />
-        <div
-          className={cn(`pointer-events-none absolute text-xs`, {
-            '-left-2': data.variant === 'input',
-            '-right-2': data.variant === 'output',
+      <div style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}>
+        <HighlightedTextArea
+          className={cn({
+            'text-yellow-500': !isAVariable,
+            'text-red-500': inputError,
+            'text-left': data.variant === 'output',
+            'text-right': data.variant === 'input',
           })}
-          ref={scrollableIndicatorRef}
-        >
-          ↕
-        </div>
+          textAreaValue={variableValue}
+          setTextAreaValue={setVariableValue}
+          handleSubmit={handleSubmitVariableValue}
+          inputHeight={{
+            height: DEFAULT_VARIABLE_HEIGHT,
+            scrollLimiter: DEFAULT_VARIABLE_HEIGHT,
+          }}
+          ref={inputVariableRef}
+        />
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

@@ -2,20 +2,23 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { cn } from '@root/utils'
 import type { ComponentPropsWithRef, UIEvent } from 'react'
-import { forwardRef, useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 
 type HighlightedTextAreaProps = ComponentPropsWithRef<'textarea'> & {
   textAreaValue: string
   setTextAreaValue: (value: string) => void
   handleSubmit?: () => void
   inputHeight?: {
-    min: number
-    max: number
+    scrollLimiter: number
+    height: number
   }
 }
 
 const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaProps>(
-  ({ textAreaValue, setTextAreaValue, handleSubmit, inputHeight, ..._props }: HighlightedTextAreaProps, ref) => {
+  (
+    { className, textAreaValue, setTextAreaValue, handleSubmit, inputHeight, ..._props }: HighlightedTextAreaProps,
+    ref,
+  ) => {
     const { searchQuery } = useOpenPLCStore()
 
     const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -26,19 +29,34 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
     const [scrollValue, setScrollValue] = useState<number>(0)
     const formattedVariableValue = searchQuery ? extractSearchQuery(textAreaValue, searchQuery) : textAreaValue
 
+    // @ts-expect-error - not all properties are used
+    useImperativeHandle(ref, () => {
+      return {
+        focus: () => {
+          inputRef.current?.focus()
+        },
+        blur: () => {
+          inputRef.current?.blur()
+        },
+        scrollHeight: textAreaValue.length === 0 ? 0 : inputRef.current?.scrollHeight,
+      }
+    }, [textAreaValue, inputRef])
+
     useEffect(() => {
-      if (inputRef.current && highlightDivRef.current) {
+      if (inputRef?.current && highlightDivRef.current) {
         // height
         inputRef.current.style.height = 'auto'
         inputRef.current.style.height = inputHeight
-          ? `${inputRef.current.scrollHeight < inputHeight.max ? inputRef.current.scrollHeight : inputHeight.min}px`
+          ? `${inputRef.current.scrollHeight < inputHeight.scrollLimiter ? inputRef.current.scrollHeight : inputHeight.height}px`
           : `${inputRef.current.scrollHeight}px`
         highlightDivRef.current.style.height = 'auto'
         highlightDivRef.current.style.height = inputRef.current.style.height
+
         // scrollable indicator
-        if (scrollableIndicatorRef.current) {
+        if (scrollableIndicatorRef.current && inputHeight) {
           scrollableIndicatorRef.current.style.display =
-            inputHeight && inputRef.current.scrollHeight > 32 ? 'block' : 'none'
+            inputRef.current.scrollHeight > inputHeight.scrollLimiter ? 'block' : 'none'
+          scrollableIndicatorRef.current.style.top = `${(inputHeight.height - 14) / 2}px`
         }
       }
     }, [textAreaValue])
@@ -61,7 +79,10 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
             ref={highlightDivRef}
           >
             <div
-              className='w-full whitespace-pre-wrap break-words text-center text-xs leading-3 text-transparent'
+              className={cn(
+                'w-full whitespace-pre-wrap break-words text-center text-xs leading-3 text-transparent',
+                className,
+              )}
               dangerouslySetInnerHTML={{ __html: formattedVariableValue }}
             />
           </div>
@@ -69,7 +90,10 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
             value={textAreaValue}
             onChange={(e) => setTextAreaValue(e.target.value)}
             placeholder='???'
-            className='absolute w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
+            className={cn(
+              'absolute w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden',
+              className,
+            )}
             onFocus={() => setInputFocus(true)}
             onBlur={() => {
               if (inputRef.current && highlightDivRef.current) {
@@ -80,12 +104,12 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
             }}
             onScroll={(e) => onScrollHandler(e)}
             onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.blur()}
-            ref={ref}
+            ref={inputRef}
             rows={1}
             spellCheck={false}
           />
         </div>
-        <div className={cn('pointer-events-none absolute -right-3 text-cp-sm')} ref={scrollableIndicatorRef}>
+        <div className={cn('pointer-events-none absolute -right-2 hidden text-cp-sm')} ref={scrollableIndicatorRef}>
           ↕
         </div>
       </div>
