@@ -109,7 +109,7 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
         className,
       )}
     >
-      <div {...(draggableHandleProps ?? {})}>
+      <div {...(draggableHandleProps ?? {})} className='flex items-center'>
         <DragHandleIcon className='h-7 w-7 fill-[#0464FB] dark:fill-brand-light' />
       </div>
       <div className='flex w-full items-center rounded-lg border border-transparent px-1' ref={containerRef}>
