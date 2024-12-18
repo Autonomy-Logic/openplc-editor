@@ -1,15 +1,21 @@
-export const parsePouToStText = (pou: {
-  name: string
-  language: string
-  type: string
-  body: string
-  documentation: string
-  variables: {
+export const parsePouToStText = (
+  pou: {
     name: string
-    class: string
-    type: { definition: string; value: string }
-  }[]
-}) => {
+    language?: string
+    type: string
+    body?: string
+    documentation?: string
+    variables?: {
+      name: string
+      class: string
+      type: { definition: string; value: string }
+    }[]
+  },
+  variableName?: string,
+) => {
+  if (!pou.variables) {
+    return `${variableName ? variableName : pou.name} (\n \n);`
+  }
   const inputVariables = pou.variables
     .filter((variable) => variable.class === 'input')
     .map((variable) => {
@@ -22,5 +28,5 @@ export const parsePouToStText = (pou: {
     })
   const lastOutputVariable = outputVariables.pop()
 
-  return `${pou.name} (\n\t${inputVariables.length > 0 ? inputVariables.join(',\n\t') + ',\n\t' : ''}${outputVariables.length > 0 ? outputVariables.join(',\n\t') + ',\n\t' : ''}${lastOutputVariable};\n)`
+  return `${variableName ? variableName : pou.name} (\n${inputVariables.length > 0 ? '    ' + inputVariables.join(',\n    ') + ',\n' : ''}${outputVariables.length > 0 ? '    ' + outputVariables.join(',\n    ') + ',\n' : ''}    ${lastOutputVariable}\n);`
 }

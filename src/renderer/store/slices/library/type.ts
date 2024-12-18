@@ -43,6 +43,7 @@ const libraryStateSchema = z.object({
     user: z.array(
       z.object({
         name: z.string(),
+        // pous: z.array(z.string()), // This is a mock implementation
         type: z.enum(['function', 'function-block', 'program']),
       }),
     ), // This is the libraries that the user has installed
