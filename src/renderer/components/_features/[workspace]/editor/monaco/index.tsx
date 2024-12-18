@@ -114,6 +114,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const handleDrop = (ev: React.DragEvent<HTMLDivElement>) => {
     ev.preventDefault()
     ev.stopPropagation()
+
     let pouToAppend
     const pouPath = ev.dataTransfer.getData('application/library')
 
@@ -129,15 +130,33 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       const libraryToUse = libraries.find((library) => library.name === libraryName)
       pouToAppend = libraryToUse
     }
+
     setContentToDrop(pouToAppend as PouToText)
 
     const editorModel = editorRef.current?.getModel()
+    const cursorPosition = editorRef.current?.getPosition()
 
-    const draftModelData = editorModel?.getValue()
+    if (!editorModel || !cursorPosition) return
+
     if (pouToAppend?.type === 'function') {
-      const newModelData = draftModelData?.concat(parsePouToStText(pouToAppend as PouToText))
-      editorModel?.setValue(newModelData as string)
-      return
+      const contentToInsert = parsePouToStText(pouToAppend as PouToText)
+
+      editorModel.pushEditOperations(
+        [],
+        [
+          {
+            range: new monaco.Range(
+              cursorPosition.lineNumber,
+              cursorPosition.column,
+              cursorPosition.lineNumber,
+              cursorPosition.column,
+            ),
+            text: contentToInsert,
+            forceMoveMarkers: true,
+          },
+        ],
+        () => null,
+      )
     } else {
       setIsOpen(true)
     }
@@ -235,7 +254,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           width='100%'
           path={path}
           language={language}
-              defaultValue={pous.find((pou) => pou.data.name === name)?.data.body.value as string}
+          defaultValue={pous.find((pou) => pou.data.name === name)?.data.body.value as string}
           onMount={handleEditorDidMount}
           onChange={handleWriteInPou}
           theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
