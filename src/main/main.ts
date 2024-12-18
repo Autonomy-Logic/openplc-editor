@@ -202,7 +202,7 @@ const createMainWindow = async () => {
       }
       splash.close()
       mainWindow?.show()
-    }, 10000)
+    }, 3000)
   })
 
   mainWindow.on('closed', () => {
