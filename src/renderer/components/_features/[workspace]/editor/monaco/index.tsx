@@ -96,6 +96,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     const editorModel = editorRef.current?.getModel()
 
+    const cursorPosition = editorRef.current?.getPosition()
+    console.log('cursorPosition', cursorPosition)
     const draftModelData = editorModel?.getValue()
     if (pouToAppend?.type === 'function') {
       const newModelData = draftModelData?.concat(parsePouToStText(pouToAppend as PouToText))
@@ -125,7 +127,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     if (!currentEditor) return
 
     const existingNames = currentEditor.data.variables.map((variable) => variable.name)
-
     const uniqueName = checkIfVariableExists(existingNames, newName)
 
     const renamedContent = { ...contentToDrop, name: uniqueName }
@@ -134,10 +135,25 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const contentToInsert = parsePouToStText(renamedContent)
 
     if (editorModel) {
-      const draftModelData = editorModel.getValue()
-      const newModelData = draftModelData ? `${draftModelData}\n${contentToInsert}` : contentToInsert
+      const cursorPosition = editorRef.current.getPosition()
+      if (!cursorPosition) return
 
-      editorModel.setValue(newModelData)
+      editorModel.pushEditOperations(
+        [],
+        [
+          {
+            range: new monaco.Range(
+              cursorPosition.lineNumber,
+              cursorPosition.column,
+              cursorPosition.lineNumber,
+              cursorPosition.column,
+            ),
+            text: contentToInsert,
+            forceMoveMarkers: true,
+          },
+        ],
+        () => null,
+      )
     }
 
     setIsOpen(false)
