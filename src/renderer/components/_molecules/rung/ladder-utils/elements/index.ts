@@ -35,12 +35,10 @@ export const addNewElement = <T>(
    * If it is, create a new parallel junction and add the new element to it
    * If it is not, add the new element to the selected placeholder
    */
-  // let newCreatedNode: Node | undefined = undefined
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
     const {
       nodes: parallelNodes,
       edges: parallelEdges,
-      // newNode: newAuxNode,
     } = startParallelConnection(
       rung,
       {
@@ -51,7 +49,6 @@ export const addNewElement = <T>(
     )
     newNodes = parallelNodes
     newEdges = parallelEdges
-    // newCreatedNode = newAuxNode
   } else {
     const {
       nodes: serialNodes,
@@ -67,7 +64,6 @@ export const addNewElement = <T>(
     )
     newNodes = serialNodes
     newEdges = serialEdges
-    // newCreatedNode = newAuxNode
   }
 
   /**
@@ -84,16 +80,6 @@ export const addNewElement = <T>(
 
   newNodes = updatedDiagramNodes
   newEdges = updatedDiagramEdges
-
-  // if (newNode.blockVariant && newCreatedNode && newCreatedNode.type === 'block') {
-  //   const block = newNodes.find((node) => node.id === newCreatedNode.id)
-  //   const { nodes: variableNodes, edges: variableEdges } = renderVariableBlock(
-  //     { ...rung, nodes: newNodes, edges: newEdges },
-  //     block ?? newCreatedNode,
-  //   )
-  //   newNodes = variableNodes
-  //   newEdges = variableEdges
-  // }
 
   /**
    * Return the updated rung

@@ -30,6 +30,20 @@ type CreateDataTypeFormProps = {
   derivation: 'array' | 'enumerated' | 'structure'
 }
 
+{
+  /** TODO: Need to be implemented - Sequential Functional Chart and Functional Block Diagram */
+}
+
+const BlockedLanguagesStyles = {
+  'Sequential Functional Chart':
+    'hover:bg-white dark:hover:bg-neutral-950 cursor-not-allowed pointer-events-none opacity-30',
+  'Functional Block Diagram':
+    'hover:bg-white dark:hover:bg-neutral-950 cursor-not-allowed pointer-events-none opacity-30',
+  'Ladder Diagram': '',
+  'Structured Text': '',
+  'Instruction List': '',
+} as const
+
 const ElementCard = (props: ElementCardProps): ReactNode => {
   const { toast } = useToast()
   const { target, closeContainer } = props
@@ -334,7 +348,10 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                   return (
                                     <SelectItem
                                       key={lang.value}
-                                      className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 focus:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus:bg-neutral-900'
+                                      className={cn(
+                                        `${BlockedLanguagesStyles[lang.value]}`,
+                                        'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 focus:bg-neutral-100 dark:hover:bg-neutral-900 dark:focus:bg-neutral-900',
+                                      )}
                                       value={ConvertToLangShortenedFormat(lang.value)}
                                     >
                                       <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>

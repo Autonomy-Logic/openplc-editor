@@ -33,8 +33,8 @@ export const getPouVariablesRungNodeAndEdges = (
           (node.data as BasicNodeData).variable.id !== undefined &&
           (node.data as BasicNodeData).variable.id === variable.id
         )
-      case 'variable':
-        return variable.name === data.variableName && variable.type.definition !== 'derived'
+      // case 'variable':
+      //   return variable.name === data.variableName && variable.type.definition !== 'derived'
       default:
         return (
           ((node.data as BasicNodeData).variable.id !== undefined
@@ -55,3 +55,6 @@ export const getPouVariablesRungNodeAndEdges = (
     node,
   }
 }
+
+export const getVariableByName = (variables: PLCVariable[], name: string): PLCVariable | undefined =>
+  variables.find((variable) => variable.name === name && variable.type.definition !== 'derived')

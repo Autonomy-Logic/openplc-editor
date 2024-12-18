@@ -16,10 +16,12 @@ import {
   ModalTitle,
   // ModalTrigger,
 } from '@root/renderer/components/_molecules'
-import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
+import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/diagram'
+// import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
 import { PLCPou } from '@root/types/PLC/open-plc'
+import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -78,9 +80,35 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
   const [node, setNode] = useState<BlockNode<object>>(selectedNode)
   const blockVariant = node.data.variant as BlockVariant
+  const lockExecutionControl = node.data.lockExecutionControl
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<T | null>(null)
+  const [documentation, setDocumentation] = useState<string | null>(
+    `${blockVariant.documentation}
+
+    INPUT:
+    ${blockVariant.variables
+      .filter((variable) => variable.class === 'input')
+      .map(
+        (variable, index) =>
+          `${variable.name}: ${variable.type.value}${
+            index < blockVariant.variables.filter((variable) => variable.class === 'input').length - 1 ? '\n' : ''
+          }`,
+      )
+      .join('')}
+
+    OUTPUT:
+    ${blockVariant.variables
+      .filter((variable) => variable.class === 'output')
+      .map(
+        (variable, index) =>
+          `${variable.name}: ${variable.type.value}${
+            index < blockVariant.variables.filter((variable) => variable.class === 'output').length - 1 ? '\n' : ''
+          }`,
+      )
+      .join('')}`,
+  )
   const [formState, setFormState] = useState<{
     name: string
     inputs: string
@@ -100,6 +128,8 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const isBlockDifferent = selectedNode !== node
 
   useEffect(() => {
+    if (!selectedFileKey) return
+
     const [type, selectedLibrary, selectedPou] = selectedFileKey?.split('/') || []
     if (type === 'system' && selectedLibrary && selectedPou) {
       const library = libraries.system.find((library) => library.name === selectedLibrary)
@@ -111,7 +141,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }, [selectedFileKey])
 
   useEffect(() => {
-    if (selectedFile) {
+    if (selectedFile && selectedFile !== selectedNode.data.variant) {
       const newNode = buildBlockNode({
         id: node.id,
         posX: node.position.x,
@@ -129,12 +159,48 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
           variable: selectedNode.data.variable,
         },
       })
+
       const newNodeDataVariant = newNode.data.variant as BlockVariant
       const formName: string = newNodeDataVariant.name
       const formInputs: string = newNodeDataVariant.variables
         .filter((variable) => variable.class === 'input' && variable.name !== 'EN')
         .length.toString()
-      setFormState((prevState) => ({ ...prevState, name: formName, inputs: formInputs }))
+
+      setFormState((prevState) => ({
+        ...prevState,
+        name: formName,
+        inputs: formInputs,
+        executionControl: newNode.data.executionControl,
+      }))
+      setDocumentation(
+        `${newNodeDataVariant.documentation}
+
+        -- INPUT --
+        ${newNodeDataVariant.variables
+          .filter((variable) => variable.class === 'input')
+          .map(
+            (variable, index) =>
+              `${variable.name}: ${variable.type.value}${
+                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'input').length - 1
+                  ? '\n'
+                  : ''
+              }`,
+          )
+          .join('')}
+
+        -- OUTPUT --
+        ${newNodeDataVariant.variables
+          .filter((variable) => variable.class === 'output')
+          .map(
+            (variable, index) =>
+              `${variable.name}: ${variable.type.value}${
+                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'output').length - 1
+                  ? '\n'
+                  : ''
+              }`,
+          )
+          .join('')}`,
+      )
     }
   }, [selectedFile])
 
@@ -305,6 +371,8 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleExecutionControlChange = (checked: boolean) => {
+    if (lockExecutionControl) return
+
     setFormState((prevState) => ({ ...prevState, executionControl: checked }))
 
     const newNode = buildBlockNode({
@@ -409,11 +477,14 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
-    const { nodes: variableNodes, edges: variableEdges } = updateVariableBlockPosition({
-      ...rung,
-      nodes: newNodes,
-      edges: newEdges,
-    })
+    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
+      {
+        ...rung,
+        nodes: newNodes,
+        edges: newEdges,
+      },
+      [rung.defaultBounds[0], rung.defaultBounds[1]],
+    )
 
     setNodes({
       editorName: editor.meta.name,
@@ -453,13 +524,10 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
             <div className='flex h-full w-full flex-col gap-2'>
               <label className={labelStyle}>Type:</label>
               <ModalBlockLibrary selectedFileKey={selectedFileKey} setSelectedFileKey={setSelectedFileKey} />
-              <div className='border-neural-100 h-full max-h-[119px] overflow-hidden rounded-lg border px-2 py-4 text-xs font-normal text-neutral-950 dark:border-neutral-850 dark:text-neutral-100'>
-                <p className='h-full overflow-y-auto dark:text-neutral-100'>
-                  {
-                    // @ts-expect-error - selectedFile is not null and it is a generic type of pous
-                    selectedFile ? selectedFile.documentation : null
-                  }
-                </p>
+              <div className='border-neural-100 h-full max-h-[119px] overflow-hidden rounded-lg border px-1 py-4 text-xs font-normal text-neutral-950 dark:border-neutral-850 dark:text-neutral-100'>
+                <div className='h-full overflow-y-auto'>
+                  <span className='h-full whitespace-pre-line px-1 dark:text-neutral-100'>{documentation}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -519,12 +587,18 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
                 onDecrement={() => handleExecutionOrderDecrement()}
               />
             </div>
+
             <div className='flex items-center gap-2'>
               <label htmlFor='executionControlSwitch' className={labelStyle}>
                 Execution Control:
               </label>
               <Switch.Root
-                className='relative h-4 w-[29px] cursor-pointer rounded-full bg-neutral-300 shadow-[0_4_4_1px] outline-none transition-all duration-150 data-[state=checked]:bg-brand dark:bg-neutral-850'
+                className={cn(
+                  'relative h-4 w-[29px] cursor-pointer rounded-full bg-neutral-300 shadow-[0_4_4_1px] outline-none transition-all duration-150 data-[state=checked]:bg-brand dark:bg-neutral-850',
+                  {
+                    'cursor-not-allowed opacity-50': lockExecutionControl,
+                  },
+                )}
                 id='executionControlSwitch'
                 onCheckedChange={handleExecutionControlChange}
                 checked={formState.executionControl}
@@ -532,6 +606,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
                 <Switch.Thumb className='block h-[14px] w-[14px] translate-x-0.5 rounded-full bg-white shadow-[0_0_4_1px] transition-all duration-150 will-change-transform data-[state=checked]:translate-x-[14px]' />
               </Switch.Root>
             </div>
+
             <label htmlFor='block-preview' className={labelStyle}>
               Preview
             </label>
@@ -542,6 +617,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
               <BlockNodeElement
                 data={node.data}
                 height={node.height || 0}
+                width={node.width || 0}
                 selected={false}
                 disabled={true}
                 scale={310 / ((node.height || 310) <= 310 ? 310 : node.height || 310)}

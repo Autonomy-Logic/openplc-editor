@@ -1,13 +1,16 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCVariable } from '@root/types/PLC'
+import { baseTypes } from '@root/shared/data'
+import { genericTypeSchema, PLCVariable } from '@root/types/PLC'
+import { PLCBasetypes } from '@root/types/PLC/units/base-types'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
-import { BlockNodeData } from './block'
+import { BlockNodeData, BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
-import { getPouVariablesRungNodeAndEdges } from './utils'
+import { getPouVariablesRungNodeAndEdges, getVariableByName } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
+// import { z } from 'zod'
 
 export type VariableNode = Node<
   BasicNodeData & {
@@ -15,6 +18,7 @@ export type VariableNode = Node<
     block: {
       id: string
       handleId: string
+      variableType: BlockVariant['variables'][0]
     }
   }
 >
@@ -24,6 +28,7 @@ type VariableBuilderProps = BuilderBasicProps & {
   block: {
     id: string
     handleId: string
+    variableType: BlockVariant['variables'][0]
   }
   variable: PLCVariable | undefined
 }
@@ -34,11 +39,45 @@ export const DEFAULT_VARIABLE_HEIGHT = 32
 export const DEFAULT_VARIABLE_CONNECTOR_X = DEFAULT_VARIABLE_WIDTH
 export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
 
+const validateVariableType = (
+  selectedType: string,
+  expectedType: BlockVariant['variables'][0],
+): { isValid: boolean; error?: string } => {
+  const upperSelectedType = selectedType.toUpperCase()
+  const upperExpectedType = expectedType.type.value.toUpperCase()
+
+  if (upperExpectedType === 'ANY') {
+    const isValidBaseType = baseTypes.includes(upperSelectedType as PLCBasetypes)
+    return {
+      isValid: isValidBaseType,
+      error: isValidBaseType ? undefined : `Expected one of: ${baseTypes.join(', ')}`,
+    }
+  }
+
+  // Handle generic types
+  if (upperExpectedType.includes('ANY')) {
+    const validTypes = Object.values(
+      genericTypeSchema.shape[upperExpectedType as keyof typeof genericTypeSchema.shape].options,
+    )
+    return {
+      isValid: validTypes.includes(upperSelectedType),
+      error: validTypes.includes(upperSelectedType) ? undefined : `Expected one of: ${validTypes.join(', ')}`,
+    }
+  }
+
+  // Handle specific types
+  return {
+    isValid: upperSelectedType === upperExpectedType,
+    error:
+      upperSelectedType === upperExpectedType ? undefined : `Expected: ${upperExpectedType}, Got: ${upperSelectedType}`,
+  }
+}
+
 const VariableElement = ({ id, data }: VariableProps) => {
   const {
     editor,
     project: {
-      data: { pous },
+      data: { pous, dataTypes },
     },
     flows,
     flowActions: { updateNode },
@@ -76,14 +115,68 @@ const VariableElement = ({ id, data }: VariableProps) => {
    * Update inputError state when the table of variables is updated
    */
   useEffect(() => {
-    const { rung, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const {
+      node: variableNode,
+      rung,
+      variables,
+    } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
       variableName: variableValue,
     })
+    if (!rung || !variableNode) return
 
-    if (!variables.selected || !inputVariableRef) {
+    const variable = variables.selected
+    if (!variable || !inputVariableRef) {
       setIsAVariable(false)
     } else {
+      if (variable.name !== (variableNode as VariableNode).data.variable.name) {
+        setVariableValue(variable.name)
+        updateNode({
+          editorName: editor.meta.name,
+          rungId: rung.id,
+          nodeId: variableNode.id,
+          node: {
+            ...variableNode,
+            data: {
+              ...variableNode.data,
+              variable: variable,
+            },
+          },
+        })
+
+        const relatedBlock = rung.nodes.find((node) => node.id === (variableNode as VariableNode).data.block.id)
+        if (!relatedBlock) {
+          setInputError(true)
+          return
+        }
+
+        updateNode({
+          editorName: editor.meta.name,
+          rungId: rung.id,
+          nodeId: relatedBlock.id,
+          node: {
+            ...relatedBlock,
+            data: {
+              ...relatedBlock.data,
+              connectedVariables: {
+                ...(relatedBlock.data as BlockNodeData<object>).connectedVariables,
+                [(variableNode as VariableNode).data.block.handleId]: {
+                  variable: variable,
+                  type: variableNode.data.variant,
+                },
+              },
+            },
+          },
+        })
+      }
+
+      const validation = validateVariableType(variable.type.value, data.block.variableType)
+      if (!validation.isValid && dataTypes.length > 0) {
+        const userDataTypes = dataTypes.map((dataType) => dataType.name)
+        validation.isValid = userDataTypes.includes(variable.type.value)
+        validation.error = undefined
+      }
+      setInputError(!validation.isValid)
       setIsAVariable(true)
     }
 
@@ -100,14 +193,16 @@ const VariableElement = ({ id, data }: VariableProps) => {
    * Handle with the variable input onBlur event
    */
   const handleSubmitVariableValue = () => {
-    const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { pou, rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
-      variableName: variableValue,
     })
-    if (!rung || !node) return
+    if (!pou || !rung || !node) return
     const variableNode = node as VariableNode
 
-    let variable: PLCVariable | { name: string } | undefined = variables.selected
+    let variable: PLCVariable | { name: string } | undefined = getVariableByName(
+      pou.data.variables as PLCVariable[],
+      variableValue,
+    )
     if (!variable) {
       setIsAVariable(false)
       variable = { name: variableValue }
@@ -170,13 +265,16 @@ const VariableElement = ({ id, data }: VariableProps) => {
           style={{
             scrollbarGutter: 'stable',
           }}
-          placeholder='???'
-          className={cn('h-full w-full resize-none bg-transparent text-xs outline-none [&::-webkit-scrollbar]:hidden', {
-            'text-yellow-500': !isAVariable,
-            'text-red-500': inputError,
-            'pl-2 text-left': data.variant === 'output',
-            'pr-2 text-right': data.variant === 'input',
-          })}
+          placeholder={`(*${data.block.variableType.type.value}*)`}
+          className={cn(
+            'h-full w-full resize-none bg-transparent text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden',
+            {
+              'text-yellow-500': !isAVariable,
+              'text-red-500': inputError,
+              'pl-2 text-left': data.variant === 'output',
+              'pr-2 text-right': data.variant === 'input',
+            },
+          )}
           onFocus={() => setInputVariableFocus(true)}
           onBlur={() => {
             if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
@@ -185,11 +283,12 @@ const VariableElement = ({ id, data }: VariableProps) => {
           onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
           rows={1}
           ref={inputVariableRef}
+          spellCheck={false}
         />
         <div
           className={cn(`pointer-events-none absolute text-xs`, {
-            '-left-3': data.variant === 'input',
-            '-right-3': data.variant === 'output',
+            '-left-2': data.variant === 'input',
+            '-right-2': data.variant === 'output',
           })}
           ref={scrollableIndicatorRef}
         >

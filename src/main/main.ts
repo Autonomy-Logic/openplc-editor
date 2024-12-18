@@ -11,9 +11,8 @@ import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
 import { autoUpdater } from 'electron-updater'
 import { platform, release } from 'os'
-import path from 'path'
+import path, { resolve } from 'path'
 
-import { resolveHtmlPath } from '../utils/resolveHtmlPath'
 // TODO: Refactor this type declaration
 import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
@@ -21,6 +20,7 @@ import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
 import { ProjectService, UserService } from './services'
 import { CompilerService } from './services/compiler-service'
+import { resolveHtmlPath } from './utils'
 
 class AppUpdater {
   constructor() {
@@ -118,16 +118,26 @@ const createMainWindow = async () => {
     height: 366,
     resizable: false,
     frame: false,
+    show: false,
     webPreferences: {
-      sandbox: false,
+      sandbox: true,
     },
   })
 
+  const splashPath = app.isPackaged
+    ? resolve(__dirname, '../main/splash.html')
+    : 'src/main/modules/preload/splash-screen/splash.html'
   splash
-    .loadURL(`file://${path.join(__dirname, './modules/preload/scripts/loading/splash.html')}`)
+    .loadFile(splashPath)
     .then(() => console.log('Splash screen loaded successfully'))
     .catch((error) => console.error('Error loading splash screen:', error))
+
   splash.setIgnoreMouseEvents(false)
+
+  splash.once('ready-to-show', () => {
+    splash?.show()
+  })
+
   // Create the main window instance.
   mainWindow = new BrowserWindow({
     minWidth: 1124,
@@ -144,15 +154,9 @@ const createMainWindow = async () => {
     },
   })
 
-  // Send a message to the renderer process when the content finishes loading;
+  // Load the Url or index.html file;
+  void mainWindow.loadURL(resolveHtmlPath('index.html'))
 
-  mainWindow.webContents.on('did-finish-load', () => {
-    if (splash) {
-      splash?.destroy()
-    }
-    mainWindow?.show()
-    mainWindow?.webContents.send('main-process-message', new Date().toLocaleString())
-  })
   // Save window bounds on resize, close, and move events
   const saveBounds = () => {
     store.set('window.bounds', mainWindow?.getBounds())
@@ -176,14 +180,14 @@ const createMainWindow = async () => {
     mainWindow.maximize()
   }
 
-  // Load the Url or index.html file;
-  void mainWindow.loadURL(resolveHtmlPath(''))
-
   // Open devtools if the app is not packaged;
-  // if (isDebug) {
-  // 	mainWindow.webContents.openDevTools()
-  // }
+  if (isDebug) {
+    mainWindow.webContents.openDevTools()
+  }
 
+  splash.on('closed', () => (splash = null))
+
+  // Listen to the ready event to show the window gracefully;
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow) {
       throw new Error('"mainWindow" is not defined')
@@ -191,8 +195,14 @@ const createMainWindow = async () => {
     if (process.env.START_MINIMIZED) {
       mainWindow.minimize()
     }
-    splash?.close()
-    mainWindow.show()
+    setTimeout(() => {
+      if (splash === null) {
+        mainWindow?.destroy()
+        return
+      }
+      splash.close()
+      mainWindow?.show()
+    }, 3000)
   })
 
   mainWindow.on('closed', () => {
@@ -241,8 +251,6 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
   process.exit(0)
 }
-
-// console.log(userService.getSetting('window'))
 
 // Quit the app when all windows are closed;
 app.on('window-all-closed', () => {

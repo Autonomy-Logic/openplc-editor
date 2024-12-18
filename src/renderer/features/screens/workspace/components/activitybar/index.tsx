@@ -8,7 +8,6 @@ import {
   ZoomInOut,
 } from '@process:renderer/assets/icons'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { useNavigate } from 'react-router-dom'
 
 import { ActivitybarButton } from './components'
 
@@ -16,14 +15,12 @@ export default function Activitybar() {
   const {
     workspaceActions: { setEditingState },
     tabsActions: { clearTabs },
-    editorActions: { clearEditor }
+    editorActions: { clearEditor },
   } = useOpenPLCStore()
-  const navigate = useNavigate()
   const returnStartScreen = () => {
     setEditingState('unsaved')
     clearEditor()
     clearTabs()
-    navigate('/')
   }
 
   return (
