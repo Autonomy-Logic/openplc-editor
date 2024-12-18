@@ -112,8 +112,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       highlightDivRef.current.style.height = 'auto'
       highlightDivRef.current.style.height = inputVariableRef.current.style.height
       // top
-      highlightDivRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-30px' : '-24px'
-      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-30px' : '-24px'
+      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-32px' : '-16px'
       // scrollable indicator
       if (scrollableIndicatorRef.current) {
         scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
@@ -248,41 +247,40 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
         style={{ width: DEFAULT_CONTACT_BLOCK_WIDTH, height: DEFAULT_CONTACT_BLOCK_HEIGHT }}
       >
         {contact.svg(wrongVariable)}
-        <div
-          className='-z-1 pointer-events-none absolute -left-[24px] -top-[24px] w-[72px] overflow-y-scroll [&::-webkit-scrollbar]:hidden'
-          ref={highlightDivRef}
-        >
-          <div
-            className='h-full w-full whitespace-pre-wrap break-words text-center text-xs leading-3 text-transparent'
-            dangerouslySetInnerHTML={{ __html: formattedContactVariableValue }}
-          />
-        </div>
-        <div className='absolute -left-[24px] -top-[24px] w-[72px]' ref={inputWrapperRef}>
-          <textarea
-            value={contactVariableValue}
-            onChange={(e) => setContactVariableValue(e.target.value)}
-            placeholder='???'
-            className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
-            onFocus={() => setInputFocus(true)}
-            onBlur={() => {
-              if (inputVariableRef.current && highlightDivRef.current) {
-                inputVariableRef.current.scrollTop = 0
-                highlightDivRef.current.scrollTop = 0
-              }
-              inputFocus && handleSubmitContactVariable()
-            }}
-            onScroll={(e) => onScrollHandler(e)}
-            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-            ref={inputVariableRef}
-            rows={1}
-            spellCheck={false}
-          />
-        </div>
-        <div
-          className={cn('pointer-events-none absolute -right-[36px] -top-[24px] text-cp-sm')}
-          ref={scrollableIndicatorRef}
-        >
-          ↕
+        <div className='absolute -left-[24px] -top-[16px] w-[72px]' ref={inputWrapperRef}>
+          <div className='relative w-full'>
+            <div
+              className='-z-1 pointer-events-none absolute w-full overflow-y-scroll [&::-webkit-scrollbar]:hidden'
+              ref={highlightDivRef}
+            >
+              <div
+                className='w-full whitespace-pre-wrap break-words text-center text-xs leading-3 text-transparent'
+                dangerouslySetInnerHTML={{ __html: formattedContactVariableValue }}
+              />
+            </div>
+            <textarea
+              value={contactVariableValue}
+              onChange={(e) => setContactVariableValue(e.target.value)}
+              placeholder='???'
+              className='absolute w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
+              onFocus={() => setInputFocus(true)}
+              onBlur={() => {
+                if (inputVariableRef.current && highlightDivRef.current) {
+                  inputVariableRef.current.scrollTop = 0
+                  highlightDivRef.current.scrollTop = 0
+                }
+                inputFocus && handleSubmitContactVariable()
+              }}
+              onScroll={(e) => onScrollHandler(e)}
+              onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+              ref={inputVariableRef}
+              rows={1}
+              spellCheck={false}
+            />
+          </div>
+          <div className={cn('pointer-events-none absolute -right-1 top-1 text-cp-sm')} ref={scrollableIndicatorRef}>
+            ↕
+          </div>
         </div>
       </div>
       {data.handles.map((handle, index) => (

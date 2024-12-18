@@ -142,8 +142,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       highlightDivRef.current.style.height = 'auto'
       highlightDivRef.current.style.height = inputVariableRef.current.style.height
       // top
-      highlightDivRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-30px' : '-24px'
-      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-30px' : '-24px'
+      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-32px' : '-16px'
       // scrollable indicator
       if (scrollableIndicatorRef.current) {
         scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
@@ -269,43 +268,42 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
       >
-        <div
-          className='-z-1 pointer-events-none absolute -left-[24px] -top-[24px] w-[72px] overflow-y-scroll [&::-webkit-scrollbar]:hidden'
-          ref={highlightDivRef}
-        >
-          <div
-            className='h-full w-full whitespace-pre-wrap break-words text-center text-xs leading-3 text-transparent'
-            dangerouslySetInnerHTML={{ __html: formattedCoilVariableValue }}
-          />
-        </div>
-        <div className='absolute -left-[24px] -top-[24px] w-[72px]' ref={inputWrapperRef}>
-          <textarea
-            value={coilVariableValue}
-            onChange={(e) => setCoilVariableValue(e.target.value)}
-            placeholder='???'
-            className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
-            onFocus={() => setInputFocus(true)}
-            onBlur={() => {
-              if (inputVariableRef.current && highlightDivRef.current) {
-                inputVariableRef.current.scrollTop = 0
-                highlightDivRef.current.scrollTop = 0
-              }
-              inputFocus && handleSubmitCoilVariable()
-            }}
-            onScroll={(e) => onScrollHandler(e)}
-            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-            ref={inputVariableRef}
-            rows={1}
-            spellCheck={false}
-          />
-        </div>
-        <div
-          className={cn('pointer-events-none absolute -right-[38px] -top-[27px] text-cp-sm')}
-          ref={scrollableIndicatorRef}
-        >
-          ↕
-        </div>
         {coil.svg(wrongVariable)}
+        <div className='absolute -left-[24px] -top-[16px] w-[72px]' ref={inputWrapperRef}>
+          <div className='relative w-full'>
+            <div
+              className='-z-1 pointer-events-none absolute w-full overflow-y-scroll [&::-webkit-scrollbar]:hidden'
+              ref={highlightDivRef}
+            >
+              <div
+                className='w-full whitespace-pre-wrap break-words text-center text-xs leading-3 text-transparent'
+                dangerouslySetInnerHTML={{ __html: formattedCoilVariableValue }}
+              />
+            </div>
+            <textarea
+              value={coilVariableValue}
+              onChange={(e) => setCoilVariableValue(e.target.value)}
+              placeholder='???'
+              className='absolute w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
+              onFocus={() => setInputFocus(true)}
+              onBlur={() => {
+                if (inputVariableRef.current && highlightDivRef.current) {
+                  inputVariableRef.current.scrollTop = 0
+                  highlightDivRef.current.scrollTop = 0
+                }
+                inputFocus && handleSubmitCoilVariable()
+              }}
+              onScroll={(e) => onScrollHandler(e)}
+              onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
+              ref={inputVariableRef}
+              rows={1}
+              spellCheck={false}
+            />
+          </div>
+          <div className={cn('pointer-events-none absolute -right-1 top-1 text-cp-sm')} ref={scrollableIndicatorRef}>
+            ↕
+          </div>
+        </div>
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
