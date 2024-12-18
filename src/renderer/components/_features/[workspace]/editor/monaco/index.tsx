@@ -6,6 +6,7 @@ import { useOpenPLCStore } from '@process:renderer/store'
 import type { LibraryState } from '@root/renderer/store/slices'
 import * as monaco from 'monaco-editor'
 import { useRef, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 
 import { toast } from '../../../[app]/toast/use-toast'
 import { parsePouToStText } from './drag-and-drop/st'
@@ -86,9 +87,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const [scope, libraryName, pouName] = pouPath.split('/')
 
     const libraryScope = scope as 'system' | 'user'
-
-    // Caution!
-    // Todo: Add validation for user defined libraries
     const libraries = sliceLibraries[libraryScope] as LibraryState['libraries']['system']
 
     const libraryToUse = libraries.find((library) => library.name === libraryName)
@@ -99,38 +97,39 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const editorModel = editorRef.current?.getModel()
 
     const draftModelData = editorModel?.getValue()
-
-    console.log('libraries: ', libraries)
-    console.log('libraryToUse: ', libraryToUse)
-    console.log('Pou to append: ', pouToAppend)
-    console.log('Editor model: ', editorModel)
-    console.log('Draft model data: ', draftModelData)
-
-    /**
-     * TODO: Adicionar o conteudo na posicão do cursor
-     */
     if (pouToAppend?.type === 'function') {
       const newModelData = draftModelData?.concat(parsePouToStText(pouToAppend as _qualquerCoisa))
       editorModel?.setValue(newModelData as string)
       return
     } else {
-      /**
-       * TODO:
-       * - Criar variavel para ser associada com o pou do tipo function block
-       */
       setIsOpen(true)
     }
+  }
+
+  function checkIfVariableExists(existingNames: string[], baseName: string): string {
+    let newName = baseName
+    let index = 1
+
+    while (existingNames.includes(newName)) {
+      newName = `${baseName}_${index}`
+      index++
+    }
+
+    return newName
   }
 
   const handleRenamePou = () => {
     if (!contentToDrop || !editorRef.current) return
 
-    const renamedContent = { ...contentToDrop, name: newName }
+    const existingNames = pous.flatMap((pou) => pou.data.variables.map((variable) => variable.name))
+
+    const uniqueName = checkIfVariableExists(existingNames, newName)
+
+    const renamedContent = { ...contentToDrop, name: uniqueName }
 
     console.log('Novo conteúdo renomeado:', renamedContent)
 
     const editorModel = editorRef.current.getModel()
-
     const contentToInsert = parsePouToStText(renamedContent)
 
     if (editorModel) {
@@ -145,7 +144,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     const res = createVariable({
       data: {
-        name: newName,
+        id: uuidv4(),
+        name: uniqueName,
         type: {
           definition: 'derived',
           value: contentToDrop.name,
@@ -158,6 +158,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       scope: 'local',
       associatedPou: editor.meta.name,
     })
+    console.log('Resposta: ', res)
     if (!res.ok) {
       toast({
         title: res.title,
@@ -166,15 +167,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       })
       return
     }
+    console.log('pous: ', pous)
   }
 
   const handleCancelRenamePou = () => {
     setIsOpen(false)
     setNewName('')
   }
-
-  // console.log('Editor instance: ', editorRef.current?.getModel()?.uri.path)
-  // console.log('Monaco instance: ', monacoRef.current?.editor.getEditors())
 
   return (
     <>
