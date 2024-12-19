@@ -6,6 +6,7 @@ import { cn } from '@root/utils'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
+import { ImperativePanelHandle } from 'react-resizable-panels'
 
 import { ExitIcon } from '../assets'
 import { toast } from '../components/_features/[app]/toast/use-toast'
@@ -94,10 +95,15 @@ const WorkspaceScreen = () => {
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
 
-  const panelRef = useRef(null)
-  const explorerPanelRef = useRef(null)
-  const workspacePanelRef = useRef(null)
-  const consolePanelRef = useRef(null)
+  type PanelMethods = {
+    collapse: () => void
+    expand: () => void
+  } & ImperativePanelHandle
+
+  const panelRef = useRef<ImperativePanelHandle | null>(null)
+  const explorerPanelRef = useRef<PanelMethods | null>(null)
+  const workspacePanelRef = useRef<PanelMethods | null>(null)
+  const consolePanelRef = useRef<PanelMethods | null>(null)
   const [activeTab, setActiveTab] = useState('console')
   const hasSearchResults = searchResults.length > 0
 
@@ -118,7 +124,9 @@ const WorkspaceScreen = () => {
   useEffect(() => {
     const action = isCollapsed ? 'collapse' : 'expand'
     ;[explorerPanelRef, workspacePanelRef, consolePanelRef].forEach((ref) => {
-      if (ref.current) ref.current[action]()
+      if (ref.current && typeof ref.current[action] === 'function') {
+        ref.current[action]()
+      }
     })
   }, [isCollapsed])
 

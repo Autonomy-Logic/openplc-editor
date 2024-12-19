@@ -13,7 +13,7 @@ import { BasicNodeData } from '../../_atoms/react-flow/custom-nodes/utils/types'
 type RungHeaderProps = {
   rung: RungState
   isOpen: boolean
-  draggableHandleProps: DraggableProvidedDragHandleProps | null
+  draggableHandleProps: DraggableProvidedDragHandleProps | undefined
   className: string
   onClick: () => void
 }

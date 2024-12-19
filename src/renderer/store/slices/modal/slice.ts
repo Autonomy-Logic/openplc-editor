@@ -1,4 +1,5 @@
 import { produce } from 'immer'
+import { string } from 'zod'
 import { StateCreator } from 'zustand'
 
 import { ModalSlice, ModalTypes } from './types'
@@ -22,7 +23,16 @@ const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState
       open: false,
       data: null,
     },
+    'save-changes-project': {
+      open: false,
+      data: string,
+    },
+    'confirm-delete-POUs': {
+      open: false,
+      data: null,
+    },
   },
+
   modalActions: {
     openModal: (modal, data) => {
       setState(

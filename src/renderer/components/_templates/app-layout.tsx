@@ -11,8 +11,9 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
     modals,
-    modalActions: { openModal },
     workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecents },
+    modalActions: { openModal },
+    workspace: { editingState },
   } = useOpenPLCStore()
 
   useEffect(() => {
@@ -48,7 +49,13 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
 
   useEffect(() => {
     const handleCreateProjectAccelerator = () => {
-      window.bridge.createProjectAccelerator(() => openModal('create-project', null))
+      window.bridge.createProjectAccelerator(() => {
+        if (editingState !== 'unsaved') {
+          openModal('create-project', null)
+        } else {
+          openModal('save-changes-project', 'create-project')
+        }
+      })
     }
     handleCreateProjectAccelerator()
   }, [])
