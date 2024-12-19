@@ -125,8 +125,8 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
         /> */}
         <HighlightedTextArea
           placeholder='Start typing to add a comment to this rung'
-          textAreaClassName='text-left'
-          highlightClassName='text-left'
+          textAreaClassName='text-xs'
+          highlightClassName='text-xs'
           ref={textAreaRef}
           textAreaValue={textAreaValue}
           setTextAreaValue={setTextAreaValue}

@@ -248,6 +248,8 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
               scrollLimiter: 32,
             }}
             ref={inputVariableRef}
+            textAreaClassName='text-center text-xs leading-3'
+            highlightClassName='text-center text-xs leading-3'
           />
         </div>
       </div>

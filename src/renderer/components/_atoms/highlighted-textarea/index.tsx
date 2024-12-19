@@ -94,14 +94,14 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
       <div className='[&::-webkit-text-size-adjust]:none relative h-full w-full' aria-label={props['aria-label']}>
         <div
           className={cn(
-            'pointer-events-none absolute -z-10 w-full overflow-y-scroll text-center [&::-webkit-scrollbar]:hidden',
+            'pointer-events-none absolute -z-10 w-full overflow-y-scroll [&::-webkit-scrollbar]:hidden',
             'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
             highlightClassName,
           )}
           ref={highlightDivRef}
         >
           <div
-            className={cn('w-full whitespace-pre-wrap break-words text-xs leading-3 text-transparent')}
+            className={cn('w-full whitespace-pre-wrap break-words text-transparent')}
             dangerouslySetInnerHTML={{ __html: formattedVariableValue }}
           />
         </div>
@@ -110,7 +110,7 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
           onChange={(e) => setTextAreaValue(e.target.value)}
           placeholder={placeholder ?? '???'}
           className={cn(
-            'absolute w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden',
+            'absolute w-full resize-none bg-transparent outline-none [&::-webkit-scrollbar]:hidden',
             'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
             textAreaClassName,
           )}

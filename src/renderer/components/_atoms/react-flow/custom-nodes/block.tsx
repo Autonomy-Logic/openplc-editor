@@ -566,6 +566,8 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
               scrollLimiter: 14,
             }}
             ref={inputVariableRef}
+            textAreaClassName='text-center text-xs leading-3'
+            highlightClassName='text-center text-xs leading-3'
           />
         )}
       </div>

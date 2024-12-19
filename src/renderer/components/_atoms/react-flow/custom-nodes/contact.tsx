@@ -230,6 +230,8 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
               scrollLimiter: 32,
             }}
             ref={inputVariableRef}
+            textAreaClassName='text-center text-xs leading-3'
+            highlightClassName='text-center text-xs leading-3'
           />
         </div>
       </div>
