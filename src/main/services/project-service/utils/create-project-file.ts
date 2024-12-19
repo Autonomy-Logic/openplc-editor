@@ -12,7 +12,7 @@ const CreateProjectFile = (dataToCreateProjectFile: CreateProjectFileProps) => {
   const bodyData =
     dataToCreateProjectFile.language === 'ld'
       ? { language: dataToCreateProjectFile.language, value: { name: dataToCreateProjectFile.name, rungs: [] } }
-      : { language: dataToCreateProjectFile.language, value: 'This is the body' }
+      : { language: dataToCreateProjectFile.language, value: '' }
 
   const _projectJSONStructure: PLCProject = {
     meta: {

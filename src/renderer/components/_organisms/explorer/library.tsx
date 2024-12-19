@@ -3,7 +3,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { ReactNode, useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
-import { parsePouToStText } from '../../_features/[workspace]/editor/monaco/drag-and-drop/st'
+// import { parsePouToStText } from '../../_features/[workspace]/editor/monaco/drag-and-drop/st'
 import { LibraryFile, LibraryFolder, LibraryRoot } from '../../_molecules'
 
 type ILibraryFileProps = {
@@ -37,7 +37,7 @@ type LibraryProps = {
   }[]
   filteredUserLibraries: {
     name: string
-    type: 'function' | 'function-block'| 'program'
+    type: 'function' | 'function-block' | 'program'
   }[]
   setSelectedFileKey: (key: string) => void
   selectedFileKey: string | null
@@ -59,6 +59,7 @@ const Library = ({
 
   const [isSearchActive, setIsSearchActive] = useState(false)
   const [shouldRenderInput, setShouldRenderInput] = useState(false)
+
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -164,7 +165,7 @@ const Library = ({
                     draggable
                     onDragStart={(e) => {
                       if (type === 'plc-textual')
-                        e.dataTransfer.setData('text/plain', meta.language === 'st' ? parsePouToStText(pou) : pou.body)
+                        e.dataTransfer.setData('application/library', `system/${library.name}/${pou.name}`)
                       else if (type === 'plc-graphical') {
                         if (meta.language === 'ld') {
                           e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
@@ -191,8 +192,8 @@ const Library = ({
                     isSelected={selectedFileKey === userLibrary.name}
                     draggable
                     onDragStart={(e) => {
-                      if (type === 'plc-textual') return
-                      // e.dataTransfer.setData('text/plain', meta.language === 'st' ? parsePouToStText(pou) : pou.body)
+                      if (type === 'plc-textual')
+                        e.dataTransfer.setData('application/library', `user/${userLibrary.name}`)
                       else if (type === 'plc-graphical') {
                         if (meta.language === 'ld') {
                           e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
