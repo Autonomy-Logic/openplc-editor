@@ -3,18 +3,22 @@ import { ComponentPropsWithoutRef } from 'react'
 
 type IFileProps = ComponentPropsWithoutRef<'div'> & {
   projectName: string
+  projectPath: string
   lastModified: string
 }
 const File = (props: IFileProps) => {
-  const { projectName, lastModified, className, ...res } = props
+  const { projectName, projectPath, lastModified, className, ...res } = props
   return (
     <div title='file-root' id='folder-root' className={cn('relative flex h-[160px] w-[224px]', className)} {...res}>
       <p
         id={projectName}
-        className='absolute bottom-4 left-3 flex cursor-pointer flex-col gap-[1px] text-xs text-white'
+        className='absolute bottom-4 left-3 flex cursor-pointer flex-col gap-[1px] text-white'
       >
-        <span id={projectName} className='overflow-hidden overflow-ellipsis whitespace-nowrap'>
+        <span id={projectName} className='overflow-hidden overflow-ellipsis whitespace-nowrap text-sm font-bold'>
           {projectName}
+        </span>
+        <span id={projectName} className='overflow-hidden overflow-ellipsis whitespace-nowrap text-cp-sm'>
+          {projectPath}
         </span>
         <span id={lastModified} className='overflow-hidden overflow-ellipsis whitespace-nowrap text-[10px] opacity-40'>
           {lastModified}
