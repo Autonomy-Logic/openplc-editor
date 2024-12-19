@@ -5,7 +5,13 @@ const variableXMLSchema = z.object({
   '@name': z.string(),
   '@address': z.string().optional(),
   type: z.object(baseTypes.reduce((acc, type) => ({ ...acc, [type]: z.string().optional() }), {})).optional(),
-  initialValue: z.string().optional(),
+  initialValue: z
+    .object({
+      simpleValue: z.object({
+        '@value': z.string(),
+      }),
+    })
+    .optional(),
   documentation: z
     .object({
       'xhtml:p': z.object({

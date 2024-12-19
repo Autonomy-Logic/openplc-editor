@@ -60,7 +60,12 @@ export const parseInterface = (pou: PLCPou) => {
 
     if (variable.location) v['@address'] = variable.location
 
-    if (variable.initialValue) v.initialValue = variable.initialValue
+    if (variable.initialValue)
+      v.initialValue = {
+        simpleValue: {
+          '@value': variable.initialValue,
+        },
+      }
 
     if (variable.documentation)
       v.documentation = {

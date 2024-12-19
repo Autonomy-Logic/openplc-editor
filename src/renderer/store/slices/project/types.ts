@@ -161,6 +161,10 @@ const projectActionsSchema = z.object({
     .function()
     .args(variableDTOSchema.omit({ data: true }).extend({ rowId: z.number(), data: PLCVariableSchema.partial() }))
     .returns(projectResponseSchema),
+  getVariable: z
+    .function()
+    .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number() })))
+    .returns(PLCVariableSchema.optional()),
   deleteVariable: z
     .function()
     .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number() })))
