@@ -1,4 +1,5 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { PLCVariable } from '@root/types/PLC'
 import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { v4 as uuidv4 } from 'uuid'
@@ -14,7 +15,7 @@ import {
   updateVariableValidation,
 } from './utils/variables'
 
-const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (setState) => ({
+const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (setState, getState) => ({
   project: {
     meta: {
       name: '',
@@ -264,6 +265,29 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       )
       return response
     },
+    getVariable: (variableToGet): PLCVariable | undefined => {
+      let variable: PLCVariable
+      switch (variableToGet.scope) {
+        case 'global': {
+          variable = getState().project.data.configuration.resource.globalVariables[variableToGet.rowId] as PLCVariable
+          break
+        }
+        case 'local': {
+          const pou = getState().project.data.pous.find((pou) => pou.data.name === variableToGet.associatedPou)
+          if (!pou) {
+            console.error(`Pou ${variableToGet.associatedPou} not found`)
+            return undefined
+          }
+          variable = pou.data.variables[variableToGet.rowId] as PLCVariable
+          break
+        }
+        default: {
+          console.error(`Scope ${variableToGet.scope ? variableToGet.scope : ''} not found or invalid params`)
+          return undefined
+        }
+      }
+      return variable
+    },
     deleteVariable: (variableToBeDeleted): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
@@ -369,39 +393,39 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
      * Data Type Actions
      */
     createDatatype: (dataToCreate) => {
-      let response = { ok: true, message: '', data: null };
-    
+      let response = { ok: true, message: '', data: null }
+
       setState(
         produce(({ project }: ProjectSlice) => {
-          const { data } = dataToCreate;
-          const { name } = data;
-    
-          const dataExists = project.data.dataTypes.find((datatype) => datatype.name === name);
-          const pouExists = project.data.pous.find((datatype) => datatype.data.name === name);
-    
+          const { data } = dataToCreate
+          const { name } = data
+
+          const dataExists = project.data.dataTypes.find((datatype) => datatype.name === name)
+          const pouExists = project.data.pous.find((datatype) => datatype.data.name === name)
+
           if (!dataExists && !pouExists) {
-            project.data.dataTypes.push(data);
-            response.message = 'Datatype created successfully.';
-            response.ok = true;
+            project.data.dataTypes.push(data)
+            response.message = 'Datatype created successfully.'
+            response.ok = true
           } else {
             response = {
               ok: false,
               message: `You can't create a POU and Data type with the same name.`,
               data: null,
-            };
-    
+            }
+
             toast({
               title: 'Invalid array',
               description: response.message,
               variant: 'fail',
-            });
+            })
           }
         }),
-      );
-    
-      return response;
+      )
+
+      return response
     },
-    
+
     // TODO: Review requirements.
     /**
      * Function to update a unique data type.

@@ -18,7 +18,7 @@ import { SelectableClassCell, SelectableDebugCell, SelectableTypeCell } from './
 
 const columnHelper = createColumnHelper<PLCVariable>()
 
-const columns = [
+const columnsPrograms = [
   columnHelper.accessor('id', {
     header: '#',
     size: 64,
@@ -69,6 +69,52 @@ const columns = [
   columnHelper.accessor('debug', { header: 'Debug', size: 64, minSize: 64, maxSize: 64, cell: SelectableDebugCell }),
 ]
 
+const columns = [
+  columnHelper.accessor('id', {
+    header: '#',
+    size: 64,
+    minSize: 32,
+    maxSize: 64,
+    enableResizing: true,
+    cell: (props) => props.row.id,
+  }),
+  columnHelper.accessor('name', {
+    header: 'Name',
+    enableResizing: true,
+    size: 300,
+    minSize: 150,
+    maxSize: 300,
+    cell: EditableNameCell,
+  }),
+  columnHelper.accessor('class', {
+    header: 'Class',
+    enableResizing: true,
+    cell: SelectableClassCell,
+  }),
+  columnHelper.accessor('type', {
+    header: 'Type',
+    enableResizing: true,
+    size: 300,
+    minSize: 80,
+    maxSize: 300,
+    cell: SelectableTypeCell,
+  }),
+  columnHelper.accessor('initialValue', {
+    header: 'Initial Value',
+    enableResizing: true,
+    cell: EditableNameCell,
+  }),
+  columnHelper.accessor('documentation', {
+    header: 'Documentation',
+    enableResizing: true,
+    size: 568,
+    minSize: 198,
+    maxSize: 568,
+    cell: EditableDocumentationCell,
+  }),
+  columnHelper.accessor('debug', { header: 'Debug', size: 64, minSize: 64, maxSize: 64, cell: SelectableDebugCell }),
+]
+
 type PLCVariablesTableProps = {
   tableData: PLCVariable[]
   filterValue?: string
@@ -90,12 +136,17 @@ const VariablesTable = ({
     editor: {
       meta: { name },
     },
+    project: {
+      data: { pous },
+    },
     projectActions: { updateVariable },
   } = useOpenPLCStore()
 
   const tableHeaderRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
+
+  const pou = pous.find((p) => p.data.name === name)
 
   const resetBorders = () => {
     const parent = tableBodyRef.current
@@ -153,7 +204,7 @@ const VariablesTable = ({
   }, [filterValue])
 
   const table = useReactTable({
-    columns: columns,
+    columns: pou?.type !== 'program' ? columns : columnsPrograms,
     columnResizeMode: 'onChange',
     data: tableData,
     debugTable: true,
@@ -211,7 +262,7 @@ const VariablesTable = ({
           <TableRow
             id={row.id}
             key={row.id}
-            className='h-8 cursor-pointer'
+            className={cn('h-8 cursor-pointer')}
             onClick={(e) => handleRowClick(e.currentTarget)}
             selected={selectedRow === parseInt(row.id)}
             ref={selectedRow === parseInt(row.id) ? tableBodyRowRef : null}
@@ -227,7 +278,8 @@ const VariablesTable = ({
               >
                 {flexRender(cell.column.columnDef.cell, {
                   ...cell.getContext(),
-                  editable: selectedRow === parseInt(row.id),
+                  selected: selectedRow === parseInt(row.id),
+                  scope: 'local',
                 })}
               </TableCell>
             ))}

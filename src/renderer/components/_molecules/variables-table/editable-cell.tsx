@@ -18,18 +18,41 @@ declare module '@tanstack/react-table' {
   }
 }
 
-type IEditableCellProps = CellContext<PLCVariable, unknown> & { editable?: boolean }
-const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, editable = true }: IEditableCellProps) => {
+type IEditableCellProps = CellContext<PLCVariable, unknown> & { selected?: boolean; scope?: 'local' | 'global' }
+const EditableNameCell = ({
+  getValue,
+  row: { index },
+  column: { id },
+  table,
+  selected = false,
+  scope = 'local',
+}: IEditableCellProps) => {
   const initialValue = getValue<string>()
   const { toast } = useToast()
 
   const {
+    editor,
     searchQuery,
+    projectActions: { getVariable },
   } = useOpenPLCStore()
 
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
   const [isEditing, setIsEditing] = useState(false)
+
+  const variable = getVariable({
+    rowId: index,
+    scope,
+    associatedPou: editor.meta.name,
+  })
+
+  const isCellEditable = () => {
+    if (id !== 'location' && id !== 'initialValue') return true
+
+    if (variable?.type.definition === 'derived') return false
+    return true
+  }
+  const isEditable = isCellEditable()
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = () => {
@@ -41,7 +64,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
   }
 
   const handleStartEditing = () => {
-    if (!editable) return
+    if (!isEditable) return
     setIsEditing(true)
   }
 
@@ -57,17 +80,18 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
       value={cellValue}
       onChange={(e) => setCellValue(e.target.value)}
       onBlur={onBlur}
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
-        'pointer-events-none': !editable,
-      })}
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
     />
   ) : (
     <div
       onClick={handleStartEditing}
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', { 'pointer-events-none': !editable })}
+      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+        'pointer-events-none': !selected,
+        'cursor-not-allowed': !isEditable,
+      })}
     >
       <p
-        className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'
+        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
         dangerouslySetInnerHTML={{ __html: formattedCellValue }}
       />
     </div>
@@ -79,7 +103,7 @@ const EditableDocumentationCell = ({
   row: { index },
   column: { id },
   table,
-  editable = true,
+  selected = true,
 }: IEditableCellProps) => {
   const initialValue = getValue<string | undefined>()
   // We need to keep and update the state of the cell normally
@@ -99,7 +123,7 @@ const EditableDocumentationCell = ({
       <PrimitivePopover.Trigger asChild>
         <div
           className={cn('flex h-full w-full cursor-text items-center justify-center p-2', {
-            'pointer-events-none': !editable,
+            'pointer-events-none': !selected,
           })}
         >
           <p className='h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all'>{cellValue}</p>
