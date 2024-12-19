@@ -2,19 +2,20 @@
  * Webpack config for production electron main process
  */
 
-import path from 'path';
-import TerserPlugin from 'terser-webpack-plugin';
-import webpack from 'webpack';
-import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
-import { merge } from 'webpack-merge';
+import HtmlWebpackPlugin from 'html-webpack-plugin'
+import { join } from 'path'
+import TerserPlugin from 'terser-webpack-plugin'
+import webpack from 'webpack'
+import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
+import { merge } from 'webpack-merge'
 
-import checkNodeEnv from '../../scripts/check-node-env';
-import deleteSourceMaps from '../../scripts/delete-source-maps';
-import baseConfig from './webpack.config.base';
-import webpackPaths from './webpack.paths';
+import checkNodeEnv from '../../scripts/check-node-env'
+import deleteSourceMaps from '../../scripts/delete-source-maps'
+import baseConfig from './webpack.config.base'
+import webpackPaths from './webpack.paths'
 
-checkNodeEnv('production');
-deleteSourceMaps();
+checkNodeEnv('production')
+deleteSourceMaps()
 
 const configuration: webpack.Configuration = {
   devtool: 'source-map',
@@ -24,8 +25,8 @@ const configuration: webpack.Configuration = {
   target: 'electron-main',
 
   entry: {
-    main: path.join(webpackPaths.srcMainPath, 'main.ts'),
-    preload: path.join(webpackPaths.srcMainPath, 'modules/preload/index.ts'),
+    main: join(webpackPaths.srcMainPath, 'main.ts'),
+    preload: join(webpackPaths.srcMainPath, 'modules/preload/preload.ts'),
   },
 
   output: {
@@ -64,6 +65,12 @@ const configuration: webpack.Configuration = {
       DEBUG_PROD: false,
       START_MINIMIZED: false,
     }),
+    new HtmlWebpackPlugin({
+      filename: join('splash.html'),
+      template: join(webpackPaths.srcMainPath, 'modules', 'preload', 'splash-screen', 'splash.html'),
+      isBrowser: false,
+      isDevelopment: false,
+    }),
 
     new webpack.DefinePlugin({
       'process.type': '"browser"',
@@ -79,6 +86,6 @@ const configuration: webpack.Configuration = {
     __dirname: false,
     __filename: false,
   },
-};
+}
 
-export default merge(baseConfig, configuration);
+export default merge(baseConfig, configuration)

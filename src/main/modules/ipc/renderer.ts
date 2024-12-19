@@ -36,15 +36,13 @@ const rendererProcessBridge = {
    * As for the click and for the accelerator type.
    */
 
-  createProjectAccelerator: (callback: (editingState: string) => void) => {
-    ipcRenderer.on('project:create-accelerator', (_event: IpcRendererEvent, editingState: string) => {
-      callback(editingState)
-    })
-  },
+  createProjectAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
 
   createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
   createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> =>
     ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
+
   /**
    * Path picker
    */
@@ -143,6 +141,7 @@ const rendererProcessBridge = {
    * This is a mock implementation to be used as a presentation.
    * !! Do not use this on production !!
    */
+
   // @ts-expect-error Callback is from an any type
   compileRequest: (xmlPath: string, callback) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()

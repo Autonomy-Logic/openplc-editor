@@ -37,25 +37,30 @@ export const ArrayModal = ({
       meta: { name },
     },
     project: {
-      data: { pous },
+      data: { dataTypes, pous },
     },
     projectActions: { updateVariable },
   } = useOpenPLCStore()
 
-  const types = baseTypeSchema.options
+  const baseTypes = baseTypeSchema.options
+  const allTypes = [
+    ...baseTypes,
+    ...dataTypes.map((type) => (type.name !== name ? type.name : '')).filter((type) => type !== ''),
+  ]
 
   const [selectedInput, setSelectedInput] = useState<string>('')
   const [dimensions, setDimensions] = useState<string[]>([])
-  const [typeValue, setTypeValue] = useState<BaseType>('dint')
+  const [typeValue, setTypeValue] = useState<string>('dint')
 
   useEffect(() => {
     const variable = pous
       .find((pou) => pou.data.name === name)
       ?.data.variables.find((variable) => variable.name === variableName)
+    if (!variable) return
 
-    if (variable?.type.definition === 'array') {
-      setDimensions(variable.type.data.dimensions)
-      setTypeValue(variable?.type.data.baseType)
+    if (variable.type.definition === 'array') {
+      setDimensions(variable.type.data.dimensions.map((dimension) => dimension.dimension))
+      setTypeValue(variable.type.data.baseType.value)
     } else {
       setDimensions([])
       setTypeValue('dint')
@@ -120,6 +125,11 @@ export const ArrayModal = ({
       return
     }
     const formatArrayName = `ARRAY [${dimensionToSave.join(', ')}] OF ${typeValue?.toUpperCase()}`
+
+    let isBaseType = false
+    baseTypes.forEach((type) => {
+      if (type === typeValue) isBaseType = true
+    })
     updateVariable({
       scope: 'local',
       associatedPou: name,
@@ -129,8 +139,11 @@ export const ArrayModal = ({
           definition: 'array',
           value: formatArrayName,
           data: {
-            baseType: typeValue,
-            dimensions,
+            baseType: {
+              definition: isBaseType ? 'base-type' : 'user-data-type',
+              value: typeValue,
+            },
+            dimensions: dimensionToSave.map((dimension) => ({ dimension: dimension })),
           },
         },
       },
@@ -183,7 +196,7 @@ export const ArrayModal = ({
                   sideOffset={-28}
                   className='box z-[999] h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
                 >
-                  {types.map((type) => (
+                  {allTypes.map((type) => (
                     <SelectItem
                       value={type}
                       className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'

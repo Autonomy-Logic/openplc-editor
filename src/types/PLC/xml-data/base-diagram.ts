@@ -1,6 +1,7 @@
 import { formatDate } from '@root/utils'
 import { z } from 'zod'
 
+import { dataTypeSchema } from './data-types/data-types-diagram'
 import { pousSchema } from './pous/pous-diagram'
 import { taskXMLSchema } from './task/task-diagram'
 import { variableXMLSchema } from './variable/variable-diagram'
@@ -49,7 +50,7 @@ const baseXmlSchema = z.object({
     }),
 
     types: z.object({
-      dataTypes: z.string(),
+      dataTypes: dataTypeSchema,
       pous: pousSchema,
     }),
 

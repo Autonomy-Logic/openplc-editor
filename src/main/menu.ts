@@ -521,7 +521,7 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:edit.submenu.deletePou'),
-            accelerator: 'delete',
+            accelerator:"Ctrl+Shift+delete",
             click: () => this.handleDeletePou(),
           },
         ],

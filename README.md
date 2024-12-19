@@ -14,7 +14,7 @@ In order to run the development version, clone the repository, and install depen
 You'll need the following tools:
 
 - [Git](https://git-scm.com/)
-- [NodeJS](https://nodejs.org/en/download/), **x64**, version `>=18.19.x and <20.x`
+- [NodeJS](https://nodejs.org/en/download/), **x64**, version `>=20`
 
 ### Step by step
 
@@ -29,7 +29,7 @@ cd openplc-editor
 - Install the dependencies
 
 ```bash
-npm install 
+npm install
 ```
 
 - Run the development script
@@ -37,6 +37,29 @@ npm install
 ```bash
 npm run start:dev
 ```
+
+### Not required but necessary if you intend to use the compiler
+
+You'll need the following:
+
+- [Python](https://www.python.org/downloads/), version `>3.x`
+    - [lxml](https://lxml.de/installation.html)
+
+Step by step
+
+- Install required Python package
+
+On Windows
+```bash
+py -m pip install lxml
+```
+
+On MacOS
+```bash
+python3 -m pip install lxml
+```
+
+*Note that each operating system has its own way to handle the Python package manager; those are only a suggestion and may work in most of the cases.*
 
 ## Documentation
 

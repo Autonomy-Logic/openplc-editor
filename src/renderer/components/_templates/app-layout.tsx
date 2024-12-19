@@ -1,14 +1,13 @@
 import { TitleBar } from '@root/renderer/components/_organisms/title-bar'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { ReactNode, useEffect, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 
 import Toaster from '../_features/[app]/toast/toaster'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 
-// type IAppLayoutProps = ComponentPropsWithoutRef<'div'>
-const AppLayout = (): ReactNode => {
+type AppLayoutProps = ComponentPropsWithoutRef<'main'>
+const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
     modals,
@@ -58,7 +57,6 @@ const AppLayout = (): ReactNode => {
         }
       })
     }
-
     handleCreateProjectAccelerator()
   }, [])
 
@@ -70,8 +68,9 @@ const AppLayout = (): ReactNode => {
           'absolute bottom-0 left-0 right-0 flex overflow-hidden',
           `${isLinux ? 'top-0' : 'top-[--oplc-title-bar-height]'}`,
         )}
+        {...rest}
       >
-        <Outlet />
+        {children}
         <Toaster />
         {modals?.['create-project']?.open === true && <ProjectModal isOpen={modals['create-project'].open} />}
       </main>

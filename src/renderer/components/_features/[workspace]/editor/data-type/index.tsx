@@ -3,6 +3,7 @@ import { ArrayDataType } from '@root/renderer/components/_molecules/data-types/a
 import { EnumeratorDataType } from '@root/renderer/components/_molecules/data-types/enumerated'
 import { StructureDataType } from '@root/renderer/components/_molecules/data-types/structure'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { PLCDataType } from '@root/types/PLC/open-plc'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
@@ -18,8 +19,10 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     tabsActions: { updateTabName },
     editorActions: { updateEditorModel },
     projectActions: { updateDatatype },
+    searchQuery,
   } = useOpenPLCStore()
   const [editorContent, setEditorContent] = useState<PLCDataType>()
+  const [isEditing, setIsEditing] = useState(false)
 
   useEffect(() => {
     const dataTypeIndex = dataTypes.findIndex((dataType) => dataType.name === dataTypeName)
@@ -29,13 +32,20 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     }
   }, [dataTypes, dataTypeName])
 
+  const handleStartEditing = () => {
+    setIsEditing(true)
+  }
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = e.target
-    console.log('Data type name changed to:', value)
-    setEditorContent((prevContent) => ({
-      ...prevContent,
-      name: value,
-    }))
+    setEditorContent((prevContent) =>
+      prevContent
+        ? {
+            ...prevContent,
+            name: value,
+          }
+        : prevContent,
+    )
   }
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -44,6 +54,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
       updateDatatype(dataTypeName, { derivation: editorContent?.derivation, name: value } as PLCDataType)
       updateEditorModel(dataTypeName, value)
       updateTabName(dataTypeName, value)
+      setIsEditing(false)
     }
   }
 
@@ -68,14 +79,23 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
             aria-label='Data type name input container'
             className='h-[30px] w-full max-w-[385px] rounded-lg border border-neutral-400 bg-white focus-within:border-brand dark:border-neutral-800 dark:bg-neutral-950'
           >
-            <InputWithRef
-              value={editorContent?.name}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              id='data-type-name'
-              aria-label='data-type-name'
-              className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
-            />
+            {isEditing ? (
+              <InputWithRef
+                value={editorContent?.name}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                id='data-type-name'
+                aria-label='data-type-name'
+                className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
+              />
+            ) : (
+              <p
+                aria-label='Data type name'
+                className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
+                onClick={handleStartEditing}
+                dangerouslySetInnerHTML={{ __html: extractSearchQuery(editorContent?.name || '', searchQuery) }}
+              />
+            )}
           </div>
         </div>
       </div>

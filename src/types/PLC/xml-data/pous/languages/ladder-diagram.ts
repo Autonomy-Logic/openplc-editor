@@ -91,7 +91,7 @@ type RightPowerRailLadderXML = z.infer<typeof rightPowerRailSchema>
 const blockSchema = z.object({
   '@localId': z.string(),
   '@typeName': z.string(),
-  '@instanceName': z.string(),
+  '@instanceName': z.string().optional(),
   '@width': z.number(),
   '@height': z.number(),
   '@executionOrderId': z.number().optional(),

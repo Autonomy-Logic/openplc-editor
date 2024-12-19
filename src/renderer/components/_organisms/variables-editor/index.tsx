@@ -21,7 +21,7 @@ const VariablesEditor = () => {
       data: { pous },
     },
     editorActions: { updateModelVariables },
-    projectActions: { createVariable, deleteVariable, rearrangeVariables },
+    projectActions: { createVariable, deleteVariable, rearrangeVariables, updatePouDocumentation },
   } = useOpenPLCStore()
 
   /**
@@ -47,16 +47,14 @@ const VariablesEditor = () => {
    * Update the table data and the editor's variables when the editor or the pous change
    */
   useEffect(() => {
-    const foundPou = pous.find((pou) => pou?.data?.name === editor?.meta?.name);
-  
+    const foundPou = pous.find((pou) => pou?.data?.name === editor?.meta?.name)
+
     if (foundPou) {
-     
-      setTableData(foundPou.data.variables);
+      setTableData(foundPou.data.variables)
     } else {
-     
-      setTableData([]); 
+      setTableData([])
     }
-  }, [editor, pous]);
+  }, [editor, pous])
 
   /**
    * If the editor name is not the same as the current editor name
@@ -198,23 +196,28 @@ const VariablesEditor = () => {
     })
   }
 
+  const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) =>
+    updatePouDocumentation(editor.meta.name, event.target.value)
+
   return (
     <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
       <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
         {editorVariables.display === 'table' ? (
           <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
             <div
+              id='Pou documentation'
               aria-label='Variables editor table description container'
               className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'
             >
               <label
                 htmlFor='description'
-                className='w-fit text-base font-medium text-neutral-1000 dark:text-neutral-300'
+                className='w-fit text-xs font-medium text-neutral-1000 dark:text-neutral-300'
               >
                 Description :
               </label>
               <InputWithRef
                 id='description'
+                onBlur={handleDescriptionChange}
                 className='h-full w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
               />
             </div>
@@ -224,7 +227,7 @@ const VariablesEditor = () => {
             >
               <label
                 htmlFor='class-filter'
-                className='w-fit text-base font-medium text-neutral-1000 dark:text-neutral-300'
+                className='w-fit text-xs font-medium text-neutral-1000 dark:text-neutral-300'
               >
                 Class Filter :
               </label>
@@ -315,7 +318,7 @@ const VariablesEditor = () => {
               'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
             )}
           />
-
+          {/** TODO: Need to be implemented */}
           <CodeIcon
             aria-label='Variables code visualization'
             onClick={() => handleVisualizationTypeChange('code')}
@@ -323,7 +326,7 @@ const VariablesEditor = () => {
             currentVisible={editorVariables.display === 'code'}
             className={cn(
               editorVariables.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-              'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
+              'disabled pointer-events-none rounded-r-md opacity-30 transition-colors ease-in-out hover:cursor-not-allowed',
             )}
           />
         </div>
