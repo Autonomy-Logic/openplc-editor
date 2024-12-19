@@ -10,11 +10,22 @@ const checkIfStructureVariableExists = (variables: PLCStructureVariable[], name:
   return variables.some((variable) => variable.name === name)
 }
 const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
-  return variables.some((variable) => variable.name === name)
+  return variables.some((variable) => variable.name.toLowerCase() === name.toLowerCase())
 }
 const checkIfGlobalVariableExists = (variables: PLCGlobalVariable[], name: string) => {
   return variables.some((variable) => variable.name === name)
 }
+
+/**
+ * This is a validation to check if the value of the location is unique.
+ */
+const checkIfLocationExists = (variables: PLCVariable[], location: string) => {
+  return variables.some((variable) => variable.location === location)
+}
+
+/**
+ * This function extracts the number at the end of a string.
+ */
 const extractNumberAtEnd = (str: string): { number: number; string: string; length: number } => {
   const match = str.match(/(\d+)$/)
   const number = match ? parseInt(match[0], 10) : 0
@@ -86,13 +97,6 @@ const arrayValidation = ({ value }: { value: string }) => {
     }
   }
   return { ok: true }
-}
-
-/**
- * This is a validation to check if the value of the location is unique.
- */
-const checkIfLocationExists = (variables: PLCVariable[], location: string) => {
-  return variables.some((variable) => variable.location === location)
 }
 
 /**
@@ -175,7 +179,7 @@ const createVariableValidation = (
     // Check if there is a variable with the same name when removing the number at the end
     const variableNameWithoutNumber = variableName.substring(0, variableName.length - extractNumberAtEnd(variableName).length)
     const filteredVariables = variables.filter((variable: PLCVariable) =>
-      variable.name.includes(variableNameWithoutNumber),
+      variable.name.toLowerCase().includes(variableNameWithoutNumber.toLowerCase()),
     )
 
     // If there is a variable with the same name, sort the variables by the number at the end and get the biggest number
