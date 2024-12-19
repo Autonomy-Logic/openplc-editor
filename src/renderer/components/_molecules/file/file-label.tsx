@@ -14,8 +14,6 @@ export default function Label({ projectName, projectPath, lastModified, ...props
     return strNoProjectJson.length > maxLength ? '...' + strNoProjectJson.slice(-maxLength) : strNoProjectJson
   }
 
-  console.log('projectName', projectName, 'projectPath', projectPath, 'lastModified', lastModified)
-
   return (
     <p
       id={projectName}
