@@ -5,7 +5,6 @@ import { FlowType } from '@root/renderer/store/slices/flow'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { ComponentPropsWithoutRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 import { Modal, ModalContent } from '../../modal'
 
@@ -24,14 +23,12 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     flowActions: { addFlow, clearFlows },
     libraryActions: { addLibrary, clearUserLibraries },
   } = useOpenPLCStore()
-  const navigate = useNavigate()
 
   const onClose = () => {
     closeModal()
     clearUserLibraries()
     clearFlows()
     clearProjects()
-    navigate('/')
   }
   const handleCloseProject = async (operation: 'save' | 'not-saving') => {
     onClose()
