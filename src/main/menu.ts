@@ -1,5 +1,4 @@
 /* eslint-disable no-console */
-import { useOpenPLCStore } from '@root/renderer/store'
 import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
 import { i18n } from '../utils/i18n'
@@ -49,10 +48,7 @@ export default class MenuBuilder {
     return menu
   }
   handleCreateProject() {
-    const {
-      workspace: { editingState },
-    } = useOpenPLCStore()
-    this.mainWindow.webContents.send('project:create-accelerator', editingState) // Enviando o editingState para o main process
+    this.mainWindow.webContents.send('project:create-accelerator')
   }
 
   async handleOpenProject() {
