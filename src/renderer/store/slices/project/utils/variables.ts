@@ -104,21 +104,21 @@ const checkIfLocationExists = (variables: PLCVariable[], location: string) => {
 const variableLocationValidation = (variableLocation: string, variableType: string) => {
   switch (variableType.toUpperCase()) {
     case 'BOOL':
-      return /^%[QI]X\d\.\d$/.test(variableLocation)
+      return /^%[QI]X\d+\.\d$/.test(variableLocation)
     case 'INT':
     case 'UINT':
     case 'WORD':
-      return /^%[QIM]W\d$/.test(variableLocation)
+      return /^%[QIM]W\d+$/.test(variableLocation)
     case 'DINT':
     case 'UDINT':
     case 'REAL':
     case 'DWORD':
-      return /^%MD\d$/.test(variableLocation)
+      return /^%MD\d+$/.test(variableLocation)
     case 'LINT':
     case 'ULINT':
     case 'LREAL':
     case 'LWORD':
-      return /^%ML\d$/.test(variableLocation)
+      return /^%ML\d+$/.test(variableLocation)
     default:
       return false
   }
