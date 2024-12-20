@@ -38,6 +38,7 @@ const WorkspaceScreen = () => {
     tabsActions: { clearTabs },
     searchResults,
   } = useOpenPLCStore()
+
   useEffect(() => {
     const handleSaveProject = async () => {
       const projectData = PLCProjectSchema.safeParse(project)
@@ -93,7 +94,6 @@ const WorkspaceScreen = () => {
   ]
   const [graphList, setGraphList] = useState<string[]>([])
   const [isVariablesPanelCollapsed, setIsVariablesPanelCollapsed] = useState(false)
-
   const panelRef = useRef(null)
   const explorerPanelRef = useRef(null)
   const workspacePanelRef = useRef(null)
@@ -254,6 +254,7 @@ const WorkspaceScreen = () => {
                           />
 
                           <ResizablePanel
+                            // onDrop={editor.type === 'plc-textual' ? handleDrop : undefined}
                             defaultSize={75}
                             id='textualEditorPanel'
                             order={2}
