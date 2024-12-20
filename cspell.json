@@ -10,7 +10,8 @@
         "tailwindcss",
         "udint",
         "ulint",
-        "usint"
+        "usint",
+        "uuidv"
     ],
     "ignoreWords": [],
     "import": []
