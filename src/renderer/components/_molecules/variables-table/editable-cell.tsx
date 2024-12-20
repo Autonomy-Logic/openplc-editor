@@ -68,7 +68,7 @@ const EditableNameCell = ({
     setIsEditing(true)
   }
 
-  const formattedCellValue = searchQuery ? extractSearchQuery(cellValue, searchQuery) : cellValue
+  const formattedCellValue = searchQuery && cellValue ? extractSearchQuery(cellValue, searchQuery) : cellValue
 
   // If the initialValue is changed external, sync it up with our state
   useEffect(() => {

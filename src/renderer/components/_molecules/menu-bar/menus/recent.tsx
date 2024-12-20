@@ -160,7 +160,8 @@ export const RecentMenu = () => {
               )}
             >
               <RecentProjectIcon />
-              <span className='flex-1 overflow-hidden capitalize'>{project.path}</span>
+              <span className='flex-1 overflow-hidden'>{project.name}</span>
+              <span className='flex-1 overflow-hidden text-cp-xs'>{project.path}</span>
               <span className='text-cp-sm font-normal text-neutral-400'>{projectTimes[project.path]}</span>
             </MenuPrimitive.Item>
           ))}
