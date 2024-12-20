@@ -24,6 +24,7 @@ export type IProjectServiceResponse = {
 }
 
 interface IProjectHistoryEntry {
+  name: string
   path: string
   createdAt: string
   lastOpenedAt: string
@@ -36,6 +37,15 @@ class ProjectService {
     const pathToUserHistoryFolder = join(pathToUserDataFolder, 'History')
 
     return join(pathToUserHistoryFolder, 'projects.json')
+  }
+  async getProjectName(projectPath: string): Promise<string> {
+    try {
+      const projectFile = await promises.readFile(projectPath, 'utf-8')
+      return (JSON.parse(projectFile) as PLCProject).meta.name || 'Unknown project'
+    } catch {
+      console.error('Error reading project file', projectPath)
+      return 'Unknown project'
+    }
   }
   async readProjectHistory(projectsFilePath: string): Promise<IProjectHistoryEntry[]> {
     try {
@@ -51,14 +61,16 @@ class ProjectService {
   }
   private async updateProjectHistory(projectPath: string): Promise<void> {
     const projectsFilePath = this.getProjectsFilePath()
+    const projectName = await this.getProjectName(projectPath)
     const historyData = await this.readProjectHistory(projectsFilePath)
     const lastOpenedAt = new Date().toISOString()
 
     const existingProjectIndex = historyData.findIndex((proj) => proj.path === projectPath)
     if (existingProjectIndex > -1) {
       historyData[existingProjectIndex].lastOpenedAt = lastOpenedAt
+      historyData[existingProjectIndex].name = projectName
     } else {
-      historyData.push({ path: projectPath, createdAt: lastOpenedAt, lastOpenedAt })
+      historyData.push({ name: projectName, path: projectPath, createdAt: lastOpenedAt, lastOpenedAt })
     }
 
     historyData.sort((a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime())

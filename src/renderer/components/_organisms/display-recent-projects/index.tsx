@@ -157,7 +157,11 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
             className='overflow-hidden '
             key={project.path}
           >
-            <FileElement.Label projectName={project.path} lastModified={projectTimes[project.path]} />
+            <FileElement.Label
+              projectName={project.name}
+              projectPath={project.path}
+              lastModified={projectTimes[project.path]}
+            />
             <FileElement.Shape />
           </FileElement.Root>
         ))}

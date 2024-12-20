@@ -39,6 +39,7 @@ const WorkspaceScreen = () => {
     tabsActions: { clearTabs },
     searchResults,
   } = useOpenPLCStore()
+
   useEffect(() => {
     const handleSaveProject = async () => {
       const projectData = PLCProjectSchema.safeParse(project)
@@ -237,7 +238,7 @@ const WorkspaceScreen = () => {
                         <ResizablePanelGroup
                           id='editorContentPanelGroup'
                           direction='vertical'
-                          className='flex flex-1 flex-col'
+                          className='flex flex-1 flex-col gap-1'
                         >
                           <ResizablePanel
                             ref={panelRef}
@@ -262,6 +263,7 @@ const WorkspaceScreen = () => {
                           />
 
                           <ResizablePanel
+                            // onDrop={editor.type === 'plc-textual' ? handleDrop : undefined}
                             defaultSize={75}
                             id='textualEditorPanel'
                             order={2}

@@ -12,7 +12,7 @@ const workspaceStateSchema = z.object({
   workspace: z.object({
     editingState: z.enum(['save-request', 'saved', 'unsaved']),
     systemConfigs: systemConfigsSchema,
-    recents: z.array(z.object({ lastOpenedAt: z.string(), createdAt: z.string(), path: z.string() })),
+    recents: z.array(z.object({ lastOpenedAt: z.string(), createdAt: z.string(), path: z.string(), name: z.string() })),
     isCollapsed: z.boolean(),
     isModalOpen: z.array(z.object({ modalName: z.string(), modalState: z.boolean() })),
     discardChanges: z.boolean(),

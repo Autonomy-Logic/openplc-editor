@@ -6,11 +6,11 @@ import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
+import { HighlightedTextArea } from '../../highlighted-textarea'
 import { BlockNodeData, BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges, getVariableByName } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
-// import { z } from 'zod'
 
 export type VariableNode = Node<
   BasicNodeData & {
@@ -84,22 +84,10 @@ const VariableElement = ({ id, data }: VariableProps) => {
   } = useOpenPLCStore()
 
   const inputVariableRef = useRef<HTMLTextAreaElement>(null)
-  const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
-  const [inputVariableFocus, setInputVariableFocus] = useState<boolean>(true)
 
   const [variableValue, setVariableValue] = useState(data.variable.name)
   const [inputError, setInputError] = useState<boolean>(false)
   const [isAVariable, setIsAVariable] = useState<boolean>(false)
-
-  useEffect(() => {
-    if (inputVariableRef.current) {
-      inputVariableRef.current.style.height = 'auto'
-      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < DEFAULT_VARIABLE_HEIGHT ? inputVariableRef.current.scrollHeight : DEFAULT_VARIABLE_HEIGHT}px`
-      if (scrollableIndicatorRef.current)
-        scrollableIndicatorRef.current.style.display =
-          inputVariableRef.current.scrollHeight > DEFAULT_VARIABLE_HEIGHT ? 'block' : 'none'
-    }
-  }, [variableValue])
 
   /**
    * useEffect to focus the variable input when the block is selected
@@ -253,47 +241,32 @@ const VariableElement = ({ id, data }: VariableProps) => {
 
   return (
     <>
-      <div
-        className={cn('relative flex w-fit items-center')}
-        style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}
-      >
-        <textarea
-          value={variableValue}
-          onChange={(e) => {
-            setVariableValue(e.target.value)
-          }}
-          style={{
-            scrollbarGutter: 'stable',
-          }}
-          placeholder={`(*${data.block.variableType.type.value}*)`}
-          className={cn(
-            'h-full w-full resize-none bg-transparent text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden',
-            {
-              'text-yellow-500': !isAVariable,
-              'text-red-500': inputError,
-              'pl-2 text-left': data.variant === 'output',
-              'pr-2 text-right': data.variant === 'input',
-            },
-          )}
-          onFocus={() => setInputVariableFocus(true)}
-          onBlur={() => {
-            if (inputVariableRef.current) inputVariableRef.current.scrollTop = 0
-            inputVariableFocus && handleSubmitVariableValue()
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-          rows={1}
-          ref={inputVariableRef}
-          spellCheck={false}
-        />
-        <div
-          className={cn(`pointer-events-none absolute text-xs`, {
-            '-left-2': data.variant === 'input',
-            '-right-2': data.variant === 'output',
+      <div style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}>
+        <HighlightedTextArea
+          textAreaClassName={cn('text-center text-xs leading-3', {
+            'text-yellow-500': !isAVariable,
+            'text-red-500': inputError,
+            'text-left': data.variant === 'output',
+            'text-right': data.variant === 'input',
           })}
-          ref={scrollableIndicatorRef}
-        >
-          ↕
-        </div>
+          highlightClassName={cn('text-center text-xs leading-3', {
+            'text-left': data.variant === 'output',
+            'text-right': data.variant === 'input',
+          })}
+          scrollableIndicatorClassName={cn({
+            '-right-3': data.variant === 'output',
+            '-left-3': data.variant === 'input',
+          })}
+          placeholder={`(*${data.block.variableType.type.value}*)`}
+          textAreaValue={variableValue}
+          setTextAreaValue={setVariableValue}
+          handleSubmit={handleSubmitVariableValue}
+          inputHeight={{
+            height: DEFAULT_VARIABLE_HEIGHT,
+            scrollLimiter: DEFAULT_VARIABLE_HEIGHT,
+          }}
+          ref={inputVariableRef}
+        />
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
