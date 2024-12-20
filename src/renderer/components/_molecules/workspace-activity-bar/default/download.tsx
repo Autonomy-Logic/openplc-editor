@@ -13,6 +13,9 @@ const DownloadButton = () => {
   const {
     project,
     consoleActions: { addLog },
+    workspace: {
+      systemConfigs: { OS },
+    },
   } = useOpenPLCStore()
 
   const buildProgram = () =>
@@ -24,7 +27,7 @@ const DownloadButton = () => {
       lines.forEach((line, index) => {
         addLog({ id: uuidv4(), type: stdType, message: line })
         if (index === lines.length - 2) {
-          const buildPath = project.meta.path.replace('project.json', 'build')
+          const buildPath = `${project.meta.path.replace('project.json', 'build')}${OS === 'win32' ? '\\' : '/'}program.st`
           lines[index].includes('successfully') &&
             addLog({ id: uuidv4(), type: 'info', message: `OpenPLC Runtime program generated at ${buildPath}` })
         }
