@@ -159,9 +159,10 @@ export const RecentMenu = () => {
                 'flex items-center justify-normal gap-2 !overflow-hidden text-xs font-medium text-neutral-900 dark:text-neutral-50',
               )}
             >
-              <RecentProjectIcon />
-              <span className='flex-1 overflow-hidden capitalize'>{project.path}</span>
-              <span className='text-cp-sm font-normal text-neutral-400'>{projectTimes[project.path]}</span>
+              <RecentProjectIcon className='w-4 h-4'/>
+              <span className='flex-1 overflow-hidden text-xs'>{project.name}</span>
+              <span className='flex-1 overflow-hidden text-cp-xs'>{project.path}</span>
+              <span className='text-cp-xs font-normal text-neutral-400'>{projectTimes[project.path]}</span>
             </MenuPrimitive.Item>
           ))}
         </MenuPrimitive.Content>

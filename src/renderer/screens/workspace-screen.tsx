@@ -229,7 +229,7 @@ const WorkspaceScreen = () => {
                         <ResizablePanelGroup
                           id='editorContentPanelGroup'
                           direction='vertical'
-                          className='flex flex-1 flex-col'
+                          className='flex flex-1 flex-col gap-1'
                         >
                           <ResizablePanel
                             ref={panelRef}

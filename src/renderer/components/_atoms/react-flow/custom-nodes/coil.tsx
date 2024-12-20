@@ -7,13 +7,13 @@ import {
   SetCoil,
 } from '@root/renderer/assets/icons/flow/Coil'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { cn, generateNumericUUID } from '@root/utils'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
-import type { ReactNode, UIEvent } from 'react'
+import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 
+import { HighlightedTextArea } from '../../highlighted-textarea'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
@@ -116,7 +116,6 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     },
     flows,
     flowActions: { updateNode },
-    searchQuery,
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
@@ -125,37 +124,12 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
 
   const inputWrapperRef = useRef<HTMLDivElement>(null)
   const inputVariableRef = useRef<HTMLTextAreaElement>(null)
-  const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
-  const [inputFocus, setInputFocus] = useState<boolean>(true)
-
-  const highlightDivRef = useRef<HTMLDivElement>(null)
-  const [scrollValue, setScrollValue] = useState<number>(0)
-  const formattedCoilVariableValue = searchQuery
-    ? extractSearchQuery(coilVariableValue, searchQuery)
-    : coilVariableValue
 
   useEffect(() => {
-    if (inputVariableRef.current && highlightDivRef.current && inputWrapperRef.current) {
-      // height
-      inputVariableRef.current.style.height = 'auto'
-      inputVariableRef.current.style.height = `${inputVariableRef.current.scrollHeight < 32 ? inputVariableRef.current.scrollHeight : 24}px`
-      highlightDivRef.current.style.height = 'auto'
-      highlightDivRef.current.style.height = inputVariableRef.current.style.height
-      // top
-      highlightDivRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-30px' : '-24px'
-      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-30px' : '-24px'
-      // scrollable indicator
-      if (scrollableIndicatorRef.current) {
-        scrollableIndicatorRef.current.style.display = inputVariableRef.current.scrollHeight > 32 ? 'block' : 'none'
-      }
+    if (inputVariableRef.current && inputWrapperRef.current) {
+      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-20px' : '-16px'
     }
   }, [coilVariableValue])
-
-  useEffect(() => {
-    if (highlightDivRef.current) {
-      highlightDivRef.current.scrollTop = scrollValue
-    }
-  }, [scrollValue])
 
   /**
    * useEffect to focus the variable input when the block is selected
@@ -181,7 +155,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     })
 
     const variable = variables.selected
-    if (!variable && !inputFocus) {
+    if (!variable && inputVariableRef.current && !inputVariableRef.current.focus) {
       setWrongVariable(true)
       return
     }
@@ -209,8 +183,6 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
    * Handle with the variable input onBlur event
    */
   const handleSubmitCoilVariable = () => {
-    setInputFocus(false)
-
     const { variables, rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
       variableName: coilVariableValue,
@@ -250,10 +222,6 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
     setWrongVariable(false)
   }
 
-  const onScrollHandler = (e: UIEvent<HTMLTextAreaElement>) => {
-    setScrollValue(e.currentTarget.scrollTop)
-  }
-
   return (
     <div
       className={cn({
@@ -269,43 +237,21 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
         )}
         style={{ width: DEFAULT_COIL_BLOCK_WIDTH, height: DEFAULT_COIL_BLOCK_HEIGHT }}
       >
-        <div
-          className='-z-1 pointer-events-none absolute -left-[24px] -top-[24px] w-[72px] overflow-y-scroll [&::-webkit-scrollbar]:hidden'
-          ref={highlightDivRef}
-        >
-          <div
-            className='h-full w-full whitespace-pre-wrap break-words text-center text-xs leading-3 text-transparent'
-            dangerouslySetInnerHTML={{ __html: formattedCoilVariableValue }}
-          />
-        </div>
-        <div className='absolute -left-[24px] -top-[24px] w-[72px]' ref={inputWrapperRef}>
-          <textarea
-            value={coilVariableValue}
-            onChange={(e) => setCoilVariableValue(e.target.value)}
-            placeholder='???'
-            className='w-full resize-none bg-transparent text-center text-xs leading-3 outline-none [&::-webkit-scrollbar]:hidden'
-            onFocus={() => setInputFocus(true)}
-            onBlur={() => {
-              if (inputVariableRef.current && highlightDivRef.current) {
-                inputVariableRef.current.scrollTop = 0
-                highlightDivRef.current.scrollTop = 0
-              }
-              inputFocus && handleSubmitCoilVariable()
-            }}
-            onScroll={(e) => onScrollHandler(e)}
-            onKeyDown={(e) => e.key === 'Enter' && inputVariableRef.current?.blur()}
-            ref={inputVariableRef}
-            rows={1}
-            spellCheck={false}
-          />
-        </div>
-        <div
-          className={cn('pointer-events-none absolute -right-[38px] -top-[27px] text-cp-sm')}
-          ref={scrollableIndicatorRef}
-        >
-          ↕
-        </div>
         {coil.svg(wrongVariable)}
+        <div className='absolute left-1/2 w-[72px] -translate-x-1/2' ref={inputWrapperRef}>
+          <HighlightedTextArea
+            textAreaValue={coilVariableValue}
+            setTextAreaValue={setCoilVariableValue}
+            handleSubmit={handleSubmitCoilVariable}
+            inputHeight={{
+              height: 24,
+              scrollLimiter: 32,
+            }}
+            ref={inputVariableRef}
+            textAreaClassName='text-center text-xs leading-3'
+            highlightClassName='text-center text-xs leading-3'
+          />
+        </div>
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

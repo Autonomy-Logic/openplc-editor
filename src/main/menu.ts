@@ -608,9 +608,10 @@ handleFindInProject(){
           const projectPath = projectEntry.path.startsWith(homeDir)
             ? projectEntry.path.replace(homeDir, '~')
             : projectEntry.path
+          const projectName = projectEntry.name
 
           return {
-            label: projectPath,
+            label: `${projectName} (${projectPath})`,
             click: () => {
               this.handleOpenProjectByPath(projectEntry.path)
               console.log('Opened project from path:', projectEntry.path)

@@ -43,6 +43,10 @@ const VariablesEditor = () => {
     description: '',
   })
 
+  useEffect(() => {
+    console.log('tableData', tableData)
+  }, [tableData])
+
   /**
    * Update the table data and the editor's variables when the editor or the pous change
    */
@@ -268,7 +272,10 @@ const VariablesEditor = () => {
               </TableActionButton>
               <TableActionButton
                 aria-label='Remove table row button'
-                disabled={parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED}
+                disabled={
+                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
+                  tableData[parseInt(editorVariables.selectedRow)].type.definition === 'derived'
+                }
                 onClick={handleRemoveVariable}
               >
                 <MinusIcon />

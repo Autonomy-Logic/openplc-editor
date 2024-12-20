@@ -10,11 +10,32 @@ const checkIfStructureVariableExists = (variables: PLCStructureVariable[], name:
   return variables.some((variable) => variable.name === name)
 }
 const checkIfVariableExists = (variables: PLCVariable[], name: string) => {
-  return variables.some((variable) => variable.name === name)
+  return variables.some((variable) => variable.name.toLowerCase() === name.toLowerCase())
 }
 const checkIfGlobalVariableExists = (variables: PLCGlobalVariable[], name: string) => {
   return variables.some((variable) => variable.name === name)
 }
+
+/**
+ * This is a validation to check if the value of the location is unique.
+ */
+const checkIfLocationExists = (variables: PLCVariable[], location: string) => {
+  return variables.some((variable) => variable.location === location)
+}
+
+/**
+ * This function extracts the number at the end of a string.
+ */
+const extractNumberAtEnd = (str: string): { number: number; string: string; length: number } => {
+  const match = str.match(/(\d+)$/)
+  const number = match ? parseInt(match[0], 10) : 0
+  return {
+    number,
+    string: match ? match[0] : '',
+    length: match ? match[0].length : 0,
+  }
+}
+
 /**
  * This is a validation to check if the variable name is correct.
  * CamelCase, PascalCase or SnakeCase and can not be empty.
@@ -79,13 +100,6 @@ const arrayValidation = ({ value }: { value: string }) => {
 }
 
 /**
- * This is a validation to check if the value of the location is unique.
- */
-const checkIfLocationExists = (variables: PLCVariable[], location: string) => {
-  return variables.some((variable) => variable.location === location)
-}
-
-/**
  * This is a validation to check if the value of the location is valid.
  *
  * The validation have to obey this rules:
@@ -103,22 +117,25 @@ const checkIfLocationExists = (variables: PLCVariable[], location: string) => {
  */
 const variableLocationValidation = (variableLocation: string, variableType: string) => {
   switch (variableType.toUpperCase()) {
-    case 'BOOL':
-      return /^%[QI]X\d\.\d$/.test(variableLocation)
+    case 'BOOL': {
+      const boolRegex = /^%[QI]X\d+\.\d$/
+      const boolMatch = boolRegex.test(variableLocation) && variableLocation.split('.')[1] <= '7'
+      return boolMatch
+    }
     case 'INT':
     case 'UINT':
     case 'WORD':
-      return /^%[QIM]W\d$/.test(variableLocation)
+      return /^%[QIM]W\d+$/.test(variableLocation)
     case 'DINT':
     case 'UDINT':
     case 'REAL':
     case 'DWORD':
-      return /^%MD\d$/.test(variableLocation)
+      return /^%MD\d+$/.test(variableLocation)
     case 'LINT':
     case 'ULINT':
     case 'LREAL':
     case 'LWORD':
-      return /^%ML\d$/.test(variableLocation)
+      return /^%ML\d+$/.test(variableLocation)
     default:
       return false
   }
@@ -158,33 +175,40 @@ const createVariableValidation = (
   const { name: variableName, location: variableLocation } = variable
   const response = { name: variableName, location: variableLocation }
 
-  console.log('variableName', variableName, '  variableLocation', variableLocation)
-
   if (checkIfVariableExists(variables, variableName)) {
-    const regex = /_\d+$/
+    // Check if there is a variable with the same name when removing the number at the end
+    const variableNameWithoutNumber = variableName.substring(0, variableName.length - extractNumberAtEnd(variableName).length)
     const filteredVariables = variables.filter((variable: PLCVariable) =>
-      variable.name.includes(variableName.replace(regex, '')),
+      variable.name.toLowerCase().includes(variableNameWithoutNumber.toLowerCase()),
     )
+
+    // If there is a variable with the same name, sort the variables by the number at the end and get the biggest number
     const sortedVariables = filteredVariables.sort((a, b) => {
-      const matchA = a.name.match(regex)
-      const matchB = b.name.match(regex)
-      if (matchA && matchB) {
-        return parseInt(matchA[0].slice(1)) - parseInt(matchB[0].slice(1))
+      const numberA = extractNumberAtEnd(a.name).number
+      const numberB = extractNumberAtEnd(b.name).number
+      if (numberA && numberB) {
+        return numberA - numberB
       }
       return 0
     })
-    const biggestVariable = sortedVariables[sortedVariables.length - 1].name.match(regex)
-    let number = biggestVariable ? parseInt(biggestVariable[0].slice(1)) : 0
+    const biggestVariable =
+      sortedVariables.length > 0 ? extractNumberAtEnd(sortedVariables[sortedVariables.length - 1].name) : { number: 0 }
+
+    // If there is a number at the end of the variable name, increment the number by 1
+    let number = biggestVariable.number
     for (let i = sortedVariables.length - 1; i >= 1; i--) {
-      const previousVariable = sortedVariables[i].name.match(regex)
-      const previousNumber = previousVariable ? parseInt(previousVariable[0].slice(1)) : 0
-      const currentVariable = sortedVariables[i - 1].name.match(regex)
-      const currentNumber = currentVariable ? parseInt(currentVariable[0].slice(1)) : 0
+      const previousVariable = extractNumberAtEnd(sortedVariables[i].name)
+      const previousNumber = previousVariable.number
+
+      const currentVariable = extractNumberAtEnd(sortedVariables[i - 1].name)
+      const currentNumber = currentVariable.number
+
       if (currentNumber !== previousNumber - 1) {
         number = currentNumber
       }
     }
-    response.name = `${variableName.replace(regex, '')}_${number + 1}`
+
+    response.name = `${variableNameWithoutNumber}${number + 1}`
   }
 
   if (checkIfLocationExists(variables, variableLocation)) {

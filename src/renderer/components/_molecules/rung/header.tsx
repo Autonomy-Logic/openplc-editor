@@ -8,6 +8,7 @@ import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
 
+import { HighlightedTextArea } from '../../_atoms'
 import { BasicNodeData } from '../../_atoms/react-flow/custom-nodes/utils/types'
 
 type RungHeaderProps = {
@@ -32,18 +33,23 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
   const editorName = editor.meta.name
   const pou = pous.find((pou) => pou.data.name === editorName)
 
+  const containerRef = useRef<HTMLDivElement>(null)
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
   const [textAreaValue, setTextAreaValue] = useState<string>(rung.comment ?? '')
-  const onTextAreaChange = (value: string) => {
-    setTextAreaValue(value)
-  }
 
   useEffect(() => {
-    if (textAreaRef.current) {
-      textAreaRef.current.style.height = 'auto'
-      textAreaRef.current.style.height = `${textAreaRef.current.scrollHeight}px`
+    if (containerRef.current && textAreaRef.current) {
+      containerRef.current.style.height =
+        28 > textAreaRef.current.scrollHeight ? '28px' : `${textAreaRef.current.scrollHeight}px`
     }
   }, [textAreaValue])
+
+  // useEffect(() => {
+  //   if (textAreaRef.current) {
+  //     textAreaRef.current.style.height = 'auto'
+  //     textAreaRef.current.style.height = `${textAreaRef.current.scrollHeight}px`
+  //   }
+  // }, [textAreaValue])
 
   useEffect(() => {
     setTextAreaValue(rung.comment ?? '')
@@ -103,19 +109,29 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
         className,
       )}
     >
-      <div {...(draggableHandleProps ?? {})}>
+      <div {...(draggableHandleProps ?? {})} className='flex items-center'>
         <DragHandleIcon className='h-7 w-7 fill-[#0464FB] dark:fill-brand-light' />
       </div>
-      <div className='flex w-full items-center rounded-lg border border-transparent px-1'>
-        <textarea
+      <div className='flex w-full items-center rounded-lg border border-transparent px-1' ref={containerRef}>
+        {/* <textarea
           aria-label='Rung name and description'
           className='w-full resize-none overflow-hidden bg-transparent text-xs outline-none'
           placeholder='Start typing to add a comment to this rung'
           ref={textAreaRef}
           rows={1}
-          onChange={(e) => onTextAreaChange(e.currentTarget.value)}
+          onChange={(e) => setTextAreaValue(e.target.value)}
           value={textAreaValue}
           onBlur={() => addComment({ editorName, rungId: rung.id, comment: textAreaValue })}
+        /> */}
+        <HighlightedTextArea
+          placeholder='Start typing to add a comment to this rung'
+          textAreaClassName='text-xs'
+          highlightClassName='text-xs'
+          ref={textAreaRef}
+          textAreaValue={textAreaValue}
+          setTextAreaValue={setTextAreaValue}
+          handleSubmit={() => addComment({ editorName, rungId: rung.id, comment: textAreaValue })}
+          submitWith={{ enter: false }}
         />
       </div>
       <div className='flex flex-row gap-1'>

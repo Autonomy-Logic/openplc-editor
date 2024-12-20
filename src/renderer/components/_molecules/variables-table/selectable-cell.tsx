@@ -11,14 +11,14 @@ import { useEffect, useState } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 import { ArrayModal } from './elements/array-modal'
 
-type ISelectableCellProps = CellContext<PLCVariable, unknown> & { editable?: boolean }
+type ISelectableCellProps = CellContext<PLCVariable, unknown> & { selected?: boolean }
 
 const SelectableTypeCell = ({
   getValue,
   row: { index },
   column: { id },
   table,
-  editable = true,
+  selected = false,
 }: ISelectableCellProps) => {
   const {
     project: {
@@ -59,8 +59,8 @@ const SelectableTypeCell = ({
       <PrimitiveDropdown.Trigger asChild disabled={definition === 'derived'}>
         <div
           className={cn('flex h-full w-full cursor-pointer justify-center p-2 outline-none', {
-            'pointer-events-none': !editable,
-            'cursor-default': !editable || definition === 'derived',
+            'pointer-events-none': !selected,
+            'cursor-default': !selected || definition === 'derived',
           })}
         >
           <span className='line-clamp-1 font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
@@ -131,7 +131,7 @@ const SelectableClassCell = ({
   row: { index },
   column: { id },
   table,
-  editable = true,
+  selected = true,
 }: ISelectableCellProps) => {
   const initialValue = getValue()
   // We need to keep and update the state of the cell normally
@@ -155,7 +155,7 @@ const SelectableClassCell = ({
         placeholder={cellValue as string}
         className={cn(
           'flex h-full w-full justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
-          { 'pointer-events-none': !editable },
+          { 'pointer-events-none': !selected },
         )}
       />
       <SelectContent
