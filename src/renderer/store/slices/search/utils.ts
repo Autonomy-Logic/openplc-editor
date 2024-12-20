@@ -11,11 +11,9 @@ const extractSearchQuery = (body: string, searchQuery: string): string => {
   if (match) {
     const highlightedHTML = body.replace(
       regex,
-      (matched) =>
-        `<span class='bg-brand-light dark:bg-brand-medium-dark border-0 rounded-sm'>${matched}</span>`,
+      (matched) => `<span class='bg-brand-light dark:bg-brand-medium-dark border-0 rounded-sm'>${matched}</span>`,
     )
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     return DOMPurify.sanitize(highlightedHTML)
   }
 

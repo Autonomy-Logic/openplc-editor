@@ -72,7 +72,11 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
               }
             })
           }
-          data.content.data.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
+          data.content.data.pous.forEach((pou) => {
+            if (pou.type !== 'program') {
+              addLibrary(pou.data.name, pou.type)
+            }
+          })
           toast({
             title: 'Project opened!',
             description: 'Your project was opened and loaded successfully.',
@@ -112,7 +116,6 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     })
 
     if (success) {
-      _.debounce(() => setEditingState('saved'), 1000)()
       setEditingState('saved')
       toast({
         title: 'Changes saved!',
@@ -120,7 +123,6 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
         variant: 'default',
       })
     } else {
-      _.debounce(() => setEditingState('unsaved'), 1000)()
       toast({
         title: 'Error in the save request!',
         description: reason?.description,

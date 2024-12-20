@@ -84,10 +84,17 @@ export default class MenuBuilder {
   handleSwitchPerspective() {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
   }
-  handleOpenExternalLink(link: string) {
-    void shell.openExternal(link)
+  async handleOpenExternalLink(link: string) {
+    try {
+      await shell.openExternal(link)
+    } catch (error) {
+      console.error('Failed to open external link:', error)
+      this.mainWindow.webContents.send('error:external-link', {
+        message: 'Failed to open external link',
+        error,
+      })
+    }
   }
-
   handleOpenAboutModal() {
     this.mainWindow.webContents.send('about:open-accelerator')
   }
@@ -520,7 +527,7 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:edit.submenu.deletePou'),
-            accelerator:"Ctrl+Shift+delete",
+            accelerator: 'Ctrl+Shift+delete',
             click: () => this.handleDeletePou(),
           },
         ],

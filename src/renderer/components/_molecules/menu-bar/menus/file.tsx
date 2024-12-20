@@ -27,19 +27,22 @@ export const FileMenu = () => {
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
-  const handleCreateProject = () => {
+  const handleUnsavedChanges = (action: 'create-project' | 'open-project') => {
     if (editingState === 'unsaved') {
-      openModal('save-changes-project', 'create-project')
-    } else {
-      openModal('create-project', null)
+      openModal('save-changes-project', action)
+      return true
     }
+    return false
+  }
+
+  const handleCreateProject = () => {
+    if (handleUnsavedChanges('create-project')) return
+    openModal('create-project', null)
   }
 
   const handleOpenProject = async () => {
-    if (editingState === 'unsaved') {
-      openModal('save-changes-project', 'open-project')
-      return
-    }
+    if (handleUnsavedChanges('open-project')) return
+
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
       clearEditor()

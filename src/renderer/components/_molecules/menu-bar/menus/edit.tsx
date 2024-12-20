@@ -19,6 +19,9 @@ export const EditMenu = () => {
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
   useEffect(() => {
     setSelectedTab(editor.meta.name)
+    return () => {
+      setSelectedTab('')
+    }
   }, [editor])
 
   const findInProject = () => {

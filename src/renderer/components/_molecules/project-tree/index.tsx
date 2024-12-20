@@ -255,10 +255,15 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
       <button
         aria-label='delete element button'
         type='button'
-        className=' mr-1 flex h-5 w-5 items-center justify-center  '
-        onClick={handleDeleteTab}
+        className='mr-2 flex h-5 w-5 items-center'
+        onClick={(e) => {
+          e.stopPropagation()
+          handleDeleteTab()
+        }}
+        aria-haspopup='dialog'
+        aria-expanded='false'
       >
-        <TrashCanIcon className=' h-full w-full group-hover:stroke-red-500 ' />
+        <TrashCanIcon className='h-4 w-4 group-hover:stroke-red-500' />
       </button>
     </li>
   )
