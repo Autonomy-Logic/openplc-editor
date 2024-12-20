@@ -62,7 +62,7 @@ export const MainContent = () => {
                       id='textualEditorPanel'
                       order={2}
                       defaultSize={75}
-                      className='mt-6 flex-1 flex-grow rounded-md'
+                      className='mt-6 flex-1 bg-red-500 flex-grow rounded-md'
                     >
                       <MonacoEditor />
                     </ResizablePanel>

@@ -1,9 +1,10 @@
 {
-  "appId": "autonomy-logic.openplc-editor",
+  "appId": "com.autonomylogic.openplceditor",
   "productName": "OpenPLC Editor",
   "asar": true,
   "asarUnpack": "**\\*.{node,dll}",
   "files": ["dist", "node_modules", "package.json"],
+  "afterSign": "scripts/notarize.js",
   "directories": {
     "app": "release/app",
     "buildResources": "assets",

@@ -148,6 +148,7 @@ const projectActionsSchema = z.object({
     .args(z.object({ name: z.string(), content: bodySchema }))
     .returns(z.void()),
   deletePou: z.function().args(z.string()).returns(z.void()),
+  updatePouDocumentation: z.function().args(z.string(), z.string()).returns(z.void()),
 
   /**
    * Variables Table Actions

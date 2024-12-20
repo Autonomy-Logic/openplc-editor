@@ -1,6 +1,6 @@
-import notarize from '@electron/notarize'
 
-import build from '../package.json'
+/* eslint-disable */
+const notarize = require('@electron/notarize')
 
 exports.default = async function notarizeMacos(context) {
   const { electronPlatformName, appOutDir } = context
@@ -8,22 +8,19 @@ exports.default = async function notarizeMacos(context) {
     return
   }
 
+  // Must set process.env.CI to true for notarization to work
   if (process.env.CI !== 'true') {
     console.warn('Skipping notarizing step. Packaging is not running in CI')
     return
   }
 
-  if (!('APPLE_ID' in process.env && 'APPLE_APP_SPECIFIC_PASSWORD' in process.env)) {
-    console.warn('Skipping notarizing step. APPLE_ID and APPLE_APP_SPECIFIC_PASSWORD env variables must be set')
-    return
-  }
-
   const appName = context.packager.appInfo.productFilename
 
-  await notarize({
-    appBundleId: build.appId,
+  await notarize.notarize({
+    appBundleId: '66HTP4XT8H.com.autonomylogic.openplceditor',
     appPath: `${appOutDir}/${appName}.app`,
-    appleId: process.env.APPLE_ID,
-    appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
+    teamId: '66HTP4XT8H',
+    appleId: 'thiago.alves@autonomylogic.com',
+    appleIdPassword: 'INSERT-APP-SPECIFIC-PASSWORD-HERE',
   })
 }

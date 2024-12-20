@@ -136,6 +136,17 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       )
     },
 
+    updatePouDocumentation: (pouName, documentation): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const draft = project.data.pous.find((pou) => {
+            return pou.data.name === pouName
+          })
+          if (draft) draft.data.documentation = documentation
+        }),
+      )
+    },
+
     /**
      * Variables Table Actions
      */
