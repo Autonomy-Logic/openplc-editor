@@ -436,7 +436,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
       return response
     },
-
+    deleteDatatype: (dataTypeName) => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          project.data.dataTypes = project.data.dataTypes.filter((datatype) => datatype.name !== dataTypeName)
+        }),
+      )
+    },
     // TODO: Review requirements.
     /**
      * Function to update a unique data type.

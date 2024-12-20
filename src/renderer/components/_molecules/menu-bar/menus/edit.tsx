@@ -6,7 +6,7 @@ import _ from 'lodash'
 import { useEffect } from 'react'
 
 import { MenuClasses } from '../constants'
-import { ConfirmDeletePousModal } from '../modals/delete-confirmation-modal'
+import { ConfirmDeleteElementModal } from '../modals/delete-confirmation-modal'
 
 export const EditMenu = () => {
   const {
@@ -79,14 +79,14 @@ export const EditMenu = () => {
             <span>{i18n.t('menu:edit.submenu.selectAll')}</span>
             <span className={ACCELERATOR}>{'Ctrl + A'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} onClick={() => openModal('confirm-delete-POUs', null)}>
+          <MenuPrimitive.Item className={ITEM} onClick={() => openModal('confirm-delete-element', null)}>
             <span>{i18n.t('menu:edit.submenu.deletePou')}</span>
             <span className={ACCELERATOR}>{''}</span>
           </MenuPrimitive.Item>
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>
-      {modals?.['confirm-delete-POUs']?.open === true && (
-        <ConfirmDeletePousModal isOpen={modals['confirm-delete-POUs'].open} />
+      {modals?.['confirm-delete-element']?.open === true && (
+        <ConfirmDeleteElementModal isOpen={modals['confirm-delete-element'].open} />
       )}
     </MenuPrimitive.Menu>
   )

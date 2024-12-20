@@ -15,6 +15,7 @@ import {
   SFCIcon,
   STIcon,
   StructureIcon,
+  TrashCanIcon,
 } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
@@ -27,6 +28,7 @@ type IProjectTreeRootProps = ComponentPropsWithoutRef<'ul'> & {
 const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => {
   const [isOpen, setIsOpen] = useState(true)
   const handleVisibility = useCallback(() => setIsOpen(!isOpen), [isOpen])
+
   return (
     <div className='select-none'>
       <ul className='list-none p-0' {...res}>
@@ -151,6 +153,7 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
       data: { dataTypes },
     },
   } = useOpenPLCStore()
+
   const [branchIsOpen, setBranchIsOpen] = useState<boolean>(false)
   const { BranchIcon, label } = NestedBranchSources[nestedBranchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
@@ -216,11 +219,16 @@ const LeafSources = {
   res: { LeafIcon: ResourceIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => {
+  //aqui
   const {
     editor: {
       meta: { name },
     },
+    modalActions: { openModal },
   } = useOpenPLCStore()
+  const handleDeleteTab = () => {
+    openModal('confirm-delete-element', null)
+  }
   const [leafIsSelected, setLeafIsSelected] = useState<boolean>(false)
   const { LeafIcon } = LeafSources[leafLang]
 
@@ -229,7 +237,7 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
   return (
     <li
       className={cn(
-        ' flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
+        ' group flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
 
         name === label && 'bg-slate-50 dark:bg-neutral-900',
       )}
@@ -244,6 +252,14 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
         )}
         dangerouslySetInnerHTML={{ __html: label || '' }}
       />
+      <button
+        aria-label='delete element button'
+        type='button'
+        className=' mr-1 flex h-5 w-5 items-center justify-center  '
+        onClick={handleDeleteTab}
+      >
+        <TrashCanIcon className=' h-full w-full group-hover:stroke-red-500 ' />
+      </button>
     </li>
   )
 }
