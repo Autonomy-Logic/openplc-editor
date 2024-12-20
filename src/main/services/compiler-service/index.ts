@@ -74,8 +74,8 @@ const CompilerService = {
 
     const developmentCompilerPath = join(workingDirectory, 'resources', 'st-compiler', 'xml2st.py')
     // Construct the path for the st compiler script based on the current environment
-    const windowsOrLinuxCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.exe') // In Fedora the generated compiler doesn't have an explicit extension and it cause some bugs
-    const darwinCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.py')
+    const windowsCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.exe') // In Fedora the generated compiler doesn't have an explicit extension and it cause some bugs
+    const darwinOrLinuxCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st')
 
     // Remove the project.json file from the path to the xml file.
     // This is necessary because on windows the path is handled differently from unix systems
@@ -96,11 +96,11 @@ const CompilerService = {
       }
     } else {
       if (isWindows) {
-        execCompilerScript = spawn(windowsOrLinuxCompilerPath, [pathToXMLFile])
+        execCompilerScript = spawn(windowsCompilerPath, [pathToXMLFile])
       } else if (isMac) {
-        execCompilerScript = spawn(darwinCompilerPath, [pathToXMLFile])
+        execCompilerScript = spawn(darwinOrLinuxCompilerPath, [pathToXMLFile])
       } else if (isLinux) {
-        execCompilerScript = spawn(windowsOrLinuxCompilerPath, [pathToXMLFile])
+        execCompilerScript = spawn(darwinOrLinuxCompilerPath, [pathToXMLFile])
       }
     }
 
