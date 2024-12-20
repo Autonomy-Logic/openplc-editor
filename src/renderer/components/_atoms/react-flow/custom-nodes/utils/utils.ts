@@ -1,7 +1,11 @@
 import type { EditorModel, FlowType } from '@root/renderer/store/slices'
+import { baseTypes } from '@root/shared/data'
+import { genericTypeSchema } from '@root/types/PLC'
 import type { PLCPou } from '@root/types/PLC/open-plc'
+import { PLCBasetypes } from '@root/types/PLC/units/base-types'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
 
+import { BlockVariant } from '../block'
 import { BasicNodeData } from './types'
 
 export const getPouVariablesRungNodeAndEdges = (
@@ -58,3 +62,45 @@ export const getPouVariablesRungNodeAndEdges = (
 
 export const getVariableByName = (variables: PLCVariable[], name: string): PLCVariable | undefined =>
   variables.find((variable) => variable.name === name && variable.type.definition !== 'derived')
+
+export const validateVariableType = (
+  selectedType: string,
+  expectedType: BlockVariant['variables'][0],
+): { isValid: boolean; error?: string } => {
+  const upperSelectedType = selectedType.toUpperCase()
+  const upperExpectedType = expectedType.type.value.toUpperCase()
+
+  if (upperExpectedType === 'ANY') {
+    const isValidBaseType = baseTypes.includes(upperSelectedType as PLCBasetypes)
+    return {
+      isValid: isValidBaseType,
+      error: isValidBaseType ? undefined : `Expected one of: ${baseTypes.join(', ')}`,
+    }
+  }
+
+  // Handle generic types
+  if (upperExpectedType.includes('ANY')) {
+    const validTypes = Object.values(
+      genericTypeSchema.shape[upperExpectedType as keyof typeof genericTypeSchema.shape].options,
+    )
+    return {
+      isValid: validTypes.includes(upperSelectedType),
+      error: validTypes.includes(upperSelectedType) ? undefined : `Expected one of: ${validTypes.join(', ')}`,
+    }
+  }
+
+  // Handle specific types
+  return {
+    isValid: upperSelectedType === upperExpectedType,
+    error:
+      upperSelectedType === upperExpectedType ? undefined : `Expected: ${upperExpectedType}, Got: ${upperSelectedType}`,
+  }
+}
+
+export const getVariableRestrictionType = (variableType: string) => {
+  if (variableType.includes('ANY_')) {
+    return Object.values(genericTypeSchema.shape[variableType as keyof typeof genericTypeSchema.shape].options) as string[]
+  }
+
+  return [variableType]
+}

@@ -15,6 +15,7 @@ import { HighlightedTextArea } from '../../highlighted-textarea'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
+import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 
 export type ContactNode = Node<BasicNodeData & { variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }>
 type ContactProps = NodeProps<ContactNode>
@@ -78,7 +79,8 @@ export const DEFAULT_CONTACT_TYPES: ContactType = {
   },
 }
 
-export const Contact = ({ selected, data, id }: ContactProps) => {
+export const Contact = (block: ContactProps) => {
+  const { selected, data, id } = block
   const {
     editor,
     project: {
@@ -94,7 +96,6 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
 
   const inputWrapperRef = useRef<HTMLDivElement>(null)
   const inputVariableRef = useRef<HTMLTextAreaElement>(null)
-  const [inputFocus, setInputFocus] = useState<boolean>(true)
 
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
@@ -127,7 +128,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
     })
 
     const variable = variables.selected
-    if (!variable && !inputFocus) {
+    if (!variable) {
       setWrongVariable(true)
       return
     }
@@ -158,8 +159,6 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
    * Handle with the variable input onBlur event
    */
   const handleSubmitContactVariable = () => {
-    setInputFocus(false)
-
     const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
       variableName: contactVariableValue,
@@ -233,6 +232,11 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
           />
+          <div className='relative flex justify-center'>
+            <div className='absolute -bottom-4'>
+              <VariablesBlockAutoComplete block={block} blockType={'contact'} valueToSearch={contactVariableValue} />
+            </div>
+          </div>
         </div>
       </div>
       {data.handles.map((handle, index) => (

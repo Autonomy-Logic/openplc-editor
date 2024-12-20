@@ -1,7 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { baseTypes } from '@root/shared/data'
-import { genericTypeSchema, PLCVariable } from '@root/types/PLC'
-import { PLCBasetypes } from '@root/types/PLC/units/base-types'
+import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
@@ -9,8 +7,9 @@ import { useEffect, useRef, useState } from 'react'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { BlockNodeData, BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
-import { getPouVariablesRungNodeAndEdges, getVariableByName } from './utils'
+import { getPouVariablesRungNodeAndEdges, getVariableByName, validateVariableType } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
+// import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 
 export type VariableNode = Node<
   BasicNodeData & {
@@ -39,41 +38,8 @@ export const DEFAULT_VARIABLE_HEIGHT = 32
 export const DEFAULT_VARIABLE_CONNECTOR_X = DEFAULT_VARIABLE_WIDTH
 export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
 
-const validateVariableType = (
-  selectedType: string,
-  expectedType: BlockVariant['variables'][0],
-): { isValid: boolean; error?: string } => {
-  const upperSelectedType = selectedType.toUpperCase()
-  const upperExpectedType = expectedType.type.value.toUpperCase()
-
-  if (upperExpectedType === 'ANY') {
-    const isValidBaseType = baseTypes.includes(upperSelectedType as PLCBasetypes)
-    return {
-      isValid: isValidBaseType,
-      error: isValidBaseType ? undefined : `Expected one of: ${baseTypes.join(', ')}`,
-    }
-  }
-
-  // Handle generic types
-  if (upperExpectedType.includes('ANY')) {
-    const validTypes = Object.values(
-      genericTypeSchema.shape[upperExpectedType as keyof typeof genericTypeSchema.shape].options,
-    )
-    return {
-      isValid: validTypes.includes(upperSelectedType),
-      error: validTypes.includes(upperSelectedType) ? undefined : `Expected one of: ${validTypes.join(', ')}`,
-    }
-  }
-
-  // Handle specific types
-  return {
-    isValid: upperSelectedType === upperExpectedType,
-    error:
-      upperSelectedType === upperExpectedType ? undefined : `Expected: ${upperExpectedType}, Got: ${upperSelectedType}`,
-  }
-}
-
-const VariableElement = ({ id, data }: VariableProps) => {
+const VariableElement = (block: VariableProps) => {
+  const { id, data } = block
   const {
     editor,
     project: {
@@ -267,6 +233,11 @@ const VariableElement = ({ id, data }: VariableProps) => {
           }}
           ref={inputVariableRef}
         />
+        {/* <div className='relative flex justify-center'>
+          <div className='absolute -bottom-2'>
+            <VariablesBlockAutoComplete block={block} blockType={'variable'} valueToSearch={variableValue} />
+          </div>
+        </div> */}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
