@@ -9,7 +9,6 @@ import _ from 'lodash'
 import { useEffect } from 'react'
 
 import { MenuClasses } from '../constants'
-import { SaveChangesModal } from '../modals/save-changes-modal'
 
 export const FileMenu = () => {
   const {
@@ -21,7 +20,6 @@ export const FileMenu = () => {
     tabsActions: { clearTabs },
     flowActions: { addFlow },
     editor,
-    modals,
     modalActions: { openModal },
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
@@ -180,12 +178,6 @@ export const FileMenu = () => {
             </MenuPrimitive.Item>
           </MenuPrimitive.Content>
         </MenuPrimitive.Portal>
-        {modals?.['save-changes-project']?.open === true && (
-          <SaveChangesModal
-            isOpen={modals['save-changes-project'].open}
-            validationContext={modals['save-changes-project'].data as string}
-          />
-        )}
       </MenuPrimitive.Menu>
     </>
   )
