@@ -18,6 +18,8 @@ const DownloadButton = () => {
     },
   } = useOpenPLCStore()
 
+  console.log(project.meta.path)
+
   const buildProgram = () =>
     window.bridge.compileRequest(project.meta.path, (compileResponse: CompileResponseObject) => {
       const { type: stdType, data, message: stdMessage } = compileResponse
@@ -27,7 +29,7 @@ const DownloadButton = () => {
       lines.forEach((line, index) => {
         addLog({ id: uuidv4(), type: stdType, message: line })
         if (index === lines.length - 2) {
-          const buildPath = `${project.meta.path.replace('project.json', 'build')}${OS === 'win32' ? '\\' : '/'}program.st`
+          const buildPath = `${OS === 'win32' ? project.meta.path.replace('\\project.json', '\\build\\program.st') : project.meta.path.replace('/project.json', '/build/program.st')}`
           lines[index].includes('successfully') &&
             addLog({ id: uuidv4(), type: 'info', message: `OpenPLC Runtime program generated at ${buildPath}` })
         }
