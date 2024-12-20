@@ -50,7 +50,6 @@ export default class MenuBuilder {
   handleCreateProject() {
     this.mainWindow.webContents.send('project:create-accelerator')
   }
-
   async handleOpenProject() {
     const response = await this.projectService.openProject()
     this.mainWindow.webContents.send('project:open-accelerator', response)
@@ -92,10 +91,10 @@ export default class MenuBuilder {
   handleOpenAboutModal() {
     this.mainWindow.webContents.send('about:open-accelerator')
   }
-
   handleFindInProject() {
     this.mainWindow.webContents.send('project:find-in-project-accelerator')
   }
+
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props

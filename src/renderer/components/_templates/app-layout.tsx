@@ -46,19 +46,29 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
       switchAppTheme()
     })
   }, [])
-
   useEffect(() => {
-    const handleCreateProjectAccelerator = () => {
-      window.bridge.createProjectAccelerator(() => {
-        if (editingState !== 'unsaved') {
-          openModal('create-project', null)
-        } else {
-          openModal('save-changes-project', 'create-project')
-        }
-      })
+    const handleOpenProjectAccelerator = () => {
+      if (editingState === 'unsaved') {
+        openModal('save-changes-project', 'open-project')
+      }
     }
-    handleCreateProjectAccelerator()
-  }, [])
+
+    const handleCreateProjectAccelerator = () => {
+      if (editingState !== 'unsaved') {
+        openModal('create-project', null)
+      } else {
+        openModal('save-changes-project', 'create-project')
+      }
+    }
+
+    window.bridge.openProjectAccelerator(handleOpenProjectAccelerator)
+    window.bridge.createProjectAccelerator(handleCreateProjectAccelerator)
+
+    return () => {
+      window.bridge.removeOpenProjectAccelerator()
+      window.bridge.removeCreateProjectAccelerator()
+    }
+  }, [editingState])
 
   return (
     <>
