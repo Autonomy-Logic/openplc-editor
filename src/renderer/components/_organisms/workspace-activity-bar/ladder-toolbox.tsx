@@ -4,8 +4,9 @@ import { cn } from '@root/utils'
 
 import { BasicNodeData } from '../../_atoms/react-flow/custom-nodes/utils/types'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
-import { TrashCanButton } from '../../_molecules/workspace-activity-bar/default'
+import { DeleteElementButton } from '../../_molecules/workspace-activity-bar/default'
 import { BlockButton, CoilButton, ContactButton } from '../../_molecules/workspace-activity-bar/ladder'
+// import { CloseFilledIcon } from '@root/renderer/assets'
 
 export const LadderToolbox = () => {
   const {
@@ -96,7 +97,7 @@ export const LadderToolbox = () => {
       <CoilButton onDragStart={(event) => handleDragStart(event, 'coil')} />
       <ContactButton onDragStart={(event) => handleDragStart(event, 'contact')} />
       <DividerActivityBar />
-      <TrashCanButton
+      <DeleteElementButton
         onClick={handleRemoveNodes}
         className={cn({
           'disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent': selectedNodes.length === 0,
