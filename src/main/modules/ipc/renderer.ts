@@ -105,15 +105,15 @@ const rendererProcessBridge = {
    * Send the OS information to the renderer process
    * !IMPORTANT: This return type must be refactored to match the Node.js API
    */
-  getRecents: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
+  getrecent: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
   getSystemInfo: (): Promise<{
     OS: 'linux' | 'darwin' | 'win32' | ''
     architecture: 'x64' | 'arm' | ''
     prefersDarkMode: boolean
     isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
-  retrieveRecents: (): Promise<{ name: string, path: string; lastOpenedAt: string; createdAt: string }[]> =>
-    ipcRenderer.invoke('app:store-retrieve-recents'),
+  retrieverecent: (): Promise<{ name: string, path: string; lastOpenedAt: string; createdAt: string }[]> =>
+    ipcRenderer.invoke('app:store-retrieve-recent'),
   closeWindow: () => ipcRenderer.send('window-controls:close'),
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),

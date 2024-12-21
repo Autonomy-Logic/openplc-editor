@@ -111,7 +111,7 @@ class MainProcessBridge implements MainIpcModule {
                 }
             }
         })
-        this.ipcMain.handle('app:store-retrieve-recents', async () => {
+        this.ipcMain.handle('app:store-retrieve-recent', async () => {
             const pathToUserDataFolder = join(app.getPath('userData'), 'User')
             const pathToUserHistoryFolder = join(pathToUserDataFolder, 'History')
             const projectsFilePath = join(pathToUserHistoryFolder, 'projects.json')

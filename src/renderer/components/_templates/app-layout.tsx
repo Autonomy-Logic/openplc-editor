@@ -12,15 +12,15 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const {
     modals,
     modalActions: { openModal },
-    workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecents },
+    workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setrecent },
   } = useOpenPLCStore()
 
   useEffect(() => {
     const getUserSystemProps = async () => {
       const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
-      const recents = await window.bridge.retrieveRecents()
+      const recent = await window.bridge.retrieverecent()
 
-      setRecents(recents)
+      setrecent(recent)
       setSystemConfigs({
         OS,
         arch: architecture,

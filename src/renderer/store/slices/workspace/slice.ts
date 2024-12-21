@@ -12,7 +12,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       shouldUseDarkMode: false,
       isWindowMaximized: false,
     },
-    recents: [],
+    recent: [],
     isCollapsed: false,
     isModalOpen: [],
   },
@@ -32,11 +32,11 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    setRecents: (recents): void => {
+    setrecent: (recent): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
-          workspace.recents = recents
-          console.log(workspace.recents)
+          workspace.recent = recent
+          console.log(workspace.recent)
         }),
       )
     },

@@ -32,7 +32,7 @@ const WorkspaceScreen = () => {
     project,
     editor,
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecents, toggleCollapse },
+    workspaceActions: { setEditingState, setrecent, toggleCollapse },
     projectActions: { clearProjects },
     flowActions: { clearFlows },
     tabsActions: { clearTabs },
@@ -130,7 +130,7 @@ const WorkspaceScreen = () => {
         clearProjects()
         clearFlows()
         setEditingState('unsaved')
-        setRecents([])
+        setrecent([])
       })
     }
     handleCloseProject()

@@ -62,7 +62,7 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-accelerator')
   }
 
-  async handleGetRecents() {
+  async handleGetrecent() {
     const response = await this.projectService.readProjectHistory(this.projectService.getProjectsFilePath())
     return response
   }
@@ -123,7 +123,7 @@ handleFindInProject(){
 
   // Wip: Constructing a mac machines menu.
   async buildDarwinTemplate(): Promise<MenuItemConstructorOptions[]> {
-    const recents = await this.handleGetRecents()
+    const recent = await this.handleGetrecent()
     const homeDir = process.env.HOME || ''
     const defaultDarwinMenu: MenuItemConstructorOptions = {
       role: 'appMenu',
@@ -330,8 +330,8 @@ handleFindInProject(){
     }
 
     const subMenuRecent: DarwinMenuItemConstructorOptions = {
-      label: i18n.t('menu:recents'),
-      submenu: recents.map((projectEntry) => {
+      label: i18n.t('menu:recent'),
+      submenu: recent.map((projectEntry) => {
         const projectPath = projectEntry.path.startsWith(homeDir)
           ? projectEntry.path.replace(homeDir, '~')
           : projectEntry.path
@@ -367,7 +367,7 @@ handleFindInProject(){
 
   // Wip: Constructing a default machines menu.
   async buildDefaultTemplate() {
-    const recents = await this.handleGetRecents()
+    const recent = await this.handleGetrecent()
     const homeDir = process.env.HOME || ''
     const templateDefault: MenuItemConstructorOptions[] = [
       {
@@ -603,8 +603,8 @@ handleFindInProject(){
       },
 
       {
-        label: i18n.t('menu:recents'),
-        submenu: recents.map((projectEntry) => {
+        label: i18n.t('menu:recent'),
+        submenu: recent.map((projectEntry) => {
           const projectPath = projectEntry.path.startsWith(homeDir)
             ? projectEntry.path.replace(homeDir, '~')
             : projectEntry.path

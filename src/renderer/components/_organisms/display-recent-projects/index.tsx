@@ -8,26 +8,26 @@ export type IDisplayRecentProjectProps = ComponentProps<'section'>
 
 const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
   const {
-    workspace: { recents },
+    workspace: { recent },
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecents },
+    workspaceActions: { setEditingState, setrecent },
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
     libraryActions: { addLibrary },
   } = useOpenPLCStore()
 
-  const [recentProjects, setRecentProjects] = useState(recents)
+  const [recentProjects, setRecentProjects] = useState(recent)
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
 
   const getUserRecentProjects = async () => {
-    const recentProjects = await window.bridge.retrieveRecents()
+    const recentProjects = await window.bridge.retrieverecent()
     setRecentProjects(recentProjects)
   }
 
   useEffect(() => {
     void getUserRecentProjects()
-  }, [recents])
+  }, [recent])
 
   const compareLastOpened = (lastOpenedAt: string) => {
     const currentTime = new Date()
@@ -94,7 +94,7 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
     if (success && data) {
       setEditingState('unsaved')
-      setRecents([])
+      setrecent([])
       clearEditor()
       clearTabs()
 
