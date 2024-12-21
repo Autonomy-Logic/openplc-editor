@@ -13,6 +13,7 @@ import { MenuClasses } from '../constants'
 export const FileMenu = () => {
   const {
     project,
+    workspace: { editingState },
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setRecents },
     projectActions: { setProject },
@@ -24,19 +25,22 @@ export const FileMenu = () => {
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
-  const handleCreateProject = () => {
-    try {
-      openModal('create-project', null)
-    } catch (_error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to open project creation modal',
-        variant: 'fail',
-      })
+  const handleUnsavedChanges = (action: 'create-project' | 'open-project') => {
+    if (editingState === 'unsaved') {
+      openModal('save-changes-project', action)
+      return true
     }
+    return false
+  }
+
+  const handleCreateProject = () => {
+    if (handleUnsavedChanges('create-project')) return
+    openModal('create-project', null)
   }
 
   const handleOpenProject = async () => {
+    if (handleUnsavedChanges('open-project')) return
+
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
       clearEditor()

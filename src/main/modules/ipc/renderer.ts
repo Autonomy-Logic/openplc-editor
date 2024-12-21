@@ -30,6 +30,7 @@ type CreateProjectFileProps = {
 }
 type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
 
+
 const rendererProcessBridge = {
   /**
    * Handlers for creating projects.
@@ -38,7 +39,7 @@ const rendererProcessBridge = {
 
   createProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
-
+  removeCreateProjectAccelerator: () => ipcRenderer.removeAllListeners('project:create-accelerator'),
   createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
   createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> =>
     ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
@@ -68,8 +69,10 @@ const rendererProcessBridge = {
    * As for the click and for the accelerator type.
    */
   openProjectAccelerator: (callback: IpcRendererCallbacks) =>
+    //aqui
     ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
-
+  removeOpenProjectAccelerator: () =>
+    ipcRenderer.removeAllListeners('project:open-accelerator'),
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
   openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
     ipcRenderer.invoke('project:open-by-path', projectPath),
@@ -93,8 +96,10 @@ const rendererProcessBridge = {
     ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
   removeDeletePouListener: () => ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
   removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
+  //aqui
   findInProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:find-in-project-accelerator', callback),
+
   aboutModalAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('about:open-accelerator', callback),
   aboutAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('website:about-accelerator', callback),
   /** -------------------------------------------------------------------------------------------- */

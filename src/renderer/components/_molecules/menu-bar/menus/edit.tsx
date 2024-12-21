@@ -6,29 +6,26 @@ import _ from 'lodash'
 import { useEffect } from 'react'
 
 import { MenuClasses } from '../constants'
+import { ConfirmDeleteElementModal } from '../modals/delete-confirmation-modal'
 
 export const EditMenu = () => {
   const {
     editor,
-    projectActions: { deletePou },
-    // workspaceActions: { setModalOpen },
-    flowActions: { removeFlow },
-    libraryActions: { removeUserLibrary },
+    workspaceActions: { setModalOpen },
+    modalActions: { openModal },
+    modals,
   } = useOpenPLCStore()
-  const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
+  const { setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
-
   useEffect(() => {
     setSelectedTab(editor.meta.name)
+    return () => {
+      setSelectedTab('')
+    }
   }, [editor])
-  const handleDeletePou = () => {
-    handleRemoveTab(selectedTab)
-    deletePou(selectedTab)
-    removeFlow(selectedTab)
-    removeUserLibrary(selectedTab)
-  }
+
   const findInProject = () => {
-    // setModalOpen('findInProject', true)
+    setModalOpen('findInProject', true)
   }
 
   return (
@@ -85,12 +82,15 @@ export const EditMenu = () => {
             <span>{i18n.t('menu:edit.submenu.selectAll')}</span>
             <span className={ACCELERATOR}>{'Ctrl + A'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} onClick={() => void handleDeletePou()}>
+          <MenuPrimitive.Item className={ITEM} onClick={() => openModal('confirm-delete-element', null)}>
             <span>{i18n.t('menu:edit.submenu.deletePou')}</span>
             <span className={ACCELERATOR}>{''}</span>
           </MenuPrimitive.Item>
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>
+      {modals?.['confirm-delete-element']?.open === true && (
+        <ConfirmDeleteElementModal isOpen={modals['confirm-delete-element'].open} />
+      )}
     </MenuPrimitive.Menu>
   )
 }
