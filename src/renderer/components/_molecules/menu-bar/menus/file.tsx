@@ -86,8 +86,7 @@ export const FileMenu = () => {
 
     const { success, reason } = await window.bridge.saveProject({
       projectPath: project.meta.path,
-      //@ts-expect-error overlap
-      projectData: project.data,
+      projectData: project,
     })
 
     if (success) {
