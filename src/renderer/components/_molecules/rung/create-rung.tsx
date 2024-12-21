@@ -8,7 +8,7 @@ export const CreateRung = ({ onClick }: CreateRungProps) => {
   return (
     <div
       aria-label='Create new rung'
-      className='flex w-full flex-row items-center justify-between rounded-lg border bg-transparent p-1 opacity-40 hover:opacity-100 dark:border-neutral-800'
+      className='flex w-full select-none flex-row items-center justify-between rounded-lg border bg-transparent p-1 opacity-40 hover:opacity-100 dark:border-neutral-800'
     >
       <p className='ml-2 cursor-default text-xs'>Create new rung</p>
       <button

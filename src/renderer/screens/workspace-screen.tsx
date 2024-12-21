@@ -309,7 +309,7 @@ const WorkspaceScreen = () => {
                     onValueChange={setActiveTab}
                     className='relative flex h-full w-full flex-col gap-2 overflow-hidden'
                   >
-                    <Tabs.List className='flex h-7 w-64 gap-4'>
+                    <Tabs.List className='flex h-7 w-64 select-none gap-4'>
                       <Tabs.Trigger
                         value='console'
                         className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900  dark:text-neutral-700'
