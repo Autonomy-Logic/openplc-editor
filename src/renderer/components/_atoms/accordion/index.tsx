@@ -69,7 +69,9 @@ const AccordionContent = forwardRef<HTMLDivElement, AccordionPrimitive.Accordion
 AccordionContent.displayName = 'AccordionContent'
 
 const Accordion = ({ items }: AccordionProps) => {
-  const [openItems, setOpenItems] = useState<string[]>([items[items.length - 1].searchID])
+  const [openItems, setOpenItems] = useState<string[]>(
+    items.length > 0 ? [items[items.length - 1].searchID] : []
+  )
   const prevItems = useRef<AccordionItemProps[]>(items)
 
   useEffect(() => {
