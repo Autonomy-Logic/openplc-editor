@@ -1,6 +1,7 @@
 import {
   ArrayIcon,
   ArrowIcon,
+  CloseIcon,
   DataTypeIcon,
   DeviceIcon,
   EnumIcon,
@@ -15,7 +16,6 @@ import {
   SFCIcon,
   STIcon,
   StructureIcon,
-  TrashCanIcon,
 } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
@@ -263,7 +263,7 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
         aria-haspopup='dialog'
         aria-expanded='false'
       >
-        <TrashCanIcon className='h-4 w-4 group-hover:stroke-red-500' />
+        <CloseIcon className='h-4 w-4 group-hover:stroke-red-500' />
       </button>
     </li>
   )
