@@ -69,17 +69,19 @@ const AccordionContent = forwardRef<HTMLDivElement, AccordionPrimitive.Accordion
 AccordionContent.displayName = 'AccordionContent'
 
 const Accordion = ({ items }: AccordionProps) => {
-  const [openItems, setOpenItems] = useState<string[]>([])
-  const prevItemsLength = useRef<number>(items.length)
+  const [openItems, setOpenItems] = useState<string[]>([items[items.length - 1].searchID])
+  const prevItems = useRef<AccordionItemProps[]>(items)
 
   useEffect(() => {
-    if (items.length > prevItemsLength.current) {
+    const prevIDs = prevItems.current.map((item) => item.searchID)
+    const currentIDs = items.map((item) => item.searchID)
+
+    if (currentIDs.length > prevIDs.length || !currentIDs.every((id, index) => id === prevIDs[index])) {
       setOpenItems([items[items.length - 1].searchID])
-    } else if (prevItemsLength.current === 1) {
-      setOpenItems([items[0].searchID])
     }
-    prevItemsLength.current = items.length
-  }, [items.length])
+
+    prevItems.current = items
+  }, [items])
 
   const handleValueChange = (value: string[]) => {
     setOpenItems(value)

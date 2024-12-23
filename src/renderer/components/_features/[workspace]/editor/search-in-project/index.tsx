@@ -154,6 +154,15 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
   }
 
   const handleSearch = () => {
+    if (!searchQuery.trim()) {
+      toast({
+        title: 'No search query',
+        description: 'Please enter a search query to search.',
+        variant: 'warn',
+      })
+      return
+    }
+
     const filterMap = {
       'data type': 'data-type',
       function: 'function',
@@ -212,16 +221,22 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
               : variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
         )
 
-        return pouTypeMatchesFilter && (pouMatches || variableMatches || (['st', 'il'].includes(pou.data.language) && (() => {
-          try {
-            const regex = new RegExp(searchQuery, sensitiveCaseOption ? 'g' : 'gi')
-            const matches = (pou.data.body.value as string).match(regex)
-            return matches ? matches.length > 0 : false
-          } catch (error) {
-            console.error('Invalid regex or error processing body:', error)
-            return false
-          }
-        })()))
+        return (
+          pouTypeMatchesFilter &&
+          (pouMatches ||
+            variableMatches ||
+            (['st', 'il'].includes(pou.data.language) &&
+              (() => {
+                try {
+                  const regex = new RegExp(searchQuery, sensitiveCaseOption ? 'g' : 'gi')
+                  const matches = (pou.data.body.value as string).match(regex)
+                  return matches ? matches.length > 0 : false
+                } catch (error) {
+                  console.error('Invalid regex or error processing body:', error)
+                  return false
+                }
+              })()))
+        )
       })
       .reduce(
         (acc, pou) => {
@@ -235,16 +250,19 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
             name: pou.data.name,
             language: pou.data.language,
             pouType: pou.type,
-            body: (['st', 'il'].includes(pou.data.language) && (() => {
-              try {
-                const regex = new RegExp(`\\b(${searchQuery}\\w*)`, sensitiveCaseOption ? 'g' : 'gi')
-                const matches = (pou.data.body.value as string).match(regex)
-                return matches ? matches.join(', ') : ''
-              } catch (error) {
-                console.error('Invalid regex or error processing body:', error)
-                return ''
-              }
-            })()) || '',
+            body:
+              (['st', 'il'].includes(pou.data.language) &&
+                (() => {
+                  try {
+                    const regex = new RegExp(`\\b(${searchQuery}\\w*)`, sensitiveCaseOption ? 'g' : 'gi')
+                    const matches = (pou.data.body.value as string).match(regex)
+                    return matches ? matches.join(', ') : ''
+                  } catch (error) {
+                    console.error('Invalid regex or error processing body:', error)
+                    return ''
+                  }
+                })()) ||
+              '',
             variable: pou.data.variables
               .filter((variable) =>
                 regularExpressionOption
@@ -376,12 +394,6 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       toast({
         title: 'No results found',
         description: 'No matches were found for your search.',
-        variant: 'warn',
-      })
-    } else if (searchQuery === '') {
-      toast({
-        title: 'No search query',
-        description: 'Please enter a search query to search.',
         variant: 'warn',
       })
     } else {
