@@ -15,7 +15,7 @@ export const FileMenu = () => {
     project,
     workspace: { editingState },
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecents },
+    workspaceActions: { setEditingState, setrecent },
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
@@ -46,7 +46,7 @@ export const FileMenu = () => {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
-      setRecents([])
+      setrecent([])
       setProject({
         meta: {
           name: data.content.meta.name,
@@ -90,8 +90,7 @@ export const FileMenu = () => {
 
     const { success, reason } = await window.bridge.saveProject({
       projectPath: project.meta.path,
-      //@ts-expect-error overlap
-      projectData: project.data,
+      projectData: project,
     })
 
     if (success) {
@@ -119,7 +118,7 @@ export const FileMenu = () => {
     clearEditor()
     clearTabs()
     setEditingState('unsaved')
-    setRecents([])
+    setrecent([])
   }
 
   return (

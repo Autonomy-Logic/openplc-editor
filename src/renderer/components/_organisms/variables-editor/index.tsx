@@ -207,7 +207,10 @@ const VariablesEditor = () => {
     <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
       <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
         {editorVariables.display === 'table' ? (
-          <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
+          <div
+            aria-label='Variables editor table actions container'
+            className='flex h-full w-full select-none justify-between'
+          >
             <div
               id='Pou documentation'
               aria-label='Variables editor table description container'

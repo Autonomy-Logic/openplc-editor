@@ -7,7 +7,7 @@ const MenuRoot = (props: IMenuRootProps) => {
   const { children, ...res } = props
   return (
     <div
-      className='flex h-fit min-h-[372px] w-[240px] max-w-[240px] flex-col justify-start bg-transparent text-xl text-neutral-1000 dark:text-white'
+      className='flex h-fit min-h-[372px] w-[240px] max-w-[240px] select-none flex-col justify-start bg-transparent text-xl text-neutral-1000 dark:text-white'
       {...res}
     >
       {children}

@@ -1,5 +1,5 @@
 import { DraggableProvidedDragHandleProps } from '@hello-pangea/dnd'
-import { TrashCanIcon } from '@root/renderer/assets'
+import { CloseIcon } from '@root/renderer/assets'
 import { DragHandleIcon } from '@root/renderer/assets/icons/interface/DragHandle'
 import { StickArrowIcon } from '@root/renderer/assets/icons/interface/StickArrow'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -140,7 +140,7 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
           onClick={handleRemoveRung}
           className='h-fit rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
         >
-          <TrashCanIcon className='h-5 w-5 stroke-[#0464FB] dark:stroke-brand-light' />
+          <CloseIcon className='w-5 h-5 stoke-brand dark:stroke-brand-light' />
         </button>
         <button
           aria-label='Expand body button'

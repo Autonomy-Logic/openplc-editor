@@ -8,26 +8,26 @@ export type IDisplayRecentProjectProps = ComponentProps<'section'>
 
 const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
   const {
-    workspace: { recents },
+    workspace: { recent },
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecents },
+    workspaceActions: { setEditingState, setrecent },
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
     libraryActions: { addLibrary },
   } = useOpenPLCStore()
 
-  const [recentProjects, setRecentProjects] = useState(recents)
+  const [recentProjects, setRecentProjects] = useState(recent)
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
 
   const getUserRecentProjects = async () => {
-    const recentProjects = await window.bridge.retrieveRecents()
+    const recentProjects = await window.bridge.retrieverecent()
     setRecentProjects(recentProjects)
   }
 
   useEffect(() => {
     void getUserRecentProjects()
-  }, [recents])
+  }, [recent])
 
   const compareLastOpened = (lastOpenedAt: string) => {
     const currentTime = new Date()
@@ -94,7 +94,7 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
     if (success && data) {
       setEditingState('unsaved')
-      setRecents([])
+      setrecent([])
       clearEditor()
       clearTabs()
 
@@ -146,7 +146,10 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
   }
 
   return (
-    <section className='flex h-[52%] w-full flex-col pr-9 2xl:h-3/5 3xl:h-3/4 4xl:h-4/5 4xl:pr-0' {...props}>
+    <section
+      className='flex h-[52%] w-full select-none flex-col pr-9 2xl:h-3/5 3xl:h-3/4 4xl:h-4/5 4xl:pr-0'
+      {...props}
+    >
       <h2 className='mb-6 flex  cursor-default justify-start font-caption text-xl font-medium text-neutral-1000 dark:text-white'>
         Projects
       </h2>
