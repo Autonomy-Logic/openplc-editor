@@ -91,28 +91,24 @@ export const Contact = (block: ContactProps) => {
   } = useOpenPLCStore()
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
-  const [contactVariableValue, setContactVariableValue] = useState<string>('')
+  const [contactVariableValue, setContactVariableValue] = useState<string>(data.variable.name)
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
   const inputWrapperRef = useRef<HTMLDivElement>(null)
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
+      blur: ({ submit }: { submit?: boolean }) => void
       isFocused: boolean
     }
   >(null)
 
-  const autocompleteRef = useRef<
-    HTMLDivElement & {
-      isFocused: boolean
-    }
-  >(null)
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
   const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
       // top
-      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-20px' : '-16px'
+      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-24px' : '-20px'
     }
   }, [contactVariableValue])
 
@@ -138,6 +134,7 @@ export const Contact = (block: ContactProps) => {
       nodeId: id,
       variableName: contactVariableValue,
     })
+    if (!node || !rung) return
 
     const variable = variables.selected
     if (!variable) {
@@ -148,8 +145,9 @@ export const Contact = (block: ContactProps) => {
       setWrongVariable(true)
       return
     }
-    if (variable && node && rung && node.data.variable !== variable) {
-      setContactVariableValue(variable.name)
+
+    // Variable of the node is different from the selected variable
+    if (node.data.variable !== variable) {
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -162,25 +160,35 @@ export const Contact = (block: ContactProps) => {
           },
         },
       })
+      setWrongVariable(false)
+      return
     }
 
-    setWrongVariable(false)
+    if (node.data.variable === variable && variable.name !== contactVariableValue) {
+      setContactVariableValue(variable.name)
+      if (inputVariableRef.current?.isFocused) {
+        inputVariableRef.current.blur({ submit: false })
+        handleSubmitContactVariableOnTextareaBlur(variable.name)
+        return
+      }
+    }
   }, [pous])
 
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitContactVariableOnTextareaBlur = () => {
+  const handleSubmitContactVariableOnTextareaBlur = (variableName?: string) => {
+    const variableNameToSubmit = variableName || contactVariableValue
     const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
-      variableName: contactVariableValue,
+      variableName: variableNameToSubmit,
     })
     if (!rung || !node) return
 
     const variable = variables.selected
     if (
       !variable ||
-      variable.name !== contactVariableValue ||
+      variable.name !== variableNameToSubmit ||
       variable.type.definition !== 'base-type' ||
       variable.type.value.toUpperCase() !== 'BOOL'
     ) {
@@ -193,7 +201,7 @@ export const Contact = (block: ContactProps) => {
           ...node,
           data: {
             ...node.data,
-            variable: { name: contactVariableValue },
+            variable: { name: variableNameToSubmit },
           },
         },
       })
@@ -251,7 +259,7 @@ export const Contact = (block: ContactProps) => {
             highlightClassName='text-center text-xs leading-3'
             onChange={onChangeHandler}
             onKeyDown={(e) => {
-              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') e.preventDefault()
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
               setKeyPressedAtTextarea(e.key)
             }}
             onKeyUp={() => setKeyPressedAtTextarea('')}
@@ -265,7 +273,6 @@ export const Contact = (block: ContactProps) => {
                 isOpen={openAutocomplete}
                 setIsOpen={(value) => setOpenAutocomplete(value)}
                 keyPressed={keyPressedAtTextarea}
-                ref={autocompleteRef}
               />
             </div>
           </div>

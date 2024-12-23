@@ -2,9 +2,11 @@ import * as Popover from '@radix-ui/react-popover'
 import { PlusIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
+import { Node } from '@xyflow/react'
 import { ComponentPropsWithRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 
-import { getVariableRestrictionType } from '../utils'
+import { getPouVariablesRungNodeAndEdges, getVariableRestrictionType } from '../utils'
+import { BasicNodeData } from '../utils/types'
 import { VariableNode } from '../variable'
 
 type VariablesBlockAutoCompleteProps = ComponentPropsWithRef<'div'> & {
@@ -31,15 +33,7 @@ const blockTypeRestrictions = (block: unknown, blockType: VariablesBlockAutoComp
 
 const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAutoCompleteProps>(
   (
-    {
-      block,
-      blockType = 'other',
-      isOpen,
-      setIsOpen,
-      keyPressed,
-      valueToSearch,
-      ..._props
-    }: VariablesBlockAutoCompleteProps,
+    { block, blockType = 'other', isOpen, setIsOpen, keyPressed, valueToSearch }: VariablesBlockAutoCompleteProps,
     ref,
   ) => {
     const {
@@ -47,6 +41,8 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       project: {
         data: { pous },
       },
+      flows,
+      flowActions: { updateNode },
     } = useOpenPLCStore()
 
     const popoverRef = useRef<HTMLDivElement>(null)
@@ -57,11 +53,14 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     const variables = pou?.data.variables || []
     const variableRestrictions = blockTypeRestrictions(block, blockType)
 
-    const filteredVariables = variables.filter(
-      (variable) =>
-        variable.name.includes(valueToSearch) &&
-        (variableRestrictions === undefined || variableRestrictions.includes(variable.type.value.toLowerCase())),
-    )
+    const filteredDivRef = useRef<HTMLDivElement>(null)
+    const filteredVariables = variables
+      .filter(
+        (variable) =>
+          variable.name.includes(valueToSearch) &&
+          (variableRestrictions === undefined || variableRestrictions.includes(variable.type.value.toLowerCase())),
+      )
+      .sort((a, b) => a.name.localeCompare(b.name))
     const [selectedVariable, setSelectedVariable] = useState<{ positionInArray: number; variableName: string }>({
       positionInArray: -1,
       variableName: '',
@@ -79,10 +78,6 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
 
     useEffect(() => {
       switch (keyDown) {
-        case 'Enter':
-          setInputFocus(false)
-          setIsOpen && setIsOpen(false)
-          break
         case 'ArrowDown':
           setSelectedVariable((prev) => {
             const newPosition = prev.positionInArray + 1
@@ -107,6 +102,12 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             }
           })
           break
+        case 'Tab':
+        case 'Enter':
+          setInputFocus(false)
+          setIsOpen && setIsOpen(false)
+          submitVariableToBlock()
+          break
         default:
           break
       }
@@ -116,6 +117,37 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     useEffect(() => {
       setKeyDown((prev) => keyPressed || prev)
     }, [keyPressed])
+
+    useEffect(() => {
+      scrollWhenSelectedIsChanged()
+    }, [selectedVariable])
+
+    const scrollWhenSelectedIsChanged = () => {
+      if (filteredDivRef.current) {
+        const selectedElement = filteredDivRef.current.children[selectedVariable.positionInArray]
+        selectedElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
+
+    const submitVariableToBlock = () => {
+      const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+        nodeId: (block as Node<BasicNodeData>).id,
+      })
+      if (!rung || !node) return
+
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            variable: filteredVariables[selectedVariable.positionInArray],
+          },
+        },
+      })
+    }
 
     return (
       <Popover.Root open={isOpen ? isOpen : false}>
@@ -146,7 +178,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           >
             {filteredVariables.length > 0 && (
               <div className='h-fit w-full p-1'>
-                <div className='flex max-h-32 w-full flex-col overflow-y-auto'>
+                <div className='flex max-h-32 w-full flex-col overflow-y-auto' ref={filteredDivRef}>
                   {filteredVariables.map((variable) => (
                     <div
                       key={variable.name}

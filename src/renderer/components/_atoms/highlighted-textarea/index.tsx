@@ -45,6 +45,7 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
     const highlightDivRef = useRef<HTMLDivElement>(null)
 
     const [inputFocus, setInputFocus] = useState<boolean>(true)
+    const [canSubmit, setCanSubmit] = useState<boolean>(true)
     const [scrollValue, setScrollValue] = useState<number>(0)
     const formattedVariableValue = searchQuery ? extractSearchQuery(textAreaValue, searchQuery) : textAreaValue
 
@@ -53,10 +54,15 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
       return {
         focus: () => {
           inputRef.current?.focus()
+          setInputFocus(true)
         },
         isFocused: inputFocus,
-        blur: () => {
+        blur: ({ submit }: { submit?: boolean }) => {
+          if (submit !== undefined) {
+            setCanSubmit(submit)
+          }
           inputRef.current?.blur()
+          setInputFocus(false)
         },
         scrollHeight: textAreaValue.length === 0 ? 0 : inputRef.current?.scrollHeight,
       }
@@ -127,7 +133,8 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
               inputRef.current.scrollTop = 0
               highlightDivRef.current.scrollTop = 0
             }
-            handleSubmit && handleSubmit()
+            canSubmit && handleSubmit && handleSubmit()
+            setCanSubmit(true)
           }}
           onScroll={(e) => onScrollHandler(e)}
           onKeyDown={(e) => {
