@@ -95,7 +95,19 @@ export const Contact = (block: ContactProps) => {
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
   const inputWrapperRef = useRef<HTMLDivElement>(null)
-  const inputVariableRef = useRef<HTMLTextAreaElement>(null)
+  const inputVariableRef = useRef<
+    HTMLTextAreaElement & {
+      isFocused: boolean
+    }
+  >(null)
+
+  const autocompleteRef = useRef<
+    HTMLDivElement & {
+      isFocused: boolean
+    }
+  >(null)
+  const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
+  const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
@@ -158,7 +170,7 @@ export const Contact = (block: ContactProps) => {
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitContactVariable = () => {
+  const handleSubmitContactVariableOnTextareaBlur = () => {
     const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
       variableName: contactVariableValue,
@@ -203,6 +215,12 @@ export const Contact = (block: ContactProps) => {
     setWrongVariable(false)
   }
 
+  const onChangeHandler = () => {
+    if (!openAutocomplete) {
+      setOpenAutocomplete(true)
+    }
+  }
+
   return (
     <div
       className={cn({
@@ -223,7 +241,7 @@ export const Contact = (block: ContactProps) => {
           <HighlightedTextArea
             textAreaValue={contactVariableValue}
             setTextAreaValue={setContactVariableValue}
-            handleSubmit={handleSubmitContactVariable}
+            handleSubmit={handleSubmitContactVariableOnTextareaBlur}
             inputHeight={{
               height: 24,
               scrollLimiter: 32,
@@ -231,10 +249,24 @@ export const Contact = (block: ContactProps) => {
             ref={inputVariableRef}
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
+            onChange={onChangeHandler}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') e.preventDefault()
+              setKeyPressedAtTextarea(e.key)
+            }}
+            onKeyUp={() => setKeyPressedAtTextarea('')}
           />
           <div className='relative flex justify-center'>
             <div className='absolute -bottom-4'>
-              <VariablesBlockAutoComplete block={block} blockType={'contact'} valueToSearch={contactVariableValue} />
+              <VariablesBlockAutoComplete
+                block={block}
+                blockType={'contact'}
+                valueToSearch={contactVariableValue}
+                isOpen={openAutocomplete}
+                setIsOpen={(value) => setOpenAutocomplete(value)}
+                keyPressed={keyPressedAtTextarea}
+                ref={autocompleteRef}
+              />
             </div>
           </div>
         </div>
