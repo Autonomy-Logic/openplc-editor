@@ -48,7 +48,7 @@ export const Rung = ({ index, id, rung }: RungProps) => {
             onClick={handleOpenSection}
             isOpen={isOpen}
             rung={rung}
-            draggableHandleProps={provided.dragHandleProps}
+            draggableHandleProps={provided.dragHandleProps || undefined}
             className={cn('border border-transparent', {
               'rounded-t-lg': index === 0,
               'rounded-b-lg': index === flow.rungs.length - 1 && !isOpen,

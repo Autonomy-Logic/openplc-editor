@@ -32,7 +32,6 @@ const StartScreen = () => {
       if (success && data) {
         clearTabs()
         setEditingState('unsaved')
-
         const projectMeta = {
           name: data.content.meta.name,
           type: data.content.meta.type,
@@ -129,14 +128,7 @@ const StartScreen = () => {
     handleOpenProjectAccelerator()
   }, [])
 
-  useEffect(() => {
-    const handleCreateProjectAccelerator = () => {
-      window.bridge.createProjectAccelerator(() => {
-        openModal('create-project', null)
-      })
-    }
-    handleCreateProjectAccelerator()
-  }, [])
+
 
   useEffect(() => {
     const handleOpenRecentAccelerator = () => {

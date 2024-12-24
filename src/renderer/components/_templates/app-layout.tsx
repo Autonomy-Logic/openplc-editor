@@ -5,22 +5,25 @@ import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 
 import Toaster from '../_features/[app]/toast/toaster'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
+import { ConfirmDeleteElementModal } from '../_molecules/menu-bar/modals/delete-confirmation-modal'
+import { SaveChangesModal } from '../_molecules/menu-bar/modals/save-changes-modal'
 
 type AppLayoutProps = ComponentPropsWithoutRef<'main'>
 const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
     modals,
+    workspace: { editingState },
     modalActions: { openModal },
-    workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setrecent },
+    workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecent },
   } = useOpenPLCStore()
 
   useEffect(() => {
     const getUserSystemProps = async () => {
       const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
-      const recent = await window.bridge.retrieverecent()
+      const recent = await window.bridge.retrieveRecent()
 
-      setrecent(recent)
+      setRecent(recent)
       setSystemConfigs({
         OS,
         arch: architecture,
@@ -45,13 +48,29 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
       switchAppTheme()
     })
   }, [])
-
   useEffect(() => {
-    const handleCreateProjectAccelerator = () => {
-      window.bridge.createProjectAccelerator(() => openModal('create-project', null))
+    const handleOpenProjectAccelerator = () => {
+      if (editingState === 'unsaved') {
+        openModal('save-changes-project', 'open-project')
+      }
     }
-    handleCreateProjectAccelerator()
-  }, [])
+
+    const handleCreateProjectAccelerator = () => {
+      if (editingState !== 'unsaved') {
+        openModal('create-project', null)
+      } else {
+        openModal('save-changes-project', 'create-project')
+      }
+    }
+
+    window.bridge.openProjectAccelerator(handleOpenProjectAccelerator)
+    window.bridge.createProjectAccelerator(handleCreateProjectAccelerator)
+
+    return () => {
+      window.bridge.removeOpenProjectAccelerator()
+      window.bridge.removeCreateProjectAccelerator()
+    }
+  }, [editingState])
 
   return (
     <>
@@ -66,6 +85,15 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
         {children}
         <Toaster />
         {modals?.['create-project']?.open === true && <ProjectModal isOpen={modals['create-project'].open} />}
+        {modals?.['save-changes-project']?.open === true && (
+          <SaveChangesModal
+            isOpen={modals['save-changes-project'].open}
+            validationContext={modals['save-changes-project'].data as string}
+          />
+        )}
+        {modals?.['confirm-delete-element']?.open === true && (
+          <ConfirmDeleteElementModal isOpen={modals['confirm-delete-element'].open} />
+        )}
       </main>
     </>
   )
