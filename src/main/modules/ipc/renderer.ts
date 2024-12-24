@@ -30,7 +30,6 @@ type CreateProjectFileProps = {
 }
 type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
 
-
 const rendererProcessBridge = {
   /**
    * Handlers for creating projects.
@@ -71,8 +70,7 @@ const rendererProcessBridge = {
   openProjectAccelerator: (callback: IpcRendererCallbacks) =>
     //aqui
     ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
-  removeOpenProjectAccelerator: () =>
-    ipcRenderer.removeAllListeners('project:open-accelerator'),
+  removeOpenProjectAccelerator: () => ipcRenderer.removeAllListeners('project:open-accelerator'),
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
   openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
     ipcRenderer.invoke('project:open-by-path', projectPath),
@@ -96,7 +94,6 @@ const rendererProcessBridge = {
     ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
   removeDeletePouListener: () => ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
   removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
-  //aqui
   findInProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:find-in-project-accelerator', callback),
 
@@ -117,7 +114,7 @@ const rendererProcessBridge = {
     prefersDarkMode: boolean
     isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
-  retrieverecent: (): Promise<{ name: string, path: string; lastOpenedAt: string; createdAt: string }[]> =>
+  retrieverecent: (): Promise<{ name: string; path: string; lastOpenedAt: string; createdAt: string }[]> =>
     ipcRenderer.invoke('app:store-retrieve-recent'),
   closeWindow: () => ipcRenderer.send('window-controls:close'),
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),

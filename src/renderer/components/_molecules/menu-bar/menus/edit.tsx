@@ -6,14 +6,12 @@ import _ from 'lodash'
 import { useEffect } from 'react'
 
 import { MenuClasses } from '../constants'
-import { ConfirmDeleteElementModal } from '../modals/delete-confirmation-modal'
 
 export const EditMenu = () => {
   const {
     editor,
     workspaceActions: { setModalOpen },
     modalActions: { openModal },
-    modals,
   } = useOpenPLCStore()
   const { setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
@@ -88,9 +86,7 @@ export const EditMenu = () => {
           </MenuPrimitive.Item>
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>
-      {modals?.['confirm-delete-element']?.open === true && (
-        <ConfirmDeleteElementModal isOpen={modals['confirm-delete-element'].open} />
-      )}
+
     </MenuPrimitive.Menu>
   )
 }

@@ -5,6 +5,7 @@ import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 
 import Toaster from '../_features/[app]/toast/toaster'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
+import { ConfirmDeleteElementModal } from '../_molecules/menu-bar/modals/delete-confirmation-modal'
 import { SaveChangesModal } from '../_molecules/menu-bar/modals/save-changes-modal'
 
 type AppLayoutProps = ComponentPropsWithoutRef<'main'>
@@ -89,6 +90,9 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
             isOpen={modals['save-changes-project'].open}
             validationContext={modals['save-changes-project'].data as string}
           />
+        )}
+        {modals?.['confirm-delete-element']?.open === true && (
+          <ConfirmDeleteElementModal isOpen={modals['confirm-delete-element'].open} />
         )}
       </main>
     </>
