@@ -97,6 +97,9 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
         })
       }
     }
+    if (validationContext === 'close-app') {
+      window.bridge.closeWindow()
+    }
   }
 
   const handleSaveProject = async () => {
