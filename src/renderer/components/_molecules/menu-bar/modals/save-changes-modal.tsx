@@ -16,12 +16,13 @@ type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
 const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModalProps) => {
   const {
     project,
-    workspaceActions: { setEditingState },
+    workspaceActions: { setEditingState, setRecent },
     modalActions: { closeModal, onOpenChange, openModal },
     tabsActions: { clearTabs },
     projectActions: { setProject, clearProjects },
     flowActions: { addFlow, clearFlows },
     libraryActions: { addLibrary, clearUserLibraries },
+    editorActions: { clearEditor },
   } = useOpenPLCStore()
 
   const onClose = () => {
@@ -99,6 +100,15 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     }
     if (validationContext === 'close-app') {
       window.bridge.closeWindow()
+      return
+    }
+    if (validationContext === 'close-project') {
+      clearEditor()
+      clearTabs()
+      setRecent([])
+      clearUserLibraries()
+      clearFlows()
+      clearProjects()
     }
   }
 

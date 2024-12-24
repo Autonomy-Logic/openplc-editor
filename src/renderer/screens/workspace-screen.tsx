@@ -32,11 +32,8 @@ const WorkspaceScreen = () => {
     workspace: { editingState, isCollapsed },
     project,
     editor,
-    editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setrecent, toggleCollapse },
-    projectActions: { clearProjects },
-    flowActions: { clearFlows },
-    tabsActions: { clearTabs },
+    workspaceActions: { setEditingState, toggleCollapse },
+    modalActions: { openModal },
     searchResults,
   } = useOpenPLCStore()
 
@@ -134,12 +131,9 @@ const WorkspaceScreen = () => {
   useEffect(() => {
     const handleCloseProject = () => {
       window.bridge.closeProjectAccelerator((_event) => {
-        clearEditor()
-        clearTabs()
-        clearProjects()
-        clearFlows()
-        setEditingState('unsaved')
-        setrecent([])
+        if (editingState === 'unsaved') {
+          openModal('save-changes-project', 'close-project')
+        }
       })
     }
     handleCloseProject()

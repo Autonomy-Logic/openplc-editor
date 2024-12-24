@@ -10,7 +10,7 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
   const {
     workspace: { recent },
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setrecent },
+    workspaceActions: { setEditingState, setRecent },
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
@@ -21,7 +21,7 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
 
   const getUserRecentProjects = async () => {
-    const recentProjects = await window.bridge.retrieverecent()
+    const recentProjects = await window.bridge.retrieveRecent()
     setRecentProjects(recentProjects)
   }
 
@@ -94,7 +94,7 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
     if (success && data) {
       setEditingState('unsaved')
-      setrecent([])
+      setRecent([])
       clearEditor()
       clearTabs()
 

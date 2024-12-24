@@ -15,7 +15,7 @@ export const FileMenu = () => {
     project,
     workspace: { editingState },
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setrecent },
+    workspaceActions: { setEditingState, setRecent },
     projectActions: { setProject, clearProjects },
     tabsActions: { clearTabs },
     flowActions: { addFlow, clearFlows },
@@ -48,7 +48,7 @@ export const FileMenu = () => {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
-      setrecent([])
+      setRecent([])
       setProject({
         meta: {
           name: data.content.meta.name,
@@ -131,7 +131,7 @@ export const FileMenu = () => {
     }
     clearEditor()
     clearTabs()
-    setrecent([])
+    setRecent([])
     clearUserLibraries()
     clearFlows()
     clearProjects()

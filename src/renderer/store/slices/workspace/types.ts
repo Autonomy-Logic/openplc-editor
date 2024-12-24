@@ -29,7 +29,7 @@ type WorkspaceResponse = z.infer<typeof workspaceResponseSchema>
 
 const workspaceActionsSchema = z.object({
   setEditingState: z.function().args(workspaceStateSchema.shape.workspace.shape.editingState).returns(z.void()),
-  setrecent: z.function().args(workspaceStateSchema.shape.workspace.shape.recent).returns(z.void()),
+  setRecent: z.function().args(workspaceStateSchema.shape.workspace.shape.recent).returns(z.void()),
   setSystemConfigs: z.function().args(systemConfigsSchema).returns(z.void()),
   switchAppTheme: z.function().returns(z.void()),
   toggleMaximizedWindow: z.function().returns(z.void()),

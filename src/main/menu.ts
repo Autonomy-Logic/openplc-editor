@@ -59,7 +59,7 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-accelerator')
   }
 
-  async handleGetrecent() {
+  async handleGetRecent() {
     const response = await this.projectService.readProjectHistory(this.projectService.getProjectsFilePath())
     return response
   }
@@ -125,7 +125,7 @@ export default class MenuBuilder {
 
   // Wip: Constructing a mac machines menu.
   async buildDarwinTemplate(): Promise<MenuItemConstructorOptions[]> {
-    const recent = await this.handleGetrecent()
+    const recent = await this.handleGetRecent()
     const homeDir = process.env.HOME || ''
     const defaultDarwinMenu: MenuItemConstructorOptions = {
       role: 'appMenu',
@@ -369,7 +369,7 @@ export default class MenuBuilder {
 
   // Wip: Constructing a default machines menu.
   async buildDefaultTemplate() {
-    const recent = await this.handleGetrecent()
+    const recent = await this.handleGetRecent()
     const homeDir = process.env.HOME || ''
     const templateDefault: MenuItemConstructorOptions[] = [
       {

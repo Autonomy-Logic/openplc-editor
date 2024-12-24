@@ -33,7 +33,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    setrecent: (recent): void => {
+    setRecent: (recent): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.recent = recent

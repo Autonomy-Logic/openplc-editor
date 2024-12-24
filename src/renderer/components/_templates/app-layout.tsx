@@ -15,20 +15,15 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     modals,
     workspace: { editingState },
     modalActions: { openModal },
-    workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setrecent },
-    projectActions: { clearProjects },
-    editorActions: { clearEditor },
-    flowActions: { clearFlows },
-    libraryActions: { clearUserLibraries },
-    tabsActions: { clearTabs },
+    workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecent },
   } = useOpenPLCStore()
 
   useEffect(() => {
     const getUserSystemProps = async () => {
       const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
-      const recent = await window.bridge.retrieverecent()
+      const recent = await window.bridge.retrieveRecent()
 
-      setrecent(recent)
+      setRecent(recent)
       setSystemConfigs({
         OS,
         arch: architecture,
@@ -76,27 +71,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
       window.bridge.removeCreateProjectAccelerator()
     }
   }, [editingState])
-
-  useEffect(() => {
-    window.bridge.closeProjectAccelerator(handleCloseProject)
-
-    return () => {
-      void window.bridge.removeCloseProjectListener()
-    }
-  }, [])
-
-  const handleCloseProject = () => {
-    if (editingState === 'unsaved') {
-      openModal('save-changes-project', 'exit')
-      return
-    }
-    clearEditor()
-    clearTabs()
-    setrecent([])
-    clearUserLibraries()
-    clearFlows()
-    clearProjects()
-  }
 
   return (
     <>
