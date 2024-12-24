@@ -16,6 +16,11 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     workspace: { editingState },
     modalActions: { openModal },
     workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setrecent },
+    projectActions: { clearProjects },
+    editorActions: { clearEditor },
+    flowActions: { clearFlows },
+    libraryActions: { clearUserLibraries },
+    tabsActions: { clearTabs },
   } = useOpenPLCStore()
 
   useEffect(() => {
@@ -71,6 +76,27 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
       window.bridge.removeCreateProjectAccelerator()
     }
   }, [editingState])
+
+  useEffect(() => {
+    window.bridge.closeProjectAccelerator(handleCloseProject)
+
+    return () => {
+      void window.bridge.removeCloseProjectListener()
+    }
+  }, [])
+
+  const handleCloseProject = () => {
+    if (editingState === 'unsaved') {
+      openModal('save-changes-project', 'exit')
+      return
+    }
+    clearEditor()
+    clearTabs()
+    setrecent([])
+    clearUserLibraries()
+    clearFlows()
+    clearProjects()
+  }
 
   return (
     <>
