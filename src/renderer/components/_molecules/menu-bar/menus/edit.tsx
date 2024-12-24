@@ -82,11 +82,10 @@ export const EditMenu = () => {
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} onClick={() => openModal('confirm-delete-element', null)}>
             <span>{i18n.t('menu:edit.submenu.deletePou')}</span>
-            <span className={ACCELERATOR}>{''}</span>
+            <span className={ACCELERATOR}>{'Ctrl + Backspace'}</span>
           </MenuPrimitive.Item>
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>
-
     </MenuPrimitive.Menu>
   )
 }

@@ -162,7 +162,7 @@ export default class MenuBuilder {
         },
         {
           label: i18n.t('menu:file.submenu.closeProject'),
-          accelerator: '',
+          accelerator: 'Cmd+Shift+W',
           click: () => this.handleCloseProject(),
         },
         { type: 'separator' },

@@ -68,7 +68,6 @@ const rendererProcessBridge = {
    * As for the click and for the accelerator type.
    */
   openProjectAccelerator: (callback: IpcRendererCallbacks) =>
-    //aqui
     ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
   removeOpenProjectAccelerator: () => ipcRenderer.removeAllListeners('project:open-accelerator'),
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
@@ -88,8 +87,10 @@ const rendererProcessBridge = {
   closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
   closeProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:close-project-accelerator', callback),
+  removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
   deletePouAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:delete-pou-accelerator', callback),
+
   switchPerspective: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
   removeDeletePouListener: () => ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),

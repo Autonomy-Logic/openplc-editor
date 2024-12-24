@@ -16,9 +16,11 @@ export const FileMenu = () => {
     workspace: { editingState },
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setrecent },
-    projectActions: { setProject },
+    projectActions: { setProject, clearProjects },
     tabsActions: { clearTabs },
-    flowActions: { addFlow },
+    flowActions: { addFlow, clearFlows },
+    libraryActions: { clearUserLibraries },
+
     editor,
     modalActions: { openModal },
   } = useOpenPLCStore()
@@ -114,11 +116,25 @@ export const FileMenu = () => {
     setSelectedTab(editor.meta.name)
   }, [editor])
 
+  useEffect(() => {
+    window.bridge.closeProjectAccelerator(handleCloseProject)
+
+    return () => {
+      void window.bridge.removeCloseProjectListener()
+    }
+  }, [])
+
   const handleCloseProject = () => {
+    if (editingState === 'unsaved') {
+      openModal('save-changes-project', 'exit')
+      return
+    }
     clearEditor()
     clearTabs()
-    setEditingState('unsaved')
     setrecent([])
+    clearUserLibraries()
+    clearFlows()
+    clearProjects()
   }
 
   return (
@@ -150,7 +166,7 @@ export const FileMenu = () => {
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} onClick={() => void handleCloseProject()}>
               <span>{i18n.t('menu:file.submenu.closeProject')}</span>
-              <span className={ACCELERATOR}>{'Ctrl  + W'}</span>
+              <span className={ACCELERATOR}>{'Ctrl + Shift + W'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
             <MenuPrimitive.Item className={ITEM} disabled>
