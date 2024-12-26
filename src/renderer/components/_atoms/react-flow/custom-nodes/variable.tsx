@@ -9,7 +9,7 @@ import { BlockNodeData, BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges, getVariableByName, validateVariableType } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
-// import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
+import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 
 export type VariableNode = Node<
   BasicNodeData & {
@@ -49,7 +49,15 @@ const VariableElement = (block: VariableProps) => {
     flowActions: { updateNode },
   } = useOpenPLCStore()
 
-  const inputVariableRef = useRef<HTMLTextAreaElement>(null)
+  const inputVariableRef = useRef<
+    HTMLTextAreaElement & {
+      blur: ({ submit }: { submit?: boolean }) => void
+      isFocused: boolean
+    }
+  >(null)
+
+  const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
+  const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   const [variableValue, setVariableValue] = useState(data.variable.name)
   const [inputError, setInputError] = useState<boolean>(false)
@@ -124,6 +132,15 @@ const VariableElement = (block: VariableProps) => {
         })
       }
 
+      if (variable.name === (variableNode as VariableNode).data.variable.name && variable.name !== variableValue) {
+        setVariableValue(variable.name)
+        if (inputVariableRef.current?.isFocused) {
+          inputVariableRef.current.blur({ submit: false })
+          handleSubmitVariableValueOnTextareaBlur(variable.name)
+          return
+        }
+      }
+
       const validation = validateVariableType(variable.type.value, data.block.variableType)
       if (!validation.isValid && dataTypes.length > 0) {
         const userDataTypes = dataTypes.map((dataType) => dataType.name)
@@ -146,7 +163,9 @@ const VariableElement = (block: VariableProps) => {
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitVariableValue = () => {
+  const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
+    const variableNameToSubmit = variableName || variableValue
+
     const { pou, rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
     })
@@ -155,11 +174,11 @@ const VariableElement = (block: VariableProps) => {
 
     let variable: PLCVariable | { name: string } | undefined = getVariableByName(
       pou.data.variables as PLCVariable[],
-      variableValue,
+      variableNameToSubmit,
     )
     if (!variable) {
       setIsAVariable(false)
-      variable = { name: variableValue }
+      variable = { name: variableNameToSubmit }
     } else {
       setIsAVariable(true)
     }
@@ -205,6 +224,12 @@ const VariableElement = (block: VariableProps) => {
     setInputError(false)
   }
 
+  const onChangeHandler = () => {
+    if (!openAutocomplete) {
+      setOpenAutocomplete(true)
+    }
+  }
+
   return (
     <>
       <div style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}>
@@ -226,18 +251,31 @@ const VariableElement = (block: VariableProps) => {
           placeholder={`(*${data.block.variableType.type.value}*)`}
           textAreaValue={variableValue}
           setTextAreaValue={setVariableValue}
-          handleSubmit={handleSubmitVariableValue}
+          handleSubmit={handleSubmitVariableValueOnTextareaBlur}
           inputHeight={{
             height: DEFAULT_VARIABLE_HEIGHT,
             scrollLimiter: DEFAULT_VARIABLE_HEIGHT,
           }}
           ref={inputVariableRef}
+          onChange={onChangeHandler}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
+            setKeyPressedAtTextarea(e.key)
+          }}
+          onKeyUp={() => setKeyPressedAtTextarea('')}
         />
-        {/* <div className='relative flex justify-center'>
-          <div className='absolute -bottom-2'>
-            <VariablesBlockAutoComplete block={block} blockType={'variable'} valueToSearch={variableValue} />
+        <div className='relative flex justify-center'>
+          <div className='absolute -bottom-1'>
+            <VariablesBlockAutoComplete
+              block={block}
+              blockType={'variable'}
+              valueToSearch={variableValue}
+              isOpen={openAutocomplete}
+              setIsOpen={(value) => setOpenAutocomplete(value)}
+              keyPressed={keyPressedAtTextarea}
+            />
           </div>
-        </div> */}
+        </div>
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

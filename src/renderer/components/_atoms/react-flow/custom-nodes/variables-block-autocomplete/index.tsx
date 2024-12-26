@@ -1,9 +1,12 @@
 import * as Popover from '@radix-ui/react-popover'
 import { PlusIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { extractNumberAtEnd } from '@root/renderer/store/slices/project/utils/variables'
+import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import { Node } from '@xyflow/react'
 import { ComponentPropsWithRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 
 import { getPouVariablesRungNodeAndEdges, getVariableRestrictionType } from '../utils'
 import { BasicNodeData } from '../utils/types'
@@ -21,10 +24,17 @@ type VariablesBlockAutoCompleteProps = ComponentPropsWithRef<'div'> & {
 const blockTypeRestrictions = (block: unknown, blockType: VariablesBlockAutoCompleteProps['blockType']) => {
   switch (blockType) {
     case 'contact':
-      return ['bool']
+      return {
+        values: ['bool'],
+        definition: 'base-type',
+      }
     case 'variable': {
-      const variableType = (block as VariableNode).data.block.variableType.type.value
-      return getVariableRestrictionType(variableType)
+      const variableType = (block as VariableNode).data.block.variableType.type
+      const values = getVariableRestrictionType(variableType.value).map((value) => value.toLowerCase())
+      return {
+        values,
+        definition: variableType.definition,
+      }
     }
     default:
       return undefined
@@ -41,6 +51,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       project: {
         data: { pous },
       },
+      projectActions: { createVariable },
       flows,
       flowActions: { updateNode },
     } = useOpenPLCStore()
@@ -58,9 +69,17 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       .filter(
         (variable) =>
           variable.name.includes(valueToSearch) &&
-          (variableRestrictions === undefined || variableRestrictions.includes(variable.type.value.toLowerCase())),
+          (variableRestrictions === undefined ||
+            variableRestrictions.values.includes(variable.type.value.toLowerCase())),
       )
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => {
+        const aNumber = extractNumberAtEnd(a.name).number
+        const bNumber = extractNumberAtEnd(b.name).number
+        if (aNumber === bNumber) {
+          return a.name.localeCompare(b.name)
+        }
+        return aNumber - bNumber
+      })
     const [selectedVariable, setSelectedVariable] = useState<{ positionInArray: number; variableName: string }>({
       positionInArray: -1,
       variableName: '',
@@ -104,9 +123,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           break
         case 'Tab':
         case 'Enter':
-          setInputFocus(false)
-          setIsOpen && setIsOpen(false)
-          submitVariableToBlock()
+          submitVariableToBlock({})
           break
         default:
           break
@@ -129,11 +146,19 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       }
     }
 
-    const submitVariableToBlock = () => {
+    const submitVariableToBlock = ({ clickedVariable }: { clickedVariable?: number }) => {
       const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
       if (!rung || !node) return
+
+      const variable =
+        clickedVariable !== undefined
+          ? filteredVariables[clickedVariable]
+          : selectedVariable.positionInArray !== -1
+            ? filteredVariables[selectedVariable.positionInArray]
+            : undefined
+      if (!variable) return
 
       updateNode({
         editorName: editor.meta.name,
@@ -143,10 +168,61 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           ...node,
           data: {
             ...node.data,
-            variable: filteredVariables[selectedVariable.positionInArray],
+            variable: variable,
           },
         },
       })
+
+      setInputFocus(false)
+      setIsOpen && setIsOpen(false)
+    }
+
+    const submitAddVariable = ({ variableName }: { variableName: string }) => {
+      const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+        nodeId: (block as Node<BasicNodeData>).id,
+      })
+      if (!rung || !node) return
+
+      const variableTypeRestriction = {
+        definition: variableRestrictions ? variableRestrictions.definition : undefined,
+        value: variableRestrictions ? variableRestrictions.values[0] : undefined,
+      }
+      if (!variableTypeRestriction.definition || !variableTypeRestriction.value) return
+
+      const res = createVariable({
+        data: {
+          id: uuidv4(),
+          name: variableName,
+          type: {
+            definition: variableTypeRestriction.definition as 'base-type' | 'derived' | 'array' | 'user-data-type',
+            value: variableTypeRestriction.value,
+          },
+          class: 'local',
+          location: '',
+          documentation: '',
+          debug: false,
+        },
+        scope: 'local',
+        associatedPou: editor.meta.name,
+      })
+
+      if (!res) return
+
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            variable: res.data as PLCVariable | undefined,
+          },
+        },
+      })
+
+      setInputFocus(false)
+      setIsOpen && setIsOpen(false)
     }
 
     return (
@@ -179,7 +255,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             {filteredVariables.length > 0 && (
               <div className='h-fit w-full p-1'>
                 <div className='flex max-h-32 w-full flex-col overflow-y-auto' ref={filteredDivRef}>
-                  {filteredVariables.map((variable) => (
+                  {filteredVariables.map((variable, index) => (
                     <div
                       key={variable.name}
                       className={cn(
@@ -189,7 +265,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
                         },
                       )}
                       onClick={() => {
-                        console.log('variable', variable)
+                        submitVariableToBlock({ clickedVariable: index })
                       }}
                     >
                       {variable.name}
@@ -198,7 +274,10 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
                 </div>
               </div>
             )}
-            <div className='flex h-fit w-full flex-row items-center justify-center p-1'>
+            <div
+              className='flex h-fit w-full flex-row items-center justify-center p-1'
+              onClick={() => submitAddVariable({ variableName: valueToSearch })}
+            >
               <PlusIcon className='h-3 w-3 fill-red-600 stroke-red-600' />
               <div className='ml-2'>Add variable</div>
             </div>
