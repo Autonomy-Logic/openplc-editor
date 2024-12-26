@@ -138,8 +138,8 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
           }}
           onScroll={(e) => onScrollHandler(e)}
           onKeyDown={(e) => {
-            submitWith.enter && e.key === 'Enter' && inputRef.current?.blur()
             props.onKeyDown && props.onKeyDown(e)
+            submitWith.enter && e.key === 'Enter' && inputRef.current?.blur()
           }}
           onKeyUp={props.onKeyUp}
           ref={inputRef}

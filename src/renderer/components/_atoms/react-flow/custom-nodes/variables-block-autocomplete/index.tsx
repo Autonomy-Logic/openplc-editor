@@ -162,10 +162,13 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
 
     const closeModal = () => {
       setInputFocus(false)
+      setSelectedVariable({ positionInArray: -1, variableName: '' })
       setIsOpen && setIsOpen(false)
     }
 
     const submitVariableToBlock = ({ clickedVariable }: { clickedVariable?: number }) => {
+      closeModal()
+
       const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
@@ -191,8 +194,6 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           },
         },
       })
-
-      closeModal()
     }
 
     const submitAddVariable = ({ variableName }: { variableName: string }) => {
