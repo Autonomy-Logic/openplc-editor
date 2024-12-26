@@ -19,11 +19,19 @@ export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) =
     libraryActions: { clearUserLibraries },
     flowActions: { clearFlows },
     projectActions: { clearProjects },
+    modalActions: { openModal },
+    workspace: { editingState },
+    workspaceActions: { setEditingState },
   } = useOpenPLCStore()
 
   const isLadderEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'ld'
 
   const handleExitApplication = () => {
+    if (editingState === 'unsaved') {
+      openModal('save-changes-project', 'exit')
+      return
+    }
+    setEditingState('initial-state')
     clearUserLibraries()
     clearFlows()
     clearProjects()

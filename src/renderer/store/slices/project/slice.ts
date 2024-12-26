@@ -436,7 +436,27 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
       return response
     },
-
+    deleteDatatype: (dataTypeName) => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const datatypeIndex = project.data.dataTypes.findIndex((datatype) => datatype.name === dataTypeName)
+          if (datatypeIndex === -1) {
+            response = { ok: false, message: 'Datatype not found' }
+            return
+          }
+          project.data.dataTypes.splice(datatypeIndex, 1)
+        }),
+      )
+      if (!response.ok) {
+        toast({
+          title: 'Error',
+          description: response.message,
+          variant: 'fail',
+        })
+      }
+      return response
+    },
     // TODO: Review requirements.
     /**
      * Function to update a unique data type.

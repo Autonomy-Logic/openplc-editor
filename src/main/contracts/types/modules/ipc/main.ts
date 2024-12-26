@@ -8,7 +8,7 @@ export type MainIpcModule = {
   ipcMain: IpcMain
   mainWindow: InstanceType<typeof BrowserWindow> | null
   compilerService: typeof CompilerService
-  projectService: typeof ProjectService
+  projectService: InstanceType<typeof ProjectService>
   store: TStoreType
   setupMainIpcListener: () => void
   mainIpcEventHandlers: {
@@ -22,6 +22,6 @@ export type MainIpcModuleConstructor = {
   ipcMain: IpcMain
   mainWindow: InstanceType<typeof BrowserWindow> | null
   compilerService: typeof CompilerService
-  projectService: typeof ProjectService
+  projectService: InstanceType<typeof ProjectService>
   store: TStoreType
 }

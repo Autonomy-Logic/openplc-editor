@@ -13,7 +13,7 @@ export const RecentMenu = () => {
   const {
     workspace: { recent },
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setrecent },
+    workspaceActions: { setEditingState, setRecent },
     tabsActions: { clearTabs },
     projectActions: { setProject },
     flowActions: { addFlow },
@@ -25,7 +25,7 @@ export const RecentMenu = () => {
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
 
   const getUserRecentProjects = async () => {
-    const recentProjects = await window.bridge.retrieverecent()
+    const recentProjects = await window.bridge.retrieveRecent()
     setRecentProjects(recentProjects)
   }
 
@@ -96,7 +96,7 @@ export const RecentMenu = () => {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
-      setrecent([])
+      setRecent([])
 
       const projectMeta = {
         name: data.content.meta.name,

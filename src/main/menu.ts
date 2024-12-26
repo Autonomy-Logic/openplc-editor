@@ -17,9 +17,9 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
  * @class MenuBuilder
  */
 export default class MenuBuilder {
-  private mainWindow: BrowserWindow;
+  private mainWindow: BrowserWindow
 
-  private projectService: ProjectService;
+  private projectService: ProjectService
 
   developOptions: MenuItemConstructorOptions[] = [
     { type: 'separator' },
@@ -29,8 +29,8 @@ export default class MenuBuilder {
   ]
 
   constructor(mainWindow: BrowserWindow) {
-    this.mainWindow = mainWindow;
-    this.projectService = new ProjectService(mainWindow);
+    this.mainWindow = mainWindow
+    this.projectService = new ProjectService(mainWindow)
   }
 
   async buildMenu(): Promise<Menu> {
@@ -47,22 +47,20 @@ export default class MenuBuilder {
 
     return menu
   }
-
-   handleCreateProject() {
-
+  handleCreateProject() {
     this.mainWindow.webContents.send('project:create-accelerator')
   }
 
-  async handleOpenProject() {
-    const response = await this.projectService.openProject()
-    this.mainWindow.webContents.send('project:open-accelerator', response)
+  // TODO:
+  sendOpenRequest() {
+    this.mainWindow.webContents.send('project:open-project-request')
   }
 
   handleSaveProject() {
     this.mainWindow.webContents.send('project:save-accelerator')
   }
 
-  async handleGetrecent() {
+  async handleGetRecent() {
     const response = await this.projectService.readProjectHistory(this.projectService.getProjectsFilePath())
     return response
   }
@@ -74,32 +72,37 @@ export default class MenuBuilder {
 
   handleCloseTab() {
     this.mainWindow.webContents.send('workspace:close-tab-accelerator')
-
   }
 
-  handleCloseProject(){
+  handleCloseProject() {
     this.mainWindow.webContents.send('workspace:close-project-accelerator')
   }
 
-  handleDeletePou(){
+  handleDeletePou() {
     this.mainWindow.webContents.send('workspace:delete-pou-accelerator')
-
   }
 
   handleSwitchPerspective() {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
   }
-handleOpenExternalLink(link:string) {
- void shell.openExternal(link)
-}
+  async handleOpenExternalLink(link: string) {
+    try {
+      await shell.openExternal(link)
+    } catch (error) {
+      console.error('Failed to open external link:', error)
+      this.mainWindow.webContents.send('error:external-link', {
+        message: 'Failed to open external link',
+        error,
+      })
+    }
+  }
+  handleOpenAboutModal() {
+    this.mainWindow.webContents.send('about:open-accelerator')
+  }
+  handleFindInProject() {
+    this.mainWindow.webContents.send('project:find-in-project-accelerator')
+  }
 
-handleOpenAboutModal() {
-  this.mainWindow.webContents.send('about:open-accelerator')
-}
-
-handleFindInProject(){
-  this.mainWindow.webContents.send('project:find-in-project-accelerator')
-}
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -123,7 +126,7 @@ handleFindInProject(){
 
   // Wip: Constructing a mac machines menu.
   async buildDarwinTemplate(): Promise<MenuItemConstructorOptions[]> {
-    const recent = await this.handleGetrecent()
+    const recent = await this.handleGetRecent()
     const homeDir = process.env.HOME || ''
     const defaultDarwinMenu: MenuItemConstructorOptions = {
       role: 'appMenu',
@@ -140,7 +143,7 @@ handleFindInProject(){
         {
           label: i18n.t('menu:file.submenu.open'),
           accelerator: 'Cmd+O',
-          click: () => void this.handleOpenProject(),
+          click: () => this.sendOpenRequest(),
         },
         { type: 'separator' },
         {
@@ -160,7 +163,7 @@ handleFindInProject(){
         },
         {
           label: i18n.t('menu:file.submenu.closeProject'),
-          accelerator: '',
+          accelerator: 'Cmd+Shift+W',
           click: () => this.handleCloseProject(),
         },
         { type: 'separator' },
@@ -362,12 +365,12 @@ handleFindInProject(){
       ],
     }
 
-    return [defaultDarwinMenu,subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
+    return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
   }
 
   // Wip: Constructing a default machines menu.
   async buildDefaultTemplate() {
-    const recent = await this.handleGetrecent()
+    const recent = await this.handleGetRecent()
     const homeDir = process.env.HOME || ''
     const templateDefault: MenuItemConstructorOptions[] = [
       {
@@ -382,9 +385,9 @@ handleFindInProject(){
           {
             label: i18n.t('menu:file.submenu.open'),
             accelerator: 'Ctrl+O',
-            click: () => void this.handleOpenProject(),
+            click: () => this.sendOpenRequest(),
           },
-             {
+          {
             type: 'separator',
           },
           {
@@ -525,7 +528,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:edit.submenu.deletePou'),
-            accelerator:"Ctrl+Shift+delete",
+            accelerator: 'Ctrl+backspace',
             click: () => this.handleDeletePou(),
           },
         ],
@@ -596,7 +599,7 @@ handleFindInProject(){
           },
           {
             label: i18n.t('menu:help.submenu.about'),
-            accelerator : 'F1',
+            accelerator: 'F1',
             click: () => this.handleOpenAboutModal(),
           },
         ],

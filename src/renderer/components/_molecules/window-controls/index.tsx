@@ -30,8 +30,21 @@ const MaximizeButton = () => {
 }
 
 const CloseButton = () => {
+  const {
+    workspace: { editingState },
+    modalActions: { openModal },
+  } = useOpenPLCStore()
+  const handleClose = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    if (editingState !== 'unsaved') {
+      window.bridge.closeWindow()
+    } else {
+      openModal('save-changes-project', 'close-app')
+    }
+  }
+
   return (
-    <WindowControlButton id='close-button' className='hover:bg-red-600' onClick={() => window.bridge.closeWindow()}>
+    <WindowControlButton id='close-button' className='hover:bg-red-600' onClick={handleClose}>
       <CloseWindowIcon />
     </WindowControlButton>
   )
