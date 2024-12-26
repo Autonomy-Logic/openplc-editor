@@ -227,7 +227,6 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       if (!res.ok) return
 
       const variable = res.data as PLCVariable | undefined
-      console.log('res.data --> variable', variable)
 
       updateNode({
         editorName: editor.meta.name,
