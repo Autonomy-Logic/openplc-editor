@@ -17,6 +17,7 @@ import { HighlightedTextArea } from '../../highlighted-textarea'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
+import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 
 export type CoilNode = Node<
   BasicNodeData & {
@@ -108,7 +109,9 @@ export const DEFAULT_COIL_TYPES: CoilType = {
   },
 }
 
-export const Coil = ({ selected, data, id }: CoilProps) => {
+export const Coil = (block: CoilProps) => {
+  const { selected, data, id } = block
+
   const {
     editor,
     project: {
@@ -119,11 +122,19 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
-  const [coilVariableValue, setCoilVariableValue] = useState<string>('')
+  const [coilVariableValue, setCoilVariableValue] = useState<string>(data.variable.name)
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
   const inputWrapperRef = useRef<HTMLDivElement>(null)
-  const inputVariableRef = useRef<HTMLTextAreaElement>(null)
+  const inputVariableRef = useRef<
+    HTMLTextAreaElement & {
+      blur: ({ submit }: { submit?: boolean }) => void
+      isFocused: boolean
+    }
+  >(null)
+
+  const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
+  const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
@@ -154,13 +165,20 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       variableName: coilVariableValue,
     })
 
+    if (!rung || !node) return
+
     const variable = variables.selected
-    if (!variable && inputVariableRef.current && !inputVariableRef.current.focus) {
+    if (!variable) {
       setWrongVariable(true)
       return
     }
 
-    if (variable && node && rung && node.data.variable !== variable) {
+    if (variable && (variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL')) {
+      setWrongVariable(true)
+      return
+    }
+
+    if (node.data.variable !== variable) {
       setCoilVariableValue(variable.name)
       updateNode({
         editorName: editor.meta.name,
@@ -174,6 +192,18 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
           },
         },
       })
+      setWrongVariable(false)
+      return
+    }
+
+    if (node.data.variable === variable && variable.name !== coilVariableValue) {
+      setCoilVariableValue(variable.name)
+      if (inputVariableRef.current?.isFocused) {
+        inputVariableRef.current.blur({ submit: false })
+        handleSubmitCoilVariableOnTextareaBlur(variable.name)
+      }
+      setWrongVariable(false)
+      return
     }
 
     setWrongVariable(false)
@@ -182,16 +212,21 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitCoilVariable = () => {
+  const handleSubmitCoilVariableOnTextareaBlur = (variableName?: string) => {
+    const variableNameToSubmit = variableName || coilVariableValue
     const { variables, rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
-      variableName: coilVariableValue,
+      variableName: variableNameToSubmit,
     })
     if (!rung || !node) return
 
     const variable = variables.selected
-    if (!variable || variable.name !== coilVariableValue) {
-      setWrongVariable(true)
+    if (
+      !variable ||
+      variable.name !== variableNameToSubmit ||
+      variable.type.definition !== 'base-type' ||
+      variable.type.value.toUpperCase() !== 'BOOL'
+    ) {
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -200,10 +235,11 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
           ...node,
           data: {
             ...node.data,
-            variable: { name: coilVariableValue },
+            variable: { name: variableNameToSubmit },
           },
         },
       })
+      setWrongVariable(true)
       return
     }
 
@@ -220,6 +256,12 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
       },
     })
     setWrongVariable(false)
+  }
+
+  const onChangeHandler = () => {
+    if (!openAutocomplete) {
+      setOpenAutocomplete(true)
+    }
   }
 
   return (
@@ -242,7 +284,7 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
           <HighlightedTextArea
             textAreaValue={coilVariableValue}
             setTextAreaValue={setCoilVariableValue}
-            handleSubmit={handleSubmitCoilVariable}
+            handleSubmit={handleSubmitCoilVariableOnTextareaBlur}
             inputHeight={{
               height: 24,
               scrollLimiter: 32,
@@ -250,7 +292,27 @@ export const Coil = ({ selected, data, id }: CoilProps) => {
             ref={inputVariableRef}
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
+            onChange={onChangeHandler}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
+              setKeyPressedAtTextarea(e.key)
+            }}
+            onKeyUp={() => setKeyPressedAtTextarea('')}
           />
+          {openAutocomplete && (
+            <div className='relative flex justify-center'>
+              <div className='absolute -bottom-4'>
+                <VariablesBlockAutoComplete
+                  block={block}
+                  blockType={'coil'}
+                  valueToSearch={coilVariableValue}
+                  isOpen={openAutocomplete}
+                  setIsOpen={(value) => setOpenAutocomplete(value)}
+                  keyPressed={keyPressedAtTextarea}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
       {data.handles.map((handle, index) => (

@@ -26,7 +26,7 @@ const checkIfLocationExists = (variables: PLCVariable[], location: string) => {
 /**
  * This function extracts the number at the end of a string.
  */
-const extractNumberAtEnd = (str: string): { number: number; string: string; length: number } => {
+export const extractNumberAtEnd = (str: string): { number: number; string: string; length: number } => {
   const match = str.match(/(\d+)$/)
   const number = match ? parseInt(match[0], 10) : 0
   return {
