@@ -1,5 +1,5 @@
 import { DraggableProvidedDragHandleProps } from '@hello-pangea/dnd'
-import { TrashCanIcon } from '@root/renderer/assets'
+import { CloseIcon } from '@root/renderer/assets'
 import { DragHandleIcon } from '@root/renderer/assets/icons/interface/DragHandle'
 import { StickArrowIcon } from '@root/renderer/assets/icons/interface/StickArrow'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -14,7 +14,7 @@ import { BasicNodeData } from '../../_atoms/react-flow/custom-nodes/utils/types'
 type RungHeaderProps = {
   rung: RungState
   isOpen: boolean
-  draggableHandleProps: DraggableProvidedDragHandleProps | null
+  draggableHandleProps: DraggableProvidedDragHandleProps | undefined
   className: string
   onClick: () => void
 }
@@ -138,9 +138,9 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
         <button
           aria-label='Delete body button'
           onClick={handleRemoveRung}
-          className='h-fit rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+          className='flex h-full w-7 items-center justify-center rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
         >
-          <TrashCanIcon className='h-5 w-5 stroke-[#0464FB] dark:stroke-brand-light' />
+          <CloseIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />
         </button>
         <button
           aria-label='Expand body button'

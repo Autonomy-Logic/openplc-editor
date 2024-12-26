@@ -11,9 +11,9 @@ import { MenuClasses } from '../constants'
 
 export const RecentMenu = () => {
   const {
-    workspace: { recents },
+    workspace: { recent },
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecents },
+    workspaceActions: { setEditingState, setRecent },
     tabsActions: { clearTabs },
     projectActions: { setProject },
     flowActions: { addFlow },
@@ -21,17 +21,17 @@ export const RecentMenu = () => {
   } = useOpenPLCStore()
   const { TRIGGER, CONTENT, ITEM } = MenuClasses
 
-  const [recentProjects, setRecentProjects] = useState(recents)
+  const [recentProjects, setRecentProjects] = useState(recent)
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
 
   const getUserRecentProjects = async () => {
-    const recentProjects = await window.bridge.retrieveRecents()
+    const recentProjects = await window.bridge.retrieveRecent()
     setRecentProjects(recentProjects)
   }
 
   useEffect(() => {
     void getUserRecentProjects()
-  }, [recents])
+  }, [recent])
 
   const compareLastOpened = (lastOpenedAt: string) => {
     const currentTime = new Date()
@@ -96,7 +96,7 @@ export const RecentMenu = () => {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
-      setRecents([])
+      setRecent([])
 
       const projectMeta = {
         name: data.content.meta.name,

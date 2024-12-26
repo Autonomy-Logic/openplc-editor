@@ -38,7 +38,7 @@ const rendererProcessBridge = {
 
   createProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
-
+  removeCreateProjectAccelerator: () => ipcRenderer.removeAllListeners('project:create-accelerator'),
   createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
   createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> =>
     ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
@@ -67,9 +67,9 @@ const rendererProcessBridge = {
    * Handlers for opening projects.
    * As for the click and for the accelerator type.
    */
-  openProjectAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
-
+  handleOpenProjectRequest: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:open-project-request', (_event) => callback(_event)),
+  removeOpenProjectAccelerator: () => ipcRenderer.removeAllListeners('project:open-project-request'),
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
   openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
     ipcRenderer.invoke('project:open-by-path', projectPath),
@@ -87,14 +87,17 @@ const rendererProcessBridge = {
   closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
   closeProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:close-project-accelerator', callback),
+  removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
   deletePouAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:delete-pou-accelerator', callback),
+
   switchPerspective: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
   removeDeletePouListener: () => ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
   removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
   findInProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:find-in-project-accelerator', callback),
+
   aboutModalAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('about:open-accelerator', callback),
   aboutAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('website:about-accelerator', callback),
   /** -------------------------------------------------------------------------------------------- */
@@ -105,15 +108,15 @@ const rendererProcessBridge = {
    * Send the OS information to the renderer process
    * !IMPORTANT: This return type must be refactored to match the Node.js API
    */
-  getRecents: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
+  getRecent: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
   getSystemInfo: (): Promise<{
     OS: 'linux' | 'darwin' | 'win32' | ''
     architecture: 'x64' | 'arm' | ''
     prefersDarkMode: boolean
     isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
-  retrieveRecents: (): Promise<{ name: string, path: string; lastOpenedAt: string; createdAt: string }[]> =>
-    ipcRenderer.invoke('app:store-retrieve-recents'),
+  retrieveRecent: (): Promise<{ name: string; path: string; lastOpenedAt: string; createdAt: string }[]> =>
+    ipcRenderer.invoke('app:store-retrieve-recent'),
   closeWindow: () => ipcRenderer.send('window-controls:close'),
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   maximizeWindow: () => ipcRenderer.send('window-controls:maximize'),

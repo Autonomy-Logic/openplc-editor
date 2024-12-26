@@ -3,6 +3,7 @@
   "productName": "OpenPLC Editor",
   "asar": true,
   "asarUnpack": "**\\*.{node,dll}",
+  "generateUpdatesFilesForAllChannels": true,
   "files": ["dist", "node_modules", "package.json"],
   "afterSign": "scripts/notarize.js",
   "directories": {

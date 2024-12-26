@@ -184,6 +184,7 @@ const projectActionsSchema = z.object({
     .function()
     .args(dataTypeDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
     .returns(projectResponseSchema),
+  deleteDatatype: z.function().args(z.string()).returns(z.void()),
   updateDatatype: z.function().args(z.string(), PLCDataTypeSchema.optional()).returns(z.void()),
   createArrayDimension: z
     .function()

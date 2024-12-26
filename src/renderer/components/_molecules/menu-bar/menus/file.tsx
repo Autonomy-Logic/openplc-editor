@@ -13,36 +13,42 @@ import { MenuClasses } from '../constants'
 export const FileMenu = () => {
   const {
     project,
+    workspace: { editingState },
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecents },
-    projectActions: { setProject },
+    workspaceActions: { setEditingState, setRecent },
+    projectActions: { setProject, clearProjects },
     tabsActions: { clearTabs },
-    flowActions: { addFlow },
+    flowActions: { addFlow, clearFlows },
+    libraryActions: { clearUserLibraries },
+
     editor,
     modalActions: { openModal },
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
-  const handleCreateProject = () => {
-    try {
-      openModal('create-project', null)
-    } catch (_error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to open project creation modal',
-        variant: 'fail',
-      })
+  const handleUnsavedChanges = (action: 'create-project' | 'open-project') => {
+    if (editingState === 'unsaved') {
+      openModal('save-changes-project', action)
+      return true
     }
+    return false
+  }
+
+  const handleCreateProject = () => {
+    if (handleUnsavedChanges('create-project')) return
+    openModal('create-project', null)
   }
 
   const handleOpenProject = async () => {
+    if (handleUnsavedChanges('open-project')) return
+
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
-      setRecents([])
+      setRecent([])
       setProject({
         meta: {
           name: data.content.meta.name,
@@ -86,8 +92,7 @@ export const FileMenu = () => {
 
     const { success, reason } = await window.bridge.saveProject({
       projectPath: project.meta.path,
-      //@ts-expect-error overlap
-      projectData: project.data,
+      projectData: project,
     })
 
     if (success) {
@@ -111,11 +116,25 @@ export const FileMenu = () => {
     setSelectedTab(editor.meta.name)
   }, [editor])
 
+  useEffect(() => {
+    window.bridge.closeProjectAccelerator(handleCloseProject)
+
+    return () => {
+      void window.bridge.removeCloseProjectListener()
+    }
+  }, [])
+
   const handleCloseProject = () => {
+    if (editingState === 'unsaved') {
+      openModal('save-changes-project', 'exit')
+      return
+    }
     clearEditor()
     clearTabs()
-    setEditingState('unsaved')
-    setRecents([])
+    setRecent([])
+    clearUserLibraries()
+    clearFlows()
+    clearProjects()
   }
 
   return (
@@ -147,7 +166,7 @@ export const FileMenu = () => {
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} onClick={() => void handleCloseProject()}>
               <span>{i18n.t('menu:file.submenu.closeProject')}</span>
-              <span className={ACCELERATOR}>{'Ctrl  + W'}</span>
+              <span className={ACCELERATOR}>{'Ctrl + Shift + W'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
             <MenuPrimitive.Item className={ITEM} disabled>

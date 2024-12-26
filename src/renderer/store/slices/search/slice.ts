@@ -18,10 +18,16 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
         }),
       )
     },
-    setSearchResults: (searchResults) => {
+    setSearchResults: (newSearchResult) => {
       setState(
         produce((state: SearchSlice) => {
-          state.searchResults.push(searchResults)
+          const index = state.searchResults.findIndex(
+            (result) => result.searchQuery === newSearchResult.searchQuery
+          )
+          if (index !== -1) {
+            state.searchResults.splice(index, 1)
+          }
+          state.searchResults.push(newSearchResult)
         }),
       )
     },

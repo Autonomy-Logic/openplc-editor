@@ -7,10 +7,12 @@
         "loglevel",
         "lreal",
         "lword",
+        "sublabel",
         "tailwindcss",
         "udint",
         "ulint",
-        "usint"
+        "usint",
+        "uuidv"
     ],
     "ignoreWords": [],
     "import": []
