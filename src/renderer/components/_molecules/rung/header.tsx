@@ -138,9 +138,9 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
         <button
           aria-label='Delete body button'
           onClick={handleRemoveRung}
-          className='h-fit rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+          className='flex h-full w-7 items-center justify-center rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
         >
-          <CloseIcon className='w-5 h-5 stoke-brand dark:stroke-brand-light' />
+          <CloseIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />
         </button>
         <button
           aria-label='Expand body button'
