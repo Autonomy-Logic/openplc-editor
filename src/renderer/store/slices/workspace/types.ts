@@ -10,7 +10,7 @@ type SystemConfigs = z.infer<typeof systemConfigsSchema>
 
 const workspaceStateSchema = z.object({
   workspace: z.object({
-    editingState: z.enum(['save-request', 'saved', 'unsaved']),
+    editingState: z.enum(['save-request', 'saved', 'unsaved', 'initial-state']),
     systemConfigs: systemConfigsSchema,
     recent: z.array(z.object({ lastOpenedAt: z.string(), createdAt: z.string(), path: z.string(), name: z.string() })),
     isCollapsed: z.boolean(),

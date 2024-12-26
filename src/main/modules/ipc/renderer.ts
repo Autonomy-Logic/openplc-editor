@@ -67,9 +67,9 @@ const rendererProcessBridge = {
    * Handlers for opening projects.
    * As for the click and for the accelerator type.
    */
-  openProjectAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('project:open-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
-  removeOpenProjectAccelerator: () => ipcRenderer.removeAllListeners('project:open-accelerator'),
+  handleOpenProjectRequest: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:open-project-request', (_event) => callback(_event)),
+  removeOpenProjectAccelerator: () => ipcRenderer.removeAllListeners('project:open-project-request'),
   openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
   openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
     ipcRenderer.invoke('project:open-by-path', projectPath),

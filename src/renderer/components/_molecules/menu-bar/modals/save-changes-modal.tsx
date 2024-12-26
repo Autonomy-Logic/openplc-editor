@@ -43,6 +43,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
       openModal('create-project', null)
       return
     }
+    // Validate
     if (validationContext === 'open-project') {
       try {
         const { success, data, error } = await window.bridge.openProject()

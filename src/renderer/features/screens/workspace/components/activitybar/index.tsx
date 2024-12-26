@@ -18,7 +18,7 @@ export default function Activitybar() {
     editorActions: { clearEditor },
   } = useOpenPLCStore()
   const returnStartScreen = () => {
-    setEditingState('unsaved')
+    setEditingState('initial-state')
     clearEditor()
     clearTabs()
   }

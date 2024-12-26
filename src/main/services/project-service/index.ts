@@ -59,7 +59,7 @@ class ProjectService {
   private async writeProjectHistory(projectsFilePath: string, historyData: IProjectHistoryEntry[]): Promise<void> {
     await promises.writeFile(projectsFilePath, JSON.stringify(historyData, null, 2))
   }
-  private async updateProjectHistory(projectPath: string): Promise<void> {
+  async updateProjectHistory(projectPath: string): Promise<void> {
     const projectsFilePath = this.getProjectsFilePath()
     const projectName = await this.getProjectName(projectPath)
     const historyData = await this.readProjectHistory(projectsFilePath)

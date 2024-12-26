@@ -5,7 +5,7 @@ import type { WorkspaceSlice } from './types'
 
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   workspace: {
-    editingState: 'unsaved',
+    editingState: 'initial-state',
     systemConfigs: {
       OS: '',
       arch: '',

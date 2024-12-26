@@ -50,9 +50,10 @@ export default class MenuBuilder {
   handleCreateProject() {
     this.mainWindow.webContents.send('project:create-accelerator')
   }
-  async handleOpenProject() {
-    const response = await this.projectService.openProject()
-    this.mainWindow.webContents.send('project:open-accelerator', response)
+
+  // TODO:
+  sendOpenRequest() {
+    this.mainWindow.webContents.send('project:open-project-request')
   }
 
   handleSaveProject() {
@@ -142,7 +143,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.open'),
           accelerator: 'Cmd+O',
-          click: () => void this.handleOpenProject(),
+          click: () => this.sendOpenRequest(),
         },
         { type: 'separator' },
         {
@@ -384,7 +385,7 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.open'),
             accelerator: 'Ctrl+O',
-            click: () => void this.handleOpenProject(),
+            click: () => this.sendOpenRequest(),
           },
           {
             type: 'separator',
