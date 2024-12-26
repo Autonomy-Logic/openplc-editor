@@ -28,6 +28,8 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
     },
     projectActions: { deleteVariable },
     flowActions: { addComment, removeRung },
+    workspace: { editingState },
+    modalActions: { openModal },
   } = useOpenPLCStore()
 
   const editorName = editor.meta.name
@@ -67,34 +69,39 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
      *    -- src/renderer/components/_molecules/rung/header.tsx
      *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
      */
-    const blockNodes = rung.nodes.filter((node) => node.type === 'block')
-    if (blockNodes.length > 0) {
-      let variables: PLCVariable[] = []
-      if (pou) variables = [...pou.data.variables] as PLCVariable[]
+    if (editingState === 'unsaved') {
+      openModal('confirm-delete-element', rung)
+    } else {
+      const blockNodes = rung.nodes.filter((node) => node.type === 'block')
 
-      blockNodes.forEach((blockNode) => {
-        const variableIndex = variables.findIndex(
-          (variable) => variable.id === (blockNode.data as BasicNodeData).variable.id,
-        )
-        if (variableIndex !== -1) {
-          deleteVariable({
-            rowId: variableIndex,
-            scope: 'local',
-            associatedPou: editor.meta.name,
-          })
-          variables.splice(variableIndex, 1)
-        }
-        if (
-          editor.type === 'plc-graphical' &&
-          editor.variable.display === 'table' &&
-          parseInt(editor.variable.selectedRow) === variableIndex
-        ) {
-          updateModelVariables({ display: 'table', selectedRow: -1 })
-        }
-      })
+      if (blockNodes.length > 0) {
+        let variables: PLCVariable[] = []
+        if (pou) variables = [...pou.data.variables] as PLCVariable[]
+
+        blockNodes.forEach((blockNode) => {
+          const variableIndex = variables.findIndex(
+            (variable) => variable.id === (blockNode.data as BasicNodeData).variable.id,
+          )
+          if (variableIndex !== -1) {
+            deleteVariable({
+              rowId: variableIndex,
+              scope: 'local',
+              associatedPou: editor.meta.name,
+            })
+            variables.splice(variableIndex, 1)
+          }
+          if (
+            editor.type === 'plc-graphical' &&
+            editor.variable.display === 'table' &&
+            parseInt(editor.variable.selectedRow) === variableIndex
+          ) {
+            updateModelVariables({ display: 'table', selectedRow: -1 })
+          }
+        })
+      }
+
+      removeRung(editorName, rung.id)
     }
-
-    removeRung(editorName, rung.id)
   }
 
   return (

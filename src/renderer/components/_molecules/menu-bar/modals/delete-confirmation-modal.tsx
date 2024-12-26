@@ -1,25 +1,78 @@
 import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
+import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { RungState } from '@root/renderer/store/slices'
+import { PLCVariable } from '@root/types/PLC'
 import { useEffect } from 'react'
 
 import { Modal, ModalContent } from '../../modal'
 
-const ConfirmDeleteElementModal = ({ isOpen }: { isOpen: boolean }) => {
+type ConfirmDeleteElementProps = {
+  rung?: RungState
+  isOpen: boolean
+  validationContext: string | null
+}
+
+const ConfirmDeleteElementModal = ({ rung, isOpen, validationContext, ...rest }: ConfirmDeleteElementProps) => {
   const {
     editor,
     projectActions: { deletePou, deleteDatatype },
     flowActions: { removeFlow },
+    project: {
+      data: { pous },
+    },
     libraryActions: { removeUserLibrary },
     modalActions: { onOpenChange },
+    projectActions: { deleteVariable },
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
+  const editorName = editor.meta.name
+  const pou = pous.find((pou) => pou.data.name === editorName)
 
   useEffect(() => {
     setSelectedTab(editor.meta.name)
   }, [editor])
   const handleDeleteElement = () => {
+    console.log('aqui seu animal', rung)
+    console.log('aqui seu animal', editor.type)
+    try {
+      if (rung) {
+        const blockNodes = rung.nodes.filter((node) => node.type === 'block')
+        if (blockNodes.length > 0) {
+          let variables: PLCVariable[] = []
+          if (pou) variables = [...pou.data.variables] as PLCVariable[]
+
+          blockNodes.forEach((blockNode) => {
+            const variableIndex = variables.findIndex(
+              (variable) => variable.id === (blockNode.data as BasicNodeData).variable.id,
+            )
+            if (variableIndex !== -1) {
+              deleteVariable({
+                rowId: variableIndex,
+                scope: 'local',
+                associatedPou: editor.meta.name,
+              })
+              variables.splice(variableIndex, 1)
+            }
+          })
+        }
+      }
+      toast({
+        title: 'Rung deleted success!',
+        description: 'Your rung were successfully deleted.',
+        variant: 'default',
+      })
+    } catch (error) {
+      toast({
+        title: 'Error deleting rung',
+        description: 'An error occurred while deleting the rung. Please try again.',
+        variant: 'fail',
+      })
+      console.error('Error deleting rung:', error)
+    }
+    return
     if (editor.type === 'plc-datatype') {
       try {
         handleRemoveTab(selectedTab)
@@ -39,7 +92,10 @@ const ConfirmDeleteElementModal = ({ isOpen }: { isOpen: boolean }) => {
         })
         console.error('Error deleting datatype:', error)
       }
-    } else {
+      return
+    }
+
+    if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
       try {
         handleRemoveTab(selectedTab)
         deletePou(selectedTab)
@@ -58,6 +114,7 @@ const ConfirmDeleteElementModal = ({ isOpen }: { isOpen: boolean }) => {
         })
         console.error('Error deleting pou:', error)
       }
+      return
     }
 
     onOpenChange('confirm-delete-element', false)
@@ -68,7 +125,7 @@ const ConfirmDeleteElementModal = ({ isOpen }: { isOpen: boolean }) => {
   }
 
   return (
-    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('confirm-delete-element', open)}>
+    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('confirm-delete-element', open)} {...rest}>
       <ModalContent className='flex max-h-80 w-[300px] select-none flex-col items-center justify-evenly rounded-lg'>
         <div className='flex select-none flex-col items-center gap-6'>
           <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px]' />
