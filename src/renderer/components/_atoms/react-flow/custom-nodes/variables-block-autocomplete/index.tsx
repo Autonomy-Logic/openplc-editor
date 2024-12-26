@@ -285,6 +285,9 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
                 </div>
               </div>
             )}
+            {filteredVariables.length > 0 && (
+              <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />
+            )}
             <div
               className='flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900'
               onClick={() => submitAddVariable({ variableName: valueToSearch })}
