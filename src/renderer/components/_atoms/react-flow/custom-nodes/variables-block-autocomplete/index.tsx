@@ -249,7 +249,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         <Popover.Trigger />
         <Popover.Portal>
           <Popover.Content
-            className='flex w-32 flex-col items-center rounded-lg border-0 bg-white text-xs shadow-lg outline-none'
+            className='box flex w-32 flex-col items-center rounded-lg bg-white text-xs text-neutral-950 outline-none dark:bg-neutral-950 dark:text-white'
             side='bottom'
             sideOffset={5}
             ref={popoverRef}
@@ -270,9 +270,9 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
                     <div
                       key={variable.name}
                       className={cn(
-                        'flex h-fit w-full cursor-pointer select-none items-center justify-center p-1 hover:bg-neutral-700',
+                        'flex h-fit w-full cursor-pointer select-none items-center justify-center p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
                         {
-                          'bg-brand': selectedVariable.variableName === variable.name,
+                          'bg-neutral-400 dark:bg-neutral-800': selectedVariable.variableName === variable.name,
                         },
                       )}
                       onClick={() => {
@@ -286,10 +286,10 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
               </div>
             )}
             <div
-              className='flex h-fit w-full flex-row items-center justify-center p-1'
+              className='flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900'
               onClick={() => submitAddVariable({ variableName: valueToSearch })}
             >
-              <PlusIcon className='h-3 w-3 fill-red-600 stroke-red-600' />
+              <PlusIcon className='h-3 w-3 stroke-brand' />
               <div className='ml-2'>Add variable</div>
             </div>
           </Popover.Content>
