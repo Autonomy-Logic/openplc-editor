@@ -27,6 +27,7 @@ const blockTypeRestrictions = (block: unknown, blockType: VariablesBlockAutoComp
       return {
         values: ['bool'],
         definition: 'base-type',
+        limitations: ['derived'],
       }
     case 'variable': {
       const variableType = (block as VariableNode).data.block.variableType.type
@@ -34,10 +35,21 @@ const blockTypeRestrictions = (block: unknown, blockType: VariablesBlockAutoComp
       return {
         values,
         definition: variableType.definition,
+        limitations: ['derived'],
       }
     }
+    case 'coil':
+      return {
+        values: undefined,
+        definition: undefined,
+        limitations: ['derived'],
+      }
     default:
-      return undefined
+      return {
+        values: undefined,
+        definition: undefined,
+        limitations: undefined,
+      }
   }
 }
 
@@ -69,8 +81,10 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       .filter(
         (variable) =>
           variable.name.includes(valueToSearch) &&
-          (variableRestrictions === undefined ||
-            variableRestrictions.values.includes(variable.type.value.toLowerCase())),
+          (variableRestrictions.values === undefined ||
+            variableRestrictions.values.includes(variable.type.value.toLowerCase())) &&
+          (variableRestrictions.limitations === undefined ||
+            !variableRestrictions.limitations.includes(variable.type.definition)),
       )
       .sort((a, b) => {
         const aNumber = extractNumberAtEnd(a.name).number
@@ -146,6 +160,11 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       }
     }
 
+    const closeModal = () => {
+      setInputFocus(false)
+      setIsOpen && setIsOpen(false)
+    }
+
     const submitVariableToBlock = ({ clickedVariable }: { clickedVariable?: number }) => {
       const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
         nodeId: (block as Node<BasicNodeData>).id,
@@ -184,8 +203,8 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       if (!rung || !node) return
 
       const variableTypeRestriction = {
-        definition: variableRestrictions ? variableRestrictions.definition : undefined,
-        value: variableRestrictions ? variableRestrictions.values[0] : undefined,
+        definition: blockType === 'coil' ? 'base-type' : variableRestrictions.definition || 'base-type',
+        value: blockType === 'coil' ? 'bool' : variableRestrictions.values?.[0] || 'bool',
       }
       if (!variableTypeRestriction.definition || !variableTypeRestriction.value) return
 
@@ -235,19 +254,11 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             sideOffset={5}
             ref={popoverRef}
             onOpenAutoFocus={(e) => e.preventDefault()}
-            onCloseAutoFocus={(e) => {
-              e.preventDefault()
-              setInputFocus(false)
-              setIsOpen && setIsOpen(false)
-            }}
-            onEscapeKeyDown={() => {
-              setInputFocus(false)
-              setIsOpen && setIsOpen(false)
-            }}
-            onPointerDownOutside={() => {
-              setInputFocus(false)
-              setIsOpen && setIsOpen(false)
-            }}
+            onCloseAutoFocus={closeModal}
+            onEscapeKeyDown={closeModal}
+            onPointerDownOutside={closeModal}
+            onFocusOutside={closeModal}
+            onInteractOutside={closeModal}
             onFocus={() => setInputFocus(true)}
             onBlur={() => setInputFocus(false)}
             onKeyDown={(e) => setKeyDown(e.key)}
