@@ -122,7 +122,7 @@ export const Coil = (block: CoilProps) => {
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
-  const [coilVariableValue, setCoilVariableValue] = useState<string>('')
+  const [coilVariableValue, setCoilVariableValue] = useState<string>(data.variable.name)
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
   const inputWrapperRef = useRef<HTMLDivElement>(null)

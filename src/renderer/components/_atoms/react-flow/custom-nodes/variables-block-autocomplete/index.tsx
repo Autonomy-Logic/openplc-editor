@@ -192,8 +192,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         },
       })
 
-      setInputFocus(false)
-      setIsOpen && setIsOpen(false)
+      closeModal()
     }
 
     const submitAddVariable = ({ variableName }: { variableName: string }) => {
