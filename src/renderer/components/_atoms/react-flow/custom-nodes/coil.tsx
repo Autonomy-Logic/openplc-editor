@@ -187,6 +187,8 @@ export const Coil = (block: CoilProps) => {
           },
         },
       })
+      setWrongVariable(false)
+      return
     }
 
     if (node.data.variable === variable && variable.name !== coilVariableValue) {
@@ -194,8 +196,9 @@ export const Coil = (block: CoilProps) => {
       if (inputVariableRef.current?.isFocused) {
         inputVariableRef.current.blur({ submit: false })
         handleSubmitCoilVariableOnTextareaBlur(variable.name)
-        return
       }
+      setWrongVariable(false)
+      return
     }
 
     setWrongVariable(false)
@@ -214,7 +217,6 @@ export const Coil = (block: CoilProps) => {
 
     const variable = variables.selected
     if (!variable || variable.name !== variableNameToSubmit) {
-      setWrongVariable(true)
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -227,6 +229,7 @@ export const Coil = (block: CoilProps) => {
           },
         },
       })
+      setWrongVariable(true)
       return
     }
 

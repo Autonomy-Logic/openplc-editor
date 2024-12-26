@@ -169,9 +169,12 @@ export const Contact = (block: ContactProps) => {
       if (inputVariableRef.current?.isFocused) {
         inputVariableRef.current.blur({ submit: false })
         handleSubmitContactVariableOnTextareaBlur(variable.name)
-        return
       }
+      setWrongVariable(false)
+      return
     }
+
+    setWrongVariable(false)
   }, [pous])
 
   /**
@@ -192,7 +195,6 @@ export const Contact = (block: ContactProps) => {
       variable.type.definition !== 'base-type' ||
       variable.type.value.toUpperCase() !== 'BOOL'
     ) {
-      setWrongVariable(true)
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -205,6 +207,7 @@ export const Contact = (block: ContactProps) => {
           },
         },
       })
+      setWrongVariable(true)
       return
     }
 

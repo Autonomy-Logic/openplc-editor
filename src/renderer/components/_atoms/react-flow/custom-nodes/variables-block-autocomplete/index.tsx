@@ -224,8 +224,10 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         scope: 'local',
         associatedPou: editor.meta.name,
       })
+      if (!res.ok) return
 
-      if (!res) return
+      const variable = res.data as PLCVariable | undefined
+      console.log('res.data --> variable', variable)
 
       updateNode({
         editorName: editor.meta.name,
@@ -235,7 +237,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           ...node,
           data: {
             ...node.data,
-            variable: res.data as PLCVariable | undefined,
+            variable: variable ?? { name: '' },
           },
         },
       })
@@ -285,9 +287,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
                 </div>
               </div>
             )}
-            {filteredVariables.length > 0 && (
-              <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />
-            )}
+            {filteredVariables.length > 0 && <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />}
             <div
               className='flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900'
               onClick={() => submitAddVariable({ variableName: valueToSearch })}
