@@ -299,18 +299,20 @@ export const Coil = (block: CoilProps) => {
             }}
             onKeyUp={() => setKeyPressedAtTextarea('')}
           />
-          <div className='relative flex justify-center'>
-            <div className='absolute -bottom-4'>
-              <VariablesBlockAutoComplete
-                block={block}
-                blockType={'coil'}
-                valueToSearch={coilVariableValue}
-                isOpen={openAutocomplete}
-                setIsOpen={(value) => setOpenAutocomplete(value)}
-                keyPressed={keyPressedAtTextarea}
-              />
+          {openAutocomplete && (
+            <div className='relative flex justify-center'>
+              <div className='absolute -bottom-4'>
+                <VariablesBlockAutoComplete
+                  block={block}
+                  blockType={'coil'}
+                  valueToSearch={coilVariableValue}
+                  isOpen={openAutocomplete}
+                  setIsOpen={(value) => setOpenAutocomplete(value)}
+                  keyPressed={keyPressedAtTextarea}
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
       {data.handles.map((handle, index) => (

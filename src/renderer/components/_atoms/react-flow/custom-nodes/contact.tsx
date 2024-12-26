@@ -267,18 +267,20 @@ export const Contact = (block: ContactProps) => {
             }}
             onKeyUp={() => setKeyPressedAtTextarea('')}
           />
-          <div className='relative flex justify-center'>
-            <div className='absolute -bottom-4'>
-              <VariablesBlockAutoComplete
-                block={block}
-                blockType={'contact'}
-                valueToSearch={contactVariableValue}
-                isOpen={openAutocomplete}
-                setIsOpen={(value) => setOpenAutocomplete(value)}
-                keyPressed={keyPressedAtTextarea}
-              />
+          {openAutocomplete && (
+            <div className='relative flex justify-center'>
+              <div className='absolute -bottom-4'>
+                <VariablesBlockAutoComplete
+                  block={block}
+                  blockType={'contact'}
+                  valueToSearch={contactVariableValue}
+                  isOpen={openAutocomplete}
+                  setIsOpen={(value) => setOpenAutocomplete(value)}
+                  keyPressed={keyPressedAtTextarea}
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
       {data.handles.map((handle, index) => (
