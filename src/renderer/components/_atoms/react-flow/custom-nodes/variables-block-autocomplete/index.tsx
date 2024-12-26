@@ -31,17 +31,16 @@ const blockTypeRestrictions = (block: unknown, blockType: VariablesBlockAutoComp
       }
     case 'variable': {
       const variableType = (block as VariableNode).data.block.variableType.type
-      const values = getVariableRestrictionType(variableType.value).map((value) => value.toLowerCase())
+      const restriction = getVariableRestrictionType(variableType.value)
       return {
-        values,
-        definition: variableType.definition,
+        ...restriction,
         limitations: ['derived'],
       }
     }
     case 'coil':
       return {
-        values: undefined,
-        definition: undefined,
+        values: ['bool'],
+        definition: 'base-type',
         limitations: ['derived'],
       }
     default:
@@ -203,8 +202,8 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       if (!rung || !node) return
 
       const variableTypeRestriction = {
-        definition: blockType === 'coil' ? 'base-type' : variableRestrictions.definition || 'base-type',
-        value: blockType === 'coil' ? 'bool' : variableRestrictions.values?.[0] || 'bool',
+        definition: variableRestrictions.definition || 'base-type',
+        value: variableRestrictions.values?.[0] || 'dint',
       }
       if (!variableTypeRestriction.definition || !variableTypeRestriction.value) return
 

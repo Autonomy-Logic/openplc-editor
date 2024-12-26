@@ -94,7 +94,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
       if (inputElement) {
         const inputValue = inputElement.value.trim();
         const validation = arrayValidation({ value: inputValue });
-  
+
         if (!validation.ok || inputValue === '') {
           const newRows = prevRows.filter((_, index) => index !== rowIndex);
           updateDimensions(newRows);
@@ -124,7 +124,7 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
       return prevRows;
     });
   };
-  
+
   const addNewRow = () => {
     setTableData((prevRows) => {
       const newRows = [...prevRows, { dimension: '' }]

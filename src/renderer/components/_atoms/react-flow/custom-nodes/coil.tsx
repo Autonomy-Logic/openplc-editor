@@ -173,6 +173,11 @@ export const Coil = (block: CoilProps) => {
       return
     }
 
+    if (variable && (variable.type.definition !== 'base-type' || variable.type.value.toUpperCase() !== 'BOOL')) {
+      setWrongVariable(true)
+      return
+    }
+
     if (node.data.variable !== variable) {
       setCoilVariableValue(variable.name)
       updateNode({
@@ -216,7 +221,12 @@ export const Coil = (block: CoilProps) => {
     if (!rung || !node) return
 
     const variable = variables.selected
-    if (!variable || variable.name !== variableNameToSubmit) {
+    if (
+      !variable ||
+      variable.name !== variableNameToSubmit ||
+      variable.type.definition !== 'base-type' ||
+      variable.type.value.toUpperCase() !== 'BOOL'
+    ) {
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,

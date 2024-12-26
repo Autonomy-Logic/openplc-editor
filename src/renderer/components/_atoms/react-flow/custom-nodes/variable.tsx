@@ -137,7 +137,6 @@ const VariableElement = (block: VariableProps) => {
         if (inputVariableRef.current?.isFocused) {
           inputVariableRef.current.blur({ submit: false })
           handleSubmitVariableValueOnTextareaBlur(variable.name)
-          return
         }
       }
 
@@ -264,18 +263,20 @@ const VariableElement = (block: VariableProps) => {
           }}
           onKeyUp={() => setKeyPressedAtTextarea('')}
         />
-        <div className='relative flex justify-center'>
-          <div className='absolute -bottom-1'>
-            <VariablesBlockAutoComplete
-              block={block}
-              blockType={'variable'}
-              valueToSearch={variableValue}
-              isOpen={openAutocomplete}
-              setIsOpen={(value) => setOpenAutocomplete(value)}
-              keyPressed={keyPressedAtTextarea}
-            />
+        {openAutocomplete && (
+          <div className='relative flex justify-center'>
+            <div className='absolute -bottom-1'>
+              <VariablesBlockAutoComplete
+                block={block}
+                blockType={'variable'}
+                valueToSearch={variableValue}
+                isOpen={openAutocomplete}
+                setIsOpen={(value) => setOpenAutocomplete(value)}
+                keyPressed={keyPressedAtTextarea}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

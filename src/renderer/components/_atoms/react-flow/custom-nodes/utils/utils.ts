@@ -1,8 +1,6 @@
 import type { EditorModel, FlowType } from '@root/renderer/store/slices'
-import { baseTypes } from '@root/shared/data'
 import { genericTypeSchema } from '@root/types/PLC'
 import type { PLCPou } from '@root/types/PLC/open-plc'
-import { PLCBasetypes } from '@root/types/PLC/units/base-types'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
 
 import { BlockVariant } from '../block'
@@ -71,21 +69,37 @@ export const validateVariableType = (
   const upperExpectedType = expectedType.type.value.toUpperCase()
 
   if (upperExpectedType === 'ANY') {
-    const isValidBaseType = baseTypes.includes(upperSelectedType as PLCBasetypes)
     return {
-      isValid: isValidBaseType,
-      error: isValidBaseType ? undefined : `Expected one of: ${baseTypes.join(', ')}`,
+      isValid: true,
+      error: undefined,
     }
   }
 
   // Handle generic types
   if (upperExpectedType.includes('ANY')) {
-    const validTypes = Object.values(
-      genericTypeSchema.shape[upperExpectedType as keyof typeof genericTypeSchema.shape].options,
-    )
+    const validTypes = genericTypeSchema.shape[upperExpectedType as keyof typeof genericTypeSchema.shape].options
+    if (validTypes.length > 1) {
+      const subValues: string[] = []
+      validTypes.forEach((value) => {
+        ;(genericTypeSchema.shape[value.value as keyof typeof genericTypeSchema.shape].options as string[]).forEach(
+          (subValue) => {
+            subValues.push(subValue.toLowerCase())
+          },
+        )
+      })
+      return {
+        isValid: subValues.includes(upperSelectedType.toLowerCase()),
+        error: subValues.includes(upperSelectedType.toLowerCase())
+          ? undefined
+          : `Expected one of: ${subValues.join(', ')}`,
+      }
+    }
+    console.log('types', validTypes)
     return {
-      isValid: validTypes.includes(upperSelectedType),
-      error: validTypes.includes(upperSelectedType) ? undefined : `Expected one of: ${validTypes.join(', ')}`,
+      isValid: Object.values(validTypes).includes(upperSelectedType),
+      error: Object.values(validTypes).includes(upperSelectedType)
+        ? undefined
+        : `Expected one of: ${Object.values(validTypes).join(', ')}`,
     }
   }
 
@@ -98,9 +112,37 @@ export const validateVariableType = (
 }
 
 export const getVariableRestrictionType = (variableType: string) => {
-  if (variableType.includes('ANY_')) {
-    return Object.values(genericTypeSchema.shape[variableType as keyof typeof genericTypeSchema.shape].options) as string[]
+  if (variableType === 'ANY') {
+    return {
+      values: undefined,
+      definition: undefined,
+    }
   }
 
-  return [variableType]
+  if (variableType.includes('ANY_')) {
+    const values = genericTypeSchema.shape[variableType as keyof typeof genericTypeSchema.shape].options
+    if (values.length > 1) {
+      const subValues: string[] = []
+      values.forEach((value) => {
+        ;(genericTypeSchema.shape[value.value as keyof typeof genericTypeSchema.shape].options as string[]).forEach(
+          (subValue) => {
+            subValues.push(subValue.toLowerCase())
+          },
+        )
+      })
+      return {
+        values: subValues,
+        definition: 'base-type',
+      }
+    }
+    return {
+      values: (values as string[]).map((value) => value.toLowerCase()),
+      definition: 'base-type',
+    }
+  }
+
+  return {
+    values: variableType.toLowerCase(),
+    definition: 'base-type',
+  }
 }
