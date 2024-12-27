@@ -19,10 +19,11 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, validationContext, ...rest }:
   const {
     editor,
     projectActions: { deletePou, deleteDatatype },
-    flowActions: { removeFlow },
+    flowActions: { removeFlow, removeRung },
     project: {
       data: { pous },
     },
+    editorActions: { updateModelVariables },
     libraryActions: { removeUserLibrary },
     modalActions: { onOpenChange },
     projectActions: { deleteVariable },
@@ -35,11 +36,10 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, validationContext, ...rest }:
     setSelectedTab(editor.meta.name)
   }, [editor])
   const handleDeleteElement = () => {
-    console.log('aqui seu animal', rung)
-    console.log('aqui seu animal', editor.type)
     try {
       if (rung) {
         const blockNodes = rung.nodes.filter((node) => node.type === 'block')
+
         if (blockNodes.length > 0) {
           let variables: PLCVariable[] = []
           if (pou) variables = [...pou.data.variables] as PLCVariable[]
@@ -56,65 +56,62 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, validationContext, ...rest }:
               })
               variables.splice(variableIndex, 1)
             }
+
+            if (
+              editor.type === 'plc-graphical' &&
+              editor.variable.display === 'table' &&
+              parseInt(editor.variable.selectedRow) === variableIndex
+            ) {
+              updateModelVariables({ display: 'table', selectedRow: -1 })
+            }
           })
         }
+
+        removeRung(editor.meta.name, rung.id)
+
+        toast({
+          title: 'Rung deleted success!',
+          description: 'Your rung was successfully deleted.',
+          variant: 'default',
+        })
+        onOpenChange('confirm-delete-element', false)
+        return
       }
-      toast({
-        title: 'Rung deleted success!',
-        description: 'Your rung were successfully deleted.',
-        variant: 'default',
-      })
-    } catch (error) {
-      toast({
-        title: 'Error deleting rung',
-        description: 'An error occurred while deleting the rung. Please try again.',
-        variant: 'fail',
-      })
-      console.error('Error deleting rung:', error)
-    }
-    return
-    if (editor.type === 'plc-datatype') {
-      try {
+
+      if (editor.type === 'plc-datatype') {
         handleRemoveTab(selectedTab)
         deleteDatatype(selectedTab)
         removeFlow(selectedTab)
         removeUserLibrary(selectedTab)
         toast({
           title: 'Datatype deleted success!',
-          description: 'Your datatype were successfully deleted.',
+          description: 'Your datatype was successfully deleted.',
           variant: 'default',
         })
-      } catch (error) {
-        toast({
-          title: 'Error deleting datatype',
-          description: 'An error occurred while deleting the datatype. Please try again.',
-          variant: 'fail',
-        })
-        console.error('Error deleting datatype:', error)
+        onOpenChange('confirm-delete-element', false)
+        return
       }
-      return
-    }
 
-    if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
-      try {
+      if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
         handleRemoveTab(selectedTab)
         deletePou(selectedTab)
         removeFlow(selectedTab)
         removeUserLibrary(selectedTab)
         toast({
           title: 'Pou deleted success!',
-          description: 'Your pou were successfully deleted.',
+          description: 'Your pou was successfully deleted.',
           variant: 'default',
         })
-      } catch (error) {
-        toast({
-          title: 'Error deleting pou',
-          description: 'An error occurred while deleting the pou. Please try again.',
-          variant: 'fail',
-        })
-        console.error('Error deleting pou:', error)
+        onOpenChange('confirm-delete-element', false)
+        return
       }
-      return
+    } catch (error) {
+      toast({
+        title: 'Error deleting element',
+        description: 'An error occurred while deleting the element. Please try again.',
+        variant: 'fail',
+      })
+      console.error('Error deleting element:', error)
     }
 
     onOpenChange('confirm-delete-element', false)
