@@ -94,7 +94,6 @@ export const validateVariableType = (
           : `Expected one of: ${subValues.join(', ')}`,
       }
     }
-    console.log('types', validTypes)
     return {
       isValid: Object.values(validTypes).includes(upperSelectedType),
       error: Object.values(validTypes).includes(upperSelectedType)

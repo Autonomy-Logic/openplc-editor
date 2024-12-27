@@ -24,8 +24,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     projectActions: { setProject },
   } = useOpenPLCStore()
 
-  console.log('Editing state:', editingState)
-
   useEffect(() => {
     const getUserSystemProps = async () => {
       const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()

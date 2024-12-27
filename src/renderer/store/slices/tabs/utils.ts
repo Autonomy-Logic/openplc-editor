@@ -84,7 +84,6 @@ const CreateEditorModelObject = (
 }
 
 const CreateResourceEditor = (name = 'resource'): EditorModel => {
-  console.log('Creating resource editor for: ' + name)
   const editor = CreateEditorObject({
     type: 'plc-resource',
     meta: {

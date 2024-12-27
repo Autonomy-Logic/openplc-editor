@@ -206,8 +206,6 @@ const VariablesEditor = () => {
     })
   }
 
-  console.log('Description', pous)
-
   const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     event.preventDefault()
     event.stopPropagation()

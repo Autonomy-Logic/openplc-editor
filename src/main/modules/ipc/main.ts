@@ -98,10 +98,8 @@ class MainProcessBridge implements MainIpcModule {
         this.ipcMain.handle('project:open-by-path', async (_event, projectPath: string) => {
             try {
                 const response = await this.projectService.openProjectByPath(projectPath)
-                console.log(response)
                 return response
-            } catch (error) {
-                console.error('Error opening project:', error)
+            } catch (_error) {
                 return {
                     success: false,
                     error: {
@@ -157,7 +155,6 @@ class MainProcessBridge implements MainIpcModule {
         },
         getStoreValue: (_: Event, key: keyof typeof this.store) => {
             const response = this.store.get(key)
-            console.log(response)
             return response as unknown as TStoreType
         },
         createPou: () => this.mainWindow?.webContents.send('pou:createPou', {ok: true}),

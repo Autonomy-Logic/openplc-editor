@@ -343,7 +343,6 @@ export default class MenuBuilder {
           label: projectPath,
           click: () => {
             this.handleOpenProjectByPath(projectEntry.path)
-            console.log('Opened project from path:', projectEntry.path)
           },
         }
       }),
@@ -617,7 +616,6 @@ export default class MenuBuilder {
             label: `${projectName} (${projectPath})`,
             click: () => {
               this.handleOpenProjectByPath(projectEntry.path)
-              console.log('Opened project from path:', projectEntry.path)
             },
           }
         }),
