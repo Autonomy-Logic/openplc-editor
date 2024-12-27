@@ -15,6 +15,7 @@ import { HighlightedTextArea } from '../../highlighted-textarea'
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
+import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 
 export type ContactNode = Node<BasicNodeData & { variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }>
 type ContactProps = NodeProps<ContactNode>
@@ -78,7 +79,8 @@ export const DEFAULT_CONTACT_TYPES: ContactType = {
   },
 }
 
-export const Contact = ({ selected, data, id }: ContactProps) => {
+export const Contact = (block: ContactProps) => {
+  const { selected, data, id } = block
   const {
     editor,
     project: {
@@ -89,17 +91,24 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
   } = useOpenPLCStore()
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
-  const [contactVariableValue, setContactVariableValue] = useState<string>('')
+  const [contactVariableValue, setContactVariableValue] = useState<string>(data.variable.name)
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
   const inputWrapperRef = useRef<HTMLDivElement>(null)
-  const inputVariableRef = useRef<HTMLTextAreaElement>(null)
-  const [inputFocus, setInputFocus] = useState<boolean>(true)
+  const inputVariableRef = useRef<
+    HTMLTextAreaElement & {
+      blur: ({ submit }: { submit?: boolean }) => void
+      isFocused: boolean
+    }
+  >(null)
+
+  const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
+  const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
       // top
-      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-20px' : '-16px'
+      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-24px' : '-20px'
     }
   }, [contactVariableValue])
 
@@ -125,9 +134,10 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       nodeId: id,
       variableName: contactVariableValue,
     })
+    if (!node || !rung) return
 
     const variable = variables.selected
-    if (!variable && !inputFocus) {
+    if (!variable) {
       setWrongVariable(true)
       return
     }
@@ -135,8 +145,9 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       setWrongVariable(true)
       return
     }
-    if (variable && node && rung && node.data.variable !== variable) {
-      setContactVariableValue(variable.name)
+
+    // Variable of the node is different from the selected variable
+    if (node.data.variable !== variable) {
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -149,6 +160,18 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
           },
         },
       })
+      setWrongVariable(false)
+      return
+    }
+
+    if (node.data.variable === variable && variable.name !== contactVariableValue) {
+      setContactVariableValue(variable.name)
+      if (inputVariableRef.current?.isFocused) {
+        inputVariableRef.current.blur({ submit: false })
+        handleSubmitContactVariableOnTextareaBlur(variable.name)
+      }
+      setWrongVariable(false)
+      return
     }
 
     setWrongVariable(false)
@@ -157,23 +180,21 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitContactVariable = () => {
-    setInputFocus(false)
-
+  const handleSubmitContactVariableOnTextareaBlur = (variableName?: string) => {
+    const variableNameToSubmit = variableName || contactVariableValue
     const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
-      variableName: contactVariableValue,
+      variableName: variableNameToSubmit,
     })
     if (!rung || !node) return
 
     const variable = variables.selected
     if (
       !variable ||
-      variable.name !== contactVariableValue ||
+      variable.name !== variableNameToSubmit ||
       variable.type.definition !== 'base-type' ||
       variable.type.value.toUpperCase() !== 'BOOL'
     ) {
-      setWrongVariable(true)
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -182,10 +203,11 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
           ...node,
           data: {
             ...node.data,
-            variable: { name: contactVariableValue },
+            variable: { name: variableNameToSubmit },
           },
         },
       })
+      setWrongVariable(true)
       return
     }
 
@@ -202,6 +224,12 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
       },
     })
     setWrongVariable(false)
+  }
+
+  const onChangeHandler = () => {
+    if (!openAutocomplete) {
+      setOpenAutocomplete(true)
+    }
   }
 
   return (
@@ -224,7 +252,7 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
           <HighlightedTextArea
             textAreaValue={contactVariableValue}
             setTextAreaValue={setContactVariableValue}
-            handleSubmit={handleSubmitContactVariable}
+            handleSubmit={handleSubmitContactVariableOnTextareaBlur}
             inputHeight={{
               height: 24,
               scrollLimiter: 32,
@@ -232,7 +260,27 @@ export const Contact = ({ selected, data, id }: ContactProps) => {
             ref={inputVariableRef}
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
+            onChange={onChangeHandler}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
+              setKeyPressedAtTextarea(e.key)
+            }}
+            onKeyUp={() => setKeyPressedAtTextarea('')}
           />
+          {openAutocomplete && (
+            <div className='relative flex justify-center'>
+              <div className='absolute -bottom-4'>
+                <VariablesBlockAutoComplete
+                  block={block}
+                  blockType={'contact'}
+                  valueToSearch={contactVariableValue}
+                  isOpen={openAutocomplete}
+                  setIsOpen={(value) => setOpenAutocomplete(value)}
+                  keyPressed={keyPressedAtTextarea}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
       {data.handles.map((handle, index) => (

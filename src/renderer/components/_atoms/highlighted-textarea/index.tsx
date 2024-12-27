@@ -1,7 +1,7 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { cn } from '@root/utils'
-import type { ComponentPropsWithRef, UIEvent } from 'react'
+import type { ChangeEvent, ComponentPropsWithRef, UIEvent } from 'react'
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 
 type HighlightedTextAreaProps = ComponentPropsWithRef<'textarea'> & {
@@ -45,6 +45,7 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
     const highlightDivRef = useRef<HTMLDivElement>(null)
 
     const [inputFocus, setInputFocus] = useState<boolean>(true)
+    const [canSubmit, setCanSubmit] = useState<boolean>(true)
     const [scrollValue, setScrollValue] = useState<number>(0)
     const formattedVariableValue = searchQuery ? extractSearchQuery(textAreaValue, searchQuery) : textAreaValue
 
@@ -53,13 +54,19 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
       return {
         focus: () => {
           inputRef.current?.focus()
+          setInputFocus(true)
         },
-        blur: () => {
+        isFocused: inputFocus,
+        blur: ({ submit }: { submit?: boolean }) => {
+          if (submit !== undefined) {
+            setCanSubmit(submit)
+          }
           inputRef.current?.blur()
+          setInputFocus(false)
         },
         scrollHeight: textAreaValue.length === 0 ? 0 : inputRef.current?.scrollHeight,
       }
-    }, [textAreaValue, inputRef])
+    }, [textAreaValue, inputRef, inputFocus])
 
     useEffect(() => {
       if (inputRef?.current && highlightDivRef.current) {
@@ -86,6 +93,11 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
       }
     }, [scrollValue])
 
+    const onChangeHandler = (e: ChangeEvent<HTMLTextAreaElement>) => {
+      setTextAreaValue(e.target.value)
+      props.onChange && props.onChange(e)
+    }
+
     const onScrollHandler = (e: UIEvent<HTMLTextAreaElement>) => {
       setScrollValue(e.currentTarget.scrollTop)
     }
@@ -107,7 +119,7 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
         </div>
         <textarea
           value={textAreaValue}
-          onChange={(e) => setTextAreaValue(e.target.value)}
+          onChange={onChangeHandler}
           placeholder={placeholder ?? '???'}
           className={cn(
             'absolute w-full resize-none bg-transparent outline-none [&::-webkit-scrollbar]:hidden',
@@ -116,14 +128,20 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
           )}
           onFocus={() => setInputFocus(true)}
           onBlur={() => {
+            setInputFocus(false)
             if (inputRef.current && highlightDivRef.current) {
               inputRef.current.scrollTop = 0
               highlightDivRef.current.scrollTop = 0
             }
-            inputFocus && handleSubmit && handleSubmit()
+            canSubmit && handleSubmit && handleSubmit()
+            setCanSubmit(true)
           }}
           onScroll={(e) => onScrollHandler(e)}
-          onKeyDown={(e) => submitWith.enter && e.key === 'Enter' && inputRef.current?.blur()}
+          onKeyDown={(e) => {
+            props.onKeyDown && props.onKeyDown(e)
+            submitWith.enter && e.key === 'Enter' && inputRef.current?.blur()
+          }}
+          onKeyUp={props.onKeyUp}
           ref={inputRef}
           rows={1}
           spellCheck={false}
