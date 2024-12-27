@@ -6,6 +6,9 @@ const useCompiler = () => {
   const {
     project,
     consoleActions: { addLog },
+    workspace: {
+      systemConfigs: { OS },
+    },
   } = useOpenPLCStore()
 
   const handleExportProject = async () => {
@@ -17,6 +20,8 @@ const useCompiler = () => {
       const result = await window.bridge.createXmlFileToBuild(project.meta.path, project.data)
       if (result.success) {
         addLog({ id: uuidv4(), type: 'info', message: result.message })
+        const buildPath = `${OS === 'win32' ? project.meta.path.replace('\\project.json', '\\build\\plc.xml') : project.meta.path.replace('/project.json', '/build/plc.xml')}`
+        addLog({ id: uuidv4(), type: 'info', message: `PLC Open XML file generated at ${buildPath}` })
       } else {
         addLog({ id: uuidv4(), type: 'error', message: result.message })
       }

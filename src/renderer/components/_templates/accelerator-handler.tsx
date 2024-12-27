@@ -1,21 +1,22 @@
-// import { useOpenPLCStore } from '@root/renderer/store'
 import { useCompiler } from '@root/renderer/hooks'
-import { useEffect } from 'react'
-// import { v4 as uuidv4 } from 'uuid'
+import { useEffect, useState } from 'react'
 
 const AcceleratorHandler = () => {
   const { handleExportProject } = useCompiler()
+  const [requestFlag, setRequestFlag] = useState(false)
   /**
    * Compiler Related Accelerators
    */
   useEffect(() => {
-    window.bridge.exportProjectRequest(() => {
-      void handleExportProject()
-    })
+    window.bridge.exportProjectRequest((_event) => setRequestFlag(true))
+    requestFlag &&
+      handleExportProject()
+        .then(() => setRequestFlag(false))
+        .catch(() => setRequestFlag(false))
     return () => {
       window.bridge.removeExportProjectListener()
     }
-  }, [])
+  }, [requestFlag])
   return <></>
 }
 export { AcceleratorHandler }
