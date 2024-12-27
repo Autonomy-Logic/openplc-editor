@@ -140,6 +140,9 @@ const rendererProcessBridge = {
     dataToCreateXml: ProjectState['data'],
   ): Promise<{ success: boolean; message: string }> =>
     ipcRenderer.invoke('compiler:create-xml-file', pathToUserProject, dataToCreateXml),
+  exportProjectRequest: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('compiler:export-project-request', (_event) => callback(_event)),
+  removeExportProjectListener: () => ipcRenderer.removeAllListeners('compiler:export-project-request'),
   /**
    * This is a mock implementation to be used as a presentation.
    * !! Do not use this on production !!

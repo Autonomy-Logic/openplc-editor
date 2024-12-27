@@ -103,7 +103,7 @@ class MainProcessBridge implements MainIpcModule {
                 return {
                     success: false,
                     error: {
-                        title: 'Errror opening project',
+                        title: 'Error opening project',
                         description: 'Please try again',
                     },
                 }
