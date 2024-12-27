@@ -1,7 +1,6 @@
 import {
   ArrayIcon,
   ArrowIcon,
-  CloseIcon,
   DataTypeIcon,
   DeviceIcon,
   EnumIcon,
@@ -219,16 +218,12 @@ const LeafSources = {
   res: { LeafIcon: ResourceIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => {
-  //aqui
   const {
     editor: {
       meta: { name },
     },
-    modalActions: { openModal },
   } = useOpenPLCStore()
-  const handleDeleteTab = () => {
-    openModal('confirm-delete-element', null)
-  }
+
   const [leafIsSelected, setLeafIsSelected] = useState<boolean>(false)
   const { LeafIcon } = LeafSources[leafLang]
 
@@ -237,8 +232,7 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
   return (
     <li
       className={cn(
-        ' group flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
-
+        'group flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
         name === label && 'bg-slate-50 dark:bg-neutral-900',
       )}
       onClick={handleLeafSelection}
@@ -247,24 +241,11 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
       <LeafIcon className='flex-shrink-0' />
       <span
         className={cn(
-          'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+          'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
           name === label && 'font-medium text-neutral-1000 dark:text-white',
         )}
         dangerouslySetInnerHTML={{ __html: label || '' }}
       />
-      <button
-        aria-label='delete element button'
-        type='button'
-        className='mr-2 flex h-5 w-5 items-center'
-        onClick={(e) => {
-          e.stopPropagation()
-          handleDeleteTab()
-        }}
-        aria-haspopup='dialog'
-        aria-expanded='false'
-      >
-        <CloseIcon className='h-4 w-4 group-hover:stroke-red-500' />
-      </button>
     </li>
   )
 }
