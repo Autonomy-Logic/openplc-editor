@@ -206,6 +206,11 @@ const VariablesEditor = () => {
     })
   }
 
+  const forbiddenVariableToBeRemoved =
+    editorVariables.display === 'table' &&
+    tableData[parseInt(editorVariables.selectedRow)]?.type.definition === 'derived' &&
+    editor?.type !== 'plc-textual'
+
   const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     event.preventDefault()
     event.stopPropagation()
@@ -293,10 +298,7 @@ const VariablesEditor = () => {
               </TableActionButton>
               <TableActionButton
                 aria-label='Remove table row button'
-                disabled={
-                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                  tableData[parseInt(editorVariables.selectedRow)].type.definition === 'derived'
-                }
+                disabled={parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED || forbiddenVariableToBeRemoved}
                 onClick={handleRemoveVariable}
               >
                 <MinusIcon />
