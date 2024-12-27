@@ -24,6 +24,8 @@ const VariablesEditor = () => {
     projectActions: { createVariable, deleteVariable, rearrangeVariables, updatePouDocumentation },
   } = useOpenPLCStore()
 
+  const [pouDescription, setPouDescription] = useState<string>('')
+
   /**
    * Table data and column filters states to keep track of the table data and column filters
    */
@@ -42,6 +44,14 @@ const VariablesEditor = () => {
     classFilter: 'All',
     description: '',
   })
+
+  useEffect(() => {
+    const data = pous.find((pou) => pou.data.name === editor.meta.name)?.data.documentation
+    data && setPouDescription(data)
+    return () => {
+      setPouDescription('')
+    }
+  }, [editor, pous])
 
   /**
    * Update the table data and the editor's variables when the editor or the pous change
@@ -196,8 +206,19 @@ const VariablesEditor = () => {
     })
   }
 
-  const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) =>
+  console.log('Description', pous)
+
+  const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
     updatePouDocumentation(editor.meta.name, event.target.value)
+  }
+
+  const handleDescriptionValueChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setPouDescription(event.target.value)
+  }
 
   return (
     <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
@@ -221,6 +242,9 @@ const VariablesEditor = () => {
               <InputWithRef
                 id='description'
                 onBlur={handleDescriptionChange}
+                defaultValue={pouDescription}
+                value={pouDescription}
+                onChange={handleDescriptionValueChange}
                 className='h-full w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
               />
             </div>
