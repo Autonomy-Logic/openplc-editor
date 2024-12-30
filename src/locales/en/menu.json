@@ -20,6 +20,7 @@
       "saveAs": "Save As",
       "closeTab": "Close Tab",
       "closeProject": "Close Project",
+      "exportToPLCOpenXml": "Export to PLCOpen XML",
       "pageSetup": "Page Setup",
       "preview": "Preview",
       "print": "Print",

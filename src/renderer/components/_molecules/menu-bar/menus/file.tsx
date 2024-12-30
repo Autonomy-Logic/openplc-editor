@@ -1,6 +1,6 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { useHandleRemoveTab } from '@root/renderer/hooks'
+import { useCompiler, useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { FlowType } from '@root/renderer/store/slices/flow/types'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
@@ -25,6 +25,7 @@ export const FileMenu = () => {
     modalActions: { openModal },
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
+  const { handleExportProject } = useCompiler()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
   const handleUnsavedChanges = (action: 'create-project' | 'open-project') => {
@@ -167,6 +168,9 @@ export const FileMenu = () => {
             <MenuPrimitive.Item className={ITEM} onClick={() => void handleCloseProject()}>
               <span>{i18n.t('menu:file.submenu.closeProject')}</span>
               <span className={ACCELERATOR}>{'Ctrl + Shift + W'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item className={ITEM} onClick={() => void handleExportProject()}>
+              <span>{i18n.t('menu:file.submenu.exportToPLCOpenXml')}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
             <MenuPrimitive.Item className={ITEM} disabled>

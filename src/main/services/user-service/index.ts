@@ -22,13 +22,15 @@ const DEFAULT_HISTORY = {
 const createDirectoryIfNotExists = async (path: string): Promise<void> => {
   try {
     await access(path, constants.F_OK)
-    console.log(`Directory found at ${path}`)
   } catch {
     try {
       await mkdir(path, { recursive: true })
-      console.log(`Directory created at ${path}`)
     } catch (err) {
-      console.error(`Error creating directory at ${path}: ${err.message}`)
+      if (err instanceof Error) {
+        console.error(`Error creating directory at ${path}: ${err.message}`)
+      } else {
+        console.error(`Error creating directory at ${path}: ${String(err)}`)
+      }
     }
   }
 }
@@ -36,9 +38,12 @@ const createDirectoryIfNotExists = async (path: string): Promise<void> => {
 const createFileIfNotExists = async (filePath: string, data: object): Promise<void> => {
   try {
     await writeFile(filePath, JSON.stringify(data, null, 2), { flag: 'wx' })
-    console.log(`File created at ${filePath}`)
   } catch (err) {
-    console.error(`Error creating file at ${filePath}: ${err.message}`)
+    if (err instanceof Error) {
+      console.error(`Error creating directory at ${filePath}: ${err.message}`)
+    } else {
+      console.error(`Error creating directory at ${filePath}: ${String(err)}`)
+    }
   }
 }
 

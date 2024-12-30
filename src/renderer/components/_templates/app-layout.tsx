@@ -9,6 +9,7 @@ import { toast } from '../_features/[app]/toast/use-toast'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 import { ConfirmDeleteElementModal } from '../_molecules/menu-bar/modals/delete-confirmation-modal'
 import { SaveChangesModal } from '../_molecules/menu-bar/modals/save-changes-modal'
+import { AcceleratorHandler } from './accelerator-handler'
 
 type AppLayoutProps = ComponentPropsWithoutRef<'main'>
 const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
@@ -156,6 +157,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
             rung={modals['confirm-delete-element'].data as RungState}
           />
         )}
+        <AcceleratorHandler />
       </main>
     </>
   )

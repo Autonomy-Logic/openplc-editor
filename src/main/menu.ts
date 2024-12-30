@@ -51,13 +51,16 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:create-accelerator')
   }
 
-  // TODO:
   sendOpenRequest() {
     this.mainWindow.webContents.send('project:open-project-request')
   }
 
   handleSaveProject() {
     this.mainWindow.webContents.send('project:save-accelerator')
+  }
+
+  handleExportProjectRequest() {
+    this.mainWindow.webContents.send('compiler:export-project-request')
   }
 
   async handleGetRecent() {
@@ -165,6 +168,10 @@ export default class MenuBuilder {
           label: i18n.t('menu:file.submenu.closeProject'),
           accelerator: 'Cmd+Shift+W',
           click: () => this.handleCloseProject(),
+        },
+        {
+          label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
+          click: () => this.handleExportProjectRequest(),
         },
         { type: 'separator' },
         {
@@ -343,7 +350,6 @@ export default class MenuBuilder {
           label: projectPath,
           click: () => {
             this.handleOpenProjectByPath(projectEntry.path)
-            console.log('Opened project from path:', projectEntry.path)
           },
         }
       }),
@@ -409,6 +415,10 @@ export default class MenuBuilder {
             label: i18n.t('menu:file.submenu.closeProject'),
             accelerator: 'Ctrl+Shift+W',
             click: () => this.handleCloseProject(),
+          },
+          {
+            label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
+            click: () => this.handleExportProjectRequest(),
           },
           {
             type: 'separator',
@@ -617,7 +627,6 @@ export default class MenuBuilder {
             label: `${projectName} (${projectPath})`,
             click: () => {
               this.handleOpenProjectByPath(projectEntry.path)
-              console.log('Opened project from path:', projectEntry.path)
             },
           }
         }),

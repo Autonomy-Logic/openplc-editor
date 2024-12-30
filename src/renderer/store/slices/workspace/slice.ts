@@ -37,7 +37,6 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.recent = recent
-          console.log(workspace.recent)
         }),
       )
     },
