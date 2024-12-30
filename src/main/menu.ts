@@ -372,7 +372,6 @@ export default class MenuBuilder {
       submenu: [
         {
           label: i18n.t('menu:help.submenu.communitySupport'),
-          accelerator: 'F1',
           click: () => void this.handleOpenExternalLink('https://openplc.discussion.community/'),
         },
         {
@@ -610,7 +609,6 @@ export default class MenuBuilder {
         submenu: [
           {
             label: i18n.t('menu:help.submenu.communitySupport'),
-            accelerator: 'F1',
             click: () => void this.handleOpenExternalLink('https://openplc.discussion.community/'),
           },
           {
