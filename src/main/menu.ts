@@ -47,6 +47,11 @@ export default class MenuBuilder {
 
     return menu
   }
+
+  /**
+   * Menu handlers -------------------------------------------------------
+   */
+
   handleCreateProject() {
     this.mainWindow.webContents.send('project:create-accelerator')
   }
@@ -88,6 +93,7 @@ export default class MenuBuilder {
   handleSwitchPerspective() {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
   }
+
   async handleOpenExternalLink(link: string) {
     try {
       await shell.openExternal(link)
@@ -99,13 +105,22 @@ export default class MenuBuilder {
       })
     }
   }
+
   handleOpenAboutModal() {
     this.mainWindow.webContents.send('about:open-accelerator')
   }
+
   handleFindInProject() {
     this.mainWindow.webContents.send('project:find-in-project-accelerator')
   }
 
+  handleQuitAppRequest() {
+    this.mainWindow.webContents.send('app:quit-accelerator')
+  }
+
+  /**
+   * --------------------------------------------------------------------------------------------
+   */
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -127,7 +142,12 @@ export default class MenuBuilder {
     this.buildMenu()
   }
 
-  // Wip: Constructing a mac machines menu.
+  /**
+   * Menu construction -------------------------------------------------------
+   */
+  /**
+   * Construct a menu instance for OXS.
+   */
   async buildDarwinTemplate(): Promise<MenuItemConstructorOptions[]> {
     const recent = await this.handleGetRecent()
     const homeDir = process.env.HOME || ''
@@ -199,8 +219,9 @@ export default class MenuBuilder {
         { type: 'separator' },
         {
           label: i18n.t('menu:file.submenu.quit'),
-          role: 'quit',
+          // role: 'quit',
           accelerator: 'Cmd+Q',
+          click: () => this.handleQuitAppRequest(),
         },
       ],
     }
@@ -385,7 +406,9 @@ export default class MenuBuilder {
     return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
   }
 
-  // Wip: Constructing a default machines menu.
+  /**
+   * Construct a default menu instance.
+   */
   async buildDefaultTemplate() {
     const recent = await this.handleGetRecent()
     const homeDir = process.env.HOME || ''
@@ -458,8 +481,9 @@ export default class MenuBuilder {
           { type: 'separator' },
           {
             label: i18n.t('menu:file.submenu.quit'),
-            role: 'quit',
+            // role: 'quit',
             accelerator: 'Ctrl+Q',
+            click: () => this.handleQuitAppRequest(),
           },
         ],
       },

@@ -191,7 +191,7 @@ export const FileMenu = () => {
               <span className={ACCELERATOR}>{'Ctrl + U'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
-            <MenuPrimitive.Item className={ITEM}>
+            <MenuPrimitive.Item className={ITEM} onClick={handleCloseProject}>
               <span>{i18n.t('menu:file.submenu.quit')}</span>
               <span className={ACCELERATOR}>{'Ctrl + Q'}</span>
             </MenuPrimitive.Item>
