@@ -122,6 +122,7 @@ const rendererProcessBridge = {
   reloadWindow: () => ipcRenderer.send('window:reload'),
   handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
   winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
+  hideWindow: () => ipcRenderer.send('window-controls:hide'),
 
   // WIP: Refactoring
   // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),

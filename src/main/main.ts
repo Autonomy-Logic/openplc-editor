@@ -208,10 +208,10 @@ const createMainWindow = async () => {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
-  mainWindow.on('close', (event) => {
+  mainWindow.on('close', () => {
     if (process.platform === 'darwin') {
-      event.preventDefault()
-      mainWindow?.hide()
+      // event.preventDefault()
+      app.quit()
     }
   })
 

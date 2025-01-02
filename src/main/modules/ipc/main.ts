@@ -135,6 +135,8 @@ class MainProcessBridge implements MainIpcModule {
         this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
         this.ipcMain.on('system:update-theme', () => this.mainIpcEventHandlers.handleUpdateTheme())
         this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
+        // This is only for MacOS
+        this.ipcMain.on('window-controls:hide', () => this.mainWindow?.hide())
 
         /**
          * Compiler Service

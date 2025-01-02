@@ -20,6 +20,9 @@ const StartScreen = () => {
     flowActions: { addFlow },
     libraryActions: { addLibrary },
     modalActions: { openModal },
+    workspace: {
+      systemConfigs: { OS },
+    },
   } = useOpenPLCStore()
 
   const handleCreateProject = async () => {
@@ -186,6 +189,10 @@ const StartScreen = () => {
     void handleOpenRecentAccelerator()
   }, [])
 
+  const handleExitAppRequest = () => {
+    OS === 'darwin' ? window.bridge.hideWindow() : window.bridge.closeWindow()
+  }
+
   return (
     <>
       <StartSideContent>
@@ -203,8 +210,8 @@ const StartScreen = () => {
           </MenuSection>
           <MenuDivider />
           <MenuSection id='2'>
-            <MenuItem onClick={() => window.bridge.closeWindow()} ghosted>
-              <StickArrowIcon  className='rotate-180 stroke-brand' /> Exit 
+            <MenuItem onClick={handleExitAppRequest} ghosted>
+              <StickArrowIcon className='rotate-180 stroke-brand' /> Exit
             </MenuItem>
           </MenuSection>
         </MenuRoot>
