@@ -204,7 +204,7 @@ const StartScreen = () => {
           <MenuDivider />
           <MenuSection id='2'>
             <MenuItem onClick={() => window.bridge.closeWindow()} ghosted>
-              <StickArrowIcon  className='rotate-180 stroke-brand' /> Quit 
+              <StickArrowIcon  className='rotate-180 stroke-brand' /> Exit 
             </MenuItem>
           </MenuSection>
         </MenuRoot>
