@@ -1,5 +1,5 @@
 import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '@components/_molecules/project-tree'
-import { CloseIcon, FolderIcon } from '@root/renderer/assets'
+import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
@@ -17,7 +17,6 @@ const Project = () => {
     projectActions: { updateMetaName },
     tabsActions: { updateTabs },
     editorActions: { setEditor, addModel, getEditorFromEditors },
-    modalActions: { openModal },
     searchQuery,
   } = useOpenPLCStore()
   const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
@@ -42,9 +41,6 @@ const Project = () => {
     if (inputValue !== name) {
       updateMetaName(inputValue)
     }
-  }
-  const handleDeleteTab = (dataBranchTarget: string) => {
-    openModal('confirm-delete-element', dataBranchTarget)
   }
 
   useEffect(() => {
@@ -93,166 +89,115 @@ const Project = () => {
       <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto'>
         <ProjectTreeRoot label={name}>
           <ProjectTreeBranch branchTarget='function'>
-            <div className='flex flex-row items-center gap-1  hover:bg-slate-50 dark:hover:bg-neutral-900'>
-              {pous
-                ?.filter(({ type }) => type === 'function')
-                .map(({ data }) => (
-                  <ProjectTreeLeaf
-                    key={data.name}
-                    leafLang={data.language}
-                    label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
-                    onClick={() => {
-                      handleCreateTab({
-                        name: data.name,
-                        path: `/data/pous/function/${data.name}`,
-                        elementType: { type: 'function', language: data.language },
-                      })
-                    }}
-                  />
-                ))}
-              <button
-                aria-label='delete element button'
-                type='button'
-                className='group ml-2 flex h-5 w-5 items-center'
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleDeleteTab('pou')
-                }}
-              >
-                <CloseIcon className='h-4 w-4 group-hover:stroke-red-500' />
-              </button>
-            </div>
+            {pous
+              ?.filter(({ type }) => type === 'function')
+              .map(({ data }) => (
+                <ProjectTreeLeaf
+                  key={data.name}
+                  leafLang={data.language}
+                  label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
+                  onClick={() =>
+                    handleCreateTab({
+                      name: data.name,
+                      path: `/data/pous/function/${data.name}`,
+                      elementType: { type: 'function', language: data.language },
+                    })
+                  }
+                />
+              ))}
           </ProjectTreeBranch>
+
           <ProjectTreeBranch branchTarget='function-block'>
-            <div className='flex flex-row items-center gap-1  hover:bg-slate-50 dark:hover:bg-neutral-900'>
-              {pous
-                ?.filter(({ type }) => type === 'function-block')
-                .map(({ data }) => (
-                  <ProjectTreeLeaf
-                    key={data.name}
-                    leafLang={data.language}
-                    label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
-                    onClick={() =>
-                      handleCreateTab({
-                        name: data.name,
-                        path: `/data/pous/function-block/${data.name}`,
-                        elementType: { type: 'function-block', language: data.language },
-                      })
-                    }
-                  />
-                ))}
-              <button
-                aria-label='delete element button'
-                type='button'
-                className='group ml-2 flex h-5 w-5 items-center'
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleDeleteTab('pou')
-                }}
-              >
-                <CloseIcon className='h-4 w-4 group-hover:stroke-red-500' />
-              </button>
-            </div>
+            {pous
+              ?.filter(({ type }) => type === 'function-block')
+              .map(({ data }) => (
+                <ProjectTreeLeaf
+                  key={data.name}
+                  leafLang={data.language}
+                  label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
+                  onClick={() =>
+                    handleCreateTab({
+                      name: data.name,
+                      path: `/data/pous/function-block/${data.name}`,
+                      elementType: { type: 'function-block', language: data.language },
+                    })
+                  }
+                />
+              ))}
           </ProjectTreeBranch>
           <ProjectTreeBranch branchTarget='program'>
-            <div className='flex flex-row items-center gap-1  hover:bg-slate-50 dark:hover:bg-neutral-900'>
-              {pous
-                ?.filter(({ type }) => type === 'program')
-                .map(({ data }) => (
-                  <ProjectTreeLeaf
-                    key={data.name}
-                    leafLang={data.language}
-                    label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
-                    onClick={() =>
-                      handleCreateTab({
-                        name: data.name,
-                        path: `/data/pous/program/${data.name}`,
-                        elementType: { type: 'program', language: data.language },
-                      })
-                    }
-                  />
-                ))}
-              <button
-                aria-label='delete element button'
-                type='button'
-                className='group ml-2 flex h-5 w-5 items-center'
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleDeleteTab('pou')
-                }}
-              >
-                <CloseIcon className='h-4 w-4 group-hover:stroke-red-500' />
-              </button>
-            </div>
+            {pous
+              ?.filter(({ type }) => type === 'program')
+              .map(({ data }) => (
+                <ProjectTreeLeaf
+                  key={data.name}
+                  leafLang={data.language}
+                  label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
+                  onClick={() =>
+                    handleCreateTab({
+                      name: data.name,
+                      path: `/data/pous/program/${data.name}`,
+                      elementType: { type: 'program', language: data.language },
+                    })
+                  }
+                />
+              ))}
           </ProjectTreeBranch>
 
           <ProjectTreeBranch branchTarget='data-type'>
-            <div className='flex flex-row items-center gap-1  hover:bg-slate-50 dark:hover:bg-neutral-900'>
-              {dataTypes
-                ?.filter(({ derivation }) => derivation === 'array')
-                .map(({ name }) => (
-                  <ProjectTreeLeaf
-                    nested
-                    key={name}
-                    leafLang='arr'
-                    label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
-                    onClick={() =>
-                      handleCreateTab({
-                        name,
-                        path: `/data/data-types/array/${name}`,
-                        elementType: { type: 'data-type', derivation: 'array' },
-                      })
-                    }
-                  />
-                ))}
-              {dataTypes
-                ?.filter(({ derivation }) => derivation === 'enumerated')
-                .map(({ name }) => (
-                  <ProjectTreeLeaf
-                    nested
-                    key={name}
-                    leafLang='enum'
-                    label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
-                    /** Todo: Update the tab state */
-                    onClick={() =>
-                      handleCreateTab({
-                        name,
-                        path: `/data/data-types/enumerated/${name}`,
-                        elementType: { type: 'data-type', derivation: 'enumerated' },
-                      })
-                    }
-                  />
-                ))}
-              {dataTypes
-                ?.filter(({ derivation }) => derivation === 'structure')
-                .map(({ name }) => (
-                  <ProjectTreeLeaf
-                    nested
-                    key={name}
-                    leafLang='str'
-                    label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
-                    /** Todo: Update the tab state */
-                    onClick={() =>
-                      handleCreateTab({
-                        name,
-                        path: `/data/data-types/structure/${name}`,
-                        elementType: { type: 'data-type', derivation: 'structure' },
-                      })
-                    }
-                  />
-                ))}
-              <button
-                aria-label='delete element button'
-                type='button'
-                className='group ml-2 flex h-5 w-5 items-center'
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleDeleteTab('dataType')
-                }}
-              >
-                <CloseIcon className='h-4 w-4 group-hover:stroke-red-500' />
-              </button>
-            </div>
+            {dataTypes
+              ?.filter(({ derivation }) => derivation === 'array')
+              .map(({ name }) => (
+                <ProjectTreeLeaf
+                  nested
+                  key={name}
+                  leafLang='arr'
+                  label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
+                  onClick={() =>
+                    handleCreateTab({
+                      name,
+                      path: `/data/data-types/array/${name}`,
+                      elementType: { type: 'data-type', derivation: 'array' },
+                    })
+                  }
+                />
+              ))}
+            {dataTypes
+              ?.filter(({ derivation }) => derivation === 'enumerated')
+              .map(({ name }) => (
+                <ProjectTreeLeaf
+                  nested
+                  key={name}
+                  leafLang='enum'
+                  label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
+                  /** Todo: Update the tab state */
+                  onClick={() =>
+                    handleCreateTab({
+                      name,
+                      path: `/data/data-types/enumerated/${name}`,
+                      elementType: { type: 'data-type', derivation: 'enumerated' },
+                    })
+                  }
+                />
+              ))}
+            {dataTypes
+              ?.filter(({ derivation }) => derivation === 'structure')
+              .map(({ name }) => (
+                <ProjectTreeLeaf
+                  nested
+                  key={name}
+                  leafLang='str'
+                  label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
+                  /** Todo: Update the tab state */
+                  onClick={() =>
+                    handleCreateTab({
+                      name,
+                      path: `/data/data-types/structure/${name}`,
+                      elementType: { type: 'data-type', derivation: 'structure' },
+                    })
+                  }
+                />
+              ))}
           </ProjectTreeBranch>
 
           <ProjectTreeBranch
