@@ -30,8 +30,17 @@ const MaximizeButton = () => {
 }
 
 const CloseButton = () => {
+  const {
+    workspace: {
+      systemConfigs: { OS },
+    },
+  } = useOpenPLCStore()
+
+  const handleClose = () => {
+    OS === 'darwin' ? window.bridge.hideWindow() : window.bridge.closeWindow()
+  }
   return (
-    <WindowControlButton id='close-button' className='hover:bg-red-600' onClick={() => window.bridge.closeWindow()}>
+    <WindowControlButton id='close-button' className='hover:bg-red-600' onClick={() => handleClose()}>
       <CloseWindowIcon />
     </WindowControlButton>
   )
