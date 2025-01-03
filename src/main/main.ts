@@ -208,10 +208,10 @@ const createMainWindow = async () => {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
-  mainWindow.on('close', () => {
+  mainWindow.on('close', (event) => {
     if (process.platform === 'darwin') {
-      // event.preventDefault()
-      app.quit()
+      event.preventDefault()
+      mainWindow?.hide()
     }
   })
 
@@ -221,6 +221,10 @@ const createMainWindow = async () => {
     } else {
       mainWindow.show()
     }
+  })
+
+  app.on('before-quit', () => {
+    mainWindow?.destroy()
   })
 
   // Open urls in the user's browser
