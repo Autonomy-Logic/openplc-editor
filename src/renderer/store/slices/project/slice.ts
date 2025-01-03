@@ -105,7 +105,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           if (!pouExists && !dataTypeExists) {
             project.data.pous.push(pouToBeCreated)
             response = { ok: true, message: 'Pou created successfully' }
-            console.log('pou created:', pouToBeCreated)
           }
           if (dataTypeExists || pouExists) {
             toast({
@@ -364,7 +363,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
           dataType.variable.splice(newIndex, 0, removed)
 
-          console.log('Variables rearranged:', dataType.variable)
         }),
       )
     },
@@ -436,7 +434,27 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
       return response
     },
-
+    deleteDatatype: (dataTypeName) => {
+      let response: ProjectResponse = { ok: true }
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const datatypeIndex = project.data.dataTypes.findIndex((datatype) => datatype.name === dataTypeName)
+          if (datatypeIndex === -1) {
+            response = { ok: false, message: 'Datatype not found' }
+            return
+          }
+          project.data.dataTypes.splice(datatypeIndex, 1)
+        }),
+      )
+      if (!response.ok) {
+        toast({
+          title: 'Error',
+          description: response.message,
+          variant: 'fail',
+        })
+      }
+      return response
+    },
     // TODO: Review requirements.
     /**
      * Function to update a unique data type.
@@ -448,7 +466,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         produce(({ project }: ProjectSlice) => {
           const datatypeToUpdateIndex = project.data.dataTypes.findIndex((datatype) => datatype.name === name)
           if (datatypeToUpdateIndex === -1) return
-          console.log('Updating datatype', name, dataToUpdate)
           Object.assign(project.data.dataTypes[datatypeToUpdateIndex], dataToUpdate)
         }),
       )

@@ -181,9 +181,9 @@ const createMainWindow = async () => {
   }
 
   // Open devtools if the app is not packaged;
-  if (isDebug) {
-    mainWindow.webContents.openDevTools()
-  }
+  // if (isDebug) {
+  //   mainWindow.webContents.openDevTools()
+  // }
 
   splash.on('closed', () => (splash = null))
 

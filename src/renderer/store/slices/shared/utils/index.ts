@@ -18,13 +18,10 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
         data: {
           name: name,
           language,
-          body:
-            language === 'ld'
-              ? { language, value: { name, rungs: [] } }
-              : { language, value: '' },
+          body: language === 'ld' ? { language, value: { name, rungs: [] } } : { language, value: '' },
           returnType: 'BOOL',
           variables: [],
-          documentation: 'Doc for function',
+          documentation: '',
         },
       }
     case 'function-block':
@@ -33,12 +30,9 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
         data: {
           name: name,
           language,
-          body:
-            language === 'ld'
-              ? { language, value: { name, rungs: [] } }
-              : { language, value: '' },
+          body: language === 'ld' ? { language, value: { name, rungs: [] } } : { language, value: '' },
           variables: [],
-          documentation: 'Doc for function block',
+          documentation: '',
         },
       }
     case 'program':
@@ -47,12 +41,9 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
         data: {
           name: name,
           language,
-          body:
-            language === 'ld'
-              ? { language, value: { name, rungs: [] } }
-              : { language, value: '' },
+          body: language === 'ld' ? { language, value: { name, rungs: [] } } : { language, value: '' },
           variables: [],
-          documentation: 'Doc for program',
+          documentation: '',
         },
       }
   }

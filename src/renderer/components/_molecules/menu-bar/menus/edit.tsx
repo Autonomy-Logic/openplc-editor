@@ -10,25 +10,20 @@ import { MenuClasses } from '../constants'
 export const EditMenu = () => {
   const {
     editor,
-    projectActions: { deletePou },
-    // workspaceActions: { setModalOpen },
-    flowActions: { removeFlow },
-    libraryActions: { removeUserLibrary },
+    workspaceActions: { setModalOpen },
+    modalActions: { openModal },
   } = useOpenPLCStore()
-  const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
+  const { setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
-
   useEffect(() => {
     setSelectedTab(editor.meta.name)
+    return () => {
+      setSelectedTab('')
+    }
   }, [editor])
-  const handleDeletePou = () => {
-    handleRemoveTab(selectedTab)
-    deletePou(selectedTab)
-    removeFlow(selectedTab)
-    removeUserLibrary(selectedTab)
-  }
+
   const findInProject = () => {
-    // setModalOpen('findInProject', true)
+    setModalOpen('findInProject', true)
   }
 
   return (
@@ -85,9 +80,9 @@ export const EditMenu = () => {
             <span>{i18n.t('menu:edit.submenu.selectAll')}</span>
             <span className={ACCELERATOR}>{'Ctrl + A'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} onClick={() => void handleDeletePou()}>
+          <MenuPrimitive.Item className={ITEM} onClick={() => openModal('confirm-delete-element', null)}>
             <span>{i18n.t('menu:edit.submenu.deletePou')}</span>
-            <span className={ACCELERATOR}>{''}</span>
+            <span className={ACCELERATOR}>{'Ctrl + Backspace'}</span>
           </MenuPrimitive.Item>
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>

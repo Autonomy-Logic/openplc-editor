@@ -18,8 +18,6 @@ const DownloadButton = () => {
     },
   } = useOpenPLCStore()
 
-  console.log(project.meta.path)
-
   const buildProgram = () =>
     window.bridge.compileRequest(project.meta.path, (compileResponse: CompileResponseObject) => {
       const { type: stdType, data, message: stdMessage } = compileResponse

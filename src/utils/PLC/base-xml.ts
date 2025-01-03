@@ -88,8 +88,7 @@ export const parseProjectToXML = (project: ProjectState): string => {
   const doc = create(xmlResult)
   doc.dec({ version: '1.0', encoding: 'utf-8' })
   const xml = doc.end({ prettyPrint: true })
-  console.log('xml as object', xmlResult)
   return xml
 }
 
-export {getBaseXmlStructure}
+export { getBaseXmlStructure }

@@ -5,7 +5,7 @@ import type { WorkspaceSlice } from './types'
 
 const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice> = (setState) => ({
   workspace: {
-    editingState: 'unsaved',
+    editingState: 'initial-state',
     systemConfigs: {
       OS: '',
       arch: '',
@@ -15,6 +15,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     recent: [],
     isCollapsed: false,
     isModalOpen: [],
+    discardChanges: false,
   },
 
   workspaceActions: {
@@ -32,11 +33,10 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-    setrecent: (recent): void => {
+    setRecent: (recent): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.recent = recent
-          console.log(workspace.recent)
         }),
       )
     },
@@ -62,6 +62,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    toggleDiscardChanges: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.discardChanges = !workspace.discardChanges
+        }),
+      )
+    },
     setModalOpen: (modalName: string, modalState: boolean): void => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
@@ -75,7 +82,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
-   },
+  },
 })
 
 export { createWorkspaceSlice }

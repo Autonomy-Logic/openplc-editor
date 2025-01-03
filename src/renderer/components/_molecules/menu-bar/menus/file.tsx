@@ -1,6 +1,6 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { useHandleRemoveTab } from '@root/renderer/hooks'
+import { useCompiler, useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { FlowType } from '@root/renderer/store/slices/flow/types'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
@@ -13,36 +13,43 @@ import { MenuClasses } from '../constants'
 export const FileMenu = () => {
   const {
     project,
+    workspace: { editingState },
     editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setrecent },
-    projectActions: { setProject },
+    workspaceActions: { setEditingState, setRecent },
+    projectActions: { setProject, clearProjects },
     tabsActions: { clearTabs },
-    flowActions: { addFlow },
+    flowActions: { addFlow, clearFlows },
+    libraryActions: { clearUserLibraries },
+
     editor,
     modalActions: { openModal },
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
+  const { handleExportProject } = useCompiler()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
-  const handleCreateProject = () => {
-    try {
-      openModal('create-project', null)
-    } catch (_error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to open project creation modal',
-        variant: 'fail',
-      })
+  const handleUnsavedChanges = (action: 'create-project' | 'open-project') => {
+    if (editingState === 'unsaved') {
+      openModal('save-changes-project', action)
+      return true
     }
+    return false
+  }
+
+  const handleCreateProject = () => {
+    if (handleUnsavedChanges('create-project')) return
+    openModal('create-project', null)
   }
 
   const handleOpenProject = async () => {
+    if (handleUnsavedChanges('open-project')) return
+
     const { success, data, error } = await window.bridge.openProject()
     if (success && data) {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
-      setrecent([])
+      setRecent([])
       setProject({
         meta: {
           name: data.content.meta.name,
@@ -110,11 +117,25 @@ export const FileMenu = () => {
     setSelectedTab(editor.meta.name)
   }, [editor])
 
+  useEffect(() => {
+    window.bridge.closeProjectAccelerator(handleCloseProject)
+
+    return () => {
+      void window.bridge.removeCloseProjectListener()
+    }
+  }, [])
+
   const handleCloseProject = () => {
+    if (editingState === 'unsaved') {
+      openModal('save-changes-project', 'exit')
+      return
+    }
     clearEditor()
     clearTabs()
-    setEditingState('unsaved')
-    setrecent([])
+    setRecent([])
+    clearUserLibraries()
+    clearFlows()
+    clearProjects()
   }
 
   return (
@@ -146,7 +167,10 @@ export const FileMenu = () => {
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} onClick={() => void handleCloseProject()}>
               <span>{i18n.t('menu:file.submenu.closeProject')}</span>
-              <span className={ACCELERATOR}>{'Ctrl  + W'}</span>
+              <span className={ACCELERATOR}>{'Ctrl + Shift + W'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item className={ITEM} onClick={() => void handleExportProject()}>
+              <span>{i18n.t('menu:file.submenu.exportToPLCOpenXml')}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
             <MenuPrimitive.Item className={ITEM} disabled>
@@ -167,7 +191,7 @@ export const FileMenu = () => {
               <span className={ACCELERATOR}>{'Ctrl + U'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
-            <MenuPrimitive.Item className={ITEM}>
+            <MenuPrimitive.Item className={ITEM} onClick={handleCloseProject}>
               <span>{i18n.t('menu:file.submenu.quit')}</span>
               <span className={ACCELERATOR}>{'Ctrl + Q'}</span>
             </MenuPrimitive.Item>
