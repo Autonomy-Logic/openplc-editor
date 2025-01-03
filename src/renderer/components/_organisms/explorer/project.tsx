@@ -12,7 +12,7 @@ const Project = () => {
   const {
     project: {
       data: { pous, dataTypes, configuration },
-      meta: {name}
+      meta: { name },
     },
     projectActions: { updateMetaName },
     tabsActions: { updateTabs },
@@ -33,7 +33,6 @@ const Project = () => {
     addModel(editor)
     setEditor(editor)
   }
-
   const [isEditing, setIsEditing] = useState(false)
   const [inputValue, setInputValue] = useState<string>(name)
 
@@ -43,6 +42,7 @@ const Project = () => {
       updateMetaName(inputValue)
     }
   }
+
   useEffect(() => {
     setInputValue(name)
   }, [name])
@@ -106,6 +106,7 @@ const Project = () => {
                 />
               ))}
           </ProjectTreeBranch>
+
           <ProjectTreeBranch branchTarget='function-block'>
             {pous
               ?.filter(({ type }) => type === 'function-block')
@@ -163,7 +164,7 @@ const Project = () => {
               ))}
             {dataTypes
               ?.filter(({ derivation }) => derivation === 'enumerated')
-              .map(({  name }) => (
+              .map(({ name }) => (
                 <ProjectTreeLeaf
                   nested
                   key={name}

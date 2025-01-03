@@ -1,6 +1,6 @@
 import { TitleBar } from '@root/renderer/components/_organisms/title-bar'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { FlowType } from '@root/renderer/store/slices'
+import { FlowType, RungState } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 
@@ -24,7 +24,10 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     libraryActions: { addLibrary },
     projectActions: { setProject },
   } = useOpenPLCStore()
-
+  type ModalData = {
+    leafLang: string
+    label: string
+  }
   useEffect(() => {
     const getUserSystemProps = async () => {
       const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
@@ -151,7 +154,12 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           />
         )}
         {modals?.['confirm-delete-element']?.open === true && (
-          <ConfirmDeleteElementModal isOpen={modals['confirm-delete-element'].open} />
+          <ConfirmDeleteElementModal
+            isOpen={modals['confirm-delete-element'].open}
+            validationContext={modals['confirm-delete-element'].data as string}
+            rung={modals['confirm-delete-element'].data as RungState}
+            modalData={modals['confirm-delete-element'].data as ModalData}
+          />
         )}
         <AcceleratorHandler />
       </main>
