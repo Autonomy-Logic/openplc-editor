@@ -230,9 +230,11 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
   const { LeafIcon } = LeafSources[leafLang]
 
   const handleLeafSelection = useCallback(() => setLeafIsSelected(!leafIsSelected), [leafIsSelected])
+  const modalData = { leafLang, label }
 
   const handleDeleteTab = () => {
-    openModal('confirm-delete-element', null)
+    console.log('modalData:', modalData)
+    openModal('confirm-delete-element', modalData)
   }
 
   return (
@@ -259,7 +261,6 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
         onClick={(e) => {
           e.stopPropagation()
           handleDeleteTab()
-          console.log('Delete button clicked:', leafLang, label)
         }}
         aria-haspopup='dialog'
         aria-expanded='false'

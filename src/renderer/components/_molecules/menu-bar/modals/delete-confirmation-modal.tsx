@@ -9,35 +9,47 @@ import { useEffect } from 'react'
 
 import { Modal, ModalContent } from '../../modal'
 
-type ConfirmDeleteElementProps = {
-  rung?: RungState
-  isOpen: boolean
-  validationContext: string | null
+type ModalData = {
+  leafLang: string
+  label: string
 }
 
-const ConfirmDeleteElementModal = ({ rung, isOpen, validationContext, ...rest }: ConfirmDeleteElementProps) => {
+type ConfirmDeleteElementProps = {
+  rung?: RungState | null
+  isOpen: boolean
+  validationContext: string | null
+  modalData?: ModalData
+}
+
+const ConfirmDeleteElementModal = ({
+  rung,
+  modalData,
+  isOpen,
+  validationContext,
+  ...rest
+}: ConfirmDeleteElementProps) => {
   const {
     editor,
-    projectActions: { deletePou, deleteDatatype },
+    projectActions: { deletePou, deleteDatatype, deleteVariable },
     flowActions: { removeFlow, removeRung },
-    project: {
-      data: { pous },
-    },
     editorActions: { updateModelVariables },
     libraryActions: { removeUserLibrary },
     modalActions: { onOpenChange },
-    projectActions: { deleteVariable },
+    project: {
+      data: { pous },
+    },
   } = useOpenPLCStore()
-  const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
+
+  const { handleRemoveTab } = useHandleRemoveTab()
   const editorName = editor.meta.name
   const pou = pous.find((pou) => pou.data.name === editorName)
 
   useEffect(() => {
-    setSelectedTab(editor.meta.name)
-  }, [editor])
-  const handleDeleteElement = () => {
+
+  }, [modalData,editor])
+  const handleDeleteElement = (): void => {
     try {
-      if (rung) {
+      if (rung && Array.isArray(rung.nodes)) {
         const blockNodes = rung.nodes.filter((node) => node.type === 'block')
 
         if (blockNodes.length > 0) {
@@ -45,9 +57,9 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, validationContext, ...rest }:
           if (pou) variables = [...pou.data.variables] as PLCVariable[]
 
           blockNodes.forEach((blockNode) => {
-            const variableIndex = variables.findIndex(
-              (variable) => variable.id === (blockNode.data as BasicNodeData).variable.id,
-            )
+            const variableData = (blockNode.data as BasicNodeData)?.variable
+            const variableIndex = variables.findIndex((variable) => variable.id === variableData?.id)
+
             if (variableIndex !== -1) {
               deleteVariable({
                 rowId: variableIndex,
@@ -60,7 +72,7 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, validationContext, ...rest }:
             if (
               editor.type === 'plc-graphical' &&
               editor.variable.display === 'table' &&
-              parseInt(editor.variable.selectedRow) === variableIndex
+              parseInt(editor.variable.selectedRow, 10) === variableIndex
             ) {
               updateModelVariables({ display: 'table', selectedRow: -1 })
             }
@@ -78,28 +90,37 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, validationContext, ...rest }:
         return
       }
 
+      // Verifica se estamos lidando com um "datatype"
       if (editor.type === 'plc-datatype') {
-        handleRemoveTab(selectedTab)
-        deleteDatatype(selectedTab)
-        removeFlow(selectedTab)
-        removeUserLibrary(selectedTab)
+        const targetLabel = modalData?.label
+        if (!targetLabel) {
+          throw new Error('No label found for datatype deletion.')
+        }
+
+        handleRemoveTab(targetLabel)
+        deleteDatatype(targetLabel)
+        removeFlow(targetLabel)
+        removeUserLibrary(targetLabel)
+
         toast({
           title: 'Datatype deleted success!',
-          description: 'Your datatype was successfully deleted.',
+          description: `Datatype "${targetLabel}" was successfully deleted.`,
           variant: 'default',
         })
         onOpenChange('confirm-delete-element', false)
         return
       }
 
-      if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
-        handleRemoveTab(selectedTab)
-        deletePou(selectedTab)
-        removeFlow(selectedTab)
-        removeUserLibrary(selectedTab)
+      // Verifica se estamos lidando com um "pou"
+      if ((editor.type === 'plc-textual' || editor.type === 'plc-graphical') && modalData?.label) {
+        handleRemoveTab(modalData.label)
+        deletePou(modalData.label)
+        removeFlow(modalData.label)
+        removeUserLibrary(modalData.label)
+
         toast({
           title: 'Pou deleted success!',
-          description: 'Your pou was successfully deleted.',
+          description: `POU "${modalData.label}" was successfully deleted.`,
           variant: 'default',
         })
         onOpenChange('confirm-delete-element', false)
@@ -133,16 +154,14 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, validationContext, ...rest }:
           </div>
           <div className='flex w-[200px] flex-col gap-1 space-y-2 text-sm'>
             <button
-              onClick={() => {
-                handleDeleteElement()
-              }}
+              onClick={handleDeleteElement}
               className='w-full rounded-lg bg-brand px-4 py-2 text-center font-medium text-white'
             >
               Delete
             </button>
             <button
               onClick={handleCloseModal}
-              className='w-full rounded-md bg-neutral-100 px-4 py-2 font-medium dark:bg-neutral-850 dark:text-neutral-100 '
+              className='w-full rounded-md bg-neutral-100 px-4 py-2 font-medium dark:bg-neutral-850 dark:text-neutral-100'
             >
               Cancel
             </button>
@@ -152,4 +171,5 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, validationContext, ...rest }:
     </Modal>
   )
 }
+
 export { ConfirmDeleteElementModal }

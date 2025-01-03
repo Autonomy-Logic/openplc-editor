@@ -24,7 +24,10 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     libraryActions: { addLibrary },
     projectActions: { setProject },
   } = useOpenPLCStore()
-
+  type ModalData = {
+    leafLang: string
+    label: string
+  }
   useEffect(() => {
     const getUserSystemProps = async () => {
       const { OS, architecture, prefersDarkMode, isWindowMaximized } = await window.bridge.getSystemInfo()
@@ -155,6 +158,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
             isOpen={modals['confirm-delete-element'].open}
             validationContext={modals['confirm-delete-element'].data as string}
             rung={modals['confirm-delete-element'].data as RungState}
+            modalData={modals['confirm-delete-element'].data as ModalData}
           />
         )}
         <AcceleratorHandler />
