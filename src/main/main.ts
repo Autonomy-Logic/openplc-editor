@@ -208,6 +208,24 @@ const createMainWindow = async () => {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+  mainWindow.on('close', (event) => {
+    if (process.platform === 'darwin') {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
+  })
+
+  app.on('activate', () => {
+    if (mainWindow === null) {
+      void createMainWindow()
+    } else {
+      mainWindow.show()
+    }
+  })
+
+  app.on('before-quit', () => {
+    mainWindow?.destroy()
+  })
 
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
