@@ -5,8 +5,14 @@ import type { FlowType } from '@root/renderer/store/slices'
 import { ComponentProps, useEffect, useState } from 'react'
 
 export type IDisplayRecentProjectProps = ComponentProps<'section'>
+interface DisplayRecentProjectsProps {
+  projectFilterValue: string
+}
 
-const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
+const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
+  { projectFilterValue },
+  props: IDisplayRecentProjectProps,
+) => {
   const {
     workspace: { recent },
     editorActions: { clearEditor },
@@ -24,6 +30,21 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
     const recentProjects = await window.bridge.retrieveRecent()
     setRecentProjects(recentProjects)
   }
+
+  useEffect(() => {
+    if (projectFilterValue === 'Name') {
+      const ordenarItensPorNome = (recentProjects: { name: string }[]) => {
+        return recentProjects.sort((a: { name: string }, b: { name: string }) => a.name?.localeCompare(b.name))
+      }
+      ordenarItensPorNome(recentProjects)
+    }
+    if (projectFilterValue === 'Recent') {
+      const ordenarItensPorData = (recentProjects: { lastOpenedAt: string }[]) => {
+        return recentProjects.sort((a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime())
+      }
+      ordenarItensPorData(recentProjects)
+    }
+  }, [projectFilterValue])
 
   useEffect(() => {
     void getUserRecentProjects()

@@ -4,7 +4,9 @@ import { ReactNode, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
 
-const ProjectFilterBar = (): ReactNode => {
+interface ProjectFilterBarProps { setFilterValueProps: (projectFilterValue: string) => void; }
+
+const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({setFilterValueProps}): ReactNode => {
   const [projectFilter, setProjectFilter] = useState('Recent')
   return (
     <div
@@ -51,7 +53,7 @@ const ProjectFilterBar = (): ReactNode => {
             <PrimitiveDropdown.Item
               id='project-filter-dropdown-item-recent'
               aria-selected={projectFilter === 'Recent'}
-              onSelect={() => setProjectFilter('Recent')}
+              onSelect={() => {setProjectFilter('Recent');  setFilterValueProps('Recent')}} 
               className='select-none bg-white outline-none hover:cursor-pointer hover:bg-neutral-50 aria-selected:bg-neutral-100 dark:bg-neutral-900 hover:dark:bg-neutral-700 dark:aria-selected:bg-neutral-800'
             >
               <span>Recent</span>
@@ -59,7 +61,7 @@ const ProjectFilterBar = (): ReactNode => {
             <PrimitiveDropdown.Item
               id='project-filter-dropdown-item-name'
               aria-selected={projectFilter === 'Name'}
-              onSelect={() => setProjectFilter('Name')}
+              onSelect={() => {setProjectFilter('Name');  setFilterValueProps('Name')}}
               className='select-none bg-white outline-none hover:cursor-pointer hover:bg-neutral-50 aria-selected:bg-neutral-100 dark:bg-neutral-900 hover:dark:bg-neutral-700 dark:aria-selected:bg-neutral-800'
             >
               <span>Name</span>
@@ -67,7 +69,7 @@ const ProjectFilterBar = (): ReactNode => {
             <PrimitiveDropdown.Item
               id='project-filter-dropdown-item-size'
               aria-selected={projectFilter === 'Size'}
-              onSelect={() => setProjectFilter('Size')}
+              onSelect={() => {setProjectFilter('Size') ; setFilterValueProps('Size')} }
               className='select-none bg-white outline-none hover:cursor-pointer hover:bg-neutral-50 aria-selected:bg-neutral-100 dark:bg-neutral-900 hover:dark:bg-neutral-700 dark:aria-selected:bg-neutral-800'
             >
               <span>Size</span>

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/require-await */
 import { IProjectServiceResponse } from '@root/main/services/project-service'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 import { FolderIcon, PlusIcon, StickArrowIcon, VideoIcon } from '../assets'
 import { useToast } from '../components/_features/[app]/toast/use-toast'
@@ -12,6 +12,8 @@ import { useOpenPLCStore } from '../store'
 import { FlowType } from '../store/slices/flow/types'
 
 const StartScreen = () => {
+  const [filterValueProps, setFilterValueProps] = useState<string>('')
+
   const { toast } = useToast()
   const {
     workspaceActions: { setEditingState },
@@ -24,6 +26,10 @@ const StartScreen = () => {
 
   const handleCreateProject = async () => {
     openModal('create-project', null)
+  }
+
+  const receberDadoDoFilho = (orderFilterValue: string) => {
+    setFilterValueProps(orderFilterValue)
   }
 
   const retrieveOpenProjectData = async () => {
@@ -150,8 +156,8 @@ const StartScreen = () => {
         </MenuRoot>
       </StartSideContent>
       <StartMainContent>
-        <ProjectFilterBar />
-        <DisplayRecentProjects />
+        <ProjectFilterBar setFilterValueProps={receberDadoDoFilho} />
+        <DisplayRecentProjects projectFilterValue={filterValueProps} />
       </StartMainContent>
     </>
   )
