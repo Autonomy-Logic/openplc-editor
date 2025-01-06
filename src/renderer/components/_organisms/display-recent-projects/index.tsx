@@ -7,10 +7,11 @@ import { ComponentProps, useEffect, useState } from 'react'
 export type IDisplayRecentProjectProps = ComponentProps<'section'>
 interface DisplayRecentProjectsProps {
   projectFilterValue: string
+  searchNameFilterValue: string
 }
 
 const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
-  { projectFilterValue },
+  { projectFilterValue, searchNameFilterValue },
   props: IDisplayRecentProjectProps,
 ) => {
   const {
@@ -45,6 +46,14 @@ const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
       ordenarItensPorData(recentProjects)
     }
   }, [projectFilterValue])
+
+  useEffect(() => {
+    setTimeout(() => {
+      recentProjects.filter((item) => {
+        return item.name?.includes(searchNameFilterValue.toLocaleLowerCase())
+      })
+    }, 2000)
+  }, [searchNameFilterValue])
 
   useEffect(() => {
     void getUserRecentProjects()

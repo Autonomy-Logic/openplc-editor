@@ -4,9 +4,11 @@ import { ReactNode, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
 
-interface ProjectFilterBarProps { setFilterValueProps: (projectFilterValue: string) => void; }
+interface ProjectFilterBarProps { setFilterValueProps: (projectFilterValue: string) => void; 
+  setSearchFilterValue:  (searchNameFilterValue: string) => void;
+}
 
-const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({setFilterValueProps}): ReactNode => {
+const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({setFilterValueProps, setSearchFilterValue}): ReactNode => {
   const [projectFilter, setProjectFilter] = useState('Recent')
   return (
     <div
@@ -89,6 +91,7 @@ const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({setFilterValueProps}
           type='text'
           placeholder='Search for a project'
           className='h-full w-full bg-inherit text-black outline-none placeholder:select-none placeholder:font-caption placeholder:font-normal dark:text-white'
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchFilterValue(e.target.value)}
         />
       </div>
     </div>

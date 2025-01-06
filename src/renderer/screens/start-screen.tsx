@@ -13,6 +13,7 @@ import { FlowType } from '../store/slices/flow/types'
 
 const StartScreen = () => {
   const [filterValueProps, setFilterValueProps] = useState<string>('')
+  const [searchFilterValue, setSearchFilterProps] = useState<string>('')
 
   const { toast } = useToast()
   const {
@@ -28,8 +29,12 @@ const StartScreen = () => {
     openModal('create-project', null)
   }
 
-  const receberDadoDoFilho = (orderFilterValue: string) => {
+  const orderByFilter = (orderFilterValue: string) => {
     setFilterValueProps(orderFilterValue)
+  }
+
+  const searchFilter = (searchFilterValue: string) => {
+    setSearchFilterProps(searchFilterValue)
   }
 
   const retrieveOpenProjectData = async () => {
@@ -156,8 +161,8 @@ const StartScreen = () => {
         </MenuRoot>
       </StartSideContent>
       <StartMainContent>
-        <ProjectFilterBar setFilterValueProps={receberDadoDoFilho} />
-        <DisplayRecentProjects projectFilterValue={filterValueProps} />
+        <ProjectFilterBar setFilterValueProps={orderByFilter} setSearchFilterValue={searchFilter}/>
+        <DisplayRecentProjects projectFilterValue={filterValueProps} searchNameFilterValue ={searchFilterValue}/>
       </StartMainContent>
     </>
   )
