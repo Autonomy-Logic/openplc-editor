@@ -33,26 +33,42 @@ const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
   }
 
   useEffect(() => {
-    if (projectFilterValue === 'Name') {
-      const ordenarItensPorNome = (recentProjects: { name: string }[]) => {
-        return recentProjects.sort((a: { name: string }, b: { name: string }) => a.name?.localeCompare(b.name))
-      }
-      ordenarItensPorNome(recentProjects)
+    let sortedProjects = []
+
+    switch (projectFilterValue) {
+      case 'Name':
+        sortedProjects = [...recentProjects].sort((a, b) => a.name?.localeCompare(b.name))
+        break
+      case 'Recent':
+        sortedProjects = [...recentProjects].sort(
+          (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
+        )
+        break
+      default:
+        console.log('Unrecognized filter')
+        return
     }
-    if (projectFilterValue === 'Recent') {
-      const ordenarItensPorData = (recentProjects: { lastOpenedAt: string }[]) => {
-        return recentProjects.sort((a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime())
-      }
-      ordenarItensPorData(recentProjects)
-    }
-  }, [projectFilterValue])
+
+    setRecentProjects(sortedProjects)
+  }, [projectFilterValue, recentProjects])
 
   useEffect(() => {
-    setTimeout(() => {
-      recentProjects.filter((item) => {
-        return item.name?.includes(searchNameFilterValue.toLocaleLowerCase())
-      })
-    }, 2000)
+    const filtered =
+      searchNameFilterValue.length === 0
+        ? recent
+        : recent.filter((project) => project.name?.includes(searchNameFilterValue))
+
+    setRecentProjects(filtered)
+  }, [searchNameFilterValue, recent])
+
+  useEffect(() => {
+    const getFilteredProjects = () => {
+      if (searchNameFilterValue.length === 0) {
+        return recentProjects
+      }
+      return recentProjects.filter((project) => project.name?.includes(searchNameFilterValue))
+    }
+    getFilteredProjects()
   }, [searchNameFilterValue])
 
   useEffect(() => {
