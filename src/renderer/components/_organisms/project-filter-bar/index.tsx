@@ -68,14 +68,6 @@ const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({setFilterValueProps,
             >
               <span>Name</span>
             </PrimitiveDropdown.Item>
-            <PrimitiveDropdown.Item
-              id='project-filter-dropdown-item-size'
-              aria-selected={projectFilter === 'Size'}
-              onSelect={() => {setProjectFilter('Size') ; setFilterValueProps('Size')} }
-              className='select-none bg-white outline-none hover:cursor-pointer hover:bg-neutral-50 aria-selected:bg-neutral-100 dark:bg-neutral-900 hover:dark:bg-neutral-700 dark:aria-selected:bg-neutral-800'
-            >
-              <span>Size</span>
-            </PrimitiveDropdown.Item>
           </PrimitiveDropdown.Content>
         </PrimitiveDropdown.Root>
       </div>
