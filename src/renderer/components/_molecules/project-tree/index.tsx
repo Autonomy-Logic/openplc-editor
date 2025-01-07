@@ -219,26 +219,27 @@ const LeafSources = {
   res: { LeafIcon: ResourceIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => {
-  //aqui
   const {
     editor: {
       meta: { name },
     },
     modalActions: { openModal },
   } = useOpenPLCStore()
-  const handleDeleteTab = () => {
-    openModal('confirm-delete-element', null)
-  }
+
   const [leafIsSelected, setLeafIsSelected] = useState<boolean>(false)
   const { LeafIcon } = LeafSources[leafLang]
 
   const handleLeafSelection = useCallback(() => setLeafIsSelected(!leafIsSelected), [leafIsSelected])
+  const modalData = { leafLang, label }
+
+  const handleDeleteTab = () => {
+    openModal('confirm-delete-element', modalData)
+  }
 
   return (
     <li
       className={cn(
         ' group flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
-
         name === label && 'bg-slate-50 dark:bg-neutral-900',
       )}
       onClick={handleLeafSelection}
@@ -247,7 +248,7 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
       <LeafIcon className='flex-shrink-0' />
       <span
         className={cn(
-          'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap  font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+          'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
           name === label && 'font-medium text-neutral-1000 dark:text-white',
         )}
         dangerouslySetInnerHTML={{ __html: label || '' }}
@@ -268,4 +269,5 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
     </li>
   )
 }
+
 export { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeNestedBranch, ProjectTreeRoot }
