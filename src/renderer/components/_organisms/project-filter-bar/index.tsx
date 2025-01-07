@@ -4,7 +4,11 @@ import { ReactNode, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
 
-const ProjectFilterBar = (): ReactNode => {
+interface ProjectFilterBarProps { setFilterValueProps: (projectFilterValue: string) => void; 
+  setSearchFilterValue:  (searchNameFilterValue: string) => void;
+}
+
+const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({setFilterValueProps, setSearchFilterValue}): ReactNode => {
   const [projectFilter, setProjectFilter] = useState('Recent')
   return (
     <div
@@ -45,13 +49,13 @@ const ProjectFilterBar = (): ReactNode => {
               border-neutral-100 bg-white *:flex
               *:h-9 *:w-full
               *:flex-col *:justify-center *:pl-2 *:font-caption *:text-base *:font-normal *:text-black
-              dark:border-neutral-800 dark:bg-neutral-900 *:dark:text-white [&_[role=menuitem]:first-child]:rounded-t-md [&_[role=menuitem]:last-child]:rounded-b-md
+              dark:border-neutral-800 dark:bg-neutral-900 *:dark:text-white [&_[role=menuitem]:first-child]:rounded-t-md [&_[role=menuitem]:last-child]:rounded-b-md z-[10]
               '
           >
             <PrimitiveDropdown.Item
               id='project-filter-dropdown-item-recent'
               aria-selected={projectFilter === 'Recent'}
-              onSelect={() => setProjectFilter('Recent')}
+              onSelect={() => {setProjectFilter('Recent');  setFilterValueProps('Recent')}} 
               className='select-none bg-white outline-none hover:cursor-pointer hover:bg-neutral-50 aria-selected:bg-neutral-100 dark:bg-neutral-900 hover:dark:bg-neutral-700 dark:aria-selected:bg-neutral-800'
             >
               <span>Recent</span>
@@ -59,18 +63,10 @@ const ProjectFilterBar = (): ReactNode => {
             <PrimitiveDropdown.Item
               id='project-filter-dropdown-item-name'
               aria-selected={projectFilter === 'Name'}
-              onSelect={() => setProjectFilter('Name')}
+              onSelect={() => {setProjectFilter('Name');  setFilterValueProps('Name')}}
               className='select-none bg-white outline-none hover:cursor-pointer hover:bg-neutral-50 aria-selected:bg-neutral-100 dark:bg-neutral-900 hover:dark:bg-neutral-700 dark:aria-selected:bg-neutral-800'
             >
               <span>Name</span>
-            </PrimitiveDropdown.Item>
-            <PrimitiveDropdown.Item
-              id='project-filter-dropdown-item-size'
-              aria-selected={projectFilter === 'Size'}
-              onSelect={() => setProjectFilter('Size')}
-              className='select-none bg-white outline-none hover:cursor-pointer hover:bg-neutral-50 aria-selected:bg-neutral-100 dark:bg-neutral-900 hover:dark:bg-neutral-700 dark:aria-selected:bg-neutral-800'
-            >
-              <span>Size</span>
             </PrimitiveDropdown.Item>
           </PrimitiveDropdown.Content>
         </PrimitiveDropdown.Root>
@@ -87,6 +83,7 @@ const ProjectFilterBar = (): ReactNode => {
           type='text'
           placeholder='Search for a project'
           className='h-full w-full bg-inherit text-black outline-none placeholder:select-none placeholder:font-caption placeholder:font-normal dark:text-white'
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchFilterValue(e.target.value)}
         />
       </div>
     </div>

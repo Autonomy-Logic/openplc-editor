@@ -5,8 +5,15 @@ import type { FlowType } from '@root/renderer/store/slices'
 import { ComponentProps, useEffect, useState } from 'react'
 
 export type IDisplayRecentProjectProps = ComponentProps<'section'>
+interface DisplayRecentProjectsProps {
+  projectFilterValue: string
+  searchNameFilterValue: string
+}
 
-const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
+const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
+  { projectFilterValue, searchNameFilterValue },
+  props: IDisplayRecentProjectProps,
+) => {
   const {
     workspace: { recent },
     editorActions: { clearEditor },
@@ -24,6 +31,37 @@ const DisplayRecentProjects = (props: IDisplayRecentProjectProps) => {
     const recentProjects = await window.bridge.retrieveRecent()
     setRecentProjects(recentProjects)
   }
+
+  useEffect(() => {
+    let sortedProjects = []
+
+    switch (projectFilterValue) {
+      case 'Name':
+        sortedProjects = [...recentProjects].sort((a, b) => a.name?.localeCompare(b.name))
+        break
+      case 'Recent':
+        sortedProjects = [...recentProjects].sort(
+          (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
+        )
+        break
+      default:
+        console.log('Unrecognized filter')
+        return
+    }
+
+    setRecentProjects(sortedProjects)
+  }, [projectFilterValue, recentProjects])
+
+  useEffect(() => {
+    const filtered = searchNameFilterValue.length === 0 
+      ? recent 
+      : recent.filter((project) =>
+          project.name?.toLowerCase().includes(searchNameFilterValue.toLowerCase())
+        );
+    
+    setRecentProjects(filtered);
+  }, [searchNameFilterValue, recent]);
+  
 
   useEffect(() => {
     void getUserRecentProjects()

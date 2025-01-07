@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd'
 import { CreateRung } from '@root/renderer/components/_molecules/rung/create-rung'
