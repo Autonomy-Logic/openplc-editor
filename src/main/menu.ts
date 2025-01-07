@@ -47,11 +47,6 @@ export default class MenuBuilder {
 
     return menu
   }
-
-  /**
-   * Menu handlers -------------------------------------------------------
-   */
-
   handleCreateProject() {
     this.mainWindow.webContents.send('project:create-accelerator')
   }
@@ -121,6 +116,7 @@ export default class MenuBuilder {
   /**
    * --------------------------------------------------------------------------------------------
    */
+
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
       const { x, y } = props
@@ -219,7 +215,6 @@ export default class MenuBuilder {
         { type: 'separator' },
         {
           label: i18n.t('menu:file.submenu.quit'),
-          // role: 'quit',
           accelerator: 'Cmd+Q',
           click: () => this.handleQuitAppRequest(),
         },
@@ -570,7 +565,7 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:edit.submenu.deletePou'),
-            accelerator: 'Ctrl+backspace',
+            accelerator: 'Ctrl+Shift+delete',
             click: () => this.handleDeletePou(),
           },
         ],

@@ -126,6 +126,7 @@ const rendererProcessBridge = {
   winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
   quitAppRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:quit-accelerator', callback),
   removeQuitAppListener: () => ipcRenderer.removeAllListeners('app:quit-accelerator'),
+  hideWindow: () => ipcRenderer.send('window-controls:hide'),
 
   // WIP: Refactoring
   // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),

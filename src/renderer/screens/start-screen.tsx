@@ -23,6 +23,9 @@ const StartScreen = () => {
     flowActions: { addFlow },
     libraryActions: { addLibrary },
     modalActions: { openModal },
+    workspace: {
+      systemConfigs: { OS },
+    },
   } = useOpenPLCStore()
 
   const handleCreateProject = async () => {
@@ -65,6 +68,7 @@ const StartScreen = () => {
           })
         }
         data.content.data.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
+
         toast({
           title: 'Project opened!',
           description: 'Your project was opened and loaded successfully.',
@@ -137,6 +141,10 @@ const StartScreen = () => {
     void handleOpenRecentAccelerator()
   }, [])
 
+  const handleExitAppRequest = () => {
+    OS === 'darwin' ? window.bridge.hideWindow() : window.bridge.closeWindow()
+  }
+
   return (
     <>
       <StartSideContent>
@@ -154,8 +162,8 @@ const StartScreen = () => {
           </MenuSection>
           <MenuDivider />
           <MenuSection id='2'>
-            <MenuItem ghosted>
-              <StickArrowIcon className='rotate-180 stroke-brand' /> Quit
+            <MenuItem onClick={handleExitAppRequest} ghosted>
+              <StickArrowIcon className='rotate-180 stroke-brand' /> Exit
             </MenuItem>
           </MenuSection>
         </MenuRoot>
