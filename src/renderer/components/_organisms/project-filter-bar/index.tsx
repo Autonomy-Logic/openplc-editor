@@ -49,7 +49,7 @@ const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({setFilterValueProps,
               border-neutral-100 bg-white *:flex
               *:h-9 *:w-full
               *:flex-col *:justify-center *:pl-2 *:font-caption *:text-base *:font-normal *:text-black
-              dark:border-neutral-800 dark:bg-neutral-900 *:dark:text-white [&_[role=menuitem]:first-child]:rounded-t-md [&_[role=menuitem]:last-child]:rounded-b-md
+              dark:border-neutral-800 dark:bg-neutral-900 *:dark:text-white [&_[role=menuitem]:first-child]:rounded-t-md [&_[role=menuitem]:last-child]:rounded-b-md z-[10]
               '
           >
             <PrimitiveDropdown.Item
