@@ -64,16 +64,6 @@ const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
   
 
   useEffect(() => {
-    const getFilteredProjects = () => {
-      if (searchNameFilterValue.length === 0) {
-        return recentProjects
-      }
-      return recentProjects.filter((project) => project.name?.includes(searchNameFilterValue))
-    }
-    getFilteredProjects()
-  }, [searchNameFilterValue])
-
-  useEffect(() => {
     void getUserRecentProjects()
   }, [recent])
 
