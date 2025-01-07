@@ -88,6 +88,7 @@ export default class MenuBuilder {
   handleSwitchPerspective() {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
   }
+
   async handleOpenExternalLink(link: string) {
     try {
       await shell.openExternal(link)
@@ -99,12 +100,22 @@ export default class MenuBuilder {
       })
     }
   }
+
   handleOpenAboutModal() {
     this.mainWindow.webContents.send('about:open-accelerator')
   }
+
   handleFindInProject() {
     this.mainWindow.webContents.send('project:find-in-project-accelerator')
   }
+
+  handleQuitAppRequest() {
+    this.mainWindow.webContents.send('app:quit-accelerator')
+  }
+
+  /**
+   * --------------------------------------------------------------------------------------------
+   */
 
   setupDevelopmentEnvironment(): void {
     this.mainWindow.webContents.on('context-menu', (_, props) => {
@@ -127,7 +138,12 @@ export default class MenuBuilder {
     this.buildMenu()
   }
 
-  // Wip: Constructing a mac machines menu.
+  /**
+   * Menu construction -------------------------------------------------------
+   */
+  /**
+   * Construct a menu instance for OXS.
+   */
   async buildDarwinTemplate(): Promise<MenuItemConstructorOptions[]> {
     const recent = await this.handleGetRecent()
     const homeDir = process.env.HOME || ''
@@ -158,6 +174,7 @@ export default class MenuBuilder {
           label: i18n.t('menu:file.submenu.saveAs'),
           accelerator: 'Cmd+Shift+S',
           click: () => {},
+          enabled: false,
         },
         {
           label: i18n.t('menu:file.submenu.closeTab'),
@@ -177,12 +194,12 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.pageSetup'),
           accelerator: 'Cmd+Alt+P',
-          click: () => console.warn('Page setup button clicked! This is not working yet.'),
+          enabled: false,
         },
         {
           label: i18n.t('menu:file.submenu.preview'),
           accelerator: 'Cmd+Shift+P',
-          click: () => console.warn('Preview button clicked! This is not working yet.'),
+          enabled: false,
         },
         {
           label: i18n.t('menu:file.submenu.print'),
@@ -193,13 +210,13 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.updates'),
           accelerator: 'Cmd+U',
-          click: () => console.warn('Updates button clicked! This is not working yet.'),
+          enabled: false,
         },
         { type: 'separator' },
         {
           label: i18n.t('menu:file.submenu.quit'),
-          role: 'quit',
           accelerator: 'Cmd+Q',
+          click: () => this.handleQuitAppRequest(),
         },
       ],
     }
@@ -211,41 +228,49 @@ export default class MenuBuilder {
           label: i18n.t('menu:edit.submenu.undo'),
           accelerator: 'Cmd+Z',
           selector: 'undo:',
+          enabled: false,
         },
         {
           label: i18n.t('menu:edit.submenu.redo'),
           accelerator: 'Cmd+Y',
           selector: 'redo:',
+          enabled: false,
         },
         { type: 'separator' },
         {
           label: i18n.t('menu:edit.submenu.cut'),
           accelerator: 'Cmd+X',
           selector: 'cut:',
+          enabled: false,
         },
         {
           label: i18n.t('menu:edit.submenu.copy'),
           accelerator: 'Cmd+C',
           selector: 'copy:',
+          enabled: false,
         },
         {
           label: i18n.t('menu:edit.submenu.paste'),
           accelerator: 'Cmd+V',
           selector: 'paste:',
+          enabled: false,
         },
         { type: 'separator' },
         {
           label: i18n.t('menu:edit.submenu.find'),
           accelerator: 'Cmd+F',
           selector: 'find:',
+          enabled: false,
         },
         {
           label: i18n.t('menu:edit.submenu.findNext'),
           accelerator: 'Cmd+K',
+          enabled: false,
         },
         {
           label: i18n.t('menu:edit.submenu.findPrevious'),
           accelerator: 'Cmd+Shift+K',
+          enabled: false,
         },
         { type: 'separator' },
         {
@@ -256,6 +281,7 @@ export default class MenuBuilder {
         { type: 'separator' },
         {
           label: i18n.t('menu:edit.submenu.addElement.label'),
+          enabled: false,
           submenu: [
             {
               label: i18n.t('menu:edit.submenu.addElement.submenu.functionBlock'),
@@ -275,6 +301,7 @@ export default class MenuBuilder {
           label: i18n.t('menu:edit.submenu.selectAll'),
           accelerator: 'Cmd+A',
           selector: 'selectAll:',
+          enabled: false,
         },
         {
           label: i18n.t('menu:edit.submenu.deletePou'),
@@ -292,14 +319,17 @@ export default class MenuBuilder {
           label: i18n.t('menu:display.submenu.refresh'),
           accelerator: 'Cmd+R',
           selector: 'reload:',
+          enabled: false,
         },
         {
           label: i18n.t('menu:display.submenu.clearErrors'),
           accelerator: '',
+          enabled: false,
         },
         { type: 'separator' },
         {
           label: 'Zoom', // Todo: i18n.t('menu:display.submenu.zoom') have to be added
+          enabled: false,
           submenu: [
             {
               label: i18n.t('menu:display.submenu.zoomIn'),
@@ -323,10 +353,8 @@ export default class MenuBuilder {
           role: 'togglefullscreen',
         },
         {
-          label: i18n.t('menu:display.submenu.resetPerspective'),
-        },
-        {
           label: i18n.t('menu:display.submenu.sortAlpha'),
+          enabled: false,
         },
         {
           type: 'separator',
@@ -360,7 +388,6 @@ export default class MenuBuilder {
       submenu: [
         {
           label: i18n.t('menu:help.submenu.communitySupport'),
-          accelerator: 'F1',
           click: () => void this.handleOpenExternalLink('https://openplc.discussion.community/'),
         },
         {
@@ -374,7 +401,9 @@ export default class MenuBuilder {
     return [defaultDarwinMenu, subMenuFile, subMenuEdit, subMenuDisplay, subMenuHelp, subMenuRecent]
   }
 
-  // Wip: Constructing a default machines menu.
+  /**
+   * Construct a default menu instance.
+   */
   async buildDefaultTemplate() {
     const recent = await this.handleGetRecent()
     const homeDir = process.env.HOME || ''
@@ -404,10 +433,10 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.saveAs'),
             accelerator: 'Ctrl+Shift+S',
+            enabled: false,
           },
           {
             label: i18n.t('menu:file.submenu.closeTab'),
-
             accelerator: 'Ctrl+W',
             click: () => this.handleCloseTab(),
           },
@@ -427,13 +456,11 @@ export default class MenuBuilder {
             label: i18n.t('menu:file.submenu.pageSetup'),
             enabled: false,
             accelerator: 'Ctrl+Alt+P',
-            click: () => console.warn('Menu button clicked! This is not working yet.'),
           },
           {
             label: i18n.t('menu:file.submenu.preview'),
             enabled: false,
             accelerator: 'Ctrl+Shift+P',
-            click: () => console.warn('Menu button clicked! This is not working yet.'),
           },
           {
             label: i18n.t('menu:file.submenu.print'),
@@ -445,13 +472,13 @@ export default class MenuBuilder {
             label: i18n.t('menu:file.submenu.updates'),
             enabled: false,
             accelerator: 'Ctrl+U',
-            click: () => console.warn('Menu button clicked! This is not working yet.'),
           },
           { type: 'separator' },
           {
             label: i18n.t('menu:file.submenu.quit'),
-            role: 'quit',
+            // role: 'quit',
             accelerator: 'Ctrl+Q',
+            click: () => this.handleQuitAppRequest(),
           },
         ],
       },
@@ -538,7 +565,7 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:edit.submenu.deletePou'),
-            accelerator: 'Ctrl+backspace',
+            accelerator: 'Ctrl+Shift+delete',
             click: () => this.handleDeletePou(),
           },
         ],
@@ -549,6 +576,7 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:display.submenu.refresh'),
             role: 'reload',
+            enabled: false,
           },
           {
             label: i18n.t('menu:display.submenu.clearErrors'),
@@ -581,10 +609,6 @@ export default class MenuBuilder {
             role: 'togglefullscreen',
           },
           {
-            label: i18n.t('menu:display.submenu.resetPerspective'),
-            enabled: false,
-          },
-          {
             label: i18n.t('menu:display.submenu.sortAlpha'),
             enabled: false,
           },
@@ -604,7 +628,6 @@ export default class MenuBuilder {
         submenu: [
           {
             label: i18n.t('menu:help.submenu.communitySupport'),
-            accelerator: 'F1',
             click: () => void this.handleOpenExternalLink('https://openplc.discussion.community/'),
           },
           {

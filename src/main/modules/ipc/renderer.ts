@@ -101,7 +101,6 @@ const rendererProcessBridge = {
   aboutModalAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('about:open-accelerator', callback),
   aboutAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('website:about-accelerator', callback),
   /** -------------------------------------------------------------------------------------------- */
-  // saveProject: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-request', callback),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
   setStoreValue: (key: string, val: string) => ipcRenderer.send('app:store-set', key, val),
   /**
@@ -125,6 +124,9 @@ const rendererProcessBridge = {
   reloadWindow: () => ipcRenderer.send('window:reload'),
   handleUpdateTheme: (callback: IpcRendererCallbacks) => ipcRenderer.on('system:update-theme', callback),
   winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
+  quitAppRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:quit-accelerator', callback),
+  removeQuitAppListener: () => ipcRenderer.removeAllListeners('app:quit-accelerator'),
+  hideWindow: () => ipcRenderer.send('window-controls:hide'),
 
   // WIP: Refactoring
   // setTheme: (themeData: any) => ipcRenderer.send('app:set-theme', themeData),
