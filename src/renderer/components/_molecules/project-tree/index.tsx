@@ -233,7 +233,6 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
   const modalData = { leafLang, label }
 
   const handleDeleteTab = () => {
-    console.log('modalData:', modalData)
     openModal('confirm-delete-element', modalData)
   }
 

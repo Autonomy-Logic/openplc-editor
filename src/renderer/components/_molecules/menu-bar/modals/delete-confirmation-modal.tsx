@@ -44,9 +44,8 @@ const ConfirmDeleteElementModal = ({
   const editorName = editor.meta.name
   const pou = pous.find((pou) => pou.data.name === editorName)
 
-  useEffect(() => {
+  useEffect(() => {}, [modalData, editor])
 
-  }, [modalData,editor])
   const handleDeleteElement = (): void => {
     try {
       if (rung && Array.isArray(rung.nodes)) {
@@ -89,8 +88,40 @@ const ConfirmDeleteElementModal = ({
         onOpenChange('confirm-delete-element', false)
         return
       }
-
-      // Verifica se estamos lidando com um "datatype"
+      if (editor.type === 'available') {
+        const targetLabel = modalData?.label
+        if (!targetLabel) {
+          throw new Error('No label found for element deletion.')
+        }
+        const isTargetPou = pous.find((pou) => pou.data.name === targetLabel)
+        if (isTargetPou) {
+          deletePou(targetLabel)
+          handleRemoveTab(targetLabel)
+          deletePou(targetLabel)
+          removeFlow(targetLabel)
+          removeUserLibrary(targetLabel)
+          toast({
+            title: 'Pou deleted success!',
+            description: `POU "${targetLabel}" was successfully deleted.`,
+            variant: 'default',
+          })
+          onOpenChange('confirm-delete-element', false)
+          return
+        } else {
+          deleteDatatype(targetLabel)
+          handleRemoveTab(targetLabel)
+          deleteDatatype(targetLabel)
+          removeFlow(targetLabel)
+          removeUserLibrary(targetLabel)
+          toast({
+            title: 'Datatype deleted success!',
+            description: `Datatype "${targetLabel}" was successfully deleted.`,
+            variant: 'default',
+          })
+          onOpenChange('confirm-delete-element', false)
+          return
+        }
+      }
       if (editor.type === 'plc-datatype') {
         const targetLabel = modalData?.label
         if (!targetLabel) {
@@ -110,31 +141,30 @@ const ConfirmDeleteElementModal = ({
         onOpenChange('confirm-delete-element', false)
         return
       }
-
-      // Verifica se estamos lidando com um "pou"
-      if ((editor.type === 'plc-textual' || editor.type === 'plc-graphical') && modalData?.label) {
-        handleRemoveTab(modalData.label)
-        deletePou(modalData.label)
-        removeFlow(modalData.label)
-        removeUserLibrary(modalData.label)
-
+      if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+        const targetLabel = modalData?.label
+        if (!targetLabel) {
+          throw new Error('No label found for POU deletion.')
+        }
+        handleRemoveTab(targetLabel)
+        deletePou(targetLabel)
+        removeFlow(targetLabel)
+        removeUserLibrary(targetLabel)
         toast({
           title: 'Pou deleted success!',
-          description: `POU "${modalData.label}" was successfully deleted.`,
+          description: `POU "${targetLabel}" was successfully deleted.`,
           variant: 'default',
         })
         onOpenChange('confirm-delete-element', false)
         return
       }
-    } catch (error) {
+    } catch (_error) {
       toast({
         title: 'Error deleting element',
         description: 'An error occurred while deleting the element. Please try again.',
         variant: 'fail',
       })
-      console.error('Error deleting element:', error)
     }
-
     onOpenChange('confirm-delete-element', false)
   }
 
