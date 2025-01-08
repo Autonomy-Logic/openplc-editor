@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
+import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 //
 export type BlockVariant = {
   name: string
@@ -332,7 +333,9 @@ export const BlockNodeElement = <T extends object>({
   )
 }
 
-export const Block = <T extends object>({ data, dragging, height, width, selected, id }: BlockProps<T>) => {
+export const Block = <T extends object>(block: BlockProps<T>) => {
+  const { data, dragging, height, width, selected, id } = block
+
   const {
     editor,
     project: {
@@ -374,8 +377,14 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
-  const inputVariableRef = useRef<HTMLTextAreaElement>(null)
-  const [inputVariableFocus, setInputVariableFocus] = useState<boolean>(true)
+  const inputVariableRef = useRef<
+    HTMLTextAreaElement & {
+      blur: ({ submit }: { submit?: boolean }) => void
+      isFocused: boolean
+    }
+  >(null)
+  const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
+  const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   /**
    * useEffect to focus the variable input when the correct block type is selected
@@ -409,14 +418,17 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
     const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
     })
+    if (!node || !rung) return
+
+    console.log('variable', variables.selected, '\n', 'node.data.variable', node.data.variable, '\n', block.data.variant.name, block.positionAbsoluteX)
+
     const variable = variables.selected
-    if (!variable && !inputVariableFocus) {
+    if (!variable) {
       setWrongVariable(true)
       return
     }
 
-    if (variable && node && rung && node.data.variable !== variable) {
-      setBlockVariableValue(variable.name)
+    if (node.data.variable !== variable) {
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -429,17 +441,28 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
           },
         },
       })
+      setWrongVariable(false)
+      return
     }
-    setWrongVariable(false)
+
+    if (node.data.variable === variable && variable.name !== blockVariableValue) {
+      setBlockVariableValue(variable.name)
+      if (inputVariableRef.current?.isFocused) {
+        inputVariableRef.current.blur({ submit: false })
+        handleSubmitBlockVariableOnTextareaBlur(variable.name)
+      }
+      setWrongVariable(false)
+      return
+    }
   }, [pous])
 
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitBlockVariable = () => {
-    setInputVariableFocus(false)
+  const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string) => {
+    const variableNameToSubmit = variableName || blockVariableValue
 
-    if (blockVariableValue === '') {
+    if (variableNameToSubmit === '') {
       setWrongVariable(true)
       return
     }
@@ -525,6 +548,12 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
     setWrongVariable(false)
   }
 
+  const onChangeHandler = () => {
+    if (!openAutocomplete) {
+      setOpenAutocomplete(true)
+    }
+  }
+
   return (
     <div
       className={cn('relative', {
@@ -560,7 +589,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
           <HighlightedTextArea
             textAreaValue={blockVariableValue}
             setTextAreaValue={setBlockVariableValue}
-            handleSubmit={handleSubmitBlockVariable}
+            handleSubmit={handleSubmitBlockVariableOnTextareaBlur}
             inputHeight={{
               height: 13,
               scrollLimiter: 14,
@@ -568,7 +597,27 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
             ref={inputVariableRef}
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
+            onChange={onChangeHandler}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
+              setKeyPressedAtTextarea(e.key)
+            }}
+            onKeyUp={() => setKeyPressedAtTextarea('')}
           />
+        )}
+        {openAutocomplete && (
+          <div className='relative flex justify-center'>
+            <div className='absolute -bottom-4'>
+              <VariablesBlockAutoComplete
+                block={block}
+                blockType={'block'}
+                valueToSearch={blockVariableValue}
+                isOpen={openAutocomplete}
+                setIsOpen={(value) => setOpenAutocomplete(value)}
+                keyPressed={keyPressedAtTextarea}
+              />
+            </div>
+          </div>
         )}
       </div>
       {data.handles.map((handle, index) => (

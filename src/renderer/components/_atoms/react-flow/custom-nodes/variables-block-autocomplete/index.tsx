@@ -1,13 +1,14 @@
 import * as Popover from '@radix-ui/react-popover'
-import { PlusIcon } from '@root/renderer/assets'
+import { PencilIcon, PlusIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { extractNumberAtEnd } from '@root/renderer/store/slices/project/utils/variables'
+import { checkVariableName, extractNumberAtEnd } from '@root/renderer/store/slices/project/utils/variables'
 import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import { Node } from '@xyflow/react'
 import { ComponentPropsWithRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
+import { BlockNode, BlockVariant } from '../block'
 import { getPouVariablesRungNodeAndEdges, getVariableRestrictionType } from '../utils'
 import { BasicNodeData } from '../utils/types'
 import { VariableNode } from '../variable'
@@ -76,23 +77,36 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     const variableRestrictions = blockTypeRestrictions(block, blockType)
 
     const filteredDivRef = useRef<HTMLDivElement>(null)
-    const filteredVariables = variables
-      .filter(
-        (variable) =>
-          variable.name.includes(valueToSearch) &&
-          (variableRestrictions.values === undefined ||
-            variableRestrictions.values.includes(variable.type.value.toLowerCase())) &&
-          (variableRestrictions.limitations === undefined ||
-            !variableRestrictions.limitations.includes(variable.type.definition)),
-      )
-      .sort((a, b) => {
-        const aNumber = extractNumberAtEnd(a.name).number
-        const bNumber = extractNumberAtEnd(b.name).number
-        if (aNumber === bNumber) {
-          return a.name.localeCompare(b.name)
-        }
-        return aNumber - bNumber
-      })
+    const filteredVariables =
+      blockType !== 'block'
+        ? variables
+            .filter(
+              (variable) =>
+                variable.name.includes(valueToSearch) &&
+                (variableRestrictions.values === undefined ||
+                  variableRestrictions.values.includes(variable.type.value.toLowerCase())) &&
+                (variableRestrictions.limitations === undefined ||
+                  !variableRestrictions.limitations.includes(variable.type.definition)),
+            )
+            .sort((a, b) => {
+              const aNumber = extractNumberAtEnd(a.name).number
+              const bNumber = extractNumberAtEnd(b.name).number
+              if (aNumber === bNumber) {
+                return a.name.localeCompare(b.name)
+              }
+              return aNumber - bNumber
+            })
+        : []
+    const suggestedBlockVariableName =
+      blockType === 'block'
+        ? () => {
+            const { ok, name, number } = checkVariableName(
+              variables,
+              (block as BlockNode<BlockVariant>).data.variant.name,
+            )
+            return ok ? `${name}${number}` : `${(block as BlockNode<BlockVariant>).data.variant.name}0`
+          }
+        : undefined
     const [selectedVariable, setSelectedVariable] = useState<{ positionInArray: number; variableName: string }>({
       positionInArray: -1,
       variableName: '',
@@ -263,6 +277,15 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             onBlur={() => setInputFocus(false)}
             onKeyDown={(e) => setKeyDown(e.key)}
           >
+            {suggestedBlockVariableName && (
+              <div
+                className='flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900'
+                onClick={() => submitAddVariable({ variableName: suggestedBlockVariableName() })}
+              >
+                <PencilIcon className='h-3 w-3 stroke-brand' />
+                <div className='ml-2'>{suggestedBlockVariableName()}</div>
+              </div>
+            )}
             {filteredVariables.length > 0 && (
               <div className='h-fit w-full p-1'>
                 <div className='flex max-h-32 w-full flex-col overflow-y-auto' ref={filteredDivRef}>
