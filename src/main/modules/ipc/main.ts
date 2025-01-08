@@ -144,15 +144,13 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('compiler:create-build-directory', (_ev, pathToUserProject: string) =>
       this.compilerService.createBuildDirectoryIfNotExist(pathToUserProject),
     )
-    this.ipcMain.handle(
-      'compiler:export-project-xml',
-      (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data']) =>
-        this.compilerService.createXmlFile(pathToUserProject, dataToCreateXml),
+    this.ipcMain.handle('compiler:export-project-xml', (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data']) =>
+      this.compilerService.createXmlFile(pathToUserProject,dataToCreateXml),
     )
     this.ipcMain.handle(
-      'compiler:create-xml-file',
+      'compiler:build-xml-file',
       (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data']) =>
-        this.compilerService.createXmlFile(pathToUserProject, dataToCreateXml),
+        this.compilerService.buildXmlFile(pathToUserProject, dataToCreateXml),
     )
     /**
      * This is a mock implementation to be used as a presentation.

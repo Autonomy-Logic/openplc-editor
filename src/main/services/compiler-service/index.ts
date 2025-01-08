@@ -32,13 +32,39 @@ const CompilerService = {
       }
     }
   },
+
+  buildXmlFile: async (
+    pathToUserProject: string,
+    dataToCreateXml: ProjectState['data'],
+  ): Promise<{ success: boolean; message: string }> =>
+    new Promise((resolve) => {
+      const normalizedUserProjectPath = pathToUserProject.replace('project.json', '')
+      const pathToBuildDirectory = join(normalizedUserProjectPath, 'build')
+      const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml)
+      if (!projectDataAsString) {
+        resolve({ success: false, message: message })
+        return
+      }
+      const result = CreateXMLFile(pathToBuildDirectory, projectDataAsString, 'plc')
+      /**
+       * This condition must be verified.
+       * The CreateXMLFile function return should be validated.
+       * ```It is possible that the success property is always true```
+       */
+      if (result.success) {
+        resolve({ success: result.success, message: result.message })
+      } else {
+        resolve({ success: result.success, message: 'Xml file not created' })
+      }
+    }),
+
   createXmlFile: async (
     pathToUserProject: string,
     dataToCreateXml: ProjectState['data'],
   ): Promise<{ success: boolean; message: string }> => {
     const { filePath } = await dialog.showSaveDialog({
       title: 'Export Project',
-      defaultPath: join(pathToUserProject, 'project.xml'),
+      defaultPath: join(pathToUserProject, 'plc.xml'),
       buttonLabel: 'Save',
       filters: [{ name: 'XML Files', extensions: ['xml'] }],
     })
