@@ -11,7 +11,7 @@
     "buildResources": "assets",
     "output": "release/build"
   },
-  "extraResources": ["./assets/**", "./resources/compilers/**"],
+  "extraResources": ["./assets/**"],
   "mac": {
     "target": {
       "target": "default",
