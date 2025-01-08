@@ -420,8 +420,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     })
     if (!node || !rung) return
 
-    console.log('variable', variables.selected, '\n', 'node.data.variable', node.data.variable, '\n', block.data.variant.name, block.positionAbsoluteX)
-
     const variable = variables.selected
     if (!variable) {
       setWrongVariable(true)

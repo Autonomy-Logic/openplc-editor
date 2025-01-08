@@ -107,10 +107,25 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             return ok ? `${name}${number}` : `${(block as BlockNode<BlockVariant>).data.variant.name}0`
           }
         : undefined
+
     const [selectedVariable, setSelectedVariable] = useState<{ positionInArray: number; variableName: string }>({
       positionInArray: -1,
       variableName: '',
     })
+    const selectableValues = [
+      suggestedBlockVariableName && {
+        type: 'suggestion',
+        value: suggestedBlockVariableName(),
+      },
+      ...filteredVariables.map((variable) => ({
+        type: 'variable',
+        value: variable.name,
+      })),
+      {
+        type: 'add',
+        value: valueToSearch,
+      },
+    ].filter((variable) => variable !== undefined)
 
     // @ts-expect-error - not all properties are used
     useImperativeHandle(ref, () => {
@@ -127,12 +142,12 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         case 'ArrowDown':
           setSelectedVariable((prev) => {
             const newPosition = prev.positionInArray + 1
-            if (newPosition >= filteredVariables.length) {
+            if (newPosition >= selectableValues.length) {
               return prev
             }
             return {
               positionInArray: newPosition,
-              variableName: filteredVariables[newPosition].name,
+              variableName: selectableValues[newPosition].value,
             }
           })
           break
@@ -144,7 +159,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             }
             return {
               positionInArray: newPosition,
-              variableName: filteredVariables[newPosition].name,
+              variableName: selectableValues[newPosition].value,
             }
           })
           break
@@ -191,9 +206,19 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         clickedVariable !== undefined
           ? filteredVariables[clickedVariable]
           : selectedVariable.positionInArray !== -1
-            ? filteredVariables[selectedVariable.positionInArray]
+            ? selectableValues[selectedVariable.positionInArray].type === 'variable'
+              ? filteredVariables.find((variable) => selectedVariable.variableName === variable.name)
+              : undefined
             : undefined
-      if (!variable) return
+      if (!variable) {
+        if (
+          selectableValues[selectedVariable.positionInArray].type === 'suggestion' ||
+          selectableValues[selectedVariable.positionInArray].type === 'add'
+        ) {
+          submitAddVariable({ variableName: selectedVariable.variableName })
+        }
+        return
+      }
 
       updateNode({
         editorName: editor.meta.name,
@@ -279,7 +304,13 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           >
             {suggestedBlockVariableName && (
               <div
-                className='flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900'
+                className={cn(
+                  'flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-t-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                  {
+                    'bg-neutral-400 dark:bg-neutral-800':
+                      selectedVariable.variableName === suggestedBlockVariableName(),
+                  },
+                )}
                 onClick={() => submitAddVariable({ variableName: suggestedBlockVariableName() })}
               >
                 <PencilIcon className='h-3 w-3 stroke-brand' />
@@ -310,7 +341,12 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             )}
             {filteredVariables.length > 0 && <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />}
             <div
-              className='flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900'
+              className={cn(
+                'flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                {
+                  'bg-neutral-400 dark:bg-neutral-800': selectedVariable.variableName === valueToSearch,
+                },
+              )}
               onClick={() => submitAddVariable({ variableName: valueToSearch })}
             >
               <PlusIcon className='h-3 w-3 stroke-brand' />
