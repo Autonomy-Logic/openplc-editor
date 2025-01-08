@@ -50,10 +50,10 @@ const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
     }
 
     setRecentProjects(sortedProjects)
-  }, [projectFilterValue, recentProjects])
+  }, [projectFilterValue])
 
   useEffect(() => {
-    const filtered = searchNameFilterValue.length === 0 
+    const filtered = searchNameFilterValue.length === 0
       ? recent 
       : recent.filter((project) =>
           project.name?.toLowerCase().includes(searchNameFilterValue.toLowerCase())
@@ -62,7 +62,6 @@ const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
     setRecentProjects(filtered);
   }, [searchNameFilterValue, recent]);
   
-
   useEffect(() => {
     void getUserRecentProjects()
   }, [recent])
