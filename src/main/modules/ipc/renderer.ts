@@ -137,6 +137,11 @@ const rendererProcessBridge = {
    */
   createBuildDirectory: async (pathToUserProject: string): Promise<{ success: boolean; message: string }> =>
     ipcRenderer.invoke('compiler:create-build-directory', pathToUserProject),
+  exportProjectXml: async (
+    pathToUserProject: string,
+    dataToCreateXml: ProjectState['data'],
+  ): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml),
   createXmlFileToBuild: async (
     pathToUserProject: string,
     dataToCreateXml: ProjectState['data'],

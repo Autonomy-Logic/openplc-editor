@@ -12,12 +12,18 @@ const useCompiler = () => {
   } = useOpenPLCStore()
 
   const handleExportProject = async () => {
-    addLog({ id: uuidv4(), type: 'warning', message: 'Verifying if build directory exist' })
-    const { success, message: logMessage } = await window.bridge.createBuildDirectory(project.meta.path)
+    addLog({ id: uuidv4(), type: 'warning', message: 'Verifying if build directory exists' })
+
+    // Primeira chamada para exportar o projeto
+    const { success, message: logMessage } = await window.bridge.exportProjectXml(project.meta.path, project.data)
+
     if (success) {
       addLog({ id: uuidv4(), type: 'info', message: logMessage })
+
+      // Em vez de chamar `createXmlFileToBuild` aqui, vamos chamar diretamente o método do backend
       addLog({ id: uuidv4(), type: 'warning', message: 'Attempting to generate the xml file' })
       const result = await window.bridge.createXmlFileToBuild(project.meta.path, project.data)
+
       if (result.success) {
         addLog({ id: uuidv4(), type: 'info', message: result.message })
         const buildPath = `${OS === 'win32' ? project.meta.path.replace('\\project.json', '\\build\\plc.xml') : project.meta.path.replace('/project.json', '/build/plc.xml')}`
