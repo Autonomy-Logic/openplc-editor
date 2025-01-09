@@ -160,5 +160,6 @@ const rendererProcessBridge = {
 
     rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
   },
+  generateCFilesRequest: (pathToStFile: string) => ipcRenderer.send('compiler:generate-c-files', pathToStFile),
 }
 export default rendererProcessBridge
