@@ -127,8 +127,9 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           popoverRef.current?.focus()
         },
         isFocused: autocompleteFocus,
+        selectedVariable: selectedVariable,
       }
-    }, [filteredVariables, popoverRef, autocompleteFocus])
+    }, [selectedVariable, popoverRef, autocompleteFocus])
 
     useEffect(() => {
       switch (keyDown) {

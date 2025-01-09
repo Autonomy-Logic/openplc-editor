@@ -61,12 +61,15 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
           if (submit !== undefined) {
             setCanSubmit(submit)
           }
-          inputRef.current?.blur()
           setInputFocus(false)
         },
         scrollHeight: textAreaValue.length === 0 ? 0 : inputRef.current?.scrollHeight,
       }
     }, [textAreaValue, inputRef, inputFocus])
+
+    useEffect(() => {
+      if (!inputFocus) inputRef.current?.blur()
+    }, [inputFocus])
 
     useEffect(() => {
       if (inputRef?.current && highlightDivRef.current) {
@@ -128,7 +131,6 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
           )}
           onFocus={() => setInputFocus(true)}
           onBlur={() => {
-            setInputFocus(false)
             if (inputRef.current && highlightDivRef.current) {
               inputRef.current.scrollTop = 0
               highlightDivRef.current.scrollTop = 0
@@ -139,7 +141,7 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
           onScroll={(e) => onScrollHandler(e)}
           onKeyDown={(e) => {
             props.onKeyDown && props.onKeyDown(e)
-            submitWith.enter && e.key === 'Enter' && inputRef.current?.blur()
+            submitWith.enter && e.key === 'Enter' && setInputFocus(false)
           }}
           onKeyUp={props.onKeyUp}
           ref={inputRef}
