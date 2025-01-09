@@ -1,14 +1,13 @@
 import * as Popover from '@radix-ui/react-popover'
-import { PencilIcon, PlusIcon } from '@root/renderer/assets'
+import { PlusIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { checkVariableName, extractNumberAtEnd } from '@root/renderer/store/slices/project/utils/variables'
+import { extractNumberAtEnd } from '@root/renderer/store/slices/project/utils/variables'
 import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import { Node } from '@xyflow/react'
 import { ComponentPropsWithRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import { BlockNode, BlockVariant } from '../block'
 import { getPouVariablesRungNodeAndEdges, getVariableRestrictionType } from '../utils'
 import { BasicNodeData } from '../utils/types'
 import { VariableNode } from '../variable'
@@ -55,7 +54,15 @@ const blockTypeRestrictions = (block: unknown, blockType: VariablesBlockAutoComp
 
 const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAutoCompleteProps>(
   (
-    { block, blockType = 'other', isOpen, setIsOpen, keyPressed, valueToSearch }: VariablesBlockAutoCompleteProps,
+    {
+      block,
+      blockType = 'other',
+      isOpen,
+      setIsOpen,
+      keyPressed,
+      onFocus: focusEvent,
+      valueToSearch,
+    }: VariablesBlockAutoCompleteProps,
     ref,
   ) => {
     const {
@@ -69,7 +76,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     } = useOpenPLCStore()
 
     const popoverRef = useRef<HTMLDivElement>(null)
-    const [inputFocus, setInputFocus] = useState<boolean>(false)
+    const [autocompleteFocus, setAutocompleteFocus] = useState<boolean>(false)
     const [keyDown, setKeyDown] = useState<string>('')
 
     const pou = pous.find((pou) => pou.data.name === editor.meta.name)
@@ -97,26 +104,26 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
               return aNumber - bNumber
             })
         : []
-    const suggestedBlockVariableName =
-      blockType === 'block'
-        ? () => {
-            const { ok, name, number } = checkVariableName(
-              variables,
-              (block as BlockNode<BlockVariant>).data.variant.name,
-            )
-            return ok ? `${name}${number}` : `${(block as BlockNode<BlockVariant>).data.variant.name}0`
-          }
-        : undefined
+    // const suggestedBlockVariableName =
+    //   blockType === 'block'
+    //     ? () => {
+    //         const { ok, name, number } = checkVariableName(
+    //           variables,
+    //           (block as BlockNode<BlockVariant>).data.variant.name,
+    //         )
+    //         return ok ? `${name}${number}` : `${(block as BlockNode<BlockVariant>).data.variant.name}0`
+    //       }
+    //     : undefined
 
     const [selectedVariable, setSelectedVariable] = useState<{ positionInArray: number; variableName: string }>({
       positionInArray: -1,
       variableName: '',
     })
     const selectableValues = [
-      suggestedBlockVariableName && {
-        type: 'suggestion',
-        value: suggestedBlockVariableName(),
-      },
+      // suggestedBlockVariableName && {
+      //   type: 'suggestion',
+      //   value: suggestedBlockVariableName(),
+      // },
       ...filteredVariables.map((variable) => ({
         type: 'variable',
         value: variable.name,
@@ -133,9 +140,9 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         focus: () => {
           popoverRef.current?.focus()
         },
-        isFocused: inputFocus,
+        isFocused: autocompleteFocus,
       }
-    }, [filteredVariables, popoverRef, inputFocus])
+    }, [filteredVariables, popoverRef, autocompleteFocus])
 
     useEffect(() => {
       switch (keyDown) {
@@ -189,7 +196,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     }
 
     const closeModal = () => {
-      setInputFocus(false)
+      setAutocompleteFocus(false)
       setSelectedVariable({ positionInArray: -1, variableName: '' })
       setIsOpen && setIsOpen(false)
     }
@@ -210,9 +217,10 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
               ? filteredVariables.find((variable) => selectedVariable.variableName === variable.name)
               : undefined
             : undefined
+
       if (!variable) {
         if (
-          selectableValues[selectedVariable.positionInArray].type === 'suggestion' ||
+          selectedVariable.positionInArray !== -1 &&
           selectableValues[selectedVariable.positionInArray].type === 'add'
         ) {
           submitAddVariable({ variableName: selectedVariable.variableName })
@@ -250,6 +258,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         data: {
           id: uuidv4(),
           name: variableName,
+          // @ts-expect-error - type is dynamic
           type: {
             definition: variableTypeRestriction.definition as 'base-type' | 'derived' | 'array' | 'user-data-type',
             value: variableTypeRestriction.value,
@@ -279,7 +288,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         },
       })
 
-      setInputFocus(false)
+      setAutocompleteFocus(false)
       setIsOpen && setIsOpen(false)
     }
 
@@ -298,11 +307,14 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             onPointerDownOutside={closeModal}
             onFocusOutside={closeModal}
             onInteractOutside={closeModal}
-            onFocus={() => setInputFocus(true)}
-            onBlur={() => setInputFocus(false)}
+            onFocus={(e) => {
+              focusEvent && focusEvent(e)
+              setAutocompleteFocus(true)
+            }}
+            onBlur={() => setAutocompleteFocus(false)}
             onKeyDown={(e) => setKeyDown(e.key)}
           >
-            {suggestedBlockVariableName && (
+            {/* {suggestedBlockVariableName && (
               <div
                 className={cn(
                   'flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-t-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
@@ -316,7 +328,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
                 <PencilIcon className='h-3 w-3 stroke-brand' />
                 <div className='ml-2'>{suggestedBlockVariableName()}</div>
               </div>
-            )}
+            )} */}
             {filteredVariables.length > 0 && (
               <div className='h-fit w-full p-1'>
                 <div className='flex max-h-32 w-full flex-col overflow-y-auto' ref={filteredDivRef}>
@@ -344,7 +356,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
               className={cn(
                 'flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
                 {
-                  'bg-neutral-400 dark:bg-neutral-800': selectedVariable.variableName === valueToSearch,
+                  'bg-neutral-400 dark:bg-neutral-800': selectedVariable.positionInArray === selectableValues.length - 1,
                 },
               )}
               onClick={() => submitAddVariable({ variableName: valueToSearch })}

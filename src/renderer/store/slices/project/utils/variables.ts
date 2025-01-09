@@ -182,8 +182,6 @@ const checkVariableName = (variables: PLCVariable[], variableName: string) => {
     variable.name.toLowerCase().includes(variableNameWithoutNumber.toLowerCase()),
   )
 
-  console.log('filteredVariables', filteredVariables)
-
   // If there is a variable with the same name, sort the variables by the number at the end and get the biggest number
   const sortedVariables = filteredVariables.sort((a, b) => {
     const numberA = extractNumberAtEnd(a.name).number
@@ -193,6 +191,7 @@ const checkVariableName = (variables: PLCVariable[], variableName: string) => {
     }
     return 0
   })
+
   const biggestVariable =
     sortedVariables.length > 0 ? extractNumberAtEnd(sortedVariables[sortedVariables.length - 1].name) : { number: 0 }
 
@@ -210,12 +209,21 @@ const checkVariableName = (variables: PLCVariable[], variableName: string) => {
     }
   }
 
-  return { ok: filteredVariables.length > 0, name: variableNameWithoutNumber, number: filteredVariables.length > 0 ? number + 1 : 0 }
+  return {
+    ok: filteredVariables.length > 0,
+    name: variableNameWithoutNumber,
+    number:
+      filteredVariables.length > 0
+        ? extractNumberAtEnd(sortedVariables[sortedVariables.length - 1].name).string !== ''
+          ? number + 1
+          : 0
+        : 0,
+  }
 }
 
 /**
  * This is a validation to check if it is needed changing the name of a variable at creation.
- * If the variable existis change the variable name.
+ * If the variable exists change the variable name.
  **/
 const createVariableValidation = (
   variables: PLCVariable[],

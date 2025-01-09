@@ -1,6 +1,7 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { checkVariableName } from '@root/renderer/store/slices/project/utils/variables'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -13,7 +14,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
-import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 //
 export type BlockVariant = {
   name: string
@@ -383,8 +383,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       isFocused: boolean
     }
   >(null)
-  const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
-  const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   /**
    * useEffect to focus the variable input when the correct block type is selected
@@ -397,9 +395,18 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
     if (inputVariableRef.current && selected) {
       switch (blockType) {
-        case 'function-block':
+        case 'function-block': {
+          if (!data.variable || data.variable.name === '') {
+            const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+              nodeId: id,
+            })
+            // @ts-expect-error - type is dynamic
+            const { name, number } = checkVariableName(variables.all, (data.variant as BlockVariant).name.toUpperCase())
+            handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`)
+          }
           inputVariableRef.current.focus()
-          break
+          return
+        }
         default:
           break
       }
@@ -442,16 +449,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       setWrongVariable(false)
       return
     }
-
-    if (node.data.variable === variable && variable.name !== blockVariableValue) {
-      setBlockVariableValue(variable.name)
-      if (inputVariableRef.current?.isFocused) {
-        inputVariableRef.current.blur({ submit: false })
-        handleSubmitBlockVariableOnTextareaBlur(variable.name)
-      }
-      setWrongVariable(false)
-      return
-    }
   }, [pous])
 
   /**
@@ -476,11 +473,11 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
      */
     let variable: PLCVariable | undefined = variables.selected
     if (variable) {
-      if (variable.name === blockVariableValue) return
+      if (variable.name === variableNameToSubmit) return
       const res = updateVariable({
         data: {
           ...variable,
-          name: blockVariableValue,
+          name: variableNameToSubmit,
           type: {
             definition: 'derived',
             value: (node.data as BlockNodeData<BlockVariant>).variant.name,
@@ -504,7 +501,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       const res = createVariable({
         data: {
           id: uuidv4(),
-          name: blockVariableValue,
+          name: variableNameToSubmit,
           type: {
             definition: 'derived',
             value: (node.data as BlockNodeData<BlockVariant>).variant.name,
@@ -526,7 +523,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         return
       }
       variable = res.data as PLCVariable | undefined
-      if (variable?.name !== blockVariableValue) {
+      if (variable?.name !== variableNameToSubmit) {
         setBlockVariableValue(variable?.name ?? '')
       }
     }
@@ -544,12 +541,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       },
     })
     setWrongVariable(false)
-  }
-
-  const onChangeHandler = () => {
-    if (!openAutocomplete) {
-      setOpenAutocomplete(true)
-    }
   }
 
   return (
@@ -595,27 +586,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             ref={inputVariableRef}
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
-            onChange={onChangeHandler}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
-              setKeyPressedAtTextarea(e.key)
-            }}
-            onKeyUp={() => setKeyPressedAtTextarea('')}
           />
-        )}
-        {openAutocomplete && (
-          <div className='relative flex justify-center'>
-            <div className='absolute -bottom-4'>
-              <VariablesBlockAutoComplete
-                block={block}
-                blockType={'block'}
-                valueToSearch={blockVariableValue}
-                isOpen={openAutocomplete}
-                setIsOpen={(value) => setOpenAutocomplete(value)}
-                keyPressed={keyPressedAtTextarea}
-              />
-            </div>
-          </div>
         )}
       </div>
       {data.handles.map((handle, index) => (
