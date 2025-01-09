@@ -4,16 +4,11 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import type { FlowType } from '@root/renderer/store/slices'
 import { ComponentProps, useEffect, useState } from 'react'
 
-export type IDisplayRecentProjectProps = ComponentProps<'section'>
-interface DisplayRecentProjectsProps {
-  projectFilterValue: string
+export type IDisplayRecentProjectProps = ComponentProps<'section'> & {
   searchNameFilterValue: string
 }
 
-const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
-  { projectFilterValue, searchNameFilterValue },
-  props: IDisplayRecentProjectProps,
-) => {
+const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRecentProjectProps) => {
   const {
     workspace: { recent },
     editorActions: { clearEditor },
@@ -27,45 +22,22 @@ const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
   const [recentProjects, setRecentProjects] = useState(recent)
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
 
-  const getUserRecentProjects = async () => {
-    const recentProjects = await window.bridge.retrieveRecent()
-    setRecentProjects(recentProjects)
-  }
-
   useEffect(() => {
-    let sortedProjects = []
-
-    switch (projectFilterValue) {
-      case 'Name':
-        sortedProjects = [...recentProjects].sort((a, b) => a.name?.localeCompare(b.name))
-        break
-      case 'Recent':
-        sortedProjects = [...recentProjects].sort(
-          (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
-        )
-        break
-      default:
-        console.log('Unrecognized filter')
-        return
-    }
-
-    setRecentProjects(sortedProjects)
-  }, [projectFilterValue])
-
-  useEffect(() => {
-    const filtered = searchNameFilterValue.length === 0
-      ? recent 
-      : recent.filter((project) =>
-          project.name?.toLowerCase().includes(searchNameFilterValue.toLowerCase())
-        );
-    
-    setRecentProjects(filtered);
-  }, [searchNameFilterValue, recent]);
-  
-  useEffect(() => {
-    void getUserRecentProjects()
+    setRecentProjects(recent)
   }, [recent])
 
+
+  useEffect(() => {
+    const filtered =
+      searchNameFilterValue.length === 0
+        ? recent
+        : recent.filter((project) => project.name?.toLowerCase().includes(searchNameFilterValue.toLowerCase()))
+
+    setRecentProjects(filtered)
+  }, [searchNameFilterValue, recent])
+
+  console.log("recent->", recent)
+  console.log("recentProjects -->", recentProjects)
   const compareLastOpened = (lastOpenedAt: string) => {
     const currentTime = new Date()
     const lastOpenedDate = new Date(lastOpenedAt)
@@ -125,29 +97,30 @@ const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
     return () => {
       timers.forEach((timerId) => clearTimeout(timerId))
     }
-  }, [recentProjects])
+  }, [recent])
+
+  const updateUserRecentProjects = async () => {
+    const recentProjects = await window.bridge.retrieveRecent()
+    setRecent(recentProjects)
+  }
 
   const handleOpenProject = async (projectPath: string) => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
     if (success && data) {
       setEditingState('unsaved')
-      setRecent([])
       clearEditor()
       clearTabs()
-
       const projectMeta = {
         name: data.content.meta.name,
         type: data.content.meta.type,
         path: data.meta.path,
       }
       const projectData = data.content.data
-
       setProject({
         meta: projectMeta,
         data: projectData,
       })
       const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
-
       if (ladderPous.length) {
         ladderPous.forEach((pou) => {
           if (pou.data.body.language === 'ld') {
@@ -155,9 +128,7 @@ const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
           }
         })
       }
-
       projectData.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
-
       toast({
         title: 'Project opened!',
         description: 'Your project was opened and loaded.',
@@ -165,14 +136,14 @@ const DisplayRecentProjects: React.FC<DisplayRecentProjectsProps> = (
       })
     } else {
       if (error?.description.includes('Error reading project file.')) {
-        void getUserRecentProjects()
+        void updateUserRecentProjects()
         toast({
           title: 'Path does not exist.',
           description: `The path ${projectPath} does not exist on this computer.`,
           variant: 'fail',
         })
       } else {
-        void getUserRecentProjects(),
+        void updateUserRecentProjects(),
           toast({
             title: 'Cannot open the project.',
             description: error?.description,
