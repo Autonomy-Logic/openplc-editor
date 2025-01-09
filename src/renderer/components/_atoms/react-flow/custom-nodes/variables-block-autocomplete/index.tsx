@@ -104,26 +104,12 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
               return aNumber - bNumber
             })
         : []
-    // const suggestedBlockVariableName =
-    //   blockType === 'block'
-    //     ? () => {
-    //         const { ok, name, number } = checkVariableName(
-    //           variables,
-    //           (block as BlockNode<BlockVariant>).data.variant.name,
-    //         )
-    //         return ok ? `${name}${number}` : `${(block as BlockNode<BlockVariant>).data.variant.name}0`
-    //       }
-    //     : undefined
 
     const [selectedVariable, setSelectedVariable] = useState<{ positionInArray: number; variableName: string }>({
       positionInArray: -1,
       variableName: '',
     })
     const selectableValues = [
-      // suggestedBlockVariableName && {
-      //   type: 'suggestion',
-      //   value: suggestedBlockVariableName(),
-      // },
       ...filteredVariables.map((variable) => ({
         type: 'variable',
         value: variable.name,
@@ -314,21 +300,6 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             onBlur={() => setAutocompleteFocus(false)}
             onKeyDown={(e) => setKeyDown(e.key)}
           >
-            {/* {suggestedBlockVariableName && (
-              <div
-                className={cn(
-                  'flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-t-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
-                  {
-                    'bg-neutral-400 dark:bg-neutral-800':
-                      selectedVariable.variableName === suggestedBlockVariableName(),
-                  },
-                )}
-                onClick={() => submitAddVariable({ variableName: suggestedBlockVariableName() })}
-              >
-                <PencilIcon className='h-3 w-3 stroke-brand' />
-                <div className='ml-2'>{suggestedBlockVariableName()}</div>
-              </div>
-            )} */}
             {filteredVariables.length > 0 && (
               <div className='h-fit w-full p-1'>
                 <div className='flex max-h-32 w-full flex-col overflow-y-auto' ref={filteredDivRef}>
@@ -356,7 +327,8 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
               className={cn(
                 'flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
                 {
-                  'bg-neutral-400 dark:bg-neutral-800': selectedVariable.positionInArray === selectableValues.length - 1,
+                  'bg-neutral-400 dark:bg-neutral-800':
+                    selectedVariable.positionInArray === selectableValues.length - 1,
                 },
               )}
               onClick={() => submitAddVariable({ variableName: valueToSearch })}
