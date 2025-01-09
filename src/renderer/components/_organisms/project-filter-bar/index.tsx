@@ -1,15 +1,39 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { ArrowIcon, MagnifierIcon } from '@root/renderer/assets'
-import { ReactNode, useState } from 'react'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { ReactNode, useEffect, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
 
-interface ProjectFilterBarProps { setFilterValueProps: (projectFilterValue: string) => void; 
-  setSearchFilterValue:  (searchNameFilterValue: string) => void;
+interface ProjectFilterBarProps {
+  setSearchFilterValue: (searchNameFilterValue: string) => void
 }
 
-const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({setFilterValueProps, setSearchFilterValue}): ReactNode => {
+const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({setSearchFilterValue}): ReactNode => {
+  const {
+    workspace: { recent },
+    workspaceActions: { setRecent },
+  } = useOpenPLCStore()
   const [projectFilter, setProjectFilter] = useState('Recent')
+  useEffect(() => {
+    let sortedProjects = []
+
+    switch (projectFilter) {
+      case 'Name':
+        sortedProjects = [...recent].sort((a, b) => a.name?.localeCompare(b.name))
+        break
+      case 'Recent':
+        sortedProjects = [...recent].sort(
+          (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
+        )
+        break
+      default:
+        console.log('Unrecognized filter')
+        return
+    }
+    setRecent(sortedProjects)
+  }, [projectFilter])
+
   return (
     <div
       id='project-filter-bar'
@@ -45,17 +69,19 @@ const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({setFilterValueProps,
           <PrimitiveDropdown.Content
             id='project-filter-dropdown-options'
             sideOffset={15}
-            className='*:align-start w-[--radix-dropdown-menu-trigger-width] rounded-md border
-              border-neutral-100 bg-white *:flex
-              *:h-9 *:w-full
-              *:flex-col *:justify-center *:pl-2 *:font-caption *:text-base *:font-normal *:text-black
-              dark:border-neutral-800 dark:bg-neutral-900 *:dark:text-white [&_[role=menuitem]:first-child]:rounded-t-md [&_[role=menuitem]:last-child]:rounded-b-md z-[10]
+            className='*:align-start z-[10] w-[--radix-dropdown-menu-trigger-width] rounded-md
+              border border-neutral-100 bg-white
+              *:flex *:h-9
+              *:w-full *:flex-col *:justify-center *:pl-2 *:font-caption *:text-base *:font-normal
+              *:text-black dark:border-neutral-800 dark:bg-neutral-900 *:dark:text-white [&_[role=menuitem]:first-child]:rounded-t-md [&_[role=menuitem]:last-child]:rounded-b-md
               '
           >
             <PrimitiveDropdown.Item
               id='project-filter-dropdown-item-recent'
               aria-selected={projectFilter === 'Recent'}
-              onSelect={() => {setProjectFilter('Recent');  setFilterValueProps('Recent')}} 
+              onSelect={() => {
+                setProjectFilter('Recent')
+              }}
               className='select-none bg-white outline-none hover:cursor-pointer hover:bg-neutral-50 aria-selected:bg-neutral-100 dark:bg-neutral-900 hover:dark:bg-neutral-700 dark:aria-selected:bg-neutral-800'
             >
               <span>Recent</span>
@@ -63,7 +89,9 @@ const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({setFilterValueProps,
             <PrimitiveDropdown.Item
               id='project-filter-dropdown-item-name'
               aria-selected={projectFilter === 'Name'}
-              onSelect={() => {setProjectFilter('Name');  setFilterValueProps('Name')}}
+              onSelect={() => {
+                setProjectFilter('Name')
+              }}
               className='select-none bg-white outline-none hover:cursor-pointer hover:bg-neutral-50 aria-selected:bg-neutral-100 dark:bg-neutral-900 hover:dark:bg-neutral-700 dark:aria-selected:bg-neutral-800'
             >
               <span>Name</span>

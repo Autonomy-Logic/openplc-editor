@@ -12,12 +12,11 @@ import { useOpenPLCStore } from '../store'
 import { FlowType } from '../store/slices/flow/types'
 
 const StartScreen = () => {
-  const [filterValueProps, setFilterValueProps] = useState<string>('')
   const [searchFilterValue, setSearchFilterProps] = useState<string>('')
 
   const { toast } = useToast()
   const {
-    workspaceActions: { setEditingState },
+    workspaceActions: { setEditingState, setRecent },
     projectActions: { setProject },
     tabsActions: { clearTabs },
     flowActions: { addFlow },
@@ -30,10 +29,6 @@ const StartScreen = () => {
 
   const handleCreateProject = async () => {
     openModal('create-project', null)
-  }
-
-  const orderByFilter = (orderFilterValue: string) => {
-    setFilterValueProps(orderFilterValue)
   }
 
   const searchFilter = (searchFilterValue: string) => {
@@ -145,6 +140,15 @@ const StartScreen = () => {
     OS === 'darwin' ? window.bridge.hideWindow() : window.bridge.closeWindow()
   }
 
+
+  useEffect(() => {
+    const getUserRecentProjects = async () => {
+      const recentProjects = await window.bridge.retrieveRecent()
+      setRecent(recentProjects)
+    }
+    void getUserRecentProjects()
+  }, [])
+
   return (
     <>
       <StartSideContent>
@@ -169,8 +173,8 @@ const StartScreen = () => {
         </MenuRoot>
       </StartSideContent>
       <StartMainContent>
-        <ProjectFilterBar setFilterValueProps={orderByFilter} setSearchFilterValue={searchFilter}/>
-        <DisplayRecentProjects projectFilterValue={filterValueProps} searchNameFilterValue ={searchFilterValue}/>
+        <ProjectFilterBar setSearchFilterValue={searchFilter}/>
+        <DisplayRecentProjects searchNameFilterValue ={searchFilterValue}/>
       </StartMainContent>
     </>
   )
