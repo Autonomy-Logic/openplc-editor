@@ -1,5 +1,4 @@
-import { TStoreType } from '@root/main/contracts/types/modules/store'
-import { app, Event, nativeTheme, shell } from 'electron'
+import { app, nativeTheme, shell } from 'electron'
 import { join } from 'path'
 import { platform } from 'process'
 
@@ -134,7 +133,7 @@ class MainProcessBridge implements MainIpcModule {
     })
     this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
     this.ipcMain.on('system:update-theme', () => this.mainIpcEventHandlers.handleUpdateTheme())
-    this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
+    // this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
     // This is only for MacOS
     this.ipcMain.on('window-controls:hide', () => this.mainWindow?.hide())
 
@@ -166,15 +165,7 @@ class MainProcessBridge implements MainIpcModule {
     handleUpdateTheme: () => {
       nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
     },
-    getStoreValue: (_: Event, key: keyof typeof this.store) => {
-      const response = this.store.get(key)
-      return response as unknown as TStoreType
-    },
     createPou: () => this.mainWindow?.webContents.send('pou:createPou', { ok: true }),
-    // saveProject: (_: Event, arg: ProjectDto) => {
-    //   const response = this.projectService.saveProject(arg)
-    //   return response
-    // },
   }
 }
 

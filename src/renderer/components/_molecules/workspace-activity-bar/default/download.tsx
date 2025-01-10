@@ -30,7 +30,6 @@ const DownloadButton = () => {
           const buildPath = `${OS === 'win32' ? project.meta.path.replace('\\project.json', '\\build\\program.st') : project.meta.path.replace('/project.json', '/build/program.st')}`
           lines[index].includes('successfully') &&
             addLog({ id: uuidv4(), type: 'info', message: `OpenPLC Runtime program generated at ${buildPath}` })
-          // Implement the feature to generate the C files
         }
       })
       stdMessage && addLog({ id: uuidv4(), type: stdType, message: stdMessage })
@@ -47,9 +46,13 @@ const DownloadButton = () => {
       if (result.success) {
         addLog({ id: uuidv4(), type: 'info', message: result.message })
         addLog({ id: uuidv4(), type: 'warning', message: 'Attempting to build the program' })
+        // !! REFACTOR THIS PART !!
+        // This function call the compiler service to build the xml file into a program object.
+        // This process need to be improved to handle the response and call the next stages in the compilation process.
         buildProgram()
-        const buildPath = `${OS === 'win32' ? project.meta.path.replace('\\project.json', '\\build\\program.st') : project.meta.path.replace('/project.json', '/build/program.st')}`
-        setTimeout(() => window.bridge.generateCFilesRequest(buildPath), 3000)
+        // !! REFACTOR THIS PART !!
+        // This implementation is not correct, the build process should be handled by the compiler service and the function call should be handled by the bridge.
+        // setTimeout(() => window.bridge.generateCFilesRequest(buildPath), 3000)
       } else {
         addLog({ id: uuidv4(), type: 'error', message: result.message })
         if (result.message.includes('Main POU not found')) {

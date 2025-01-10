@@ -1,5 +1,5 @@
 import { CompilerService } from '@root/main/services/compiler-service'
-import { BrowserWindow, Event, IpcMain } from 'electron/main'
+import { BrowserWindow, IpcMain } from 'electron/main'
 
 import { ProjectService } from '../../../../services'
 import { TStoreType } from '../store'
@@ -13,7 +13,6 @@ export type MainIpcModule = {
   setupMainIpcListener: () => void
   mainIpcEventHandlers: {
     handleUpdateTheme: () => void
-    getStoreValue: (_: Event, key: keyof TStoreType) => TStoreType
     createPou: () => void
   }
 }
