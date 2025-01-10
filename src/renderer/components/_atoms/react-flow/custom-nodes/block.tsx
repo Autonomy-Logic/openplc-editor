@@ -449,6 +449,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       setWrongVariable(false)
       return
     }
+
+    setWrongVariable(false)
   }, [pous])
 
   /**
