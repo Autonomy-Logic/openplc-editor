@@ -39,7 +39,8 @@ const rendererProcessBridge = {
    * Registers a callback for the 'project:create-accelerator' event.
    * @param callback - The callback to be invoked when the event is triggered.
    */
-  createProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
+  createProjectAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
 
   /**
    * Removes all listeners for the 'project:create-accelerator' event.
@@ -57,19 +58,22 @@ const rendererProcessBridge = {
    * @param dataToCreateProjectFile - The data required to create the project file.
    * @returns A promise that resolves with the create project file response.
    */
-  createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> => ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
+  createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> =>
+    ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
 
   /**
    * Invokes the 'project:path-picker' event and returns a promise with the response.
    * @returns A promise that resolves with the path picker response.
    */
-  pathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> => ipcRenderer.invoke('project:path-picker'),
+  pathPicker: (): Promise<{ success: boolean; error?: { title: string; description: string }; path?: string }> =>
+    ipcRenderer.invoke('project:path-picker'),
 
   /**
    * Registers a callback for the 'project:open-project-request' event.
    * @param callback - The callback to be invoked when the event is triggered.
    */
-  handleOpenProjectRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:open-project-request', (_event) => callback(_event)),
+  handleOpenProjectRequest: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:open-project-request', (_event) => callback(_event)),
 
   /**
    * Removes all listeners for the 'project:open-project-request' event.
@@ -87,20 +91,23 @@ const rendererProcessBridge = {
    * @param projectPath - The path of the project to open.
    * @returns A promise that resolves with the project service response.
    */
-  openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open-by-path', projectPath),
+  openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
+    ipcRenderer.invoke('project:open-by-path', projectPath),
 
   /**
    * Registers a callback for the 'project:open-recent-accelerator' event.
    * @param callback - The callback to be invoked when the event is triggered.
    */
-  openRecentAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+  openRecentAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
 
   /**
    * Invokes the 'open-external-link' event with the provided link and returns a promise with the response.
    * @param link - The external link to open.
    * @returns A promise that resolves with the success status.
    */
-  openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> => ipcRenderer.invoke('open-external-link', link),
+  openExternalLinkAccelerator: (link: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('open-external-link', link),
 
   /**
    * Registers a callback for the 'project:save-accelerator' event.
@@ -113,7 +120,8 @@ const rendererProcessBridge = {
    * @param dataToWrite - The data to write to the project.
    * @returns A promise that resolves with the save data response.
    */
-  saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> => ipcRenderer.invoke('project:save', dataToWrite),
+  saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
+    ipcRenderer.invoke('project:save', dataToWrite),
 
   /**
    * Registers a callback for the 'workspace:close-tab-accelerator' event.
@@ -125,7 +133,8 @@ const rendererProcessBridge = {
    * Registers a callback for the 'workspace:close-project-accelerator' event.
    * @param callback - The callback to be invoked when the event is triggered.
    */
-  closeProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-project-accelerator', callback),
+  closeProjectAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('workspace:close-project-accelerator', callback),
 
   /**
    * Removes all listeners for the 'workspace:close-project-accelerator' event.
@@ -136,13 +145,15 @@ const rendererProcessBridge = {
    * Registers a callback for the 'workspace:delete-pou-accelerator' event.
    * @param callback - The callback to be invoked when the event is triggered.
    */
-  deletePouAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:delete-pou-accelerator', callback),
+  deletePouAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('workspace:delete-pou-accelerator', callback),
 
   /**
    * Registers a callback for the 'workspace:switch-perspective-accelerator' event.
    * @param callback - The callback to be invoked when the event is triggered.
    */
-  switchPerspective: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
+  switchPerspective: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
 
   /**
    * Removes all listeners for the 'workspace:delete-pou-accelerator' event.
@@ -158,7 +169,8 @@ const rendererProcessBridge = {
    * Registers a callback for the 'project:find-in-project-accelerator' event.
    * @param callback - The callback to be invoked when the event is triggered.
    */
-  findInProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:find-in-project-accelerator', callback),
+  findInProjectAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('project:find-in-project-accelerator', callback),
 
   /**
    * Registers a callback for the 'about:open-accelerator' event.
@@ -196,13 +208,19 @@ const rendererProcessBridge = {
    * Invokes the 'system:get-system-info' event and returns a promise with the system information.
    * @returns A promise that resolves with the system information.
    */
-  getSystemInfo: (): Promise<{ OS: 'linux' | 'darwin' | 'win32' | ''; architecture: 'x64' | 'arm' | ''; prefersDarkMode: boolean; isWindowMaximized: boolean }> => ipcRenderer.invoke('system:get-system-info'),
+  getSystemInfo: (): Promise<{
+    OS: 'linux' | 'darwin' | 'win32' | ''
+    architecture: 'x64' | 'arm' | ''
+    prefersDarkMode: boolean
+    isWindowMaximized: boolean
+  }> => ipcRenderer.invoke('system:get-system-info'),
 
   /**
    * Invokes the 'app:store-retrieve-recent' event and returns a promise with the recent items.
    * @returns A promise that resolves with the recent items.
    */
-  retrieveRecent: (): Promise<{ name: string; path: string; lastOpenedAt: string; createdAt: string }[]> => ipcRenderer.invoke('app:store-retrieve-recent'),
+  retrieveRecent: (): Promise<{ name: string; path: string; lastOpenedAt: string; createdAt: string }[]> =>
+    ipcRenderer.invoke('app:store-retrieve-recent'),
 
   /**
    * Sends the 'window-controls:close' event to close the window.
@@ -223,7 +241,8 @@ const rendererProcessBridge = {
    * Registers a callback for the 'window-controls:toggle-maximized' event.
    * @param callback - The callback to be invoked when the event is triggered.
    */
-  isMaximizedWindow: (callback: IpcRendererCallbacks) => ipcRenderer.on('window-controls:toggle-maximized', (_event) => callback(_event)),
+  isMaximizedWindow: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('window-controls:toggle-maximized', (_event) => callback(_event)),
 
   /**
    * Sends the 'window:reload' event to reload the window.
@@ -262,7 +281,8 @@ const rendererProcessBridge = {
    * @param pathToUserProject - The path to the user's project.
    * @returns A promise that resolves with the success status and message.
    */
-  createBuildDirectory: async (pathToUserProject: string): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke('compiler:create-build-directory', pathToUserProject),
+  createBuildDirectory: async (pathToUserProject: string): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('compiler:create-build-directory', pathToUserProject),
 
   /**
    * Creates an XML file for the build.
@@ -270,13 +290,18 @@ const rendererProcessBridge = {
    * @param dataToCreateXml - The data required to create the XML file.
    * @returns A promise that resolves with the success status and message.
    */
-  createXmlFileToBuild: async (pathToUserProject: string, dataToCreateXml: ProjectState['data']): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke('compiler:create-xml-file', pathToUserProject, dataToCreateXml),
+  createXmlFileToBuild: async (
+    pathToUserProject: string,
+    dataToCreateXml: ProjectState['data'],
+  ): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('compiler:create-xml-file', pathToUserProject, dataToCreateXml),
 
   /**
    * Registers a callback for the 'compiler:export-project-request' event.
    * @param callback - The callback to be invoked when the event is triggered.
    */
-  exportProjectRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('compiler:export-project-request', (_event) => callback(_event)),
+  exportProjectRequest: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('compiler:export-project-request', (_event) => callback(_event)),
 
   /**
    * Removes all listeners for the 'compiler:export-project-request' event.
@@ -296,9 +321,31 @@ const rendererProcessBridge = {
   },
 
   /**
-   * Sends the 'compiler:generate-c-files' event with the provided path to the ST file.
-   * @param pathToStFile - The path to the ST file.
+   * Execute the generation of the C files.
+   * Creates an instance using the MessageChannel API to establish a communication between the two Electron processes to generate the C files.
+   * @param pathToStProgram - The path to the ST program generated.
+   * @todo This function should be refactored to handle the response and call the next stages in the compilation process.
    */
-  generateCFilesRequest: (pathToStFile: string) => ipcRenderer.send('compiler:generate-c-files', pathToStFile),
+  generateCFilesRequest: (pathToStProgram: string, callback: (args: any) => void) => {
+    /**
+     * Create a new MessageChannel instance to establish communication between the renderer and main processes.
+     */
+    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
+
+    /**
+     * Send a message to the main process to generate the C files, passing the path to the ST program and the main process port.
+     */
+    ipcRenderer.postMessage('compiler:generate-c-files', pathToStProgram, [mainProcessPort])
+
+    /**
+     * Listen for messages from the main process.
+     */
+    rendererProcessPort.onmessage = (event) => callback(event.data)
+
+    /**
+     * Listen for the close event on the channel.
+     */
+    rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
+  },
 }
 export default rendererProcessBridge

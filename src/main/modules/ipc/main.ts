@@ -156,8 +156,9 @@ class MainProcessBridge implements MainIpcModule {
       const [replyPort] = event.ports
       this.compilerService.compileSTProgram(pathToXMLFile, replyPort)
     })
-    this.ipcMain.on('compiler:generate-c-files', (_ev, pathToStProgram: string) => {
-      this.compilerService.generateCFiles(pathToStProgram)
+    this.ipcMain.on('compiler:generate-c-files', (event, pathToStProgram: string) => {
+      const [replyPort] = event.ports
+      this.compilerService.generateCFiles(pathToStProgram, replyPort)
     })
   }
 

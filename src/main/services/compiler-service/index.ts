@@ -136,9 +136,6 @@ const CompilerService = {
    * @param pathToStProgram
    */
   generateCFiles: (pathToStProgram: string, _mainProcessPort?: MessagePortMain): void => {
-    // const draftPath = pathToProjectFile.replace('project.json', '')
-    // Construct the path to the xml file
-    // const pathToStProgram = join(draftPath, 'build', 'program.st')
     /**
      * Get the current environment and check if it's development
      */
