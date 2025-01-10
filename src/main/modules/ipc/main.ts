@@ -1,5 +1,4 @@
-import { TStoreType } from '@root/main/contracts/types/modules/store'
-import { app, Event, nativeTheme, shell } from 'electron'
+import { app, nativeTheme, shell } from 'electron'
 import { join } from 'path'
 import { platform } from 'process'
 
@@ -26,7 +25,6 @@ class MainProcessBridge implements MainIpcModule {
   projectService
   store
   compilerService
-
   constructor({ ipcMain, mainWindow, projectService, store, compilerService }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
@@ -48,7 +46,6 @@ class MainProcessBridge implements MainIpcModule {
         return { success: false, error }
       }
     })
-
     this.ipcMain.handle('project:create', async () => {
       const response = await this.projectService.createProject()
       return response
@@ -134,7 +131,7 @@ class MainProcessBridge implements MainIpcModule {
     })
     this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
     this.ipcMain.on('system:update-theme', () => this.mainIpcEventHandlers.handleUpdateTheme())
-    this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
+    // this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
     // This is only for MacOS
     this.ipcMain.on('window-controls:hide', () => this.mainWindow?.hide())
 
@@ -144,14 +141,17 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('compiler:create-build-directory', (_ev, pathToUserProject: string) =>
       this.compilerService.createBuildDirectoryIfNotExist(pathToUserProject),
     )
-    this.ipcMain.handle('compiler:export-project-xml', (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data']) =>
-      this.compilerService.createXmlFile(pathToUserProject,dataToCreateXml),
+    this.ipcMain.handle(
+      'compiler:export-project-xml',
+      (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data']) =>
+        this.compilerService.createXmlFile(pathToUserProject, dataToCreateXml),
     )
     this.ipcMain.handle(
       'compiler:build-xml-file',
       (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data']) =>
         this.compilerService.buildXmlFile(pathToUserProject, dataToCreateXml),
     )
+
     /**
      * This is a mock implementation to be used as a presentation.
      * !! Do not use this on production !!
@@ -160,21 +160,17 @@ class MainProcessBridge implements MainIpcModule {
       const [replyPort] = event.ports
       this.compilerService.compileSTProgram(pathToXMLFile, replyPort)
     })
+    this.ipcMain.on('compiler:generate-c-files', (event, pathToStProgram: string) => {
+      const [replyPort] = event.ports
+      this.compilerService.generateCFiles(pathToStProgram, replyPort)
+    })
   }
 
   mainIpcEventHandlers = {
     handleUpdateTheme: () => {
       nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
     },
-    getStoreValue: (_: Event, key: keyof typeof this.store) => {
-      const response = this.store.get(key)
-      return response as unknown as TStoreType
-    },
     createPou: () => this.mainWindow?.webContents.send('pou:createPou', { ok: true }),
-    // saveProject: (_: Event, arg: ProjectDto) => {
-    //   const response = this.projectService.saveProject(arg)
-    //   return response
-    // },
   }
 }
 

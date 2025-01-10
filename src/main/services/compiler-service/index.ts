@@ -1,3 +1,4 @@
+import type { ChildProcessWithoutNullStreams } from 'child_process'
 import { spawn } from 'child_process'
 import { dialog, type MessagePortMain } from 'electron'
 import { access, constants, mkdir, writeFile } from 'fs/promises'
@@ -5,6 +6,7 @@ import { join } from 'path'
 
 import { CreateXMLFile } from '../../../main/utils'
 import { ProjectState } from '../../../renderer/store/slices'
+import { BufferToStringArray } from '../../../utils'
 import { XmlGenerator } from '../../../utils/PLC/xml-generator'
 
 export type CompilerResponse = {
@@ -93,7 +95,10 @@ const CompilerService = {
       message: result.success ? ` XML file created successfully at ${filePath}` : 'Failed to create XML file',
     }
   },
-
+  /**
+   * TODO: Update the script path to use the builded version of the compiler.(Windows and MacOS)
+   * TODO: Resolve the compilation for the Linux environments.
+   */
   compileSTProgram: (pathToProjectFile: string, mainProcessPort: MessagePortMain): void => {
     const isDevelopment = process.env.NODE_ENV === 'development'
     const isWindows = process.platform === 'win32'
@@ -101,30 +106,43 @@ const CompilerService = {
     const isLinux = process.platform === 'linux'
 
     const workingDirectory = process.cwd()
-    const developmentCompilerPath = join(workingDirectory, 'resources', 'st-compiler', 'xml2st.py')
-    const windowsCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.exe')
-    const darwinCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st')
-    const linuxCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.py')
+
+    const windowsCompilerPath = join(
+      isDevelopment ? workingDirectory : process.resourcesPath,
+      isDevelopment ? 'resources' : '',
+      'compilers',
+      'Windows',
+      'xml2st',
+      'xml2st.exe',
+    )
+    const darwinCompilerPath = join(
+      isDevelopment ? workingDirectory : process.resourcesPath,
+      isDevelopment ? 'resources' : '',
+      'compilers',
+      'MacOS',
+      'xml2st',
+      'xml2st',
+    )
+    const linuxCompilerPath = join(
+      isDevelopment ? workingDirectory : process.resourcesPath,
+      isDevelopment ? 'resources' : '',
+      'compilers',
+      'Linux',
+      'xml2st',
+      'xml2st.py',
+    )
 
     const draftPath = pathToProjectFile.replace('project.json', '')
     const pathToXMLFile = join(draftPath, 'build', 'plc.xml')
 
     let execCompilerScript
 
-    if (isDevelopment) {
-      if (isWindows) {
-        execCompilerScript = spawn('py', [developmentCompilerPath, pathToXMLFile])
-      } else if (isMac || isLinux) {
-        execCompilerScript = spawn('python3', [developmentCompilerPath, pathToXMLFile])
-      }
-    } else {
-      if (isWindows) {
-        execCompilerScript = spawn(windowsCompilerPath, [pathToXMLFile])
-      } else if (isMac) {
-        execCompilerScript = spawn(darwinCompilerPath, [pathToXMLFile])
-      } else if (isLinux) {
-        execCompilerScript = spawn('python3', [linuxCompilerPath, pathToXMLFile])
-      }
+    if (isWindows) {
+      execCompilerScript = spawn(windowsCompilerPath, [pathToXMLFile])
+    } else if (isMac) {
+      execCompilerScript = spawn(darwinCompilerPath, [pathToXMLFile])
+    } else if (isLinux) {
+      execCompilerScript = spawn('python3', [linuxCompilerPath, pathToXMLFile])
     }
 
     execCompilerScript?.stdout.on('data', (data: Buffer) => {
@@ -138,7 +156,115 @@ const CompilerService = {
 
     execCompilerScript?.on('close', () => {
       mainProcessPort.postMessage({ type: 'info', message: 'Script finished' })
+      console.log('Finished the compilation process!')
       mainProcessPort.close()
+    })
+  },
+
+  /**
+   * Function that handles the compilation process of a ST program into C files.
+   * @param pathToStProgram
+   */
+  generateCFiles: (pathToStProgram: string, _mainProcessPort?: MessagePortMain): void => {
+    /**
+     * Get the current environment and check if it's development
+     */
+    const isDevelopment = process.env.NODE_ENV === 'development'
+
+    /**
+     * Check the current platform to execute the correct command based on the current operating system
+     */
+    const isWindows = process.platform === 'win32'
+    const isMac = process.platform === 'darwin'
+    const isLinux = process.platform === 'linux' // Works for Fedora and Debian/Ubuntu based systems
+
+    /**
+     * Construct the path for the current working directory to be able to access the compiler
+     */
+    const workingDirectory = process.cwd()
+
+    /**
+     * Construct the path for the C files compiler binary based on the current environment.
+     */
+    const windowsCompilerPath = join(
+      isDevelopment ? workingDirectory : process.resourcesPath,
+      isDevelopment ? 'resources' : '',
+      'compilers',
+      'Windows',
+      'iec2c',
+      'bin',
+      'iec2c.exe',
+    )
+    const darwinCompilerPath = join(
+      isDevelopment ? workingDirectory : process.resourcesPath,
+      isDevelopment ? 'resources' : '',
+      'compilers',
+      'MacOS',
+      'iec2c',
+      'bin',
+      'iec2c_mac',
+    )
+    const linuxCompilerPath = join(
+      isDevelopment ? workingDirectory : process.resourcesPath,
+      isDevelopment ? 'resources' : '',
+      'compilers',
+      'Linux',
+      'iec2c',
+      'bin',
+      'iec2c',
+    )
+
+    /**
+     * Create a variable to execute the C files compiler script, will receive the child_process.spawn object.
+     */
+    let execCompilerScript: ChildProcessWithoutNullStreams | undefined
+
+    /**
+     * Modify the cwd and pass the config files to the compiler, then execute the C files compiler script with the path to the st program file, based on the environment and OS.
+     */
+    if (isWindows) {
+      const workingDirectoryForCompiler = windowsCompilerPath.replace('Windows/iec2c/bin/iec2c.exe', 'MatIEC')
+      execCompilerScript = spawn(windowsCompilerPath, ['-f', '-l', '-p', pathToStProgram], {
+        cwd: workingDirectoryForCompiler,
+      })
+    } else if (isMac) {
+      const workingDirectoryForCompiler = darwinCompilerPath.replace('MacOS/iec2c/bin/iec2c_mac', 'MatIEC')
+      execCompilerScript = spawn(darwinCompilerPath, ['-f', '-l', '-p', pathToStProgram], {
+        cwd: workingDirectoryForCompiler,
+      })
+    } else if (isLinux) {
+      const workingDirectoryForCompiler = linuxCompilerPath.replace('Linux/iec2c/bin/iec2c', 'MatIEC')
+      execCompilerScript = spawn(linuxCompilerPath, ['-f', '-l', '-p', pathToStProgram], {
+        cwd: workingDirectoryForCompiler,
+      })
+    }
+
+    console.log('Executing C files compilation...')
+    /**
+     * The data object is a buffer with the content of the script output.
+     * Uses ASCII code to convert the buffer to a string.
+     * End of lines are separated by \r and \n characters. The ASCII code for \r is 13 and \n is 10.
+     */
+    execCompilerScript?.stdout.on('data', (data: Buffer) => {
+      BufferToStringArray(data).forEach((line) => {
+        console.log(line)
+      })
+      // mainProcessPort.postMessage({ type: 'default', data: data })
+    })
+
+    execCompilerScript?.stderr.on('data', (data: Buffer) => {
+      BufferToStringArray(data).forEach((line) => {
+        console.log(line)
+      })
+      // mainProcessPort.postMessage({ type: 'error', data: data })
+      // !! Watch for possible bugs with this implementation. !!
+      // mainProcessPort.close()
+    })
+
+    execCompilerScript?.on('close', () => {
+      console.log('Finished the compilation process!')
+      // mainProcessPort.postMessage({ type: 'info', message: 'Script finished' })
+      // mainProcessPort.close()
     })
   },
 }
