@@ -95,7 +95,7 @@ const CompilerService = {
       message: result.success ? ` XML file created successfully at ${filePath}` : 'Failed to create XML file',
     }
   },
-/**
+  /**
    * TODO: Update the script path to use the builded version of the compiler.(Windows and MacOS)
    * TODO: Resolve the compilation for the Linux environments.
    */
@@ -106,30 +106,43 @@ const CompilerService = {
     const isLinux = process.platform === 'linux'
 
     const workingDirectory = process.cwd()
-    const developmentCompilerPath = join(workingDirectory, 'resources', 'st-compiler', 'xml2st.py')
-    const windowsCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.exe')
-    const darwinCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st')
-    const linuxCompilerPath = join(process.resourcesPath, 'assets', 'st-compiler', 'xml2st.py')
+
+    const windowsCompilerPath = join(
+      isDevelopment ? workingDirectory : process.resourcesPath,
+      isDevelopment ? 'resources' : '',
+      'compilers',
+      'Windows',
+      'xml2st',
+      'xml2st.exe',
+    )
+    const darwinCompilerPath = join(
+      isDevelopment ? workingDirectory : process.resourcesPath,
+      isDevelopment ? 'resources' : '',
+      'compilers',
+      'MacOS',
+      'xml2st',
+      'xml2st',
+    )
+    const linuxCompilerPath = join(
+      isDevelopment ? workingDirectory : process.resourcesPath,
+      isDevelopment ? 'resources' : '',
+      'compilers',
+      'Linux',
+      'xml2st',
+      'xml2st',
+    )
 
     const draftPath = pathToProjectFile.replace('project.json', '')
     const pathToXMLFile = join(draftPath, 'build', 'plc.xml')
 
     let execCompilerScript
 
-    if (isDevelopment) {
-      if (isWindows) {
-        execCompilerScript = spawn('py', [developmentCompilerPath, pathToXMLFile])
-      } else if (isMac || isLinux) {
-        execCompilerScript = spawn('python3', [developmentCompilerPath, pathToXMLFile])
-      }
-    } else {
-      if (isWindows) {
-        execCompilerScript = spawn(windowsCompilerPath, [pathToXMLFile])
-      } else if (isMac) {
-        execCompilerScript = spawn(darwinCompilerPath, [pathToXMLFile])
-      } else if (isLinux) {
-        execCompilerScript = spawn('python3', [linuxCompilerPath, pathToXMLFile])
-      }
+    if (isWindows) {
+      execCompilerScript = spawn(windowsCompilerPath, [pathToXMLFile])
+    } else if (isMac) {
+      execCompilerScript = spawn(darwinCompilerPath, [pathToXMLFile])
+    } else if (isLinux) {
+      execCompilerScript = spawn('python3', [linuxCompilerPath, pathToXMLFile])
     }
 
     execCompilerScript?.stdout.on('data', (data: Buffer) => {
