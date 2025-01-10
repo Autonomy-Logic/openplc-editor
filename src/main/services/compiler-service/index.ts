@@ -129,7 +129,7 @@ const CompilerService = {
       'compilers',
       'Linux',
       'xml2st',
-      'xml2st',
+      'xml2st.py',
     )
 
     const draftPath = pathToProjectFile.replace('project.json', '')
@@ -223,17 +223,17 @@ const CompilerService = {
      * Modify the cwd and pass the config files to the compiler, then execute the C files compiler script with the path to the st program file, based on the environment and OS.
      */
     if (isWindows) {
-      const workingDirectoryForCompiler = windowsCompilerPath.replace('/bin/iec2c.exe', '')
+      const workingDirectoryForCompiler = windowsCompilerPath.replace('Windows/iec2c/bin/iec2c.exe', 'MatIEC')
       execCompilerScript = spawn(windowsCompilerPath, ['-f', '-l', '-p', pathToStProgram], {
         cwd: workingDirectoryForCompiler,
       })
     } else if (isMac) {
-      const workingDirectoryForCompiler = darwinCompilerPath.replace('/bin/iec2c_mac', '')
+      const workingDirectoryForCompiler = darwinCompilerPath.replace('MacOS/iec2c/bin/iec2c_mac', 'MatIEC')
       execCompilerScript = spawn(darwinCompilerPath, ['-f', '-l', '-p', pathToStProgram], {
         cwd: workingDirectoryForCompiler,
       })
     } else if (isLinux) {
-      const workingDirectoryForCompiler = linuxCompilerPath.replace('/bin/iec2c', '')
+      const workingDirectoryForCompiler = linuxCompilerPath.replace('Linux/iec2c/bin/iec2c', 'MatIEC')
       execCompilerScript = spawn(linuxCompilerPath, ['-f', '-l', '-p', pathToStProgram], {
         cwd: workingDirectoryForCompiler,
       })
