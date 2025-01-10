@@ -101,6 +101,13 @@ export const Contact = (block: ContactProps) => {
       isFocused: boolean
     }
   >(null)
+  const autocompleteRef = useRef<
+    HTMLDivElement & {
+      focus: () => void
+      isFocused: boolean
+      selectedVariable: { positionInArray: number; variableName: string }
+    }
+  >(null)
 
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
   const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
@@ -263,6 +270,9 @@ export const Contact = (block: ContactProps) => {
             onChange={onChangeHandler}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
+              if (e.key === 'Enter' && autocompleteRef.current?.selectedVariable.positionInArray !== -1) {
+                inputVariableRef.current?.blur({ submit: false })
+              }
               setKeyPressedAtTextarea(e.key)
             }}
             onKeyUp={() => setKeyPressedAtTextarea('')}
@@ -271,6 +281,7 @@ export const Contact = (block: ContactProps) => {
             <div className='relative flex justify-center'>
               <div className='absolute -bottom-4'>
                 <VariablesBlockAutoComplete
+                  ref={autocompleteRef}
                   block={block}
                   blockType={'contact'}
                   valueToSearch={contactVariableValue}

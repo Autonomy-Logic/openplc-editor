@@ -17,7 +17,7 @@ export const DragHandleIcon = (props: React.SVGProps<SVGSVGElement>) => {
       <circle cx='21' cy='24' r='1.5' className='clr-i-outline clr-i-outline-path-4'></circle>
       <circle cx='21' cy='18' r='1.5' className='clr-i-outline clr-i-outline-path-5'></circle>
       <circle cx='15' cy='18' r='1.5' className='clr-i-outline clr-i-outline-path-6'></circle>
-      <rect x='0' y='0' width='36' height='36' fill-opacity='0' />
+      <rect x='0' y='0' width='36' height='36' fillOpacity='0' />
     </svg>
   )
 }

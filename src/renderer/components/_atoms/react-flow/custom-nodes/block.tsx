@@ -1,6 +1,7 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { checkVariableName } from '@root/renderer/store/slices/project/utils/variables'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -332,7 +333,9 @@ export const BlockNodeElement = <T extends object>({
   )
 }
 
-export const Block = <T extends object>({ data, dragging, height, width, selected, id }: BlockProps<T>) => {
+export const Block = <T extends object>(block: BlockProps<T>) => {
+  const { data, dragging, height, width, selected, id } = block
+
   const {
     editor,
     project: {
@@ -374,8 +377,12 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
 
-  const inputVariableRef = useRef<HTMLTextAreaElement>(null)
-  const [inputVariableFocus, setInputVariableFocus] = useState<boolean>(true)
+  const inputVariableRef = useRef<
+    HTMLTextAreaElement & {
+      blur: ({ submit }: { submit?: boolean }) => void
+      isFocused: boolean
+    }
+  >(null)
 
   /**
    * useEffect to focus the variable input when the correct block type is selected
@@ -388,9 +395,18 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
 
     if (inputVariableRef.current && selected) {
       switch (blockType) {
-        case 'function-block':
+        case 'function-block': {
+          if (!data.variable || data.variable.name === '') {
+            const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+              nodeId: id,
+            })
+            // @ts-expect-error - type is dynamic
+            const { name, number } = checkVariableName(variables.all, (data.variant as BlockVariant).name.toUpperCase())
+            handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`)
+          }
           inputVariableRef.current.focus()
-          break
+          return
+        }
         default:
           break
       }
@@ -409,14 +425,15 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
     const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
       nodeId: id,
     })
+    if (!node || !rung) return
+
     const variable = variables.selected
-    if (!variable && !inputVariableFocus) {
+    if (!variable) {
       setWrongVariable(true)
       return
     }
 
-    if (variable && node && rung && node.data.variable !== variable) {
-      setBlockVariableValue(variable.name)
+    if (node.data.variable !== variable) {
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -429,17 +446,20 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
           },
         },
       })
+      setWrongVariable(false)
+      return
     }
+
     setWrongVariable(false)
   }, [pous])
 
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitBlockVariable = () => {
-    setInputVariableFocus(false)
+  const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string) => {
+    const variableNameToSubmit = variableName || blockVariableValue
 
-    if (blockVariableValue === '') {
+    if (variableNameToSubmit === '') {
       setWrongVariable(true)
       return
     }
@@ -455,11 +475,11 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
      */
     let variable: PLCVariable | undefined = variables.selected
     if (variable) {
-      if (variable.name === blockVariableValue) return
+      if (variable.name === variableNameToSubmit) return
       const res = updateVariable({
         data: {
           ...variable,
-          name: blockVariableValue,
+          name: variableNameToSubmit,
           type: {
             definition: 'derived',
             value: (node.data as BlockNodeData<BlockVariant>).variant.name,
@@ -483,7 +503,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
       const res = createVariable({
         data: {
           id: uuidv4(),
-          name: blockVariableValue,
+          name: variableNameToSubmit,
           type: {
             definition: 'derived',
             value: (node.data as BlockNodeData<BlockVariant>).variant.name,
@@ -505,7 +525,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
         return
       }
       variable = res.data as PLCVariable | undefined
-      if (variable?.name !== blockVariableValue) {
+      if (variable?.name !== variableNameToSubmit) {
         setBlockVariableValue(variable?.name ?? '')
       }
     }
@@ -560,7 +580,7 @@ export const Block = <T extends object>({ data, dragging, height, width, selecte
           <HighlightedTextArea
             textAreaValue={blockVariableValue}
             setTextAreaValue={setBlockVariableValue}
-            handleSubmit={handleSubmitBlockVariable}
+            handleSubmit={handleSubmitBlockVariableOnTextareaBlur}
             inputHeight={{
               height: 13,
               scrollLimiter: 14,

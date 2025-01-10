@@ -165,8 +165,65 @@ const variableLocationValidationErrorMessage = (variableType: string) => {
 }
 
 /**
+ * Check if the variable name exists and if it is needed to change the name of the variable.
+ * Returns an object containing:
+ * - ok: boolean (true if the variable exists, false otherwise)
+ * - name: string (the new name of the variable)
+ * - number: number (the biggest number at the end of the variable name)
+ */
+
+const checkVariableName = (variables: PLCVariable[], variableName: string) => {
+  // Check if there is a variable with the same name when removing the number at the end
+  const variableNameWithoutNumber = variableName.substring(
+    0,
+    variableName.length - extractNumberAtEnd(variableName).length,
+  )
+  const filteredVariables = variables.filter((variable: PLCVariable) =>
+    variable.name.toLowerCase().includes(variableNameWithoutNumber.toLowerCase()),
+  )
+
+  // If there is a variable with the same name, sort the variables by the number at the end and get the biggest number
+  const sortedVariables = filteredVariables.sort((a, b) => {
+    const numberA = extractNumberAtEnd(a.name).number
+    const numberB = extractNumberAtEnd(b.name).number
+    if (numberA && numberB) {
+      return numberA - numberB
+    }
+    return 0
+  })
+
+  const biggestVariable =
+    sortedVariables.length > 0 ? extractNumberAtEnd(sortedVariables[sortedVariables.length - 1].name) : { number: 0 }
+
+  // If there is a number at the end of the variable name, increment the number by 1
+  let number = biggestVariable.number
+  for (let i = sortedVariables.length - 1; i >= 1; i--) {
+    const previousVariable = extractNumberAtEnd(sortedVariables[i].name)
+    const previousNumber = previousVariable.number
+
+    const currentVariable = extractNumberAtEnd(sortedVariables[i - 1].name)
+    const currentNumber = currentVariable.number
+
+    if (currentNumber !== previousNumber - 1) {
+      number = currentNumber
+    }
+  }
+
+  return {
+    ok: filteredVariables.length > 0,
+    name: variableNameWithoutNumber,
+    number:
+      filteredVariables.length > 0
+        ? extractNumberAtEnd(sortedVariables[sortedVariables.length - 1].name).string !== ''
+          ? number + 1
+          : 0
+        : 0,
+  }
+}
+
+/**
  * This is a validation to check if it is needed changing the name of a variable at creation.
- * If the variable existis change the variable name.
+ * If the variable exists change the variable name.
  **/
 const createVariableValidation = (
   variables: PLCVariable[],
@@ -176,39 +233,8 @@ const createVariableValidation = (
   const response = { name: variableName, location: variableLocation }
 
   if (checkIfVariableExists(variables, variableName)) {
-    // Check if there is a variable with the same name when removing the number at the end
-    const variableNameWithoutNumber = variableName.substring(0, variableName.length - extractNumberAtEnd(variableName).length)
-    const filteredVariables = variables.filter((variable: PLCVariable) =>
-      variable.name.toLowerCase().includes(variableNameWithoutNumber.toLowerCase()),
-    )
-
-    // If there is a variable with the same name, sort the variables by the number at the end and get the biggest number
-    const sortedVariables = filteredVariables.sort((a, b) => {
-      const numberA = extractNumberAtEnd(a.name).number
-      const numberB = extractNumberAtEnd(b.name).number
-      if (numberA && numberB) {
-        return numberA - numberB
-      }
-      return 0
-    })
-    const biggestVariable =
-      sortedVariables.length > 0 ? extractNumberAtEnd(sortedVariables[sortedVariables.length - 1].name) : { number: 0 }
-
-    // If there is a number at the end of the variable name, increment the number by 1
-    let number = biggestVariable.number
-    for (let i = sortedVariables.length - 1; i >= 1; i--) {
-      const previousVariable = extractNumberAtEnd(sortedVariables[i].name)
-      const previousNumber = previousVariable.number
-
-      const currentVariable = extractNumberAtEnd(sortedVariables[i - 1].name)
-      const currentNumber = currentVariable.number
-
-      if (currentNumber !== previousNumber - 1) {
-        number = currentNumber
-      }
-    }
-
-    response.name = `${variableNameWithoutNumber}${number + 1}`
+    const { name: variableNameWithoutNumber, number } = checkVariableName(variables, variableName)
+    response.name = `${variableNameWithoutNumber}${number}`
   }
 
   if (checkIfLocationExists(variables, variableLocation)) {
@@ -455,6 +481,7 @@ const updateGlobalVariableValidation = (
 
 export {
   arrayValidation,
+  checkVariableName,
   createGlobalVariableValidation,
   createVariableValidation,
   enumeratedValidation,
