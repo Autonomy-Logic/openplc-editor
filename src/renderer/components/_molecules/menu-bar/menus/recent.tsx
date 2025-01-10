@@ -24,14 +24,14 @@ export const RecentMenu = () => {
   const [recentProjects, setRecentProjects] = useState(recent)
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
 
-  const getUserRecentProjects = async () => {
-    const recentProjects = await window.bridge.retrieveRecent()
-    setRecentProjects(recentProjects)
-  }
+  useEffect(() =>{
+    setRecentProjects(recent)
+  },[recent])
 
-  useEffect(() => {
-    void getUserRecentProjects()
-  }, [recent])
+    const updateUserRecentProjects = async () => {
+      const recentProjects = await window.bridge.retrieveRecent()
+      setRecent(recentProjects)
+    }
 
   const compareLastOpened = (lastOpenedAt: string) => {
     const currentTime = new Date()
@@ -88,7 +88,7 @@ export const RecentMenu = () => {
     return () => {
       timers.forEach((timerId) => clearTimeout(timerId))
     }
-  }, [recentProjects])
+  }, [recent])
 
   const handleOpenProject = async (projectPath: string) => {
     const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
@@ -96,8 +96,6 @@ export const RecentMenu = () => {
       clearEditor()
       clearTabs()
       setEditingState('unsaved')
-      setRecent([])
-
       const projectMeta = {
         name: data.content.meta.name,
         type: data.content.meta.type,
@@ -121,7 +119,6 @@ export const RecentMenu = () => {
       }
 
       projectData.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
-
       toast({
         title: 'Project opened!',
         description: 'Your project was opened and loaded.',
@@ -129,14 +126,14 @@ export const RecentMenu = () => {
       })
     } else {
       if (error?.description.includes('Error reading project file.')) {
-        void getUserRecentProjects()
+        void updateUserRecentProjects()
         toast({
           title: 'Path does not exist.',
           description: `The path ${projectPath} does not exist on this computer.`,
           variant: 'fail',
         })
       } else {
-        void getUserRecentProjects(),
+        void updateUserRecentProjects(),
           toast({
             title: 'Cannot open the project.',
             description: error?.description,

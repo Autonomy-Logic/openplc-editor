@@ -25,7 +25,6 @@ class MainProcessBridge implements MainIpcModule {
   projectService
   store
   compilerService
-
   constructor({ ipcMain, mainWindow, projectService, store, compilerService }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
@@ -47,7 +46,6 @@ class MainProcessBridge implements MainIpcModule {
         return { success: false, error }
       }
     })
-
     this.ipcMain.handle('project:create', async () => {
       const response = await this.projectService.createProject()
       return response
@@ -144,10 +142,16 @@ class MainProcessBridge implements MainIpcModule {
       this.compilerService.createBuildDirectoryIfNotExist(pathToUserProject),
     )
     this.ipcMain.handle(
-      'compiler:create-xml-file',
+      'compiler:export-project-xml',
       (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data']) =>
         this.compilerService.createXmlFile(pathToUserProject, dataToCreateXml),
     )
+    this.ipcMain.handle(
+      'compiler:build-xml-file',
+      (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data']) =>
+        this.compilerService.buildXmlFile(pathToUserProject, dataToCreateXml),
+    )
+
     /**
      * This is a mock implementation to be used as a presentation.
      * !! Do not use this on production !!

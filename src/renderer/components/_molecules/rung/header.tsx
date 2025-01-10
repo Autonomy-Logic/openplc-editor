@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 import { DraggableProvidedDragHandleProps } from '@hello-pangea/dnd'
 import { CloseIcon } from '@root/renderer/assets'
 import { DragHandleIcon } from '@root/renderer/assets/icons/interface/DragHandle'
@@ -28,6 +29,7 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
     },
     projectActions: { deleteVariable },
     flowActions: { addComment, removeRung },
+    modalActions: { openModal },
   } = useOpenPLCStore()
 
   const editorName = editor.meta.name
@@ -67,7 +69,9 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
      *    -- src/renderer/components/_molecules/rung/header.tsx
      *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
      */
+    openModal('confirm-delete-element', rung)
     const blockNodes = rung.nodes.filter((node) => node.type === 'block')
+
     if (blockNodes.length > 0) {
       let variables: PLCVariable[] = []
       if (pou) variables = [...pou.data.variables] as PLCVariable[]
@@ -92,9 +96,9 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
           updateModelVariables({ display: 'table', selectedRow: -1 })
         }
       })
-    }
 
-    removeRung(editorName, rung.id)
+      removeRung(editorName, rung.id)
+    }
   }
 
   return (

@@ -283,6 +283,11 @@ const rendererProcessBridge = {
    */
   createBuildDirectory: async (pathToUserProject: string): Promise<{ success: boolean; message: string }> =>
     ipcRenderer.invoke('compiler:create-build-directory', pathToUserProject),
+  exportProjectXml: async (
+    pathToUserProject: string,
+    dataToCreateXml: ProjectState['data'],
+  ): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml),
 
   /**
    * Creates an XML file for the build.
@@ -294,7 +299,7 @@ const rendererProcessBridge = {
     pathToUserProject: string,
     dataToCreateXml: ProjectState['data'],
   ): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:create-xml-file', pathToUserProject, dataToCreateXml),
+    ipcRenderer.invoke('compiler:build-xml-file', pathToUserProject, dataToCreateXml),
 
   /**
    * Registers a callback for the 'compiler:export-project-request' event.
