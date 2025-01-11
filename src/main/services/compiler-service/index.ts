@@ -267,6 +267,13 @@ const CompilerService = {
       // mainProcessPort.close()
     })
   },
+  /**
+   * This function will be responsible for call all other functions to handle the compilation process using the Arduino-CLI.
+   * @todo implement the Arduino-CLI compilation process.
+   */
+  useArduinoCLI: () => {
+    console.log('Arduino-CLI compilation process')
+  },
 }
 
 export { CompilerService }
