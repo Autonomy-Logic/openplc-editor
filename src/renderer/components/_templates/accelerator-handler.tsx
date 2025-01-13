@@ -6,8 +6,8 @@ const AcceleratorHandler = () => {
   const { handleExportProject } = useCompiler()
   const [requestFlag, setRequestFlag] = useState(false)
   const {
-    workspace: { editingState },
     modalActions: { openModal },
+    workspace: { editingState },
   } = useOpenPLCStore()
   /**
    * Compiler Related Accelerators
@@ -29,7 +29,6 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     window.bridge.quitAppRequest(() => {
       if (editingState === 'unsaved') {
-        console.log('Quit app accelerator')
         openModal('save-changes-project', 'close-app')
       } else {
         window.bridge.closeWindow()
@@ -38,7 +37,20 @@ const AcceleratorHandler = () => {
     return () => {
       window.bridge.removeQuitAppListener()
     }
-  }, [])
+  }, [editingState])
+
+  useEffect(() => {
+    window.bridge.closeProjectAccelerator((_event) => {
+      if (editingState === 'unsaved') {
+        openModal('save-changes-project', 'close-project')
+      }
+    })
+
+    return () => {
+      window.bridge.removeCloseProjectListener()
+    }
+  }, [editingState])
+
   return <></>
 }
 export { AcceleratorHandler }

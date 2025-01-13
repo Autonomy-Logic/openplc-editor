@@ -16,10 +16,12 @@ type ActivityBarProps = {
 export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) => {
   const {
     editor,
-    libraryActions: { clearUserLibraries },
+    editorActions: { clearEditor },
     flowActions: { clearFlows },
-    projectActions: { clearProjects },
+    libraryActions: { clearUserLibraries },
     modalActions: { openModal },
+    projectActions: { clearProjects },
+    tabsActions: { clearTabs },
     workspace: { editingState },
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()
@@ -28,13 +30,15 @@ export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) =
 
   const handleExitApplication = () => {
     if (editingState === 'unsaved') {
-      openModal('save-changes-project', 'exit')
+      openModal('save-changes-project', 'close-project')
       return
     }
-    setEditingState('initial-state')
+    clearEditor()
+    clearTabs()
     clearUserLibraries()
     clearFlows()
     clearProjects()
+    setEditingState('initial-state')
   }
   return (
     <>

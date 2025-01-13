@@ -16,7 +16,7 @@ type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
 const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModalProps) => {
   const {
     project,
-    workspaceActions: { setEditingState, setRecent },
+    workspaceActions: { setEditingState },
     modalActions: { closeModal, onOpenChange, openModal },
     tabsActions: { clearTabs },
     projectActions: { setProject, clearProjects },
@@ -26,29 +26,35 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
   } = useOpenPLCStore()
 
   const onClose = () => {
-    closeModal()
+    clearEditor()
+    clearTabs()
     clearUserLibraries()
     clearFlows()
     clearProjects()
   }
-  const handleCloseProject = async (operation: 'save' | 'not-saving') => {
-    onClose()
+
+  const handleAcceptCloseModal = async (operation: 'save' | 'not-saving') => {
+    closeModal()
+
     if (operation === 'save') {
       const { success } = await handleSaveProject()
       if (!success) {
         return
       }
     }
+
     if (validationContext === 'create-project') {
+      onClose()
       openModal('create-project', null)
       return
     }
+
     // Validate
     if (validationContext === 'open-project') {
       try {
         const { success, data, error } = await window.bridge.openProject()
         if (success && data) {
-          clearTabs()
+          onClose()
           setEditingState('unsaved')
 
           const projectMeta = {
@@ -67,6 +73,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
           const ladderPous = projectData.pous.filter(
             (pou: { data: { language: string } }) => pou.data.language === 'ld',
           )
+
           if (ladderPous.length) {
             ladderPous.forEach((pou) => {
               if (pou.data.body.language === 'ld') {
@@ -98,18 +105,19 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
           variant: 'fail',
         })
       }
+
+      return
     }
+
     if (validationContext === 'close-app') {
       window.bridge.closeWindow()
       return
     }
+
     if (validationContext === 'close-project') {
-      clearEditor()
-      clearTabs()
-      setRecent([])
-      clearUserLibraries()
-      clearFlows()
-      clearProjects()
+      setEditingState('initial-state')
+      onClose()
+      return
     }
   }
 
@@ -161,7 +169,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
             <div className='mb-6 flex flex-col gap-2'>
               <button
                 onClick={() => {
-                  void handleCloseProject('save')
+                  void handleAcceptCloseModal('save')
                 }}
                 className='w-full rounded-lg bg-brand px-4 py-2 text-center font-medium text-white '
               >
@@ -169,7 +177,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
               </button>
               <button
                 onClick={() => {
-                  void handleCloseProject('not-saving')
+                  void handleAcceptCloseModal('not-saving')
                 }}
                 className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
               >
@@ -177,7 +185,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
               </button>
             </div>
             <button
-              onClick={() => onOpenChange('save-changes-project', false)}
+              onClick={() => closeModal()}
               className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
             >
               Cancel

@@ -13,7 +13,7 @@ import { MenuClasses } from '../constants'
 export const FileMenu = () => {
   const {
     project,
-    workspace: { editingState },
+    workspace,
     editorActions: { clearEditor },
     workspaceActions: { setEditingState, setRecent },
     projectActions: { setProject, clearProjects },
@@ -24,6 +24,7 @@ export const FileMenu = () => {
     editor,
     modalActions: { openModal },
   } = useOpenPLCStore()
+  const { editingState } = workspace
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { handleExportProject } = useCompiler()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
@@ -117,22 +118,13 @@ export const FileMenu = () => {
     setSelectedTab(editor.meta.name)
   }, [editor])
 
-  useEffect(() => {
-    window.bridge.closeProjectAccelerator(handleCloseProject)
-
-    return () => {
-      void window.bridge.removeCloseProjectListener()
-    }
-  }, [])
-
   const handleCloseProject = () => {
     if (editingState === 'unsaved') {
-      openModal('save-changes-project', 'exit')
+      openModal('save-changes-project', 'close-project')
       return
     }
     clearEditor()
     clearTabs()
-    setRecent([])
     clearUserLibraries()
     clearFlows()
     clearProjects()
