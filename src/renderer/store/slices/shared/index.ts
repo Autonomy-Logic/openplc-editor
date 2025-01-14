@@ -1,11 +1,16 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
+import { IProjectServiceResponse } from '@root/main/services'
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
+import { FlowSlice, FlowType } from '../flow'
 import { LibrarySlice } from '../library'
+import { ModalSlice } from '../modal'
 import { ProjectSlice } from '../project'
 import { TabsSlice } from '../tabs'
+import { WorkspaceSlice } from '../workspace'
 import { CreateEditorObject, CreatePouObject } from './utils'
 
 type PropsToCreatePou = {
@@ -25,10 +30,17 @@ export type SharedSlice = {
     update: () => void
     delete: () => void
   }
+  sharedWorkspaceActions: {
+    clearStatesOnCloseProject: () => void
+    closeProject: () => void
+    openProject: () => Promise<IProjectServiceResponse>
+    openProjectByPath: (projectPath: string) => Promise<IProjectServiceResponse>
+    openRecentProject: (response: IProjectServiceResponse) => void
+  }
 }
 
 export const createSharedSlice: StateCreator<
-  EditorSlice & TabsSlice & ProjectSlice & LibrarySlice,
+  EditorSlice & TabsSlice & ProjectSlice & LibrarySlice & ModalSlice & FlowSlice & WorkspaceSlice & SharedSlice,
   [],
   [],
   SharedSlice
@@ -139,6 +151,172 @@ export const createSharedSlice: StateCreator<
     },
     update: () => {},
     delete: () => {},
+  },
+
+  sharedWorkspaceActions: {
+    clearStatesOnCloseProject: () => {
+      getState().editorActions.clearEditor()
+      getState().tabsActions.clearTabs()
+      getState().libraryActions.clearUserLibraries()
+      getState().flowActions.clearFlows()
+      getState().projectActions.clearProjects()
+    },
+    closeProject: () => {
+      const editingState = getState().workspace.editingState
+      if (editingState === 'unsaved') {
+        getState().modalActions.openModal('save-changes-project', 'close-project')
+        return
+      }
+      getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+      getState().workspaceActions.setEditingState('initial-state')
+    },
+    openProject: async () => {
+      try {
+        const { success, data, error } = await window.bridge.openProject()
+        if (success && data) {
+          getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+          getState().workspaceActions.setEditingState('unsaved')
+
+          const projectMeta = {
+            name: data.content.meta.name,
+            type: data.content.meta.type,
+            path: data.meta.path,
+          }
+          const projectData = data.content.data
+
+          getState().projectActions.setProject({
+            data: projectData,
+            meta: projectMeta,
+          })
+
+          const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
+          if (ladderPous.length)
+            ladderPous.forEach((pou) => {
+              if (pou.data.body.language === 'ld') getState().flowActions.addFlow(pou.data.body.value as FlowType)
+            })
+
+          projectData.pous.map(
+            (pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type),
+          )
+
+          toast({
+            title: 'Project opened!',
+            description: 'Your project was opened and loaded successfully.',
+            variant: 'default',
+          })
+          return {
+            success,
+            data,
+          }
+        }
+
+        toast({
+          title: 'Cannot open the project.',
+          description: error?.description || 'Failed to open the project.',
+          variant: 'fail',
+        })
+        return {
+          success,
+          error,
+        }
+      } catch (_error) {
+        toast({
+          title: 'An error occurred.',
+          description: 'There was a problem opening the project.',
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'An error occurred.',
+            description: 'There was a problem opening the project.',
+          },
+        }
+      }
+    },
+    openProjectByPath: async (projectPath: string) => {
+      const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
+      if (success && data) {
+        getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+        getState().workspaceActions.setEditingState('unsaved')
+
+        const projectMeta = {
+          name: data.content.meta.name,
+          type: data.content.meta.type,
+          path: data.meta.path,
+        }
+        const projectData = data.content.data
+
+        getState().projectActions.setProject({
+          data: projectData,
+          meta: projectMeta,
+        })
+
+        const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
+        if (ladderPous.length)
+          ladderPous.forEach((pou) => {
+            if (pou.data.body.language === 'ld') getState().flowActions.addFlow(pou.data.body.value as FlowType)
+          })
+
+        projectData.pous.map(
+          (pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type),
+        )
+
+        toast({
+          title: 'Project opened!',
+          description: 'Your project was opened and loaded.',
+          variant: 'default',
+        })
+        return {
+          success,
+          data,
+        }
+      }
+      return {
+        success,
+        error,
+      }
+    },
+    openRecentProject: (response) => {
+      const { data, error } = response
+      if (data) {
+        getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+        getState().workspaceActions.setEditingState('unsaved')
+        const projectMeta = {
+          name: data.content.meta.name,
+          type: data.content.meta.type,
+          path: data.meta.path,
+        }
+        const projectData = data.content.data
+
+        getState().projectActions.setProject({
+          data: projectData,
+          meta: projectMeta,
+        })
+
+        const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
+        if (ladderPous.length)
+          ladderPous.forEach((pou) => {
+            if (pou.data.body.language === 'ld') getState().flowActions.addFlow(pou.data.body.value as FlowType)
+          })
+
+        projectData.pous.map(
+          (pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type),
+        )
+
+        toast({
+          title: 'Project opened!',
+          description: 'Your project was opened, and loaded.',
+          variant: 'default',
+        })
+      } else {
+        toast({
+          title: 'Cannot open the project.',
+          description: error?.description,
+          variant: 'fail',
+        })
+      }
+    },
   },
 })
 

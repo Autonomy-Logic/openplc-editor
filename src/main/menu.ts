@@ -377,7 +377,7 @@ export default class MenuBuilder {
         return {
           label: projectPath,
           click: () => {
-            this.handleOpenProjectByPath(projectEntry.path)
+            void this.handleOpenProjectByPath(projectEntry.path)
           },
         }
       }),
@@ -649,7 +649,7 @@ export default class MenuBuilder {
           return {
             label: `${projectName} (${projectPath})`,
             click: () => {
-              this.handleOpenProjectByPath(projectEntry.path)
+              void this.handleOpenProjectByPath(projectEntry.path)
             },
           }
         }),
