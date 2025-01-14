@@ -102,6 +102,11 @@ const rendererProcessBridge = {
     ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
 
   /**
+   * Removes all listeners for the 'project:open-recent-accelerator' event.
+   */
+  removeOpenRecentListener: () => ipcRenderer.removeAllListeners('project:open-recent-accelerator'),
+
+  /**
    * Invokes the 'open-external-link' event with the provided link and returns a promise with the response.
    * @param link - The external link to open.
    * @returns A promise that resolves with the success status.

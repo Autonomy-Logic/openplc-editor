@@ -90,6 +90,10 @@ const AcceleratorHandler = () => {
     window.bridge.openRecentAccelerator((_event, response: IProjectServiceResponse) => {
       openRecentProject(response)
     })
+
+    return () => {
+      window.bridge.removeOpenRecentListener()
+    }
   }, [])
 
   /**

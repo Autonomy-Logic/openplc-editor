@@ -47,6 +47,7 @@ export default class MenuBuilder {
 
     return menu
   }
+
   handleCreateProject() {
     this.mainWindow.webContents.send('project:create-accelerator')
   }
@@ -65,6 +66,7 @@ export default class MenuBuilder {
 
   async handleGetRecent() {
     const response = await this.projectService.readProjectHistory(this.projectService.getProjectsFilePath())
+    console.log('Recent projects:', response)
     return response
   }
 

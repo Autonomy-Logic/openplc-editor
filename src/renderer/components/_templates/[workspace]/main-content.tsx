@@ -7,12 +7,14 @@ import { ComponentPropsWithoutRef, useEffect } from 'react'
 type IWorkspaceMainContentProps = ComponentPropsWithoutRef<'div'>
 const WorkspaceMainContent = (props: IWorkspaceMainContentProps) => {
   const {
+    editors,
     project: {
       data: { pous },
     },
     workspace: {
       systemConfigs: { OS },
     },
+
     tabsActions: { updateTabs },
     editorActions: { addModel, setEditor },
   } = useOpenPLCStore()
@@ -32,6 +34,12 @@ const WorkspaceMainContent = (props: IWorkspaceMainContentProps) => {
         }
         updateTabs(tabToBeCreated)
         const model = CreateEditorObjectFromTab(tabToBeCreated)
+        const modelFound = editors.find((editor) => editor.meta.name === model.meta.name)
+        if (modelFound) {
+          setEditor(modelFound)
+          return
+        }
+
         addModel(model)
         setEditor(model)
         return

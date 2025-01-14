@@ -9,7 +9,8 @@ import { FlowSlice, FlowType } from '../flow'
 import { LibrarySlice } from '../library'
 import { ModalSlice } from '../modal'
 import { ProjectSlice } from '../project'
-import { TabsSlice } from '../tabs'
+import { TabsProps, TabsSlice } from '../tabs'
+import { CreateEditorObjectFromTab } from '../tabs/utils'
 import { WorkspaceSlice } from '../workspace'
 import { CreateEditorObject, CreatePouObject } from './utils'
 
@@ -33,9 +34,19 @@ export type SharedSlice = {
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => void
     closeProject: () => void
-    openProject: () => Promise<IProjectServiceResponse>
-    openProjectByPath: (projectPath: string) => Promise<IProjectServiceResponse>
-    openRecentProject: (response: IProjectServiceResponse) => void
+    handleOpenProjectRequest: (data: IProjectServiceResponse['data']) => void
+    openProject: () => Promise<{
+      success: boolean
+      error?: { title: string; description: string }
+    }>
+    openProjectByPath: (projectPath: string) => Promise<{
+      success: boolean
+      error?: { title: string; description: string }
+    }>
+    openRecentProject: (response: IProjectServiceResponse) => {
+      success: boolean
+      error?: { title: string; description: string }
+    }
   }
 }
 
@@ -170,115 +181,8 @@ export const createSharedSlice: StateCreator<
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       getState().workspaceActions.setEditingState('initial-state')
     },
-    openProject: async () => {
-      try {
-        const { success, data, error } = await window.bridge.openProject()
-        if (success && data) {
-          getState().sharedWorkspaceActions.clearStatesOnCloseProject()
-          getState().workspaceActions.setEditingState('unsaved')
 
-          const projectMeta = {
-            name: data.content.meta.name,
-            type: data.content.meta.type,
-            path: data.meta.path,
-          }
-          const projectData = data.content.data
-
-          getState().projectActions.setProject({
-            data: projectData,
-            meta: projectMeta,
-          })
-
-          const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
-          if (ladderPous.length)
-            ladderPous.forEach((pou) => {
-              if (pou.data.body.language === 'ld') getState().flowActions.addFlow(pou.data.body.value as FlowType)
-            })
-
-          projectData.pous.map(
-            (pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type),
-          )
-
-          toast({
-            title: 'Project opened!',
-            description: 'Your project was opened and loaded successfully.',
-            variant: 'default',
-          })
-          return {
-            success,
-            data,
-          }
-        }
-
-        toast({
-          title: 'Cannot open the project.',
-          description: error?.description || 'Failed to open the project.',
-          variant: 'fail',
-        })
-        return {
-          success,
-          error,
-        }
-      } catch (_error) {
-        toast({
-          title: 'An error occurred.',
-          description: 'There was a problem opening the project.',
-          variant: 'fail',
-        })
-        return {
-          success: false,
-          error: {
-            title: 'An error occurred.',
-            description: 'There was a problem opening the project.',
-          },
-        }
-      }
-    },
-    openProjectByPath: async (projectPath: string) => {
-      const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
-      if (success && data) {
-        getState().sharedWorkspaceActions.clearStatesOnCloseProject()
-        getState().workspaceActions.setEditingState('unsaved')
-
-        const projectMeta = {
-          name: data.content.meta.name,
-          type: data.content.meta.type,
-          path: data.meta.path,
-        }
-        const projectData = data.content.data
-
-        getState().projectActions.setProject({
-          data: projectData,
-          meta: projectMeta,
-        })
-
-        const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
-        if (ladderPous.length)
-          ladderPous.forEach((pou) => {
-            if (pou.data.body.language === 'ld') getState().flowActions.addFlow(pou.data.body.value as FlowType)
-          })
-
-        projectData.pous.map(
-          (pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type),
-        )
-
-        toast({
-          title: 'Project opened!',
-          description: 'Your project was opened and loaded.',
-          variant: 'default',
-        })
-        return {
-          success,
-          data,
-        }
-      }
-      return {
-        success,
-        error,
-      }
-    },
-    openRecentProject: (response) => {
-      const { data, error } = response
+    handleOpenProjectRequest(data) {
       if (data) {
         getState().sharedWorkspaceActions.clearStatesOnCloseProject()
         getState().workspaceActions.setEditingState('unsaved')
@@ -304,17 +208,83 @@ export const createSharedSlice: StateCreator<
           (pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type),
         )
 
+        if (projectData.pous.length !== 0) {
+          const mainPou = projectData.pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
+          if (mainPou) {
+            const tabToBeCreated: TabsProps = {
+              name: mainPou.data.name,
+              path: '/data/pous/program/main',
+              elementType: { type: 'program', language: mainPou.data.language },
+            }
+            getState().tabsActions.updateTabs(tabToBeCreated)
+            const model = CreateEditorObjectFromTab(tabToBeCreated)
+            getState().editorActions.addModel(model)
+            getState().editorActions.setEditor(model)
+          }
+        }
+
         toast({
           title: 'Project opened!',
           description: 'Your project was opened, and loaded.',
           variant: 'default',
         })
-      } else {
-        toast({
-          title: 'Cannot open the project.',
-          description: error?.description,
-          variant: 'fail',
-        })
+      }
+    },
+    openProject: async () => {
+      const { success, data, error } = await window.bridge.openProject()
+      if (success) {
+        getState().sharedWorkspaceActions.handleOpenProjectRequest(data)
+        return {
+          success: success,
+        }
+      }
+
+      toast({
+        title: 'Cannot open the project.',
+        description: error?.description,
+        variant: 'fail',
+      })
+      return {
+        success: false,
+        error,
+      }
+    },
+    openProjectByPath: async (projectPath: string) => {
+      const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
+      if (success) {
+        getState().sharedWorkspaceActions.handleOpenProjectRequest(data)
+        return {
+          success: success,
+        }
+      }
+
+      toast({
+        title: 'Cannot open the project.',
+        description: error?.description,
+        variant: 'fail',
+      })
+      return {
+        success: false,
+        error,
+      }
+    },
+    openRecentProject: (response) => {
+      const { data, error } = response
+      if (data) {
+        getState().sharedWorkspaceActions.handleOpenProjectRequest(data)
+        return {
+          success: true,
+        }
+      }
+
+      toast({
+        title: 'Cannot open the project.',
+        description: error?.description,
+        variant: 'fail',
+      })
+      return {
+        success: false,
+        error,
       }
     },
   },
