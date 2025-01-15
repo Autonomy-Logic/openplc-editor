@@ -10,3 +10,5 @@
 *.ttf   binary
 *.woff  binary
 *.woff2 binary
+*_mac  binary
+resources/compilers/**/* -text
