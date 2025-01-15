@@ -17,8 +17,17 @@ export type CompilerResponse = {
   }
 }
 
-const CompilerService = {
-  createBuildDirectoryIfNotExist: async (pathToUserProject: string) => {
+class CompilerService {
+  compilerDirectory: string
+  constructor() {
+    this.compilerDirectory = this.constructCompilerDirectoryPath()
+  }
+  constructCompilerDirectoryPath() {
+    const isDevelopment = process.env.NODE_ENV === 'development'
+    return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'compilers')
+  }
+
+  async createBuildDirectoryIfNotExist(pathToUserProject: string) {
     const normalizedUserProjectPath = pathToUserProject.replace('project.json', '')
     const pathToBuildDirectory = join(normalizedUserProjectPath, 'build')
     try {
@@ -33,32 +42,28 @@ const CompilerService = {
         return { success: false, message: `Error creating directory at ${pathToBuildDirectory}: ${err.message}` }
       }
     }
-  },
+  }
 
   /**
    * This function will handle the temporary directory creation and deletion.
    * The temporary directory will be used to store the files generated during the compilation process.
    * @todo Implement the temporary directory handling function.
    */
-  handleTemporaryDirectory: () => {
+  handleTemporaryDirectory() {
     console.log('Temporary directory handling')
-  },
+  }
 
   /**
-   * Function to run a command in the terminal.
+   * Function to run the initial config arduino file verification.
    * @todo Implement the command execution function.
    */
-  runCommand: (commandToRun: string, args: string[], mainProcessPort: MessagePortMain): 0 | 1 => {
-    console.log('Running command')
-    let exitCode: 0 | 1 = 0
-    return exitCode
-  },
+  initArduinoConfiguration() {}
 
-  buildXmlFile: async (
+  async buildXmlFile(
     pathToUserProject: string,
     dataToCreateXml: ProjectState['data'],
-  ): Promise<{ success: boolean; message: string }> =>
-    new Promise((resolve) => {
+  ): Promise<{ success: boolean; message: string }> {
+    const res = new Promise<{ success: boolean; message: string }>((resolve) => {
       const normalizedUserProjectPath = pathToUserProject.replace('project.json', '')
       const pathToBuildDirectory = join(normalizedUserProjectPath, 'build')
       const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml)
@@ -77,12 +82,14 @@ const CompilerService = {
       } else {
         resolve({ success: result.success, message: 'Xml file not created' })
       }
-    }),
+    })
+    return res
+  }
 
-  createXmlFile: async (
+  async createXmlFile(
     pathToUserProject: string,
     dataToCreateXml: ProjectState['data'],
-  ): Promise<{ success: boolean; message: string }> => {
+  ): Promise<{ success: boolean; message: string }> {
     const { filePath } = await dialog.showSaveDialog({
       title: 'Export Project',
       defaultPath: join(pathToUserProject, 'plc.xml'),
@@ -113,12 +120,12 @@ const CompilerService = {
       success: result.success,
       message: result.success ? ` XML file created successfully at ${filePath}` : 'Failed to create XML file',
     }
-  },
+  }
   /**
    * TODO: Update the script path to use the builded version of the compiler.(Windows and MacOS)
    * TODO: Resolve the compilation for the Linux environments.
    */
-  compileSTProgram: (pathToProjectFile: string, mainProcessPort: MessagePortMain): void => {
+  compileSTProgram(pathToProjectFile: string, mainProcessPort: MessagePortMain) {
     const isDevelopment = process.env.NODE_ENV === 'development'
     const isWindows = process.platform === 'win32'
     const isMac = process.platform === 'darwin'
@@ -178,13 +185,13 @@ const CompilerService = {
       console.log('Finished the compilation process!')
       mainProcessPort.close()
     })
-  },
+  }
 
   /**
    * Function that handles the compilation process of a ST program into C files.
    * @param pathToStProgram
    */
-  generateCFiles: (pathToStProgram: string, _mainProcessPort?: MessagePortMain): void => {
+  generateCFiles(pathToStProgram: string, _mainProcessPort?: MessagePortMain) {
     /**
      * Get the current environment and check if it's development
      */
@@ -285,14 +292,14 @@ const CompilerService = {
       // mainProcessPort.postMessage({ type: 'info', message: 'Script finished' })
       // mainProcessPort.close()
     })
-  },
+  }
   /**
    * This function will be responsible for call all other functions to handle the compilation process using the Arduino-CLI.
    * @todo implement the Arduino-CLI compilation process.
    */
-  useArduinoCLI: () => {
+  useArduinoCLI() {
     console.log('Arduino-CLI compilation process')
-  },
+  }
 }
 
 export { CompilerService }
