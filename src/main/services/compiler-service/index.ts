@@ -35,6 +35,25 @@ const CompilerService = {
     }
   },
 
+  /**
+   * This function will handle the temporary directory creation and deletion.
+   * The temporary directory will be used to store the files generated during the compilation process.
+   * @todo Implement the temporary directory handling function.
+   */
+  handleTemporaryDirectory: () => {
+    console.log('Temporary directory handling')
+  },
+
+  /**
+   * Function to run a command in the terminal.
+   * @todo Implement the command execution function.
+   */
+  runCommand: (commandToRun: string, args: string[], mainProcessPort: MessagePortMain): 0 | 1 => {
+    console.log('Running command')
+    let exitCode: 0 | 1 = 0
+    return exitCode
+  },
+
   buildXmlFile: async (
     pathToUserProject: string,
     dataToCreateXml: ProjectState['data'],
