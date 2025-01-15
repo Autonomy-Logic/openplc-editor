@@ -54,7 +54,15 @@ const blockTypeRestrictions = (block: unknown, blockType: VariablesBlockAutoComp
 
 const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAutoCompleteProps>(
   (
-    { block, blockType = 'other', isOpen, setIsOpen, keyPressed, valueToSearch }: VariablesBlockAutoCompleteProps,
+    {
+      block,
+      blockType = 'other',
+      isOpen,
+      setIsOpen,
+      keyPressed,
+      onFocus: focusEvent,
+      valueToSearch,
+    }: VariablesBlockAutoCompleteProps,
     ref,
   ) => {
     const {
@@ -68,7 +76,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     } = useOpenPLCStore()
 
     const popoverRef = useRef<HTMLDivElement>(null)
-    const [inputFocus, setInputFocus] = useState<boolean>(false)
+    const [autocompleteFocus, setAutocompleteFocus] = useState<boolean>(false)
     const [keyDown, setKeyDown] = useState<string>('')
 
     const pou = pous.find((pou) => pou.data.name === editor.meta.name)
@@ -76,27 +84,41 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     const variableRestrictions = blockTypeRestrictions(block, blockType)
 
     const filteredDivRef = useRef<HTMLDivElement>(null)
-    const filteredVariables = variables
-      .filter(
-        (variable) =>
-          variable.name.includes(valueToSearch) &&
-          (variableRestrictions.values === undefined ||
-            variableRestrictions.values.includes(variable.type.value.toLowerCase())) &&
-          (variableRestrictions.limitations === undefined ||
-            !variableRestrictions.limitations.includes(variable.type.definition)),
-      )
-      .sort((a, b) => {
-        const aNumber = extractNumberAtEnd(a.name).number
-        const bNumber = extractNumberAtEnd(b.name).number
-        if (aNumber === bNumber) {
-          return a.name.localeCompare(b.name)
-        }
-        return aNumber - bNumber
-      })
+    const filteredVariables =
+      blockType !== 'block'
+        ? variables
+            .filter(
+              (variable) =>
+                variable.name.includes(valueToSearch) &&
+                (variableRestrictions.values === undefined ||
+                  variableRestrictions.values.includes(variable.type.value.toLowerCase())) &&
+                (variableRestrictions.limitations === undefined ||
+                  !variableRestrictions.limitations.includes(variable.type.definition)),
+            )
+            .sort((a, b) => {
+              const aNumber = extractNumberAtEnd(a.name).number
+              const bNumber = extractNumberAtEnd(b.name).number
+              if (aNumber === bNumber) {
+                return a.name.localeCompare(b.name)
+              }
+              return aNumber - bNumber
+            })
+        : []
+
     const [selectedVariable, setSelectedVariable] = useState<{ positionInArray: number; variableName: string }>({
       positionInArray: -1,
       variableName: '',
     })
+    const selectableValues = [
+      ...filteredVariables.map((variable) => ({
+        type: 'variable',
+        value: variable.name,
+      })),
+      {
+        type: 'add',
+        value: valueToSearch,
+      },
+    ].filter((variable) => variable !== undefined)
 
     // @ts-expect-error - not all properties are used
     useImperativeHandle(ref, () => {
@@ -104,21 +126,22 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         focus: () => {
           popoverRef.current?.focus()
         },
-        isFocused: inputFocus,
+        isFocused: autocompleteFocus,
+        selectedVariable: selectedVariable,
       }
-    }, [filteredVariables, popoverRef, inputFocus])
+    }, [selectedVariable, popoverRef, autocompleteFocus])
 
     useEffect(() => {
       switch (keyDown) {
         case 'ArrowDown':
           setSelectedVariable((prev) => {
             const newPosition = prev.positionInArray + 1
-            if (newPosition >= filteredVariables.length) {
+            if (newPosition >= selectableValues.length) {
               return prev
             }
             return {
               positionInArray: newPosition,
-              variableName: filteredVariables[newPosition].name,
+              variableName: selectableValues[newPosition].value,
             }
           })
           break
@@ -130,7 +153,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             }
             return {
               positionInArray: newPosition,
-              variableName: filteredVariables[newPosition].name,
+              variableName: selectableValues[newPosition].value,
             }
           })
           break
@@ -160,7 +183,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     }
 
     const closeModal = () => {
-      setInputFocus(false)
+      setAutocompleteFocus(false)
       setSelectedVariable({ positionInArray: -1, variableName: '' })
       setIsOpen && setIsOpen(false)
     }
@@ -177,9 +200,20 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         clickedVariable !== undefined
           ? filteredVariables[clickedVariable]
           : selectedVariable.positionInArray !== -1
-            ? filteredVariables[selectedVariable.positionInArray]
+            ? selectableValues[selectedVariable.positionInArray].type === 'variable'
+              ? filteredVariables.find((variable) => selectedVariable.variableName === variable.name)
+              : undefined
             : undefined
-      if (!variable) return
+
+      if (!variable) {
+        if (
+          selectedVariable.positionInArray !== -1 &&
+          selectableValues[selectedVariable.positionInArray].type === 'add'
+        ) {
+          submitAddVariable({ variableName: selectedVariable.variableName })
+        }
+        return
+      }
 
       updateNode({
         editorName: editor.meta.name,
@@ -211,6 +245,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         data: {
           id: uuidv4(),
           name: variableName,
+          // @ts-expect-error - type is dynamic
           type: {
             definition: variableTypeRestriction.definition as 'base-type' | 'derived' | 'array' | 'user-data-type',
             value: variableTypeRestriction.value,
@@ -240,7 +275,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         },
       })
 
-      setInputFocus(false)
+      setAutocompleteFocus(false)
       setIsOpen && setIsOpen(false)
     }
 
@@ -259,8 +294,11 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             onPointerDownOutside={closeModal}
             onFocusOutside={closeModal}
             onInteractOutside={closeModal}
-            onFocus={() => setInputFocus(true)}
-            onBlur={() => setInputFocus(false)}
+            onFocus={(e) => {
+              focusEvent && focusEvent(e)
+              setAutocompleteFocus(true)
+            }}
+            onBlur={() => setAutocompleteFocus(false)}
             onKeyDown={(e) => setKeyDown(e.key)}
           >
             {filteredVariables.length > 0 && (
@@ -287,7 +325,13 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             )}
             {filteredVariables.length > 0 && <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />}
             <div
-              className='flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900'
+              className={cn(
+                'flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                {
+                  'bg-neutral-400 dark:bg-neutral-800':
+                    selectedVariable.positionInArray === selectableValues.length - 1,
+                },
+              )}
               onClick={() => submitAddVariable({ variableName: valueToSearch })}
             >
               <PlusIcon className='h-3 w-3 stroke-brand' />
