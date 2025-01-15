@@ -46,10 +46,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
   const [isModalOpen, setModalOpen] = useState(false)
   const [intervalValue, setIntervalValue] = useState('T#20ms')
   const {
-    projectActions: { setProject },
-    workspaceActions: { setEditingState },
-    tabsActions: { clearTabs },
-    editorActions: { clearEditor },
+    sharedWorkspaceActions: { createProject },
   } = useOpenPLCStore()
 
   const handleFormSubmit: SubmitHandler<FormData> = async (data) => {
@@ -61,35 +58,7 @@ const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: ()
 
     handleUpdateForm(allData)
     try {
-      const result = await window.bridge.createProjectFile({
-        ...allData,
-        path: projectData.path,
-      } as CreateProjectFileProps)
-
-      if (result.data) {
-        setEditingState('unsaved')
-        clearEditor()
-        clearTabs()
-        setProject({
-          meta: {
-            name: allData.name,
-            type: allData.type as 'plc-project' | 'plc-library',
-            path: allData.path + '/project.json',
-          },
-          data: result.data.content.data,
-        })
-        toast({
-          title: 'The project was created successfully!',
-          description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
-          variant: 'default',
-        })
-      } else {
-        toast({
-          title: 'Cannot create a project!',
-          description: 'Failed to create the project. No data returned.',
-          variant: 'fail',
-        })
-      }
+      await createProject(allData as CreateProjectFileProps)
     } catch (_error) {
       toast({
         title: 'Cannot create a project!',

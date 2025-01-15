@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
+import { CreateProjectFileProps } from '@root/main/modules/ipc/renderer'
 import { IProjectServiceResponse } from '@root/main/services'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
@@ -47,6 +48,10 @@ export type SharedSlice = {
       success: boolean
       error?: { title: string; description: string }
     }
+    createProject: (dataToCreateProjectFile: CreateProjectFileProps) => Promise<{
+      success: boolean
+      error?: { title: string; description: string }
+    }>
   }
 }
 
@@ -286,6 +291,50 @@ export const createSharedSlice: StateCreator<
       return {
         success: false,
         error,
+      }
+    },
+
+    createProject: async (dataToCreateProjectFile) => {
+      const result = await window.bridge.createProjectFile({
+        ...dataToCreateProjectFile,
+      } as CreateProjectFileProps)
+
+      if (!result.data) {
+        toast({
+          title: 'Cannot create a project!',
+          description: 'Failed to create the project. No data returned.',
+          variant: 'fail',
+        })
+
+        return {
+          success: false,
+          error: {
+            title: 'Cannot create a project!',
+            description: 'Failed to create the project. No data returned.',
+          },
+        }
+      }
+
+      getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+      getState().workspaceActions.setEditingState('unsaved')
+      getState().projectActions.setProject({
+        meta: {
+          name: dataToCreateProjectFile.name,
+          type: dataToCreateProjectFile.type,
+          path: dataToCreateProjectFile.path + '/project.json',
+        },
+        data: result.data.content.data,
+      })
+      window.bridge.rebuildMenu()
+
+      toast({
+        title: 'The project was created successfully!',
+        description: 'To begin using the OpenPLC Editor, add a new POU to your project.',
+        variant: 'default',
+      })
+
+      return {
+        success: true,
       }
     },
   },

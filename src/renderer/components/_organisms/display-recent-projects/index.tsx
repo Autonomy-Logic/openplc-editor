@@ -109,14 +109,14 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
           description: `The path ${projectPath} does not exist on this computer.`,
           variant: 'fail',
         })
-      } else {
-        void updateUserRecentProjects()
-        toast({
-          title: 'Cannot open the project.',
-          description: error?.description,
-          variant: 'fail',
-        })
+        return
       }
+      void updateUserRecentProjects()
+      toast({
+        title: 'Cannot open the project.',
+        description: error?.description,
+        variant: 'fail',
+      })
     }
   }
 

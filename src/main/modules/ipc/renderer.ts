@@ -21,14 +21,14 @@ type ISaveDataResponse = {
   }
 }
 
-type CreateProjectFileProps = {
+export type CreateProjectFileProps = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
   time: string
   type: 'plc-project' | 'plc-library'
   name: string
   path: string
 }
-type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
+export type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
 
 /**
  * A bridge for communication between the renderer process and the main process in an Electron application.
