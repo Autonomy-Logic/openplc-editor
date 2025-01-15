@@ -251,6 +251,7 @@ const createMainWindow = async () => {
     projectService,
     compilerService: CompilerService,
     store,
+    menuBuilder,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
   // Remove this if your app does not use auto updates;

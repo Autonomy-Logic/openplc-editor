@@ -25,12 +25,15 @@ class MainProcessBridge implements MainIpcModule {
   projectService
   store
   compilerService
-  constructor({ ipcMain, mainWindow, projectService, store, compilerService }: MainIpcModuleConstructor) {
+  menuBuilder
+
+  constructor({ ipcMain, mainWindow, projectService, store, compilerService, menuBuilder }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
     this.projectService = projectService
     this.compilerService = compilerService
     this.store = store
+    this.menuBuilder = menuBuilder
   }
 
   setupMainIpcListener() {
@@ -120,20 +123,10 @@ class MainProcessBridge implements MainIpcModule {
         return []
       }
     })
-    this.ipcMain.on('window-controls:close', () => this.mainWindow?.close())
-    this.ipcMain.on('window-controls:minimize', () => this.mainWindow?.minimize())
-    this.ipcMain.on('window-controls:maximize', () => {
-      if (this.mainWindow?.isMaximized()) {
-        this.mainWindow?.restore()
-      } else {
-        this.mainWindow?.maximize()
-      }
-    })
-    this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
+
     this.ipcMain.on('system:update-theme', () => this.mainIpcEventHandlers.handleUpdateTheme())
     // this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
     // This is only for MacOS
-    this.ipcMain.on('window-controls:hide', () => this.mainWindow?.hide())
 
     /**
      * Compiler Service
@@ -164,6 +157,26 @@ class MainProcessBridge implements MainIpcModule {
       const [replyPort] = event.ports
       this.compilerService.generateCFiles(pathToStProgram, replyPort)
     })
+
+    /**
+     * Window Controls
+     */
+    this.ipcMain.on('window-controls:close', () => this.mainWindow?.close())
+    this.ipcMain.on('window-controls:hide', () => this.mainWindow?.hide())
+    this.ipcMain.on('window-controls:minimize', () => this.mainWindow?.minimize())
+    this.ipcMain.on('window-controls:maximize', () => {
+      if (this.mainWindow?.isMaximized()) {
+        this.mainWindow?.restore()
+      } else {
+        this.mainWindow?.maximize()
+      }
+    })
+
+    /**
+     * Window
+     */
+    this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
+    this.ipcMain.on('window:rebuild-menu', () => void this.menuBuilder.buildMenu())
   }
 
   mainIpcEventHandlers = {

@@ -18,7 +18,6 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
  */
 export default class MenuBuilder {
   private mainWindow: BrowserWindow
-
   private projectService: ProjectService
 
   developOptions: MenuItemConstructorOptions[] = [
@@ -66,7 +65,6 @@ export default class MenuBuilder {
 
   async handleGetRecent() {
     const response = await this.projectService.readProjectHistory(this.projectService.getProjectsFilePath())
-    console.log('Recent projects:', response)
     return response
   }
 
@@ -137,7 +135,7 @@ export default class MenuBuilder {
   updateAppTheme() {
     nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
     this.mainWindow.webContents.send('system:update-theme')
-    this.buildMenu()
+    void this.buildMenu()
   }
 
   /**

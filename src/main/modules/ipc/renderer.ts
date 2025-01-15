@@ -282,6 +282,11 @@ const rendererProcessBridge = {
   hideWindow: () => ipcRenderer.send('window-controls:hide'),
 
   /**
+   * Sends the 'window:rebuild-menu' event to rebuild the window menu.
+   */
+  rebuildMenu: () => ipcRenderer.send('window:rebuild-menu'),
+
+  /**
    * Creates a build directory for the compiler.
    * @param pathToUserProject - The path to the user's project.
    * @returns A promise that resolves with the success status and message.

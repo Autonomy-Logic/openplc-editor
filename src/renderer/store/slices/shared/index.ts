@@ -171,6 +171,7 @@ export const createSharedSlice: StateCreator<
       getState().libraryActions.clearUserLibraries()
       getState().flowActions.clearFlows()
       getState().projectActions.clearProjects()
+      window.bridge.rebuildMenu()
     },
     closeProject: () => {
       const editingState = getState().workspace.editingState
