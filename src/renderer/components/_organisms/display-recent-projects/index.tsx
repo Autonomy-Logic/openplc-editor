@@ -36,8 +36,6 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
     setRecentProjects(filtered)
   }, [searchNameFilterValue, recent])
 
-  console.log('recent->', recent)
-  console.log('recentProjects -->', recentProjects)
   const compareLastOpened = (lastOpenedAt: string) => {
     const currentTime = new Date()
     const lastOpenedDate = new Date(lastOpenedAt)
