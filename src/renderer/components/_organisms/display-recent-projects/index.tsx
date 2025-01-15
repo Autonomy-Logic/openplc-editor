@@ -2,7 +2,7 @@ import { FileElement } from '@components/elements'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { FlowType } from '@root/renderer/store/slices'
-import { ComponentProps, useEffect, useState } from 'react'
+import { ComponentProps, useEffect, useRef, useState } from 'react'
 
 export type IDisplayRecentProjectProps = ComponentProps<'section'> & {
   searchNameFilterValue: string
@@ -21,11 +21,11 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
 
   const [recentProjects, setRecentProjects] = useState(recent)
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     setRecentProjects(recent)
   }, [recent])
-
 
   useEffect(() => {
     const filtered =
@@ -36,8 +36,8 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
     setRecentProjects(filtered)
   }, [searchNameFilterValue, recent])
 
-  console.log("recent->", recent)
-  console.log("recentProjects -->", recentProjects)
+  console.log('recent->', recent)
+  console.log('recentProjects -->', recentProjects)
   const compareLastOpened = (lastOpenedAt: string) => {
     const currentTime = new Date()
     const lastOpenedDate = new Date(lastOpenedAt)
@@ -62,7 +62,7 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
   }
 
   const updateProjectTimes = () => {
-    const updatedTimes = recentProjects.reduce(
+    const updatedTimes = recent.reduce(
       (acc, project) => {
         acc[project.path] = compareLastOpened(project.lastOpenedAt)
         return acc
@@ -70,34 +70,22 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
       {} as { [key: string]: string },
     )
 
-    setProjectTimes(updatedTimes)
+    if (JSON.stringify(updatedTimes) !== JSON.stringify(projectTimes)) {
+      setProjectTimes(updatedTimes)
+    }
   }
 
   useEffect(() => {
     updateProjectTimes()
 
-    const timers = recentProjects.map((project) => {
-      const lastOpenedDate = new Date(project.lastOpenedAt)
-      const now = new Date()
-
-      const timeSinceLastOpened = now.getTime() - lastOpenedDate.getTime()
-      const timeUntilNextMinute = 60000 - (timeSinceLastOpened % 60000)
-
-      const timerId = setTimeout(() => {
-        updateProjectTimes()
-
-        setInterval(() => {
-          updateProjectTimes()
-        }, 60000)
-      }, timeUntilNextMinute)
-
-      return timerId
-    })
+    intervalRef.current = setInterval(() => {
+      updateProjectTimes()
+    }, 60000)
 
     return () => {
-      timers.forEach((timerId) => clearTimeout(timerId))
+      if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [recent])
+  }, [recentProjects])
 
   const updateUserRecentProjects = async () => {
     const recentProjects = await window.bridge.retrieveRecent()
