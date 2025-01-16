@@ -162,6 +162,7 @@ class MainProcessBridge implements MainIpcModule {
      * Window Controls
      */
     this.ipcMain.on('window-controls:close', () => this.mainWindow?.close())
+    this.ipcMain.on('window-controls:closed', () => this.mainWindow?.destroy())
     this.ipcMain.on('window-controls:hide', () => this.mainWindow?.hide())
     this.ipcMain.on('window-controls:minimize', () => this.mainWindow?.minimize())
     this.ipcMain.on('window-controls:maximize', () => {

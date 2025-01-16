@@ -37,9 +37,9 @@ const AcceleratorHandler = () => {
     window.bridge.quitAppRequest(() => {
       if (editingState === 'unsaved') {
         openModal('save-changes-project', 'close-app')
-      } else {
-        window.bridge.closeWindow()
+        return
       }
+      openModal('quit-application', null)
     })
     return () => {
       window.bridge.removeQuitAppListener()

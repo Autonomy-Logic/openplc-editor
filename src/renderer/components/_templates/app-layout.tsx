@@ -7,6 +7,7 @@ import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 import Toaster from '../_features/[app]/toast/toaster'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 import { ConfirmDeleteElementModal } from '../_molecules/menu-bar/modals/delete-confirmation-modal'
+import { QuitApplicationModal } from '../_molecules/menu-bar/modals/quit-application-modal'
 import { SaveChangesModal } from '../_molecules/menu-bar/modals/save-changes-modal'
 import { AcceleratorHandler } from './accelerator-handler'
 
@@ -69,6 +70,11 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           <SaveChangesModal
             isOpen={modals['save-changes-project'].open}
             validationContext={modals['save-changes-project'].data as string}
+          />
+        )}
+        {modals?.['quit-application']?.open === true && (
+          <QuitApplicationModal
+            isOpen={modals['quit-application'].open}
           />
         )}
         {modals?.['confirm-delete-element']?.open === true && (

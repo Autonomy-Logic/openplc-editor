@@ -34,7 +34,7 @@ const ConfirmDeleteElementModal = ({
     flowActions: { removeFlow, removeRung },
     editorActions: { updateModelVariables },
     libraryActions: { removeUserLibrary },
-    modalActions: { onOpenChange },
+    modalActions: { onOpenChange, closeModal },
     project: {
       data: { pous },
     },
@@ -85,7 +85,7 @@ const ConfirmDeleteElementModal = ({
           description: 'Your rung was successfully deleted.',
           variant: 'default',
         })
-        onOpenChange('confirm-delete-element', false)
+        closeModal()
         return
       }
       if (editor.type === 'available') {
@@ -105,7 +105,7 @@ const ConfirmDeleteElementModal = ({
             description: `POU "${targetLabel}" was successfully deleted.`,
             variant: 'default',
           })
-          onOpenChange('confirm-delete-element', false)
+          closeModal()
           return
         } else {
           deleteDatatype(targetLabel)
@@ -118,7 +118,7 @@ const ConfirmDeleteElementModal = ({
             description: `Datatype "${targetLabel}" was successfully deleted.`,
             variant: 'default',
           })
-          onOpenChange('confirm-delete-element', false)
+          closeModal()
           return
         }
       }
@@ -138,7 +138,7 @@ const ConfirmDeleteElementModal = ({
           description: `Datatype "${targetLabel}" was successfully deleted.`,
           variant: 'default',
         })
-        onOpenChange('confirm-delete-element', false)
+        closeModal()
         return
       }
       if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
@@ -155,7 +155,7 @@ const ConfirmDeleteElementModal = ({
           description: `POU "${targetLabel}" was successfully deleted.`,
           variant: 'default',
         })
-        onOpenChange('confirm-delete-element', false)
+        closeModal()
         return
       }
     } catch (_error) {
@@ -165,11 +165,11 @@ const ConfirmDeleteElementModal = ({
         variant: 'fail',
       })
     }
-    onOpenChange('confirm-delete-element', false)
+    closeModal()
   }
 
   const handleCloseModal = () => {
-    onOpenChange('confirm-delete-element', false)
+    closeModal()
   }
 
   return (

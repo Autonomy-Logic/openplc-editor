@@ -209,10 +209,13 @@ const createMainWindow = async () => {
     mainWindow = null
   })
   mainWindow.on('close', (event) => {
+    event.preventDefault()
     if (process.platform === 'darwin') {
-      event.preventDefault()
       mainWindow?.hide()
+      return
     }
+    console.log('close event')
+    mainWindow?.webContents.send('app:quit-accelerator')
   })
 
   app.on('activate', () => {

@@ -33,7 +33,7 @@ const StartScreen = () => {
   }
 
   const handleExitAppRequest = () => {
-    OS === 'darwin' ? window.bridge.hideWindow() : window.bridge.closeWindow()
+    OS === 'darwin' ? window.bridge.hideWindow() : window.bridge.requestCloseWindow()
   }
 
   useEffect(() => {
