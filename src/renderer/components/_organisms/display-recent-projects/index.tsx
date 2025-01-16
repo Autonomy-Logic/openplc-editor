@@ -1,7 +1,6 @@
 import { FileElement } from '@components/elements'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { FlowType } from '@root/renderer/store/slices'
 import { ComponentProps, useEffect, useRef, useState } from 'react'
 
 export type IDisplayRecentProjectProps = ComponentProps<'section'> & {
