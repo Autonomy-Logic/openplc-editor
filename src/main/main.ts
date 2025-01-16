@@ -214,7 +214,6 @@ const createMainWindow = async () => {
       mainWindow?.hide()
       return
     }
-    console.log('close event')
     mainWindow?.webContents.send('app:quit-accelerator')
   })
 
