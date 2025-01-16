@@ -83,7 +83,7 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [recentProjects])
+  }, [])
 
   const updateUserRecentProjects = async () => {
     const recentProjects = await window.bridge.retrieveRecent()
