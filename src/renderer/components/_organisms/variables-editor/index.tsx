@@ -4,6 +4,7 @@ import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { VariablesTable as VariablesTableType } from '@root/renderer/store/slices'
+import { baseTypes } from '@root/shared/data'
 import { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { ColumnFiltersState } from '@tanstack/react-table'
@@ -31,6 +32,7 @@ const VariablesEditor = () => {
    */
   const [tableData, setTableData] = useState<PLCVariable[]>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [returnType, setReturnType] = useState<string>('BOOL')
 
   /**
    * Editor name state to keep track of the editor name
@@ -206,6 +208,10 @@ const VariablesEditor = () => {
     })
   }
 
+  const handleTypeChange = (value: string) => {
+   setReturnType(value)
+  }
+
   const forbiddenVariableToBeRemoved =
     editorVariables.display === 'table' &&
     tableData[parseInt(editorVariables.selectedRow)]?.type.definition === 'derived' &&
@@ -231,6 +237,40 @@ const VariablesEditor = () => {
             aria-label='Variables editor table actions container'
             className='flex h-full w-full select-none justify-between'
           >
+            <div className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'>
+              <label
+                htmlFor='return type'
+                className='w-fit text-xs font-medium text-neutral-1000 dark:text-neutral-300'
+              >
+                Return type :
+              </label>
+              <Select value={returnType} onValueChange={handleTypeChange}>
+                <SelectTrigger
+                  id='class-filter'
+                  placeholder={editorVariables.classFilter}
+                  withIndicator
+                  className='group flex h-full w-44 items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
+                />
+                <SelectContent
+                  position='popper'
+                  sideOffset={3}
+                  align='center'
+                  className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                >
+                  {baseTypes.map((filter) => (
+                    <SelectItem
+                      key={filter}
+                      value={filter}
+                      className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                    >
+                      <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                        {filter}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div
               id='Pou documentation'
               aria-label='Variables editor table description container'
