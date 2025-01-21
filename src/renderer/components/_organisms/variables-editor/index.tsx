@@ -19,10 +19,10 @@ const VariablesEditor = () => {
   const {
     editor,
     project: {
-      data: { pous },
+      data: { pous, dataTypes },
     },
     editorActions: { updateModelVariables },
-    projectActions: { createVariable, deleteVariable, rearrangeVariables, updatePouDocumentation },
+    projectActions: { createVariable, deleteVariable, rearrangeVariables, updatePouDocumentation, updatePouReturnType },
   } = useOpenPLCStore()
 
   const [pouDescription, setPouDescription] = useState<string>('')
@@ -32,7 +32,8 @@ const VariablesEditor = () => {
    */
   const [tableData, setTableData] = useState<PLCVariable[]>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [returnType, setReturnType] = useState<string>('BOOL')
+  const [returnType, setReturnType] = useState('BOOL')
+  const [returnTypeOptions, setReturnTypeOptions] = useState<string[]>([])
 
   /**
    * Editor name state to keep track of the editor name
@@ -61,12 +62,18 @@ const VariablesEditor = () => {
   useEffect(() => {
     const foundPou = pous.find((pou) => pou?.data?.name === editor?.meta?.name)
 
+    const combinedReturnTypeOptions = [...baseTypes, ...dataTypes.map((type) => type.name)]
+    setReturnTypeOptions(combinedReturnTypeOptions)
+
     if (foundPou) {
       setTableData(foundPou.data.variables)
+      if (foundPou.type === 'function') {
+        setReturnType(foundPou.data.returnType)
+      }
     } else {
       setTableData([])
     }
-  }, [editor, pous])
+  }, [editor, pous, dataTypes])
 
   /**
    * If the editor name is not the same as the current editor name
@@ -209,7 +216,7 @@ const VariablesEditor = () => {
   }
 
   const handleTypeChange = (value: string) => {
-    setReturnType(value)
+    updatePouReturnType(editor.meta.name, value)
   }
 
   const forbiddenVariableToBeRemoved =
@@ -248,7 +255,7 @@ const VariablesEditor = () => {
                 <Select value={returnType} onValueChange={handleTypeChange}>
                   <SelectTrigger
                     id='class-filter'
-                    placeholder={editorVariables.classFilter}
+                    placeholder={returnType}
                     withIndicator
                     className='group flex h-full w-44 items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
                   />
@@ -258,7 +265,7 @@ const VariablesEditor = () => {
                     align='center'
                     className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
                   >
-                    {baseTypes.map((filter) => (
+                    {returnTypeOptions.map((filter) => (
                       <SelectItem
                         key={filter}
                         value={filter}
