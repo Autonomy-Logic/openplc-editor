@@ -205,10 +205,6 @@ export const Coil = (block: CoilProps) => {
 
     if (node.data.variable === variable && variable.name !== coilVariableValue) {
       setCoilVariableValue(variable.name)
-      if (inputVariableRef.current?.isFocused) {
-        inputVariableRef.current.blur({ submit: false })
-        handleSubmitCoilVariableOnTextareaBlur(variable.name)
-      }
       setWrongVariable(false)
       return
     }
