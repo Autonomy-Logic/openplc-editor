@@ -235,8 +235,6 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       })
       if (!rung || !node) return
 
-      console.log(variableRestrictions)
-
       const variableTypeRestriction = {
         definition: variableRestrictions.definition || 'base-type',
         value: variableRestrictions.values
@@ -246,8 +244,6 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           : 'dint',
       }
       if (!variableTypeRestriction.definition || !variableTypeRestriction.value) return
-
-      console.log(variableTypeRestriction)
 
       const res = createVariable({
         data: {
