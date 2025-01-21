@@ -235,11 +235,19 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       })
       if (!rung || !node) return
 
+      console.log(variableRestrictions)
+
       const variableTypeRestriction = {
         definition: variableRestrictions.definition || 'base-type',
-        value: variableRestrictions.values?.[0] || 'dint',
+        value: variableRestrictions.values
+          ? Array.isArray(variableRestrictions.values)
+            ? variableRestrictions.values[0]
+            : variableRestrictions.values
+          : 'dint',
       }
       if (!variableTypeRestriction.definition || !variableTypeRestriction.value) return
+
+      console.log(variableTypeRestriction)
 
       const res = createVariable({
         data: {
