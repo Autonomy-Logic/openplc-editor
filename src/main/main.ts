@@ -206,6 +206,7 @@ const createMainWindow = async () => {
   })
 
   mainWindow.on('closed', (close: boolean) => {
+    console.log('mainWindow closed', close)
     if (!close && process.platform === 'darwin') {
       mainWindow?.webContents.send('app:quit-accelerator')
       return
@@ -231,7 +232,16 @@ const createMainWindow = async () => {
   })
 
   app.on('before-quit', () => {
+    console.log('before-quit')
     mainWindow?.destroy()
+  })
+
+  app.on('will-quit', () => {
+    console.log('will-quit')
+  })
+
+  app.on('quit', () => {
+    console.log('quit')
   })
 
   // Open urls in the user's browser
