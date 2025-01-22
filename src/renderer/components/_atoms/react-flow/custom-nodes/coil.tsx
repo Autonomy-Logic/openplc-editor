@@ -204,7 +204,7 @@ export const Coil = (block: CoilProps) => {
     }
 
     if ((node.data as BasicNodeData).variable.id === variable.id && variable.name !== coilVariableValue) {
-      if ((node.data as BasicNodeData).variable.name === variable.name) {
+      if ((node.data as BasicNodeData).variable.name !== variable.name) {
         updateNode({
           editorName: editor.meta.name,
           rungId: rung.id,
