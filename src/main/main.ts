@@ -228,7 +228,9 @@ const createMainWindow = async () => {
   })
 
   app.on('before-quit', (event) => {
+    if (mainWindow === null) return
     console.log('before-quit')
+
     if (process.platform === 'darwin') {
       event.preventDefault()
       mainWindow?.webContents.send('app:quit-accelerator')
