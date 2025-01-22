@@ -110,7 +110,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     }
 
     if (validationContext === 'close-app') {
-      window.bridge.closeWindow(true)
+      window.bridge.closeWindow()
       return
     }
 
