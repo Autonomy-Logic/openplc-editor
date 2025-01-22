@@ -206,9 +206,11 @@ const createMainWindow = async () => {
   })
 
   mainWindow.on('closed', () => {
+    console.log('mainWindow closed')
     mainWindow = null
   })
   mainWindow.on('close', (event) => {
+    console.log('mainWindow close')
     event.preventDefault()
     if (process.platform === 'darwin') {
       mainWindow?.hide()
@@ -275,6 +277,7 @@ if (!app.requestSingleInstanceLock()) {
 
 // Quit the app when all windows are closed;
 app.on('window-all-closed', () => {
+  console.log('window-all-closed')
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
   if (process.platform !== 'darwin') {
