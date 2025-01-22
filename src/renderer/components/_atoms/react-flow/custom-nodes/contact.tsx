@@ -173,6 +173,23 @@ export const Contact = (block: ContactProps) => {
     }
 
     if ((node.data as BasicNodeData).variable.id === variable.id && variable.name !== contactVariableValue) {
+      if ((node.data as BasicNodeData).variable.name === variable.name) {
+        updateNode({
+          editorName: editor.meta.name,
+          rungId: rung.id,
+          nodeId: node.id,
+          node: {
+            ...node,
+            data: {
+              ...node.data,
+              variable: {
+                ...variable,
+                name: variable.name,
+              },
+            },
+          },
+        })
+      }
       setContactVariableValue(variable.name)
       setWrongVariable(false)
       return

@@ -9,6 +9,8 @@ import { parseDataTypesToXML } from './data-type-xml'
 const XmlGenerator = (projectToGenerateXML: ProjectState['data']) => {
   let xmlResult = getBaseXmlStructure()
 
+  console.log('projectToGenerateXML', projectToGenerateXML)
+
   /**
    * Parse POUs
    */

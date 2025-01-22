@@ -185,7 +185,7 @@ export const Coil = (block: CoilProps) => {
       return
     }
 
-    if (node.data.variable !== variable) {
+    if ((node.data as BasicNodeData).variable.id !== variable.id) {
       setCoilVariableValue(variable.name)
       updateNode({
         editorName: editor.meta.name,
@@ -203,7 +203,24 @@ export const Coil = (block: CoilProps) => {
       return
     }
 
-    if (node.data.variable === variable && variable.name !== coilVariableValue) {
+    if ((node.data as BasicNodeData).variable.id === variable.id && variable.name !== coilVariableValue) {
+      if ((node.data as BasicNodeData).variable.name === variable.name) {
+        updateNode({
+          editorName: editor.meta.name,
+          rungId: rung.id,
+          nodeId: node.id,
+          node: {
+            ...node,
+            data: {
+              ...node.data,
+              variable: {
+                ...variable,
+                name: variable.name,
+              },
+            },
+          },
+        })
+      }
       setCoilVariableValue(variable.name)
       setWrongVariable(false)
       return
