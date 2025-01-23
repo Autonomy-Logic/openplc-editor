@@ -206,9 +206,11 @@ const createMainWindow = async () => {
   })
 
   mainWindow.on('closed', () => {
+    console.log('mainWindow closed')
     mainWindow = null
   })
   mainWindow.on('close', (event) => {
+    console.log('mainWindow close')
     event.preventDefault()
     if (process.platform === 'darwin') {
       mainWindow?.hide()
@@ -225,8 +227,23 @@ const createMainWindow = async () => {
     }
   })
 
-  app.on('before-quit', () => {
+  app.on('before-quit', (_event) => {
+    console.log('before-quit')
+    console.log('mainWindow.isDestroyed()', mainWindow?.isDestroyed())
+    // if (!mainWindow?.isDestroyed()) {
+    //   event.preventDefault()
+    //   mainWindow?.webContents.send('app:quit-accelerator')
+    //   return
+    // }
     mainWindow?.destroy()
+  })
+
+  app.on('will-quit', () => {
+    console.log('will-quit')
+  })
+
+  app.on('quit', () => {
+    console.log('quit')
   })
 
   // Open urls in the user's browser

@@ -110,7 +110,7 @@ export default class MenuBuilder {
   }
 
   handleQuitAppRequest() {
-    this.mainWindow.webContents.send('app:quit-accelerator')
+    this.mainWindow.webContents.send('window-controls:request-close')
   }
 
   /**

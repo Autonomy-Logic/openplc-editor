@@ -231,6 +231,9 @@ const rendererProcessBridge = {
    * Sends the 'window-controls:close' event to close the window.
    */
   requestCloseWindow: () => ipcRenderer.send('window-controls:close'),
+  requestCloseWindowAccelerator: () =>
+    ipcRenderer.on('window-controls:request-close', () => ipcRenderer.send('window-controls:close')),
+  removeRequestCloseWindowAccelerator: () => ipcRenderer.removeAllListeners('window-controls:request-close'),
   closeWindow: () => ipcRenderer.send('window-controls:closed'),
 
   /**

@@ -31,6 +31,16 @@ const AcceleratorHandler = () => {
    */
 
   /**
+   * -- Request close app window
+   */
+  useEffect(() => {
+    window.bridge.requestCloseWindowAccelerator()
+    return () => {
+      window.bridge.removeRequestCloseWindowAccelerator()
+    }
+  }, [])
+
+  /**
    * -- Quit app
    */
   useEffect(() => {
