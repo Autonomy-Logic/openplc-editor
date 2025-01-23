@@ -1,5 +1,6 @@
 // import { PLCVariable } from '@root/types/PLC'
 import { RungState } from '@root/renderer/store/slices'
+import { baseTypes } from '@root/shared/data'
 import { PLCPou } from '@root/types/PLC/open-plc'
 import { BaseXml } from '@root/types/PLC/xml-data'
 import { InterfaceXML } from '@root/types/PLC/xml-data/pous/interface/interface-diagram'
@@ -76,8 +77,17 @@ export const parseInterface = (pou: PLCPou) => {
 
     if (returnType) {
       if (!xml.returnType) xml.returnType
-      xml.returnType = {
-        [returnType]: '',
+      const isBaseType = baseTypes.find((t) => t === returnType)
+      if (isBaseType) {
+        xml.returnType = {
+          [returnType]: '',
+        }
+      } else {
+        xml.returnType = {
+          derived: {
+            '@name': returnType,
+          },
+        }
       }
     }
 
