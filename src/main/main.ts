@@ -205,11 +205,8 @@ const createMainWindow = async () => {
     }, 3000)
   })
 
-  mainWindow.on('closed', (close: boolean) => {
-    if (!close && process.platform === 'darwin') {
-      mainWindow?.webContents.send('app:quit-accelerator')
-      return
-    }
+  mainWindow.on('closed', () => {
+    console.log('mainWindow closed')
     mainWindow = null
   })
   mainWindow.on('close', (event) => {

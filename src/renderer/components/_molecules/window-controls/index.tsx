@@ -37,7 +37,7 @@ const CloseButton = () => {
   const handleClose = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
     if (editingState !== 'unsaved') {
-      window.bridge.closeWindow(true)
+      window.bridge.closeWindow()
     } else {
       openModal('save-changes-project', 'close-app')
     }

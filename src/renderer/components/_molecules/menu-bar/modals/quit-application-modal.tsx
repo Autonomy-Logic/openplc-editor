@@ -15,7 +15,7 @@ const QuitApplicationModal = ({ isOpen, ...rest }: SaveChangeModalProps) => {
   } = useOpenPLCStore()
 
   const handleCloseApplication = () => {
-    window.bridge.closeWindow(true)
+    window.bridge.closeWindow()
   }
 
   return (
