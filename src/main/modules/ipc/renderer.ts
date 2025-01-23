@@ -231,7 +231,7 @@ const rendererProcessBridge = {
    * Sends the 'window-controls:close' event to close the window.
    */
   requestCloseWindow: () => ipcRenderer.send('window-controls:close'),
-  closeWindow: () => ipcRenderer.send('window-controls:closed'),
+  closeWindow: (close: boolean) => ipcRenderer.send('window-controls:closed', close),
 
   /**
    * Sends the 'window-controls:minimize' event to minimize the window.

@@ -205,8 +205,12 @@ const createMainWindow = async () => {
     }, 3000)
   })
 
-  mainWindow.on('closed', () => {
+  mainWindow.on('closed', (close: boolean) => {
     console.log('mainWindow closed', close)
+    if (!close && process.platform === 'darwin') {
+      mainWindow?.webContents.send('app:quit-accelerator')
+      return
+    }
     mainWindow = null
   })
   mainWindow.on('close', (event) => {
@@ -227,13 +231,8 @@ const createMainWindow = async () => {
     }
   })
 
-  app.on('before-quit', (event) => {
+  app.on('before-quit', () => {
     console.log('before-quit')
-    if (process.platform === 'darwin') {
-      event.preventDefault()
-      mainWindow?.webContents.send('app:quit-accelerator')
-      return
-    }
     mainWindow?.destroy()
   })
 
