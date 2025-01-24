@@ -141,6 +141,20 @@ const AcceleratorHandler = () => {
   }, [])
 
   /**
+   * Application Related Accelerators
+   */
+
+  useEffect(() => {
+    window.bridge.checkIfAppIsClosing((_event) => {
+      if (closeApp) {
+        window.bridge.replyIfAppIsClosing(true)
+        return
+      }
+      window.bridge.replyIfAppIsClosing(false)
+    })
+  }, [])
+
+  /**
    * -- beforeunload event
    * This event is fired after the mainWindow (electron) close event
    */

@@ -328,9 +328,19 @@ app.on('activate', () => {
  * Emitted before the application starts closing its windows. Calling event.preventDefault() will prevent the default behavior,
  * which is terminating the application.
  */
-app.on('before-quit', (_event) => {
+app.on('before-quit', (e) => {
   console.log('before-quit')
-  mainWindow?.destroy()
+  // e.preventDefault()
+  mainWindow?.webContents.send('app:check-if-app-is-closing')
+  ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => {
+    if (shouldQuit) {
+      mainWindow?.destroy()
+      return
+    }
+    e.preventDefault()
+    app.quit()
+  })
+  // mainWindow?.destroy()
 })
 
 /**
