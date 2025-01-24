@@ -1,4 +1,5 @@
 import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
+import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
 import _ from 'lodash'
 import { ComponentPropsWithoutRef } from 'react'
@@ -14,8 +15,10 @@ const QuitApplicationModal = ({ isOpen, ...rest }: SaveChangeModalProps) => {
     modalActions: { closeModal, onOpenChange },
   } = useOpenPLCStore()
 
+  const { handleQuitApp } = useQuitApp()
+
   const handleCloseApplication = () => {
-    window.bridge.closeWindow()
+    handleQuitApp()
   }
 
   return (

@@ -14,9 +14,6 @@ const StartScreen = () => {
   const {
     workspaceActions: { setRecent },
     modalActions: { openModal },
-    workspace: {
-      systemConfigs: { OS },
-    },
     sharedWorkspaceActions: { openProject },
   } = useOpenPLCStore()
 
@@ -33,7 +30,7 @@ const StartScreen = () => {
   }
 
   const handleExitAppRequest = () => {
-    OS === 'darwin' ? window.bridge.hideWindow() : window.bridge.requestCloseWindow()
+    window.bridge.handleCloseOrHideWindow()
   }
 
   useEffect(() => {

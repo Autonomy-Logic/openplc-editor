@@ -123,6 +123,7 @@ class MainProcessBridge implements MainIpcModule {
         return []
       }
     })
+    this.ipcMain.on('app:quit', () => app.quit())
 
     this.ipcMain.on('system:update-theme', () => this.mainIpcEventHandlers.handleUpdateTheme())
     // this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)

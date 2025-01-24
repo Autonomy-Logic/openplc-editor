@@ -230,10 +230,14 @@ const rendererProcessBridge = {
   /**
    * Sends the 'window-controls:close' event to close the window.
    */
-  requestCloseWindow: () => ipcRenderer.send('window-controls:close'),
-  requestCloseWindowAccelerator: () =>
+  handleCloseOrHideWindowAccelerator: () =>
     ipcRenderer.on('window-controls:request-close', () => ipcRenderer.send('window-controls:close')),
-  removeRequestCloseWindowAccelerator: () => ipcRenderer.removeAllListeners('window-controls:request-close'),
+  removeHandleCloseOrHideWindowAccelerator: () => ipcRenderer.removeAllListeners('window-controls:request-close'),
+  handleCloseOrHideWindow: () => ipcRenderer.send('window-controls:close'),
+
+  /**
+   * Sends the 'window-controls:closed' event to close the window.
+   */
   closeWindow: () => ipcRenderer.send('window-controls:closed'),
 
   /**
@@ -274,11 +278,9 @@ const rendererProcessBridge = {
    * @param callback - The callback to be invoked when the event is triggered.
    */
   quitAppRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:quit-accelerator', callback),
-
-  /**
-   * Removes all listeners for the 'app:quit-accelerator' event.
-   */
   removeQuitAppListener: () => ipcRenderer.removeAllListeners('app:quit-accelerator'),
+
+  handleQuitApp: () => ipcRenderer.send('app:quit'),
 
   /**
    * Sends the 'window-controls:hide' event to hide the window.

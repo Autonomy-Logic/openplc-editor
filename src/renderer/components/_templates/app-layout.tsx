@@ -16,7 +16,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
     modals,
-    workspaceActions: { setSystemConfigs, switchAppTheme, toggleMaximizedWindow, setRecent },
+    workspaceActions: { setSystemConfigs, setRecent },
   } = useOpenPLCStore()
   type ModalData = {
     leafLang: string
@@ -41,18 +41,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     void getUserSystemProps()
   }, [setSystemConfigs])
 
-  useEffect(() => {
-    window.bridge.isMaximizedWindow((_event) => {
-      toggleMaximizedWindow()
-    })
-  }, [])
-
-  useEffect(() => {
-    window.bridge.handleUpdateTheme((_event) => {
-      switchAppTheme()
-    })
-  }, [])
-
   return (
     <>
       {!isLinux && <TitleBar />}
@@ -73,9 +61,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           />
         )}
         {modals?.['quit-application']?.open === true && (
-          <QuitApplicationModal
-            isOpen={modals['quit-application'].open}
-          />
+          <QuitApplicationModal isOpen={modals['quit-application'].open} />
         )}
         {modals?.['confirm-delete-element']?.open === true && (
           <ConfirmDeleteElementModal

@@ -1,5 +1,6 @@
 import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowType } from '@root/renderer/store/slices/flow'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
@@ -24,6 +25,8 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     libraryActions: { addLibrary, clearUserLibraries },
     editorActions: { clearEditor },
   } = useOpenPLCStore()
+
+  const { handleQuitApp } = useQuitApp()
 
   const onClose = () => {
     clearEditor()
@@ -110,7 +113,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     }
 
     if (validationContext === 'close-app') {
-      window.bridge.closeWindow()
+      handleQuitApp()
       return
     }
 

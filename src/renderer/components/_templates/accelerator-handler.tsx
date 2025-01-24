@@ -7,10 +7,19 @@ const AcceleratorHandler = () => {
   const { handleExportProject } = useCompiler()
   const [requestFlag, setRequestFlag] = useState(false)
   const {
+    workspace: { editingState, closeApp },
     modalActions: { openModal },
-    workspace: { editingState },
     sharedWorkspaceActions: { closeProject, openProject, openRecentProject },
+    workspaceActions: { switchAppTheme, toggleMaximizedWindow },
   } = useOpenPLCStore()
+
+  const quitAppRequest = () => {
+    if (editingState === 'unsaved') {
+      openModal('save-changes-project', 'close-app')
+      return
+    }
+    openModal('quit-application', null)
+  }
 
   /**
    * Compiler Related Accelerators
@@ -34,9 +43,9 @@ const AcceleratorHandler = () => {
    * -- Request close app window
    */
   useEffect(() => {
-    window.bridge.requestCloseWindowAccelerator()
+    window.bridge.handleCloseOrHideWindowAccelerator()
     return () => {
-      window.bridge.removeRequestCloseWindowAccelerator()
+      window.bridge.removeHandleCloseOrHideWindowAccelerator()
     }
   }, [])
 
@@ -44,13 +53,7 @@ const AcceleratorHandler = () => {
    * -- Quit app
    */
   useEffect(() => {
-    window.bridge.quitAppRequest(() => {
-      if (editingState === 'unsaved') {
-        openModal('save-changes-project', 'close-app')
-        return
-      }
-      openModal('quit-application', null)
-    })
+    window.bridge.quitAppRequest(() => quitAppRequest())
     return () => {
       window.bridge.removeQuitAppListener()
     }
@@ -118,6 +121,37 @@ const AcceleratorHandler = () => {
       window.bridge.removeCloseProjectListener()
     }
   }, [editingState])
+
+  /**
+   * -- Toggle maximized window
+   */
+  useEffect(() => {
+    window.bridge.isMaximizedWindow((_event) => {
+      toggleMaximizedWindow()
+    })
+  }, [])
+
+  /**
+   * -- Update theme
+   */
+  useEffect(() => {
+    window.bridge.handleUpdateTheme((_event) => {
+      switchAppTheme()
+    })
+  }, [])
+
+  /**
+   * -- beforeunload event
+   * This event is fired after the mainWindow (electron) close event
+   */
+  window.onbeforeunload = (e) => {
+    console.log('onbeforeunload')
+    console.log(closeApp)
+    if (closeApp) return
+
+    quitAppRequest()
+    e.returnValue = false
+  }
 
   return <></>
 }

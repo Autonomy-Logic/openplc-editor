@@ -16,6 +16,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     isCollapsed: false,
     isModalOpen: [],
     discardChanges: false,
+    closeApp: false,
   },
 
   workspaceActions: {
@@ -37,6 +38,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.recent = recent
+        }),
+      )
+    },
+    setCloseApp: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.closeApp = true
         }),
       )
     },
