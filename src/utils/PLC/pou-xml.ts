@@ -76,19 +76,12 @@ export const parseInterface = (pou: PLCPou) => {
       }
 
     if (returnType) {
-      if (!xml.returnType) xml.returnType
-      const isBaseType = baseTypes.find((t) => t === returnType)
-      if (isBaseType) {
-        xml.returnType = {
-          [returnType]: '',
-        }
-      } else {
-        xml.returnType = {
-          derived: {
-            '@name': returnType,
-          },
-        }
-      }
+      if (!xml.returnType) xml.returnType = {}
+
+      const isBaseType = baseTypes.includes(returnType as (typeof baseTypes)[number])
+      xml.returnType = isBaseType
+        ? { [returnType.trim().toUpperCase() === 'STRING' ? returnType.toLowerCase() : returnType.toUpperCase()]: '' }
+        : { derived: { '@name': returnType } }
     }
 
     switch (variable.class) {
