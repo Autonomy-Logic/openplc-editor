@@ -203,24 +203,9 @@ const createMainWindow = async () => {
    * Calling event.preventDefault() will cancel the close.
    */
   mainWindow.on('close', saveBounds)
-  mainWindow.on('close', (e) => {
+  mainWindow.on('close', () => {
     console.log('mainWindow close')
-    // if (process.platform === 'darwin') {
-    //   e.preventDefault()
-    //   mainWindow?.hide()
-    //   return
-    // }
-    // mainWindow?.webContents.send('app:quit-accelerator')
-    mainWindow?.webContents.send('app:check-if-app-is-closing')
-    ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => {
-      if (shouldQuit) return
-
-      if (process.platform === 'darwin') {
-        e.preventDefault()
-        mainWindow?.hide()
-        return
-      }
-    })
+    mainWindow?.webContents.send('window-controls:is-closing')
   })
 
   /**

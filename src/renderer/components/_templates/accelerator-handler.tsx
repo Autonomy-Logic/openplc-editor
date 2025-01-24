@@ -1,5 +1,6 @@
 import { IProjectServiceResponse } from '@root/main/services'
 import { useCompiler } from '@root/renderer/hooks'
+import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useEffect, useState } from 'react'
 
@@ -7,11 +8,13 @@ const AcceleratorHandler = () => {
   const { handleExportProject } = useCompiler()
   const [requestFlag, setRequestFlag] = useState(false)
   const {
-    workspace: { editingState, closeApp },
+    workspace: { editingState, closeApp, closeWindow, systemConfigs },
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, openProject, openRecentProject },
     workspaceActions: { switchAppTheme, toggleMaximizedWindow },
   } = useOpenPLCStore()
+
+  const { handleWindowClose } = useQuitApp()
 
   const quitAppRequest = () => {
     if (editingState === 'unsaved') {
@@ -141,6 +144,15 @@ const AcceleratorHandler = () => {
   }, [])
 
   /**
+   * -- Windows is closing?
+   */
+  useEffect(() => {
+    window.bridge.windowIsClosing((_event) => {
+      handleWindowClose()
+    })
+  }, [])
+
+  /**
    * Application Related Accelerators
    */
 
@@ -159,9 +171,19 @@ const AcceleratorHandler = () => {
    * This event is fired after the mainWindow (electron) close event
    */
   window.onbeforeunload = (e) => {
-    console.log('onbeforeunload')
-    console.log(closeApp)
+    // When page is reloaded, the beforeunload event is fired, so we need to prevent the default behavior
+    if (!closeWindow) {
+      e.returnValue = false
+      return
+    }
+
     if (closeApp) return
+
+    if (systemConfigs.OS === 'darwin') {
+      window.bridge.hideWindow()
+      e.returnValue = false
+      return
+    }
 
     quitAppRequest()
     e.returnValue = false

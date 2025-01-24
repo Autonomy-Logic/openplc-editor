@@ -16,6 +16,7 @@ const workspaceStateSchema = z.object({
     isCollapsed: z.boolean(),
     isModalOpen: z.array(z.object({ modalName: z.string(), modalState: z.boolean() })),
     discardChanges: z.boolean(),
+    closeWindow: z.boolean(),
     closeApp: z.boolean(),
   }),
 })
@@ -32,7 +33,8 @@ const workspaceActionsSchema = z.object({
   setEditingState: z.function().args(workspaceStateSchema.shape.workspace.shape.editingState).returns(z.void()),
   setRecent: z.function().args(workspaceStateSchema.shape.workspace.shape.recent).returns(z.void()),
   setSystemConfigs: z.function().args(systemConfigsSchema).returns(z.void()),
-  setCloseApp: z.function().returns(z.void()),
+  setCloseWindow: z.function().args(z.boolean()).returns(z.void()),
+  setCloseApp: z.function().args(z.boolean()).returns(z.void()),
   switchAppTheme: z.function().returns(z.void()),
   toggleMaximizedWindow: z.function().returns(z.void()),
   toggleCollapse: z.function().returns(z.void()),

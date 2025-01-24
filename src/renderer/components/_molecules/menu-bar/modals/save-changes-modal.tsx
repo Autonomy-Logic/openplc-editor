@@ -26,7 +26,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     editorActions: { clearEditor },
   } = useOpenPLCStore()
 
-  const { handleQuitApp } = useQuitApp()
+  const { handleQuitApp, handleCancelWindowClose } = useQuitApp()
 
   const onClose = () => {
     clearEditor()
@@ -157,6 +157,11 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     return { success, reason }
   }
 
+  const handleCancelModal = () => {
+    closeModal()
+    handleCancelWindowClose()
+  }
+
   return (
     <Modal open={isOpen} onOpenChange={(open) => onOpenChange('save-changes-project', open)} {...rest}>
       <ModalContent className='flex h-[420px] w-[340px] select-none flex-col items-center justify-evenly rounded-lg'>
@@ -188,7 +193,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
               </button>
             </div>
             <button
-              onClick={() => closeModal()}
+              onClick={() => handleCancelModal()}
               className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
             >
               Cancel

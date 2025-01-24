@@ -15,10 +15,15 @@ const QuitApplicationModal = ({ isOpen, ...rest }: SaveChangeModalProps) => {
     modalActions: { closeModal, onOpenChange },
   } = useOpenPLCStore()
 
-  const { handleQuitApp } = useQuitApp()
+  const { handleQuitApp, handleCancelWindowClose } = useQuitApp()
 
   const handleCloseApplication = () => {
     handleQuitApp()
+  }
+
+  const handleCancelModal = () => {
+    closeModal()
+    handleCancelWindowClose()
   }
 
   return (
@@ -39,7 +44,7 @@ const QuitApplicationModal = ({ isOpen, ...rest }: SaveChangeModalProps) => {
               Yes
             </button>
             <button
-              onClick={() => closeModal()}
+              onClick={() => handleCancelModal()}
               className='w-full rounded-md bg-neutral-100 px-4 py-2 font-medium dark:bg-neutral-850 dark:text-neutral-100'
             >
               No

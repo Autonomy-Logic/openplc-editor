@@ -236,6 +236,11 @@ const rendererProcessBridge = {
   handleCloseOrHideWindow: () => ipcRenderer.send('window-controls:close'),
 
   /**
+   * Check if window is closing
+   */
+  windowIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('window-controls:is-closing', callback),
+
+  /**
    * Sends the 'window-controls:closed' event to close the window.
    */
   closeWindow: () => ipcRenderer.send('window-controls:closed'),
