@@ -14,7 +14,7 @@ const AcceleratorHandler = () => {
     workspaceActions: { switchAppTheme, toggleMaximizedWindow },
   } = useOpenPLCStore()
 
-  const { handleWindowClose } = useQuitApp()
+  const { handleWindowClose, handleAppIsClosing } = useQuitApp()
 
   const quitAppRequest = () => {
     if (editingState === 'unsaved') {
@@ -157,12 +157,8 @@ const AcceleratorHandler = () => {
    */
 
   useEffect(() => {
-    window.bridge.checkIfAppIsClosing((_event) => {
-      if (closeApp) {
-        window.bridge.replyIfAppIsClosing(true)
-        return
-      }
-      window.bridge.replyIfAppIsClosing(false)
+    window.bridge.appIsClosing((_event) => {
+      handleAppIsClosing()
     })
   }, [])
 

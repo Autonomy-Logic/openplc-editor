@@ -285,8 +285,7 @@ const rendererProcessBridge = {
   quitAppRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:quit-accelerator', callback),
   removeQuitAppListener: () => ipcRenderer.removeAllListeners('app:quit-accelerator'),
 
-  checkIfAppIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:check-if-app-is-closing', callback),
-  replyIfAppIsClosing: (isClosing: boolean) => ipcRenderer.send('app:reply-if-app-is-closing', isClosing),
+  appIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:is-closing', callback),
   handleQuitApp: () => ipcRenderer.send('app:quit'),
 
   /**

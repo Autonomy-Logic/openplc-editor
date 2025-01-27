@@ -7,13 +7,11 @@ export const useQuitApp = () => {
     workspaceActions: { setCloseApp, setCloseWindow },
   } = useOpenPLCStore()
 
-  const handleQuitApp = () => {
+  const handleAppIsClosing = () => {
     setCloseApp(true)
-    if (systemConfigs.OS === 'darwin') {
-      window.bridge.handleQuitApp()
-      return
-    }
-    window.bridge.handleCloseOrHideWindow()
+  }
+  const handleCancelAppIsClosing = () => {
+    setCloseWindow(true)
   }
 
   const handleWindowClose = () => {
@@ -24,8 +22,19 @@ export const useQuitApp = () => {
     setCloseWindow(false)
   }
 
+  const handleQuitApp = () => {
+    handleAppIsClosing()
+    if (systemConfigs.OS === 'darwin') {
+      window.bridge.handleQuitApp()
+      return
+    }
+    window.bridge.handleCloseOrHideWindow()
+  }
+
   return {
     handleQuitApp,
+    handleAppIsClosing,
+    handleCancelAppIsClosing,
     handleWindowClose,
     handleCancelWindowClose,
   }
