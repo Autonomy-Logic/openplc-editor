@@ -211,7 +211,34 @@ const Project = () => {
               })
             }
           />
-          <ProjectTreeBranch branchTarget='device'>{/** Will be filled with device */}</ProjectTreeBranch>
+          <ProjectTreeBranch branchTarget='device'>
+            <ProjectTreeLeaf
+              key='Configuration'
+              leafLang='devConfig'
+              label='Configuration'
+              /** Todo: Update the tab state */
+              onClick={() =>
+                handleCreateTab({
+                  name,
+                  path: `/data/configuration/device/configuration`,
+                  elementType: { type: 'device', derivation: 'configuration' },
+                })
+              }
+            />
+            <ProjectTreeLeaf
+              leafLang='devPin'
+              key='Pin Mapping'
+              label='Pins'
+              /** Todo: Update the tab state */
+              onClick={() =>
+                handleCreateTab({
+                  name,
+                  path: `/data/configuration/device/pin-mapping`,
+                  elementType: { type: 'device', derivation: 'pin' },
+                })
+              }
+            />
+          </ProjectTreeBranch>
           {/** Maybe a divider component */}
           {/* <ProjectTreeBranch branchTarget='' label='Resources' /> */}
         </ProjectTreeRoot>

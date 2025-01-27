@@ -2,6 +2,7 @@ import {
   ArrayIcon,
   ArrowIcon,
   CloseIcon,
+  ConfigIcon,
   DataTypeIcon,
   DeviceIcon,
   EnumIcon,
@@ -89,7 +90,9 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
   const { BranchIcon, label } = BranchSources[branchTarget]
   const handleBranchVisibility = useCallback(() => setBranchIsOpen(!branchIsOpen), [branchIsOpen])
   const hasAssociatedPou =
-    pous.some((pou) => pou.type === branchTarget) || (branchTarget === 'data-type' && dataTypes.length > 0)
+    pous.some((pou) => pou.type === branchTarget) ||
+    branchTarget === 'device' ||
+    (branchTarget === 'data-type' && dataTypes.length > 0)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
 
   return (
@@ -98,7 +101,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
         className='flex w-full cursor-pointer flex-row items-center gap-1 py-1 pl-[18px] hover:bg-slate-50 dark:hover:bg-neutral-900'
         onClick={hasAssociatedPou ? handleBranchVisibility : undefined}
       >
-        {hasAssociatedPou ? (
+        {hasAssociatedPou || branchTarget === 'device' ? (
           <ArrowIcon
             direction='right'
             className={cn(
@@ -146,6 +149,8 @@ const NestedBranchSources = {
   array: { BranchIcon: ArrayIcon, label: 'Arrays' },
   enumerated: { BranchIcon: EnumIcon, label: 'Enums' },
   structure: { BranchIcon: StructureIcon, label: 'Structures' },
+  configuration: { BranchIcon: ConfigIcon, label: 'Configurations' },
+  pin: { BranchIcon: StructureIcon, label: 'Pins' },
 }
 const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProjectTreeNestedBranchProps) => {
   const {
@@ -203,7 +208,7 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
 
 type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
   nested?: boolean
-  leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res'
+  leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res' | 'devConfig' | 'devPin'
   label?: string
 }
 
@@ -217,6 +222,8 @@ const LeafSources = {
   enum: { LeafIcon: EnumIcon },
   str: { LeafIcon: StructureIcon },
   res: { LeafIcon: ResourceIcon },
+  devConfig: { LeafIcon: ConfigIcon },
+  devPin: { LeafIcon: PLCIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => {
   const {
