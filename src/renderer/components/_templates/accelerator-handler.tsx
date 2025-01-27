@@ -156,10 +156,11 @@ const AcceleratorHandler = () => {
    * Application Related Accelerators
    */
 
+  // !DEPRECATED
   useEffect(() => {
     window.bridge.appIsClosing((event) => {
+      console.log('appIsClosing')
       if (closeApp) return
-
       event.preventDefault()
       quitAppRequest()
     })

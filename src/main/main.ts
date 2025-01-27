@@ -325,7 +325,7 @@ app.on('activate', () => {
  */
 app.on('before-quit', () => {
   console.log('before-quit')
-  mainWindow?.webContents.send('app:is-closing')
+  mainWindow?.destroy()
 })
 
 /**
