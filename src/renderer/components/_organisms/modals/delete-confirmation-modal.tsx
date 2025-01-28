@@ -7,7 +7,7 @@ import { RungState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
 import { useEffect } from 'react'
 
-import { Modal, ModalContent } from '../../modal'
+import { Modal, ModalContent } from '../../_molecules/modal'
 
 type ModalData = {
   leafLang: string

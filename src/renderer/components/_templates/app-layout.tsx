@@ -6,9 +6,7 @@ import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 
 import Toaster from '../_features/[app]/toast/toaster'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
-import { ConfirmDeleteElementModal } from '../_molecules/modals/delete-confirmation-modal'
-import { QuitApplicationModal } from '../_molecules/modals/quit-application-modal'
-import { SaveChangesModal } from '../_molecules/modals/save-changes-modal'
+import { ConfirmDeleteElementModal, QuitApplicationModal , SaveChangesModal } from '../_organisms/modals'
 import { AcceleratorHandler } from './accelerator-handler'
 
 type AppLayoutProps = ComponentPropsWithoutRef<'main'>

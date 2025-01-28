@@ -7,7 +7,7 @@ import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { ComponentPropsWithoutRef } from 'react'
 
-import { Modal, ModalContent } from '../../modal'
+import { Modal, ModalContent } from '../../_molecules/modal'
 
 type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
