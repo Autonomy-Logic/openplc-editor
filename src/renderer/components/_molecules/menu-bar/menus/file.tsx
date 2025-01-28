@@ -83,6 +83,10 @@ export const FileMenu = () => {
     closeProject()
   }
 
+  const handleQuitApp = () => {
+    window.bridge.handleCloseOrHideWindow()
+  }
+
   return (
     <>
       <MenuPrimitive.Menu>
@@ -136,7 +140,7 @@ export const FileMenu = () => {
               <span className={ACCELERATOR}>{'Ctrl + U'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
-            <MenuPrimitive.Item className={ITEM} onClick={handleCloseProject}>
+            <MenuPrimitive.Item className={ITEM} onClick={handleQuitApp}>
               <span>{i18n.t('menu:file.submenu.quit')}</span>
               <span className={ACCELERATOR}>{'Ctrl + Q'}</span>
             </MenuPrimitive.Item>
