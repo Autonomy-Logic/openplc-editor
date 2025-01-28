@@ -145,7 +145,7 @@ export const Coil = (block: CoilProps) => {
 
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
-      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-20px' : '-16px'
+      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-24px' : '-20px'
     }
   }, [coilVariableValue])
 
