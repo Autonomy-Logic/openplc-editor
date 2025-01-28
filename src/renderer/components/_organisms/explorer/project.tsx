@@ -228,7 +228,7 @@ const Project = () => {
             <ProjectTreeLeaf
               leafLang='devPin'
               key='Pin Mapping'
-              label='Pins'
+              label='Pin Mapping'
               /** Todo: Update the tab state */
               onClick={() =>
                 handleCreateTab({

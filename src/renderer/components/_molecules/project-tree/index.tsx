@@ -5,6 +5,7 @@ import {
   ConfigIcon,
   DataTypeIcon,
   DeviceIcon,
+  DeviceTransferIcon,
   EnumIcon,
   FBDIcon,
   FunctionBlockIcon,
@@ -141,7 +142,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
 // 'ml-4',
 
 type IProjectTreeNestedBranchProps = ComponentPropsWithoutRef<'li'> & {
-  nestedBranchTarget: 'array' | 'enumerated' | 'structure'
+  nestedBranchTarget: 'array' | 'enumerated' | 'structure' | 'configuration' | 'pin-mapping'
   children?: ReactNode
 }
 
@@ -150,7 +151,7 @@ const NestedBranchSources = {
   enumerated: { BranchIcon: EnumIcon, label: 'Enums' },
   structure: { BranchIcon: StructureIcon, label: 'Structures' },
   configuration: { BranchIcon: ConfigIcon, label: 'Configurations' },
-  pin: { BranchIcon: StructureIcon, label: 'Pins' },
+  'pin-mapping': { BranchIcon: DeviceTransferIcon, label: 'Pins' },
 }
 const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProjectTreeNestedBranchProps) => {
   const {
@@ -223,7 +224,7 @@ const LeafSources = {
   str: { LeafIcon: StructureIcon },
   res: { LeafIcon: ResourceIcon },
   devConfig: { LeafIcon: ConfigIcon },
-  devPin: { LeafIcon: PLCIcon },
+  devPin: { LeafIcon: DeviceTransferIcon },
 }
 const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => {
   const {
@@ -260,19 +261,21 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
         )}
         dangerouslySetInnerHTML={{ __html: label || '' }}
       />
-      <button
-        aria-label='delete element button'
-        type='button'
-        className='mr-2 flex h-5 w-5 items-center'
-        onClick={(e) => {
-          e.stopPropagation()
-          handleDeleteTab()
-        }}
-        aria-haspopup='dialog'
-        aria-expanded='false'
-      >
-        <CloseIcon className='h-4 w-4 group-hover:stroke-red-500' />
-      </button>
+      {leafLang === 'devPin' || leafLang === 'devConfig' ? null : (
+        <button
+          aria-label='delete element button'
+          type='button'
+          className='mr-2 flex h-5 w-5 items-center'
+          onClick={(e) => {
+            e.stopPropagation()
+            handleDeleteTab()
+          }}
+          aria-haspopup='dialog'
+          aria-expanded='false'
+        >
+          <CloseIcon className='h-4 w-4 group-hover:stroke-red-500' />
+        </button>
+      )}
     </li>
   )
 }
