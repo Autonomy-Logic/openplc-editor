@@ -219,7 +219,7 @@ const Project = () => {
               /** Todo: Update the tab state */
               onClick={() =>
                 handleCreateTab({
-                  name,
+                  name: 'Configuration',
                   path: `/data/configuration/device/configuration`,
                   elementType: { type: 'device', derivation: 'configuration' },
                 })
@@ -232,9 +232,9 @@ const Project = () => {
               /** Todo: Update the tab state */
               onClick={() =>
                 handleCreateTab({
-                  name,
+                  name: 'Pin Mapping',
                   path: `/data/configuration/device/pin-mapping`,
-                  elementType: { type: 'device', derivation: 'pin' },
+                  elementType: { type: 'device', derivation: 'pin-mapping' },
                 })
               }
             />

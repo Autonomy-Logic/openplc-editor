@@ -106,6 +106,22 @@ const CreateResourceEditor = (name = 'resource'): EditorModel => {
   })
   return editor
 }
+
+const CreateDeviceEditor = (name = 'device', derivation: 'configuration' | 'pin-mapping'): EditorModel => {
+  if (derivation) {
+    const editor = CreateEditorObject({
+      type: 'plc-device',
+      meta: {
+        name,
+        derivation,
+      },
+    })
+    return editor
+  }
+
+  throw new Error('Invalid derivation value')
+}
+
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
   switch (elementType.type) {
@@ -119,6 +135,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateEditorModelObject(name, null, null, elementType.derivation)
     case 'resource':
       return CreateResourceEditor(name)
+    case 'device':
+      return CreateDeviceEditor(name, elementType.derivation)
   }
 }
 
