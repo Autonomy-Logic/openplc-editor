@@ -11,6 +11,7 @@ import { ImperativePanelHandle } from 'react-resizable-panels'
 import { ExitIcon } from '../assets'
 import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
+import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { Search } from '../components/_features/[workspace]/search'
@@ -154,6 +155,10 @@ const WorkspaceScreen = () => {
     })
   }, [])
 
+  useEffect(() => {
+    console.log('editor name', editor.meta.name)
+  }, [editor])
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <AboutModal />
@@ -223,6 +228,7 @@ const WorkspaceScreen = () => {
                   {tabs.length > 0 ? (
                     <>
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
+                      {editor['type'] === 'plc-device' && <DeviceEditor DeviceTypeName={editor.meta.name} />}
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1 gap-2'>
                           <DataTypeEditor dataTypeName={editor.meta.name} />{' '}
