@@ -325,7 +325,10 @@ app.on('activate', () => {
  */
 app.on('before-quit', () => {
   console.log('before-quit')
-  mainWindow?.destroy()
+  if (process.platform === 'darwin') {
+    mainWindow?.webContents.send('app:darwin-is-closing')
+  }
+  // mainWindow?.destroy()
 })
 
 /**

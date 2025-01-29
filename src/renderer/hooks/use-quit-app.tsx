@@ -2,7 +2,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 
 export const useQuitApp = () => {
   const {
-    workspace: { systemConfigs },
+    // workspace: { systemConfigs },
 
     workspaceActions: { setCloseApp, setCloseWindow },
   } = useOpenPLCStore()
@@ -24,10 +24,6 @@ export const useQuitApp = () => {
 
   const handleQuitApp = () => {
     handleAppIsClosing()
-    if (systemConfigs.OS === 'darwin') {
-      window.bridge.handleQuitApp()
-      return
-    }
     window.bridge.handleCloseOrHideWindow()
   }
 

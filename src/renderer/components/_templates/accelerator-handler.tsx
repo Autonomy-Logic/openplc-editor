@@ -8,10 +8,10 @@ const AcceleratorHandler = () => {
   const { handleExportProject } = useCompiler()
   const [requestFlag, setRequestFlag] = useState(false)
   const {
-    workspace: { editingState, closeApp, closeWindow, systemConfigs },
+    workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, openProject, openRecentProject },
-    workspaceActions: { switchAppTheme, toggleMaximizedWindow },
+    workspaceActions: { switchAppTheme, toggleMaximizedWindow, setCloseAppDarwin },
   } = useOpenPLCStore()
 
   const { handleWindowClose } = useQuitApp()
@@ -156,13 +156,13 @@ const AcceleratorHandler = () => {
    * Application Related Accelerators
    */
 
-  // !DEPRECATED
+  /**
+   * -- Quit app in darwin.
+   * The flow is: before-quit -> close -> beforeunload -> closed -> will-quit -> quit
+   */
   useEffect(() => {
-    window.bridge.appIsClosing((event) => {
-      console.log('appIsClosing')
-      if (closeApp) return
-      event.preventDefault()
-      quitAppRequest()
+    window.bridge.darwinAppIsClosing(() => {
+      setCloseAppDarwin(true)
     })
   }, [])
 
@@ -172,14 +172,14 @@ const AcceleratorHandler = () => {
    */
   window.onbeforeunload = (e) => {
     // When page is reloaded, the beforeunload event is fired, so we need to prevent the default behavior
-    if (!closeWindow) {
+    if (!close.window) {
       e.returnValue = false
       return
     }
 
-    if (closeApp) return
+    if (close.app) return
 
-    if (systemConfigs.OS === 'darwin') {
+    if (systemConfigs.OS === 'darwin' && !close.appDarwin) {
       window.bridge.hideWindow()
       e.returnValue = false
       return

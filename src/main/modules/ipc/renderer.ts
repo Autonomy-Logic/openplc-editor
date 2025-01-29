@@ -285,7 +285,7 @@ const rendererProcessBridge = {
   quitAppRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:quit-accelerator', callback),
   removeQuitAppListener: () => ipcRenderer.removeAllListeners('app:quit-accelerator'),
 
-  appIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:is-closing', callback),
+  darwinAppIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:darwin-is-closing', callback),
   handleQuitApp: () => ipcRenderer.send('app:quit'),
 
   /**
