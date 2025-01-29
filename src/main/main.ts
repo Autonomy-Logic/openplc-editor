@@ -325,7 +325,7 @@ app.on('activate', () => {
  */
 app.on('before-quit', () => {
   console.log('before-quit')
-  if (process.platform === 'darwin') {
+  if (process.platform === 'darwin' && process.env.NODE_ENV === 'production') {
     mainWindow?.webContents.send('app:darwin-is-closing')
     return
   }
