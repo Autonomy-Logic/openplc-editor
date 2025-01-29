@@ -327,8 +327,9 @@ app.on('before-quit', () => {
   console.log('before-quit')
   if (process.platform === 'darwin') {
     mainWindow?.webContents.send('app:darwin-is-closing')
+    return
   }
-  // mainWindow?.destroy()
+  mainWindow?.destroy()
 })
 
 /**
