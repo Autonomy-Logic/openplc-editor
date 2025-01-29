@@ -212,12 +212,6 @@ export default class MenuBuilder {
           accelerator: 'Cmd+U',
           enabled: false,
         },
-        { type: 'separator' },
-        {
-          label: i18n.t('menu:file.submenu.quit'),
-          accelerator: 'Cmd+Q',
-          click: () => this.handleQuitAppRequest(),
-        },
       ],
     }
 
