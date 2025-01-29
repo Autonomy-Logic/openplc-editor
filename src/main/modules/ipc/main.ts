@@ -124,10 +124,10 @@ class MainProcessBridge implements MainIpcModule {
       }
     })
     this.ipcMain.on('app:quit', () => {
-      app.quit()
       if (this.mainWindow) {
         this.mainWindow.destroy()
       }
+      app.quit()
     })
     // this.ipcMain.on('app:reply-if-app-is-closing', (_, shouldQuit) => {
     //   if (!shouldQuit) return
