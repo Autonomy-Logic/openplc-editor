@@ -88,6 +88,11 @@ const ConfigurationEditor = () => {
             </div>
           ))}
         </div>
+        <hr className=' h-[1px] w-full self-stretch bg-brand-light ' />
+        <div className='flex items-center gap-2'>
+            <div className='h-2 w-2 bg-brand'></div>
+            <span className='text-sm font-medium text-white'>Enable Modbus TCP</span>
+          </div>
       </div>
     </div>
   )
