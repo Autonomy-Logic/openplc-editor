@@ -89,7 +89,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         ? variables
             .filter(
               (variable) =>
-                variable.name.includes(valueToSearch) &&
+                variable.name.toLowerCase().includes(valueToSearch.toLowerCase()) &&
                 (variableRestrictions.values === undefined ||
                   variableRestrictions.values.includes(variable.type.value.toLowerCase())) &&
                 (variableRestrictions.limitations === undefined ||
