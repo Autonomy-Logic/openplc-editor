@@ -410,31 +410,8 @@ const updateVariableValidation = (
 }
 const createGlobalVariableValidation = (variables: PLCGlobalVariable[], variableName: string) => {
   if (checkIfGlobalVariableExists(variables, variableName)) {
-    const regex = /_\d+$/
-    const filteredVariables = variables.filter((variable: PLCVariable) =>
-      variable.name.includes(variableName.replace(regex, '')),
-    )
-    const sortedVariables = filteredVariables.sort((a, b) => {
-      const matchA = a.name.match(regex)
-      const matchB = b.name.match(regex)
-      if (matchA && matchB) {
-        return parseInt(matchA[0].slice(1)) - parseInt(matchB[0].slice(1))
-      }
-      return 0
-    })
-    const biggestVariable = sortedVariables[sortedVariables.length - 1].name.match(regex)
-    let number = biggestVariable ? parseInt(biggestVariable[0].slice(1)) : 0
-    for (let i = sortedVariables.length - 1; i >= 1; i--) {
-      const previousVariable = sortedVariables[i].name.match(regex)
-      const previousNumber = previousVariable ? parseInt(previousVariable[0].slice(1)) : 0
-      const currentVariable = sortedVariables[i - 1].name.match(regex)
-      const currentNumber = currentVariable ? parseInt(currentVariable[0].slice(1)) : 0
-      if (currentNumber !== previousNumber - 1) {
-        number = currentNumber
-      }
-    }
-    const newVariableName = `${variableName.replace(regex, '')}_${number + 1}`
-    return newVariableName
+    const { name: variableNameWithoutNumber, number } = checkVariableName(variables, variableName)
+    return `${variableNameWithoutNumber}${number}`
   }
   return variableName
 }
