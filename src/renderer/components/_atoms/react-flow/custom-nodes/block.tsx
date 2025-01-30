@@ -433,7 +433,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    if (node.data.variable !== variable) {
+    if ((node.data as BasicNodeData).variable.id !== variable.id) {
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
