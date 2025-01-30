@@ -135,6 +135,17 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       )
     },
 
+    updatePouReturnType: (pouName, returnType): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const draft = project.data.pous.find((pou) => {
+            return pou.data.name === pouName
+          })
+          if (draft && draft.type === 'function') draft.data.returnType = returnType
+        }),
+      )
+    },
+
     updatePouDocumentation: (pouName, documentation): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
@@ -362,7 +373,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
 
           dataType.variable.splice(newIndex, 0, removed)
-
         }),
       )
     },

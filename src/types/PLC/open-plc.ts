@@ -200,7 +200,7 @@ const bodySchema = z.discriminatedUnion('language', [
 const PLCFunctionSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd']),
   name: z.string(),
-  returnType: z.enum(['BOOL', 'INT', 'DINT']),
+  returnType: z.union([baseTypeSchema, z.string()]),
   /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
   body: bodySchema,

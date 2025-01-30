@@ -75,7 +75,6 @@ const CompilerService = {
       return { success: false, message: 'User canceled the save dialog' }
     }
 
-    console.log('dataToCreateXml', dataToCreateXml)
 
     const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml)
     if (!projectDataAsString) {
