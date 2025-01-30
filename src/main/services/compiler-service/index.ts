@@ -75,7 +75,6 @@ const CompilerService = {
       return { success: false, message: 'User canceled the save dialog' }
     }
 
-    const pouFunction = dataToCreateXml.pous.map((pou) => (pou.type === 'function' ? pou.data : ''))
 
     const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml)
     if (!projectDataAsString) {
