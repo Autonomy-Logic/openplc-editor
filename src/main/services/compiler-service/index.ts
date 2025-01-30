@@ -77,8 +77,6 @@ const CompilerService = {
 
     const pouFunction = dataToCreateXml.pous.map((pou) => (pou.type === 'function' ? pou.data : ''))
 
-    console.log('dataToCreateXml', pouFunction)
-
     const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml)
     if (!projectDataAsString) {
       return { success: false, message: message }
