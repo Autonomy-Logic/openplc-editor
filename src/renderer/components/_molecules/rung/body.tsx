@@ -232,7 +232,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
      * !IMPORTANT: This function must be used inside of components, because the functions deleteVariable and updateModelVariables are just available at the useOpenPLCStore hook
      * -- This block of code references at project:
      *    -- src/renderer/components/_molecules/rung/body.tsx
-     *    -- src/renderer/components/_molecules/rung/header.tsx
+     *    -- src/renderer/components/_molecules/menu-bar/modals/delete-confirmation-modal.tsx
      *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
      */
     const blockNodes = nodes.filter((node) => node.type === 'block')
