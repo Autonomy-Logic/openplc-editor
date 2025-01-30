@@ -28,7 +28,7 @@ const checkIfLocationExists = (variables: PLCVariable[], location: string) => {
  */
 export const extractNumberAtEnd = (str: string): { number: number; string: string; length: number } => {
   const match = str.match(/(\d+)$/)
-  const number = match ? parseInt(match[0], 10) : 0
+  const number = match ? parseInt(match[0], 10) : -1
   return {
     number,
     string: match ? match[0] : '',
@@ -47,14 +47,12 @@ const variableNameValidation = (variableName: string) => {
 }
 
 /**
- * This is a validation to check if variable is correct.
+ * This is a validation to check if the enumerated variable name is correct.
  *
  * The validation have to obey this rules:
- * 1. There CANNOT be space between the numeric values and dots
- * 2. The second number MUST always be greater than the first
- * 3. Only integer numbers can be used (shouldn't accept floating numbers or strings of any type)
- *
- * It is exported to be used at array-modal.tsx file present at src/renderer/components/_molecules/variables-table/elements.
+ * - CamelCase, PascalCase or SnakeCase
+ * - Can not be empty
+ * - Can not be a reserved word
  */
 const enumeratedValidation = ({ value }: { value: string }) => {
   const regex =
@@ -76,6 +74,17 @@ const enumeratedValidation = ({ value }: { value: string }) => {
   }
   return { ok: true }
 }
+
+/**
+ * This is a validation to check if the array variable is correct.
+ *
+ * The validation have to obey this rules:
+ * 1. There CANNOT be space between the numeric values and dots
+ * 2. The second number MUST always be greater than the first
+ * 3. Only integer numbers can be used (shouldn't accept floating numbers or strings of any type)
+ *
+ * It is exported to be used at array-modal.tsx file present at src/renderer/components/_molecules/variables-table/elements.
+ */
 const validateArrayValue = (value: string) => {
   const [left, right] = value.split('..').map(Number)
   return Number.isInteger(left) && Number.isInteger(right) && left < right
@@ -192,32 +201,15 @@ const checkVariableName = (variables: PLCVariable[], variableName: string) => {
     return 0
   })
 
+  // Get the biggest number at the end of the variable name
+  // If there is no number at the end of the variable name, return -1 (because the number at the end of the variable name is 0)
   const biggestVariable =
-    sortedVariables.length > 0 ? extractNumberAtEnd(sortedVariables[sortedVariables.length - 1].name) : { number: 0 }
-
-  // If there is a number at the end of the variable name, increment the number by 1
-  let number = biggestVariable.number
-  for (let i = sortedVariables.length - 1; i >= 1; i--) {
-    const previousVariable = extractNumberAtEnd(sortedVariables[i].name)
-    const previousNumber = previousVariable.number
-
-    const currentVariable = extractNumberAtEnd(sortedVariables[i - 1].name)
-    const currentNumber = currentVariable.number
-
-    if (currentNumber !== previousNumber - 1) {
-      number = currentNumber
-    }
-  }
+    sortedVariables.length > 0 ? extractNumberAtEnd(sortedVariables[sortedVariables.length - 1].name) : { number: -1 }
 
   return {
     ok: filteredVariables.length > 0,
     name: variableNameWithoutNumber,
-    number:
-      filteredVariables.length > 0
-        ? extractNumberAtEnd(sortedVariables[sortedVariables.length - 1].name).string !== ''
-          ? number + 1
-          : 0
-        : 0,
+    number: biggestVariable.number + 1,
   }
 }
 
