@@ -144,6 +144,7 @@ export const Contact = (block: ContactProps) => {
     if (!node || !rung) return
 
     const variable = variables.selected
+
     if (!variable) {
       setWrongVariable(true)
       return
@@ -154,7 +155,7 @@ export const Contact = (block: ContactProps) => {
     }
 
     // Variable of the node is different from the selected variable
-    if (node.data.variable !== variable) {
+    if ((node.data as BasicNodeData).variable.id !== variable.id) {
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
@@ -171,12 +172,25 @@ export const Contact = (block: ContactProps) => {
       return
     }
 
-    if (node.data.variable === variable && variable.name !== contactVariableValue) {
-      setContactVariableValue(variable.name)
-      if (inputVariableRef.current?.isFocused) {
-        inputVariableRef.current.blur({ submit: false })
-        handleSubmitContactVariableOnTextareaBlur(variable.name)
+    if ((node.data as BasicNodeData).variable.id === variable.id && variable.name !== contactVariableValue) {
+      if ((node.data as BasicNodeData).variable.name !== variable.name) {
+        updateNode({
+          editorName: editor.meta.name,
+          rungId: rung.id,
+          nodeId: node.id,
+          node: {
+            ...node,
+            data: {
+              ...node.data,
+              variable: {
+                ...variable,
+                name: variable.name,
+              },
+            },
+          },
+        })
       }
+      setContactVariableValue(variable.name)
       setWrongVariable(false)
       return
     }
