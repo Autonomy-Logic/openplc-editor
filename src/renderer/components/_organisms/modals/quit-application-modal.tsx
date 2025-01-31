@@ -15,7 +15,7 @@ const QuitApplicationModal = ({ isOpen, ...rest }: SaveChangeModalProps) => {
     modalActions: { closeModal, onOpenChange },
   } = useOpenPLCStore()
 
-  const { handleQuitApp, handleCancelAppIsClosing } = useQuitApp()
+  const { handleQuitApp, handleCancelQuitApp } = useQuitApp()
 
   const handleCloseApplication = () => {
     handleQuitApp()
@@ -23,7 +23,7 @@ const QuitApplicationModal = ({ isOpen, ...rest }: SaveChangeModalProps) => {
 
   const handleCancelModal = () => {
     closeModal()
-    handleCancelAppIsClosing()
+    handleCancelQuitApp()
   }
 
   return (

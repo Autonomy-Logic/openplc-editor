@@ -191,4 +191,5 @@ const AcceleratorHandler = () => {
 
   return <></>
 }
+
 export { AcceleratorHandler }
