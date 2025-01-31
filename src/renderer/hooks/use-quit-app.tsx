@@ -11,7 +11,7 @@ export const useQuitApp = () => {
     setCloseApp(true)
   }
   const handleCancelAppIsClosing = () => {
-    setCloseWindow(true)
+    setCloseApp(false)
   }
 
   const handleAppIsClosingDarwin = () => {
