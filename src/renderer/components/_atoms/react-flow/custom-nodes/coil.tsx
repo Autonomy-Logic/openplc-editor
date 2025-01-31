@@ -145,7 +145,7 @@ export const Coil = (block: CoilProps) => {
 
   useEffect(() => {
     if (inputVariableRef.current && inputWrapperRef.current) {
-      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-20px' : '-16px'
+      inputWrapperRef.current.style.top = inputVariableRef.current.scrollHeight >= 24 ? '-24px' : '-20px'
     }
   }, [coilVariableValue])
 
@@ -185,7 +185,7 @@ export const Coil = (block: CoilProps) => {
       return
     }
 
-    if (node.data.variable !== variable) {
+    if ((node.data as BasicNodeData).variable.id !== variable.id) {
       setCoilVariableValue(variable.name)
       updateNode({
         editorName: editor.meta.name,
@@ -203,12 +203,25 @@ export const Coil = (block: CoilProps) => {
       return
     }
 
-    if (node.data.variable === variable && variable.name !== coilVariableValue) {
-      setCoilVariableValue(variable.name)
-      if (inputVariableRef.current?.isFocused) {
-        inputVariableRef.current.blur({ submit: false })
-        handleSubmitCoilVariableOnTextareaBlur(variable.name)
+    if ((node.data as BasicNodeData).variable.id === variable.id && variable.name !== coilVariableValue) {
+      if ((node.data as BasicNodeData).variable.name !== variable.name) {
+        updateNode({
+          editorName: editor.meta.name,
+          rungId: rung.id,
+          nodeId: node.id,
+          node: {
+            ...node,
+            data: {
+              ...node.data,
+              variable: {
+                ...variable,
+                name: variable.name,
+              },
+            },
+          },
+        })
       }
+      setCoilVariableValue(variable.name)
       setWrongVariable(false)
       return
     }

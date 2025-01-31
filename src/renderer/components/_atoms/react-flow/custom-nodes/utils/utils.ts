@@ -2,6 +2,7 @@ import type { EditorModel, FlowType } from '@root/renderer/store/slices'
 import { genericTypeSchema } from '@root/types/PLC'
 import type { PLCPou } from '@root/types/PLC/open-plc'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
+import { ZodLiteral } from 'zod'
 
 import { BlockVariant } from '../block'
 import { BasicNodeData } from './types'
@@ -76,16 +77,24 @@ export const validateVariableType = (
   }
 
   // Handle generic types
-  if (upperExpectedType.includes('ANY')) {
+  if (upperExpectedType.includes('ANY_')) {
     const validTypes = genericTypeSchema.shape[upperExpectedType as keyof typeof genericTypeSchema.shape].options
     if (validTypes.length > 1) {
       const subValues: string[] = []
       validTypes.forEach((value) => {
-        ;(genericTypeSchema.shape[value.value as keyof typeof genericTypeSchema.shape].options as string[]).forEach(
-          (subValue) => {
-            subValues.push(subValue.toLowerCase())
-          },
-        )
+        if (typeof value === 'string') {
+          subValues.push(value.toLowerCase())
+          return
+        }
+
+        if (value instanceof ZodLiteral) {
+          ;(genericTypeSchema.shape[value.value as keyof typeof genericTypeSchema.shape].options as string[]).forEach(
+            (subValue) => {
+              subValues.push(subValue.toLowerCase())
+            },
+          )
+          return
+        }
       })
       return {
         isValid: subValues.includes(upperSelectedType.toLowerCase()),
@@ -123,11 +132,19 @@ export const getVariableRestrictionType = (variableType: string) => {
     if (values.length > 1) {
       const subValues: string[] = []
       values.forEach((value) => {
-        ;(genericTypeSchema.shape[value.value as keyof typeof genericTypeSchema.shape].options as string[]).forEach(
-          (subValue) => {
-            subValues.push(subValue.toLowerCase())
-          },
-        )
+        if (typeof value === 'string') {
+          subValues.push(value.toLowerCase())
+          return
+        }
+
+        if (value instanceof ZodLiteral) {
+          ;(genericTypeSchema.shape[value.value as keyof typeof genericTypeSchema.shape].options as string[]).forEach(
+            (subValue) => {
+              subValues.push(subValue.toLowerCase())
+            },
+          )
+          return
+        }
       })
       return {
         values: subValues,
