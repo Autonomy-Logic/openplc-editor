@@ -26,7 +26,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     editorActions: { clearEditor },
   } = useOpenPLCStore()
 
-  const { handleQuitApp, handleCancelWindowClose } = useQuitApp()
+  const { handleQuitApp, handleCancelQuitApp } = useQuitApp()
 
   const onClose = () => {
     clearEditor()
@@ -159,7 +159,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
 
   const handleCancelModal = () => {
     closeModal()
-    handleCancelWindowClose()
+    if (validationContext === 'close-app') handleCancelQuitApp()
   }
 
   return (

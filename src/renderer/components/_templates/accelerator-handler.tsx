@@ -11,10 +11,10 @@ const AcceleratorHandler = () => {
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, openProject, openRecentProject },
-    workspaceActions: { switchAppTheme, toggleMaximizedWindow, setCloseAppDarwin },
+    workspaceActions: { switchAppTheme, toggleMaximizedWindow },
   } = useOpenPLCStore()
 
-  const { handleWindowClose } = useQuitApp()
+  const { handleWindowClose, handleAppIsClosingDarwin } = useQuitApp()
 
   const quitAppRequest = () => {
     if (editingState === 'unsaved') {
@@ -162,7 +162,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     window.bridge.darwinAppIsClosing(() => {
-      setCloseAppDarwin(true)
+      handleAppIsClosingDarwin()
     })
   }, [])
 
