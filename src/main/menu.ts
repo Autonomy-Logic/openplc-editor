@@ -18,7 +18,6 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
  */
 export default class MenuBuilder {
   private mainWindow: BrowserWindow
-
   private projectService: ProjectService
 
   developOptions: MenuItemConstructorOptions[] = [
@@ -47,6 +46,7 @@ export default class MenuBuilder {
 
     return menu
   }
+
   handleCreateProject() {
     this.mainWindow.webContents.send('project:create-accelerator')
   }
@@ -110,7 +110,7 @@ export default class MenuBuilder {
   }
 
   handleQuitAppRequest() {
-    this.mainWindow.webContents.send('app:quit-accelerator')
+    this.mainWindow.webContents.send('window-controls:request-close')
   }
 
   /**
@@ -135,7 +135,7 @@ export default class MenuBuilder {
   updateAppTheme() {
     nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
     this.mainWindow.webContents.send('system:update-theme')
-    this.buildMenu()
+    void this.buildMenu()
   }
 
   /**
@@ -211,12 +211,6 @@ export default class MenuBuilder {
           label: i18n.t('menu:file.submenu.updates'),
           accelerator: 'Cmd+U',
           enabled: false,
-        },
-        { type: 'separator' },
-        {
-          label: i18n.t('menu:file.submenu.quit'),
-          accelerator: 'Cmd+Q',
-          click: () => this.handleQuitAppRequest(),
         },
       ],
     }
@@ -373,11 +367,12 @@ export default class MenuBuilder {
         const projectPath = projectEntry.path.startsWith(homeDir)
           ? projectEntry.path.replace(homeDir, '~')
           : projectEntry.path
+          const projectName = projectEntry.name
 
         return {
-          label: projectPath,
+          label: `${projectName} (${projectPath})`,
           click: () => {
-            this.handleOpenProjectByPath(projectEntry.path)
+            void this.handleOpenProjectByPath(projectEntry.path)
           },
         }
       }),
@@ -649,7 +644,7 @@ export default class MenuBuilder {
           return {
             label: `${projectName} (${projectPath})`,
             click: () => {
-              this.handleOpenProjectByPath(projectEntry.path)
+              void this.handleOpenProjectByPath(projectEntry.path)
             },
           }
         }),

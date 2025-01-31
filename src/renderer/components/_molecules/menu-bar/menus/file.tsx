@@ -2,7 +2,6 @@ import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useCompiler, useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { FlowType } from '@root/renderer/store/slices/flow/types'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
@@ -12,18 +11,15 @@ import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
   const {
-    project,
-    workspace: { editingState },
-    editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecent },
-    projectActions: { setProject, clearProjects },
-    tabsActions: { clearTabs },
-    flowActions: { addFlow, clearFlows },
-    libraryActions: { clearUserLibraries },
-
     editor,
+    project,
+    workspace,
+
+    workspaceActions: { setEditingState },
     modalActions: { openModal },
+    sharedWorkspaceActions: { closeProject, openProject },
   } = useOpenPLCStore()
+  const { editingState } = workspace
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { handleExportProject } = useCompiler()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
@@ -43,41 +39,7 @@ export const FileMenu = () => {
 
   const handleOpenProject = async () => {
     if (handleUnsavedChanges('open-project')) return
-
-    const { success, data, error } = await window.bridge.openProject()
-    if (success && data) {
-      clearEditor()
-      clearTabs()
-      setEditingState('unsaved')
-      setRecent([])
-      setProject({
-        meta: {
-          name: data.content.meta.name,
-          type: data.content.meta.type,
-          path: data.meta.path,
-        },
-        data: data.content.data,
-      })
-
-      const ladderPous = data.content.data.pous.filter((pou) => pou.data.language === 'ld')
-      if (ladderPous.length > 0) {
-        ladderPous.forEach((pou) => {
-          if (pou.data.body.language === 'ld') addFlow(pou.data.body.value as FlowType)
-        })
-      }
-
-      toast({
-        title: 'Project opened!',
-        description: 'Your project was opened, and loaded.',
-        variant: 'default',
-      })
-    } else {
-      toast({
-        title: 'Cannot open the project.',
-        description: error?.description,
-        variant: 'fail',
-      })
-    }
+    await openProject()
   }
 
   const handleSaveProject = async () => {
@@ -117,25 +79,12 @@ export const FileMenu = () => {
     setSelectedTab(editor.meta.name)
   }, [editor])
 
-  useEffect(() => {
-    window.bridge.closeProjectAccelerator(handleCloseProject)
-
-    return () => {
-      void window.bridge.removeCloseProjectListener()
-    }
-  }, [])
-
   const handleCloseProject = () => {
-    if (editingState === 'unsaved') {
-      openModal('save-changes-project', 'exit')
-      return
-    }
-    clearEditor()
-    clearTabs()
-    setRecent([])
-    clearUserLibraries()
-    clearFlows()
-    clearProjects()
+    closeProject()
+  }
+
+  const handleQuitApp = () => {
+    window.bridge.handleCloseOrHideWindow()
   }
 
   return (
@@ -191,7 +140,7 @@ export const FileMenu = () => {
               <span className={ACCELERATOR}>{'Ctrl + U'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
-            <MenuPrimitive.Item className={ITEM} onClick={handleCloseProject}>
+            <MenuPrimitive.Item className={ITEM} onClick={handleQuitApp}>
               <span>{i18n.t('menu:file.submenu.quit')}</span>
               <span className={ACCELERATOR}>{'Ctrl + Q'}</span>
             </MenuPrimitive.Item>

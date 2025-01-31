@@ -2,7 +2,6 @@ import * as MenuPrimitive from '@radix-ui/react-menubar'
 import RecentProjectIcon from '@root/renderer/assets/icons/interface/Recent'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { FlowType } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import _ from 'lodash'
 import { useEffect, useState } from 'react'
@@ -12,26 +11,22 @@ import { MenuClasses } from '../constants'
 export const RecentMenu = () => {
   const {
     workspace: { recent },
-    editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecent },
-    tabsActions: { clearTabs },
-    projectActions: { setProject },
-    flowActions: { addFlow },
-    libraryActions: { addLibrary },
+    workspaceActions: { setRecent },
+    sharedWorkspaceActions: { openProjectByPath },
   } = useOpenPLCStore()
   const { TRIGGER, CONTENT, ITEM } = MenuClasses
 
   const [recentProjects, setRecentProjects] = useState(recent)
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
 
-  useEffect(() =>{
+  useEffect(() => {
     setRecentProjects(recent)
-  },[recent])
+  }, [recent])
 
-    const updateUserRecentProjects = async () => {
-      const recentProjects = await window.bridge.retrieveRecent()
-      setRecent(recentProjects)
-    }
+  const updateUserRecentProjects = async () => {
+    const recentProjects = await window.bridge.retrieveRecent()
+    setRecent(recentProjects)
+  }
 
   const compareLastOpened = (lastOpenedAt: string) => {
     const currentTime = new Date()
@@ -90,41 +85,9 @@ export const RecentMenu = () => {
     }
   }, [recent])
 
-  const handleOpenProject = async (projectPath: string) => {
-    const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
-    if (success && data) {
-      clearEditor()
-      clearTabs()
-      setEditingState('unsaved')
-      const projectMeta = {
-        name: data.content.meta.name,
-        type: data.content.meta.type,
-        path: data.meta.path,
-      }
-      const projectData = data.content.data
-
-      setProject({
-        meta: projectMeta,
-        data: projectData,
-      })
-
-      const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
-
-      if (ladderPous.length) {
-        ladderPous.forEach((pou) => {
-          if (pou.data.body.language === 'ld') {
-            addFlow(pou.data.body.value as FlowType)
-          }
-        })
-      }
-
-      projectData.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
-      toast({
-        title: 'Project opened!',
-        description: 'Your project was opened and loaded.',
-        variant: 'default',
-      })
-    } else {
+  const handleOpenProjectByPath = async (projectPath: string) => {
+    const { success, error } = await openProjectByPath(projectPath)
+    if (!success) {
       if (error?.description.includes('Error reading project file.')) {
         void updateUserRecentProjects()
         toast({
@@ -132,14 +95,14 @@ export const RecentMenu = () => {
           description: `The path ${projectPath} does not exist on this computer.`,
           variant: 'fail',
         })
-      } else {
-        void updateUserRecentProjects(),
-          toast({
-            title: 'Cannot open the project.',
-            description: error?.description,
-            variant: 'fail',
-          })
+        return
       }
+      void updateUserRecentProjects(),
+        toast({
+          title: 'Cannot open the project.',
+          description: error?.description,
+          variant: 'fail',
+        })
     }
   }
   return (
@@ -149,14 +112,14 @@ export const RecentMenu = () => {
         <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
           {recentProjects.map((project) => (
             <MenuPrimitive.Item
-              onClick={() => void handleOpenProject(project.path)}
+              onClick={() => void handleOpenProjectByPath(project.path)}
               key={project.path}
               className={cn(
                 ITEM,
                 'flex items-center justify-normal gap-2 !overflow-hidden text-xs font-medium text-neutral-900 dark:text-neutral-50',
               )}
             >
-              <RecentProjectIcon className='w-4 h-4'/>
+              <RecentProjectIcon className='h-4 w-4' />
               <span className='flex-1 overflow-hidden text-xs'>{project.name}</span>
               <span className='flex-1 overflow-hidden text-cp-xs'>{project.path}</span>
               <span className='text-cp-xs font-normal text-neutral-400'>{projectTimes[project.path]}</span>

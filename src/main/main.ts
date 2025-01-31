@@ -113,6 +113,10 @@ const createMainWindow = async () => {
    */
   const { bounds } = store.get('window')
 
+  /**
+   * Splash window configuration
+   */
+
   splash = new BrowserWindow({
     width: 580,
     height: 366,
@@ -138,6 +142,12 @@ const createMainWindow = async () => {
     splash?.show()
   })
 
+  splash.on('closed', () => (splash = null))
+
+  /**
+   * Main window configuration
+   */
+
   // Create the main window instance.
   mainWindow = new BrowserWindow({
     minWidth: 1124,
@@ -161,33 +171,15 @@ const createMainWindow = async () => {
   const saveBounds = () => {
     store.set('window.bounds', mainWindow?.getBounds())
   }
-  mainWindow.on('resize', saveBounds)
-  mainWindow.on('close', saveBounds)
-  mainWindow.on('move', saveBounds)
 
   const isMaximizedWindow = () => {
     mainWindow?.webContents.send('window-controls:toggle-maximized')
   }
-  mainWindow.on('maximize', () => {
-    isMaximizedWindow()
-  })
-  mainWindow.on('unmaximize', () => {
-    isMaximizedWindow()
-  })
 
-  // Maximize the window if bounds are not set
-  if (!bounds) {
-    mainWindow.maximize()
-  }
-
-  // Open devtools if the app is not packaged;
-  // if (isDebug) {
-  //   mainWindow.webContents.openDevTools()
-  // }
-
-  splash.on('closed', () => (splash = null))
-
-  // Listen to the ready event to show the window gracefully;
+  /**
+   * -> Ready to show event (https://www.electronjs.org/docs/latest/api/browser-window#event-ready-to-show)
+   * Emitted when the web page has been rendered (while not being shown) and window can be displayed without a visual flash.
+   */
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow) {
       throw new Error('"mainWindow" is not defined')
@@ -205,27 +197,64 @@ const createMainWindow = async () => {
     }, 3000)
   })
 
+  /**
+   * -> Close event (https://www.electronjs.org/docs/latest/api/browser-window#event-close)
+   * Emitted when the window is going to be closed. It's emitted before the beforeunload and unload event of the DOM.
+   * Calling event.preventDefault() will cancel the close.
+   */
+  mainWindow.on('close', saveBounds)
+  mainWindow.on('close', () => {
+    console.log('mainWindow close')
+    mainWindow?.webContents.send('window-controls:is-closing')
+  })
+
+  /**
+   * -> Closed event (https://www.electronjs.org/docs/latest/api/browser-window#event-closed)
+   * Emitted when the window is closed. After you have received this event you should remove the reference to the window
+   * and avoid using it any more.
+   */
   mainWindow.on('closed', () => {
+    console.log('mainWindow closed')
     mainWindow = null
   })
-  mainWindow.on('close', (event) => {
-    if (process.platform === 'darwin') {
-      event.preventDefault()
-      mainWindow?.hide()
-    }
+
+  /**
+   * -> Move event (https://www.electronjs.org/docs/latest/api/browser-window#event-move)
+   * Emitted when the window is being moved to a new position.
+   */
+  mainWindow.on('move', saveBounds)
+
+  /**
+   * -> Maximize event (https://www.electronjs.org/docs/latest/api/browser-window#event-maximize)
+   * Emitted when the window is maximized.
+   */
+  mainWindow.on('maximize', () => {
+    isMaximizedWindow()
   })
 
-  app.on('activate', () => {
-    if (mainWindow === null) {
-      void createMainWindow()
-    } else {
-      mainWindow.show()
-    }
+  /**
+   * -> Unmaximize event (https://www.electronjs.org/docs/latest/api/browser-window#event-unmaximize)
+   * Emitted when the window exits from a maximized state.
+   */
+  mainWindow.on('unmaximize', () => {
+    isMaximizedWindow()
   })
 
-  app.on('before-quit', () => {
-    mainWindow?.destroy()
-  })
+  /**
+   * -> Resize event (https://www.electronjs.org/docs/latest/api/browser-window#event-resize)
+   */
+  // Emitted after the window has been resized.
+  mainWindow.on('resize', saveBounds)
+
+  // Maximize the window if bounds are not set
+  if (!bounds) {
+    mainWindow.maximize()
+  }
+
+  // Open devtools if the app is not packaged;
+  // if (isDebug) {
+  //   mainWindow.webContents.openDevTools()
+  // }
 
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
@@ -251,6 +280,7 @@ const createMainWindow = async () => {
     projectService,
     compilerService: CompilerService,
     store,
+    menuBuilder,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
   // Remove this if your app does not use auto updates;
@@ -270,8 +300,64 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0)
 }
 
-// Quit the app when all windows are closed;
+/**
+ * App event listeners
+ */
+
+/**
+ * -> Active event #MACOS (https://www.electronjs.org/docs/latest/api/app#event-activate-macos)
+ * emitted when the application is activated. Various actions can trigger this event, such as launching the
+ * application for the first time, attempting to re-launch the application when it's already running, or clicking on
+ * the application's dock or taskbar icon.
+ */
+app.on('activate', () => {
+  if (mainWindow === null) {
+    void createMainWindow()
+  } else {
+    mainWindow.show()
+  }
+})
+
+/**
+ * -> Before-quit event (https://www.electronjs.org/docs/latest/api/app#event-before-quit)
+ * Emitted before the application starts closing its windows. Calling event.preventDefault() will prevent the default behavior,
+ * which is terminating the application.
+ */
+app.on('before-quit', () => {
+  console.log('before-quit')
+  if (process.platform === 'darwin' && process.env.NODE_ENV === 'production') {
+    mainWindow?.webContents.send('app:darwin-is-closing')
+    return
+  }
+  mainWindow?.destroy()
+})
+
+/**
+ * -> Will-quit event (https://www.electronjs.org/docs/latest/api/app#event-will-quit)
+ * Emitted when all windows have been closed and the application will quit. Calling event.preventDefault() will prevent the default
+ * behavior, which is terminating the application.
+ */
+app.on('will-quit', () => {
+  console.log('will-quit')
+})
+
+/**
+ * -> Quit event (https://www.electronjs.org/docs/latest/api/app#event-quit)
+ */
+// Emitted when the application is quitting.
+app.on('quit', () => {
+  console.log('quit')
+})
+
+/**
+ * -> Will-quit event (https://www.electronjs.org/docs/latest/api/app#event-will-quit)
+ * If you do not subscribe to this event and all windows are closed, the default behavior is to quit the app; however, if you subscribe,
+ * you control whether the app quits or not. If the user pressed Cmd + Q, or the developer called app.quit(), Electron will first try to
+ * close all the windows and then emit the will-quit event, and in this case the window-all-closed event would not be emitted.
+ */
+// --> Quit the app when all windows are closed except on macOS. There, it's common for applications and their menu bar to stay active;
 app.on('window-all-closed', () => {
+  console.log('window-all-closed')
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
   if (process.platform !== 'darwin') {
@@ -279,6 +365,9 @@ app.on('window-all-closed', () => {
   }
 })
 
+/**
+ * -> Second-instance event (https://www.electronjs.org/docs/latest/api/app#event-second-instance)
+ */
 // Handle second instance of the app;
 app.on('second-instance', () => {
   if (mainWindow) {
