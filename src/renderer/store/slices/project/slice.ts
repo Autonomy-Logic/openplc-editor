@@ -234,8 +234,30 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 response = validationResponse
                 break
               }
-              const index = dataToBeUpdated.rowId
-              if (index === -1) response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+
+              let index = dataToBeUpdated.rowId ?? -1
+              if (index === -1) {
+                const variableId = dataToBeUpdated.variableId ?? ''
+                if (!variableId) {
+                  response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+                  break
+                }
+
+                const variable = project.data.configuration.resource.globalVariables.find(
+                  (variable) => variable.id === variableId,
+                )
+                if (!variable) {
+                  response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+                  break
+                }
+
+                index = project.data.configuration.resource.globalVariables.indexOf(variable)
+                if (index === -1) {
+                  response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+                  break
+                }
+              }
+
               project.data.configuration.resource.globalVariables[index] = {
                 ...project.data.configuration.resource.globalVariables[index],
                 ...dataToBeUpdated.data,
@@ -254,8 +276,26 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 break
               }
 
-              const index = dataToBeUpdated.rowId
-              if (index === -1) response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+              let index = dataToBeUpdated.rowId ?? -1
+              if (index === -1) {
+                const variableId = dataToBeUpdated.variableId ?? ''
+                if (!variableId) {
+                  response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+                  break
+                }
+
+                const variable = pou.data.variables.find((variable) => variable.id === variableId)
+                if (!variable) {
+                  response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+                  break
+                }
+
+                index = pou.data.variables.indexOf(variable)
+                if (index === -1) {
+                  response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+                  break
+                }
+              }
 
               const variableToUpdate = pou.data.variables[index]
               const validationResponse = updateVariableValidation(

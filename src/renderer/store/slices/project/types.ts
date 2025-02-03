@@ -160,7 +160,7 @@ const projectActionsSchema = z.object({
     .returns(projectResponseSchema),
   updateVariable: z
     .function()
-    .args(variableDTOSchema.omit({ data: true }).extend({ rowId: z.number(), data: PLCVariableSchema.partial() }))
+    .args(variableDTOSchema.omit({ data: true }).extend({ rowId: z.number().optional(), variableId: z.string().optional(), data: PLCVariableSchema.partial() }))
     .returns(projectResponseSchema),
   getVariable: z
     .function()

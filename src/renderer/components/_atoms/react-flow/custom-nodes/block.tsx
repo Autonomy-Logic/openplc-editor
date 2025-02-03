@@ -755,7 +755,10 @@ const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionC
     }))
 
   const mustHaveExecutionControlEnabled =
-    inputConnectors[0].type.value !== 'BOOL' || outputConnectors[0].type.value !== 'BOOL'
+    inputConnectors.length === 0 ||
+    inputConnectors[0].type.value !== 'BOOL' ||
+    outputConnectors.length === 0 ||
+    outputConnectors[0].type.value !== 'BOOL'
 
   if (executionControl || mustHaveExecutionControlEnabled) {
     const executionControlVariable = variant.variables.some(

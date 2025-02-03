@@ -11,6 +11,7 @@ type PouProps = {
 }
 
 const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
+  const bodyValue = language === 'ld' ? { language, value: { name, rungs: [] } } : { language, value: '' }
   switch (type) {
     case 'function':
       return {
@@ -18,9 +19,19 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
         data: {
           name: name,
           language,
-          body: language === 'ld' ? { language, value: { name, rungs: [] } } : { language, value: '' },
+          body: bodyValue,
           returnType: 'BOOL',
-          variables: [],
+          variables: [
+            {
+              id: 'OUT',
+              name: 'OUT',
+              type: { definition: 'base-type', value: 'bool' },
+              class: 'output',
+              documentation: '',
+              location: '',
+              debug: false,
+            },
+          ],
           documentation: '',
         },
       }
@@ -30,7 +41,7 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
         data: {
           name: name,
           language,
-          body: language === 'ld' ? { language, value: { name, rungs: [] } } : { language, value: '' },
+          body: bodyValue,
           variables: [],
           documentation: '',
         },
@@ -41,7 +52,7 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
         data: {
           name: name,
           language,
-          body: language === 'ld' ? { language, value: { name, rungs: [] } } : { language, value: '' },
+          body: bodyValue,
           variables: [],
           documentation: '',
         },
@@ -60,7 +71,7 @@ const CreateDatatypeObject = (data: DatatypeProps): PLCDataType => {
       return {
         name: data.name,
         derivation: 'array',
-        baseType: 'bool',
+        baseType: { definition: 'base-type', value: 'bool' },
         initialValue: 'false',
         dimensions: [],
       }

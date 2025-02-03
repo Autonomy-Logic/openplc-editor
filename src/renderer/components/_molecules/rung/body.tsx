@@ -170,8 +170,8 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
           ?.pous.find((p) => p.name === pouName)
 
       if (blockLibraryType === 'user') {
-        const Library = libraries.user.find((Library) => Library.name === blockLibrary)
-        const pou = pous.find((pou) => pou.data.name === Library?.name)
+        const library = libraries.user.find((library) => library.name === blockLibrary)
+        const pou = pous.find((pou) => pou.data.name === library?.name)
         if (!pou) return
         pouLibrary = {
           name: pou.data.name,
@@ -179,11 +179,12 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
           variables: pou.data.variables.map((variable) => ({
             name: variable.name,
             class: variable.class,
-            type: { definition: variable.type.definition, value: variable.type.value },
+            type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
           })),
           documentation: pou.data.documentation,
           extensible: false,
         }
+        console.log('pouLibrary', pouLibrary)
       }
 
       if (!pouLibrary) {
