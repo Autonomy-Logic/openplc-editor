@@ -237,7 +237,11 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
 
       const variableTypeRestriction = {
         definition: variableRestrictions.definition || 'base-type',
-        value: variableRestrictions.values?.[0] || 'dint',
+        value: variableRestrictions.values
+          ? Array.isArray(variableRestrictions.values)
+            ? variableRestrictions.values[0]
+            : variableRestrictions.values
+          : 'dint',
       }
       if (!variableTypeRestriction.definition || !variableTypeRestriction.value) return
 
