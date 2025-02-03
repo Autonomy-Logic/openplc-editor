@@ -37,7 +37,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   const {
     editor,
+    searchQuery,
+    sensitiveCase,
+    regularExpression,
     workspace: {
+      editingState,
       systemConfigs: { shouldUseDarkMode },
     },
     project: {
@@ -45,9 +49,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     },
     libraries: sliceLibraries,
     projectActions: { updatePou, createVariable },
-    searchQuery,
-    sensitiveCase,
-    regularExpression,
+    workspaceActions: { setEditingState },
   } = useOpenPLCStore()
 
   useEffect(() => {
@@ -59,6 +61,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [contentToDrop, setContentToDrop] = useState<PouToText>()
   const [newName, setNewName] = useState<string>('')
+
+  const pou = pous.find((pou) => pou.data.name === name)
 
   function handleEditorDidMount(
     editor: null | monaco.editor.IStandaloneCodeEditor,
@@ -99,6 +103,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   function handleWriteInPou(value: string | undefined) {
     if (!value) return
+    if (editingState !== 'unsaved') setEditingState('unsaved')
     updatePou({ name, content: { language, value } })
   }
 
@@ -254,7 +259,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           width='100%'
           path={path}
           language={language}
-          defaultValue={pous.find((pou) => pou.data.name === name)?.data.body.value as string}
+          defaultValue={''}
+          value={pou?.data.body.value as string}
           onMount={handleEditorDidMount}
           onChange={handleWriteInPou}
           theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}

@@ -14,8 +14,9 @@ export default function LadderEditor() {
     flows,
     editor,
     flowActions,
-    projectActions: { updatePou },
     searchNodePosition,
+    projectActions: { updatePou },
+    workspaceActions: { setEditingState },
   } = useOpenPLCStore()
 
   const flow = flows.find((flow) => flow.name === editor.meta.name)
@@ -50,11 +51,13 @@ export default function LadderEditor() {
         value: flowSchema.data,
       },
     })
+
     /**
      * TODO: Verify if this is method is declared
      */
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     flowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
+    setEditingState('unsaved')
   }, [flowUpdated === true])
 
   const handleAddNewRung = () => {
