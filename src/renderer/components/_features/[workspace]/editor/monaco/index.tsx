@@ -133,13 +133,29 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     } else {
       const libraries = sliceLibraries.user
       const libraryToUse = libraries.find((library) => library.name === libraryName)
-      pouToAppend = libraryToUse
+      const pou = pous.find((pou) => pou.data.name === libraryToUse?.name)
+      if (!pou) return
+      pouToAppend = {
+        name: pou.data.name,
+        type: pou.type,
+        variables: pou.data.variables.map((variable) => ({
+          name: variable.name,
+          class: variable.class,
+          type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
+        })),
+        documentation: pou.data.documentation,
+        extensible: false,
+      }
     }
 
     setContentToDrop(pouToAppend as PouToText)
 
     const editorModel = editorRef.current?.getModel()
     const cursorPosition = editorRef.current?.getPosition()
+
+    console.log('editorModel', editorModel)
+    console.log('cursorPosition', cursorPosition)
+    console.log('pouToAppend', pouToAppend)
 
     if (!editorModel || !cursorPosition) return
 
