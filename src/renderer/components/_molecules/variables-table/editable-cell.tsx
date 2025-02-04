@@ -41,7 +41,7 @@ const EditableNameCell = ({
   const [isEditing, setIsEditing] = useState(false)
 
   const variable = getVariable({
-    rowId: index,
+    variableId: table.options.data[index].id,
     scope,
     associatedPou: editor.meta.name,
   })

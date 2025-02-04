@@ -1,7 +1,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import { PlusIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { extractNumberAtEnd } from '@root/renderer/store/slices/project/utils/variables'
+import { extractNumberAtEnd } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import { Node } from '@xyflow/react'
