@@ -57,7 +57,39 @@ class CompilerService {
    * Function to run the initial config arduino file verification.
    * @todo Implement the command execution function.
    */
-  initArduinoConfiguration() {}
+  async initArduinoConfiguration(mainProcessPort: MessagePortMain) {
+    let exitCode: number = 0
+    const isWindows = process.platform === 'win32'
+    const isMac = process.platform === 'darwin'
+    const isLinux = process.platform === 'linux'
+    let arduinoCLI: ChildProcessWithoutNullStreams
+    const arduinoCLIParams = ['--no-color', 'config', 'init']
+    if (isWindows) {
+      const windowsArduinoBinaryPath = join(
+        this.compilerDirectory,
+        'Windows',
+        'arduino-cli',
+        'bin',
+        'arduino-cli-w64.exe',
+      )
+      arduinoCLI = spawn(windowsArduinoBinaryPath, arduinoCLIParams)
+    } else if (isMac) {
+      const darwinArduinoBinaryPath = join(this.compilerDirectory, 'MacOS', 'arduino-cli', 'bin', 'arduino-cli-mac')
+      arduinoCLI = spawn(darwinArduinoBinaryPath, arduinoCLIParams)
+    } else if (isLinux) {
+      const linuxArduinoBinaryPath = join(this.compilerDirectory, 'Linux', 'arduino-cli', 'bin', 'arduino-cli-i64')
+      arduinoCLI = spawn(linuxArduinoBinaryPath, arduinoCLIParams)
+    }
+
+    const binaryExecution = new Promise((resolve) => {
+      arduinoCLI.stdout.on('data', (data: Buffer) => {
+        console.log(data.toString())
+        exitCode = 0
+      })
+      resolve(exitCode)
+    })
+    return binaryExecution
+  }
 
   async buildXmlFile(
     pathToUserProject: string,
@@ -100,7 +132,6 @@ class CompilerService {
     if (!filePath) {
       return { success: false, message: 'User canceled the save dialog' }
     }
-
 
     const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml)
     if (!projectDataAsString) {
