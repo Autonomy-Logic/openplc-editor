@@ -19,12 +19,32 @@ export type CompilerResponse = {
 
 class CompilerService {
   compilerDirectory: string
+  arduinoCliBinaryPath: string
   constructor() {
     this.compilerDirectory = this.constructCompilerDirectoryPath()
+    this.arduinoCliBinaryPath = this.constructArduinoCliBinaryPath()
   }
   constructCompilerDirectoryPath() {
     const isDevelopment = process.env.NODE_ENV === 'development'
     return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'compilers')
+  }
+
+  constructArduinoCliBinaryPath() {
+    let arduinoCliBinary: string
+    switch (process.platform) {
+      case 'win32':
+        arduinoCliBinary = join(this.compilerDirectory, 'Windows', 'arduino-cli', 'bin', 'arduino-cli-w64.exe')
+        break
+      case 'darwin':
+        arduinoCliBinary = join(this.compilerDirectory, 'MacOS', 'arduino-cli', 'bin', 'arduino-cli-mac')
+        break
+      case 'linux':
+        arduinoCliBinary = join(this.compilerDirectory, 'Linux', 'arduino-cli', 'bin', 'arduino-cli-i64')
+        break
+      default:
+        throw new Error(`Unsupported platform: ${process.platform}`)
+    }
+    return arduinoCliBinary
   }
 
   async createBuildDirectoryIfNotExist(pathToUserProject: string) {
@@ -57,36 +77,52 @@ class CompilerService {
    * Function to run the initial config arduino file verification.
    * @todo Implement the command execution function.
    */
-  async initArduinoConfiguration(mainProcessPort: MessagePortMain) {
-    let exitCode: number = 0
-    const isWindows = process.platform === 'win32'
-    const isMac = process.platform === 'darwin'
-    const isLinux = process.platform === 'linux'
-    let arduinoCLI: ChildProcessWithoutNullStreams
+  async initArduinoConfiguration(_mainProcessPort: MessagePortMain) {
     const arduinoCLIParams = ['--no-color', 'config', 'init']
-    if (isWindows) {
-      const windowsArduinoBinaryPath = join(
-        this.compilerDirectory,
-        'Windows',
-        'arduino-cli',
-        'bin',
-        'arduino-cli-w64.exe',
-      )
-      arduinoCLI = spawn(windowsArduinoBinaryPath, arduinoCLIParams)
-    } else if (isMac) {
-      const darwinArduinoBinaryPath = join(this.compilerDirectory, 'MacOS', 'arduino-cli', 'bin', 'arduino-cli-mac')
-      arduinoCLI = spawn(darwinArduinoBinaryPath, arduinoCLIParams)
-    } else if (isLinux) {
-      const linuxArduinoBinaryPath = join(this.compilerDirectory, 'Linux', 'arduino-cli', 'bin', 'arduino-cli-i64')
-      arduinoCLI = spawn(linuxArduinoBinaryPath, arduinoCLIParams)
-    }
+
+    const arduinoCLI = spawn(this.arduinoCliBinaryPath, arduinoCLIParams)
 
     const binaryExecution = new Promise((resolve) => {
+      let exitCode: number
       arduinoCLI.stdout.on('data', (data: Buffer) => {
         console.log(data.toString())
         exitCode = 0
       })
-      resolve(exitCode)
+      arduinoCLI.stderr.on('data', (data: Buffer) => {
+        console.error(data.toString())
+        exitCode = 1
+      })
+      arduinoCLI.on('close', () => {
+        console.log('Finished the arduino-cli configuration process!')
+        resolve(exitCode)
+      })
+    })
+    return binaryExecution
+  }
+
+  /**
+   * Function to run the board installation command.
+   * @todo Implement the command execution function.
+   */
+  configureBoard(_mainProcessPort: MessagePortMain) {
+    const arduinoCLIParams = ['--no-color', 'board', 'remove', 'all']
+
+    const arduinoCLI = spawn(this.arduinoCliBinaryPath, arduinoCLIParams)
+
+    const binaryExecution = new Promise((resolve) => {
+      let exitCode: number
+      arduinoCLI.stdout.on('data', (data: Buffer) => {
+        console.log(data.toString())
+        exitCode = 0
+      })
+      arduinoCLI.stderr.on('data', (data: Buffer) => {
+        console.error(data.toString())
+        exitCode = 1
+      })
+      arduinoCLI.on('close', () => {
+        console.log('Finished the arduino-cli configuration process!')
+        resolve(exitCode)
+      })
     })
     return binaryExecution
   }
