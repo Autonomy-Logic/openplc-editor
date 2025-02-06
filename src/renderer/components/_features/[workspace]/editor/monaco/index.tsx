@@ -3,11 +3,13 @@ import './configs'
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_molecules/modal'
 import { useOpenPLCStore } from '@process:renderer/store'
+import { PLCVariable } from '@root/types/PLC'
 import * as monaco from 'monaco-editor'
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { toast } from '../../../[app]/toast/use-toast'
+import { tableVariablesCompletion } from './configs/completion'
 import { parsePouToStText } from './drag-and-drop/st'
 
 type monacoEditorProps = {
@@ -63,6 +65,25 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const [newName, setNewName] = useState<string>('')
 
   const pou = pous.find((pou) => pou.data.name === name)
+
+  /**
+   * Update the auto-completion feature of the monaco editor.
+   */
+  useEffect(() => {
+    const disposable = monaco.languages.registerCompletionItemProvider(language, {
+      provideCompletionItems: (model, position) => {
+        const word = model.getWordUntilPosition(position)
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        }
+        return tableVariablesCompletion({ range, variables: (pou?.data.variables || []) as PLCVariable[] })
+      },
+    })
+    return () => disposable.dispose()
+  }, [pou?.data.variables, language])
 
   function handleEditorDidMount(
     editor: null | monaco.editor.IStandaloneCodeEditor,
@@ -152,10 +173,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     const editorModel = editorRef.current?.getModel()
     const cursorPosition = editorRef.current?.getPosition()
-
-    console.log('editorModel', editorModel)
-    console.log('cursorPosition', cursorPosition)
-    console.log('pouToAppend', pouToAppend)
 
     if (!editorModel || !cursorPosition) return
 
