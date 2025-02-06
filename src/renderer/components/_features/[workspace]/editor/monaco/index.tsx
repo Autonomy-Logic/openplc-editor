@@ -54,17 +54,17 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()
 
-  useEffect(() => {
-    if (editorRef.current && searchQuery) {
-      moveToMatch(editorRef.current, searchQuery, sensitiveCase, regularExpression)
-    }
-  }, [searchQuery, sensitiveCase, regularExpression])
-
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [contentToDrop, setContentToDrop] = useState<PouToText>()
   const [newName, setNewName] = useState<string>('')
 
   const pou = pous.find((pou) => pou.data.name === name)
+
+  useEffect(() => {
+    if (editorRef.current && searchQuery) {
+      moveToMatch(editorRef.current, searchQuery, sensitiveCase, regularExpression)
+    }
+  }, [searchQuery, sensitiveCase, regularExpression])
 
   /**
    * Update the auto-completion feature of the monaco editor.

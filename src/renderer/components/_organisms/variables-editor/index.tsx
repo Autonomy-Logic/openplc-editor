@@ -73,7 +73,6 @@ const VariablesEditor = () => {
     setReturnTypeOptions(combinedReturnTypeOptions)
 
     if (foundPou) {
-      console.log('foundPou', foundPou)
       setTableData(foundPou.data.variables.filter((variable) => variable.id !== 'OUT'))
       if (foundPou.type === 'function') {
         setReturnType(foundPou.data.returnType)

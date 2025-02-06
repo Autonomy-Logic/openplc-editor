@@ -172,7 +172,12 @@ const AcceleratorHandler = () => {
    */
   window.onbeforeunload = (e) => {
     // When page is reloaded, the beforeunload event is fired, so we need to prevent the default behavior
+    if (process.env.NODE_ENV !== 'production') {
+      return
+    }
+
     if (!close.window) {
+      console.log('beforeunload event fired')
       e.returnValue = false
       return
     }
