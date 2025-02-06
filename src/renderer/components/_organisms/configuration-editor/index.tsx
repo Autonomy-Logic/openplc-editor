@@ -1,7 +1,7 @@
 import * as Checkbox from '@radix-ui/react-checkbox'
 import { CheckIcon } from '@radix-ui/react-icons'
 import { cn } from '@root/utils'
-import { Dispatch, SetStateAction, useState } from 'react'
+import { useState } from 'react'
 
 import { InputWithRef, Select, SelectTrigger } from '../../_atoms'
 
@@ -10,13 +10,15 @@ const SelectField = ({
   placeholder,
   width,
   ariaLabel,
+  className,
 }: {
   label: string
   placeholder: string
   width?: string
   ariaLabel: string
+  className?: string
 }) => (
-  <div className='flex items-center gap-2.5 text-xs font-medium text-neutral-850 dark:text-neutral-300'>
+  <div className={`flex items-center gap-2.5 text-xs font-medium text-neutral-850 dark:text-neutral-300 ${className}`}>
     <label htmlFor={ariaLabel} className='text-neutral-950 dark:text-white'>
       {label}
     </label>
@@ -31,8 +33,8 @@ const SelectField = ({
   </div>
 )
 
-const InputField = ({ label, placeholder }: { label: string; placeholder?: string }) => (
-  <div className='flex w-full items-center gap-2'>
+const InputField = ({ label, placeholder, className }: { label: string; placeholder?: string; className?: string }) => (
+  <div className={`flex w-full items-center gap-2 ${className}`}>
     <span className='whitespace-nowrap text-sm font-medium text-neutral-950 dark:text-white'>{label}</span>
     <InputWithRef
       placeholder={placeholder}
@@ -45,13 +47,27 @@ const InputField = ({ label, placeholder }: { label: string; placeholder?: strin
 const ConfigurationEditor = () => {
   const [modbusConfig, setModbusConfig] = useState({
     RTU: false,
-    TCP: false,
+    TCP: {
+      enableModbusTCP: false,
+      enableDCHP: false,
+    },
   })
 
   const toggleModbus = (type: 'RTU' | 'TCP') => {
     setModbusConfig((prev) => ({
       ...prev,
       [type]: !prev[type],
+    }))
+  }
+
+  const toggleTCPOption = (option: 'enableModbusTCP' | 'enableDCHP') => {
+    console.log(`Toggling ${option}`, 'modbusConfig', modbusConfig)
+    setModbusConfig((prev) => ({
+      ...prev,
+      TCP: {
+        ...prev.TCP,
+        [option]: !prev.TCP[option],
+      },
     }))
   }
 
@@ -80,31 +96,24 @@ const ConfigurationEditor = () => {
 
       <hr className='mx-4 h-[99%] w-[1px] self-stretch bg-brand-light pb-12' />
 
-      <div className='flex h-full w-1/2 flex-col gap-6 px-8 py-3'>
+      <div className='flex h-full w-1/2 flex-col gap-6 overflow-auto px-8 py-3'>
         <span className='text-lg font-medium text-white'>Communication</span>
 
         <ModbusCheckbox
-          id='enableModbusRTU'
+          id='Enable Modbus RTU (Serial)'
           label='Enable Modbus RTU (Serial)'
           checked={modbusConfig.RTU}
           onChange={() => toggleModbus('RTU')}
         />
-        <ModbusSettings enabled={modbusConfig.RTU} fields={2} />
+        <ModbusSettings enabled={modbusConfig.RTU} />
 
         <hr className='h-[1px] w-full self-stretch bg-brand-light' />
 
-        <ModbusCheckbox
-          id='enableModbusTCP'
-          label='Enable Modbus TCP'
-          checked={modbusConfig.TCP}
-          onChange={() => toggleModbus('TCP')}
+        <TCPSettings
+          enableDCHP={modbusConfig.TCP.enableDCHP}
+          enableModbusTCP={modbusConfig.TCP.enableModbusTCP}
+          onToggle={toggleTCPOption}
         />
-        <TCPSettings enabled={modbusConfig.TCP} />
-
-        <div className='flex h-8 w-full justify-evenly gap-7'>
-          <Button setModbusConfig={setModbusConfig} label='Restore Defaults' variant='restore' />
-          <Button setModbusConfig={setModbusConfig} label='Save Changes' variant='save' />
-        </div>
       </div>
     </div>
   )
@@ -135,65 +144,81 @@ const ModbusCheckbox = ({
         <CheckIcon className='stroke-brand' />
       </Checkbox.Indicator>
     </Checkbox.Root>
-    <span className='text-sm font-medium text-white'>{label}</span>
+    <label htmlFor={label} className='text-sm font-medium text-neutral-950 dark:text-white'>
+      {label}
+    </label>
   </div>
 )
 
-const ModbusSettings = ({ enabled, fields }: { enabled: boolean; fields: number }) => (
+const ModbusSettings = ({ enabled }: { enabled: boolean }) => (
   <div className={cn('flex flex-col gap-4', { 'pointer-events-none opacity-50': !enabled })}>
-    {Array.from({ length: fields }, (_, index) => (
-      <div key={index} className='flex justify-between'>
-        <SelectField label='Interface' placeholder='40028922' width='141px' ariaLabel='Interface select' />
-        <SelectField label='Slave ID:' placeholder='40028922' width='148px' ariaLabel='Slave ID select' />
+    <div className='flex justify-between'>
+      <div className='flex flex-col gap-4'>
+        <SelectField label='Interface' placeholder='40028922' ariaLabel='Interface select' />
+        <SelectField label='Slave ID:' placeholder='40028922' ariaLabel='Slave ID select' />
       </div>
-    ))}
-  </div>
-)
-
-const TCPSettings = ({ enabled }: { enabled: boolean }) => (
-  <div className={cn('flex flex-col gap-6', { 'pointer-events-none opacity-50': !enabled })}>
-    <SelectField label='Interface' placeholder='Wifi' ariaLabel='Wifi select' />
-    <InputField label='MAC' placeholder='0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD' />
-    <div className='flex w-full justify-between gap-6'>
-      <div className='flex w-full flex-col gap-4'>
-        <InputField label='IP' />
-        <InputField label='Gateway' />
-        <InputField label='Wifi SSID' />
-      </div>
-      <div className='flex w-full flex-col gap-4'>
-        <InputField label='DNS' />
-        <InputField label='Subnet' />
-        <InputField label='Password' />
+      <div className='flex flex-col gap-4'>
+        <SelectField label='Baudrate ' placeholder='40028922' ariaLabel='baudrate select' />
+        <InputField label='RS485 TX Pin:' placeholder='40028922' />
       </div>
     </div>
   </div>
 )
 
-const Button = ({
-  label,
-  variant,
-  setModbusConfig,
+const TCPSettings = ({
+  enableModbusTCP,
+  enableDHCP,
+  onToggle,
 }: {
+  enableModbusTCP: boolean
+  enableDHCP: boolean
+  onToggle: () => void
   label: string
-  variant: 'restore' | 'save'
-  setModbusConfig: Dispatch<
-    SetStateAction<{
-      RTU: boolean
-      TCP: boolean
-    }>
-  >
-}) => (
-  <button
-    onClick={() => variant === 'restore' && setModbusConfig({ RTU: false, TCP: false })}
-    className={cn(
-      'h-full w-[236px] rounded-lg text-center font-medium',
-      variant === 'restore'
-        ? 'bg-neutral-100 text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
-        : 'bg-brand text-white',
-    )}
-  >
-    {label}
-  </button>
-)
+}) => {
+  const disabledStyle = 'hidden'
+  return (
+    <div className=''>
+      <div className={cn('flex flex-col gap-5')}>
+        <ModbusCheckbox
+          id='Enable Modbus TCP'
+          label='Enable Modbus TCP'
+          checked={enableDHCP}
+          onChange={() => onToggle('enableModbusTCP')}
+        />
+        <SelectField
+          className={`${!enableModbusTCP ? disabledStyle : ''}`}
+          label='Interface'
+          placeholder='Wifi'
+          ariaLabel='Wifi select'
+        />
+        <InputField
+          className={`${!enableModbusTCP ? disabledStyle : ''}`}
+          label='MAC'
+          placeholder='0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD'
+        />
+        <div className='flex gap-6'>
+          <InputField className={`${!enableModbusTCP ? disabledStyle : ''}`} label='Password' />
+          <InputField className={`${!enableModbusTCP ? disabledStyle : ''}`} label='Wifi SSID' />
+        </div>
+        <ModbusCheckbox
+          id='Enable DHCP'
+          label='Enable DHCP'
+          checked={enableDHCP}
+          onChange={() => onToggle('enableDHCP')}
+        />
+        <div className='flex w-full justify-between gap-6'>
+          <div className='flex w-full flex-col gap-4'>
+            <InputField className={`${enableDHCP ? disabledStyle : ''}`} label='IP' />
+            <InputField className={`${enableDHCP ? disabledStyle : ''}`} label='Gateway' />
+          </div>
+          <div className='flex w-full flex-col gap-4'>
+            <InputField className={`${enableDHCP ? disabledStyle : ''}`} label='DNS' />
+            <InputField className={`${enableDHCP ? disabledStyle : ''}`} label='Subnet' />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export { ConfigurationEditor }
