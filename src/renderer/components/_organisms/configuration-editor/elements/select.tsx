@@ -9,10 +9,10 @@ const SelectField = ({
   selectedOption,
   options = [],
 }: {
-  label: string
-  placeholder: string
+  label?: string
+  placeholder?: string
   width?: string
-  ariaLabel: string
+  ariaLabel?: string
   className?: string
   setSelectedOption?: (value: string) => void
   selectedOption?: string
@@ -36,7 +36,7 @@ const SelectField = ({
           position='popper'
           side='bottom'
           sideOffset={-28}
-          className='box h-fit w-[--radix-select-trigger-width] overflow-hidden overflow-y-scroll rounded-lg bg-white outline-none dark:bg-neutral-950'
+          className='box h-fit w-[--radix-select-trigger-width] overflow-hidden overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
           {options.map((option) => {
             return (
