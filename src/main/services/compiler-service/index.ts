@@ -24,6 +24,10 @@ class CompilerService {
     this.compilerDirectory = this.constructCompilerDirectoryPath()
     this.arduinoCliBinaryPath = this.constructArduinoCliBinaryPath()
   }
+
+  /**
+   * Utilities functions to construct the necessary paths and folders --------------------------------------------------------------
+   */
   constructCompilerDirectoryPath() {
     const isDevelopment = process.env.NODE_ENV === 'development'
     return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'compilers')
@@ -63,6 +67,9 @@ class CompilerService {
       }
     }
   }
+  /**
+   * End of utilities functions -----------------------------------------------------------------------------------------------------
+   */
 
   /**
    * This function will handle the temporary directory creation and deletion.
