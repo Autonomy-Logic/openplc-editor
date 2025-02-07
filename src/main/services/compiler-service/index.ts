@@ -74,40 +74,6 @@ class CompilerService {
   }
 
   /**
-   * Function to run the initial config arduino file verification.
-   * @todo Implement the command execution function.
-   */
-  async initArduinoConfiguration(_mainProcessPort: MessagePortMain) {
-    /**
-     * Verify if the 
-     */
-
-    // const arduinoCLIParams = ['--no-color', 'config', 'init']
-
-    // const arduinoCLI = spawn(this.arduinoCliBinaryPath, arduinoCLIParams)
-
-    // /**
-    //  * Need to add the correct return for every step... The return should be a promise that resolves when the process is finished.
-    //  */
-    // const binaryExecution = new Promise((resolve) => {
-    //   let exitCode: number
-    //   arduinoCLI.stdout.on('data', (data: Buffer) => {
-    //     console.log(data.toString())
-    //     exitCode = 0
-    //   })
-    //   arduinoCLI.stderr.on('data', (data: Buffer) => {
-    //     console.error(data.toString())
-    //     exitCode = 1
-    //   })
-    //   arduinoCLI.on('close', () => {
-    //     console.log('Finished the arduino-cli configuration process!')
-    //     resolve(exitCode)
-    //   })
-    // })
-    // return binaryExecution
-  }
-
-  /**
    * Function to run the board installation command.
    * @todo Implement the command execution function.
    */

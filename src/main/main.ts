@@ -42,8 +42,9 @@ if (process.env.NODE_ENV === 'production') {
   void loadSourceMapSupport()
 }
 
-void UserService.checkIfUserBaseSettingsExists()
-void UserService.checkIfUserHistoryFolderExists()
+// Create the user service instance to initialize the user settings and history files.
+new UserService()
+
 // Retrieves the system information
 const systemInfo = platform()
 // The options to use when creating the titlebar. Type comes from electron.
@@ -270,7 +271,7 @@ const createMainWindow = async () => {
 
   // Handles the creation of the menu
   const menuBuilder = new MenuBuilder(mainWindow)
-  menuBuilder.buildMenu()
+  void menuBuilder.buildMenu()
 
   const projectService = new ProjectService(mainWindow)
 
