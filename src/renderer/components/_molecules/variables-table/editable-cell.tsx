@@ -39,12 +39,7 @@ const EditableNameCell = ({
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
   const [isEditing, setIsEditing] = useState(false)
-
-  const variable = getVariable({
-    variableId: table.options.data[index].id,
-    scope,
-    associatedPou: editor.meta.name,
-  })
+  const [variable, setVariable] = useState<PLCVariable | undefined>(undefined)
 
   const isCellEditable = () => {
     if (id !== 'location' && id !== 'initialValue') return true
@@ -73,6 +68,13 @@ const EditableNameCell = ({
   // If the initialValue is changed external, sync it up with our state
   useEffect(() => {
     setCellValue(initialValue)
+    setVariable(
+      getVariable({
+        variableId: table.options.data[index].id,
+        scope,
+        associatedPou: editor.meta.name,
+      }),
+    )
   }, [initialValue])
 
   return isEditing ? (

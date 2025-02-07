@@ -80,11 +80,46 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           endColumn: word.endColumn,
         }
 
+        const linesContent: Array<string[]> = []
+        model.getLinesContent().forEach((line) => {
+          linesContent.push(line.trim().split(' '))
+        })
+
+        const identifierTokens = linesContent.flat().flatMap((token) => {
+          return token.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || []
+        })
+        console.log(identifierTokens)
+
+        const variablesSuggestions = tableVariablesCompletion({
+          range,
+          variables: (pou?.data.variables || []) as PLCVariable[],
+        }).suggestions
+        const keywordsSuggestions = keywordsCompletion({ range, language }).suggestions
+
+        const variablesLabels = variablesSuggestions.map((suggestion) => suggestion.label)
+        const keywordsLabels = keywordsSuggestions.map((suggestion) => suggestion.label)
+
+        const identifiers = Array.from(
+          new Set(
+            identifierTokens
+              .map((token) => {
+                if (variablesLabels.includes(token) || keywordsLabels.includes(token)) {
+                  return null
+                }
+                return token
+              })
+              .filter((suggestion) => suggestion !== null),
+          ),
+        )
+        const identifiersSuggestions = identifiers.map((identifier) => ({
+          label: identifier,
+          kind: monaco.languages.CompletionItemKind.Text,
+          insertText: identifier,
+          range,
+        }))
+
         return {
-          suggestions: [
-            ...keywordsCompletion({ range, language }).suggestions,
-            ...tableVariablesCompletion({ range, variables: (pou?.data.variables || []) as PLCVariable[] }).suggestions,
-          ],
+          suggestions: [...variablesSuggestions, ...keywordsSuggestions, ...identifiersSuggestions],
         }
       },
     })
