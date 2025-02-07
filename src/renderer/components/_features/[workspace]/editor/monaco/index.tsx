@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { toast } from '../../../[app]/toast/use-toast'
-import { tableVariablesCompletion } from './configs/completion'
+import { keywordsCompletion, tableVariablesCompletion } from './completion'
 import { parsePouToStText } from './drag-and-drop/st'
 
 type monacoEditorProps = {
@@ -79,7 +79,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           startColumn: word.startColumn,
           endColumn: word.endColumn,
         }
-        return tableVariablesCompletion({ range, variables: (pou?.data.variables || []) as PLCVariable[] })
+
+        return {
+          suggestions: [
+            ...keywordsCompletion({ range, language }).suggestions,
+            ...tableVariablesCompletion({ range, variables: (pou?.data.variables || []) as PLCVariable[] }).suggestions,
+          ],
+        }
       },
     })
     return () => disposable.dispose()
