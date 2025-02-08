@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { toast } from '../../../[app]/toast/use-toast'
-import { keywordsCompletion, tableVariablesCompletion } from './completion'
+import { keywordsCompletion, libraryCompletion, tableVariablesCompletion } from './completion'
 import { parsePouToStText } from './drag-and-drop/st'
 
 type monacoEditorProps = {
@@ -88,22 +88,23 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         const identifierTokens = linesContent.flat().flatMap((token) => {
           return token.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || []
         })
-        console.log(identifierTokens)
 
         const variablesSuggestions = tableVariablesCompletion({
           range,
           variables: (pou?.data.variables || []) as PLCVariable[],
         }).suggestions
         const keywordsSuggestions = keywordsCompletion({ range, language }).suggestions
+        const librarySuggestions = libraryCompletion({ range, library: sliceLibraries, pous }).suggestions
 
         const variablesLabels = variablesSuggestions.map((suggestion) => suggestion.label)
         const keywordsLabels = keywordsSuggestions.map((suggestion) => suggestion.label)
+        const libraryLabels = librarySuggestions.map((suggestion) => suggestion.label)
 
         const identifiers = Array.from(
           new Set(
             identifierTokens
               .map((token) => {
-                if (variablesLabels.includes(token) || keywordsLabels.includes(token)) {
+                if (variablesLabels.includes(token) || keywordsLabels.includes(token) || libraryLabels.includes(token)) {
                   return null
                 }
                 return token
@@ -119,7 +120,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         }))
 
         return {
-          suggestions: [...variablesSuggestions, ...keywordsSuggestions, ...identifiersSuggestions],
+          suggestions: [...variablesSuggestions, ...keywordsSuggestions, ...librarySuggestions, ...identifiersSuggestions],
         }
       },
     })

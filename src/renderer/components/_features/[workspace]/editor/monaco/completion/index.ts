@@ -1,5 +1,9 @@
+import { LibraryState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
+import { PLCProject } from '@root/types/PLC/open-plc'
 import * as monaco from 'monaco-editor'
+
+import { parsePouToStText } from '../drag-and-drop/st'
 
 export const languageKeywords = {
   st: [
@@ -197,5 +201,68 @@ export const tableVariablesCompletion = ({ range, variables }: { range: monaco.I
 
   return {
     suggestions,
+  }
+}
+
+export const libraryCompletion = ({
+  range,
+  library,
+  pous,
+}: {
+  range: monaco.IRange
+  library: LibraryState['libraries']
+  pous: PLCProject['data']['pous']
+}) => {
+  const systemSuggestions = library.system.flatMap((system) => {
+    return system.pous.map((pou) => {
+      const text = parsePouToStText(pou)
+      return {
+        label: pou.name,
+        insertText: text,
+        documentation: pou.documentation,
+        kind: monaco.languages.CompletionItemKind.Function,
+        range,
+      }
+    })
+  })
+  const userSuggestions = library.user.flatMap((user) => {
+    const pou = pous.find((pou) => pou.data.name === user.name)
+    if (!pou) return []
+
+    const data: {
+      name: string
+      language?: string
+      type: string
+      body?: string
+      documentation?: string
+      variables?: {
+        name: string
+        class: string
+        type: { definition: string; value: string }
+      }[]
+    } = {
+      name: pou.data.name,
+      type: pou.type,
+      variables: pou.data.variables.map((variable) => ({
+        name: variable.name,
+        class: variable.class,
+        type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
+      })),
+      documentation: pou.data.documentation,
+      extensible: false,
+    }
+    const text = parsePouToStText(data)
+
+    return {
+      label: pou.data.name,
+      insertText: text,
+      documentation: pou.data.documentation,
+      kind: monaco.languages.CompletionItemKind.Function,
+      range,
+    }
+  })
+
+  return {
+    suggestions: [...systemSuggestions, ...userSuggestions],
   }
 }
