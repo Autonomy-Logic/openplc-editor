@@ -1,4 +1,4 @@
-import { LibraryState } from '@root/renderer/store/slices'
+import { EditorState, LibraryState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
 import { PLCProject } from '@root/types/PLC/open-plc'
 import * as monaco from 'monaco-editor'
@@ -230,59 +230,88 @@ export const libraryCompletion = ({
   range,
   library,
   pous,
+  editor,
 }: {
   range: monaco.IRange
   library: LibraryState['libraries']
   pous: PLCProject['data']['pous']
+  editor: EditorState['editor']
 }) => {
-  const systemSuggestions = library.system.flatMap((system) => {
-    return system.pous.map((pou) => {
-      const text = parsePouToStText(pou)
+  const systemSuggestions = library.system
+    .filter((library) =>
+      pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
+        ? library.pous.some((pou) => pou.type === 'function')
+        : library.pous.some((pou) => pou),
+    )
+    .flatMap((system) => {
+      return system.pous.map((pou) => {
+        const text = parsePouToStText(pou)
+        return {
+          label: pou.name,
+          insertText: text,
+          documentation: pou.documentation,
+          kind: monaco.languages.CompletionItemKind.Function,
+          range,
+        }
+      })
+    })
+  const userSuggestions = library.user
+    .filter((userLibrary) => {
+      if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+        if (editor.meta.pouType === 'program') {
+          return (
+            (userLibrary.type === 'function' || userLibrary.type === 'function-block') &&
+            userLibrary.name !== editor.meta.name
+          )
+        } else if (editor.meta.pouType === 'function') {
+          return userLibrary.type === 'function' && userLibrary.name !== editor.meta.name
+        } else if (editor.meta.pouType === 'function-block') {
+          return (
+            (userLibrary.type === 'function' || userLibrary.type === 'function-block') &&
+            userLibrary.name !== editor.meta.name
+          )
+        }
+      }
+
+      // Remove userLibrary if its name matches editor.meta.name (fallback case)
+      return userLibrary.name !== editor.meta.name
+    })
+    .flatMap((user) => {
+      const pou = pous.find((pou) => pou.data.name === user.name)
+      if (!pou) return []
+
+      const data: {
+        name: string
+        language?: string
+        type: string
+        body?: string
+        documentation?: string
+        variables?: {
+          name: string
+          class: string
+          type: { definition: string; value: string }
+        }[]
+      } = {
+        name: pou.data.name,
+        type: pou.type,
+        variables: pou.data.variables.map((variable) => ({
+          name: variable.name,
+          class: variable.class,
+          type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
+        })),
+        documentation: pou.data.documentation,
+        extensible: false,
+      }
+      const text = parsePouToStText(data)
+
       return {
-        label: pou.name,
+        label: pou.data.name,
         insertText: text,
-        documentation: pou.documentation,
+        documentation: pou.data.documentation,
         kind: monaco.languages.CompletionItemKind.Function,
         range,
       }
     })
-  })
-  const userSuggestions = library.user.flatMap((user) => {
-    const pou = pous.find((pou) => pou.data.name === user.name)
-    if (!pou) return []
-
-    const data: {
-      name: string
-      language?: string
-      type: string
-      body?: string
-      documentation?: string
-      variables?: {
-        name: string
-        class: string
-        type: { definition: string; value: string }
-      }[]
-    } = {
-      name: pou.data.name,
-      type: pou.type,
-      variables: pou.data.variables.map((variable) => ({
-        name: variable.name,
-        class: variable.class,
-        type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
-      })),
-      documentation: pou.data.documentation,
-      extensible: false,
-    }
-    const text = parsePouToStText(data)
-
-    return {
-      label: pou.data.name,
-      insertText: text,
-      documentation: pou.data.documentation,
-      kind: monaco.languages.CompletionItemKind.Function,
-      range,
-    }
-  })
 
   return {
     suggestions: [...systemSuggestions, ...userSuggestions],

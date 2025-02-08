@@ -108,7 +108,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           variables: globalVariables as PLCVariable[],
         }).suggestions
         const keywordsSuggestions = keywordsCompletion({ range, language }).suggestions
-        const librarySuggestions = libraryCompletion({ range, library: sliceLibraries, pous }).suggestions
+        const librarySuggestions = libraryCompletion({
+          range,
+          library: sliceLibraries,
+          pous,
+          editor,
+        }).suggestions
 
         const variablesLabels = variablesSuggestions.map((suggestion) => suggestion.label)
         const globalVariablesLabels = globalVariablesSuggestions.map((suggestion) => suggestion.label)

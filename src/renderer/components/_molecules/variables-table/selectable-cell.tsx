@@ -49,7 +49,28 @@ const SelectableTypeCell = ({
     },
     {
       definition: 'user',
-      values: sliceLibraries.user.map((library) => library.name.toUpperCase()),
+      values: sliceLibraries.user
+        .filter((userLibrary) => {
+          if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
+            if (editor.meta.pouType === 'program') {
+              return (
+                (userLibrary.type === 'function' || userLibrary.type === 'function-block') &&
+                userLibrary.name !== editor.meta.name
+              )
+            } else if (editor.meta.pouType === 'function') {
+              return userLibrary.type === 'function' && userLibrary.name !== editor.meta.name
+            } else if (editor.meta.pouType === 'function-block') {
+              return (
+                (userLibrary.type === 'function' || userLibrary.type === 'function-block') &&
+                userLibrary.name !== editor.meta.name
+              )
+            }
+          }
+
+          // Remove userLibrary if its name matches editor.meta.name (fallback case)
+          return userLibrary.name !== editor.meta.name
+        })
+        .map((library) => library.name.toUpperCase()),
     },
   ]
 
