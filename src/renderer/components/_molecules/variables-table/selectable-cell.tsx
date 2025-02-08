@@ -161,7 +161,7 @@ const SelectableTypeCell = ({
                   ) : (
                     <div className='flex h-8 w-full items-center justify-center py-1'>
                       <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                        No {_.startCase(scope.definition)}
+                        No {_.startCase(scope.definition)} found
                       </span>
                     </div>
                   )}
@@ -239,7 +239,7 @@ const SelectableTypeCell = ({
                     ) : (
                       <div className='flex h-8 w-full items-center justify-center py-1'>
                         <span className='font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                          No {_.startCase(scope.definition)}
+                          No {_.startCase(scope.definition)} libraries found
                         </span>
                       </div>
                     )}
