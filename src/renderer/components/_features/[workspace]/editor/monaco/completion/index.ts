@@ -193,7 +193,7 @@ export const tableVariablesCompletion = ({ range, variables }: { range: monaco.I
     return {
       label: variable.name,
       insertText: variable.name,
-      documentation: 'Local variable:\n' + variable.documentation,
+      documentation: 'Local variable' + (variable.documentation && ':\n' + variable.documentation),
       kind: monaco.languages.CompletionItemKind.Variable,
       range,
     }
@@ -215,7 +215,7 @@ export const tableGlobalVariablesCompletion = ({
     return {
       label: variable.name,
       insertText: variable.name,
-      documentation: 'Global variable:\n' + variable.documentation,
+      documentation: 'Global variable' + (variable.documentation && ':\n' + variable.documentation),
       kind: monaco.languages.CompletionItemKind.Field,
       range,
     }
