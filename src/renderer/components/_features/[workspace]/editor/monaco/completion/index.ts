@@ -193,8 +193,30 @@ export const tableVariablesCompletion = ({ range, variables }: { range: monaco.I
     return {
       label: variable.name,
       insertText: variable.name,
-      documentation: variable.documentation,
+      documentation: 'Local variable:\n' + variable.documentation,
       kind: monaco.languages.CompletionItemKind.Variable,
+      range,
+    }
+  })
+
+  return {
+    suggestions,
+  }
+}
+
+export const tableGlobalVariablesCompletion = ({
+  range,
+  variables,
+}: {
+  range: monaco.IRange
+  variables: PLCVariable[]
+}) => {
+  const suggestions = variables.map((variable) => {
+    return {
+      label: variable.name,
+      insertText: variable.name,
+      documentation: 'Global variable:\n' + variable.documentation,
+      kind: monaco.languages.CompletionItemKind.Field,
       range,
     }
   })

@@ -9,7 +9,12 @@ import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { toast } from '../../../[app]/toast/use-toast'
-import { keywordsCompletion, libraryCompletion, tableVariablesCompletion } from './completion'
+import {
+  keywordsCompletion,
+  libraryCompletion,
+  tableGlobalVariablesCompletion,
+  tableVariablesCompletion,
+} from './completion'
 import { parsePouToStText } from './drag-and-drop/st'
 
 type monacoEditorProps = {
@@ -47,7 +52,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       systemConfigs: { shouldUseDarkMode },
     },
     project: {
-      data: { pous },
+      data: {
+        pous,
+        configuration: {
+          resource: { globalVariables },
+        },
+      },
     },
     libraries: sliceLibraries,
     projectActions: { updatePou, createVariable },
@@ -93,10 +103,15 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           range,
           variables: (pou?.data.variables || []) as PLCVariable[],
         }).suggestions
+        const globalVariablesSuggestions = tableGlobalVariablesCompletion({
+          range,
+          variables: globalVariables as PLCVariable[],
+        }).suggestions
         const keywordsSuggestions = keywordsCompletion({ range, language }).suggestions
         const librarySuggestions = libraryCompletion({ range, library: sliceLibraries, pous }).suggestions
 
         const variablesLabels = variablesSuggestions.map((suggestion) => suggestion.label)
+        const globalVariablesLabels = globalVariablesSuggestions.map((suggestion) => suggestion.label)
         const keywordsLabels = keywordsSuggestions.map((suggestion) => suggestion.label)
         const libraryLabels = librarySuggestions.map((suggestion) => suggestion.label)
 
@@ -104,7 +119,12 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           new Set(
             identifierTokens
               .map((token) => {
-                if (variablesLabels.includes(token) || keywordsLabels.includes(token) || libraryLabels.includes(token)) {
+                if (
+                  variablesLabels.includes(token) ||
+                  globalVariablesLabels.includes(token) ||
+                  keywordsLabels.includes(token) ||
+                  libraryLabels.includes(token)
+                ) {
                   return null
                 }
                 return token
@@ -120,7 +140,13 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         }))
 
         return {
-          suggestions: [...variablesSuggestions, ...keywordsSuggestions, ...librarySuggestions, ...identifiersSuggestions],
+          suggestions: [
+            ...variablesSuggestions,
+            ...globalVariablesSuggestions,
+            ...keywordsSuggestions,
+            ...librarySuggestions,
+            ...identifiersSuggestions,
+          ],
         }
       },
     })
