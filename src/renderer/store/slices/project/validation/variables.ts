@@ -404,6 +404,9 @@ const updateVariableValidation = (
     if (!variableLocationValidation(variableToUpdate.location, dataToBeUpdated.type.value)) {
       response.data = { ...(response.data ? response.data : {}), location: '' }
     }
+    if (dataToBeUpdated.type.definition === 'derived') {
+      response.data = { ...(response.data ? response.data : {}), location: '', initialValue: '', class: 'local' }
+    }
   }
 
   return response

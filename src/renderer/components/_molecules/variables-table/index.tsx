@@ -203,6 +203,10 @@ const VariablesTable = ({
     }
   }, [filterValue])
 
+  useEffect(() => {
+    console.log('tableData', tableData)
+  }, [tableData])
+
   const table = useReactTable({
     columns: pou?.type !== 'program' ? columns : columnsPrograms,
     columnResizeMode: 'onChange',
