@@ -8,7 +8,7 @@ import { SelectField } from './elements/select'
 const ConfigurationEditor = () => {
   const [modbusConfig, setModbusConfig] = useState({ RTU: false, TCP: false })
   const [enableDHCP, setEnableDHCP] = useState(false)
-  const [selectedOption, setSelectedOption] = useState('wifi')
+  const [selectedOption, setSelectedOption] = useState('Wi-Fi')
 
   const [selectBautradeOption, setSelectBautradeOption] = useState('115200')
 
@@ -128,7 +128,7 @@ const TCPSettings = ({
   selectedOption: string
 }) => {
   const disabledStyle = 'hidden'
-  const options = ['wifi', 'ethernet']
+  const options = ['Wi-Fi', 'Ethernet']
   return (
     <div className=''>
       <div className={cn('flex flex-col gap-5')}>
@@ -144,7 +144,7 @@ const TCPSettings = ({
           setSelectedOption={setSelectedOption}
           className={`${!enableModbusTCP ? disabledStyle : ''}`}
           label='Interface'
-          placeholder='Wifi'
+          placeholder='Wi-Fi'
           ariaLabel='Wifi select'
         />
         <InputField
@@ -154,11 +154,11 @@ const TCPSettings = ({
         />
         <div className='flex gap-6'>
           <InputField
-            className={`${!enableModbusTCP || selectedOption === 'ethernet' ? disabledStyle : ''}`}
+            className={`${!enableModbusTCP || selectedOption === 'Ethernet' ? disabledStyle : ''}`}
             label='Wifi SSID'
           />
           <InputField
-            className={`${!enableModbusTCP || selectedOption === 'ethernet' ? disabledStyle : ''}`}
+            className={`${!enableModbusTCP || selectedOption === 'Ethernet' ? disabledStyle : ''}`}
             label='Password'
           />
         </div>
