@@ -10,8 +10,8 @@ const InputField = ({
   className?: string
   value?: string
 }) => (
-  <div className={`flex w-full items-center gap-2 ${className}`}>
-    <span className='whitespace-nowrap text-sm font-medium text-neutral-950 dark:text-white'>{label}</span>
+  <div className={`flex w-full items-center gap-2  ${className}`}>
+    <span className='whitespace-nowrap text-xs font-medium text-neutral-950 dark:text-white'>{label}</span>
     <InputWithRef
       placeholder={placeholder}
       value={value}
