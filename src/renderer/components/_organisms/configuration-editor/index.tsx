@@ -13,6 +13,10 @@ const ConfigurationEditor = () => {
   const [selectInterfaceOption, setSelectInterfaceOption] = useState('Serial')
   const [slaveId, setSlaveId] = useState('1')
   const [pin, setPin] = useState('-1')
+  const [ipValue, setIpValue] = useState('192.168.1.195')
+  const [gatewayValue, setGatewayValue] = useState('192.168.1.1')
+  const [DNSValue, setDNSValue] = useState('8.8.8.8')
+  const [subnetValue, setSubnetValue] = useState('255.255.255.0')
 
   const toggleModbus = (type: 'RTU' | 'TCP') => {
     setModbusConfig((prev) => ({ ...prev, [type]: !prev[type] }))
@@ -48,12 +52,20 @@ const ConfigurationEditor = () => {
         <hr className='h-[1px] w-full self-stretch bg-brand-light' />
 
         <TCPSettings
+          ipValue={ipValue}
+          setIpValue={setIpValue}
           enableModbusTCP={modbusConfig.TCP}
           enableDHCP={enableDHCP}
           onToggle={() => toggleModbus('TCP')}
           setEnableDHCP={setEnableDHCP}
           selectedOption={selectedOption}
           setSelectedOption={setSelectedOption}
+          gatewayValue={gatewayValue}
+          setGatewayValue={setGatewayValue}
+          DNSValue={DNSValue}
+          setDNSValue={setDNSValue}
+          subnetValue={subnetValue}
+          setSubnetValue={setSubnetValue}
         />
       </div>
     </div>
@@ -146,6 +158,14 @@ const TCPSettings = ({
   setEnableDHCP,
   selectedOption,
   setSelectedOption,
+  ipValue,
+  setIpValue,
+  gatewayValue,
+  setGatewayValue,
+  DNSValue,
+  setDNSValue,
+  subnetValue,
+  setSubnetValue,
 }: {
   enableModbusTCP: boolean
   enableDHCP: boolean
@@ -153,6 +173,14 @@ const TCPSettings = ({
   setEnableDHCP: (value: boolean) => void
   selectedOption: string
   setSelectedOption: (value: string) => void
+  ipValue: string
+  setIpValue: (value: string) => void
+  gatewayValue: string
+  setGatewayValue: (value: string) => void
+  DNSValue: string
+  setDNSValue: (value: string) => void
+  subnetValue: string
+  setSubnetValue: (value: string) => void
 }) => {
   const interfaceOptions = ['Wi-Fi', 'Ethernet']
   const hiddenClass = !enableModbusTCP ? 'hidden' : ''
@@ -185,12 +213,12 @@ const TCPSettings = ({
         />
         <div className='flex w-full justify-between gap-6'>
           <div className='flex w-full flex-col gap-4'>
-            <InputField className={dhcpHiddenClass} label='IP' />
-            <InputField className={dhcpHiddenClass} label='Gateway' />
+            <InputField className={dhcpHiddenClass} label='IP' value={ipValue} onChange={setIpValue} />
+            <InputField className={dhcpHiddenClass} label='Gateway' value={gatewayValue} onChange={setGatewayValue} />
           </div>
           <div className='flex w-full flex-col gap-4'>
-            <InputField className={dhcpHiddenClass} label='DNS' />
-            <InputField className={dhcpHiddenClass} label='Subnet' />
+            <InputField className={dhcpHiddenClass} label='DNS' value={DNSValue} onChange={setDNSValue} />
+            <InputField className={dhcpHiddenClass} label='Subnet' value={subnetValue} onChange={setSubnetValue} />
           </div>
         </div>
       </div>
