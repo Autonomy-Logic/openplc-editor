@@ -9,8 +9,10 @@ const ConfigurationEditor = () => {
   const [modbusConfig, setModbusConfig] = useState({ RTU: false, TCP: false })
   const [enableDHCP, setEnableDHCP] = useState(false)
   const [selectedOption, setSelectedOption] = useState('Wi-Fi')
-
-  const [selectBautradeOption, setSelectBautradeOption] = useState('115200')
+  const [selectBaudRateOption, setSelectBaudRateOption] = useState('115200')
+  const [selectInterfaceOption, setSelectInterfaceOption] = useState('Serial')
+  const [slaveId, setSlaveId] = useState('1')
+  const [pin, setPin] = useState('-1')
 
   const toggleModbus = (type: 'RTU' | 'TCP') => {
     setModbusConfig((prev) => ({ ...prev, [type]: !prev[type] }))
@@ -31,23 +33,27 @@ const ConfigurationEditor = () => {
           checked={modbusConfig.RTU}
           onChange={() => toggleModbus('RTU')}
         />
-        <ModbusSettings
-          setSelectBautradeOption={setSelectBautradeOption}
-          selectBautradeOption={selectBautradeOption}
+        <RTUSettings
+          slaveId={slaveId}
+          setSlaveId={setSlaveId}
+          pin={pin}
+          setPin={setPin}
           enabled={modbusConfig.RTU}
+          selectInterfaceOption={selectInterfaceOption}
+          setSelectInterfaceOption={setSelectInterfaceOption}
+          selectBaudRateOption={selectBaudRateOption}
+          setSelectBaudRateOption={setSelectBaudRateOption}
         />
 
         <hr className='h-[1px] w-full self-stretch bg-brand-light' />
 
         <TCPSettings
-          {...{
-            enableDHCP,
-            setEnableDHCP,
-            selectedOption,
-            setSelectedOption,
-            enableModbusTCP: modbusConfig.TCP,
-            onToggle: () => toggleModbus('TCP'),
-          }}
+          enableModbusTCP={modbusConfig.TCP}
+          enableDHCP={enableDHCP}
+          onToggle={() => toggleModbus('TCP')}
+          setEnableDHCP={setEnableDHCP}
+          selectedOption={selectedOption}
+          setSelectedOption={setSelectedOption}
         />
       </div>
     </div>
@@ -77,35 +83,56 @@ const DeviceSpecs = () => (
     <span className='text-neutral-950 dark:text-white'>Specs:</span>
     <span>CPU: ATmega328P @ 16MHz</span>
     <span>RAM: 2KB</span>
-    <span>Flash: 32kb</span>
+    <span>Flash: 32KB</span>
   </div>
 )
 
-const ModbusSettings = ({
+const RTUSettings = ({
   enabled,
-  setSelectBautradeOption,
-  selectBautradeOption,
+  setSelectBaudRateOption,
+  selectBaudRateOption,
+  setSelectInterfaceOption,
+  selectInterfaceOption,
+  slaveId,
+  setSlaveId,
+  pin,
+  setPin,
 }: {
   enabled: boolean
-  setSelectBautradeOption: (value: string) => void
-  selectBautradeOption: string
+  setSelectBaudRateOption: (value: string) => void
+  selectBaudRateOption: string
+  setSelectInterfaceOption: (value: string) => void
+  selectInterfaceOption: string
+  slaveId: string
+  setSlaveId: (value: string) => void
+  pin: string
+  setPin: (value: string) => void
 }) => {
-  const bautradeOptions = ['115200', '9600', '14400', '19200', '38400', '57600']
+  const baudRateOptions = ['115200', '9600', '14400', '19200', '38400', '57600']
+  const interfaceOptions = ['Serial', 'Serial1', 'Serial2', 'Serial3']
+
   return (
     <div className={cn('flex flex-col gap-4', { hidden: !enabled })}>
-      <div className='flex justify-between'>
-        <div className='flex flex-col gap-4'>
-          <SelectField label='Interface' placeholder='Select interface' ariaLabel='Interface select' />
-          <SelectField label='Slave ID' placeholder='Enter ID' ariaLabel='Slave ID select' />
-        </div>
-        <div className='flex flex-col gap-4'>
+      <div className='flex gap-6'>
+        <div className='flex flex-1 flex-col gap-4'>
           <SelectField
-            setSelectedOption={setSelectBautradeOption}
-            selectedOption={selectBautradeOption}
-            label='Baudrate'
-            options={bautradeOptions}
+            setSelectedOption={setSelectInterfaceOption}
+            selectedOption={selectInterfaceOption}
+            options={interfaceOptions}
+            label='Interface'
+            placeholder='Select interface'
+            ariaLabel='Interface select'
           />
-          <InputField label='RS485 TX Pin' placeholder='Enter pin' />
+          <InputField label='Slave ID' value={slaveId} onChange={setSlaveId} />
+        </div>
+        <div className='flex flex-1 flex-col gap-4'>
+          <SelectField
+            setSelectedOption={setSelectBaudRateOption}
+            selectedOption={selectBaudRateOption}
+            label='Baudrate'
+            options={baudRateOptions}
+          />
+          <InputField label='RS485 TX Pin' value={pin} onChange={setPin} />
         </div>
       </div>
     </div>
@@ -117,67 +144,53 @@ const TCPSettings = ({
   enableDHCP,
   onToggle,
   setEnableDHCP,
-  setSelectedOption,
   selectedOption,
+  setSelectedOption,
 }: {
   enableModbusTCP: boolean
   enableDHCP: boolean
   onToggle: () => void
   setEnableDHCP: (value: boolean) => void
-  setSelectedOption: (value: string) => void
   selectedOption: string
+  setSelectedOption: (value: string) => void
 }) => {
-  const disabledStyle = 'hidden'
-  const options = ['Wi-Fi', 'Ethernet']
+  const interfaceOptions = ['Wi-Fi', 'Ethernet']
+  const hiddenClass = !enableModbusTCP ? 'hidden' : ''
+  const wifiHiddenClass = !enableModbusTCP || selectedOption === 'Ethernet' ? 'hidden' : ''
+  const dhcpHiddenClass = enableDHCP ? 'hidden' : ''
+
   return (
-    <div className=''>
-      <div className={cn('flex flex-col gap-5')}>
+    <div className='flex flex-col gap-5'>
+      <CheckBox id='Enable Modbus TCP' label='Enable Modbus TCP' checked={enableModbusTCP} onChange={onToggle} />
+      <SelectField
+        options={interfaceOptions}
+        selectedOption={selectedOption}
+        setSelectedOption={setSelectedOption}
+        className={hiddenClass}
+        label='Interface'
+        placeholder='Wi-Fi'
+        ariaLabel='Interface select'
+      />
+      <InputField className={hiddenClass} label='MAC' value='0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD' />
+      <div className='flex gap-6'>
+        <InputField className={wifiHiddenClass} label='Wi-Fi SSID' />
+        <InputField className={wifiHiddenClass} label='Password' />
+      </div>
+      <div className={`flex flex-col gap-5 ${hiddenClass}`}>
         <CheckBox
-          id='Enable Modbus TCP'
-          label='Enable Modbus TCP'
-          checked={enableModbusTCP}
-          onChange={() => onToggle()}
+          id='Enable DHCP'
+          label='Enable DHCP'
+          checked={enableDHCP}
+          onChange={() => setEnableDHCP(!enableDHCP)}
         />
-        <SelectField
-          options={options}
-          selectedOption={selectedOption}
-          setSelectedOption={setSelectedOption}
-          className={`${!enableModbusTCP ? disabledStyle : ''}`}
-          label='Interface'
-          placeholder='Wi-Fi'
-          ariaLabel='Wifi select'
-        />
-        <InputField
-          className={`${!enableModbusTCP ? disabledStyle : ''}`}
-          label='MAC'
-          value='0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD'
-        />
-        <div className='flex gap-6'>
-          <InputField
-            className={`${!enableModbusTCP || selectedOption === 'Ethernet' ? disabledStyle : ''}`}
-            label='Wifi SSID'
-          />
-          <InputField
-            className={`${!enableModbusTCP || selectedOption === 'Ethernet' ? disabledStyle : ''}`}
-            label='Password'
-          />
-        </div>
-        <div className={`${!enableModbusTCP ? disabledStyle : ''} flex flex-col gap-5`}>
-          <CheckBox
-            id='Enable DHCP'
-            label='Enable DHCP'
-            checked={enableDHCP}
-            onChange={() => setEnableDHCP(!enableDHCP)}
-          />
-          <div className='flex w-full justify-between gap-6'>
-            <div className='flex w-full flex-col gap-4'>
-              <InputField className={`${enableDHCP ? disabledStyle : ''}`} label='IP' />
-              <InputField className={`${enableDHCP ? disabledStyle : ''}`} label='Gateway' />
-            </div>
-            <div className='flex w-full flex-col gap-4'>
-              <InputField className={`${enableDHCP ? disabledStyle : ''}`} label='DNS' />
-              <InputField className={`${enableDHCP ? disabledStyle : ''}`} label='Subnet' />
-            </div>
+        <div className='flex w-full justify-between gap-6'>
+          <div className='flex w-full flex-col gap-4'>
+            <InputField className={dhcpHiddenClass} label='IP' />
+            <InputField className={dhcpHiddenClass} label='Gateway' />
+          </div>
+          <div className='flex w-full flex-col gap-4'>
+            <InputField className={dhcpHiddenClass} label='DNS' />
+            <InputField className={dhcpHiddenClass} label='Subnet' />
           </div>
         </div>
       </div>
