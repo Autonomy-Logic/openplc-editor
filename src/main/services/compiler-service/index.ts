@@ -1,6 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from 'child_process'
 import { spawn } from 'child_process'
-import { dialog, type MessagePortMain } from 'electron'
+import { app, dialog, type MessagePortMain } from 'electron'
 import { access, constants, mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 
@@ -20,9 +20,11 @@ export type CompilerResponse = {
 class CompilerService {
   compilerDirectory: string
   arduinoCliBinaryPath: string
+  arduinoConfigPath: string
   constructor() {
     this.compilerDirectory = this.constructCompilerDirectoryPath()
     this.arduinoCliBinaryPath = this.constructArduinoCliBinaryPath()
+    this.arduinoConfigPath = join(app.getPath('userData'), 'User', 'arduino-cli.yaml')
   }
 
   /**
@@ -72,13 +74,108 @@ class CompilerService {
    */
 
   /**
-   * This function will handle the temporary directory creation and deletion.
-   * The temporary directory will be used to store the files generated during the compilation process.
-   * @todo Implement the temporary directory handling function.
+   * Setup functions  ---------------------------------------------------------------------------------------------------------------
    */
-  handleTemporaryDirectory() {
-    console.log('Temporary directory handling')
+
+  /**
+   * This function will be responsible for setting up the environment for the compiler service.
+   * This will cleanup the old build files and create a new temporary build directory.
+   */
+  setupEnvironment() {}
+
+  /**
+   * Should look for the iec2c transpiler and the Arduino-CLI binary.
+   */
+  verifyPreRequisites() {}
+
+  displayConfigInfos() {
+    // Display host architecture
+    // Display OS
+    // Display processor
+    // Display logical CPU cores
+    // Display physical CPU cores
+    // Display CPU frequency
+    // Display CPU model
+    // Display iec2c version
+    // Display Arduino version
   }
+
+  /**
+   * Core installation verification functions. ----------------------------------------------------------------------------------------
+   */
+
+  /**
+   * Run the core update index command.
+   * This command will update the core index, which contains the local cache of the available platforms and libraries.
+   * TODO: Must be implemented a way to print the execution return to the user.
+   */
+  runCoreUpdateIndex() {
+    const arduinoCLIParams = ['--no-color', 'core', 'update-index']
+
+    const arduinoCLI = spawn(this.arduinoCliBinaryPath, arduinoCLIParams)
+
+    const binaryExecution = new Promise((resolve) => {
+      let exitCode: number
+      arduinoCLI.stdout.on('data', (data: Buffer) => {
+        console.log(data.toString())
+        exitCode = 0
+      })
+      arduinoCLI.stderr.on('data', (data: Buffer) => {
+        console.error(data.toString())
+        exitCode = 1
+      })
+      arduinoCLI.on('close', () => {
+        console.log('Finished the arduino-cli configuration process!')
+        resolve(exitCode)
+      })
+    })
+    return binaryExecution
+  }
+
+  /**
+   * Verify if the core is installed.
+   * @param core - the core to be verified
+   */
+  checkCoreStatus(_core: string) {}
+
+  /**
+   * Install the specified core.
+   * @param core - the core to be installed
+   */
+  installCore(_core: string){}
+
+  /**
+   * End of core installation verification functions -----------------------------------------------------------------------------------
+   */
+
+  /**
+   * Board installation verification functions ------------------------------------------------------------------------------------------
+   */
+
+  /**
+   * Verify if the board has an additional manager url.
+   * Usually Arduino boards don't have an additional manager url.
+   * If the board needs an additional manager url, we will look for this url in the arduino config file.
+   * If the url is not present, we will add it to the config file.
+   * @param board - the board to be verified
+   * @returns
+   * 0 - No additional manager url present
+   * 1 - Additional manager url present
+   * 2 - Error in verification process
+   */
+  checkForBoardAdditionalManagerUrl(_board: string) {}
+
+  /**
+   * End of board installation verification functions -----------------------------------------------------------------------------------
+   */
+
+  verifyCoreInstallation() {}
+
+  verifyBoardInstallation() {}
+
+  /**
+   * End of setup functions ----------------------------------------------------------------------------------------------------------
+   */
 
   /**
    * Function to run the board installation command.
@@ -344,6 +441,21 @@ class CompilerService {
    * @todo implement the Arduino-CLI compilation process.
    */
   useArduinoCLI() {
+    console.log('Arduino-CLI compilation process')
+  }
+  /**
+   * This function will handle the temporary directory creation and deletion.
+   * The temporary directory will be used to store the files generated during the compilation process.
+   * @todo Implement the temporary directory handling function.
+   */
+  handleTemporaryDirectory() {
+    console.log('Temporary directory handling')
+  }
+  /**
+   * This function will handle the compilation process using the Arduino-CLI.
+   * @todo Implement the Arduino-CLI compilation process.
+   */
+  buildProject() {
     console.log('Arduino-CLI compilation process')
   }
 }
