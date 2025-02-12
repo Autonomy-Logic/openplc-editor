@@ -19,12 +19,16 @@ export type CompilerResponse = {
 
 class CompilerService {
   compilerDirectory: string
+  runtimeResourcesPath: string
   arduinoCliBinaryPath: string
   arduinoConfigPath: string
+  arduinoCliBaseParameters: string[]
   constructor() {
     this.compilerDirectory = this.constructCompilerDirectoryPath()
+    this.runtimeResourcesPath = this.constructRuntimeResourcesPath()
     this.arduinoCliBinaryPath = this.constructArduinoCliBinaryPath()
     this.arduinoConfigPath = join(app.getPath('userData'), 'User', 'arduino-cli.yaml')
+    this.arduinoCliBaseParameters = ['--config-file', this.arduinoConfigPath]
   }
 
   /**
@@ -33,6 +37,11 @@ class CompilerService {
   constructCompilerDirectoryPath() {
     const isDevelopment = process.env.NODE_ENV === 'development'
     return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'compilers')
+  }
+
+  constructRuntimeResourcesPath() {
+    const isDevelopment = process.env.NODE_ENV === 'development'
+    return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'runtime')
   }
 
   constructArduinoCliBinaryPath() {
@@ -90,8 +99,11 @@ class CompilerService {
 
   displayConfigInfos() {
     // Display host architecture
+    const _hostArchitecture = process.arch
     // Display OS
+    const _hostOS = process.platform
     // Display processor
+    const _processor = process.env.PROCESSOR_IDENTIFIER
     // Display logical CPU cores
     // Display physical CPU cores
     // Display CPU frequency
@@ -110,7 +122,7 @@ class CompilerService {
    * TODO: Must be implemented a way to print the execution return to the user.
    */
   runCoreUpdateIndex() {
-    const arduinoCLIParams = ['--no-color', 'core', 'update-index']
+    const arduinoCLIParams = ['core', 'update-index', ...this.arduinoCliBaseParameters]
 
     const arduinoCLI = spawn(this.arduinoCliBinaryPath, arduinoCLIParams)
 
@@ -133,16 +145,35 @@ class CompilerService {
   }
 
   /**
-   * Verify if the core is installed.
-   * @param core - the core to be verified
-   */
-  checkCoreStatus(_core: string) {}
-
-  /**
    * Install the specified core.
+   * TODO: Must be implemented a way to print the execution return to the user.
    * @param core - the core to be installed
    */
-  installCore(_core: string){}
+  installCore(core: string) {
+    /**
+     * This can be updated to not override cores that are already installed.
+     */
+    const arduinoCLIParams = ['core', 'install', core, ...this.arduinoCliBaseParameters]
+
+    const arduinoCLI = spawn(this.arduinoCliBinaryPath, arduinoCLIParams)
+
+    const binaryExecution = new Promise((resolve) => {
+      let exitCode: number
+      arduinoCLI.stdout.on('data', (data: Buffer) => {
+        console.log(data.toString())
+        exitCode = 0
+      })
+      arduinoCLI.stderr.on('data', (data: Buffer) => {
+        console.error(data.toString())
+        exitCode = 1
+      })
+      arduinoCLI.on('close', () => {
+        console.log('Finished installing the core!')
+        resolve(exitCode)
+      })
+    })
+    return binaryExecution
+  }
 
   /**
    * End of core installation verification functions -----------------------------------------------------------------------------------
