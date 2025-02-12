@@ -184,7 +184,6 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
           documentation: pou.data.documentation,
           extensible: false,
         }
-        console.log('pouLibrary', pouLibrary)
       }
 
       if (!pouLibrary) {

@@ -177,7 +177,6 @@ const AcceleratorHandler = () => {
     }
 
     if (!close.window) {
-      console.log('beforeunload event fired')
       e.returnValue = false
       return
     }
