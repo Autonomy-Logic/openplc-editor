@@ -2,6 +2,7 @@ import type { ChildProcessWithoutNullStreams } from 'child_process'
 import { spawn } from 'child_process'
 import { app, dialog, type MessagePortMain } from 'electron'
 import { access, constants, mkdir, writeFile } from 'fs/promises'
+import os from 'os'
 import { join } from 'path'
 
 import { CreateXMLFile } from '../../../main/utils'
@@ -105,11 +106,16 @@ class CompilerService {
     // Display processor
     const _processor = process.env.PROCESSOR_IDENTIFIER
     // Display logical CPU cores
+    const _logicalCPUCores = os.cpus().length
     // Display physical CPU cores
     // Display CPU frequency
+    const _cpuFrequency = os.cpus()[0].speed
     // Display CPU model
+    const _cpuModel = os.cpus()[0].model
     // Display iec2c version
+    const _iec2cVersion = ''
     // Display Arduino version
+    const _arduinoVersion = ''
   }
 
   /**
@@ -117,11 +123,20 @@ class CompilerService {
    */
 
   /**
+   * Verify the core installation.
+   * @param _core - the core to verify if it’s installed.
+   * @returns True if the core is installed, false otherwise.
+   */
+  checkCoreInstallation(_core: string): boolean {
+    return false
+  }
+
+  /**
    * Run the core update index command.
    * This command will update the core index, which contains the local cache of the available platforms and libraries.
    * TODO: Must be implemented a way to print the execution return to the user.
    */
-  runCoreUpdateIndex() {
+  async runCoreUpdateIndex() {
     const arduinoCLIParams = ['core', 'update-index', ...this.arduinoCliBaseParameters]
 
     const arduinoCLI = spawn(this.arduinoCliBinaryPath, arduinoCLIParams)
@@ -199,8 +214,6 @@ class CompilerService {
   /**
    * End of board installation verification functions -----------------------------------------------------------------------------------
    */
-
-  verifyCoreInstallation() {}
 
   verifyBoardInstallation() {}
 
