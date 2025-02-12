@@ -170,8 +170,8 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
           ?.pous.find((p) => p.name === pouName)
 
       if (blockLibraryType === 'user') {
-        const Library = libraries.user.find((Library) => Library.name === blockLibrary)
-        const pou = pous.find((pou) => pou.data.name === Library?.name)
+        const library = libraries.user.find((library) => library.name === blockLibrary)
+        const pou = pous.find((pou) => pou.data.name === library?.name)
         if (!pou) return
         pouLibrary = {
           name: pou.data.name,
@@ -179,7 +179,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
           variables: pou.data.variables.map((variable) => ({
             name: variable.name,
             class: variable.class,
-            type: { definition: variable.type.definition, value: variable.type.value },
+            type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
           })),
           documentation: pou.data.documentation,
           extensible: false,
@@ -227,7 +227,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
      * !IMPORTANT: This function must be used inside of components, because the functions deleteVariable and updateModelVariables are just available at the useOpenPLCStore hook
      * -- This block of code references at project:
      *    -- src/renderer/components/_molecules/rung/body.tsx
-     *    -- src/renderer/components/_molecules/rung/header.tsx
+     *    -- src/renderer/components/_molecules/menu-bar/modals/delete-confirmation-modal.tsx
      *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
      */
     const blockNodes = nodes.filter((node) => node.type === 'block')

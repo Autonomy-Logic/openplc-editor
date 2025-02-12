@@ -36,10 +36,7 @@ const columns = [
   columnHelper.accessor('class', {
     header: 'Class',
     enableResizing: true,
-    size: 300,
-    minSize: 80,
-    maxSize: 300,
-    cell: "Global",
+    cell: 'Global',
   }),
   columnHelper.accessor('type', {
     header: 'Type',
@@ -52,17 +49,19 @@ const columns = [
   columnHelper.accessor('location', {
     header: 'Location',
     enableResizing: true,
-    size: 300,
-    minSize: 80,
-    maxSize: 300,
+    cell: EditableNameCell,
+  }),
+  columnHelper.accessor('initialValue', {
+    header: 'Initial Value',
+    enableResizing: true,
     cell: EditableNameCell,
   }),
   columnHelper.accessor('documentation', {
     header: 'Documentation',
     enableResizing: true,
-    size: 568,
+    size: 468,
     minSize: 198,
-    maxSize: 568,
+    maxSize: 468,
     cell: EditableDocumentationCell,
   }),
   columnHelper.accessor('debug', { header: 'Debug', size: 64, minSize: 64, maxSize: 64, cell: SelectableDebugCell }),

@@ -5,7 +5,7 @@ import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
 import { useToast } from '../../_features/[app]/toast/use-toast'
@@ -32,19 +32,19 @@ const EditableNameCell = ({
 
   const {
     editor,
+    project: {
+      data: { pous },
+    },
     searchQuery,
     projectActions: { getVariable },
   } = useOpenPLCStore()
 
+  const pou = pous.find((pou) => pou.data.name === editor.meta.name)
+
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
   const [isEditing, setIsEditing] = useState(false)
-
-  const variable = getVariable({
-    rowId: index,
-    scope,
-    associatedPou: editor.meta.name,
-  })
+  const [variable, setVariable] = useState<PLCVariable | undefined>(undefined)
 
   const isCellEditable = () => {
     if (id !== 'location' && id !== 'initialValue') return true
@@ -52,7 +52,7 @@ const EditableNameCell = ({
     if (variable?.type.definition === 'derived') return false
     return true
   }
-  const isEditable = isCellEditable()
+  const isEditable = useCallback(isCellEditable, [variable])
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = () => {
@@ -64,7 +64,7 @@ const EditableNameCell = ({
   }
 
   const handleStartEditing = () => {
-    if (!isEditable) return
+    if (!isEditable()) return
     setIsEditing(true)
   }
 
@@ -74,6 +74,16 @@ const EditableNameCell = ({
   useEffect(() => {
     setCellValue(initialValue)
   }, [initialValue])
+
+  useEffect(() => {
+    setVariable(
+      getVariable({
+        variableId: table.options.data[index].id,
+        scope,
+        associatedPou: editor.meta.name,
+      }),
+    )
+  }, [pou?.data.variables])
 
   return isEditing ? (
     <InputWithRef

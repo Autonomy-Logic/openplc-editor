@@ -160,19 +160,19 @@ const projectActionsSchema = z.object({
     .returns(projectResponseSchema),
   updateVariable: z
     .function()
-    .args(variableDTOSchema.omit({ data: true }).extend({ rowId: z.number(), data: PLCVariableSchema.partial() }))
+    .args(variableDTOSchema.omit({ data: true }).extend({ rowId: z.number().optional(), variableId: z.string().optional(), data: PLCVariableSchema.partial() }))
     .returns(projectResponseSchema),
   getVariable: z
     .function()
-    .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number() })))
-    .returns(PLCVariableSchema.optional()),
+    .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number().optional(), variableId: z.string().optional() })))
+    .returns(PLCVariableSchema.or(PLCVariableSchema.omit({ class: true })).optional()),
   deleteVariable: z
     .function()
-    .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number() })))
+    .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number().optional(), variableId: z.string().optional() })))
     .returns(z.void()),
   rearrangeVariables: z
     .function()
-    .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number(), newIndex: z.number() })))
+    .args(variableDTOSchema.omit({ data: true }).merge(z.object({ rowId: z.number().optional(), variableId: z.string().optional(), newIndex: z.number() })))
     .returns(z.void()),
   rearrangeStructureVariables: z
     .function()

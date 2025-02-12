@@ -56,7 +56,7 @@ export const LadderToolbox = () => {
        * !IMPORTANT: This function must be used inside of components, because the functions deleteVariable and updateModelVariables are just available at the useOpenPLCStore hook
        * -- This block of code references at project:
        *    -- src/renderer/components/_molecules/rung/body.tsx
-       *    -- src/renderer/components/_molecules/rung/header.tsx
+       *    -- src/renderer/components/_molecules/menu-bar/modals/delete-confirmation-modal.tsx
        *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
        */
       const blockNodes = selectedNodes.filter((node) => node.type === 'block')
@@ -92,7 +92,7 @@ export const LadderToolbox = () => {
     <>
       <BlockButton
         onDragStart={(event) => handleDragStart(event, 'block')}
-        onDragEnd={(_event) => console.log('drag end ladder toolbox')}
+        // onDragEnd={(_event) => console.log('drag end ladder toolbox')}
       />
       <CoilButton onDragStart={(event) => handleDragStart(event, 'coil')} />
       <ContactButton onDragStart={(event) => handleDragStart(event, 'contact')} />

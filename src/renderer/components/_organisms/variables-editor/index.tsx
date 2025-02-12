@@ -22,7 +22,14 @@ const VariablesEditor = () => {
       data: { pous, dataTypes },
     },
     editorActions: { updateModelVariables },
-    projectActions: { createVariable, deleteVariable, rearrangeVariables, updatePouDocumentation, updatePouReturnType },
+    projectActions: {
+      createVariable,
+      deleteVariable,
+      rearrangeVariables,
+      updatePouDocumentation,
+      updatePouReturnType,
+      updateVariable,
+    },
   } = useOpenPLCStore()
 
   const [pouDescription, setPouDescription] = useState<string>('')
@@ -66,7 +73,7 @@ const VariablesEditor = () => {
     setReturnTypeOptions(combinedReturnTypeOptions)
 
     if (foundPou) {
-      setTableData(foundPou.data.variables)
+      setTableData(foundPou.data.variables.filter((variable) => variable.id !== 'OUT'))
       if (foundPou.type === 'function') {
         setReturnType(foundPou.data.returnType)
       }
@@ -108,10 +115,11 @@ const VariablesEditor = () => {
 
   const handleRearrangeVariables = (index: number, row?: number) => {
     if (editorVariables.display === 'code') return
+    const variable = tableData[row ?? parseInt(editorVariables.selectedRow)]
     rearrangeVariables({
       scope: 'local',
       associatedPou: editor.meta.name,
-      rowId: row ?? parseInt(editorVariables.selectedRow),
+      variableId: variable.id,
       newIndex: (row ?? parseInt(editorVariables.selectedRow)) + index,
     })
     updateModelVariables({
@@ -123,7 +131,9 @@ const VariablesEditor = () => {
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
 
-    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
+    const variables = pous
+      .filter((pou) => pou.data.name === editor.meta.name)[0]
+      .data.variables.filter((variable) => variable.id !== 'OUT')
     const selectedRow = parseInt(editorVariables.selectedRow)
 
     if (variables.length === 0) {
@@ -185,9 +195,12 @@ const VariablesEditor = () => {
     if (editorVariables.display === 'code') return
 
     const selectedRow = parseInt(editorVariables.selectedRow)
-    deleteVariable({ scope: 'local', associatedPou: editor.meta.name, rowId: selectedRow })
+    const selectedVariable = tableData[selectedRow]
+    deleteVariable({ scope: 'local', associatedPou: editor.meta.name, variableId: selectedVariable.id })
 
-    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
+    const variables = pous
+      .filter((pou) => pou.data.name === editor.meta.name)[0]
+      .data.variables.filter((variable) => variable.id !== 'OUT')
     if (selectedRow === variables.length - 1) {
       updateModelVariables({
         display: 'table',
@@ -215,8 +228,21 @@ const VariablesEditor = () => {
     })
   }
 
-  const handleTypeChange = (value: string) => {
+  const handleReturnTypeChange = (value: string) => {
     updatePouReturnType(editor.meta.name, value)
+    // If function block, update the return type of the function
+    if (!(editor.type === 'plc-textual' && editor.meta.pouType === 'function')) return
+    updateVariable({
+      scope: 'local',
+      associatedPou: editor.meta.name,
+      variableId: 'OUT',
+      data: {
+        type: {
+          definition: 'base-type',
+          value: value.toLowerCase(),
+        },
+      },
+    })
   }
 
   const forbiddenVariableToBeRemoved =
@@ -252,7 +278,7 @@ const VariablesEditor = () => {
                 >
                   Return type :
                 </label>
-                <Select value={returnType} onValueChange={handleTypeChange}>
+                <Select value={returnType} onValueChange={handleReturnTypeChange}>
                   <SelectTrigger
                     id='class-filter'
                     placeholder={returnType}

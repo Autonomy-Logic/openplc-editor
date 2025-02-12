@@ -3,11 +3,18 @@ import './configs'
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_molecules/modal'
 import { useOpenPLCStore } from '@process:renderer/store'
+import { PLCVariable } from '@root/types/PLC'
 import * as monaco from 'monaco-editor'
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { toast } from '../../../[app]/toast/use-toast'
+import {
+  keywordsCompletion,
+  libraryCompletion,
+  tableGlobalVariablesCompletion,
+  tableVariablesCompletion,
+} from './completion'
 import { parsePouToStText } from './drag-and-drop/st'
 
 type monacoEditorProps = {
@@ -45,12 +52,23 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       systemConfigs: { shouldUseDarkMode },
     },
     project: {
-      data: { pous },
+      data: {
+        pous,
+        configuration: {
+          resource: { globalVariables },
+        },
+      },
     },
     libraries: sliceLibraries,
     projectActions: { updatePou, createVariable },
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()
+
+  const [isOpen, setIsOpen] = useState<boolean>(false)
+  const [contentToDrop, setContentToDrop] = useState<PouToText>()
+  const [newName, setNewName] = useState<string>('')
+
+  const pou = pous.find((pou) => pou.data.name === name)
 
   useEffect(() => {
     if (editorRef.current && searchQuery) {
@@ -58,11 +76,87 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [searchQuery, sensitiveCase, regularExpression])
 
-  const [isOpen, setIsOpen] = useState<boolean>(false)
-  const [contentToDrop, setContentToDrop] = useState<PouToText>()
-  const [newName, setNewName] = useState<string>('')
+  /**
+   * Update the auto-completion feature of the monaco editor.
+   */
+  useEffect(() => {
+    const disposable = monaco.languages.registerCompletionItemProvider(language, {
+      provideCompletionItems: (model, position) => {
+        const word = model.getWordUntilPosition(position)
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        }
 
-  const pou = pous.find((pou) => pou.data.name === name)
+        const linesContent: Array<string[]> = []
+        model.getLinesContent().forEach((line) => {
+          linesContent.push(line.trim().split(' '))
+        })
+
+        const identifierTokens = linesContent.flat().flatMap((token) => {
+          return token.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || []
+        })
+
+        const variablesSuggestions = tableVariablesCompletion({
+          range,
+          variables: (pou?.data.variables || []) as PLCVariable[],
+        }).suggestions
+        const globalVariablesSuggestions = tableGlobalVariablesCompletion({
+          range,
+          variables: globalVariables as PLCVariable[],
+        }).suggestions
+        const keywordsSuggestions = keywordsCompletion({ range, language }).suggestions
+        const librarySuggestions = libraryCompletion({
+          range,
+          library: sliceLibraries,
+          pous,
+          editor,
+        }).suggestions
+
+        const variablesLabels = variablesSuggestions.map((suggestion) => suggestion.label)
+        const globalVariablesLabels = globalVariablesSuggestions.map((suggestion) => suggestion.label)
+        const keywordsLabels = keywordsSuggestions.map((suggestion) => suggestion.label)
+        const libraryLabels = librarySuggestions.map((suggestion) => suggestion.label)
+
+        const identifiers = Array.from(
+          new Set(
+            identifierTokens
+              .map((token) => {
+                if (
+                  variablesLabels.includes(token) ||
+                  globalVariablesLabels.includes(token) ||
+                  keywordsLabels.includes(token) ||
+                  libraryLabels.includes(token)
+                ) {
+                  return null
+                }
+                return token
+              })
+              .filter((suggestion) => suggestion !== null),
+          ),
+        )
+        const identifiersSuggestions = identifiers.map((identifier) => ({
+          label: identifier,
+          kind: monaco.languages.CompletionItemKind.Text,
+          insertText: identifier,
+          range,
+        }))
+
+        return {
+          suggestions: [
+            ...variablesSuggestions,
+            ...globalVariablesSuggestions,
+            ...keywordsSuggestions,
+            ...librarySuggestions,
+            ...identifiersSuggestions,
+          ],
+        }
+      },
+    })
+    return () => disposable.dispose()
+  }, [pou?.data.variables, language])
 
   function handleEditorDidMount(
     editor: null | monaco.editor.IStandaloneCodeEditor,
@@ -133,7 +227,19 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     } else {
       const libraries = sliceLibraries.user
       const libraryToUse = libraries.find((library) => library.name === libraryName)
-      pouToAppend = libraryToUse
+      const pou = pous.find((pou) => pou.data.name === libraryToUse?.name)
+      if (!pou) return
+      pouToAppend = {
+        name: pou.data.name,
+        type: pou.type,
+        variables: pou.data.variables.map((variable) => ({
+          name: variable.name,
+          class: variable.class,
+          type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
+        })),
+        documentation: pou.data.documentation,
+        extensible: false,
+      }
     }
 
     setContentToDrop(pouToAppend as PouToText)
