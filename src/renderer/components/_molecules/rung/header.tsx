@@ -2,6 +2,7 @@
 import { DraggableProvidedDragHandleProps } from '@hello-pangea/dnd'
 import { CloseIcon } from '@root/renderer/assets'
 import { DragHandleIcon } from '@root/renderer/assets/icons/interface/DragHandle'
+import { DuplicateIcon } from '@root/renderer/assets/icons/interface/Duplicate'
 import { StickArrowIcon } from '@root/renderer/assets/icons/interface/StickArrow'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungState } from '@root/renderer/store/slices'
@@ -96,7 +97,7 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
           onClick={() => duplicateRung({ editorName, rungId: rung.id })}
           className='flex h-full w-7 items-center justify-center rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
         >
-          Duplicate
+          <DuplicateIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />
         </button>
         <button
           aria-label='Delete body button'
