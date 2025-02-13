@@ -21,7 +21,7 @@ type RungHeaderProps = {
 export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onClick }: RungHeaderProps) => {
   const {
     editor,
-    flowActions: { addComment },
+    flowActions: { addComment, duplicateRung },
     modalActions: { openModal },
   } = useOpenPLCStore()
 
@@ -91,6 +91,13 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
         />
       </div>
       <div className='flex flex-row gap-1'>
+        <button
+          aria-label='Duplicate body button'
+          onClick={() => duplicateRung({ editorName, rungId: rung.id })}
+          className='flex h-full w-7 items-center justify-center rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+        >
+          Duplicate
+        </button>
         <button
           aria-label='Delete body button'
           onClick={handleRemoveRung}
