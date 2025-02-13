@@ -36,7 +36,7 @@ const SelectField = ({
           position='popper'
           side='bottom'
           sideOffset={-28}
-          className='box h-fit w-[--radix-select-trigger-width] overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
+          className='box h-fit max-h-52 w-[--radix-select-trigger-width] overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
           {options.map((option) => {
             return (

@@ -1,6 +1,7 @@
 import { cn } from '@root/utils'
 import { useState } from 'react'
 
+import { deviceType } from './device'
 import { CheckBox } from './elements/checkBox'
 import { InputField } from './elements/input'
 import { SelectField } from './elements/select'
@@ -8,6 +9,7 @@ import { SelectField } from './elements/select'
 const ConfigurationEditor = () => {
   const [modbusConfig, setModbusConfig] = useState({ RTU: false, TCP: false })
   const [enableDHCP, setEnableDHCP] = useState(false)
+  const [selectDevice, setSelectDevice] = useState(deviceType[0])
   const [selectedOption, setSelectedOption] = useState('Wi-Fi')
   const [selectBaudRateOption, setSelectBaudRateOption] = useState('115200')
   const [selectInterfaceOption, setSelectInterfaceOption] = useState('Serial')
@@ -17,6 +19,8 @@ const ConfigurationEditor = () => {
   const [gatewayValue, setGatewayValue] = useState('192.168.1.1')
   const [DNSValue, setDNSValue] = useState('8.8.8.8')
   const [subnetValue, setSubnetValue] = useState('255.255.255.0')
+  const serialPortsOptions = ['/dev/ttyUSB0', 'Porta de comunicação (COM1) (COM1)']
+  const [serialPort, setSerialPort] = useState(serialPortsOptions[0])
 
   const toggleModbus = (type: 'RTU' | 'TCP') => {
     setModbusConfig((prev) => ({ ...prev, [type]: !prev[type] }))
@@ -24,7 +28,13 @@ const ConfigurationEditor = () => {
 
   return (
     <div className='flex h-full w-full select-none'>
-      <DeviceConfiguration />
+      <DeviceConfiguration
+        setSerialPort={setSerialPort}
+        serialPort={serialPort}
+        selectDevice={selectDevice}
+        setSelectDevice={setSelectDevice}
+        serialPortsOptions={serialPortsOptions}
+      />
 
       <hr className='mx-4 h-[99%] w-[1px] self-stretch bg-brand-light pb-12' />
 
@@ -72,15 +82,35 @@ const ConfigurationEditor = () => {
   )
 }
 
-const DeviceConfiguration = () => (
+const DeviceConfiguration = ({
+  selectDevice,
+  setSelectDevice,
+  serialPort,
+  setSerialPort,
+  serialPortsOptions,
+}: {
+  selectDevice: string
+  setSelectDevice: (value: string) => void
+  serialPort: string
+  setSerialPort: (value: string) => void
+  serialPortsOptions: string[]
+}) => (
   <div className='flex h-full w-1/2 flex-col gap-6'>
     <div className='h-[60%]' />
     <div className='flex h-[40%] flex-col items-center justify-center'>
       <div className='flex flex-col gap-3'>
-        <SelectField label='Device' placeholder='arduino' ariaLabel='Device select' />
         <SelectField
+          label='Device'
+          placeholder={selectDevice}
+          setSelectedOption={setSelectDevice}
+          options={deviceType}
+          ariaLabel='Device select'
+        />
+        <SelectField
+          options={serialPortsOptions}
+          setSelectedOption={setSerialPort}
           label='Programming Port'
-          placeholder='40028922'
+          placeholder={serialPort}
           width='188px'
           ariaLabel='Programming port select'
         />
