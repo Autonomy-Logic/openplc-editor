@@ -115,6 +115,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           if (!flow) return
 
           if (!Array.isArray(rungs)) return
+
           // Validate each rung has required structure
           if (
             !rungs.every(
@@ -167,11 +168,13 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
+          const rungIndex = flow.rungs.findIndex((rung) => rung.id === rungId)
+
           const nodeMaps: { [key: string]: Node } = rung.nodes.reduce(
             (acc, node) => {
               acc[node.id] = {
                 ...node,
-                id: `${node.type?.toUpperCase()}_${crypto.randomUUID()}`,
+                id: node.type === 'powerRail' ? node.id : `${node.type?.toUpperCase()}_${crypto.randomUUID()}`,
               }
               return acc
             },
@@ -279,7 +282,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
             edges: newEdges,
           }
 
-          flow.rungs.push(newRung)
+          flow.rungs.splice(rungIndex + 1, 0, newRung)
           flow.updated = true
         }),
       )

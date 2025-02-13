@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd'
+import { closestCenter, DndContext, DragEndEvent, UniqueIdentifier } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CreateRung } from '@root/renderer/components/_molecules/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -24,7 +25,6 @@ export default function LadderEditor() {
   const flowUpdated = flow?.updated
 
   const scrollableRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     if (scrollableRef.current) {
       scrollableRef.current.scrollTo({
@@ -60,6 +60,8 @@ export default function LadderEditor() {
     setEditingState('unsaved')
   }, [flowUpdated === true])
 
+  const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
+
   const handleAddNewRung = () => {
     const defaultViewport: [number, number] = [300, 100]
     flowActions.startLadderRung({
@@ -70,15 +72,24 @@ export default function LadderEditor() {
     })
   }
 
-  const onDragEnd = (result: DropResult) => {
-    if (!result.destination) return
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+
     if (!flow) {
       console.error('Flow is undefined')
       return
     }
 
-    const sourceIndex = result.source.index
-    const destinationIndex = result.destination.index
+    if (!active || !over) {
+      console.error('Active or over is undefined')
+      return
+    }
+
+    if (active.id === over.id) return
+
+    const sourceIndex = getRungPos(active.id)
+    const destinationIndex = getRungPos(over.id)
+
     if (
       sourceIndex < 0 ||
       destinationIndex < 0 ||
@@ -95,6 +106,8 @@ export default function LadderEditor() {
     const [removed] = auxRungs.splice(sourceIndex, 1)
     auxRungs.splice(destinationIndex, 0, removed)
 
+    console.log('Rungs:', auxRungs)
+
     try {
       flowActions.setRungs({ editorName: editor.meta.name, rungs: auxRungs })
     } catch (error) {
@@ -109,23 +122,19 @@ export default function LadderEditor() {
   return (
     <div className='h-full w-full overflow-y-auto' ref={scrollableRef} style={{ scrollbarGutter: 'stable' }}>
       <div className='flex flex-1 flex-col gap-4 px-2'>
-        <DragDropContext onDragEnd={onDragEnd}>
-          <Droppable droppableId='rungs' type='list' direction='vertical'>
-            {(provided) => (
-              <div
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-                className={cn({
-                  'h-fit rounded-lg border dark:border-neutral-800': rungs.length > 0,
-                })}
-              >
-                {rungs.map((rung, index) => (
-                  <Rung key={rung.id} id={rung.id} index={index} rung={rung} />
-                ))}
-              </div>
-            )}
-          </Droppable>
-        </DragDropContext>
+        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <div
+            className={cn({
+              'h-fit rounded-lg border dark:border-neutral-800': rungs.length > 0,
+            })}
+          >
+            <SortableContext items={rungs} strategy={verticalListSortingStrategy}>
+              {rungs.map((rung, index) => (
+                <Rung key={rung.id} id={rung.id} index={index} rung={rung} />
+              ))}
+            </SortableContext>
+          </div>
+        </DndContext>
         <CreateRung onClick={handleAddNewRung} />
       </div>
     </div>
