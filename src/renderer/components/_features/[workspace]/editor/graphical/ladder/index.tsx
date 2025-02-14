@@ -9,6 +9,7 @@ import {
   DragStartEvent,
   UniqueIdentifier,
 } from '@dnd-kit/core'
+import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CreateRung } from '@root/renderer/components/_molecules/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/rung'
@@ -163,7 +164,7 @@ export default function LadderEditor() {
               ))}
             </SortableContext>
             {createPortal(
-              <DragOverlay dropAnimation={defaultDropAnimation}>
+              <DragOverlay dropAnimation={defaultDropAnimation} modifiers={[restrictToParentElement]}>
                 {activeId && activeItem ? (
                   <Rung key={activeItem.id} id={activeItem.id} rung={activeItem} index={-1} />
                 ) : null}
