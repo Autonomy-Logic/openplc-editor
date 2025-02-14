@@ -114,10 +114,16 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungState, offsetY: nu
     // Node is a parallel node
     const parallelNode = sourceNode as ParallelNode
 
+    /**
+     * TODO: This is a temporary solution to find the connections of a parallel node.
+     * This should be refactored so that the lines are placed correctly
+     */
+
     // If the parallel node is opening the connection
     if (parallelNode.data.type === 'open') {
       // Find the previous node of the parallel node
       const { nodes, parallels } = findNodeBasedOnParallelOpen(parallelNode, rung)
+      const actualNode = node
 
       const lastParallelNode = parallels
         .filter((parallel) => parallel.data.type === 'open')
@@ -130,7 +136,6 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungState, offsetY: nu
 
       // If the node is connected serially to the parallel node
       if (lastParallelSerialEdge && lastParallelSerialEdge.target === node.id) {
-        const actualNode = node
         return nodes.map((node, index) => ({
           '@refLocalId': node.data.numericId,
           '@formalParameter': node.data.outputConnector?.id,
@@ -174,33 +179,62 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungState, offsetY: nu
       }
 
       // If the node is connected in parallel to the parallel node
-      const sourceNodeOfParallelNode = nodes[0]
-      return {
-        '@refLocalId': sourceNodeOfParallelNode.data.numericId,
-        '@formalParameter': sourceNodeOfParallelNode.data.outputConnector?.id,
-        position: [
-          // Final edge destination
-          {
-            '@x': node.data.inputConnector?.glbPosition.x ?? 0,
-            '@y': (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
-          },
-          // Final position of parallel
-          {
-            '@x': lastParallelNode.data.parallelOutputConnector?.glbPosition.x ?? 0,
-            '@y': (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
-          },
-          // Initial position of parallel
-          {
-            '@x': lastParallelNode.data.parallelOutputConnector?.glbPosition.x ?? 0,
-            '@y': (sourceNodeOfParallelNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
-          },
-          // Initial edge source
-          {
-            '@x': sourceNodeOfParallelNode.data.outputConnector?.glbPosition.x ?? 0,
-            '@y': (sourceNodeOfParallelNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
-          },
-        ],
-      }
+      // const sourceNodeOfParallelNode = nodes[0]
+      // return {
+      //   '@refLocalId': sourceNodeOfParallelNode.data.numericId,
+      //   '@formalParameter': sourceNodeOfParallelNode.data.outputConnector?.id,
+      //   position: [
+      //     // Final edge destination
+      //     {
+      //       '@x': node.data.inputConnector?.glbPosition.x ?? 0,
+      //       '@y': (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
+      //     },
+      //     // Final position of parallel
+      //     {
+      //       '@x': lastParallelNode.data.parallelOutputConnector?.glbPosition.x ?? 0,
+      //       '@y': (node.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
+      //     },
+      //     // Initial position of parallel
+      //     {
+      //       '@x': lastParallelNode.data.parallelOutputConnector?.glbPosition.x ?? 0,
+      //       '@y': (sourceNodeOfParallelNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
+      //     },
+      //     // Initial edge source
+      //     {
+      //       '@x': sourceNodeOfParallelNode.data.outputConnector?.glbPosition.x ?? 0,
+      //       '@y': (sourceNodeOfParallelNode.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
+      //     },
+      //   ],
+      // }
+
+      return nodes.map((node) => {
+        return {
+          '@refLocalId': node.data.numericId,
+          '@formalParameter': node.data.outputConnector?.id,
+          position: [
+            // Final edge destination
+            {
+              '@x': actualNode.data.inputConnector?.glbPosition.x ?? 0,
+              '@y': (actualNode.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
+            },
+            // Final position of parallel
+            {
+              '@x': lastParallelNode.data.parallelInputConnector?.glbPosition.x ?? 0,
+              '@y': (actualNode.data.inputConnector?.glbPosition.y ?? 0) + offsetY,
+            },
+            // Initial position of parallel
+            {
+              '@x': lastParallelNode.data.parallelInputConnector?.glbPosition.x ?? 0,
+              '@y': (node.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
+            },
+            // Initial edge source
+            {
+              '@x': node.data.outputConnector?.glbPosition.x ?? 0,
+              '@y': (node.data.outputConnector?.glbPosition.y ?? 0) + offsetY,
+            },
+          ],
+        }
+      })
     }
 
     // If the parallel node is closing the connection
