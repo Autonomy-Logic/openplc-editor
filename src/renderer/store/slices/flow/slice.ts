@@ -195,33 +195,59 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           const newNodes = rung.nodes.map((node) => {
             switch (node.type) {
               case 'block': {
-                return {
-                  ...node,
+                const newBlock = nodesBuilder.block({
                   id: nodeMaps[node.id].id,
+                  posX: node.position.x,
+                  posY: node.position.y,
+                  handleX: (node as BlockNode<BlockVariant>).data.inputConnector?.glbPosition.x ?? 0,
+                  handleY: (node as BlockNode<BlockVariant>).data.inputConnector?.glbPosition.y ?? 0,
+                  variant: (node as BlockNode<BlockVariant>).data.variant,
+                  executionControl: (node as BlockNode<BlockVariant>).data.executionControl,
+                })
+                return {
+                  ...newBlock,
                   data: {
-                    ...node.data,
-                    numericId: generateNumericUUID(),
-                    variable: { name: '' },
+                    ...newBlock.data,
+                    variable:
+                      (node as BlockNode<BlockVariant>).data.variant.type === 'function-block'
+                        ? { name: '' }
+                        : node.data.variable,
                   },
                 } as BlockNode<BlockVariant>
               }
               case 'coil': {
-                return {
-                  ...node,
+                const newCoil = nodesBuilder.coil({
                   id: nodeMaps[node.id].id,
+                  posX: node.position.x,
+                  posY: node.position.y,
+                  handleX: (node as CoilNode).data.inputConnector?.glbPosition.x ?? 0,
+                  handleY: (node as CoilNode).data.inputConnector?.glbPosition.y ?? 0,
+                  variant: 'default',
+                })
+                return {
+                  ...newCoil,
                   data: {
-                    ...node.data,
+                    ...newCoil.data,
                     numericId: generateNumericUUID(),
+                    variable: (node as CoilNode).data.variable,
                   },
                 } as CoilNode
               }
               case 'contact': {
-                return {
-                  ...node,
+                const newContact = nodesBuilder.contact({
                   id: nodeMaps[node.id].id,
+                  posX: node.position.x,
+                  posY: node.position.y,
+                  handleX: (node as ContactNode).data.inputConnector?.glbPosition.x ?? 0,
+                  handleY: (node as ContactNode).data.inputConnector?.glbPosition.y ?? 0,
+                  variant: 'default',
+                })
+                return {
+                  ...newContact,
                   data: {
-                    ...node.data,
+                    ...newContact.data,
                     numericId: generateNumericUUID(),
+                    variable: (node as ContactNode).data.variable,
                   },
                 } as ContactNode
               }
