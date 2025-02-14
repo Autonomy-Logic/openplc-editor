@@ -7,12 +7,13 @@ import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 
 type RungProps = {
+  className?: string
   index: number
   id: string
   rung: RungState
 }
 
-export const Rung = ({ index, id, rung }: RungProps) => {
+export const Rung = ({ className, index, id, rung }: RungProps) => {
   const {
     flows,
     editorActions: { updateModelLadder, getIsRungOpen },
@@ -37,12 +38,19 @@ export const Rung = ({ index, id, rung }: RungProps) => {
   }, [rung])
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
     transition,
   }
 
   return (
-    <div aria-label='Rung container' className='overflow w-full' id={id} ref={setNodeRef} style={style} {...attributes}>
+    <div
+      aria-label='Rung container'
+      className={cn('overflow w-full', className)}
+      id={id}
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+    >
       <RungHeader
         onClick={handleOpenSection}
         isOpen={isOpen}

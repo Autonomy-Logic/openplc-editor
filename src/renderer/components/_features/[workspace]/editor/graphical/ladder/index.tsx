@@ -1,13 +1,22 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { closestCenter, DndContext, DragEndEvent, UniqueIdentifier } from '@dnd-kit/core'
+import {
+  closestCenter,
+  defaultDropAnimation,
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  UniqueIdentifier,
+} from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CreateRung } from '@root/renderer/components/_molecules/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { zodFlowSchema } from '@root/renderer/store/slices'
+import { RungState, zodFlowSchema } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
 export default function LadderEditor() {
@@ -23,6 +32,9 @@ export default function LadderEditor() {
   const flow = flows.find((flow) => flow.name === editor.meta.name)
   const rungs = flow?.rungs || []
   const flowUpdated = flow?.updated
+
+  const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
+  const [activeItem, setActiveItem] = useState<RungState | null>(null)
 
   const scrollableRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -62,6 +74,12 @@ export default function LadderEditor() {
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event
+    setActiveId(active.id)
+    setActiveItem(rungs.find((rung) => rung.id === active.id) || null)
+  }
+
   const handleAddNewRung = () => {
     const defaultViewport: [number, number] = [300, 100]
     flowActions.startLadderRung({
@@ -74,6 +92,9 @@ export default function LadderEditor() {
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
+
+    setActiveId(null)
+    setActiveItem(null)
 
     if (!flow) {
       console.error('Flow is undefined')
@@ -122,7 +143,7 @@ export default function LadderEditor() {
   return (
     <div className='h-full w-full overflow-y-auto' ref={scrollableRef} style={{ scrollbarGutter: 'stable' }}>
       <div className='flex flex-1 flex-col gap-4 px-2'>
-        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
           <div
             className={cn({
               'h-fit rounded-lg border dark:border-neutral-800': rungs.length > 0,
@@ -130,9 +151,25 @@ export default function LadderEditor() {
           >
             <SortableContext items={rungs} strategy={verticalListSortingStrategy}>
               {rungs.map((rung, index) => (
-                <Rung key={rung.id} id={rung.id} index={index} rung={rung} />
+                <Rung
+                  key={rung.id}
+                  id={rung.id}
+                  index={index}
+                  rung={rung}
+                  className={cn({
+                    'opacity-35': activeId === rung.id,
+                  })}
+                />
               ))}
             </SortableContext>
+            {createPortal(
+              <DragOverlay dropAnimation={defaultDropAnimation}>
+                {activeId && activeItem ? (
+                  <Rung key={activeItem.id} id={activeItem.id} rung={activeItem} index={-1} />
+                ) : null}
+              </DragOverlay>,
+              document.body,
+            )}
           </div>
         </DndContext>
         <CreateRung onClick={handleAddNewRung} />
