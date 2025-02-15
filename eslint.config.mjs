@@ -99,9 +99,11 @@ export default [
   },
   eslintConfigPrettier,
   {
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
     ignores: [
       '**/*.d.ts',
       '**/*.test.{js,jsx,ts,tsx}',
+      '**/*.spec.{js,jsx,ts,tsx}',
       '**/*.config.{js,ts,mjs,cjs}',
       'configs/dll/**/*.{js,ts,jsx,tsx}',
     ],
