@@ -273,19 +273,27 @@ const createMainWindow = async () => {
   const menuBuilder = new MenuBuilder(mainWindow)
   void menuBuilder.buildMenu()
 
+  /**
+   * Creates a singleton instance for project service, which will be used across the entire application
+   */
   const projectService = new ProjectService(mainWindow)
+
+  /**
+   * Creates a singleton instance for compiler service, which will be used across the entire application
+   */
+  const compilerService = new CompilerService()
 
   const mainIpcModule = new MainProcessBridge({
     mainWindow,
     ipcMain,
     projectService,
-    compilerService: CompilerService,
+    compilerService,
     store,
     menuBuilder,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
-  // Remove this if your app does not use auto updates;
 
+  // Remove this if your app does not use auto updates;
   new AppUpdater()
 }
 

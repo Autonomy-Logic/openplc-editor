@@ -155,7 +155,6 @@ class MainProcessBridge implements MainIpcModule {
       (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data']) =>
         this.compilerService.buildXmlFile(pathToUserProject, dataToCreateXml),
     )
-
     /**
      * This is a mock implementation to be used as a presentation.
      * !! Do not use this on production !!

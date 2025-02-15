@@ -1,5 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from 'child_process'
-import { spawn } from 'child_process'
+import { exec, spawn } from 'child_process'
 import { app, dialog, type MessagePortMain } from 'electron'
 import { access, constants, mkdir, writeFile } from 'fs/promises'
 import os from 'os'
@@ -127,8 +127,32 @@ class CompilerService {
    * @param _core - the core to verify if it’s installed.
    * @returns True if the core is installed, false otherwise.
    */
-  checkCoreInstallation(_core: string): boolean {
-    return false
+  checkCoreInstallation(_core: string): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      const [flag, configFile] = this.arduinoCliBaseParameters
+      /**
+       * todo: update the binary file
+       */
+      exec(`arduino-cli core list ${flag} "${configFile}" --json`, (error, stdout, stderr) => {
+        if (error) {
+          return reject(error)
+        }
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          const resultAsObject = JSON.parse(stdout)
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          const installedCores = resultAsObject.platforms.map(({ id }: { id: string }) => id)
+          if (stderr) {
+            console.error(`Error executing command: ${stderr}`)
+          }
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+          const isInstalled = installedCores.includes(_core) as boolean
+          resolve(isInstalled)
+        } catch (e) {
+          reject(e)
+        }
+      })
+    })
   }
 
   /**
