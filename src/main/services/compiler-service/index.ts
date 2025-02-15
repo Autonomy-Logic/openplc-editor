@@ -49,13 +49,13 @@ class CompilerService {
     let arduinoCliBinary: string
     switch (process.platform) {
       case 'win32':
-        arduinoCliBinary = join(this.compilerDirectory, 'Windows', 'arduino-cli', 'bin', 'arduino-cli-w64.exe')
+        arduinoCliBinary = join(this.compilerDirectory, 'Windows', 'arduino-cli', 'bin', 'arduino-cli.exe')
         break
       case 'darwin':
-        arduinoCliBinary = join(this.compilerDirectory, 'MacOS', 'arduino-cli', 'bin', 'arduino-cli-mac')
+        arduinoCliBinary = join(this.compilerDirectory, 'MacOS', 'arduino-cli', 'bin', 'arduino-cli')
         break
       case 'linux':
-        arduinoCliBinary = join(this.compilerDirectory, 'Linux', 'arduino-cli', 'bin', 'arduino-cli-i64')
+        arduinoCliBinary = join(this.compilerDirectory, 'Linux', 'arduino-cli', 'bin', 'arduino-cli')
         break
       default:
         throw new Error(`Unsupported platform: ${process.platform}`)
@@ -124,16 +124,17 @@ class CompilerService {
 
   /**
    * Verify the core installation.
-   * @param _core - the core to verify if it’s installed.
+   * @param core - the core to verify if it’s installed.
    * @returns True if the core is installed, false otherwise.
    */
-  checkCoreInstallation(_core: string): Promise<boolean> {
+  checkCoreInstallation(core: string): Promise<boolean> {
     return new Promise((resolve, reject) => {
       const [flag, configFile] = this.arduinoCliBaseParameters
       /**
-       * todo: update the binary file
+       * Double quotes are used so that the space in the path is not interpreted as
+       * a delimiter of multiple arguments.
        */
-      exec(`arduino-cli core list ${flag} "${configFile}" --json`, (error, stdout, stderr) => {
+      exec(`"${this.arduinoCliBinaryPath}" core list ${flag} "${configFile}" --json`, (error, stdout, stderr) => {
         if (error) {
           return reject(error)
         }
@@ -146,7 +147,7 @@ class CompilerService {
             console.error(`Error executing command: ${stderr}`)
           }
           // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-          const isInstalled = installedCores.includes(_core) as boolean
+          const isInstalled = installedCores.includes(core) as boolean
           resolve(isInstalled)
         } catch (e) {
           reject(e)
