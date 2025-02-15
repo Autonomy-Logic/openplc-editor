@@ -5,12 +5,10 @@ import { DragHandleIcon } from '@root/renderer/assets/icons/interface/DragHandle
 import { StickArrowIcon } from '@root/renderer/assets/icons/interface/StickArrow'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungState } from '@root/renderer/store/slices'
-import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../_atoms'
-import { BasicNodeData } from '../../_atoms/react-flow/custom-nodes/utils/types'
 
 type RungHeaderProps = {
   rung: RungState
@@ -23,17 +21,11 @@ type RungHeaderProps = {
 export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onClick }: RungHeaderProps) => {
   const {
     editor,
-    editorActions: { updateModelVariables },
-    project: {
-      data: { pous },
-    },
-    projectActions: { deleteVariable },
-    flowActions: { addComment, removeRung },
+    flowActions: { addComment },
     modalActions: { openModal },
   } = useOpenPLCStore()
 
   const editorName = editor.meta.name
-  const pou = pous.find((pou) => pou.data.name === editorName)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
@@ -58,47 +50,7 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
   }, [rung.comment])
 
   const handleRemoveRung = () => {
-    /**
-     * Remove the variable associated with the block node
-     * If the editor is a graphical editor and the variable display is set to table, update the model variables
-     * If the variable is the selected row, set the selected row to -1
-     *
-     * !IMPORTANT: This function must be used inside of components, because the functions deleteVariable and updateModelVariables are just available at the useOpenPLCStore hook
-     * -- This block of code references at project:
-     *    -- src/renderer/components/_molecules/rung/body.tsx
-     *    -- src/renderer/components/_molecules/rung/header.tsx
-     *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
-     */
     openModal('confirm-delete-element', rung)
-    const blockNodes = rung.nodes.filter((node) => node.type === 'block')
-
-    if (blockNodes.length > 0) {
-      let variables: PLCVariable[] = []
-      if (pou) variables = [...pou.data.variables] as PLCVariable[]
-
-      blockNodes.forEach((blockNode) => {
-        const variableIndex = variables.findIndex(
-          (variable) => variable.id === (blockNode.data as BasicNodeData).variable.id,
-        )
-        if (variableIndex !== -1) {
-          deleteVariable({
-            rowId: variableIndex,
-            scope: 'local',
-            associatedPou: editor.meta.name,
-          })
-          variables.splice(variableIndex, 1)
-        }
-        if (
-          editor.type === 'plc-graphical' &&
-          editor.variable.display === 'table' &&
-          parseInt(editor.variable.selectedRow) === variableIndex
-        ) {
-          updateModelVariables({ display: 'table', selectedRow: -1 })
-        }
-      })
-
-      removeRung(editorName, rung.id)
-    }
   }
 
   return (

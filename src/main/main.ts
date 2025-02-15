@@ -153,7 +153,7 @@ const createMainWindow = async () => {
   mainWindow = new BrowserWindow({
     minWidth: 1124,
     minHeight: 628,
-    ...bounds,
+    // ...bounds,
     show: false,
     icon: getAssetPath('icon.png'),
     ...titlebarStyles,

@@ -31,24 +31,24 @@ export const EditMenu = () => {
       <MenuPrimitive.Trigger className={TRIGGER}>{i18n.t('menu:edit.label')}</MenuPrimitive.Trigger>
       <MenuPrimitive.Portal>
         <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM}>
             <span>{i18n.t('menu:edit.submenu.undo')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Z'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM}>
             <span>{i18n.t('menu:edit.submenu.redo')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Y'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Separator className={SEPARATOR} />
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM}>
             <span>{i18n.t('menu:edit.submenu.cut')}</span>
             <span className={ACCELERATOR}>{'Ctrl + X'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM}>
             <span>{i18n.t('menu:edit.submenu.copy')}</span>
             <span className={ACCELERATOR}>{'Ctrl + C'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM}>
             <span>{i18n.t('menu:edit.submenu.paste')}</span>
             <span className={ACCELERATOR}>{'Ctrl + V'}</span>
           </MenuPrimitive.Item>

@@ -1,7 +1,7 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { checkVariableName } from '@root/renderer/store/slices/project/utils/variables'
+import { checkVariableName } from '@root/renderer/store/slices/project/validation/variables'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -755,7 +755,10 @@ const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionC
     }))
 
   const mustHaveExecutionControlEnabled =
-    inputConnectors[0].type.value !== 'BOOL' || outputConnectors[0].type.value !== 'BOOL'
+    inputConnectors.length === 0 ||
+    inputConnectors[0].type.value !== 'BOOL' ||
+    outputConnectors.length === 0 ||
+    outputConnectors[0].type.value !== 'BOOL'
 
   if (executionControl || mustHaveExecutionControlEnabled) {
     const executionControlVariable = variant.variables.some(

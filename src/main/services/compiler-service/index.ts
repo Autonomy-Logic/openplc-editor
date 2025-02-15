@@ -358,7 +358,7 @@ class CompilerService {
       'compilers',
       'MacOS',
       'xml2st',
-      'xml2st_mac',
+      'xml2st',
     )
     const linuxCompilerPath = join(
       isDevelopment ? workingDirectory : process.resourcesPath,

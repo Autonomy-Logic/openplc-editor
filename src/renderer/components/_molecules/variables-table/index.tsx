@@ -225,7 +225,7 @@ const VariablesTable = ({
         return updateVariable({
           scope: 'local',
           associatedPou: name,
-          rowId: rowIndex,
+          variableId: tableData[rowIndex].id,
           data: {
             [columnId]: value,
           },
@@ -269,12 +269,12 @@ const VariablesTable = ({
           >
             {row.getVisibleCells().map((cell) => (
               <TableCell
+                key={cell.id}
                 style={{
                   width: cell.column.getSize(),
                   maxWidth: cell.column.columnDef.maxSize,
                   minWidth: cell.column.columnDef.minSize,
                 }}
-                key={cell.id}
               >
                 {flexRender(cell.column.columnDef.cell, {
                   ...cell.getContext(),
