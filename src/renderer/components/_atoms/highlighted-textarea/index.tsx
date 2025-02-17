@@ -44,7 +44,7 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
     const scrollableIndicatorRef = useRef<HTMLDivElement>(null)
     const highlightDivRef = useRef<HTMLDivElement>(null)
 
-    const [inputFocus, setInputFocus] = useState<boolean>(true)
+    const [inputFocus, setInputFocus] = useState<boolean>(false)
     const [canSubmit, setCanSubmit] = useState<boolean>(true)
     const [scrollValue, setScrollValue] = useState<number>(0)
     const formattedVariableValue = searchQuery ? extractSearchQuery(textAreaValue, searchQuery) : textAreaValue

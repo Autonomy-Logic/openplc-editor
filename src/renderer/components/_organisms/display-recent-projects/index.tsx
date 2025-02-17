@@ -1,7 +1,6 @@
 import { FileElement } from '@components/elements'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { FlowType } from '@root/renderer/store/slices'
 import { ComponentProps, useEffect, useRef, useState } from 'react'
 
 export type IDisplayRecentProjectProps = ComponentProps<'section'> & {
@@ -11,12 +10,8 @@ export type IDisplayRecentProjectProps = ComponentProps<'section'> & {
 const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRecentProjectProps) => {
   const {
     workspace: { recent },
-    editorActions: { clearEditor },
-    workspaceActions: { setEditingState, setRecent },
-    projectActions: { setProject },
-    tabsActions: { clearTabs },
-    flowActions: { addFlow },
-    libraryActions: { addLibrary },
+    workspaceActions: { setRecent },
+    sharedWorkspaceActions: { openProjectByPath },
   } = useOpenPLCStore()
 
   const [recentProjects, setRecentProjects] = useState(recent)
@@ -90,37 +85,9 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
     setRecent(recentProjects)
   }
 
-  const handleOpenProject = async (projectPath: string) => {
-    const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
-    if (success && data) {
-      setEditingState('unsaved')
-      clearEditor()
-      clearTabs()
-      const projectMeta = {
-        name: data.content.meta.name,
-        type: data.content.meta.type,
-        path: data.meta.path,
-      }
-      const projectData = data.content.data
-      setProject({
-        meta: projectMeta,
-        data: projectData,
-      })
-      const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
-      if (ladderPous.length) {
-        ladderPous.forEach((pou) => {
-          if (pou.data.body.language === 'ld') {
-            addFlow(pou.data.body.value as FlowType)
-          }
-        })
-      }
-      projectData.pous.map((pou) => pou.type !== 'program' && addLibrary(pou.data.name, pou.type))
-      toast({
-        title: 'Project opened!',
-        description: 'Your project was opened and loaded.',
-        variant: 'default',
-      })
-    } else {
+  const handleOpenProjectByPath = async (projectPath: string) => {
+    const { success, error } = await openProjectByPath(projectPath)
+    if (!success) {
       if (error?.description.includes('Error reading project file.')) {
         void updateUserRecentProjects()
         toast({
@@ -128,14 +95,14 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
           description: `The path ${projectPath} does not exist on this computer.`,
           variant: 'fail',
         })
-      } else {
-        void updateUserRecentProjects(),
-          toast({
-            title: 'Cannot open the project.',
-            description: error?.description,
-            variant: 'fail',
-          })
+        return
       }
+      void updateUserRecentProjects()
+      toast({
+        title: 'Cannot open the project.',
+        description: error?.description,
+        variant: 'fail',
+      })
     }
   }
 
@@ -150,7 +117,7 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
       <div className='scroll-area flex h-auto w-full flex-wrap  gap-[25px] overflow-y-auto'>
         {recentProjects.map((project) => (
           <FileElement.Root
-            onClick={() => void handleOpenProject(project.path)}
+            onClick={() => void handleOpenProjectByPath(project.path)}
             className='overflow-hidden '
             key={project.path}
           >

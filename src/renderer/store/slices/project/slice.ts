@@ -1,19 +1,19 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { PLCVariable } from '@root/types/PLC'
-import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
+import { PLCArrayDatatype, PLCVariable } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { v4 as uuidv4 } from 'uuid'
 import { StateCreator } from 'zustand'
 
 import { ProjectResponse, ProjectSlice } from './types'
-import { createInstanceValidation, updateInstancevalidation } from './utils/instances'
-import { createTaskValidation, updateTaskValidation } from './utils/tasks'
+import { getVariableBasedOnRowIdOrVariableId } from './utils'
+import { createInstanceValidation, updateInstancevalidation } from './validation/instances'
+import { createTaskValidation, updateTaskValidation } from './validation/tasks'
 import {
   createGlobalVariableValidation,
   createVariableValidation,
   updateGlobalVariableValidation,
   updateVariableValidation,
-} from './utils/variables'
+} from './validation/variables'
 
 const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (setState, getState) => ({
   project: {
@@ -135,6 +135,17 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       )
     },
 
+    updatePouReturnType: (pouName, returnType): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const draft = project.data.pous.find((pou) => {
+            return pou.data.name === pouName
+          })
+          if (draft && draft.type === 'function') draft.data.returnType = returnType
+        }),
+      )
+    },
+
     updatePouDocumentation: (pouName, documentation): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
@@ -187,7 +198,15 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 id: variableToBeCreated.data.id ? variableToBeCreated.data.id : uuidv4(),
               }
               if (variableToBeCreated.rowToInsert !== undefined) {
-                pou.data.variables.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
+                const variablesWithoutOUT = pou.data.variables.filter((variable) => variable.id !== 'OUT')
+                const variableOUT = pou.data.variables.find((variable) => variable.id === 'OUT')
+                variablesWithoutOUT.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
+
+                if (variableOUT) {
+                  pou.data.variables = [variableOUT, ...variablesWithoutOUT]
+                  break
+                }
+                pou.data.variables = [...variablesWithoutOUT]
                 break
               }
               pou.data.variables.push(variableToBeCreated.data)
@@ -223,8 +242,17 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 response = validationResponse
                 break
               }
-              const index = dataToBeUpdated.rowId
-              if (index === -1) response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+              const variableToUpdate = getVariableBasedOnRowIdOrVariableId(
+                project.data.configuration.resource.globalVariables,
+                dataToBeUpdated.rowId,
+                dataToBeUpdated.data.id,
+              )
+              if (!variableToUpdate) {
+                console.error('Variable not found')
+                response = { ok: false, title: 'Variable not found' }
+                break
+              }
+              const index = project.data.configuration.resource.globalVariables.indexOf(variableToUpdate)
               project.data.configuration.resource.globalVariables[index] = {
                 ...project.data.configuration.resource.globalVariables[index],
                 ...dataToBeUpdated.data,
@@ -242,11 +270,15 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 response = { ok: false, title: 'Pou not found' }
                 break
               }
-
-              const index = dataToBeUpdated.rowId
-              if (index === -1) response = { ok: false, title: 'Variable not found', message: 'Internal error' }
-
-              const variableToUpdate = pou.data.variables[index]
+              const variableToUpdate = getVariableBasedOnRowIdOrVariableId(
+                pou.data.variables,
+                dataToBeUpdated.rowId,
+                dataToBeUpdated.variableId,
+              )
+              if (!variableToUpdate) {
+                response = { ok: false, title: 'Variable not found', message: 'Internal error' }
+                break
+              }
               const validationResponse = updateVariableValidation(
                 pou.data.variables,
                 dataToBeUpdated.data,
@@ -256,6 +288,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 response = validationResponse
                 break
               }
+              const index = pou.data.variables.indexOf(variableToUpdate)
               pou.data.variables[index] = {
                 ...pou.data.variables[index],
                 ...dataToBeUpdated.data,
@@ -275,28 +308,43 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       )
       return response
     },
-    getVariable: (variableToGet): PLCVariable | undefined => {
-      let variable: PLCVariable
+    getVariable: (variableToGet): PLCVariable | Omit<PLCVariable, 'class'> | undefined => {
       switch (variableToGet.scope) {
         case 'global': {
-          variable = getState().project.data.configuration.resource.globalVariables[variableToGet.rowId] as PLCVariable
-          break
+          const variable = getVariableBasedOnRowIdOrVariableId(
+            getState().project.data.configuration.resource.globalVariables,
+            variableToGet.rowId,
+            variableToGet.variableId,
+          )
+          if (!variable) {
+            console.error('Variable not found')
+            return undefined
+          }
+          return variable
         }
+
         case 'local': {
           const pou = getState().project.data.pous.find((pou) => pou.data.name === variableToGet.associatedPou)
           if (!pou) {
             console.error(`Pou ${variableToGet.associatedPou} not found`)
             return undefined
           }
-          variable = pou.data.variables[variableToGet.rowId] as PLCVariable
-          break
+          const variable = getVariableBasedOnRowIdOrVariableId(
+            pou.data.variables,
+            variableToGet.rowId,
+            variableToGet.variableId,
+          )
+          if (!variable) {
+            console.error('Variable not found')
+            return undefined
+          }
+          return variable
         }
         default: {
           console.error(`Scope ${variableToGet.scope ? variableToGet.scope : ''} not found or invalid params`)
           return undefined
         }
       }
-      return variable
     },
     deleteVariable: (variableToBeDeleted): void => {
       setState(
@@ -308,7 +356,17 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 console.error('Variable not found')
                 break
               }
-              project.data.configuration.resource.globalVariables.splice(variableToBeDeleted.rowId, 1)
+              const variable = getVariableBasedOnRowIdOrVariableId(
+                project.data.configuration.resource.globalVariables,
+                variableToBeDeleted.rowId,
+                variableToBeDeleted.variableId,
+              )
+              if (!variable) {
+                console.error('Variable not found')
+                return
+              }
+              const index = project.data.configuration.resource.globalVariables.indexOf(variable)
+              project.data.configuration.resource.globalVariables.splice(index, 1)
               break
             }
             case 'local': {
@@ -319,11 +377,68 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 console.error(`Pou ${variableToBeDeleted.associatedPou} not found`)
                 return
               }
-              if (variableToBeDeleted.rowId === -1) {
+              const variable = getVariableBasedOnRowIdOrVariableId(
+                pou.data.variables,
+                variableToBeDeleted.rowId,
+                variableToBeDeleted.variableId,
+              )
+              if (!variable) {
                 console.error('Variable not found')
-                break
+                return
               }
-              pou.data.variables.splice(variableToBeDeleted.rowId, 1)
+              const index = pou.data.variables.indexOf(variable)
+              pou.data.variables.splice(index, 1)
+              break
+            }
+            default: {
+              console.error(`Scope ${scope ? scope : ''} not found or invalid params`)
+              break
+            }
+          }
+        }),
+      )
+    },
+
+    rearrangeVariables: (variableToBeRearranged): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const { scope } = variableToBeRearranged
+          switch (scope) {
+            case 'global': {
+              const { rowId, variableId, newIndex } = variableToBeRearranged
+              const variableToBeRemoved = getVariableBasedOnRowIdOrVariableId(
+                project.data.configuration.resource.globalVariables,
+                rowId,
+                variableId,
+              )
+              if (!variableToBeRemoved) {
+                console.error('Variable not found')
+                return
+              }
+              const index = project.data.configuration.resource.globalVariables.indexOf(variableToBeRemoved)
+              const [removed] = project.data.configuration.resource.globalVariables.splice(index, 1)
+              project.data.configuration.resource.globalVariables.splice(newIndex, 0, removed)
+              break
+            }
+            case 'local': {
+              const pou = project.data.pous.find((pou) => pou.data.name === variableToBeRearranged.associatedPou)
+              if (!pou) {
+                console.error(`Pou ${variableToBeRearranged.associatedPou} not found`)
+                return
+              }
+              const { rowId, variableId, newIndex } = variableToBeRearranged
+              const variableToBeRemoved = getVariableBasedOnRowIdOrVariableId(
+                pou.data.variables,
+                rowId,
+                variableId,
+              )
+              if (!variableToBeRemoved) {
+                console.error('Variable not found')
+                return
+              }
+              const index = pou.data.variables.indexOf(variableToBeRemoved)
+              const [removed] = pou.data.variables.splice(index, 1)
+              pou.data.variables.splice(newIndex, 0, removed)
               break
             }
             default: {
@@ -362,38 +477,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           }
 
           dataType.variable.splice(newIndex, 0, removed)
-
-        }),
-      )
-    },
-
-    rearrangeVariables: (variableToBeRearranged): void => {
-      setState(
-        produce(({ project }: ProjectSlice) => {
-          const { scope } = variableToBeRearranged
-          switch (scope) {
-            case 'global': {
-              const { rowId, newIndex } = variableToBeRearranged
-              const [removed] = project.data.configuration.resource.globalVariables.splice(rowId, 1)
-              project.data.configuration.resource.globalVariables.splice(newIndex, 0, removed)
-              break
-            }
-            case 'local': {
-              const pou = project.data.pous.find((pou) => pou.data.name === variableToBeRearranged.associatedPou)
-              if (!pou) {
-                console.error(`Pou ${variableToBeRearranged.associatedPou} not found`)
-                return
-              }
-              const { rowId, newIndex } = variableToBeRearranged
-              const [removed] = pou.data.variables.splice(rowId, 1)
-              pou.data.variables.splice(newIndex, 0, removed)
-              break
-            }
-            default: {
-              console.error(`Scope ${scope ? scope : ''} not found or invalid params`)
-              break
-            }
-          }
         }),
       )
     },

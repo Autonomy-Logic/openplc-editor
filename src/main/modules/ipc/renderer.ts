@@ -21,14 +21,14 @@ type ISaveDataResponse = {
   }
 }
 
-type CreateProjectFileProps = {
+export type CreateProjectFileProps = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
   time: string
   type: 'plc-project' | 'plc-library'
   name: string
   path: string
 }
-type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
+export type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
 
 /**
  * A bridge for communication between the renderer process and the main process in an Electron application.
@@ -100,6 +100,11 @@ const rendererProcessBridge = {
    */
   openRecentAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:open-recent-accelerator', (_event, val: IProjectServiceResponse) => callback(_event, val)),
+
+  /**
+   * Removes all listeners for the 'project:open-recent-accelerator' event.
+   */
+  removeOpenRecentListener: () => ipcRenderer.removeAllListeners('project:open-recent-accelerator'),
 
   /**
    * Invokes the 'open-external-link' event with the provided link and returns a promise with the response.
@@ -225,7 +230,20 @@ const rendererProcessBridge = {
   /**
    * Sends the 'window-controls:close' event to close the window.
    */
-  closeWindow: () => ipcRenderer.send('window-controls:close'),
+  handleCloseOrHideWindowAccelerator: () =>
+    ipcRenderer.on('window-controls:request-close', () => ipcRenderer.send('window-controls:close')),
+  removeHandleCloseOrHideWindowAccelerator: () => ipcRenderer.removeAllListeners('window-controls:request-close'),
+  handleCloseOrHideWindow: () => ipcRenderer.send('window-controls:close'),
+
+  /**
+   * Check if window is closing
+   */
+  windowIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('window-controls:is-closing', callback),
+
+  /**
+   * Sends the 'window-controls:closed' event to close the window.
+   */
+  closeWindow: () => ipcRenderer.send('window-controls:closed'),
 
   /**
    * Sends the 'window-controls:minimize' event to minimize the window.
@@ -265,16 +283,20 @@ const rendererProcessBridge = {
    * @param callback - The callback to be invoked when the event is triggered.
    */
   quitAppRequest: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:quit-accelerator', callback),
-
-  /**
-   * Removes all listeners for the 'app:quit-accelerator' event.
-   */
   removeQuitAppListener: () => ipcRenderer.removeAllListeners('app:quit-accelerator'),
+
+  darwinAppIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:darwin-is-closing', callback),
+  handleQuitApp: () => ipcRenderer.send('app:quit'),
 
   /**
    * Sends the 'window-controls:hide' event to hide the window.
    */
   hideWindow: () => ipcRenderer.send('window-controls:hide'),
+
+  /**
+   * Sends the 'window:rebuild-menu' event to rebuild the window menu.
+   */
+  rebuildMenu: () => ipcRenderer.send('window:rebuild-menu'),
 
   /**
    * Creates a build directory for the compiler.

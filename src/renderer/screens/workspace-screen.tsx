@@ -34,7 +34,6 @@ const WorkspaceScreen = () => {
     project,
     editor,
     workspaceActions: { setEditingState, toggleCollapse },
-    modalActions: { openModal },
     searchResults,
   } = useOpenPLCStore()
 
@@ -128,17 +127,6 @@ const WorkspaceScreen = () => {
       }
     })
   }, [isCollapsed])
-
-  useEffect(() => {
-    const handleCloseProject = () => {
-      window.bridge.closeProjectAccelerator((_event) => {
-        if (editingState === 'unsaved') {
-          openModal('save-changes-project', 'close-project')
-        }
-      })
-    }
-    handleCloseProject()
-  }, [])
 
   const [isSwitchingPerspective, setIsSwitchingPerspective] = useState(false)
 

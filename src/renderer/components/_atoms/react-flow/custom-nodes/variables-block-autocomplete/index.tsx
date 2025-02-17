@@ -1,7 +1,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import { PlusIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { extractNumberAtEnd } from '@root/renderer/store/slices/project/utils/variables'
+import { extractNumberAtEnd } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import { Node } from '@xyflow/react'
@@ -89,7 +89,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         ? variables
             .filter(
               (variable) =>
-                variable.name.includes(valueToSearch) &&
+                variable.name.toLowerCase().includes(valueToSearch.toLowerCase()) &&
                 (variableRestrictions.values === undefined ||
                   variableRestrictions.values.includes(variable.type.value.toLowerCase())) &&
                 (variableRestrictions.limitations === undefined ||
@@ -237,7 +237,11 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
 
       const variableTypeRestriction = {
         definition: variableRestrictions.definition || 'base-type',
-        value: variableRestrictions.values?.[0] || 'dint',
+        value: variableRestrictions.values
+          ? Array.isArray(variableRestrictions.values)
+            ? variableRestrictions.values[0]
+            : variableRestrictions.values
+          : 'dint',
       }
       if (!variableTypeRestriction.definition || !variableTypeRestriction.value) return
 

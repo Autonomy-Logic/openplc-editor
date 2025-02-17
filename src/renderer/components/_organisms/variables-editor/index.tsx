@@ -4,6 +4,7 @@ import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { VariablesTable as VariablesTableType } from '@root/renderer/store/slices'
+import { baseTypes } from '@root/shared/data'
 import { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { ColumnFiltersState } from '@tanstack/react-table'
@@ -18,10 +19,17 @@ const VariablesEditor = () => {
   const {
     editor,
     project: {
-      data: { pous },
+      data: { pous, dataTypes },
     },
     editorActions: { updateModelVariables },
-    projectActions: { createVariable, deleteVariable, rearrangeVariables, updatePouDocumentation },
+    projectActions: {
+      createVariable,
+      deleteVariable,
+      rearrangeVariables,
+      updatePouDocumentation,
+      updatePouReturnType,
+      updateVariable,
+    },
   } = useOpenPLCStore()
 
   const [pouDescription, setPouDescription] = useState<string>('')
@@ -31,6 +39,8 @@ const VariablesEditor = () => {
    */
   const [tableData, setTableData] = useState<PLCVariable[]>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [returnType, setReturnType] = useState('BOOL')
+  const [returnTypeOptions, setReturnTypeOptions] = useState<string[]>([])
 
   /**
    * Editor name state to keep track of the editor name
@@ -59,12 +69,18 @@ const VariablesEditor = () => {
   useEffect(() => {
     const foundPou = pous.find((pou) => pou?.data?.name === editor?.meta?.name)
 
+    const combinedReturnTypeOptions = [...baseTypes, ...dataTypes.map((type) => type.name)]
+    setReturnTypeOptions(combinedReturnTypeOptions)
+
     if (foundPou) {
-      setTableData(foundPou.data.variables)
+      setTableData(foundPou.data.variables.filter((variable) => variable.id !== 'OUT'))
+      if (foundPou.type === 'function') {
+        setReturnType(foundPou.data.returnType)
+      }
     } else {
       setTableData([])
     }
-  }, [editor, pous])
+  }, [editor, pous, dataTypes])
 
   /**
    * If the editor name is not the same as the current editor name
@@ -99,10 +115,11 @@ const VariablesEditor = () => {
 
   const handleRearrangeVariables = (index: number, row?: number) => {
     if (editorVariables.display === 'code') return
+    const variable = tableData[row ?? parseInt(editorVariables.selectedRow)]
     rearrangeVariables({
       scope: 'local',
       associatedPou: editor.meta.name,
-      rowId: row ?? parseInt(editorVariables.selectedRow),
+      variableId: variable.id,
       newIndex: (row ?? parseInt(editorVariables.selectedRow)) + index,
     })
     updateModelVariables({
@@ -114,7 +131,9 @@ const VariablesEditor = () => {
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
 
-    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
+    const variables = pous
+      .filter((pou) => pou.data.name === editor.meta.name)[0]
+      .data.variables.filter((variable) => variable.id !== 'OUT')
     const selectedRow = parseInt(editorVariables.selectedRow)
 
     if (variables.length === 0) {
@@ -176,9 +195,12 @@ const VariablesEditor = () => {
     if (editorVariables.display === 'code') return
 
     const selectedRow = parseInt(editorVariables.selectedRow)
-    deleteVariable({ scope: 'local', associatedPou: editor.meta.name, rowId: selectedRow })
+    const selectedVariable = tableData[selectedRow]
+    deleteVariable({ scope: 'local', associatedPou: editor.meta.name, variableId: selectedVariable.id })
 
-    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
+    const variables = pous
+      .filter((pou) => pou.data.name === editor.meta.name)[0]
+      .data.variables.filter((variable) => variable.id !== 'OUT')
     if (selectedRow === variables.length - 1) {
       updateModelVariables({
         display: 'table',
@@ -203,6 +225,23 @@ const VariablesEditor = () => {
     updateModelVariables({
       display: 'table',
       selectedRow: parseInt(row.id),
+    })
+  }
+
+  const handleReturnTypeChange = (value: string) => {
+    updatePouReturnType(editor.meta.name, value)
+    // If function block, update the return type of the function
+    if (!(editor.type === 'plc-textual' && editor.meta.pouType === 'function')) return
+    updateVariable({
+      scope: 'local',
+      associatedPou: editor.meta.name,
+      variableId: 'OUT',
+      data: {
+        type: {
+          definition: 'base-type',
+          value: value.toLowerCase(),
+        },
+      },
     })
   }
 
@@ -231,6 +270,42 @@ const VariablesEditor = () => {
             aria-label='Variables editor table actions container'
             className='flex h-full w-full select-none justify-between'
           >
+            {editor.type === 'plc-textual' && editor.meta.pouType === 'function' && (
+              <div className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'>
+                <label
+                  htmlFor='return type'
+                  className='w-fit text-xs font-medium text-neutral-1000 dark:text-neutral-300'
+                >
+                  Return type :
+                </label>
+                <Select value={returnType} onValueChange={handleReturnTypeChange}>
+                  <SelectTrigger
+                    id='class-filter'
+                    placeholder={returnType}
+                    withIndicator
+                    className='group flex h-full w-44 items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
+                  />
+                  <SelectContent
+                    position='popper'
+                    sideOffset={3}
+                    align='center'
+                    className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                  >
+                    {returnTypeOptions.map((filter) => (
+                      <SelectItem
+                        key={filter}
+                        value={filter}
+                        className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      >
+                        <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                          {filter}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div
               id='Pou documentation'
               aria-label='Variables editor table description container'

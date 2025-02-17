@@ -75,7 +75,6 @@ const CompilerService = {
       return { success: false, message: 'User canceled the save dialog' }
     }
 
-    console.log('dataToCreateXml', dataToCreateXml)
 
     const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml)
     if (!projectDataAsString) {
@@ -121,7 +120,7 @@ const CompilerService = {
       'compilers',
       'MacOS',
       'xml2st',
-      'xml2st_mac',
+      'xml2st',
     )
     const linuxCompilerPath = join(
       isDevelopment ? workingDirectory : process.resourcesPath,

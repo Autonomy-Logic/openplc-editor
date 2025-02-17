@@ -75,12 +75,10 @@ const CreateEditorModelObject = (
   }
 
   if (['ld', 'sfc', 'fbd'].includes(language)) {
-    const editor = CreatePLCGraphicalObject(name, language as 'ld' | 'sfc' | 'fbd', pouType)
-    return editor
-  } else {
-    const editor = CreatePLCTextualObject(name, language as 'il' | 'st', pouType)
-    return editor
+    return CreatePLCGraphicalObject(name, language as 'ld' | 'sfc' | 'fbd', pouType)
   }
+
+  return CreatePLCTextualObject(name, language as 'il' | 'st', pouType)
 }
 
 const CreateResourceEditor = (name = 'resource'): EditorModel => {

@@ -134,10 +134,6 @@ const VariableElement = (block: VariableProps) => {
 
       if (variable.name === (variableNode as VariableNode).data.variable.name && variable.name !== variableValue) {
         setVariableValue(variable.name)
-        if (inputVariableRef.current?.isFocused) {
-          inputVariableRef.current.blur({ submit: false })
-          handleSubmitVariableValueOnTextareaBlur(variable.name)
-        }
       }
 
       const validation = validateVariableType(variable.type.value, data.block.variableType)

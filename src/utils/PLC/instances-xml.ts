@@ -37,7 +37,11 @@ export const instanceToXml = (xml: BaseXml, configuration: PLCConfiguration) => 
       type: {
         [variable.type.value.toUpperCase()]: '',
       },
-      initialValue: variable.initialValue,
+      initialValue: variable.initialValue ? {
+        simpleValue: {
+          '@value': variable.initialValue,
+        },
+      } : null,
       documentation: {
         'xhtml:p': {
           $: variable.documentation,

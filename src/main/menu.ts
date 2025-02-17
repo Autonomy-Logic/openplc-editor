@@ -18,7 +18,6 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
  */
 export default class MenuBuilder {
   private mainWindow: BrowserWindow
-
   private projectService: ProjectService
 
   developOptions: MenuItemConstructorOptions[] = [
@@ -47,6 +46,7 @@ export default class MenuBuilder {
 
     return menu
   }
+
   handleCreateProject() {
     this.mainWindow.webContents.send('project:create-accelerator')
   }
@@ -110,7 +110,7 @@ export default class MenuBuilder {
   }
 
   handleQuitAppRequest() {
-    this.mainWindow.webContents.send('app:quit-accelerator')
+    this.mainWindow.webContents.send('window-controls:request-close')
   }
 
   /**
@@ -135,7 +135,7 @@ export default class MenuBuilder {
   updateAppTheme() {
     nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? 'light' : 'dark'
     this.mainWindow.webContents.send('system:update-theme')
-    this.buildMenu()
+    void this.buildMenu()
   }
 
   /**
@@ -212,12 +212,6 @@ export default class MenuBuilder {
           accelerator: 'Cmd+U',
           enabled: false,
         },
-        { type: 'separator' },
-        {
-          label: i18n.t('menu:file.submenu.quit'),
-          accelerator: 'Cmd+Q',
-          click: () => this.handleQuitAppRequest(),
-        },
       ],
     }
 
@@ -228,32 +222,32 @@ export default class MenuBuilder {
           label: i18n.t('menu:edit.submenu.undo'),
           accelerator: 'Cmd+Z',
           selector: 'undo:',
-          enabled: false,
+          enabled: true,
         },
         {
           label: i18n.t('menu:edit.submenu.redo'),
           accelerator: 'Cmd+Y',
           selector: 'redo:',
-          enabled: false,
+          enabled: true,
         },
         { type: 'separator' },
         {
           label: i18n.t('menu:edit.submenu.cut'),
           accelerator: 'Cmd+X',
           selector: 'cut:',
-          enabled: false,
+          enabled: true,
         },
         {
           label: i18n.t('menu:edit.submenu.copy'),
           accelerator: 'Cmd+C',
           selector: 'copy:',
-          enabled: false,
+          enabled: true,
         },
         {
           label: i18n.t('menu:edit.submenu.paste'),
           accelerator: 'Cmd+V',
           selector: 'paste:',
-          enabled: false,
+          enabled: true,
         },
         { type: 'separator' },
         {
@@ -373,11 +367,12 @@ export default class MenuBuilder {
         const projectPath = projectEntry.path.startsWith(homeDir)
           ? projectEntry.path.replace(homeDir, '~')
           : projectEntry.path
+          const projectName = projectEntry.name
 
         return {
-          label: projectPath,
+          label: `${projectName} (${projectPath})`,
           click: () => {
-            this.handleOpenProjectByPath(projectEntry.path)
+            void this.handleOpenProjectByPath(projectEntry.path)
           },
         }
       }),
@@ -487,32 +482,32 @@ export default class MenuBuilder {
         submenu: [
           {
             label: i18n.t('menu:edit.submenu.undo'),
-            enabled: false,
+            enabled: true,
             accelerator: 'Ctrl+Z',
             role: 'undo',
           },
           {
             label: i18n.t('menu:edit.submenu.redo'),
-            enabled: false,
+            enabled: true,
             accelerator: 'Ctrl+Y',
             role: 'redo',
           },
           { type: 'separator' },
           {
             label: i18n.t('menu:edit.submenu.cut'),
-            enabled: false,
+            enabled: true,
             accelerator: 'Ctrl+X',
             role: 'cut',
           },
           {
             label: i18n.t('menu:edit.submenu.copy'),
-            enabled: false,
+            enabled: true,
             accelerator: 'Ctrl+C',
             role: 'copy',
           },
           {
             label: i18n.t('menu:edit.submenu.paste'),
-            enabled: false,
+            enabled: true,
             accelerator: 'Ctrl+V',
             role: 'paste',
           },
@@ -649,7 +644,7 @@ export default class MenuBuilder {
           return {
             label: `${projectName} (${projectPath})`,
             click: () => {
-              this.handleOpenProjectByPath(projectEntry.path)
+              void this.handleOpenProjectByPath(projectEntry.path)
             },
           }
         }),
