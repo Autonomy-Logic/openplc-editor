@@ -125,6 +125,11 @@ const CreateEditorObject = (props: EditorModel): EditorModel => {
         task: model.task,
         instance: model.instance,
       }
+    case 'plc-device':
+      return {
+        type,
+        meta,
+      }
     default:
       return {
         type: 'available',
