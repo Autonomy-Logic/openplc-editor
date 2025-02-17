@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
+ 
 import { CreateProjectFileProps } from '@root/main/modules/ipc/renderer'
 import { IProjectServiceResponse } from '@root/main/services'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
@@ -90,7 +90,7 @@ export const createSharedSlice: StateCreator<
             language: propsToCreatePou.language,
           },
         })
-        propsToCreatePou.type !== 'program' &&
+        if (propsToCreatePou.type !== 'program')
           getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
         return true
       }
@@ -130,8 +130,9 @@ export const createSharedSlice: StateCreator<
             language: propsToCreatePou.language,
           },
         })
-        propsToCreatePou.type !== 'program' &&
+        if (propsToCreatePou.type !== 'program') {
           getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
+        }
         return true
       }
       return false

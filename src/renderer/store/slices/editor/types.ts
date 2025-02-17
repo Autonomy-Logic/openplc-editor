@@ -127,7 +127,7 @@ const editorStateSchema = z.object({
  * It is used to validate the editor actions if needed,
  * in most cases you can use the type inferred from it.
  */
-const editorActionsSchema = z.object({
+const _editorActionsSchema = z.object({
   addModel: z.function().args(editorModelSchema).returns(z.void()),
   removeModel: z.function().args(z.string()).returns(z.void()),
   updateEditorModel: z.function().args(z.string(), z.string()).returns(z.void()),
@@ -183,7 +183,7 @@ type EditorModel = z.infer<typeof editorModelSchema>
 /** The state, the source of truth that drives our app. - Concept based on Redux */
 type EditorState = z.infer<typeof editorStateSchema>
 /** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */
-type EditorActions = z.infer<typeof editorActionsSchema>
+type EditorActions = z.infer<typeof _editorActionsSchema>
 type EditorSlice = EditorState & {
   editorActions: EditorActions
 }

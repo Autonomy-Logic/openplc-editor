@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+ 
+ 
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd'
 import { CreateRung } from '@root/renderer/components/_molecules/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/rung'
@@ -55,7 +55,7 @@ export default function LadderEditor() {
     /**
      * TODO: Verify if this is method is declared
      */
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+     
     flowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
     setEditingState('unsaved')
   }, [flowUpdated === true])

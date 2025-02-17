@@ -126,7 +126,7 @@ type ProjectResponse = z.infer<typeof projectResponseSchema>
  * Project Action Schema
  * - This schema is used to define the actions that can be performed on the project slice
  */
-const projectActionsSchema = z.object({
+const _projectActionsSchema = z.object({
   /**
    * Update/Set Project state
    */
@@ -231,7 +231,7 @@ const projectActionsSchema = z.object({
     .args(z.object({ rowId: z.number(), newIndex: z.number() }))
     .returns(z.void()),
 })
-type ProjectActions = z.infer<typeof projectActionsSchema>
+type ProjectActions = z.infer<typeof _projectActionsSchema>
 
 /**
  * Project Slice
