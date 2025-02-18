@@ -128,8 +128,6 @@ export default function LadderEditor() {
     const [removed] = auxRungs.splice(sourceIndex, 1)
     auxRungs.splice(destinationIndex, 0, removed)
 
-    console.log('Rungs:', auxRungs)
-
     try {
       flowActions.setRungs({ editorName: editor.meta.name, rungs: auxRungs })
     } catch (error) {
