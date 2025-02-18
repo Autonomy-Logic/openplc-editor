@@ -29,7 +29,7 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     window.bridge.exportProjectRequest((_event) => setRequestFlag(true))
-    requestFlag &&
+    if (requestFlag)
       handleExportProject()
         .then(() => setRequestFlag(false))
         .catch(() => setRequestFlag(false))

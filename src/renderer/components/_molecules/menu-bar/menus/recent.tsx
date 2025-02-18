@@ -97,12 +97,12 @@ export const RecentMenu = () => {
         })
         return
       }
-      void updateUserRecentProjects(),
-        toast({
-          title: 'Cannot open the project.',
-          description: error?.description,
-          variant: 'fail',
-        })
+      void updateUserRecentProjects()
+      toast({
+        title: 'Cannot open the project.',
+        description: error?.description,
+        variant: 'fail',
+      })
     }
   }
   return (
