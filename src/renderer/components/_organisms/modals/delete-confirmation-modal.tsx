@@ -72,7 +72,7 @@ const ConfirmDeleteElementModal = ({
 
             if (variableIndex !== -1) {
               deleteVariable({
-                rowId: variableIndex,
+                variableId: variableData?.id,
                 scope: 'local',
                 associatedPou: editor.meta.name,
               })

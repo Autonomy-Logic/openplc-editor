@@ -427,11 +427,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 return
               }
               const { rowId, variableId, newIndex } = variableToBeRearranged
-              const variableToBeRemoved = getVariableBasedOnRowIdOrVariableId(
-                pou.data.variables,
-                rowId,
-                variableId,
-              )
+              const variableToBeRemoved = getVariableBasedOnRowIdOrVariableId(pou.data.variables, rowId, variableId)
               if (!variableToBeRemoved) {
                 console.error('Variable not found')
                 return

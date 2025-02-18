@@ -1,4 +1,5 @@
-import { Draggable } from '@hello-pangea/dnd'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { RungBody, RungHeader } from '@root/renderer/components/_molecules/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungState } from '@root/renderer/store/slices'
@@ -6,16 +7,19 @@ import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 
 type RungProps = {
+  className?: string
   index: number
   id: string
   rung: RungState
 }
 
-export const Rung = ({ index, id, rung }: RungProps) => {
+export const Rung = ({ className, index, id, rung }: RungProps) => {
   const {
     flows,
     editorActions: { updateModelLadder, getIsRungOpen },
   } = useOpenPLCStore()
+
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id })
 
   const [isOpen, setIsOpen] = useState<boolean>(true)
   const flow = flows.find((flow) => flow.rungs.some((r) => r.id === rung.id)) || { rungs: [] }
@@ -33,37 +37,38 @@ export const Rung = ({ index, id, rung }: RungProps) => {
     setIsOpen(getIsRungOpen({ rungId: rung.id }))
   }, [rung])
 
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+  }
+
   return (
-    <Draggable draggableId={rung.id} index={index}>
-      {(provided) => (
-        <div
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          aria-label='Rung container'
-          className='overflow w-full'
-          id={id}
-          style={{ ...provided.draggableProps.style }}
-        >
-          <RungHeader
-            onClick={handleOpenSection}
-            isOpen={isOpen}
-            rung={rung}
-            draggableHandleProps={provided.dragHandleProps || undefined}
-            className={cn('border border-transparent', {
-              'rounded-t-lg': index === 0,
-              'rounded-b-lg': index === flow.rungs.length - 1 && !isOpen,
-            })}
-          />
-          {getIsRungOpen({ rungId: rung.id }) && (
-            <RungBody
-              rung={rung}
-              className={cn('border border-transparent', {
-                'rounded-b-lg': index === flow.rungs.length - 1,
-              })}
-            />
-          )}
-        </div>
+    <div
+      aria-label='Rung container'
+      className={cn('overflow w-full', className)}
+      id={id}
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+    >
+      <RungHeader
+        onClick={handleOpenSection}
+        isOpen={isOpen}
+        rung={rung}
+        draggableHandleProps={listeners}
+        className={cn('border border-transparent', {
+          'rounded-t-lg': index === 0,
+          'rounded-b-lg': index === flow.rungs.length - 1 && !isOpen,
+        })}
+      />
+      {getIsRungOpen({ rungId: rung.id }) && (
+        <RungBody
+          rung={rung}
+          className={cn('border border-transparent', {
+            'rounded-b-lg': index === flow.rungs.length - 1,
+          })}
+        />
       )}
-    </Draggable>
+    </div>
   )
 }

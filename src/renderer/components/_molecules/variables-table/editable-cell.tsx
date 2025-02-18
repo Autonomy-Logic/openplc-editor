@@ -32,14 +32,9 @@ const EditableNameCell = ({
 
   const {
     editor,
-    project: {
-      data: { pous },
-    },
     searchQuery,
     projectActions: { getVariable },
   } = useOpenPLCStore()
-
-  const pou = pous.find((pou) => pou.data.name === editor.meta.name)
 
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
@@ -83,7 +78,7 @@ const EditableNameCell = ({
         associatedPou: editor.meta.name,
       }),
     )
-  }, [pou?.data.variables])
+  }, [table.options.data[index].id])
 
   return isEditing ? (
     <InputWithRef

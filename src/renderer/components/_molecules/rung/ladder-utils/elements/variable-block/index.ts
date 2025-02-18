@@ -105,7 +105,7 @@ export const renderVariableBlock = <T>(rung: RungState, block: Node) => {
 
 export const removeVariableBlock = (rung: RungState) => {
   const newNodes = rung.nodes.filter((node) => node.type !== 'variable')
-  const newEdges = rung.edges.filter((edge) => !edge.source.includes('variable') && !edge.target.includes('variable'))
+  const newEdges = rung.edges.filter((edge) => !edge.source.toLowerCase().includes('variable') && !edge.target.toLowerCase().includes('variable'))
   return { nodes: newNodes, edges: newEdges }
 }
 

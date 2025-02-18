@@ -23,6 +23,6 @@ export const getVariableBasedOnRowIdOrVariableId = (
     return variable
   }
 
-  console.error('Variable not found')
+  console.error('variableId or rowId not given')
   return null
 }
