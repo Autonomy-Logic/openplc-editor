@@ -399,7 +399,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
   const handleCloseModal = () => {
     handleClearForm()
-    onClose && onClose()
+    if (onClose) onClose()
   }
 
   const handleBlockSubmit = () => {

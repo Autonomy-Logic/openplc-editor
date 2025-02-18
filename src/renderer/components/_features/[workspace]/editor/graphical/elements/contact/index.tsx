@@ -35,7 +35,7 @@ const ContactElement = ({ isOpen, onClose, node }: ContactElementProps) => {
 
   const handleCloseModal = () => {
     setSelectedModifier(null)
-    onClose && onClose()
+    if (onClose) onClose()
   }
 
   const handleConfirmAlteration = () => {
