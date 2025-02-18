@@ -168,6 +168,10 @@ class MainProcessBridge implements MainIpcModule {
       this.compilerService.generateCFiles(pathToStProgram, replyPort)
     })
 
+    this.ipcMain.handle('compiler:debug-ipc', async (_event, core:string, coreVersion: string, updatedAt: string) =>{
+      await this.compilerService.updateHalsFile(core, coreVersion, updatedAt)
+    })
+
     /**
      * Window Controls
      */

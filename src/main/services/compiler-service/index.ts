@@ -1,7 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from 'child_process'
 import { exec, spawn } from 'child_process'
 import { app, dialog, type MessagePortMain } from 'electron'
-import { access, constants, mkdir, writeFile } from 'fs/promises'
+import { access, constants, mkdir, readFile, writeFile } from 'fs/promises'
 import os from 'os'
 import { join } from 'path'
 
@@ -216,7 +216,44 @@ class CompilerService {
   }
 
   /**
-   * End of core installation verification functions -----------------------------------------------------------------------------------
+   * Function to update the HALS.json file which does our version controlling.
+   * @param core - the core to update info.
+   * @param coreVersion - the core version that was installed.
+   * @param updatedAt - the date that the core was updated for last.
+   */
+  async updateHalsFile(_core: string, _coreVersion: string, _updatedAt: string) {
+    const pathToHalsFile = join(this.runtimeResourcesPath, 'hals.json')
+
+    const readJSONFile = async (path: string) => {
+      const file = await readFile(path, 'utf8')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return JSON.parse(file) as Record<string, any>
+    }
+
+    const halsContent = await readJSONFile(pathToHalsFile)
+
+    const cores: string[] = []
+    for (const core in halsContent) {
+      cores.push(core)
+    }
+    if (!cores.includes(_core)) return
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    halsContent[_core]['version'] = _coreVersion
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    halsContent[_core]['updatedAt'] = _updatedAt
+
+    const updatedHalsData = JSON.stringify(halsContent)
+
+    try {
+      await writeFile(pathToHalsFile, updatedHalsData, { encoding: 'utf-8' })
+      return
+    } catch (err) {
+      console.warn('Failed in update hals file', err)
+    }
+  }
+  /**
+   * End of core installation verification functions ---------------------------------------‰--------------------------------------------
    */
 
   /**
