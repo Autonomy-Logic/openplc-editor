@@ -104,6 +104,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
   useEffect(() => {
     setRungLocal(rung)
     updateFlowPanelExtent(rung)
+    console.log('rung updated', rung)
   }, [rung.nodes])
 
   /**

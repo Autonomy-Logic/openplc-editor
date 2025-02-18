@@ -228,7 +228,6 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
                   ...newCoil,
                   data: {
                     ...newCoil.data,
-                    numericId: generateNumericUUID(),
                     variable: (node as CoilNode).data.variable,
                   },
                 } as CoilNode
@@ -246,7 +245,6 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
                   ...newContact,
                   data: {
                     ...newContact.data,
-                    numericId: generateNumericUUID(),
                     variable: (node as ContactNode).data.variable,
                   },
                 } as ContactNode
@@ -262,14 +260,14 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
                 } as ParallelNode
               }
               case 'powerRail': {
-                return {
-                  ...node,
+                return nodesBuilder.powerRail({
                   id: nodeMaps[node.id].id,
-                  data: {
-                    ...node.data,
-                    numericId: generateNumericUUID(),
-                  },
-                } as PowerRailNode
+                  posX: node.position.x,
+                  posY: node.position.y,
+                  handleX: (node as PowerRailNode).data.inputConnector?.glbPosition.x ?? 0,
+                  handleY: (node as PowerRailNode).data.inputConnector?.glbPosition.y ?? 0,
+                  connector: (node as PowerRailNode).data.variant,
+                })
               }
               case 'variable': {
                 return {
