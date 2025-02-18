@@ -63,6 +63,8 @@ const VariablesEditor = () => {
     }
   }, [editor, pous])
 
+  useEffect(() => {console.log('tableData', tableData)}, [tableData])
+
   /**
    * Update the table data and the editor's variables when the editor or the pous change
    */
