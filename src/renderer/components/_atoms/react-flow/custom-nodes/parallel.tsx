@@ -104,10 +104,10 @@ export const buildParallel = ({ id, posX, posY, handleX, handleY, type }: Parall
   ]
 
   const inputHandles = [handles[0]]
-  type !== 'open' && inputHandles.push(handles[2])
+  if (type !== 'open') inputHandles.push(handles[2])
 
   const outputHandles = [handles[1]]
-  type === 'open' && outputHandles.push(handles[2])
+  if (type === 'open') outputHandles.push(handles[2])
 
   return {
     id,

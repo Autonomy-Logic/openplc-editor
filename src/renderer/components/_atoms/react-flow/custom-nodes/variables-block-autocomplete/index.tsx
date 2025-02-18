@@ -185,7 +185,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     const closeModal = () => {
       setAutocompleteFocus(false)
       setSelectedVariable({ positionInArray: -1, variableName: '' })
-      setIsOpen && setIsOpen(false)
+      if (setIsOpen) setIsOpen(false)
     }
 
     const submitVariableToBlock = ({ clickedVariable }: { clickedVariable?: number }) => {
@@ -280,7 +280,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       })
 
       setAutocompleteFocus(false)
-      setIsOpen && setIsOpen(false)
+      if (setIsOpen) setIsOpen(false)
     }
 
     return (
@@ -299,7 +299,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             onFocusOutside={closeModal}
             onInteractOutside={closeModal}
             onFocus={(e) => {
-              focusEvent && focusEvent(e)
+              if (focusEvent) focusEvent(e)
               setAutocompleteFocus(true)
             }}
             onBlur={() => setAutocompleteFocus(false)}
