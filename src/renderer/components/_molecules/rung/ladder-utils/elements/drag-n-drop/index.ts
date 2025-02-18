@@ -113,9 +113,7 @@ export const onElementDrop = (
    * Find the copycat node
    * If not found, return the old rung as it is
    */
-  const copycatNode = newNodes
-    .filter((n) => n.id.toLowerCase().includes('variable'))
-    .find((n) => n.id === `copycat_${node.id}`)
+  const copycatNode = newNodes.filter((n) => n.type !== 'variable').find((n) => n.id === `copycat_${node.id}`)
   if (!copycatNode) return { nodes: oldStateRung.nodes, edges: oldStateRung.edges }
 
   /**
