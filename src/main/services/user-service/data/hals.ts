@@ -1,4 +1,4 @@
-export const HALS_DATA = `{
+export const HALS_DATA = {
   'Arduino Due (native USB port)': {
     core: 'arduino:sam',
     default_ain: 'A0, A1, A2, A3, A4, A5, A6, A7',
@@ -752,4 +752,4 @@ export const HALS_DATA = `{
     source: 'stm32_f446zet_nucleo.cpp',
     version: '0',
   },
-}`
+}

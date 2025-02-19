@@ -2,7 +2,10 @@ import { app } from 'electron'
 import { access, constants, mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 
+import { ARDUINO_DATA } from './data/arduino'
 import { HALS_DATA } from './data/hals'
+import { HISTORY_DATA } from './data/history'
+import { SETTINGS_DATA } from './data/settings'
 
 /**
  * UserService class responsible for user settings and history management.
@@ -19,36 +22,11 @@ class UserService {
    * Static methods and properties.
    */
 
-  static DEFAULT_SETTINGS = {
-    'theme-preference': 'light',
-    window: {
-      bounds: {
-        width: 1124,
-        height: 628,
-        x: 0,
-        y: 0,
-      },
-    },
-  }
+  static DEFAULT_SETTINGS = SETTINGS_DATA
 
-  static DEFAULT_HISTORY = {
-    projects: [],
-    libraries: [],
-  }
+  static DEFAULT_HISTORY = HISTORY_DATA
 
-  static ARDUINO_FILE_CONTENT = `board_manager:
-  additional_urls:
-      - https://arduino.esp8266.com/stable/package_esp8266com_index.json
-      - https://espressif.github.io/arduino-esp32/package_esp32_index.json
-      - https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json
-      - https://raw.githubusercontent.com/CONTROLLINO-PLC/CONTROLLINO_Library/master/Boards/package_ControllinoHardware_index.json
-      - https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json
-      - https://facts-engineering.gitlab.io/facts-open-source/p1am/beta_file_hosting/package_productivity-P1AM_200-boardmanagermodule_index.json
-      - https://raw.githubusercontent.com/facts-engineering/facts-engineering.github.io/master/package_productivity-P1AM-boardmanagermodule_index.json
-      - https://raw.githubusercontent.com/VEA-SRL/IRUINO_Library/main/package_vea_index.json
-  output:
-  no_color: true
-  `
+  static ARDUINO_FILE_CONTENT = ARDUINO_DATA
 
   static HALS_FILE_CONTENT = HALS_DATA
 
@@ -75,7 +53,7 @@ class UserService {
     }
   }
 
-  static async createFileIfNotExists(filePath: string, data: object): Promise<void> {
+  static async createJSONFileIfNotExists(filePath: string, data: object): Promise<void> {
     try {
       await writeFile(filePath, JSON.stringify(data, null, 2), { flag: 'wx' })
     } catch (err) {
@@ -105,7 +83,7 @@ class UserService {
     const pathToUserDataFile = join(pathToUserDataFolder, 'settings.json')
 
     await UserService.createDirectoryIfNotExists(pathToUserDataFolder)
-    await UserService.createFileIfNotExists(pathToUserDataFile, UserService.DEFAULT_SETTINGS)
+    await UserService.createJSONFileIfNotExists(pathToUserDataFile, UserService.DEFAULT_SETTINGS)
   }
 
   /**
@@ -120,8 +98,8 @@ class UserService {
     const pathToUserLibraryInfoFile = join(pathToUserHistoryFolder, 'libraries.json')
 
     await UserService.createDirectoryIfNotExists(pathToUserHistoryFolder)
-    await UserService.createFileIfNotExists(pathToUserProjectInfoFile, UserService.DEFAULT_HISTORY.projects)
-    await UserService.createFileIfNotExists(pathToUserLibraryInfoFile, UserService.DEFAULT_HISTORY.libraries)
+    await UserService.createJSONFileIfNotExists(pathToUserProjectInfoFile, UserService.DEFAULT_HISTORY.projects)
+    await UserService.createJSONFileIfNotExists(pathToUserLibraryInfoFile, UserService.DEFAULT_HISTORY.libraries)
   }
 
   /**
@@ -146,18 +124,16 @@ class UserService {
   /**
    * Checks if the Hals file exists and creates it if it doesn't.
    * TODO: This function must be refactored.
-   * - Should include a verification for the runtime folder.
    * - Must be validate if the json content is being written correctly.
    * - Must validate if this implementation for the hals.json file is correct.
    */
 
-  async _checkIfHalsFileExists(): Promise<void> {
-    const pathToHalsFile = join(app.getPath('userData'), 'User', 'runtime', 'hals.json')
-    try {
-      await writeFile(pathToHalsFile, UserService.HALS_FILE_CONTENT, { flag: 'wx' })
-    } catch (err) {
-      console.warn(err)
-    }
+  async #checkIfHalsFileExists(): Promise<void> {
+    const pathToRuntimeFolder = join(app.getPath('userData'), 'User', 'Runtime')
+    const pathToHalsFile = join(pathToRuntimeFolder, 'hals.json')
+
+    await UserService.createDirectoryIfNotExists(pathToRuntimeFolder)
+    await UserService.createJSONFileIfNotExists(pathToHalsFile, UserService.HALS_FILE_CONTENT)
   }
   /**
    * Initializes user settings and history by checking the relevant folders and files.
@@ -169,6 +145,7 @@ class UserService {
     await this.#checkIfUserBaseSettingsExists()
     await this.#checkIfUserHistoryFolderExists()
     await this.#checkIfArduinoCliConfigExists()
+    await this.#checkIfHalsFileExists()
   }
 }
 
