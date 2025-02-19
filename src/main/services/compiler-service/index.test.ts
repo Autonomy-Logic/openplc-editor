@@ -1,8 +1,9 @@
-import { join } from 'path'
-import { CompilerService } from './index'
-import { access, mkdir } from 'fs/promises'
 import { exec, spawn } from 'child_process'
 import { app, dialog } from 'electron'
+import { access, mkdir } from 'fs/promises'
+import { join } from 'path'
+
+import { CompilerService } from './index'
 
 jest.mock('fs/promises', () => ({
     access: jest.fn(),

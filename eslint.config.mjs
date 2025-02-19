@@ -8,7 +8,7 @@ import tseslint from 'typescript-eslint'
 
 /** @type {import('@types/eslint').Linter.FlatConfig} */
 export default [
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+   
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
