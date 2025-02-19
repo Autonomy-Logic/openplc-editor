@@ -2,6 +2,8 @@ import { app } from 'electron'
 import { access, constants, mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 
+import { HALS_DATA } from './data/hals'
+
 /**
  * UserService class responsible for user settings and history management.
  * This class is a singleton and should be instantiated only once during the application lifecycle.
@@ -47,6 +49,9 @@ class UserService {
   output:
   no_color: true
   `
+
+  static HALS_FILE_CONTENT = HALS_DATA
+
   static async createDirectoryIfNotExists(path: string): Promise<void> {
     /**
      * The access() method checks the existence of the file or directory at the specified path.
@@ -138,6 +143,22 @@ class UserService {
     }
   }
 
+  /**
+   * Checks if the Hals file exists and creates it if it doesn't.
+   * TODO: This function must be refactored.
+   * - Should include a verification for the runtime folder.
+   * - Must be validate if the json content is being written correctly.
+   * - Must validate if this implementation for the hals.json file is correct.
+   */
+
+  async _checkIfHalsFileExists(): Promise<void> {
+    const pathToHalsFile = join(app.getPath('userData'), 'User', 'runtime', 'hals.json')
+    try {
+      await writeFile(pathToHalsFile, UserService.HALS_FILE_CONTENT, { flag: 'wx' })
+    } catch (err) {
+      console.warn(err)
+    }
+  }
   /**
    * Initializes user settings and history by checking the relevant folders and files.
    * This method should be called during the application startup process.

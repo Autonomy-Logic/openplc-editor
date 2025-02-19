@@ -217,6 +217,7 @@ class CompilerService {
 
   /**
    * Function to update the HALS.json file which does our version controlling.
+   * TODO: Must verify if this file can be generated dynamically for each user.
    * @param core - the core to update info.
    * @param coreVersion - the core version that was installed.
    * @param updatedAt - the date that the core was updated for last.
