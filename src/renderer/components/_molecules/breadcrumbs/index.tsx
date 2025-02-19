@@ -1,7 +1,7 @@
 /**
  * This need to be refactored!!!!
  */
-import { ArrowIcon, PLCIcon } from '@process:renderer/assets'
+import { ArrowIcon, ConfigIcon, DeviceTransferIcon, PLCIcon } from '@process:renderer/assets'
 import { LanguageIcon, LanguageIconType, PouIcon, PouIconType } from '@process:renderer/data'
 import { ArrayIcon, EnumIcon, StructureIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -32,15 +32,21 @@ const Breadcrumbs = () => {
     enumerated: EnumIcon,
     structure: StructureIcon,
     array: ArrayIcon,
+    configuration: ConfigIcon,
+    'pin-mapping': DeviceTransferIcon,
   }
 
   const getPouTypeOrDataTypeOrResource = ():
-    | ['program' | 'function' | 'function-block' | 'resource' | 'data-type']
+    | ['program' | 'function' | 'function-block' | 'resource' | 'data-type' | 'device']
     | null => {
     if ('pouType' in meta) {
       return [meta.pouType] as ['program' | 'function' | 'function-block']
-    } else if (dataTypes.find((datatype) => datatype.name === meta.name)) {
+    }
+    if (dataTypes.find((datatype) => datatype.name === meta.name)) {
       return ['data-type']
+    }
+    if (meta.name === 'Configuration' || meta.name === 'Pin Mapping') {
+      return ['device']
     }
     return ['resource']
   }
@@ -49,6 +55,11 @@ const Breadcrumbs = () => {
     const dataTypeDerivation = dataTypes.find((datatype) => datatype.name === meta.name)?.derivation
     if (dataTypeDerivation) {
       return [derivationIcons[dataTypeDerivation], dataTypeDerivation]
+    }
+    const deviceTypeDerivation =
+      meta.name === 'Configuration' ? 'configuration' : meta.name === 'Pin Mapping' ? 'pin-mapping' : null
+    if (deviceTypeDerivation) {
+      return [derivationIcons[deviceTypeDerivation], deviceTypeDerivation]
     }
     if ('language' in meta) {
       return [LanguageIcon[meta.language], meta.language]
