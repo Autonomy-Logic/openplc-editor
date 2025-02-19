@@ -1,4 +1,5 @@
 import type { PlaceholderNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/placeholder'
+import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
 import type { RungState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
@@ -36,10 +37,7 @@ export const addNewElement = <T>(
    * If it is not, add the new element to the selected placeholder
    */
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
-    const {
-      nodes: parallelNodes,
-      edges: parallelEdges,
-    } = startParallelConnection(
+    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnection(
       rung,
       {
         index: parseInt(selectedPlaceholderIndex),
@@ -96,7 +94,9 @@ export const removeElement = (rung: RungState, element: Node): { nodes: Node[]; 
   /**
    * Disconnect the element from the rung
    */
-  const edgeToRemove = rung.edges.find((e) => e.source === element.id)
+  const edgeToRemove = rung.edges.find(
+    (e) => e.source === element.id && e.sourceHandle === (element.data as BasicNodeData).outputConnector?.id,
+  )
   if (!edgeToRemove) return { nodes: rung.nodes, edges: rung.edges }
   let newEdges = disconnectNodes(rung, edgeToRemove.source, edgeToRemove.target)
 

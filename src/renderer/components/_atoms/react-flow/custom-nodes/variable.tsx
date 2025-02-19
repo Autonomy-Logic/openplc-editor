@@ -91,7 +91,7 @@ const VariableElement = (block: VariableProps) => {
     if (!variable || !inputVariableRef) {
       setIsAVariable(false)
     } else {
-      if (variable.name !== (variableNode as VariableNode).data.variable.name) {
+      if (variable.id !== (variableNode as VariableNode).data.variable.id) {
         setVariableValue(variable.name)
         updateNode({
           editorName: editor.meta.name,
@@ -132,7 +132,7 @@ const VariableElement = (block: VariableProps) => {
         })
       }
 
-      if (variable.name === (variableNode as VariableNode).data.variable.name && variable.name !== variableValue) {
+      if (variable.id === (variableNode as VariableNode).data.variable.id && variable.name !== variableValue) {
         setVariableValue(variable.name)
       }
 
