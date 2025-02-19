@@ -260,14 +260,14 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
                 } as ParallelNode
               }
               case 'powerRail': {
-                return nodesBuilder.powerRail({
+                return {
+                  ...node,
                   id: nodeMaps[node.id].id,
-                  posX: node.position.x,
-                  posY: node.position.y,
-                  handleX: (node as PowerRailNode).data.inputConnector?.glbPosition.x ?? 0,
-                  handleY: (node as PowerRailNode).data.inputConnector?.glbPosition.y ?? 0,
-                  connector: (node as PowerRailNode).data.variant,
-                })
+                  data: {
+                    ...node.data,
+                    numericId: generateNumericUUID(),
+                  }
+                } as PowerRailNode
               }
               case 'variable': {
                 return {
