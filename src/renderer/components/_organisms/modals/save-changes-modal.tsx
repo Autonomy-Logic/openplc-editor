@@ -3,11 +3,11 @@ import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FlowType } from '@root/renderer/store/slices/flow'
-import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
 import { ComponentPropsWithoutRef } from 'react'
 
 import { Modal, ModalContent } from '../../_molecules/modal'
+import { saveProjectRequest } from '../../_templates'
 
 type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
@@ -40,7 +40,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     closeModal()
 
     if (operation === 'save') {
-      const { success } = await handleSaveProject()
+      const { success } = await saveProjectRequest(project, setEditingState)
       if (!success) {
         return
       }
@@ -122,39 +122,6 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
       onClose()
       return
     }
-  }
-
-  const handleSaveProject = async () => {
-    const projectData = PLCProjectSchema.safeParse(project)
-    if (!projectData.success) {
-      toast({
-        title: 'Error in the save request!',
-        description: 'The project data is not valid.',
-        variant: 'fail',
-      })
-      return { success: projectData.success }
-    }
-
-    const { success, reason } = await window.bridge.saveProject({
-      projectPath: project.meta.path,
-      projectData: projectData.data,
-    })
-
-    if (success) {
-      setEditingState('saved')
-      toast({
-        title: 'Changes saved!',
-        description: 'The project was saved successfully!',
-        variant: 'default',
-      })
-    } else {
-      toast({
-        title: 'Error in the save request!',
-        description: reason?.description,
-        variant: 'fail',
-      })
-    }
-    return { success, reason }
   }
 
   const handleCancelModal = () => {
