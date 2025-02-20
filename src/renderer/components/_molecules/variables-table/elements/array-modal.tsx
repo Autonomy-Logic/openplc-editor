@@ -130,10 +130,11 @@ export const ArrayModal = ({
     baseTypes.forEach((type) => {
       if (type === typeValue) isBaseType = true
     })
+
     updateVariable({
       scope: 'local',
       associatedPou: name,
-      rowId: VariableRow ?? 0,
+      rowId: VariableRow,
       data: {
         type: {
           definition: 'array',
@@ -252,6 +253,7 @@ export const ArrayModal = ({
             {dimensions.map((value, index) => (
               <ArrayDimensionsInput
                 id={index.toString()}
+                key={index}
                 initialValue={value}
                 selectedInput={selectedInput}
                 handleInputClick={handleInputClick}
