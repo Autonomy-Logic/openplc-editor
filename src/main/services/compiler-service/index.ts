@@ -4,6 +4,7 @@ import { app, dialog, type MessagePortMain } from 'electron'
 import { access, constants, mkdir, readFile, writeFile } from 'fs/promises'
 import os from 'os'
 import { join } from 'path'
+import { promisify } from 'util'
 
 import { CreateXMLFile } from '../../../main/utils'
 import { ProjectState } from '../../../renderer/store/slices'
@@ -24,12 +25,14 @@ class CompilerService {
   arduinoCliBinaryPath: string
   arduinoConfigPath: string
   arduinoCliBaseParameters: string[]
+  iec2cBinaryPath: string
   constructor() {
     this.compilerDirectory = this.constructCompilerDirectoryPath()
     this.runtimeResourcesPath = this.constructRuntimeResourcesPath()
     this.arduinoCliBinaryPath = this.constructArduinoCliBinaryPath()
     this.arduinoConfigPath = join(app.getPath('userData'), 'User', 'arduino-cli.yaml')
     this.arduinoCliBaseParameters = ['--config-file', this.arduinoConfigPath]
+    this.iec2cBinaryPath = this.constructIec2cBinaryPath()
   }
 
   /**
@@ -61,6 +64,24 @@ class CompilerService {
         throw new Error(`Unsupported platform: ${process.platform}`)
     }
     return arduinoCliBinary
+  }
+
+  constructIec2cBinaryPath(): string {
+    let iec2cBinaryPath: string
+    switch (process.platform) {
+      case 'win32':
+        iec2cBinaryPath = join(this.compilerDirectory, 'Windows', 'iec2c', 'bin', 'iec2c.exe')
+        break
+      case 'darwin':
+        iec2cBinaryPath = join(this.compilerDirectory, 'MacOS', 'iec2c', 'bin', 'iec2c')
+        break
+      case 'linux':
+        iec2cBinaryPath = join(this.compilerDirectory, 'Linux', 'iec2c', 'bin', 'iec2c')
+        break
+      default:
+        throw new Error(`Unsupported platform: ${process.platform}`)
+    }
+    return iec2cBinaryPath
   }
 
   async createBuildDirectoryIfNotExist(pathToUserProject: string) {
@@ -96,31 +117,78 @@ class CompilerService {
   /**
    * Should look for the iec2c transpiler and the Arduino-CLI binary.
    */
-  verifyPreRequisites() {}
+  async verifyPreRequisites() {
+    const [flag, configFile] = this.arduinoCliBaseParameters
+
+    const getArduinoVersion = promisify(exec)
+    const getIec2Version = promisify(exec)
+
+    
+    const {} = await getArduinoVersion(`"${this.arduinoCliBinaryPath}" version ${flag} "${configFile}"`)
+
+    const {} = await getIec2Version(`"${this.iec2cBinaryPath}" -v"`)
+    
+  }
 
   displayConfigInfos() {
     // Display host architecture
-    const _hostArchitecture = process.arch
+    const hostArchitecture = process.arch
     // Display OS
-    const _hostOS = process.platform
+    const hostOS = process.platform
     // Display processor
-    const _processor = process.env.PROCESSOR_IDENTIFIER
+    const processor = process.env.PROCESSOR_IDENTIFIER
     // Display logical CPU cores
-    const _logicalCPUCores = os.cpus().length
+    const logicalCPUCores = os.cpus().length
     // Display physical CPU cores
     // Display CPU frequency
-    const _cpuFrequency = os.cpus()[0].speed
+    const cpuFrequency = os.cpus()[0].speed
     // Display CPU model
-    const _cpuModel = os.cpus()[0].model
+    const cpuModel = os.cpus()[0].model
     // Display iec2c version
     const _iec2cVersion = ''
     // Display Arduino version
     const _arduinoVersion = ''
+    const hostInfo = `
+    ##################
+    System Information
+    ##################
+    Host Architecture: ${hostArchitecture}
+    Processor: ${processor}
+    Logical CPU Cores: ${logicalCPUCores}
+    Operating System: ${hostOS}
+    CPU Model: ${cpuModel}
+    CPU Frequency: ${cpuFrequency}
+    `
+    return hostInfo
   }
 
   /**
    * Core installation verification functions. ----------------------------------------------------------------------------------------
    */
+
+  async getInstalledCores() {
+    return new Promise((resolve, reject) => {
+      const [flag, configFile] = this.arduinoCliBaseParameters
+      exec(`"${this.arduinoCliBinaryPath}" core list ${flag} "${configFile}" --json`, (error, stdout, stderr) => {
+        if (error) return reject(error)
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          const resultAsObject = JSON.parse(stdout)
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+          const cores = resultAsObject.platforms.map((id: any) => ({
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+            id: id,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+            installed_version: id.installed_version,
+          }))
+          if (stderr) console.error(`Error executing command: ${stderr}`)
+          resolve(cores)
+        } catch (e) {
+          reject(e)
+        }
+      })
+    })
+  }
 
   /**
    * Verify the core installation.
