@@ -114,23 +114,45 @@ class CompilerService {
    */
   setupEnvironment() {}
 
-  /**
-   * Should look for the iec2c transpiler and the Arduino-CLI binary.
-   */
-  async verifyPreRequisites() {
+  async #getArduinoVersion() {
     const [flag, configFile] = this.arduinoCliBaseParameters
 
-    const getArduinoVersion = promisify(exec)
-    const getIec2Version = promisify(exec)
+    const runArduinoCli = promisify(exec)
 
-    
-    const {} = await getArduinoVersion(`"${this.arduinoCliBinaryPath}" version ${flag} "${configFile}"`)
+    const { stderr, stdout } = await runArduinoCli(`"${this.arduinoCliBinaryPath}" version ${flag} "${configFile}"`)
 
-    const {} = await getIec2Version(`"${this.iec2cBinaryPath}" -v"`)
-    
+    if (stderr) return stderr
+    return stdout
   }
 
-  displayConfigInfos() {
+  async #getIec2cVersion() {
+    const runIec2c = promisify(exec)
+
+    const { stderr, stdout } = await runIec2c(`"${this.iec2cBinaryPath}" -v"`)
+
+    if (stderr) return stderr
+    return stdout
+  }
+
+  /**
+   * Should look for the iec2c transpiler and the Arduino-CLI binary.
+   * If the tools is installed and available the method will return the versions.
+   */
+  async getToolsAvailabilityAndVersion() {
+    const [arduinoVersion, iec2cVersion] = await Promise.all([this.#getArduinoVersion(), this.#getIec2cVersion()])
+    const response = `
+  ${arduinoVersion}
+  ${iec2cVersion}
+  `
+    return response
+  }
+
+  /**
+   * Function that retrieve the host info and the tools availability.
+   * Upon success this will return a string with all information required.
+   * @returns - host info
+   */
+  async displayConfigInfos() {
     // Display host architecture
     const hostArchitecture = process.arch
     // Display OS
@@ -144,21 +166,24 @@ class CompilerService {
     const cpuFrequency = os.cpus()[0].speed
     // Display CPU model
     const cpuModel = os.cpus()[0].model
-    // Display iec2c version
-    const _iec2cVersion = ''
-    // Display Arduino version
-    const _arduinoVersion = ''
+    // Retrieve ArduinoCli and iec2c version
+    const arduinoAndIec2cVersions = await this.getToolsAvailabilityAndVersion()
+
+    // Get together all required infos
     const hostInfo = `
     ##################
     System Information
     ##################
+    Operating System: ${hostOS}
     Host Architecture: ${hostArchitecture}
     Processor: ${processor}
     Logical CPU Cores: ${logicalCPUCores}
-    Operating System: ${hostOS}
     CPU Model: ${cpuModel}
     CPU Frequency: ${cpuFrequency}
+    ${arduinoAndIec2cVersions}
     `
+
+    // Return the specifications to be printed on the user console.
     return hostInfo
   }
 
