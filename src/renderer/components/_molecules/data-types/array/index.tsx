@@ -28,15 +28,15 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const ROWS_NOT_SELECTED = -1
   const [arrayTable, setArrayTable] = useState<{ selectedRow: string }>({ selectedRow: ROWS_NOT_SELECTED.toString() })
   const [initialValueData, setInitialValueData] = useState<string>('')
-  const [baseType, setBaseType] = useState<string>(data.baseType.value)
+  const [baseType, setBaseType] = useState<string>(data.type.value)
 
   useEffect(() => {
     setInitialValueData(data.initialValue || '')
   }, [])
 
   useEffect(() => {
-    setBaseType(data.baseType.value)
-  }, [data.baseType])
+    setBaseType(data.type.value)
+  }, [data.type])
 
   const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
     setInitialValueData(e.target.value)
@@ -56,7 +56,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       })
       const updatedData = {
         ...data,
-        baseType: {
+        type: {
           value: selectedValue,
           definition: isBaseType ? 'base-type' : 'user-data-type',
         },
