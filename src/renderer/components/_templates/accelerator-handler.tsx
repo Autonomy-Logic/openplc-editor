@@ -21,8 +21,16 @@ export const saveProjectRequest = async (
   project: ProjectState,
   setEditingState: (state: 'saved' | 'unsaved' | 'save-request' | 'initial-state') => void,
 ): Promise<ISaveDataResponse> => {
+  setEditingState('save-request')
+  toast({
+    title: 'Save changes',
+    description: 'Trying to save the changes in the project file.',
+    variant: 'warn',
+  })
+
   const projectData = PLCProjectSchema.safeParse(project)
   if (!projectData.success) {
+    setEditingState('unsaved')
     toast({
       title: 'Error in the save request!',
       description: 'The project data is not valid.',
@@ -157,12 +165,6 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     window.bridge.saveProjectAccelerator((_event) => {
-      setEditingState('save-request')
-      toast({
-        title: 'Save changes',
-        description: 'Trying to save the changes in the project file.',
-        variant: 'warn',
-      })
       void saveProjectRequest(project, setEditingState)
     })
 
