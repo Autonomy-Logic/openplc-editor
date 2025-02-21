@@ -8,8 +8,7 @@ import { promisify } from 'util'
 
 import { CreateXMLFile } from '../../../main/utils'
 import { ProjectState } from '../../../renderer/store/slices'
-import { BufferToStringArray } from '../../../utils'
-import { XmlGenerator } from '../../../utils/PLC/xml-generator'
+import { BufferToStringArray, XmlGenerator, YamlObjectToString, YamlToObject } from '../../../utils'
 
 export type CompilerResponse = {
   error?: boolean
@@ -17,6 +16,41 @@ export type CompilerResponse = {
     type: 'error' | 'warning' | 'info'
     content: string | Buffer
   }
+}
+
+interface ArduinoCliConfig {
+  board_manager: {
+    additional_urls: string[]
+  }
+  output: {
+    no_color: boolean
+  }
+}
+
+type BoardInfo = {
+  core: string
+  default_ain: string
+  default_aout: string
+  default_din: string
+  default_dout: string
+  updatedAt: number
+  platform: string
+  source: string
+  version: string
+  board_manager_url?: string
+  extra_libraries?: string[]
+  define?: string | string[]
+  user_ain?: string
+  user_aout?: string
+  user_din?: string
+  user_dout?: string
+  c_flags?: string[]
+  cxx_flags?: string[]
+  arch?: string
+}
+
+type HalsFile = {
+  [boardName: string]: BoardInfo
 }
 
 class CompilerService {
@@ -112,7 +146,24 @@ class CompilerService {
    * This function will be responsible for setting up the environment for the compiler service.
    * This will cleanup the old build files and create a new temporary build directory.
    */
-  setupEnvironment() {}
+  async setupEnvironment() {
+    // First step - Print Host info
+    console.log(this.getHostInfo())
+    // Second step - Check for the tools availability
+    const toolsAvailability = await this.getToolsAvailabilityAndVersion()
+    console.log(toolsAvailability)
+    // Third step - Check for the cores availability
+    const installedCores = await this.getInstalledCores()
+    console.log(installedCores)
+    // Fourth step - Check for the boards availability
+    // First - Check if board has an additional configuration
+    const boardAdditionalConfigStatus = await this.checkForBoardAdditionalManagerUrl('arduino')
+    console.log(boardAdditionalConfigStatus)
+    // Second - Check if board is installed ????
+    // Third - Install core if not installed
+    // Fourth - Run the core update index
+    // Fifth step - Check for the libraries availability
+  }
 
   async #getArduinoVersion() {
     const [flag, configFile] = this.arduinoCliBaseParameters
@@ -152,7 +203,7 @@ class CompilerService {
    * Upon success this will return a string with all information required.
    * @returns - host info
    */
-  async displayConfigInfos() {
+  getHostInfo() {
     // Display host architecture
     const hostArchitecture = process.arch
     // Display OS
@@ -166,8 +217,6 @@ class CompilerService {
     const cpuFrequency = os.cpus()[0].speed
     // Display CPU model
     const cpuModel = os.cpus()[0].model
-    // Retrieve ArduinoCli and iec2c version
-    const arduinoAndIec2cVersions = await this.getToolsAvailabilityAndVersion()
 
     // Get together all required infos
     const hostInfo = `
@@ -180,7 +229,6 @@ class CompilerService {
     Logical CPU Cores: ${logicalCPUCores}
     CPU Model: ${cpuModel}
     CPU Frequency: ${cpuFrequency}
-    ${arduinoAndIec2cVersions}
     `
 
     // Return the specifications to be printed on the user console.
@@ -360,12 +408,42 @@ class CompilerService {
    * If the board needs an additional manager url, we will look for this url in the arduino config file.
    * If the url is not present, we will add it to the config file.
    * @param board - the board to be verified
-   * @returns
-   * 0 - No additional manager url present
-   * 1 - Additional manager url present
-   * 2 - Error in verification process
    */
-  checkForBoardAdditionalManagerUrl(_board: string) {}
+  async checkForBoardAdditionalManagerUrl(board: string) {
+    const halsFilePath = join(this.runtimeResourcesPath, 'hals.json')
+
+    const readJSONFile = async (path: string) => {
+      const file = await readFile(path, 'utf8')
+      return JSON.parse(file) as HalsFile
+    }
+
+    const halsContent: HalsFile = await readJSONFile(halsFilePath)
+
+    // Early return if the board is not present in the hals file.
+    if (!halsContent[board]) {
+      return `Board: ${board} not found in the hals file`
+    }
+
+    if (!halsContent[board].board_manager_url) {
+      return `No additional manager URL found for board: ${board}`
+    }
+
+    const arduinoConfigContent = await readFile(this.arduinoConfigPath, 'utf8')
+    const arduinoConfigAsObject = YamlToObject(arduinoConfigContent) as ArduinoCliConfig
+
+    if (!arduinoConfigAsObject.board_manager.additional_urls.includes(halsContent[board].board_manager_url)) {
+      arduinoConfigAsObject.board_manager.additional_urls.push(halsContent[board].board_manager_url)
+      try {
+        await writeFile(this.arduinoConfigPath, YamlObjectToString(arduinoConfigAsObject), 'utf8')
+        return `Successfully updated additional URLs for board: ${board}`
+      } catch (err) {
+        console.error('Failed to update arduino config:', err)
+        return `Error updating additional URLs for board: ${board}`
+      }
+    }
+
+    return `Additional manager URL present in Arduino config file for board: ${board}`
+  }
 
   /**
    * End of board installation verification functions -----------------------------------------------------------------------------------
@@ -376,33 +454,6 @@ class CompilerService {
   /**
    * End of setup functions ----------------------------------------------------------------------------------------------------------
    */
-
-  /**
-   * Function to run the board installation command.
-   * @todo Implement the command execution function.
-   */
-  configureBoard(_mainProcessPort: MessagePortMain) {
-    const arduinoCLIParams = ['--no-color', 'board', 'remove', 'all']
-
-    const arduinoCLI = spawn(this.arduinoCliBinaryPath, arduinoCLIParams)
-
-    const binaryExecution = new Promise((resolve) => {
-      let exitCode: number
-      arduinoCLI.stdout.on('data', (data: Buffer) => {
-        console.log(data.toString())
-        exitCode = 0
-      })
-      arduinoCLI.stderr.on('data', (data: Buffer) => {
-        console.error(data.toString())
-        exitCode = 1
-      })
-      arduinoCLI.on('close', () => {
-        console.log('Finished the arduino-cli configuration process!')
-        resolve(exitCode)
-      })
-    })
-    return binaryExecution
-  }
 
   async buildXmlFile(
     pathToUserProject: string,
