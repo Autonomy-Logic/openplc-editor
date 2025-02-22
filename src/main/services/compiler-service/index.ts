@@ -157,12 +157,19 @@ class CompilerService {
     console.log(installedCores)
     // Fourth step - Check for the boards availability
     // First - Check if board has an additional configuration
-    const boardAdditionalConfigStatus = await this.checkForBoardAdditionalManagerUrl('arduino')
+    const boardAdditionalConfigStatus = await this.checkForBoardAdditionalManagerUrl('arduino:avr')
     console.log(boardAdditionalConfigStatus)
     // Second - Check if board is installed ????
     // Third - Install core if not installed
+    const coreIsInstalled = await this.checkCoreInstallation('arduino:avr')
+    if (!coreIsInstalled) {
+      console.log('Core not installed, installing now...')
+      await this.installCore('arduino:avr')
+    }
     // Fourth - Run the core update index
+    await this.updateCoreIndex()
     // Fifth step - Check for the libraries availability
+
   }
 
   async #getArduinoVersion() {
@@ -244,21 +251,17 @@ class CompilerService {
       const [flag, configFile] = this.arduinoCliBaseParameters
       exec(`"${this.arduinoCliBinaryPath}" core list ${flag} "${configFile}" --json`, (error, stdout, stderr) => {
         if (error) return reject(error)
-        try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const resultAsObject = JSON.parse(stdout)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+        const cores = resultAsObject.platforms.map((id: any) => ({
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          const resultAsObject = JSON.parse(stdout)
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
-          const cores = resultAsObject.platforms.map((id: any) => ({
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            id: id,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-            installed_version: id.installed_version,
-          }))
-          if (stderr) console.error(`Error executing command: ${stderr}`)
-          resolve(cores)
-        } catch (e) {
-          reject(e)
-        }
+          id: id,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+          installed_version: id.installed_version,
+        }))
+        if (stderr) console.error(`Error executing command: ${stderr}`)
+        resolve(cores)
       })
     })
   }
@@ -279,20 +282,16 @@ class CompilerService {
         if (error) {
           return reject(error)
         }
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          const resultAsObject = JSON.parse(stdout)
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-          const installedCores = resultAsObject.platforms.map(({ id }: { id: string }) => id)
-          if (stderr) {
-            console.error(`Error executing command: ${stderr}`)
-          }
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-          const isInstalled = installedCores.includes(core) as boolean
-          resolve(isInstalled)
-        } catch (e) {
-          reject(e)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const resultAsObject = JSON.parse(stdout)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const installedCores = resultAsObject.platforms.map(({ id }: { id: string }) => id)
+        if (stderr) {
+          console.error(`Error executing command: ${stderr}`)
         }
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const isInstalled = installedCores.includes(core) as boolean
+        resolve(isInstalled)
       })
     })
   }
@@ -302,7 +301,7 @@ class CompilerService {
    * This command will update the core index, which contains the local cache of the available platforms and libraries.
    * TODO: Must be implemented a way to print the execution return to the user.
    */
-  async runCoreUpdateIndex() {
+  async updateCoreIndex() {
     const arduinoCLIParams = ['core', 'update-index', ...this.arduinoCliBaseParameters]
 
     const arduinoCLI = spawn(this.arduinoCliBinaryPath, arduinoCLIParams)
@@ -686,13 +685,6 @@ class CompilerService {
       // mainProcessPort.postMessage({ type: 'info', message: 'Script finished' })
       // mainProcessPort.close()
     })
-  }
-  /**
-   * This function will be responsible for call all other functions to handle the compilation process using the Arduino-CLI.
-   * @todo implement the Arduino-CLI compilation process.
-   */
-  useArduinoCLI() {
-    console.log('Arduino-CLI compilation process')
   }
   /**
    * This function will handle the temporary directory creation and deletion.
