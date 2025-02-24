@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
 import * as Tabs from '@radix-ui/react-tabs'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
@@ -142,10 +141,6 @@ const WorkspaceScreen = () => {
       handleSwitchPerspective()
     })
   }, [])
-
-  useEffect(() => {
-    console.log('editor name', editor.meta.name)
-  }, [editor])
 
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
