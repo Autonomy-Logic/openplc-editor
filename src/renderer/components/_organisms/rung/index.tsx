@@ -49,7 +49,10 @@ export const Rung = ({ className, index, id, rung }: RungProps) => {
       id={id}
       ref={setNodeRef}
       style={style}
-      {...attributes}
+      {...Object.entries(attributes).reduce((acc, [key, value]: [string, string]) => {
+        if (key === 'tabIndex') return acc
+        return { ...acc, [key]: value }
+      }, {})}
     >
       <RungHeader
         onClick={handleOpenSection}
