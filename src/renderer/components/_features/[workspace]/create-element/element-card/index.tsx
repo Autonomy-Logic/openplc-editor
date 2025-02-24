@@ -96,7 +96,10 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       const draft = {
         name: data.name,
         derivation: data.derivation,
-        baseType: 'bool',
+        type: {
+          definition: 'base-type',
+          value: 'bool',
+        },
         initialValue: '',
         dimensions: [],
       } as PLCArrayDatatype

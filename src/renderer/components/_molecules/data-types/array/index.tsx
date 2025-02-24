@@ -56,7 +56,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       })
       const updatedData = {
         ...data,
-        baseType: {
+        type: {
           value: selectedValue,
           definition: isBaseType ? 'base-type' : 'user-data-type',
         },
