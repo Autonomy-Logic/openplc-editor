@@ -98,7 +98,7 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
 
     const onChangeHandler = (e: ChangeEvent<HTMLTextAreaElement>) => {
       setTextAreaValue(e.target.value)
-      props.onChange && props.onChange(e)
+      if (props.onChange) props.onChange(e)
     }
 
     const onScrollHandler = (e: UIEvent<HTMLTextAreaElement>) => {
@@ -135,13 +135,17 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
               inputRef.current.scrollTop = 0
               highlightDivRef.current.scrollTop = 0
             }
-            canSubmit && handleSubmit && handleSubmit()
+            if (canSubmit && handleSubmit) handleSubmit()
             setCanSubmit(true)
           }}
           onScroll={(e) => onScrollHandler(e)}
           onKeyDown={(e) => {
-            props.onKeyDown && props.onKeyDown(e)
-            submitWith.enter && e.key === 'Enter' && setInputFocus(false)
+            if (props.onKeyDown) {
+              props.onKeyDown(e)
+            }
+            if (submitWith.enter && e.key === 'Enter') {
+              setInputFocus(false)
+            }
           }}
           onKeyUp={props.onKeyUp}
           ref={inputRef}

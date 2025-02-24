@@ -4,7 +4,7 @@ import MockImage from '@process:renderer/assets/images/example.png'
 import { ComponentProps } from 'react'
 
 // TODO: Remove mock data
-import Mock from '../../../../../../shared/data/mock/examples.json'
+import Mock from '../../../../shared/data/mock/examples.json'
 
 type IDisplayExampleProjectProps = ComponentProps<'section'>
 

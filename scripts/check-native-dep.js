@@ -16,10 +16,18 @@ if (dependencies) {
     // Find the reason for why the dependency is installed. If it is installed
     // because of a devDependency then that is okay. Warn when it is installed
     // because of a dependency
-    const { dependencies: dependenciesObject } = JSON.parse(
-      execSync(`npm ls ${nativeDeps.join(' ')} --json`).toString(),
-    );
-    const rootDependencies = Object.keys(dependenciesObject);
+
+    // Explicitly define the expected structure of the parsed JSON
+    interface NpmLsOutput {
+      dependencies?: Record<string, unknown>;
+    }
+
+    const rawOutput = execSync(`npm ls ${nativeDeps.join(' ')} --json`).toString();
+    const parsedOutput = JSON.parse(rawOutput) as NpmLsOutput; 
+
+    const dependenciesObject = parsedOutput.dependencies ?? {}; 
+    const rootDependencies = Object.keys(dependenciesObject); 
+
     const filteredRootDependencies = rootDependencies.filter((rootDependency) =>
       dependenciesKeys.includes(rootDependency),
     );
@@ -50,6 +58,6 @@ ${chalk.bold(
       process.exit(1);
     }
   } catch (e) {
-    console.log('Native dependencies could not be checked');
+    console.log('Native dependencies could not be checked', e);
   }
 }

@@ -41,21 +41,22 @@ const searchLibraryByPouName = (
   pouName: string,
 ) => {
   let libraryBlock: unknown = undefined
-  libraries.system
-    .filter((library) =>
+
+  const filteredLibraries = libraries.system.filter(
+    (library) =>
       pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
         ? library.pous.some((pou) => pou.type === 'function')
-        : library,
-    )
-    .find((block) =>
-      block.pous.find((pou) => {
-        if (pou.name === pouName) {
-          libraryBlock = pou
-          return true
-        }
-        return
-      }),
-    ) || undefined
+        : true, 
+  )
+
+  for (const block of filteredLibraries) {
+    const foundPou = block.pous.find((pou) => pou.name === pouName)
+    if (foundPou) {
+      libraryBlock = foundPou
+      break
+    }
+  }
+
   return libraryBlock
 }
 
