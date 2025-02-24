@@ -7,7 +7,6 @@ type DeviceEditorProps = ComponentPropsWithoutRef<'div'> & {
 }
 
 const DeviceEditor = ({ DeviceTypeName }: DeviceEditorProps) => {
-  console.log('DeviceTypeName', DeviceTypeName)
   return (
     <div aria-label='Device content container' className='h-full w-full overflow-hidden'>
       {DeviceTypeName === 'Pin Mapping' && <PinMappingEditor />}
