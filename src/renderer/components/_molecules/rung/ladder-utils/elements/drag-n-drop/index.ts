@@ -96,8 +96,7 @@ export const onElementDrop = (
   const [selectedPlaceholderIndex, selectedPlaceholder] = Object.entries(rung.nodes).find(
     (node) => (node[1].type === 'placeholder' || node[1].type === 'parallelPlaceholder') && node[1].selected,
   ) ?? [undefined, undefined]
-  if (!selectedPlaceholder || !selectedPlaceholderIndex)
-    return { nodes: oldStateRung.nodes, edges: oldStateRung.edges }
+  if (!selectedPlaceholder || !selectedPlaceholderIndex) return { nodes: oldStateRung.nodes, edges: oldStateRung.edges }
 
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
@@ -114,7 +113,7 @@ export const onElementDrop = (
    * Find the copycat node
    * If not found, return the old rung as it is
    */
-  const copycatNode = newNodes.find((n) => n.id === `copycat_${node.id}`)
+  const copycatNode = newNodes.filter((n) => n.type !== 'variable').find((n) => n.id === `copycat_${node.id}`)
   if (!copycatNode) return { nodes: oldStateRung.nodes, edges: oldStateRung.edges }
 
   /**

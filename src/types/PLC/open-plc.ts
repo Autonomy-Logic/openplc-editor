@@ -52,6 +52,7 @@ const PLCEnumeratedDatatypeSchema = z.object({
 })
 
 const PLCStructureVariableSchema = z.object({
+  id: z.string().optional(),
   name: z.string(),
   type: z.discriminatedUnion('definition', [
     z.object({
