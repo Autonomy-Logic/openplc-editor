@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
 import * as Tabs from '@radix-ui/react-tabs'
-import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import _ from 'lodash'
 import { useEffect, useRef } from 'react'
@@ -9,7 +8,6 @@ import { useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 
 import { ExitIcon } from '../assets'
-import { toast } from '../components/_features/[app]/toast/use-toast'
 import { DataTypeEditor, MonacoEditor } from '../components/_features/[workspace]/editor'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
@@ -29,59 +27,11 @@ import { useOpenPLCStore } from '../store'
 const WorkspaceScreen = () => {
   const {
     tabs,
-    workspace: { editingState, isCollapsed },
-    project,
+    workspace: { isCollapsed },
     editor,
-    workspaceActions: { setEditingState, toggleCollapse },
+    workspaceActions: { toggleCollapse },
     searchResults,
   } = useOpenPLCStore()
-
-  useEffect(() => {
-    const handleSaveProject = async () => {
-      const projectData = PLCProjectSchema.safeParse(project)
-      if (!projectData.success) {
-        toast({
-          title: 'Error in the save request!',
-          description: 'The project data is not valid.',
-          variant: 'fail',
-        })
-        return
-      }
-
-      const { success, reason } = await window.bridge.saveProject({
-        projectPath: project.meta.path,
-        projectData: projectData.data,
-      })
-      if (success) {
-        _.debounce(() => setEditingState('saved'), 1000)()
-        toast({
-          title: 'Changes saved!',
-          description: 'The project was saved successfully!',
-          variant: 'default',
-        })
-      } else {
-        _.debounce(() => setEditingState('unsaved'), 1000)()
-        toast({
-          title: 'Error in the save request!',
-          description: reason?.description,
-          variant: 'fail',
-        })
-      }
-    }
-
-    if (editingState === 'save-request') {
-      void handleSaveProject()
-    }
-  }, [editingState])
-
-  window.bridge.saveProjectAccelerator((_event) => {
-    setEditingState('save-request')
-    toast({
-      title: 'Save changes',
-      description: 'Trying to save the changes in the project file.',
-      variant: 'warn',
-    })
-  })
 
   const variables = [
     { name: 'a', type: 'false' },
