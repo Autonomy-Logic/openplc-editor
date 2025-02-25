@@ -13,7 +13,7 @@ type IDataToWrite = {
   projectData: PLCProject
 }
 
-type ISaveDataResponse = {
+export type ISaveDataResponse = {
   success: boolean
   reason: {
     title: string
@@ -119,6 +119,7 @@ const rendererProcessBridge = {
    * @param callback - The callback to be invoked when the event is triggered.
    */
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
+  removeSaveProjectAccelerator: () => ipcRenderer.removeAllListeners('project:save-accelerator'),
 
   /**
    * Invokes the 'project:save' event with the provided data and returns a promise with the response.

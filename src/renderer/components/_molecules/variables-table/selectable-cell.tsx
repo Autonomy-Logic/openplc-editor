@@ -227,7 +227,7 @@ const SelectableTypeCell = ({
                           : filteredUserLibraries.map((value) => (
                               <PrimitiveDropdown.Item
                                 key={value}
-                                // onSelect={() => onSelect('library', value)}
+                                onSelect={() => onSelect('derived', value)}
                                 className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                               >
                                 <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>

@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
+ 
+ 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { baseTypeSchema, PLCArrayDatatype } from '@root/types/PLC/open-plc'
@@ -56,7 +56,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       })
       const updatedData = {
         ...data,
-        baseType: {
+        type: {
           value: selectedValue,
           definition: isBaseType ? 'base-type' : 'user-data-type',
         },

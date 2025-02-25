@@ -77,7 +77,7 @@ const titlebarStyles = titlebarOptionsMap[systemInfo] || titlebarOptionsMap.defa
 const isDebug = process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true'
 
 if (isDebug) {
-  import('electron-debug')
+  void import('electron-debug')
 }
 
 const installExtensions = async () => {
@@ -270,7 +270,7 @@ const createMainWindow = async () => {
 
   // Handles the creation of the menu
   const menuBuilder = new MenuBuilder(mainWindow)
-  menuBuilder.buildMenu()
+  void menuBuilder.buildMenu()
 
   const projectService = new ProjectService(mainWindow)
 

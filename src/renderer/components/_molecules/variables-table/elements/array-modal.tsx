@@ -130,10 +130,11 @@ export const ArrayModal = ({
     baseTypes.forEach((type) => {
       if (type === typeValue) isBaseType = true
     })
+
     updateVariable({
       scope: 'local',
       associatedPou: name,
-      rowId: VariableRow ?? 0,
+      rowId: VariableRow,
       data: {
         type: {
           definition: 'array',
@@ -194,7 +195,7 @@ export const ArrayModal = ({
                   position='popper'
                   side='bottom'
                   sideOffset={-28}
-                  className='box z-[999] h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                  className='box z-[999] max-h-[300px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
                 >
                   {allTypes.map((type) => (
                     <SelectItem
@@ -252,6 +253,7 @@ export const ArrayModal = ({
             {dimensions.map((value, index) => (
               <ArrayDimensionsInput
                 id={index.toString()}
+                key={index}
                 initialValue={value}
                 selectedInput={selectedInput}
                 handleInputClick={handleInputClick}

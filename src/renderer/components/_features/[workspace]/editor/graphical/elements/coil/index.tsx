@@ -35,7 +35,7 @@ const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
 
   const handleCloseModal = () => {
     setSelectedModifier(null)
-    onClose && onClose()
+    if (onClose) onClose()
   }
 
   const handleConfirmAlteration = () => {

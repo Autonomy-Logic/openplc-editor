@@ -55,6 +55,9 @@ const zodFlowStateSchema = z.object({
 })
 type ZodFlowState = z.infer<typeof zodFlowStateSchema>
 
+const zodNodeTypesSchema = z.enum(['block', 'contact', 'coil', 'parallel', 'powerRail', 'variable'])
+type ZodNodeType = z.infer<typeof zodNodeTypesSchema>
+
 /**
  * Types used at the slice
  */
@@ -101,6 +104,7 @@ type FlowActions = {
   setRungs: ({ rungs, editorName }: { rungs: RungState[]; editorName: string }) => void
   removeRung: (editorName: string, rungId: string) => void
   addComment: ({ editorName, rungId, comment }: { editorName: string; rungId: string; comment: string }) => void
+  duplicateRung: ({ editorName, rungId }: { editorName: string; rungId: string }) => void
 
   /**
    * Control the rungs transactions
@@ -181,6 +185,6 @@ export { FlowActions, FlowSlice, FlowState, FlowType, RungState }
 /**
  * Zod exports
  */
-export { edgeSchema, nodeSchema, zodFlowSchema, zodFlowStateSchema, zodRungStateSchema }
+export { edgeSchema, nodeSchema, zodFlowSchema, zodFlowStateSchema, zodNodeTypesSchema,zodRungStateSchema }
 
-export type { EdgeType, NodeType, ZodFlowState, ZodFlowType, ZodRungType }
+export type { EdgeType, NodeType, ZodFlowState, ZodFlowType, ZodNodeType,ZodRungType }

@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
 import { i18n } from '../utils/i18n'

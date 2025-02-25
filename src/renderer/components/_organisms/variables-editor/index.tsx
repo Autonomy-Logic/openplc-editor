@@ -57,7 +57,7 @@ const VariablesEditor = () => {
 
   useEffect(() => {
     const data = pous.find((pou) => pou.data.name === editor.meta.name)?.data.documentation
-    data && setPouDescription(data)
+    if (data) setPouDescription(data)
     return () => {
       setPouDescription('')
     }
