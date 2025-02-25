@@ -62,7 +62,7 @@ const VariablesEditor = () => {
     return () => {
       setPouDescription('')
     }
-  }, [editor])
+  }, [editor, pou?.data.documentation])
 
   /**
    * Update the table data and the editor's variables when the editor or the pous change
@@ -79,7 +79,7 @@ const VariablesEditor = () => {
     } else {
       setTableData([])
     }
-  }, [editor, dataTypes])
+  }, [editor, pou?.data.variables, dataTypes])
 
   /**
    * If the editor name is not the same as the current editor name
