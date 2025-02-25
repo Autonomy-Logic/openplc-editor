@@ -96,7 +96,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       const draft = {
         name: data.name,
         derivation: data.derivation,
-        type: {
+        baseType: {
           definition: 'base-type',
           value: 'bool',
         },
