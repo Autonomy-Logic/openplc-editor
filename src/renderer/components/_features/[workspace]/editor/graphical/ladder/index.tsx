@@ -1,3 +1,9 @@
+/**
+ * Explain - This is a workaround to avoid the following error:
+ * The ```@dnd-kit``` package is not correctly asserted by the lint tool.
+ */
+
+import type { UniqueIdentifier } from '@dnd-kit/core'
 import {
   closestCenter,
   defaultDropAnimation,
@@ -5,7 +11,6 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  UniqueIdentifier,
 } from '@dnd-kit/core'
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -31,7 +36,6 @@ export default function LadderEditor() {
   const flow = flows.find((flow) => flow.name === editor.meta.name)
   const rungs = flow?.rungs || []
   const flowUpdated = flow?.updated
-
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
   const [activeItem, setActiveItem] = useState<RungState | null>(null)
 
@@ -66,7 +70,6 @@ export default function LadderEditor() {
     /**
      * TODO: Verify if this is method is declared
      */
-     
     flowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
     setEditingState('unsaved')
   }, [flowUpdated === true])

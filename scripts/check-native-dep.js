@@ -18,16 +18,13 @@ if (dependencies) {
     // because of a dependency
 
     // Explicitly define the expected structure of the parsed JSON
-    interface NpmLsOutput {
-      dependencies?: Record<string, unknown>;
-    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const { dependencies: dependenciesObject } = JSON.parse(
+      execSync(`npm ls ${nativeDeps.join(' ')} --json`).toString(),
+    );
 
-    const rawOutput = execSync(`npm ls ${nativeDeps.join(' ')} --json`).toString();
-    const parsedOutput = JSON.parse(rawOutput) as NpmLsOutput; 
-
-    const dependenciesObject = parsedOutput.dependencies ?? {}; 
-    const rootDependencies = Object.keys(dependenciesObject); 
-
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    const rootDependencies = Object.keys(dependenciesObject);
     const filteredRootDependencies = rootDependencies.filter((rootDependency) =>
       dependenciesKeys.includes(rootDependency),
     );
