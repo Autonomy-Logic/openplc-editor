@@ -167,7 +167,6 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
-
           const rungIndex = flow.rungs.findIndex((rung) => rung.id === rungId)
 
           const nodeMaps: { [key: string]: Node } = rung.nodes.reduce(
@@ -180,12 +179,15 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
             },
             {} as { [key: string]: Node },
           )
+
           const edgeMaps: { [key: string]: Edge } = rung.edges.reduce(
             (acc, edge) => {
               acc[edge.id] = {
                 id: `e_${nodeMaps[edge.source].id}_${nodeMaps[edge.target].id}__${edge.sourceHandle}_${edge.targetHandle}`,
                 source: nodeMaps[edge.source].id,
                 target: nodeMaps[edge.target].id,
+                sourceHandle: edge.sourceHandle,
+                targetHandle: edge.targetHandle,
               }
               return acc
             },
@@ -212,6 +214,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
                       (node as BlockNode<BlockVariant>).data.variant.type === 'function-block'
                         ? { name: '' }
                         : node.data.variable,
+                    connectedVariables: (node as BlockNode<BlockVariant>).data.connectedVariables,
                   },
                 } as BlockNode<BlockVariant>
               }
@@ -256,6 +259,12 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
                   data: {
                     ...node.data,
                     numericId: generateNumericUUID(),
+                    parallelCloseReference: (node as ParallelNode).data.parallelCloseReference
+                      ? nodeMaps[(node as ParallelNode).data.parallelCloseReference ?? ''].id
+                      : undefined,
+                    parallelOpenReference: (node as ParallelNode).data.parallelOpenReference
+                      ? nodeMaps[(node as ParallelNode).data.parallelOpenReference ?? ''].id
+                      : undefined,
                   },
                 } as ParallelNode
               }
@@ -266,7 +275,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
                   data: {
                     ...node.data,
                     numericId: generateNumericUUID(),
-                  }
+                  },
                 } as PowerRailNode
               }
               case 'variable': {
