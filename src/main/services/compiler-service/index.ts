@@ -146,7 +146,7 @@ class CompilerService {
    * This function will be responsible for setting up the environment for the compiler service.
    * This will cleanup the old build files and create a new temporary build directory.
    */
-  async setupEnvironment() {
+  async setupEnvironment(_mainProcessPort: MessagePortMain) {
     // First step - Print Host info
     console.log(this.getHostInfo())
     // Second step - Check for the tools availability
@@ -169,7 +169,6 @@ class CompilerService {
     // Fourth - Run the core update index
     await this.updateCoreIndex()
     // Fifth step - Check for the libraries availability
-
   }
 
   async #getArduinoVersion() {

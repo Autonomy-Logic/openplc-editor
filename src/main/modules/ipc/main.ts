@@ -142,6 +142,13 @@ class MainProcessBridge implements MainIpcModule {
     /**
      * Compiler Service
      */
+
+    // !! UNDER DEVELOPMENT !!
+    this.ipcMain.on('compiler:setup-environment', (event) => {
+      const [replyPort] = event.ports
+      void this.compilerService.setupEnvironment(replyPort)
+    })
+
     this.ipcMain.handle('compiler:create-build-directory', (_ev, pathToUserProject: string) =>
       this.compilerService.createBuildDirectoryIfNotExist(pathToUserProject),
     )
@@ -168,7 +175,7 @@ class MainProcessBridge implements MainIpcModule {
       this.compilerService.generateCFiles(pathToStProgram, replyPort)
     })
 
-    this.ipcMain.handle('compiler:debug-ipc', async (_event, core:string, coreVersion: string, updatedAt: string) =>{
+    this.ipcMain.handle('compiler:debug-ipc', async (_event, core: string, coreVersion: string, updatedAt: string) => {
       await this.compilerService.updateHalsFile(core, coreVersion, updatedAt)
     })
 
