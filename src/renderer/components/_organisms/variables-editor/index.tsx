@@ -55,32 +55,31 @@ const VariablesEditor = () => {
     description: '',
   })
 
+  const pou = pous.find((p) => p.data.name === editor.meta.name)
   useEffect(() => {
-    const data = pous.find((pou) => pou.data.name === editor.meta.name)?.data.documentation
+    const data = pou?.data.documentation
     if (data) setPouDescription(data)
     return () => {
       setPouDescription('')
     }
-  }, [editor, pous])
+  }, [editor])
 
   /**
    * Update the table data and the editor's variables when the editor or the pous change
    */
   useEffect(() => {
-    const foundPou = pous.find((pou) => pou?.data?.name === editor?.meta?.name)
-
     const combinedReturnTypeOptions = [...baseTypes, ...dataTypes.map((type) => type.name)]
     setReturnTypeOptions(combinedReturnTypeOptions)
 
-    if (foundPou) {
-      setTableData(foundPou.data.variables.filter((variable) => variable.id !== 'OUT'))
-      if (foundPou.type === 'function') {
-        setReturnType(foundPou.data.returnType)
+    if (pou) {
+      setTableData(pou.data.variables.filter((variable) => variable.id !== 'OUT'))
+      if (pou.type === 'function') {
+        setReturnType(pou.data.returnType)
       }
     } else {
       setTableData([])
     }
-  }, [editor, pous, dataTypes])
+  }, [editor, dataTypes])
 
   /**
    * If the editor name is not the same as the current editor name
