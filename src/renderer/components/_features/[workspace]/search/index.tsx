@@ -163,8 +163,8 @@ const Search = ({ items }: SearchProps) => {
                                     name: pou.name,
                                     path: `/data/pous/${pou.pouType}/${pou.name}`,
                                     elementType: { type: pou.pouType, language: pou.language },
-                                  }),
-                                    setSearchQuery(item.searchQuery)
+                                  })
+                                  setSearchQuery(item.searchQuery)
                                 }}
                               />
                             ),
@@ -184,8 +184,8 @@ const Search = ({ items }: SearchProps) => {
                                 name: dataType.name,
                                 path: `/data/data-types/${dataType.type}/${dataType.name}`,
                                 elementType: { type: 'data-type', derivation: dataType.type },
-                              }),
-                                setSearchQuery(item.searchQuery)
+                              })
+                              setSearchQuery(item.searchQuery)
                             }}
                           />
                         ))}
@@ -208,8 +208,8 @@ const Search = ({ items }: SearchProps) => {
                                     name: 'resource',
                                     path: `/data/configuration/resource`,
                                     elementType: { type: 'resource' },
-                                  }),
-                                    setSearchQuery(item.searchQuery)
+                                  })
+                                  setSearchQuery(item.searchQuery)
                                 }}
                               />
                             ))}
@@ -227,8 +227,8 @@ const Search = ({ items }: SearchProps) => {
                                     name: 'resource',
                                     path: `/data/configuration/resource`,
                                     elementType: { type: 'resource' },
-                                  }),
-                                    setSearchQuery(item.searchQuery)
+                                  })
+                                  setSearchQuery(item.searchQuery)
                                 }}
                               />
                             ))}
@@ -246,8 +246,8 @@ const Search = ({ items }: SearchProps) => {
                                     name: 'resource',
                                     path: `/data/configuration/resource`,
                                     elementType: { type: 'resource' },
-                                  }),
-                                    setSearchQuery(item.searchQuery)
+                                  })
+                                  setSearchQuery(item.searchQuery)
                                 }}
                               />
                             ))}

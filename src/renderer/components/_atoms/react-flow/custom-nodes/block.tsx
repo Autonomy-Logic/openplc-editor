@@ -139,16 +139,10 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
-    let libraryBlock: unknown = undefined
-    libraries.system.find((block) =>
-      block.pous.find((pou) => {
-        if (pou.name === blockNameValue) {
-          libraryBlock = pou
-          return true
-        }
-        return
-      }),
-    ) || undefined
+    const libraryBlock: unknown = libraries.system
+      .flatMap((block) => block.pous)
+      .find((pou) => pou.name === blockNameValue)
+
     if (!libraryBlock) {
       setWrongName(true)
       return

@@ -1,5 +1,9 @@
-/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
-import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities'
+/**
+ * Explain - This is a workaround to avoid the following error:
+ * The ```@dnd-kit``` package is not correctly asserted by the lint tool.
+ */
+ 
+import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities'
 import { CloseIcon } from '@root/renderer/assets'
 import { DragHandleIcon } from '@root/renderer/assets/icons/interface/DragHandle'
 import { DuplicateIcon } from '@root/renderer/assets/icons/interface/Duplicate'
@@ -60,7 +64,7 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
       )}
     >
       <div {...(draggableHandleProps ?? {})} className='flex items-center'>
-        <DragHandleIcon className='h-7 w-7 fill-[#0464FB] dark:fill-brand-light cursor-grab' />
+        <DragHandleIcon className='h-7 w-7 cursor-grab fill-[#0464FB] dark:fill-brand-light' />
       </div>
       <div className='flex w-full items-center rounded-lg border border-transparent px-1' ref={containerRef}>
         <HighlightedTextArea

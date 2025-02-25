@@ -8,7 +8,21 @@ import tseslint from 'typescript-eslint'
 
 /** @type {import('@types/eslint').Linter.FlatConfig} */
 export default [
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  {
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    ignores: [
+      '**/*.d.ts',
+      '**/*.test.{js,jsx,ts,tsx}',
+      '**/*.spec.{js,jsx,ts,tsx}',
+      '**/*.config.{js,ts,mjs,cjs}',
+      'configs/dll/**/*.{js,ts,jsx,tsx}',
+      '**/scripts/**',
+      '**/build/**',
+      '**/public/**',
+      '**/release/**',
+      '**/resources/**',
+    ],
+  },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
@@ -98,12 +112,4 @@ export default [
     },
   },
   eslintConfigPrettier,
-  {
-    ignores: [
-      '**/*.d.ts',
-      '**/*.test.{js,jsx,ts,tsx}',
-      '**/*.config.{js,ts,mjs,cjs}',
-      'configs/dll/**/*.{js,ts,jsx,tsx}',
-    ],
-  },
 ]

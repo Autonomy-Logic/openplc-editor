@@ -2,11 +2,13 @@
  * Build config for electron renderer process
  */
 
+import autoprefixer from 'autoprefixer'
 import CssMinimizerPlugin from 'css-minimizer-webpack-plugin'
 import HtmlWebpackPlugin from 'html-webpack-plugin'
 import MiniCssExtractPlugin from 'mini-css-extract-plugin'
 import MonacoEditorWebpackPlugin from 'monaco-editor-webpack-plugin'
 import { join } from 'path'
+import tailwindcss from 'tailwindcss'
 import TerserPlugin from 'terser-webpack-plugin'
 import webpack from 'webpack'
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
@@ -66,7 +68,7 @@ const configuration: webpack.Configuration = {
             loader: 'postcss-loader',
             options: {
               postcssOptions: {
-                plugins: [require('tailwindcss'), require('autoprefixer')],
+                plugins: [tailwindcss, autoprefixer],
               },
             },
           },

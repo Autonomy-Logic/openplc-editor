@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const dataTypeSchema = z.object({
+const _dataTypeSchema = z.object({
   '@name': z.string(),
   baseType: z.array(
     z.object({
@@ -87,4 +87,4 @@ const dataTypeSchema = z.object({
     .optional(),
 })
 
-export type DataTypeShape = z.infer<typeof dataTypeSchema>
+export type DataTypeShape = z.infer<typeof _dataTypeSchema>

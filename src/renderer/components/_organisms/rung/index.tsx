@@ -1,3 +1,7 @@
+/**
+ * Explain - This is a workaround to avoid the following error:
+ * The ```@dnd-kit``` package is not correctly asserted by the lint tool.
+ */
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { RungBody, RungHeader } from '@root/renderer/components/_molecules/rung'
