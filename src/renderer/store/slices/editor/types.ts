@@ -36,7 +36,7 @@ const taskSchema = z.discriminatedUnion('display', [
   z.object({ display: z.literal('code') }),
 ])
 
-const instaceSchema = z.discriminatedUnion('display', [
+const instanceSchema = z.discriminatedUnion('display', [
   z.object({
     display: z.literal('table'),
     selectedRow: z.string(),
@@ -110,7 +110,7 @@ const editorModelSchema = z.discriminatedUnion('type', [
     }),
     variable: editorGlobalVariablesSchema,
     task: taskSchema,
-    instance: instaceSchema,
+    instance: instanceSchema,
   }),
 ])
 
@@ -175,7 +175,7 @@ type StructureTableType = z.infer<typeof editorStructureSchema>
 type VariablesTable = z.infer<typeof editorVariablesSchema>
 type GlobalVariablesTableType = z.infer<typeof editorGlobalVariablesSchema>
 type TaskType = z.infer<typeof taskSchema>
-type InstanceType = z.infer<typeof instaceSchema>
+type InstanceType = z.infer<typeof instanceSchema>
 /** Graphical */
 type GraphicalType = z.infer<typeof editorGraphicalSchema>
 /** The model, the data that we display in the app. */
