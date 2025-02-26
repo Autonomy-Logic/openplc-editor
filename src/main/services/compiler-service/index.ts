@@ -192,7 +192,7 @@ class CompilerService {
   async #getIec2cVersion() {
     const runIec2c = promisify(exec)
 
-    const { stderr, stdout } = await runIec2c(`"${this.iec2cBinaryPath}" -v"`)
+    const { stderr, stdout } = await runIec2c(`"${this.iec2cBinaryPath}" -v`)
 
     if (stderr) return stderr
     return stdout

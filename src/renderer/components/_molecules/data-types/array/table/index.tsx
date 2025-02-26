@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
 import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
@@ -220,8 +217,8 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
   const setBorders = (indexFocus: number | null) => {
     const parent = tableBodyRef.current
-    if (!parent) return // @ts-expect-error - Incorrectly datatype implementation.
-    ;[...parent.children].forEach((child, index) => {
+    if (!parent || !parent.children) return
+    Array.from(parent.children).forEach((child, index) => {
       if (index !== indexFocus) {
         child.className = cn(child.className, '[&>td]:border-neutral-500 dark:[&>td]:border-neutral-500')
       }

@@ -7,8 +7,13 @@ import { parse } from 'yaml'
  * @returns The JavaScript object
  */
 const YamlToObject = (yaml: string): { [key: string]: any } => {
-  const parsedObject = parse(yaml) as { [key: string]: any }
-  return parsedObject
+  try {
+    const parsedObject = parse(yaml) as { [key: string]: any }
+    return parsedObject
+  } catch (error) {
+    console.error('Error parsing YAML:', error)
+    throw new Error(`Failed to parse YAML: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 export { YamlToObject }

@@ -7,8 +7,13 @@ import { stringify } from 'yaml'
  * @returns The YAML string
  */
 const YamlObjectToString = (obj: { [key: string]: any }): string => {
-  const yamlString = stringify(obj)
-  return yamlString
+  try {
+    const yamlString = stringify(obj)
+    return yamlString
+  } catch (error) {
+    console.error('Error while trying to parse the object to YAML:', error)
+    throw new Error(`Failed to convert object to YAML: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 export { YamlObjectToString }
