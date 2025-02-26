@@ -66,18 +66,18 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     >
       <div
         aria-label='Data type metadata container'
-        className='h-46  flex w-full items-center gap-4 rounded-md bg-neutral-50 p-2 shadow-md dark:border dark:border-neutral-800 dark:bg-neutral-1000'
+        className='h-46 flex w-full items-center gap-4 rounded-md bg-neutral-50 p-2 shadow-md dark:border dark:border-neutral-800 dark:bg-neutral-1000'
       >
-        <div aria-label='Data type name container' className='flex h-8 w-1/2 items-center gap-2'>
+        <div aria-label='Data type name container' className='flex h-full w-1/2 items-center gap-2'>
           <label
             htmlFor='data-type-name'
-            className='mb-1 text-start font-caption text-xs font-medium text-neutral-950 dark:text-white'
+            className='text-start font-caption text-xs font-medium text-neutral-950 dark:text-white'
           >
-            Name
+            Name:
           </label>
           <div
             aria-label='Data type name input container'
-            className='h-[30px] w-full max-w-[385px] rounded-lg border border-neutral-400 bg-white focus-within:border-brand dark:border-neutral-800 dark:bg-neutral-950'
+            className='flex h-full w-full max-w-[385px] items-center rounded-lg border border-neutral-400 bg-white focus-within:border-brand dark:border-neutral-800 dark:bg-neutral-950'
           >
             {isEditing ? (
               <InputWithRef
@@ -86,12 +86,12 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
                 onBlur={handleBlur}
                 id='data-type-name'
                 aria-label='data-type-name'
-                className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
+                className='h-full w-full bg-transparent p-2 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
               />
             ) : (
               <p
                 aria-label='Data type name'
-                className='h-full w-full bg-transparent px-3 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
+                className='h-full w-full bg-transparent p-2 text-start font-caption text-xs text-neutral-850 outline-none dark:text-neutral-100'
                 onClick={handleStartEditing}
                 dangerouslySetInnerHTML={{ __html: extractSearchQuery(editorContent?.name || '', searchQuery) }}
               />
