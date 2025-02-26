@@ -41,10 +41,6 @@ const StartScreen = () => {
     void getUserRecentProjects()
   }, [])
 
-  const handleDebug = async () => {
-    await window.bridge.debugIpc('Raspberry Pico W"', '1.0.0', '2025-02-18')
-  }
-
   return (
     <>
       <StartSideContent>
@@ -64,11 +60,6 @@ const StartScreen = () => {
           <MenuSection id='2'>
             <MenuItem onClick={handleExitAppRequest} ghosted>
               <StickArrowIcon className='rotate-180 stroke-brand' /> Exit
-            </MenuItem>
-          </MenuSection>
-          <MenuSection id='2'>
-            <MenuItem onClick={handleDebug} ghosted>
-              <StickArrowIcon className='rotate-180 stroke-brand' /> debug
             </MenuItem>
           </MenuSection>
         </MenuRoot>

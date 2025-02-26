@@ -383,8 +383,5 @@ const rendererProcessBridge = {
      */
     rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
   },
-
-  debugIpc: async (core: string, coreVersion: string, updatedAt: string) =>
-    ipcRenderer.invoke('compiler:debug-ipc', core, coreVersion, updatedAt),
 }
 export default rendererProcessBridge
