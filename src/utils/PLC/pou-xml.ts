@@ -22,7 +22,7 @@ export const parseInterface = (pou: PLCPou) => {
     if (variable.type.definition === 'array') {
       vType = {
         array: {
-          dimensions: variable.type.data.dimensions.map((dimension) => {
+          dimension: variable.type.data.dimensions.map((dimension) => {
             const lower = dimension.dimension.split('..')[0]
             const upper = dimension.dimension.split('..')[1]
             return {

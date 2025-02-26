@@ -5,7 +5,7 @@ import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_m
 import { useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
 import * as monaco from 'monaco-editor'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { toast } from '../../../[app]/toast/use-toast'
@@ -76,6 +76,68 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [searchQuery, sensitiveCase, regularExpression])
 
+  const variablesSuggestions = useCallback(
+    (range: monaco.IRange) => {
+      const suggestions = tableVariablesCompletion({
+        range,
+        variables: (pou?.data.variables || []) as PLCVariable[],
+      }).suggestions
+      const labels = suggestions.map((suggestion) => suggestion.label)
+      return {
+        suggestions,
+        labels,
+      }
+    },
+    [pou?.data.variables],
+  )
+
+  const globalVariablesSuggestions = useCallback(
+    (range: monaco.IRange) => {
+      const suggestions = tableGlobalVariablesCompletion({
+        range,
+        variables: globalVariables as PLCVariable[],
+      }).suggestions
+      const labels = suggestions.map((suggestion) => suggestion.label)
+      return {
+        suggestions,
+        labels,
+      }
+    },
+    [globalVariables],
+  )
+
+  const librarySuggestions = useCallback(
+    (range: monaco.IRange) => {
+      const suggestions = libraryCompletion({
+        range,
+        library: sliceLibraries,
+        pous,
+        editor,
+      }).suggestions
+      const labels = suggestions.map((suggestion) => suggestion.label)
+      return {
+        suggestions,
+        labels,
+      }
+    },
+    [sliceLibraries],
+  )
+
+  const keywordsSuggestions = useCallback(
+    (range: monaco.IRange) => {
+      const suggestions = keywordsCompletion({
+        range,
+        language,
+      }).suggestions
+      const labels = suggestions.map((suggestion) => suggestion.label)
+      return {
+        suggestions,
+        labels,
+      }
+    },
+    [language],
+  )
+
   /**
    * Update the auto-completion feature of the monaco editor.
    */
@@ -99,36 +161,15 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           return token.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || []
         })
 
-        const variablesSuggestions = tableVariablesCompletion({
-          range,
-          variables: (pou?.data.variables || []) as PLCVariable[],
-        }).suggestions
-        const globalVariablesSuggestions = tableGlobalVariablesCompletion({
-          range,
-          variables: globalVariables as PLCVariable[],
-        }).suggestions
-        const keywordsSuggestions = keywordsCompletion({ range, language }).suggestions
-        const librarySuggestions = libraryCompletion({
-          range,
-          library: sliceLibraries,
-          pous,
-          editor,
-        }).suggestions
-
-        const variablesLabels = variablesSuggestions.map((suggestion) => suggestion.label)
-        const globalVariablesLabels = globalVariablesSuggestions.map((suggestion) => suggestion.label)
-        const keywordsLabels = keywordsSuggestions.map((suggestion) => suggestion.label)
-        const libraryLabels = librarySuggestions.map((suggestion) => suggestion.label)
-
         const identifiers = Array.from(
           new Set(
             identifierTokens
               .map((token) => {
                 if (
-                  variablesLabels.includes(token) ||
-                  globalVariablesLabels.includes(token) ||
-                  keywordsLabels.includes(token) ||
-                  libraryLabels.includes(token)
+                  variablesSuggestions(range).labels.includes(token) ||
+                  globalVariablesSuggestions(range).labels.includes(token) ||
+                  librarySuggestions(range).labels.includes(token) ||
+                  keywordsSuggestions(range).labels.includes(token)
                 ) {
                   return null
                 }
@@ -146,17 +187,17 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
         return {
           suggestions: [
-            ...variablesSuggestions,
-            ...globalVariablesSuggestions,
-            ...keywordsSuggestions,
-            ...librarySuggestions,
+            ...variablesSuggestions(range).suggestions,
+            ...globalVariablesSuggestions(range).suggestions,
+            ...librarySuggestions(range).suggestions,
+            ...keywordsSuggestions(range).suggestions,
             ...identifiersSuggestions,
           ],
         }
       },
     })
     return () => disposable.dispose()
-  }, [pou?.data.variables, language])
+  }, [pou?.data.variables, globalVariables, sliceLibraries, language])
 
   function handleEditorDidMount(
     editor: null | monaco.editor.IStandaloneCodeEditor,
