@@ -72,7 +72,7 @@ const ConfirmDeleteElementModal = ({
 
             if (variableIndex !== -1) {
               deleteVariable({
-                rowId: variableIndex,
+                variableId: variableData?.id,
                 scope: 'local',
                 associatedPou: editor.meta.name,
               })
@@ -100,51 +100,16 @@ const ConfirmDeleteElementModal = ({
         return
       }
 
-      if (editor.type === 'available') {
-        const targetLabel = modalData?.label
-        if (!targetLabel) {
-          throw new Error('No label found for element deletion.')
-        }
-        const isTargetPou = pous.find((pou) => pou.data.name === targetLabel)
-        if (isTargetPou) {
-          deletePou(targetLabel)
-          handleRemoveTab(targetLabel)
-          deletePou(targetLabel)
-          removeFlow(targetLabel)
-          removeUserLibrary(targetLabel)
-          toast({
-            title: 'Pou deleted success!',
-            description: `POU "${targetLabel}" was successfully deleted.`,
-            variant: 'default',
-          })
-          closeModal()
-          return
-        } else {
-          deleteDatatype(targetLabel)
-          handleRemoveTab(targetLabel)
-          deleteDatatype(targetLabel)
-          removeFlow(targetLabel)
-          removeUserLibrary(targetLabel)
-          toast({
-            title: 'Datatype deleted success!',
-            description: `Datatype "${targetLabel}" was successfully deleted.`,
-            variant: 'default',
-          })
-          closeModal()
-          return
-        }
-      }
-
       if (editor.type === 'plc-datatype') {
         const targetLabel = modalData?.label
         if (!targetLabel) {
           throw new Error('No label found for datatype deletion.')
         }
 
-        handleRemoveTab(targetLabel)
         deleteDatatype(targetLabel)
         removeFlow(targetLabel)
         removeUserLibrary(targetLabel)
+        handleRemoveTab(targetLabel)
 
         toast({
           title: 'Datatype deleted success!',
@@ -154,15 +119,16 @@ const ConfirmDeleteElementModal = ({
         closeModal()
         return
       }
+
       if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
         const targetLabel = modalData?.label
         if (!targetLabel) {
           throw new Error('No label found for POU deletion.')
         }
-        handleRemoveTab(targetLabel)
         deletePou(targetLabel)
         removeFlow(targetLabel)
         removeUserLibrary(targetLabel)
+        handleRemoveTab(targetLabel)
         toast({
           title: 'Pou deleted success!',
           description: `POU "${targetLabel}" was successfully deleted.`,

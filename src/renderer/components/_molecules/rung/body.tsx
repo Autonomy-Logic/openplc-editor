@@ -236,12 +236,12 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
       if (pouRef) variables = [...pouRef.data.variables] as PLCVariable[]
 
       blockNodes.forEach((blockNode) => {
-        const variableIndex = variables.findIndex(
-          (variable) => variable.id === (blockNode.data as BasicNodeData).variable.id,
-        )
+        const variableData = (blockNode.data as BasicNodeData)?.variable
+        const variableIndex = variables.findIndex((variable) => variable.id === variableData?.id)
+
         if (variableIndex !== -1) {
           deleteVariable({
-            rowId: variableIndex,
+            variableId: (blockNode.data as BasicNodeData).variable.id,
             scope: 'local',
             associatedPou: editor.meta.name,
           })

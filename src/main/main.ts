@@ -78,7 +78,7 @@ const titlebarStyles = titlebarOptionsMap[systemInfo] || titlebarOptionsMap.defa
 const isDebug = process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true'
 
 if (isDebug) {
-  import('electron-debug')
+  void import('electron-debug')
 }
 
 const installExtensions = async () => {
@@ -153,6 +153,7 @@ const createMainWindow = async () => {
   mainWindow = new BrowserWindow({
     minWidth: 1124,
     minHeight: 628,
+    fullscreen: true,
     // ...bounds,
     show: false,
     icon: getAssetPath('icon.png'),

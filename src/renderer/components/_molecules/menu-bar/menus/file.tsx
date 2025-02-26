@@ -1,8 +1,7 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
-import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { saveProjectRequest } from '@root/renderer/components/_templates'
 import { useCompiler, useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
 import { useEffect } from 'react'
@@ -42,39 +41,6 @@ export const FileMenu = () => {
     await openProject()
   }
 
-  const handleSaveProject = async () => {
-    const projectData = PLCProjectSchema.safeParse(project)
-    if (!projectData.success) {
-      toast({
-        title: 'Error in the save request!',
-        description: 'The project data is not valid.',
-        variant: 'fail',
-      })
-      return
-    }
-
-    const { success, reason } = await window.bridge.saveProject({
-      projectPath: project.meta.path,
-      projectData: project,
-    })
-
-    if (success) {
-      _.debounce(() => setEditingState('saved'), 1000)()
-      toast({
-        title: 'Changes saved!',
-        description: 'The project was saved successfully!',
-        variant: 'default',
-      })
-    } else {
-      _.debounce(() => setEditingState('unsaved'), 1000)()
-      toast({
-        title: 'Error in the save request!',
-        description: reason?.description,
-        variant: 'fail',
-      })
-    }
-  }
-
   useEffect(() => {
     setSelectedTab(editor.meta.name)
   }, [editor])
@@ -102,7 +68,7 @@ export const FileMenu = () => {
               <span className={ACCELERATOR}>{'Ctrl + O'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
-            <MenuPrimitive.Item className={ITEM} onClick={() => void handleSaveProject()}>
+            <MenuPrimitive.Item className={ITEM} onClick={() => void saveProjectRequest(project, setEditingState)}>
               <span>{i18n.t('menu:file.submenu.save')}</span>
               <span className={ACCELERATOR}>{'Ctrl + S'}</span>
             </MenuPrimitive.Item>

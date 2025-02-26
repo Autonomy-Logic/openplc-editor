@@ -90,7 +90,7 @@ export const createSharedSlice: StateCreator<
             language: propsToCreatePou.language,
           },
         })
-        propsToCreatePou.type !== 'program' &&
+        if (propsToCreatePou.type !== 'program')
           getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
         return true
       }
@@ -130,8 +130,9 @@ export const createSharedSlice: StateCreator<
             language: propsToCreatePou.language,
           },
         })
-        propsToCreatePou.type !== 'program' &&
+        if (propsToCreatePou.type !== 'program') {
           getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
+        }
         return true
       }
       return false

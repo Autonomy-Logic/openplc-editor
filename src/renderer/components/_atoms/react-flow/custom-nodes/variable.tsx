@@ -1,4 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
+import { RungState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -63,6 +64,33 @@ const VariableElement = (block: VariableProps) => {
   const [inputError, setInputError] = useState<boolean>(false)
   const [isAVariable, setIsAVariable] = useState<boolean>(false)
 
+  const updateRelatedNode = (rung: RungState, variableNode: VariableNode, variable: PLCVariable) => {
+    const relatedBlock = rung.nodes.find((node) => node.id === variableNode.data.block.id)
+    if (!relatedBlock) {
+      setInputError(true)
+      return
+    }
+
+    updateNode({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodeId: relatedBlock.id,
+      node: {
+        ...relatedBlock,
+        data: {
+          ...relatedBlock.data,
+          connectedVariables: {
+            ...(relatedBlock.data as BlockNodeData<object>).connectedVariables,
+            [variableNode.data.block.handleId]: {
+              variable: variable,
+              type: variableNode.data.variant,
+            },
+          },
+        },
+      },
+    })
+  }
+
   /**
    * useEffect to focus the variable input when the block is selected
    */
@@ -91,8 +119,8 @@ const VariableElement = (block: VariableProps) => {
     if (!variable || !inputVariableRef) {
       setIsAVariable(false)
     } else {
-      if (variable.name !== (variableNode as VariableNode).data.variable.name) {
-        setVariableValue(variable.name)
+      // if the variable is not the same as the one in the node, update the node
+      if (variable.id !== (variableNode as VariableNode).data.variable.id) {
         updateNode({
           editorName: editor.meta.name,
           rungId: rung.id,
@@ -105,35 +133,24 @@ const VariableElement = (block: VariableProps) => {
             },
           },
         })
+        updateRelatedNode(rung, variableNode as VariableNode, variable)
+      }
 
-        const relatedBlock = rung.nodes.find((node) => node.id === (variableNode as VariableNode).data.block.id)
-        if (!relatedBlock) {
-          setInputError(true)
-          return
-        }
-
+      // if the variable is the same as the one in the node, update the node
+      if (variable.id === (variableNode as VariableNode).data.variable.id && variable.name !== (variableNode as VariableNode).data.variable.name) {
         updateNode({
           editorName: editor.meta.name,
           rungId: rung.id,
-          nodeId: relatedBlock.id,
+          nodeId: variableNode.id,
           node: {
-            ...relatedBlock,
+            ...variableNode,
             data: {
-              ...relatedBlock.data,
-              connectedVariables: {
-                ...(relatedBlock.data as BlockNodeData<object>).connectedVariables,
-                [(variableNode as VariableNode).data.block.handleId]: {
-                  variable: variable,
-                  type: variableNode.data.variant,
-                },
-              },
+              ...variableNode.data,
+              variable: variable,
             },
           },
         })
-      }
-
-      if (variable.name === (variableNode as VariableNode).data.variable.name && variable.name !== variableValue) {
-        setVariableValue(variable.name)
+        updateRelatedNode(rung, variableNode as VariableNode, variable)
       }
 
       const validation = validateVariableType(variable.type.value, data.block.variableType)
@@ -142,6 +159,7 @@ const VariableElement = (block: VariableProps) => {
         validation.isValid = userDataTypes.includes(variable.type.value)
         validation.error = undefined
       }
+      setVariableValue(variable.name)
       setInputError(!validation.isValid)
       setIsAVariable(true)
     }
@@ -191,31 +209,7 @@ const VariableElement = (block: VariableProps) => {
       },
     })
 
-    const relatedBlock = rung.nodes.find((node) => node.id === variableNode.data.block.id)
-    if (!relatedBlock) {
-      setInputError(true)
-      return
-    }
-
-    updateNode({
-      editorName: editor.meta.name,
-      rungId: rung.id,
-      nodeId: relatedBlock.id,
-      node: {
-        ...relatedBlock,
-        data: {
-          ...relatedBlock.data,
-          connectedVariables: {
-            ...(relatedBlock.data as BlockNodeData<object>).connectedVariables,
-            [variableNode.data.block.handleId]: {
-              variable: variable,
-              type: variableNode.data.variant,
-            },
-          },
-        },
-      },
-    })
-
+    updateRelatedNode(rung, variableNode, variable as PLCVariable)
     setInputError(false)
   }
 

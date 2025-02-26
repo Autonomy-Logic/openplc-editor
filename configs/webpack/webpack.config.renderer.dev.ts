@@ -1,6 +1,7 @@
 import 'webpack-dev-server'
 
 import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin'
+import autoprefixer from 'autoprefixer'
 import chalk from 'chalk'
 import { execSync, spawn } from 'child_process'
 import EslintPlugin from 'eslint-webpack-plugin'
@@ -8,6 +9,7 @@ import fs from 'fs'
 import HtmlWebpackPlugin from 'html-webpack-plugin'
 import MonacoEditorWebpackPlugin from 'monaco-editor-webpack-plugin'
 import { join, resolve } from 'path'
+import tailwindcss from 'tailwindcss'
 import webpack from 'webpack'
 import { merge } from 'webpack-merge'
 
@@ -93,7 +95,7 @@ const configuration: ICustomConfiguration = {
             loader: 'postcss-loader',
             options: {
               postcssOptions: {
-                plugins: [require('tailwindcss'), require('autoprefixer')],
+                plugins: [tailwindcss, autoprefixer],
               },
             },
           },

@@ -65,12 +65,12 @@ export const LadderToolbox = () => {
         if (pou) variables = [...pou.data.variables] as PLCVariable[]
 
         blockNodes.forEach((blockNode) => {
-          const variableIndex = variables.findIndex(
-            (variable) => variable.id === (blockNode.data as BasicNodeData).variable.id,
-          )
+          const variableData = (blockNode.data as BasicNodeData)?.variable
+          const variableIndex = variables.findIndex((variable) => variable.id === variableData?.id)
+
           if (variableIndex !== -1) {
             deleteVariable({
-              rowId: variableIndex,
+              variableId: variableData?.id,
               scope: 'local',
               associatedPou: editor.meta.name,
             })

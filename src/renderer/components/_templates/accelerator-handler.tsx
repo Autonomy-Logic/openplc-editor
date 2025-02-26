@@ -1,35 +1,90 @@
-import { IProjectServiceResponse } from '@root/main/services'
+import type { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
+import type { IProjectServiceResponse } from '@root/main/services'
 import { useCompiler } from '@root/renderer/hooks'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
+import type { ModalTypes, ProjectState } from '@root/renderer/store/slices'
+import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { useEffect, useState } from 'react'
+
+import { toast } from '../_features/[app]/toast/use-toast'
+
+const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?: unknown) => void) => {
+  if (isUnsaved) {
+    openModal('save-changes-project', 'close-app')
+    return
+  }
+  openModal('quit-application', null)
+}
+
+export const saveProjectRequest = async (
+  project: ProjectState,
+  setEditingState: (state: 'saved' | 'unsaved' | 'save-request' | 'initial-state') => void,
+): Promise<ISaveDataResponse> => {
+  setEditingState('save-request')
+  toast({
+    title: 'Save changes',
+    description: 'Trying to save the changes in the project file.',
+    variant: 'warn',
+  })
+
+  const projectData = PLCProjectSchema.safeParse(project)
+  if (!projectData.success) {
+    setEditingState('unsaved')
+    toast({
+      title: 'Error in the save request!',
+      description: 'The project data is not valid.',
+      variant: 'fail',
+    })
+    return {
+      success: false,
+      reason: { title: 'Error in the save request!', description: 'The project data is not valid.' },
+    }
+  }
+
+  const { success, reason } = await window.bridge.saveProject({
+    projectPath: project.meta.path,
+    projectData: projectData.data,
+  })
+
+  if (success) {
+    setEditingState('saved')
+    toast({
+      title: 'Changes saved!',
+      description: 'The project was saved successfully!',
+      variant: 'default',
+    })
+  } else {
+    setEditingState('unsaved')
+    toast({
+      title: 'Error in the save request!',
+      description: reason?.description,
+      variant: 'fail',
+    })
+  }
+
+  return { success, reason }
+}
 
 const AcceleratorHandler = () => {
   const { handleExportProject } = useCompiler()
   const [requestFlag, setRequestFlag] = useState(false)
   const {
+    project,
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, openProject, openRecentProject },
-    workspaceActions: { switchAppTheme, toggleMaximizedWindow },
+    workspaceActions: { setEditingState, switchAppTheme, toggleMaximizedWindow },
   } = useOpenPLCStore()
 
   const { handleWindowClose, handleAppIsClosingDarwin } = useQuitApp()
-
-  const quitAppRequest = () => {
-    if (editingState === 'unsaved') {
-      openModal('save-changes-project', 'close-app')
-      return
-    }
-    openModal('quit-application', null)
-  }
 
   /**
    * Compiler Related Accelerators
    */
   useEffect(() => {
     window.bridge.exportProjectRequest((_event) => setRequestFlag(true))
-    requestFlag &&
+    if (requestFlag)
       handleExportProject()
         .then(() => setRequestFlag(false))
         .catch(() => setRequestFlag(false))
@@ -39,28 +94,8 @@ const AcceleratorHandler = () => {
   }, [requestFlag])
 
   /**
-   * Window Related Accelerators
+   * ==== Project Related Accelerators ====
    */
-
-  /**
-   * -- Request close app window
-   */
-  useEffect(() => {
-    window.bridge.handleCloseOrHideWindowAccelerator()
-    return () => {
-      window.bridge.removeHandleCloseOrHideWindowAccelerator()
-    }
-  }, [])
-
-  /**
-   * -- Quit app
-   */
-  useEffect(() => {
-    window.bridge.quitAppRequest(() => quitAppRequest())
-    return () => {
-      window.bridge.removeQuitAppListener()
-    }
-  }, [editingState])
 
   /**
    * -- Create project
@@ -126,6 +161,43 @@ const AcceleratorHandler = () => {
   }, [editingState])
 
   /**
+   * -- Save project
+   */
+  useEffect(() => {
+    window.bridge.saveProjectAccelerator((_event) => {
+      void saveProjectRequest(project, setEditingState)
+    })
+
+    return () => {
+      window.bridge.removeSaveProjectAccelerator()
+    }
+  }, [project])
+
+  /**
+   * ==== Window Related Accelerators ====
+   */
+
+  /**
+   * -- Request close app window
+   */
+  useEffect(() => {
+    window.bridge.handleCloseOrHideWindowAccelerator()
+    return () => {
+      window.bridge.removeHandleCloseOrHideWindowAccelerator()
+    }
+  }, [])
+
+  /**
+   * -- Quit app
+   */
+  useEffect(() => {
+    window.bridge.quitAppRequest(() => quitAppRequest(editingState === 'unsaved', openModal))
+    return () => {
+      window.bridge.removeQuitAppListener()
+    }
+  }, [editingState])
+
+  /**
    * -- Toggle maximized window
    */
   useEffect(() => {
@@ -151,10 +223,6 @@ const AcceleratorHandler = () => {
       handleWindowClose()
     })
   }, [])
-
-  /**
-   * Application Related Accelerators
-   */
 
   /**
    * -- Quit app in darwin.
@@ -189,7 +257,7 @@ const AcceleratorHandler = () => {
       return
     }
 
-    quitAppRequest()
+    quitAppRequest(editingState === 'unsaved', openModal)
     e.returnValue = false
   }
 

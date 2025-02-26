@@ -8,6 +8,7 @@ import { Node } from '@xyflow/react'
 import { ComponentPropsWithRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
+import { BlockNodeData } from '../block'
 import { getPouVariablesRungNodeAndEdges, getVariableRestrictionType } from '../utils'
 import { BasicNodeData } from '../utils/types'
 import { VariableNode } from '../variable'
@@ -185,17 +186,18 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     const closeModal = () => {
       setAutocompleteFocus(false)
       setSelectedVariable({ positionInArray: -1, variableName: '' })
-      setIsOpen && setIsOpen(false)
+      if (setIsOpen) setIsOpen(false)
     }
 
     const submitVariableToBlock = ({ clickedVariable }: { clickedVariable?: number }) => {
       closeModal()
 
-      const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      const { rung, node: variableNode } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
-      if (!rung || !node) return
+      if (!rung || !variableNode) return
 
+      // Get the variable that was clicked or the selected one
       const variable =
         clickedVariable !== undefined
           ? filteredVariables[clickedVariable]
@@ -205,6 +207,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
               : undefined
             : undefined
 
+      /// If the variable is undefined, check if the selected variable is an add variable
       if (!variable) {
         if (
           selectedVariable.positionInArray !== -1 &&
@@ -218,12 +221,39 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       updateNode({
         editorName: editor.meta.name,
         rungId: rung.id,
-        nodeId: node.id,
+        nodeId: variableNode.id,
         node: {
-          ...node,
+          ...variableNode,
           data: {
-            ...node.data,
+            ...variableNode.data,
             variable: variable,
+          },
+        },
+      })
+
+      // Check if the variable is connected to a block
+      if ((variableNode as VariableNode).data.block === undefined) return
+
+      // Get the block that is connected to the variable
+      const relatedBlock = rung.nodes.find((node) => node.id === (variableNode as VariableNode).data.block.id)
+      if (!relatedBlock) return
+
+      // Update the block to include the variable
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: relatedBlock.id,
+        node: {
+          ...relatedBlock,
+          data: {
+            ...relatedBlock.data,
+            connectedVariables: {
+              ...(relatedBlock.data as BlockNodeData<object>).connectedVariables,
+              [(variableNode as VariableNode).data.block.handleId]: {
+                variable: variable,
+                type: variableNode.data.variant,
+              },
+            },
           },
         },
       })
@@ -280,7 +310,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       })
 
       setAutocompleteFocus(false)
-      setIsOpen && setIsOpen(false)
+      if (setIsOpen) setIsOpen(false)
     }
 
     return (
@@ -299,7 +329,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
             onFocusOutside={closeModal}
             onInteractOutside={closeModal}
             onFocus={(e) => {
-              focusEvent && focusEvent(e)
+              if (focusEvent) focusEvent(e)
               setAutocompleteFocus(true)
             }}
             onBlur={() => setAutocompleteFocus(false)}

@@ -28,11 +28,11 @@ const DownloadButton = () => {
         addLog({ id: uuidv4(), type: stdType, message: line })
         if (index === lines.length - 2) {
           const buildPath = `${OS === 'win32' ? project.meta.path.replace('\\project.json', '\\build\\program.st') : project.meta.path.replace('/project.json', '/build/program.st')}`
-          lines[index].includes('successfully') &&
+          if (lines[index].includes('successfully'))
             addLog({ id: uuidv4(), type: 'info', message: `OpenPLC Runtime program generated at ${buildPath}` })
         }
       })
-      stdMessage && addLog({ id: uuidv4(), type: stdType, message: stdMessage })
+      if (stdMessage) addLog({ id: uuidv4(), type: stdType, message: stdMessage })
     })
 
   const requestBuildProgram = async () => {

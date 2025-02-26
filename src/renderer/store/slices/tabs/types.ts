@@ -24,6 +24,10 @@ const tabsPropsSchema = z.object({
     z.object({
       type: z.literal('resource'),
     }),
+    z.object({
+      type: z.literal('device'),
+      derivation: z.enum(['pin-mapping', 'configuration']),
+    }),
   ]),
   configuration: z.object({}).optional(),
 })
@@ -41,7 +45,7 @@ const tabsStateSchema = z.object({
  * It is used to validate the tabs actions if needed,
  * in most cases you can use the type inferred from it.
  */
-const tabsActionsSchema = z.object({
+const _tabsActionsSchema = z.object({
   setTabs: z.function().args(z.array(tabsPropsSchema)).returns(z.void()),
   updateTabs: z.function().args(tabsPropsSchema).returns(z.void()),
   sortTabs: z.function().args(z.array(tabsPropsSchema)).returns(z.void()),
@@ -53,7 +57,7 @@ const tabsActionsSchema = z.object({
 /** The state, the source of truth that drives our app. - Concept based on Redux */
 type TabsState = z.infer<typeof tabsStateSchema>
 /** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */
-type TabsActions = z.infer<typeof tabsActionsSchema>
+type TabsActions = z.infer<typeof _tabsActionsSchema>
 type TabsSlice = TabsState & {
   tabsActions: TabsActions
 }
