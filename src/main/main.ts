@@ -152,6 +152,7 @@ const createMainWindow = async () => {
   mainWindow = new BrowserWindow({
     minWidth: 1124,
     minHeight: 628,
+    fullscreen: true,
     // ...bounds,
     show: false,
     icon: getAssetPath('icon.png'),
