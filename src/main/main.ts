@@ -152,8 +152,6 @@ const createMainWindow = async () => {
   mainWindow = new BrowserWindow({
     minWidth: 1124,
     minHeight: 628,
-    fullscreen: true,
-    // ...bounds,
     show: false,
     icon: getAssetPath('icon.png'),
     ...titlebarStyles,
@@ -185,6 +183,7 @@ const createMainWindow = async () => {
     if (!mainWindow) {
       throw new Error('"mainWindow" is not defined')
     }
+    mainWindow.maximize()
     if (process.env.START_MINIMIZED) {
       mainWindow.minimize()
     }
