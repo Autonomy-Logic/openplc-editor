@@ -1,6 +1,6 @@
- 
- 
+import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { baseTypeSchema, PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import _ from 'lodash'
@@ -25,10 +25,18 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     ...baseTypes,
     ...dataTypes.map((type) => (type.name !== editor.meta.name ? type.name : '')).filter((type) => type !== ''),
   ]
+
   const ROWS_NOT_SELECTED = -1
-  const [arrayTable, setArrayTable] = useState<{ selectedRow: string }>({ selectedRow: ROWS_NOT_SELECTED.toString() })
+
+  const [arrayTable, setArrayTable] = useState<{ selectedRow: number }>({ selectedRow: ROWS_NOT_SELECTED })
   const [initialValueData, setInitialValueData] = useState<string>('')
   const [baseType, setBaseType] = useState<string>(data.baseType.value)
+
+  const [tableData, setTableData] = useState<PLCArrayDatatype['dimensions']>([])
+
+  useEffect(() => {
+    setTableData(data.dimensions)
+  }, [data.dimensions])
 
   useEffect(() => {
     setInitialValueData(data.initialValue || '')
@@ -63,6 +71,80 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       }
       updateDatatype(data.name, updatedData as PLCArrayDatatype)
     }, 100)()
+  }
+
+  const addNewRow = () => {
+    setTableData((prevRows) => {
+      const newRows = [...prevRows, { dimension: '' }]
+      setArrayTable({ selectedRow: newRows.length - 1 })
+      return newRows
+    })
+  }
+
+  const removeRow = () => {
+    setTableData((prevRows) => {
+      if (arrayTable.selectedRow !== null) {
+        const newRows = prevRows.filter((_, index) => index !== arrayTable.selectedRow)
+
+        const newFocusIndex = arrayTable.selectedRow === newRows.length ? newRows.length - 1 : arrayTable.selectedRow
+        setArrayTable({ selectedRow: newFocusIndex })
+
+        newRows.forEach(() => {
+          const optionalSchema = {
+            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
+          }
+          updateDatatype(data.name, optionalSchema as PLCArrayDatatype)
+        })
+        prevRows = newRows
+      }
+      return prevRows
+    })
+  }
+
+  const moveRowUp = () => {
+    setTableData((prevRows) => {
+      if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
+        const newRows = [...prevRows]
+        const temp = newRows[arrayTable.selectedRow]
+        newRows[arrayTable.selectedRow] = newRows[arrayTable.selectedRow - 1]
+        newRows[arrayTable.selectedRow - 1] = temp
+
+        const newFocusIndex = arrayTable.selectedRow - 1
+        setArrayTable({ selectedRow: newFocusIndex })
+
+        newRows.forEach(() => {
+          const optionalSchema = {
+            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
+          }
+          updateDatatype(data.name, optionalSchema as PLCArrayDatatype)
+        })
+        prevRows = newRows
+      }
+      return prevRows
+    })
+  }
+
+  const moveRowDown = () => {
+    setTableData((prevRows) => {
+      if (arrayTable.selectedRow !== null && arrayTable.selectedRow < prevRows.length - 1) {
+        const newRows = [...prevRows]
+        const temp = newRows[arrayTable.selectedRow]
+        newRows[arrayTable.selectedRow] = newRows[arrayTable.selectedRow + 1]
+        newRows[arrayTable.selectedRow + 1] = temp
+
+        const newFocusIndex = arrayTable.selectedRow + 1
+        setArrayTable({ selectedRow: newFocusIndex })
+
+        newRows.forEach(() => {
+          const optionalSchema = {
+            dimensions: newRows.map((row) => ({ dimension: row?.dimension })),
+          }
+          updateDatatype(data.name, optionalSchema as PLCArrayDatatype)
+        })
+        prevRows = newRows
+      }
+      return prevRows
+    })
   }
 
   return (
@@ -121,12 +203,45 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
           </div>
         </div>
       </div>
+      <div
+        aria-label='Array data type table actions container'
+        className='flex h-fit w-3/5 items-center justify-between'
+      >
+        <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
+          Dimensions
+        </p>
+        <div
+          aria-label='Data type table actions buttons container'
+          className='flex-start flex h-full w-2/5 *:rounded-md *:p-1'
+        >
+          <TableActionButton aria-label='Add table row button' onClick={addNewRow} id='add-new-row-button'>
+            <PlusIcon className='!stroke-brand' />
+          </TableActionButton>
+          <TableActionButton aria-label='Remove table row button' onClick={removeRow}>
+            <MinusIcon className='stroke-[#0464FB]' />
+          </TableActionButton>
+          <TableActionButton
+            aria-label='Move table row up button'
+            onClick={moveRowUp}
+            disabled={arrayTable.selectedRow === ROWS_NOT_SELECTED || arrayTable.selectedRow === 0}
+          >
+            <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
+          </TableActionButton>
+          <TableActionButton
+            aria-label='Move table row down button'
+            onClick={moveRowDown}
+            disabled={arrayTable.selectedRow === ROWS_NOT_SELECTED || arrayTable.selectedRow === tableData.length - 1}
+          >
+            <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
+          </TableActionButton>
+        </div>
+      </div>
 
       <DimensionsTable
         name={data.name}
-        dimensions={data.dimensions}
-        handleRowClick={(row) => setArrayTable({ selectedRow: row.id })}
-        selectedRow={parseInt(arrayTable.selectedRow)}
+        tableData={tableData}
+        handleRowClick={(row) => setArrayTable({ selectedRow: parseInt(row.id) })}
+        selectedRow={arrayTable.selectedRow}
       />
     </div>
   )
