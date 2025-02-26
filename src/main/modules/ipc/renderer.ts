@@ -351,7 +351,7 @@ const rendererProcessBridge = {
   // !! UNDER DEVELOPMENT !!
   setupCompilerEnvironment: (callback: (args: any) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
-    ipcRenderer.postMessage('compiler:setup-environment', [mainProcessPort])
+    ipcRenderer.postMessage('compiler:setup-environment', '', [mainProcessPort])
     rendererProcessPort.onmessage = (event) => callback(event.data)
     rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
   },

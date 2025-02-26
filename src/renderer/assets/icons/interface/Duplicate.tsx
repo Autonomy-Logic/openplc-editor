@@ -8,12 +8,7 @@ export const DuplicateIcon = (props: IIconProps) => {
   const sizeClasses = IconStyles.sizeClasses.small[size]
 
   return (
-    <svg
-      viewBox='0 0 21 21'
-      xmlns='http://www.w3.org/2000/svg'
-      className={cn(`${sizeClasses[size]}`, className)}
-      {...res}
-    >
+    <svg viewBox='0 0 21 21' xmlns='http://www.w3.org/2000/svg' className={cn(`${sizeClasses}`, className)} {...res}>
       <g fill='none' fillRule='evenodd' strokeLinecap='round' strokeLinejoin='round' transform='translate(2 2)'>
         <title>duplicate icon</title>
         <path d='m16.5 10.5v-8c0-1.1045695-.8954305-2-2-2h-8c-1.1045695 0-2 .8954305-2 2v8c0 1.1045695.8954305 2 2 2h8c1.1045695 0 2-.8954305 2-2z' />

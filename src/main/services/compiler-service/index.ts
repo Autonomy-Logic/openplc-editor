@@ -147,7 +147,7 @@ class CompilerService {
    * This will cleanup the old build files and create a new temporary build directory.
    */
   async setupEnvironment(mainProcessPort: MessagePortMain) {
-    const mockBoard = 'Arduino nano'
+    const mockBoard = 'Arduino Nano'
     const mockCore = 'arduino:avr'
     mainProcessPort.postMessage({ type: 'Default', message: 'Setting up the environment for compilation process' })
     // First step - Print Host info
@@ -167,7 +167,10 @@ class CompilerService {
     // Third - Install core if not installed
     const coreIsInstalled = await this.checkCoreInstallation(mockCore)
     if (!coreIsInstalled) {
-      mainProcessPort.postMessage({type: 'info', message: `No core found for ${mockBoard}.\n Installing ${mockCore} core...`})
+      mainProcessPort.postMessage({
+        type: 'info',
+        message: `No core found for ${mockBoard}.\n Installing ${mockCore} core...`,
+      })
       await this.installCore('arduino:avr')
     }
     mainProcessPort.postMessage({ type: 'info', message: `Core ${mockCore} installed successfully!` })
@@ -232,13 +235,13 @@ class CompilerService {
     const hostInfo = `
     ##################
     System Information
-    ##################
-    Operating System: ${hostOS}
-    Host Architecture: ${hostArchitecture}
-    Processor: ${processor}
-    Logical CPU Cores: ${logicalCPUCores}
-    CPU Model: ${cpuModel}
-    CPU Frequency: ${cpuFrequency}
+    ##################\n
+    Operating System: ${hostOS}\n
+    Host Architecture: ${hostArchitecture}\n
+    Processor: ${processor}\n
+    Logical CPU Cores: ${logicalCPUCores}\n
+    CPU Model: ${cpuModel}\n
+    CPU Frequency: ${cpuFrequency}\n
     `
 
     // Return the specifications to be printed on the user console.
@@ -263,6 +266,7 @@ class CompilerService {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
           installed_version: id.installed_version,
         }))
+        console.log('Installed cores ->', cores)
         if (stderr) console.error(`Error executing command: ${stderr}`)
         resolve(cores)
       })

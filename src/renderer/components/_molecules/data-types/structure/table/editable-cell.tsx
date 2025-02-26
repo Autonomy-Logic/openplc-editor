@@ -17,7 +17,7 @@ declare module '@tanstack/react-table' {
 
 type IEditableCellProps = CellContext<PLCStructureVariable, unknown> & { editable?: boolean }
 const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: IEditableCellProps) => {
-  const initialValue = getValue<string | undefined>()
+  const initialValue = getValue<string>()
   const { toast } = useToast()
   const [cellValue, setCellValue] = useState(initialValue)
 

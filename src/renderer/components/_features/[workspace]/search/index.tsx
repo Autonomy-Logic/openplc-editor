@@ -1,7 +1,7 @@
 import { CloseIcon } from '@root/renderer/assets'
 import { Accordion } from '@root/renderer/components/_atoms/accordion'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { TabsProps } from '@root/renderer/store/slices'
+import { Project, TabsProps } from '@root/renderer/store/slices'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
 
@@ -13,7 +13,7 @@ import {
   ProjectSearchTreeVariableLeaf,
 } from './display/tree-view'
 
-interface SearchResult {
+interface _SearchResult {
   searchID: string
   searchQuery: string
   projectName: string
@@ -42,7 +42,7 @@ interface SearchResult {
 }
 
 interface SearchProps {
-  items: SearchResult[]
+  items: Project[]
 }
 
 const Search = ({ items }: SearchProps) => {
@@ -115,7 +115,7 @@ const Search = ({ items }: SearchProps) => {
                         key={pouType}
                         branchTarget={pouType as 'function' | 'program' | 'function-block'}
                       >
-                        {item.functions.pous[pouType as 'function' | 'program' | 'function-block'].map(
+                        {(item.functions.pous[pouType as 'function' | 'program' | 'function-block'] ?? []).map(
                           (pou, pouIndex) =>
                             pou.variable || pou.language === 'st' || pou.language === 'il' ? (
                               <ProjectSearchTreeVariableBranch
