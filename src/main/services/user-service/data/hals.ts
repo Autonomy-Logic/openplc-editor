@@ -752,4 +752,7 @@ export const HALS_DATA = {
     source: 'stm32_f446zet_nucleo.cpp',
     version: '0',
   },
+  'OpenPLC Runtime': {
+    core: 'OpenPLC:Runtime',
+  },
 }

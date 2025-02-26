@@ -146,29 +146,33 @@ class CompilerService {
    * This function will be responsible for setting up the environment for the compiler service.
    * This will cleanup the old build files and create a new temporary build directory.
    */
-  async setupEnvironment(_mainProcessPort: MessagePortMain) {
+  async setupEnvironment(mainProcessPort: MessagePortMain) {
+    const mockBoard = 'Arduino nano'
+    const mockCore = 'arduino:avr'
+    mainProcessPort.postMessage({ type: 'Default', message: 'Setting up the environment for compilation process' })
     // First step - Print Host info
-    console.log(this.getHostInfo())
+    const hostInfo = this.getHostInfo()
+    mainProcessPort.postMessage({ type: 'info', message: hostInfo })
     // Second step - Check for the tools availability
     const toolsAvailability = await this.getToolsAvailabilityAndVersion()
-    console.log(toolsAvailability)
+    mainProcessPort.postMessage({ type: 'info', message: toolsAvailability })
     // Third step - Check for the cores availability
-    const installedCores = await this.getInstalledCores()
-    console.log(installedCores)
+    // const installedCores = await this.getInstalledCores()
+    // mainProcessPort.postMessage({ type: 'info', message: installedCores })
     // Fourth step - Check for the boards availability
     // First - Check if board has an additional configuration
-    const boardAdditionalConfigStatus = await this.checkForBoardAdditionalManagerUrl('arduino:avr')
-    console.log(boardAdditionalConfigStatus)
+    const boardAdditionalConfigStatus = await this.checkForBoardAdditionalManagerUrl(mockBoard)
+    mainProcessPort.postMessage({ type: 'info', message: boardAdditionalConfigStatus })
     // Second - Check if board is installed ????
     // Third - Install core if not installed
-    const coreIsInstalled = await this.checkCoreInstallation('arduino:avr')
+    const coreIsInstalled = await this.checkCoreInstallation(mockCore)
     if (!coreIsInstalled) {
-      console.log('Core not installed, installing now...')
+      mainProcessPort.postMessage({type: 'info', message: `No core found for ${mockBoard}.\n Installing ${mockCore} core...`})
       await this.installCore('arduino:avr')
     }
-    // Fourth - Run the core update index
-    await this.updateCoreIndex()
-    // Fifth step - Check for the libraries availability
+    mainProcessPort.postMessage({ type: 'info', message: `Core ${mockCore} installed successfully!` })
+    mainProcessPort.postMessage({ type: 'info', message: 'Environment setup finished\n Closing communication port...' })
+    mainProcessPort.close()
   }
 
   async #getArduinoVersion() {
