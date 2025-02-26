@@ -18,3 +18,6 @@ iec2c_mac   binary
 xml2st  binary
 resources/compilers/MacOS/xml2st/_internal/**/*  binary
 resources/compilers/Windows/xml2st/_internal/**/*  binary
+resources/compilers/MacOS/arduino-cli/**/*  binary
+resources/compilers/Windows/arduino-cli/**/*  binary
+resources/compilers/Linux/arduino-cli/**/*  binary

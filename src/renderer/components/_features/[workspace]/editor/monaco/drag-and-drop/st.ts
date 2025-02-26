@@ -7,7 +7,7 @@ export const parsePouToStText = (
     documentation?: string
     variables?: {
       name: string
-      class: string
+      class: string | undefined
       type: { definition: string; value: string }
     }[]
   },
