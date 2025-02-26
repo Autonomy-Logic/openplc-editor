@@ -112,6 +112,13 @@ const editorModelSchema = z.discriminatedUnion('type', [
     task: taskSchema,
     instance: instanceSchema,
   }),
+  z.object({
+    type: z.literal('plc-device'),
+    meta: z.object({
+      name: z.string(),
+      derivation: z.enum(['configuration', 'pin-mapping']),
+    }),
+  }),
 ])
 
 /** This is a zod schema for the editor slice state.
