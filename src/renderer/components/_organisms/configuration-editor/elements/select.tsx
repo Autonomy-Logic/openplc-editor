@@ -1,3 +1,5 @@
+import { cn } from '@root/utils'
+
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../_atoms'
 const SelectField = ({
   label,
@@ -30,7 +32,10 @@ const SelectField = ({
           aria-label={ariaLabel}
           withIndicator
           placeholder={placeholder}
-          className={`h-7 min-w-0 ${width ? `w-[${width}]` : 'flex-1'} flex items-center justify-between  rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850  dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-300`}
+          className={cn(
+            'flex h-7 min-w-0 items-center justify-between rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-300',
+            width ? `w-[${width}]` : 'flex-1',
+          )}
         />
         <SelectContent
           position='popper'
@@ -38,9 +43,10 @@ const SelectField = ({
           sideOffset={-28}
           className='box h-fit max-h-52 w-[--radix-select-trigger-width] overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
-          {options.map((option) => {
+          {options.map((option, idx) => {
             return (
               <SelectItem
+                key={idx}
                 className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                 value={option}
               >

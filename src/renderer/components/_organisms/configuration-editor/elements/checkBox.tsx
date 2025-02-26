@@ -26,7 +26,7 @@ const CheckBox = ({
         <CheckIcon className='stroke-brand' />
       </Checkbox.Indicator>
     </Checkbox.Root>
-    <label htmlFor={label} className='text-sm font-medium text-neutral-950 dark:text-white'>
+    <label htmlFor={id} className='text-sm font-medium text-neutral-950 dark:text-white'>
       {label}
     </label>
   </div>
