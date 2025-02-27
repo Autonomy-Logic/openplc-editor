@@ -36,7 +36,6 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   useEffect(() => {
     setTableData(data.dimensions)
-    console.log('data.dimensions', data.dimensions)
   }, [data.dimensions])
 
   useEffect(() => {
@@ -49,29 +48,25 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   const handleInitialValueChange = (e: ChangeEvent<HTMLInputElement>) => {
     setInitialValueData(e.target.value)
-    _.debounce(() => {
-      const updatedData = { ...data }
-      updatedData.initialValue = e.target.value
-      updateDatatype(data.name, updatedData as PLCArrayDatatype)
-    }, 1000)()
+    const updatedData = { ...data }
+    updatedData.initialValue = e.target.value
+    updateDatatype(data.name, updatedData as PLCArrayDatatype)
   }
 
   const onSelectValueChange = (selectedValue: string) => {
     setBaseType(selectedValue)
-    _.debounce(() => {
-      let isBaseType = false
-      baseTypes.forEach((type) => {
-        if (type === selectedValue) isBaseType = true
-      })
-      const updatedData = {
-        ...data,
-        type: {
-          value: selectedValue,
-          definition: isBaseType ? 'base-type' : 'user-data-type',
-        },
-      }
-      updateDatatype(data.name, updatedData as PLCArrayDatatype)
-    }, 100)()
+    let isBaseType = false
+    baseTypes.forEach((type) => {
+      if (type === selectedValue) isBaseType = true
+    })
+    const updatedData = {
+      ...data,
+      baseType: {
+        value: selectedValue,
+        definition: isBaseType ? 'base-type' : 'user-data-type',
+      },
+    }
+    updateDatatype(data.name, updatedData as PLCArrayDatatype)
   }
 
   const addNewRow = () => {
