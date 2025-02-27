@@ -319,7 +319,6 @@ const VariablesEditor = () => {
               <InputWithRef
                 id='description'
                 onBlur={handleDescriptionChange}
-                defaultValue={pouDescription}
                 value={pouDescription}
                 onChange={handleDescriptionValueChange}
                 className='h-full w-full max-w-80 rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
