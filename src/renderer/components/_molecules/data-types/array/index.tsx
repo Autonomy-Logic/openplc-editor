@@ -190,7 +190,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
             className='flex h-fit w-full items-center justify-end'
           >
             <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100 '>
-              Initial Value
+              Initial Value:
             </label>
             <InputWithRef
               onChange={handleInitialValueChange}
