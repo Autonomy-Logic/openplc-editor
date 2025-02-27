@@ -36,6 +36,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   useEffect(() => {
     setTableData(data.dimensions)
+    console.log('data.dimensions', data.dimensions)
   }, [data.dimensions])
 
   useEffect(() => {
@@ -77,6 +78,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     setTableData((prevRows) => {
       const newRows = [...prevRows, { dimension: '' }]
       setArrayTable({ selectedRow: newRows.length - 1 })
+      updateDatatype(data.name, { dimensions: newRows } as PLCArrayDatatype)
       return newRows
     })
   }
@@ -242,6 +244,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         tableData={tableData}
         handleRowClick={(row) => setArrayTable({ selectedRow: parseInt(row.id) })}
         selectedRow={arrayTable.selectedRow}
+        setArrayTable={setArrayTable}
       />
     </div>
   )

@@ -65,17 +65,6 @@ const TableRow = forwardRef<
         // all cells
         '[&>*:first-child]:border-l [&>*]:border-b [&>*]:border-r',
         '[&>*]:border-neutral-300 dark:[&>*]:border-neutral-800',
-        // add border above all header cells
-        // '[&:nth-child(2)>th]:border-t',
-        // '[&:nth-child(2)>th]:border-t-neutral-500',
-        // add border above the entire header row
-        // '[&:nth-child(2)]:border-t',
-        // '[&:nth-child(2)]:border-t-neutral-500',
-        // ensure the parent element has a border top
-        // 'border-t border-t-neutral-500',
-        // add border above the first row
-        // '[&:first-child]:border-t',
-        // '[&:first-child]:border-t-neutral-500',
         className,
         {
           '[&:first-child>td]:rounded-t-md [&:first-child>td]:border-t [&:first-child>td]:border-t-neutral-500':

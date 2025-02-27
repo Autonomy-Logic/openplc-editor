@@ -3,11 +3,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
-// import { useOpenPLCStore } from '@root/renderer/store'
-import { PLCArrayDatatype } from '@root/types/PLC/open-plc'
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { arrayValidation } from '@root/renderer/store/slices/project/validation/variables'
+import { PLCArrayDatatype, PLCDataType } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils/cn'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import React from 'react'
 
 import { DimensionCell } from './editable-cell'
@@ -17,18 +19,18 @@ type DataTypeDimensionsTableProps = {
   tableData: PLCArrayDatatype['dimensions']
   selectedRow: number
   handleRowClick: (row: HTMLTableRowElement) => void
+  setArrayTable: React.Dispatch<React.SetStateAction<{ selectedRow: number }>>
 }
 
-const DimensionsTable = ({ name, tableData, selectedRow, handleRowClick }: DataTypeDimensionsTableProps) => {
-  const [focusIndex, setFocusIndex] = useState<number | null>(null)
+const DimensionsTable = ({ name, tableData, selectedRow, handleRowClick, setArrayTable }: DataTypeDimensionsTableProps) => {
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
-  // const {
-  //   projectActions: { updateDatatype },
-  // } = useOpenPLCStore()
+  const {
+    projectActions: { updateDatatype },
+  } = useOpenPLCStore()
 
-  const columnHelper = createColumnHelper<{ dimension: unknown }>()
+  const columnHelper = createColumnHelper<{ dimension: string }>()
   const columns = React.useMemo(
     () => [
       columnHelper.accessor('dimension', {
@@ -39,95 +41,52 @@ const DimensionsTable = ({ name, tableData, selectedRow, handleRowClick }: DataT
 
         cell: (cellProps) => (
           <DimensionCell
-            key={cellProps.row.id}
-            // onInputChange={(value) => handleInputChange(value, cellProps.row.index)}
-            // onBlur={() => handleBlur(cellProps.row.index)}
             id={`dimension-input-${cellProps.row.index}`}
-            autoFocus={cellProps.row.index === focusIndex}
-            selectedRow={selectedRow}
+            key={cellProps.row.id}
+            onBlur={() => handleBlur(cellProps.row.index)}
+            selectedRow={selectedRow === cellProps.row.index ? selectedRow : -1}
             {...cellProps}
           />
         ),
       }),
     ],
-    [focusIndex, name, selectedRow],
+    [name, selectedRow],
   )
 
-  useEffect(() => {
-    if (focusIndex !== null) {
-      const inputElement = document.getElementById(`dimension-input-${focusIndex}`)
-      if (inputElement) {
-        inputElement.focus()
+  const handleBlur = (rowIndex: number) => {
+    const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement
+    const prevRows = tableData
+
+    if (inputElement) {
+      const inputValue = inputElement.value.trim()
+      const validation = arrayValidation({ value: inputValue })
+
+      if (!validation.ok || inputValue === '') {
+        const newRows = prevRows.filter((_, index) => index !== rowIndex)
+        const optionalSchema = {
+          name: name,
+          dimensions: newRows.map((row) => ({ dimension: row.dimension })),
+        }
+        updateDatatype(name, optionalSchema as PLCArrayDatatype)
+        setArrayTable({ selectedRow: -1 })
+        toast({
+          title: 'Invalid array',
+          description: `The array value is invalid. Pattern: "LEFT_number..RIGHT_number" and RIGHT must be GREATER than LEFT. Example: 0..10.`,
+          variant: 'fail',
+        })
+      } else {
+        const newRows = prevRows.map((row, index) => ({
+          ...row,
+          dimension: index === rowIndex ? inputValue : row.dimension,
+        }))
+        const optionalSchema = {
+          name: name,
+          dimensions: newRows.map((row) => ({ dimension: row.dimension })),
+        }
+        updateDatatype(name, optionalSchema as PLCDataType)
       }
     }
-  }, [focusIndex])
-
-  useEffect(() => {
-    setFocusIndex(selectedRow)
-  }, [selectedRow])
-
-  // const handleInputChange = (value: string, index: number) => {
-  //   setTableData((prevRows) => prevRows.map((row, i) => (i === index ? { ...row, dimension: value } : row)))
-  //   setFocusIndex(index)
-  // }
-
-  // const updateDimensions = (newDimensions: unknown[]) => {
-  //   newDimensions.map((row) => ({ dimension: row.dimension }))
-  // }
-
-  // const handleBlur = (rowIndex: number) => {
-  //   setTableData((prevRows) => {
-  //     const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement
-  //     if (inputElement) {
-  //       const inputValue = inputElement.value.trim()
-  //       const validation = arrayValidation({ value: inputValue })
-
-  //       if (!validation.ok || inputValue === '') {
-  //         const newRows = prevRows.filter((_, index) => index !== rowIndex)
-  //         updateDimensions(newRows)
-  //         setFocusIndex(null)
-  //         toast({
-  //           title: 'Invalid array',
-  //           description: `The array value is invalid. Pattern: "LEFT_number..RIGHT_number" and RIGHT must be GREATER than LEFT. Example: 0..10.`,
-  //           variant: 'fail',
-  //         })
-  //         removeRow()
-  //         return newRows
-  //       } else {
-  //         const newRows = prevRows.map((row, index) => ({
-  //           ...row,
-  //           dimension: index === rowIndex ? inputValue : row.dimension,
-  //         }))
-  //         const optionalSchema = {
-  //           name: name,
-  //           dimensions: newRows.map((row) => ({ dimension: row.dimension })),
-  //         }
-  //         updateDatatype(name, optionalSchema as PLCDataType)
-  //         updateDimensions(newRows)
-  //         return newRows
-  //       }
-  //     }
-  //     setFocusIndex(null)
-  //     return prevRows
-  //   })
-  // }
-
-  // const resetBorders = () => {
-  //   const parent = tableBodyRef.current
-  //   if (!parent?.children) return
-
-  //   const rows = Array.from(parent.children)
-  //   rows.forEach((row) => {
-  //     row.className = cn(
-  //       row.className,
-  //       '[&:last-child>td]:border-b-neutral-500 [&>td:first-child]:border-l-neutral-500 [&>td:last-child]:border-r-neutral-500 [&>td]:border-b-neutral-300',
-  //       '[&>td]:border-t-neutral-500',
-  //       'dark:[&>td:first-child]:border-l-neutral-500 dark:[&>td:last-child]:border-r-neutral-500 dark:[&>td]:border-b-neutral-800',
-  //       'dark:[&>td]:border-t-neutral-500',
-  //       'shadow-none dark:shadow-none',
-  //     )
-  //   })
-  // }
+  }
 
   const resetBorders = () => {
     const parent = tableBodyRef.current
