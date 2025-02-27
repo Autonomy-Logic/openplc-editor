@@ -14,10 +14,13 @@
 ##########################
 # Identification for binary files used as compilers/transpilers
 ##########################
-iec2c_mac   binary
+iec2c   binary
 xml2st  binary
 resources/compilers/MacOS/xml2st/_internal/**/*  binary
 resources/compilers/Windows/xml2st/_internal/**/*  binary
 resources/compilers/MacOS/arduino-cli/**/*  binary
 resources/compilers/Windows/arduino-cli/**/*  binary
 resources/compilers/Linux/arduino-cli/**/*  binary
+resources/compilers/MacOS/iec2c/**/*  binary
+resources/compilers/Windows/iec2c/**/*  binary
+resources/compilers/Linux/iec2c/**/*  binary

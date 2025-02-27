@@ -28,9 +28,11 @@
     "entitlements": "assets/entitlements.mac.plist",
     "entitlementsInherit": "assets/entitlements.mac.plist",
     "gatekeeperAssess": false,
-    "artifactName": "${productName}_${version}.${ext}"
+    "artifactName": "open_plc_editor_${version}.${ext}"
   },
   "dmg": {
+    "artifactName": "open_plc_editor_${version}.${ext}",
+    "title": "${productName}",
     "contents": [
       {
         "x": 130,
@@ -49,7 +51,7 @@
       "target": "default",
       "arch": ["x64"]
     },
-    "artifactName": "${productName}_${version}.${ext}"
+    "artifactName": "open_plc_editor_${version}.${ext}"
   },
   "linux": {
     "target": ["AppImage"],
