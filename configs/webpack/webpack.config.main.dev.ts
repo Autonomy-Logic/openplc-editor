@@ -37,6 +37,20 @@ const configuration: webpack.Configuration = {
     },
   },
 
+  module: {
+    rules: [
+      {
+        test: /\.ts?$/,
+        use: 'ts-loader',
+        exclude: /node_modules/,
+      },
+    ],
+  },
+
+  resolve: {
+    extensions: ['.ts', '.js'],
+  },
+
   plugins: [
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore

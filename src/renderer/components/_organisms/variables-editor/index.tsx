@@ -5,7 +5,7 @@ import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { VariablesTable as VariablesTableType } from '@root/renderer/store/slices'
 import { baseTypes } from '@root/shared/data'
-import { PLCVariable } from '@root/types/PLC/open-plc'
+import { BaseType, PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { ColumnFiltersState } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
@@ -227,7 +227,7 @@ const VariablesEditor = () => {
     })
   }
 
-  const handleReturnTypeChange = (value: string) => {
+  const handleReturnTypeChange = (value: BaseType) => {
     updatePouReturnType(editor.meta.name, value)
     // If function block, update the return type of the function
     if (!(editor.type === 'plc-textual' && editor.meta.pouType === 'function')) return
@@ -238,7 +238,7 @@ const VariablesEditor = () => {
       data: {
         type: {
           definition: 'base-type',
-          value: value.toLowerCase(),
+          value: value.toLowerCase() as BaseType,
         },
       },
     })

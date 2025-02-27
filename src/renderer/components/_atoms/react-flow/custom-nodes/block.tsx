@@ -139,8 +139,10 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
-    const libraryBlock: unknown = libraries.system
-      .flatMap((block) => block.pous)
+    const libraryBlock = libraries.system
+    // @ts-expect-error - type is dynamic
+    .flatMap((block) => block.pous)
+    // @ts-expect-error - type is dynamic
       .find((pou) => pou.name === blockNameValue)
 
     if (!libraryBlock) {

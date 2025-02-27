@@ -156,7 +156,7 @@ const PLCVariableSchema = z.object({
     }),
   ]),
   location: z.string(),
-  initialValue: z.string().optional(),
+  initialValue: z.string().or(z.null()).optional(),
   documentation: z.string(),
   debug: z.boolean(),
 })

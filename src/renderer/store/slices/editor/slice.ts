@@ -117,15 +117,14 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
-    updateModelStructure: (structure: { selectedRow: number; description: string }) =>
+    updateModelStructure: ({ selectedRow, description }) =>
       setState(
         produce((state: EditorState) => {
           const { editor } = state
           if (editor.type === 'plc-datatype') {
             editor.structure = {
-              ...editor.structure,
-              selectedRow: structure.selectedRow.toString(),
-              description: structure.description,
+              selectedRow: selectedRow ? selectedRow.toString() : editor.structure.selectedRow,
+              description: description ? description : editor.structure.description,
             }
           }
         }),

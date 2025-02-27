@@ -136,12 +136,10 @@ export const ArrayModal = ({
       return
     }
 
+    // @ts-expect-error - This is a valid operation. This is being fixed.
     const updatedVariables: PLCStructureVariable[] = structure.variable.map((variable) => {
       if (variable.name === variableName) {
-        let isBaseType = false
-        baseTypes.forEach((type) => {
-          if (type === typeValue) isBaseType = true
-        })
+        const isBaseType = baseTypes.includes(typeValue as BaseType)
         return {
           ...variable,
           type: {

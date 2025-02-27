@@ -5,7 +5,6 @@ import { join } from 'path'
 import { PLCProject, PLCProjectSchema } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { CreateJSONFile } from '../../utils'
-import { UserService } from '../user-service'
 import { baseJsonStructure } from './data'
 
 export type IProjectServiceResponse = {
@@ -156,7 +155,6 @@ class ProjectService {
       }
     }
 
-    await UserService.checkIfUserHistoryFolderExists()
     CreateJSONFile(filePath, JSON.stringify(baseJsonStructure, null, 2), 'data')
 
     const projectPath = join(filePath, 'data.json')

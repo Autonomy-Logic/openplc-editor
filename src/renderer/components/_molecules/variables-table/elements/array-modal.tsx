@@ -141,6 +141,7 @@ export const ArrayModal = ({
           definition: 'array',
           value: formatArrayName,
           data: {
+            // @ts-expect-error - This is a valid operation. This is being fixed.
             baseType: {
               definition: isBaseType ? 'base-type' : 'user-data-type',
               value: typeValue,

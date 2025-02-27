@@ -11,6 +11,7 @@ const variableXMLSchema = z.object({
         '@value': z.string(),
       }),
     })
+    .or(z.null())
     .optional(),
   documentation: z
     .object({

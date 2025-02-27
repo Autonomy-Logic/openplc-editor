@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
- 
- 
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
 import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
@@ -51,11 +47,12 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
             onBlur={() => handleBlur(cellProps.row.index)}
             id={`dimension-input-${cellProps.row.index}`}
             autoFocus={cellProps.row.index === focusIndex}
+            // @ts-expect-error - Incorrectly datatype implementation.
             name={name}
             dimensions={dimensions}
             selectedRow={selectedRow}
-             {...cellProps}
-        />
+            {...cellProps}
+          />
         ),
       }),
     ],
@@ -85,45 +82,46 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
   }
 
   const updateDimensions = (newDimensions: unknown[]) => {
+    // @ts-expect-error - Incorrectly datatype implementation. Is being fixed.
     newDimensions.map((row) => ({ dimension: row.dimension }))
   }
 
   const handleBlur = (rowIndex: number) => {
     setTableData((prevRows) => {
-      const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement;
+      const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement
       if (inputElement) {
-        const inputValue = inputElement.value.trim();
-        const validation = arrayValidation({ value: inputValue });
+        const inputValue = inputElement.value.trim()
+        const validation = arrayValidation({ value: inputValue })
 
         if (!validation.ok || inputValue === '') {
-          const newRows = prevRows.filter((_, index) => index !== rowIndex);
-          updateDimensions(newRows);
-          setFocusIndex(null);
+          const newRows = prevRows.filter((_, index) => index !== rowIndex)
+          updateDimensions(newRows)
+          setFocusIndex(null)
           toast({
             title: 'Invalid array',
             description: `The array value is invalid. Pattern: "LEFT_number..RIGHT_number" and RIGHT must be GREATER than LEFT. Example: 0..10.`,
             variant: 'fail',
           })
           removeRow()
-          return newRows;
+          return newRows
         } else {
           const newRows = prevRows.map((row, index) => ({
             ...row,
             dimension: index === rowIndex ? inputValue : row.dimension,
-          }));
+          }))
           const optionalSchema = {
             name: name,
             dimensions: newRows.map((row) => ({ dimension: row.dimension })),
-          };
-          updateDatatype(name, optionalSchema as PLCDataType);
-          updateDimensions(newRows);
-          return newRows;
+          }
+          updateDatatype(name, optionalSchema as PLCDataType)
+          updateDimensions(newRows)
+          return newRows
         }
       }
       setFocusIndex(null)
-      return prevRows;
-    });
-  };
+      return prevRows
+    })
+  }
 
   const addNewRow = () => {
     setTableData((prevRows) => {
@@ -219,15 +217,14 @@ const DimensionsTable = ({ name, dimensions, selectedRow, handleRowClick }: Data
 
   const setBorders = (indexFocus: number | null) => {
     const parent = tableBodyRef.current
-    if (!parent) return
-
-    ;[...parent.children].forEach((child, index) => {
+    if (!parent || !parent.children) return
+    Array.from(parent.children).forEach((child, index) => {
       if (index !== indexFocus) {
         child.className = cn(child.className, '[&>td]:border-neutral-500 dark:[&>td]:border-neutral-500')
       }
     })
 
-    const currentRow = parent.children[indexFocus]
+    const currentRow = indexFocus !== null ? parent.children[indexFocus] : null
     if (currentRow) {
       currentRow.className = cn(
         currentRow.className,

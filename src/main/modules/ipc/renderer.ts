@@ -348,6 +348,14 @@ const rendererProcessBridge = {
     rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
   },
 
+  // !! UNDER DEVELOPMENT !!
+  setupCompilerEnvironment: (callback: (args: any) => void) => {
+    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
+    ipcRenderer.postMessage('compiler:setup-environment', '', [mainProcessPort])
+    rendererProcessPort.onmessage = (event) => callback(event.data)
+    rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
+  },
+
   /**
    * Execute the generation of the C files.
    * Creates an instance using the MessageChannel API to establish a communication between the two Electron processes to generate the C files.
