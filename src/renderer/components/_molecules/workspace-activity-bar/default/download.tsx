@@ -35,6 +35,17 @@ const DownloadButton = () => {
       if (stdMessage) addLog({ id: uuidv4(), type: stdType, message: stdMessage })
     })
 
+  const setupBuildEnvironment = () => {
+    window.bridge.setupCompilerEnvironment((response: CompileResponseObject) => {
+      const { type, message } = response
+      if (message) {
+        message.split('\n').forEach((line) => {
+          addLog({ id: uuidv4(), type, message: line })
+        })
+      }
+    })
+  }
+
   const requestBuildProgram = async () => {
     addLog({ id: uuidv4(), type: 'info', message: 'Build process started' })
     addLog({ id: uuidv4(), type: 'warning', message: 'Verifying if build directory exist' })
@@ -49,6 +60,7 @@ const DownloadButton = () => {
         // !! REFACTOR THIS PART !!
         // This function call the compiler service to build the xml file into a program object.
         // This process need to be improved to handle the response and call the next stages in the compilation process.
+        setupBuildEnvironment()
         buildProgram()
         // !! REFACTOR THIS PART !!
         // This implementation is not correct, the build process should be handled by the compiler service and the function call should be handled by the bridge.

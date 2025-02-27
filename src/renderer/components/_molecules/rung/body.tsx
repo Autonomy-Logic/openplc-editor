@@ -335,7 +335,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
     (changes) => {
       const selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
       changes.forEach((change) => {
-        if (change.type) {
+        if (change.type === 'select') {
           const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
           if (!change.selected) {
             const index = selectedNodes.findIndex((n) => n.id === change.id)

@@ -43,7 +43,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       setState(
         produce(({ project }: ProjectSlice) => {
           project.meta = projectState.meta
-          project.data = projectState.data
+          project.data = projectState.data as ProjectSlice['project']['data']
         }),
       )
     },
@@ -103,6 +103,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           })
 
           if (!pouExists && !dataTypeExists) {
+            // @ts-expect-error - pouToBeCreated can not be from a valid type once it can be a rung object.
             project.data.pous.push(pouToBeCreated)
             response = { ok: true, message: 'Pou created successfully' }
           }
@@ -123,6 +124,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           const draft = project.data.pous.find((pou) => {
             return pou.data.name === dataToBeUpdated.name
           })
+          // @ts-expect-error - pouToBeCreated can not be from a valid type once it can be a rung object.
           if (draft) draft.data.body = dataToBeUpdated.content
         }),
       )

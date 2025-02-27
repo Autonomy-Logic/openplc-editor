@@ -42,8 +42,9 @@ if (process.env.NODE_ENV === 'production') {
   void loadSourceMapSupport()
 }
 
-void UserService.checkIfUserBaseSettingsExists()
-void UserService.checkIfUserHistoryFolderExists()
+// Create the user service instance to initialize the user settings and history files.
+new UserService()
+
 // Retrieves the system information
 const systemInfo = platform()
 // The options to use when creating the titlebar. Type comes from electron.
@@ -272,19 +273,27 @@ const createMainWindow = async () => {
   const menuBuilder = new MenuBuilder(mainWindow)
   void menuBuilder.buildMenu()
 
+  /**
+   * Creates a singleton instance for project service, which will be used across the entire application
+   */
   const projectService = new ProjectService(mainWindow)
+
+  /**
+   * Creates a singleton instance for compiler service, which will be used across the entire application
+   */
+  const compilerService = new CompilerService()
 
   const mainIpcModule = new MainProcessBridge({
     mainWindow,
     ipcMain,
     projectService,
-    compilerService: CompilerService,
+    compilerService,
     store,
     menuBuilder,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
-  // Remove this if your app does not use auto updates;
 
+  // Remove this if your app does not use auto updates;
   new AppUpdater()
 }
 

@@ -140,6 +140,7 @@ const TaskTable = ({ tableData, selectedRow, handleRowClick }: PLCTaskTableProps
       updateData: (rowIndex, columnId, value) => {
         return updateTask({
           rowId: rowIndex,
+          // @ts-expect-error - The data value is a literal type that need to be parsed. This is being fixed.
           data: {
             [columnId]: value,
           },

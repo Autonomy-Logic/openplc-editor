@@ -8,7 +8,7 @@ const DTBaseTypeContainer = () => {
       <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
         Base type
       </label>
-      <Select aria-label='Array data type base type select' id='select-base-type'>
+      <Select aria-label='Array data type base type select'>
         <SelectTrigger
           withIndicator
           placeholder='Base type'
@@ -20,9 +20,10 @@ const DTBaseTypeContainer = () => {
           sideOffset={-28}
           className='box h-fit w-[--radix-select-trigger-width] overflow-hidden overflow-y-scroll rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
-          {baseTypes.map((type) => {
+          {baseTypes.map((type, idx) => {
             return (
               <SelectItem
+                key={idx}
                 value={type}
                 className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
               >

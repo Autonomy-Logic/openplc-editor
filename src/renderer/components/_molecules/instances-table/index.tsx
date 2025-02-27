@@ -9,7 +9,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import EditableNameCell from './editable-cell'
 import { SelectableProgramCell, SelectableTaskCell } from './selectable-cell'
 
-
 const columnHelper = createColumnHelper<PLCInstance>()
 const columns = [
   columnHelper.accessor('name', {
@@ -116,6 +115,7 @@ const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstances
       updateData: (rowIndex, columnId, value) => {
         return updateInstance({
           rowId: rowIndex,
+          // @ts-expect-error - The data value is a literal type that need to be parsed
           data: { [columnId]: value },
         })
       },

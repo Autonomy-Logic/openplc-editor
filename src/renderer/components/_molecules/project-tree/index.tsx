@@ -68,7 +68,7 @@ const ProjectTreeRoot = ({ children, label, ...res }: IProjectTreeRootProps) => 
   )
 }
 
-type IProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
+type ProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
   branchTarget: 'data-type' | 'function' | 'function-block' | 'program' | 'resource' | 'device'
   children?: ReactNode
 }
@@ -81,7 +81,7 @@ const BranchSources = {
   resource: { BranchIcon: ResourceIcon, label: 'Resource' },
   device: { BranchIcon: DeviceIcon, label: 'Device' },
 }
-const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranchProps) => {
+const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranchProps) => {
   const {
     project: {
       data: { pous, dataTypes },
@@ -102,7 +102,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: IProjectTreeBranc
         className='flex w-full cursor-pointer flex-row items-center gap-1 py-1 pl-[18px] hover:bg-slate-50 dark:hover:bg-neutral-900'
         onClick={hasAssociatedPou ? handleBranchVisibility : undefined}
       >
-        {hasAssociatedPou || branchTarget === 'device' ? (
+        {hasAssociatedPou ? (
           <ArrowIcon
             direction='right'
             className={cn(

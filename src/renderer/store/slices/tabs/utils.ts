@@ -106,11 +106,12 @@ const CreateResourceEditor = (name = 'resource'): EditorModel => {
 }
 
 const CreateDeviceEditor = (name = 'device', derivation: 'configuration' | 'pin-mapping'): EditorModel => {
+  const errorHandler = name as 'Pin Mapping' | 'Configuration'
   if (derivation) {
     const editor = CreateEditorObject({
       type: 'plc-device',
       meta: {
-        name,
+        name: errorHandler,
         derivation,
       },
     })

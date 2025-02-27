@@ -8,7 +8,7 @@ import { TStoreType } from '../store'
 export type MainIpcModule = {
   ipcMain: IpcMain
   mainWindow: InstanceType<typeof BrowserWindow> | null
-  compilerService: typeof CompilerService
+  compilerService: InstanceType<typeof CompilerService>
   projectService: InstanceType<typeof ProjectService>
   store: TStoreType
   setupMainIpcListener: () => void
@@ -21,7 +21,7 @@ export type MainIpcModule = {
 export type MainIpcModuleConstructor = {
   ipcMain: IpcMain
   mainWindow: InstanceType<typeof BrowserWindow> | null
-  compilerService: typeof CompilerService
+  compilerService: InstanceType<typeof CompilerService>
   projectService: InstanceType<typeof ProjectService>
   store: TStoreType
   menuBuilder: InstanceType<typeof MenuBuilder>

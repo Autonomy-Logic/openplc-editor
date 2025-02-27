@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
