@@ -70,10 +70,10 @@ export const parseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
                       type: {
                         [variable.type.value.toUpperCase()]: '',
                       },
-                      initialValue: variable.initialValue
+                      initialValue: variable.initialValue?.simpleValue.value
                         ? {
                             simpleValue: {
-                              '@value': variable.initialValue.simpleValue.value,
+                              '@value': variable.initialValue?.simpleValue.value,
                             },
                           }
                         : undefined,
@@ -84,10 +84,10 @@ export const parseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
                       type: {
                         derived: { '@name': variable.type.value },
                       },
-                      initialValue: variable.initialValue
+                      initialValue: variable.initialValue?.simpleValue.value
                         ? {
                             simpleValue: {
-                              '@value': variable.initialValue.simpleValue.value,
+                              '@value': variable.initialValue?.simpleValue.value,
                             },
                           }
                         : undefined,

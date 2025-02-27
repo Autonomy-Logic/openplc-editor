@@ -13,11 +13,13 @@ const dataTypeSchema = z.object({
         enum: dataTypeEnumSchema.optional(),
         struct: dataTypeStructSchema.optional(),
       }),
-      initialValue: z.object({
-        simpleValue: z.object({
-          '@value': z.string(),
-        }),
-      }).optional(),
+      initialValue: z
+        .object({
+          simpleValue: z.object({
+            '@value': z.string(),
+          }),
+        })
+        .optional(),
     }),
   ),
 })
