@@ -33,6 +33,7 @@
   "dmg": {
     "artifactName": "${productName}_${version}.${ext}",
     "title": "${productName}",
+    "format": "UDRW",
     "contents": [
       {
         "x": 130,

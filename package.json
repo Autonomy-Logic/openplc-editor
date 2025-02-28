@@ -16,7 +16,7 @@
     "lint:fix": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx} --debug --fix",
     "format": "cross-env NODE_ENV=development prettier --write ./src/**/*.{js,ts,jsx,tsx}",
     "postinstall": "ts-node scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
-    "package": "ts-node scripts/clean.js dist && npm run build && cross-env DEBUG_DMG=true electron-builder build --publish never && npm run build:dll",
+    "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "prestart": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.dev.ts",
     "start:dev": "ts-node scripts/check-port-in-use.js && npm run prestart && npm run start:renderer",
