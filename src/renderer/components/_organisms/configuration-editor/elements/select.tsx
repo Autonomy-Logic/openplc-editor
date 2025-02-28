@@ -1,6 +1,8 @@
+import { ScrollArea } from '@radix-ui/react-scroll-area'
 import { cn } from '@root/utils'
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../_atoms'
+
 const SelectField = ({
   label,
   placeholder,
@@ -38,24 +40,23 @@ const SelectField = ({
           )}
         />
         <SelectContent
-          position='popper'
           side='bottom'
           sideOffset={-28}
-          className='box h-fit max-h-52 w-[--radix-select-trigger-width] overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
+          className='box max-h-52 w-[--radix-select-trigger-width] rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
-          {options.map((option, idx) => {
-            return (
+          <ScrollArea className="max-h-52 overflow-y-auto">
+            {options.map((option, idx) => (
               <SelectItem
                 key={idx}
                 className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                 value={option}
               >
                 <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                  <span>{option}</span>
+                  {option}
                 </span>
               </SelectItem>
-            )
-          })}
+            ))}
+          </ScrollArea>
         </SelectContent>
       </Select>
     </div>
