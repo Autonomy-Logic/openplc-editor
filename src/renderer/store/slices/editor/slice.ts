@@ -123,7 +123,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
           const { editor } = state
           if (editor.type === 'plc-datatype') {
             editor.structure = {
-              selectedRow: selectedRow ? selectedRow.toString() : editor.structure.selectedRow,
+              selectedRow: selectedRow !== undefined ? selectedRow.toString() : editor.structure.selectedRow,
               description: description ? description : editor.structure.description,
             }
           }

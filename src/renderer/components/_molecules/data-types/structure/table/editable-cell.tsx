@@ -42,7 +42,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: I
     const validation = validateVariableName(cellValue ?? '', existingVariableNames, initialValue)
 
     if (!validation.valid) {
-      toast({ title: 'Erro', description: validation.message, variant: 'fail' })
+      toast({ title: 'Error', description: validation.message, variant: 'fail' })
       setCellValue(initialValue)
       return
     }
