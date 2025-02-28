@@ -1,5 +1,5 @@
-import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { ScrollArea } from '@radix-ui/react-scroll-area'
+import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -199,7 +199,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
             <InputWithRef
               onChange={handleInitialValueChange}
               value={initialValueData}
-              className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 focus-within:border-brand focus:border-brand focus:outline-none dark:border-neutral-800 dark:border-neutral-800 dark:bg-neutral-950 dark:bg-neutral-950 dark:text-neutral-100'
+              className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 focus-within:border-brand focus:border-brand focus:outline-none dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
             />
           </div>
         </div>
