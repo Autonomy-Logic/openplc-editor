@@ -27,9 +27,8 @@ const SelectableTypeCell = ({
 
   const VariableTypes = [
     { definition: 'base-type', values: baseTypeSchema.options },
-    { definition: 'user-data-type', values: dataTypes.map((dataType) => dataType.name) }, 
+    { definition: 'user-data-type', values: dataTypes.map((dataType) => dataType.name) },
   ]
-  
 
   const { value, definition } = getValue<PLCStructureVariable['type']>()
 
@@ -45,7 +44,7 @@ const SelectableTypeCell = ({
   ) => {
     setCellValue(value)
     table.options.meta?.updateData(index, id, { definition, value })
-    
+
   }
 
   useEffect(() => {

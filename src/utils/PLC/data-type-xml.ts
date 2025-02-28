@@ -18,7 +18,11 @@ export const parseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
                 }
               }),
               baseType: {
-                [dataType.baseType.definition === 'user-data-type' ? 'derived' : dataType.baseType.value.toUpperCase()]:
+                [dataType.baseType.definition === 'user-data-type'
+                  ? 'derived'
+                  : dataType.baseType.value === 'string'
+                    ? 'string'
+                    : dataType.baseType.value.toUpperCase()]:
                   dataType.baseType.definition === 'user-data-type' ? { '@name': dataType.baseType.value } : '',
               },
             },
@@ -68,12 +72,12 @@ export const parseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
                     return {
                       '@name': variable.name,
                       type: {
-                        [variable.type.value.toUpperCase()]: '',
+                        [variable.type.value === 'string' ? 'string' : variable.type.value.toUpperCase()]: '',
                       },
-                      initialValue: variable.initialValue
+                      initialValue: variable.initialValue?.simpleValue.value
                         ? {
                             simpleValue: {
-                              '@value': variable.initialValue.simpleValue.value,
+                              '@value': variable.initialValue?.simpleValue.value,
                             },
                           }
                         : undefined,
@@ -84,10 +88,10 @@ export const parseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
                       type: {
                         derived: { '@name': variable.type.value },
                       },
-                      initialValue: variable.initialValue
+                      initialValue: variable.initialValue?.simpleValue.value
                         ? {
                             simpleValue: {
-                              '@value': variable.initialValue.simpleValue.value,
+                              '@value': variable.initialValue?.simpleValue.value,
                             },
                           }
                         : undefined,
@@ -108,7 +112,9 @@ export const parseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
                           baseType: {
                             [variable.type.data.baseType.definition === 'user-data-type'
                               ? 'derived'
-                              : variable.type.data.baseType.value.toUpperCase()]:
+                              : variable.type.data.baseType.value === 'string'
+                                ? 'string'
+                                : variable.type.data.baseType.value.toUpperCase()]:
                               variable.type.data.baseType.definition === 'user-data-type'
                                 ? { '@name': variable.type.data.baseType.value }
                                 : '',

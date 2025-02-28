@@ -240,13 +240,13 @@ export const ArrayModal = ({
                   aria-label='Move table row up button'
                   onClick={() => handleRearrangeDimensions(Number(selectedInput), 'up')}
                 >
-                  <StickArrowIcon direction='up' />
+                  <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
                 </TableActionButton>
                 <TableActionButton
                   aria-label='Move table row down button'
                   onClick={() => handleRearrangeDimensions(Number(selectedInput), 'down')}
                 >
-                  <StickArrowIcon direction='down' />
+                  <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
                 </TableActionButton>
               </div>
             </div>
