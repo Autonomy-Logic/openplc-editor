@@ -92,6 +92,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
                   {allTypes.map((type) => {
                     return (
                       <SelectItem
+                        key={type}
                         value={type}
                         className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
                       >

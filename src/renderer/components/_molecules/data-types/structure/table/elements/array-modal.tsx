@@ -209,6 +209,7 @@ export const ArrayModal = ({
                   <ScrollArea className='max-h-[300px] overflow-y-auto'>
                     {allTypes.map((type) => (
                       <SelectItem
+                        key={type}
                         value={type}
                         className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
                       >
