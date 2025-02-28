@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../
 import { buildHandle, CustomHandle } from './handle'
 import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
-//
+
 export type BlockVariant = {
   name: string
   type: string
@@ -140,9 +140,9 @@ export const BlockNodeElement = <T extends object>({
     }
 
     const libraryBlock = libraries.system
-    // @ts-expect-error - type is dynamic
-    .flatMap((block) => block.pous)
-    // @ts-expect-error - type is dynamic
+      // @ts-expect-error - type is dynamic
+      .flatMap((block) => block.pous)
+      // @ts-expect-error - type is dynamic
       .find((pou) => pou.name === blockNameValue)
 
     if (!libraryBlock) {
@@ -567,7 +567,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
         </Tooltip>
       </TooltipProvider>
       <div
-        className='absolute -top-2'
+        className='absolute -top-[10px]'
         style={{
           width: width ?? DEFAULT_BLOCK_WIDTH,
         }}
@@ -577,6 +577,38 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             textAreaValue={blockVariableValue}
             setTextAreaValue={setBlockVariableValue}
             handleSubmit={handleSubmitBlockVariableOnTextareaBlur}
+            onFocus={() => {
+              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+                nodeId: id ?? '',
+              })
+              if (!node || !rung) return
+              updateNode({
+                editorName: editor.meta.name,
+                nodeId: node.id,
+                rungId: rung.id,
+                node: {
+                  ...node,
+                  draggable: false,
+                },
+              })
+              return
+            }}
+            onBlur={() => {
+              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+                nodeId: id ?? '',
+              })
+              if (!node || !rung) return
+              updateNode({
+                editorName: editor.meta.name,
+                nodeId: node.id,
+                rungId: rung.id,
+                node: {
+                  ...node,
+                  draggable: node.data.draggable as boolean,
+                },
+              })
+              return
+            }}
             inputHeight={{
               height: 13,
               scrollLimiter: 14,

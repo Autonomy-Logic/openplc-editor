@@ -129,13 +129,17 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
             'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
             textAreaClassName,
           )}
-          onFocus={() => setInputFocus(true)}
-          onBlur={() => {
+          onFocus={(e) => {
+            setInputFocus(true)
+            props.onFocus?.(e)
+          }}
+          onBlur={(e) => {
             if (inputRef.current && highlightDivRef.current) {
               inputRef.current.scrollTop = 0
               highlightDivRef.current.scrollTop = 0
             }
             if (canSubmit && handleSubmit) handleSubmit()
+            props.onBlur?.(e)
             setCanSubmit(true)
           }}
           onScroll={(e) => onScrollHandler(e)}
