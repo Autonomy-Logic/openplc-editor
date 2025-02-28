@@ -281,6 +281,38 @@ export const Contact = (block: ContactProps) => {
             ref={inputVariableRef}
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
+            onFocus={() => {
+              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+                nodeId: id ?? '',
+              })
+              if (!node || !rung) return
+              updateNode({
+                editorName: editor.meta.name,
+                nodeId: node.id,
+                rungId: rung.id,
+                node: {
+                  ...node,
+                  draggable: false,
+                },
+              })
+              return
+            }}
+            onBlur={() => {
+              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+                nodeId: id ?? '',
+              })
+              if (!node || !rung) return
+              updateNode({
+                editorName: editor.meta.name,
+                nodeId: node.id,
+                rungId: rung.id,
+                node: {
+                  ...node,
+                  draggable: node.data.draggable as boolean,
+                },
+              })
+              return
+            }}
             onChange={onChangeHandler}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
