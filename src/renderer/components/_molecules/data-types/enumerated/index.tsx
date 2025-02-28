@@ -131,7 +131,9 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
               Initial Value:
             </label>
             <Select
-              onValueChange={(value) => (value === 'none' ? setInitialValueData('') : setInitialValueData(value))}
+              onValueChange={(value) =>
+                value === 'none' ? handleInitialValueChange('') : handleInitialValueChange(value)
+              }
               value={initialValueData === '' ? '' : initialValueData}
             >
               <SelectTrigger
@@ -144,7 +146,6 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
                 <SelectItem
                   value='none'
                   className='flex h-8 w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                  onClick={() => setInitialValueData('')}
                 >
                   <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'></span>
                 </SelectItem>
@@ -155,7 +156,6 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
                         key={value.description}
                         value={value.description}
                         className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                        onClick={() => handleInitialValueChange(value.description)}
                       >
                         <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
                           {value.description}

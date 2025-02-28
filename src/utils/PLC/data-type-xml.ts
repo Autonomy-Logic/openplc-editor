@@ -18,7 +18,11 @@ export const parseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
                 }
               }),
               baseType: {
-                [dataType.baseType.definition === 'user-data-type' ? 'derived' : dataType.baseType.value.toUpperCase()]:
+                [dataType.baseType.definition === 'user-data-type'
+                  ? 'derived'
+                  : dataType.baseType.value === 'string'
+                    ? 'string'
+                    : dataType.baseType.value.toUpperCase()]:
                   dataType.baseType.definition === 'user-data-type' ? { '@name': dataType.baseType.value } : '',
               },
             },
