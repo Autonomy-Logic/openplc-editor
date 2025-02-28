@@ -88,7 +88,7 @@ const SelectableTypeCell = ({
               <PrimitiveDropdown.Portal>
                 <PrimitiveDropdown.SubContent
                   sideOffset={5}
-                  className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                  className='box max-h-[300px] w-[200px] overflow-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
                 >
                   {scope.values.map((value) => (
                     <PrimitiveDropdown.Item

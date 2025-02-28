@@ -7,6 +7,7 @@ const foldersToRemove = [
   webpackPaths.distPath,
   webpackPaths.buildPath,
   webpackPaths.dllPath,
+  '/tmp/*.dmg'
 ];
 
 foldersToRemove.forEach((folder) => {

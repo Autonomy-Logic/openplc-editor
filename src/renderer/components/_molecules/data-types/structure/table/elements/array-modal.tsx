@@ -1,3 +1,4 @@
+import { ScrollArea } from '@radix-ui/react-scroll-area'
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
@@ -203,18 +204,21 @@ export const ArrayModal = ({
                   position='popper'
                   side='bottom'
                   sideOffset={-28}
-                  className='box z-[999] h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                  className='box z-[999] max-h-[300px] w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
                 >
-                  {allTypes.map((type) => (
-                    <SelectItem
-                      value={type}
-                      className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                    >
-                      <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                        {type.toUpperCase()}
-                      </span>
-                    </SelectItem>
-                  ))}
+                  <ScrollArea className='max-h-[300px] overflow-y-auto'>
+                    {allTypes.map((type) => (
+                      <SelectItem
+                        key={type}
+                        value={type}
+                        className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                      >
+                        <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {type.toUpperCase()}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </ScrollArea>
                 </SelectContent>
               </Select>
             </div>
