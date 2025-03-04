@@ -211,36 +211,6 @@ const Project = () => {
               })
             }
           />
-          <ProjectTreeBranch branchTarget='device'>
-            <ProjectTreeLeaf
-              key='Configuration'
-              leafLang='devConfig'
-              label='Configuration'
-              /** Todo: Update the tab state */
-              onClick={() =>
-                handleCreateTab({
-                  name: 'Configuration',
-                  path: `/data/configuration/device/configuration`,
-                  elementType: { type: 'device', derivation: 'configuration' },
-                })
-              }
-            />
-            <ProjectTreeLeaf
-              leafLang='devPin'
-              key='Pin Mapping'
-              label='Pin Mapping'
-              /** Todo: Update the tab state */
-              onClick={() =>
-                handleCreateTab({
-                  name: 'Pin Mapping',
-                  path: `/data/configuration/device/pin-mapping`,
-                  elementType: { type: 'device', derivation: 'pin-mapping' },
-                })
-              }
-            />
-          </ProjectTreeBranch>
-          {/** Maybe a divider component */}
-          {/* <ProjectTreeBranch branchTarget='' label='Resources' /> */}
         </ProjectTreeRoot>
       </div>
     </div>
@@ -248,3 +218,32 @@ const Project = () => {
 }
 
 export { Project }
+
+// <ProjectTreeBranch branchTarget='device'>
+//             <ProjectTreeLeaf
+//               key='Configuration'
+//               leafLang='devConfig'
+//               label='Configuration'
+//               /** Todo: Update the tab state */
+//               onClick={() =>
+//                 handleCreateTab({
+//                   name: 'Configuration',
+//                   path: `/data/configuration/device/configuration`,
+//                   elementType: { type: 'device', derivation: 'configuration' },
+//                 })
+//               }
+//             />
+//             <ProjectTreeLeaf
+//               leafLang='devPin'
+//               key='Pin Mapping'
+//               label='Pin Mapping'
+//               /** Todo: Update the tab state */
+//               onClick={() =>
+//                 handleCreateTab({
+//                   name: 'Pin Mapping',
+//                   path: `/data/configuration/device/pin-mapping`,
+//                   elementType: { type: 'device', derivation: 'pin-mapping' },
+//                 })
+//               }
+//             />
+//           </ProjectTreeBranch>
