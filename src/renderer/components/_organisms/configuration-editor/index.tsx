@@ -1,5 +1,5 @@
 import { cn } from '@root/utils'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { deviceType } from './device'
 import { CheckBox } from './elements/checkBox'
@@ -94,31 +94,41 @@ const DeviceConfiguration = ({
   serialPort: string
   setSerialPort: (value: string) => void
   serialPortsOptions: string[]
-}) => (
-  <div className='flex h-full w-1/2 flex-col gap-6'>
-    <div className='h-[60%]' />
-    <div className='flex h-[40%] flex-col items-center justify-center'>
-      <div className='flex flex-col gap-3'>
-        <SelectField
-          label='Device'
-          placeholder={selectDevice}
-          setSelectedOption={setSelectDevice}
-          options={deviceType}
-          ariaLabel='Device select'
-        />
-        <SelectField
-          options={serialPortsOptions}
-          setSelectedOption={setSerialPort}
-          label='Programming Port'
-          placeholder={serialPort}
-          width='188px'
-          ariaLabel='Programming port select'
-        />
-        <DeviceSpecs />
+}) => {
+  useEffect(() => {
+    const getSerialPorts = async () => {
+      const ports = await window.bridge.listSerialPorts()
+      console.log(ports)
+    }
+    void getSerialPorts()
+  }, [])
+
+  return (
+    <div className='flex h-full w-1/2 flex-col gap-6'>
+      <div className='h-[60%]' />
+      <div className='flex h-[40%] flex-col items-center justify-center'>
+        <div className='flex flex-col gap-3'>
+          <SelectField
+            label='Device'
+            placeholder={selectDevice}
+            setSelectedOption={setSelectDevice}
+            options={deviceType}
+            ariaLabel='Device select'
+          />
+          <SelectField
+            options={serialPortsOptions}
+            setSelectedOption={setSerialPort}
+            label='Programming Port'
+            placeholder={serialPort}
+            width='188px'
+            ariaLabel='Programming port select'
+          />
+          <DeviceSpecs />
+        </div>
       </div>
     </div>
-  </div>
-)
+  )
+}
 
 const DeviceSpecs = () => (
   <div className='flex flex-col gap-1.5 text-xs font-medium text-neutral-850 dark:text-neutral-300'>

@@ -26,14 +26,24 @@ class MainProcessBridge implements MainIpcModule {
   store
   compilerService
   menuBuilder
+  hardwareService
 
-  constructor({ ipcMain, mainWindow, projectService, store, compilerService, menuBuilder }: MainIpcModuleConstructor) {
+  constructor({
+    ipcMain,
+    mainWindow,
+    projectService,
+    store,
+    compilerService,
+    menuBuilder,
+    hardwareService,
+  }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
     this.projectService = projectService
     this.compilerService = compilerService
     this.store = store
     this.menuBuilder = menuBuilder
+    this.hardwareService = hardwareService
   }
 
   setupMainIpcListener() {
@@ -162,6 +172,7 @@ class MainProcessBridge implements MainIpcModule {
       (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data']) =>
         this.compilerService.buildXmlFile(pathToUserProject, dataToCreateXml),
     )
+    this.ipcMain.handle('hardware:list-serial-ports', (_ev) => this.hardwareService.listSerialPorts())
     /**
      * This is a mock implementation to be used as a presentation.
      * !! Do not use this on production !!
