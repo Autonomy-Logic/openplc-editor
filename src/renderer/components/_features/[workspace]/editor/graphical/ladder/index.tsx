@@ -17,7 +17,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CreateRung } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/graphical-editor/ladder/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { RungState, zodFlowSchema } from '@root/renderer/store/slices'
+import { RungState, zodLadderFlowSchema } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -25,15 +25,15 @@ import { v4 as uuidv4 } from 'uuid'
 
 export default function LadderEditor() {
   const {
-    flows,
+    ladderFlows,
     editor,
-    flowActions,
+    ladderFlowActions,
     searchNodePosition,
     projectActions: { updatePou },
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()
 
-  const flow = flows.find((flow) => flow.name === editor.meta.name)
+  const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
   const rungs = flow?.rungs || []
   const flowUpdated = flow?.updated
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
@@ -56,7 +56,7 @@ export default function LadderEditor() {
   useEffect(() => {
     if (!flowUpdated) return
 
-    const flowSchema = zodFlowSchema.safeParse(flow)
+    const flowSchema = zodLadderFlowSchema.safeParse(flow)
     if (!flowSchema.success) return
 
     updatePou({
@@ -70,7 +70,7 @@ export default function LadderEditor() {
     /**
      * TODO: Verify if this is method is declared
      */
-    flowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
+    ladderFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
     setEditingState('unsaved')
   }, [flowUpdated === true])
 
@@ -84,7 +84,7 @@ export default function LadderEditor() {
 
   const handleAddNewRung = () => {
     const defaultViewport: [number, number] = [300, 100]
-    flowActions.startLadderRung({
+    ladderFlowActions.startLadderRung({
       editorName: editor.meta.name,
       rungId: `rung_${editor.meta.name}_${uuidv4()}`,
       defaultBounds: defaultViewport,
@@ -130,11 +130,11 @@ export default function LadderEditor() {
     auxRungs.splice(destinationIndex, 0, removed)
 
     try {
-      flowActions.setRungs({ editorName: editor.meta.name, rungs: auxRungs })
+      ladderFlowActions.setRungs({ editorName: editor.meta.name, rungs: auxRungs })
     } catch (error) {
       console.error('Failed to update rungs:', error)
       // Recover the original state
-      flowActions.setRungs({ editorName: editor.meta.name, rungs: originalRungs })
+      ladderFlowActions.setRungs({ editorName: editor.meta.name, rungs: originalRungs })
       // Notify the user
       console.error('Failed to reorder rungs. The operation has been reverted.')
     }

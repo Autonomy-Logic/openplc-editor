@@ -44,14 +44,14 @@ const zodRungStateSchema = z.object({
 })
 type ZodRungType = z.infer<typeof zodRungStateSchema>
 
-const zodFlowSchema = z.object({
+const zodLadderFlowSchema = z.object({
   name: z.string(),
   rungs: z.array(zodRungStateSchema).default([]),
 })
-type ZodFlowType = z.infer<typeof zodFlowSchema>
+type ZodLadderFlowType = z.infer<typeof zodLadderFlowSchema>
 
 const zodFlowStateSchema = z.object({
-  flows: z.array(zodFlowSchema),
+  ladderFlows: z.array(zodLadderFlowSchema),
 })
 type ZodFlowState = z.infer<typeof zodFlowStateSchema>
 
@@ -72,20 +72,20 @@ type RungState = {
   edges: Edge[]
 }
 
-type FlowType = {
+type LadderFlowType = {
   name: string
   updated: boolean
   rungs: RungState[]
 }
 
-type FlowState = {
-  flows: FlowType[]
+type LadderFlowState = {
+  ladderFlows: LadderFlowType[]
 }
 
-type FlowActions = {
-  clearFlows: () => void
-  addFlow: (flow: FlowType) => void
-  removeFlow: (flowId: string) => void
+type LadderFlowActions = {
+  clearLadderFlows: () => void
+  addLadderFlow: (flow: LadderFlowType) => void
+  removeLadderFlow: (flowId: string) => void
 
   /**
    * Control the rungs of the flow
@@ -176,15 +176,15 @@ type FlowActions = {
 }
 
 /** The actions, the events that occur in the app based on user input, and trigger updates in the state - Concept based on Redux */
-type FlowSlice = FlowState & {
-  flowActions: FlowActions
+type LadderFlowSlice = LadderFlowState & {
+  ladderFlowActions: LadderFlowActions
 }
 
-export { FlowActions, FlowSlice, FlowState, FlowType, RungState }
+export { LadderFlowActions, LadderFlowSlice, LadderFlowState, LadderFlowType, RungState }
 
 /**
  * Zod exports
  */
-export { edgeSchema, nodeSchema, zodFlowSchema, zodFlowStateSchema, zodNodeTypesSchema,zodRungStateSchema }
+export { edgeSchema, nodeSchema, zodFlowStateSchema, zodLadderFlowSchema, zodNodeTypesSchema,zodRungStateSchema }
 
-export type { EdgeType, NodeType, ZodFlowState, ZodFlowType, ZodNodeType,ZodRungType }
+export type { EdgeType, NodeType, ZodFlowState, ZodLadderFlowType, ZodNodeType,ZodRungType }

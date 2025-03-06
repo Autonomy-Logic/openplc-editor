@@ -117,8 +117,8 @@ export const Coil = (block: CoilProps) => {
     project: {
       data: { pous },
     },
-    flows,
-    flowActions: { updateNode },
+    ladderFlows,
+    ladderFlowActions: { updateNode },
   } = useOpenPLCStore()
 
   const coil = DEFAULT_COIL_TYPES[data.variant]
@@ -167,7 +167,7 @@ export const Coil = (block: CoilProps) => {
    * Update wrongVariable state when the table of variables is updated
    */
   useEffect(() => {
-    const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
       variableName: coilVariableValue,
     })
@@ -234,7 +234,7 @@ export const Coil = (block: CoilProps) => {
    */
   const handleSubmitCoilVariableOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || coilVariableValue
-    const { variables, rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { variables, rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
       variableName: variableNameToSubmit,
     })
@@ -313,7 +313,7 @@ export const Coil = (block: CoilProps) => {
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
             onFocus={() => {
-              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
@@ -329,7 +329,7 @@ export const Coil = (block: CoilProps) => {
               return
             }}
             onBlur={() => {
-              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return

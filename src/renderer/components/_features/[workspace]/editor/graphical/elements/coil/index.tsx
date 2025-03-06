@@ -13,11 +13,11 @@ type CoilElementProps = {
 const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
   const {
     editor,
-    flows,
+    ladderFlows,
     project: {
       data: { pous },
     },
-    flowActions: { updateNode },
+    ladderFlowActions: { updateNode },
     modalActions: { onOpenChange },
   } = useOpenPLCStore()
 
@@ -39,7 +39,7 @@ const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
   }
 
   const handleConfirmAlteration = () => {
-    const { rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: node.id,
     })
     if (!rung) return

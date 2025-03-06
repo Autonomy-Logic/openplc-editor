@@ -86,8 +86,8 @@ export const Contact = (block: ContactProps) => {
     project: {
       data: { pous },
     },
-    flows,
-    flowActions: { updateNode },
+    ladderFlows,
+    ladderFlowActions: { updateNode },
   } = useOpenPLCStore()
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
@@ -137,7 +137,7 @@ export const Contact = (block: ContactProps) => {
    * Update wrongVariable state when the table of variables is updated
    */
   useEffect(() => {
-    const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
       variableName: contactVariableValue,
     })
@@ -203,7 +203,7 @@ export const Contact = (block: ContactProps) => {
    */
   const handleSubmitContactVariableOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || contactVariableValue
-    const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
       variableName: variableNameToSubmit,
     })
@@ -282,7 +282,7 @@ export const Contact = (block: ContactProps) => {
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
             onFocus={() => {
-              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
@@ -298,7 +298,7 @@ export const Contact = (block: ContactProps) => {
               return
             }}
             onBlur={() => {
-              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return

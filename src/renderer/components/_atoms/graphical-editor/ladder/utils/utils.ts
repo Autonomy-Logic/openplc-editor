@@ -1,4 +1,4 @@
-import type { EditorModel, FlowType } from '@root/renderer/store/slices'
+import type { EditorModel, LadderFlowType } from '@root/renderer/store/slices'
 import { genericTypeSchema } from '@root/types/PLC'
 import type { PLCPou } from '@root/types/PLC/open-plc'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
@@ -10,18 +10,18 @@ import { BasicNodeData } from './types'
 export const getPouVariablesRungNodeAndEdges = (
   editor: EditorModel,
   pous: PLCPou[],
-  flows: FlowType[],
+  ladderFlows: LadderFlowType[],
   data: { nodeId: string; variableName?: string },
 ): {
   pou: PLCPou | undefined
-  rung: FlowType['rungs'][0] | undefined
+  rung: LadderFlowType['rungs'][0] | undefined
   variables: { all: PLCVariable[]; selected: PLCVariable | undefined }
-  edges: { source: FlowType['rungs'][0]['edges'] | undefined; target: FlowType['rungs'][0]['edges'] | undefined }
-  node: FlowType['rungs'][0]['nodes'][0] | undefined
+  edges: { source: LadderFlowType['rungs'][0]['edges'] | undefined; target: LadderFlowType['rungs'][0]['edges'] | undefined }
+  node: LadderFlowType['rungs'][0]['nodes'][0] | undefined
 } => {
   const pou = pous.find((pou) => pou.data.name === editor.meta.name)
 
-  const rung = flows
+  const rung = ladderFlows
     .find((flow) => flow.name === editor.meta.name)
     ?.rungs.find((rung) => rung.nodes.some((node) => node.id === data.nodeId))
 

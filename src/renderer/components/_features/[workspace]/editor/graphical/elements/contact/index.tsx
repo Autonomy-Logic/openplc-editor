@@ -13,11 +13,11 @@ type ContactElementProps = {
 const ContactElement = ({ isOpen, onClose, node }: ContactElementProps) => {
   const {
     editor,
-    flows,
+    ladderFlows,
     project: {
       data: { pous },
     },
-    flowActions: { updateNode },
+    ladderFlowActions: { updateNode },
     modalActions: { onOpenChange },
   } = useOpenPLCStore()
 
@@ -39,7 +39,7 @@ const ContactElement = ({ isOpen, onClose, node }: ContactElementProps) => {
   }
 
   const handleConfirmAlteration = () => {
-    const { rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: node.id,
     })
     if (!rung) return

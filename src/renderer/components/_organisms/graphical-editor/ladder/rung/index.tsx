@@ -19,14 +19,14 @@ type RungProps = {
 
 export const Rung = ({ className, index, id, rung }: RungProps) => {
   const {
-    flows,
+    ladderFlows,
     editorActions: { updateModelLadder, getIsRungOpen },
   } = useOpenPLCStore()
 
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id })
 
   const [isOpen, setIsOpen] = useState<boolean>(true)
-  const flow = flows.find((flow) => flow.rungs.some((r) => r.id === rung.id)) || { rungs: [] }
+  const flow = ladderFlows.find((flow) => flow.rungs.some((r) => r.id === rung.id)) || { rungs: [] }
 
   const handleOpenSection = () => {
     setIsOpen(!isOpen)

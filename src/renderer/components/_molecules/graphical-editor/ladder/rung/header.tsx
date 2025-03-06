@@ -26,7 +26,7 @@ type RungHeaderProps = {
 export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onClick }: RungHeaderProps) => {
   const {
     editor,
-    flowActions: { addComment, duplicateRung },
+    ladderFlowActions: { addComment, duplicateRung },
     modalActions: { openModal },
   } = useOpenPLCStore()
 

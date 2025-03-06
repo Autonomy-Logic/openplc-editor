@@ -78,8 +78,8 @@ export const BlockNodeElement = <T extends object>({
     editor,
     editorActions: { updateModelVariables },
     libraries,
-    flows,
-    flowActions: { setNodes, setEdges },
+    ladderFlows,
+    ladderFlowActions: { setNodes, setEdges },
     project: {
       data: { pous },
     },
@@ -150,7 +150,7 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
-    const { pou, rung, node, variables, edges } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { pou, rung, node, variables, edges } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: nodeId ?? '',
     })
     if (!pou || !rung || !node) return
@@ -338,8 +338,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       data: { pous },
     },
     projectActions: { createVariable, updateVariable },
-    flows,
-    flowActions: { updateNode },
+    ladderFlows,
+    ladderFlowActions: { updateNode },
   } = useOpenPLCStore()
   const {
     documentation: variantDocumentation,
@@ -393,7 +393,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       switch (blockType) {
         case 'function-block': {
           if (!data.variable || data.variable.name === '') {
-            const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+            const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
               nodeId: id,
             })
             // @ts-expect-error - type is dynamic
@@ -418,7 +418,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
     })
     if (!node || !rung) return
@@ -460,7 +460,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
     })
     if (!rung || !node) return
@@ -578,7 +578,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             setTextAreaValue={setBlockVariableValue}
             handleSubmit={handleSubmitBlockVariableOnTextareaBlur}
             onFocus={() => {
-              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
@@ -594,7 +594,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
               return
             }}
             onBlur={() => {
-              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return

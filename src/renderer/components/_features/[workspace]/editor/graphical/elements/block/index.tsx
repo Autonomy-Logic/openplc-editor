@@ -64,8 +64,8 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const {
     editor,
     editorActions: { updateModelVariables },
-    flows,
-    flowActions: { setNodes, setEdges },
+    ladderFlows,
+    ladderFlowActions: { setNodes, setEdges },
     project: {
       data: { pous },
     },
@@ -418,7 +418,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       executionOrder: Number(formState.executionOrder),
     }
 
-    const { rung, edges, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { rung, edges, variables } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: selectedNode.id,
     })
     if (!rung) return

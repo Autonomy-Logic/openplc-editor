@@ -42,7 +42,7 @@ const createInstanceValidation = (instances: PLCInstance[], name: string) => {
   return name
 }
 
-const updateInstancevalidation = (instances: PLCInstance[], dataToBeUpdated: Partial<PLCInstance>) => {
+const updateInstanceValidation = (instances: PLCInstance[], dataToBeUpdated: Partial<PLCInstance>) => {
   let response: ProjectResponse = { ok: true }
 
   if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
@@ -81,4 +81,4 @@ const updateInstancevalidation = (instances: PLCInstance[], dataToBeUpdated: Par
   return response
 }
 
-export { checkIfInstanceExists, createInstanceValidation, instanceNameValidation, updateInstancevalidation }
+export { checkIfInstanceExists, createInstanceValidation, instanceNameValidation, updateInstanceValidation }

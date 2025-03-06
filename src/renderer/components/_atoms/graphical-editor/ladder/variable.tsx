@@ -46,8 +46,8 @@ const VariableElement = (block: VariableProps) => {
     project: {
       data: { pous, dataTypes },
     },
-    flows,
-    flowActions: { updateNode },
+    ladderFlows,
+    ladderFlowActions: { updateNode },
   } = useOpenPLCStore()
 
   const inputVariableRef = useRef<
@@ -109,7 +109,7 @@ const VariableElement = (block: VariableProps) => {
       node: variableNode,
       rung,
       variables,
-    } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
       variableName: variableValue,
     })
@@ -179,7 +179,7 @@ const VariableElement = (block: VariableProps) => {
   const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || variableValue
 
-    const { pou, rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { pou, rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
     })
     if (!pou || !rung || !node) return

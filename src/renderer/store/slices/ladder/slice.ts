@@ -13,19 +13,19 @@ import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import { FlowSlice, FlowState } from './types'
+import { LadderFlowSlice,LadderFlowState } from './types'
 
-export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setState) => ({
-  flows: [],
+export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], LadderFlowSlice> = (setState) => ({
+  ladderFlows: [],
 
-  flowActions: {
-    clearFlows: () => {
-      setState({ flows: [] })
+  ladderFlowActions: {
+    clearLadderFlows: () => {
+      setState({ ladderFlows: [] })
     },
-    addFlow: (flow) => {
+    addLadderFlow: (flow) => {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flowIndex = flows.findIndex((f) => f.name === flow.name)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flowIndex = ladderFlows.findIndex((f) => f.name === flow.name)
           const rungs = flow.rungs.map((rung) => ({
             ...rung,
             selectedNodes: [],
@@ -33,20 +33,20 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           const newFlow = { ...flow, rungs }
 
           if (flowIndex === -1) {
-            flows.push(newFlow)
+            ladderFlows.push(newFlow)
           } else {
-            flows[flowIndex] = newFlow
+            ladderFlows[flowIndex] = newFlow
           }
         }),
       )
     },
-    removeFlow: (flowId) => {
+    removeLadderFlow: (flowId) => {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flowIndex = flows.findIndex((f) => f.name === flowId)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flowIndex = ladderFlows.findIndex((f) => f.name === flowId)
           if (flowIndex === -1) return
 
-          flows.splice(flowIndex, 1)
+          ladderFlows.splice(flowIndex, 1)
         }),
       )
     },
@@ -56,16 +56,16 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
      */
     startLadderRung: ({ editorName, rungId, defaultBounds, reactFlowViewport }) => {
       setState(
-        produce(({ flows }: FlowState) => {
-          if (!flows.find((flow) => flow.name === editorName)) {
-            flows.push({
+        produce(({ ladderFlows }: LadderFlowState) => {
+          if (!ladderFlows.find((flow) => flow.name === editorName)) {
+            ladderFlows.push({
               name: editorName,
               updated: true,
               rungs: [],
             })
           }
 
-          const flow = flows.find((flow) => flow.name === editorName)
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const { powerRail } = defaultCustomNodesStyles
@@ -110,8 +110,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
     setRungs: ({ editorName, rungs }) => {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           if (!Array.isArray(rungs)) return
@@ -136,8 +136,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
     removeRung: (editorName, rungId) => {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           flow.rungs = flow.rungs.filter((rung) => rung.id !== rungId)
@@ -147,8 +147,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
     addComment({ editorName, rungId, comment }) {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -161,8 +161,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
     duplicateRung({ editorName, rungId }) {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -326,8 +326,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
      */
     onNodesChange: ({ changes, editorName, rungId }) => {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -339,8 +339,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
     onEdgesChange: ({ changes, editorName, rungId }) => {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -352,8 +352,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
     onConnect: ({ changes, editorName, rungId }) => {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -366,8 +366,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
 
     setNodes: ({ editorName, nodes, rungId }) => {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -380,8 +380,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
     updateNode({ editorName, node, nodeId, rungId }) {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -397,8 +397,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
     addNode({ editorName, node, rungId }) {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -411,8 +411,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
     removeNodes({ editorName, nodes, rungId }) {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -427,8 +427,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
     setSelectedNodes({ nodes, rungId, editorName }) {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -476,8 +476,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
 
     setEdges({ edges, editorName, rungId }) {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -490,8 +490,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
     updateEdge({ edge, edgeId, editorName, rungId }) {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -507,8 +507,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     },
     addEdge({ edge, editorName, rungId }) {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -525,8 +525,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
      */
     updateReactFlowViewport({ editorName, reactFlowViewport, rungId }) {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           const rung = flow.rungs.find((rung) => rung.id === rungId)
@@ -540,8 +540,8 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
 
     setFlowUpdated({ editorName, updated }) {
       setState(
-        produce(({ flows }: FlowState) => {
-          const flow = flows.find((flow) => flow.name === editorName)
+        produce(({ ladderFlows }: LadderFlowState) => {
+          const flow = ladderFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
           flow.updated = updated

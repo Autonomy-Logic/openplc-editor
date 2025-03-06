@@ -34,7 +34,7 @@ type RungBodyProps = {
 
 export const RungBody = ({ rung, className }: RungBodyProps) => {
   const {
-    flowActions,
+    ladderFlowActions,
     libraries,
     editor,
     editorActions: { updateModelVariables },
@@ -91,7 +91,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
       [0, 0],
       [bounds.width, bounds.height + 20],
     ])
-    flowActions.updateReactFlowViewport({
+    ladderFlowActions.updateReactFlowViewport({
       editorName: editor.meta.name,
       rungId: rungLocal.id,
       reactFlowViewport: [bounds.width, bounds.height + 20],
@@ -119,7 +119,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
     }
 
     // Update the selected nodes in the rung state
-    flowActions.setSelectedNodes({
+    ladderFlowActions.setSelectedNodes({
       editorName: editor.meta.name,
       rungId: rung.id,
       nodes: rungLocal.selectedNodes,
@@ -202,8 +202,8 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
       elementType: newNodeType,
       blockVariant: pouLibrary,
     })
-    flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes })
-    flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges })
+    ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes })
+    ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges })
   }
 
   /**
@@ -211,9 +211,9 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
    */
   const handleRemoveNode = (nodes: FlowNode[]) => {
     const { nodes: newNodes, edges: newEdges } = removeElements({ ...rungLocal }, nodes)
-    flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: newNodes })
-    flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: newEdges })
-    flowActions.setSelectedNodes({
+    ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: newNodes })
+    ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: newEdges })
+    ladderFlowActions.setSelectedNodes({
       editorName: editor.meta.name,
       rungId: rungLocal.id,
       nodes: [],
@@ -298,8 +298,8 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
   const handleNodeDragStop = (node: FlowNode) => {
     const result = onElementDrop(rungLocal, rung, node)
     setDragging(false)
-    flowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: result.nodes })
-    flowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: result.edges })
+    ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: result.nodes })
+    ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: result.edges })
   }
 
   /**

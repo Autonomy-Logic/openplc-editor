@@ -72,8 +72,8 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
         data: { pous },
       },
       projectActions: { createVariable },
-      flows,
-      flowActions: { updateNode },
+      ladderFlows,
+      ladderFlowActions: { updateNode },
     } = useOpenPLCStore()
 
     const popoverRef = useRef<HTMLDivElement>(null)
@@ -192,7 +192,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     const submitVariableToBlock = ({ clickedVariable }: { clickedVariable?: number }) => {
       closeModal()
 
-      const { rung, node: variableNode } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      const { rung, node: variableNode } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
       if (!rung || !variableNode) return
@@ -260,7 +260,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     }
 
     const submitAddVariable = ({ variableName }: { variableName: string }) => {
-      const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+      const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
       if (!rung || !node) return

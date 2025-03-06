@@ -2,7 +2,7 @@ import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { FlowType } from '@root/renderer/store/slices/flow'
+import { LadderFlowType } from '@root/renderer/store/slices/ladder'
 import _ from 'lodash'
 import { ComponentPropsWithoutRef } from 'react'
 
@@ -21,7 +21,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     modalActions: { closeModal, onOpenChange, openModal },
     tabsActions: { clearTabs },
     projectActions: { setProject, clearProjects },
-    flowActions: { addFlow, clearFlows },
+    ladderFlowActions: { addLadderFlow, clearLadderFlows },
     libraryActions: { addLibrary, clearUserLibraries },
     editorActions: { clearEditor },
   } = useOpenPLCStore()
@@ -32,7 +32,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     clearEditor()
     clearTabs()
     clearUserLibraries()
-    clearFlows()
+    clearLadderFlows()
     clearProjects()
   }
 
@@ -80,7 +80,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
           if (ladderPous.length) {
             ladderPous.forEach((pou) => {
               if (pou.data.body.language === 'ld') {
-                addFlow(pou.data.body.value as FlowType)
+                addLadderFlow(pou.data.body.value as LadderFlowType)
               }
             })
           }

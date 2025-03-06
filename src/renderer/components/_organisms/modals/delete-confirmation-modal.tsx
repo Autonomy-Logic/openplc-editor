@@ -31,7 +31,7 @@ const ConfirmDeleteElementModal = ({
   const {
     editor,
     projectActions: { deletePou, deleteDatatype, deleteVariable },
-    flowActions: { removeFlow, removeRung },
+    ladderFlowActions: { removeLadderFlow, removeRung },
     editorActions: { updateModelVariables },
     libraryActions: { removeUserLibrary },
     modalActions: { onOpenChange, closeModal },
@@ -107,7 +107,7 @@ const ConfirmDeleteElementModal = ({
         }
 
         deleteDatatype(targetLabel)
-        removeFlow(targetLabel)
+        removeLadderFlow(targetLabel)
         removeUserLibrary(targetLabel)
         handleRemoveTab(targetLabel)
 
@@ -126,7 +126,7 @@ const ConfirmDeleteElementModal = ({
           throw new Error('No label found for POU deletion.')
         }
         deletePou(targetLabel)
-        removeFlow(targetLabel)
+        removeLadderFlow(targetLabel)
         removeUserLibrary(targetLabel)
         handleRemoveTab(targetLabel)
         toast({
