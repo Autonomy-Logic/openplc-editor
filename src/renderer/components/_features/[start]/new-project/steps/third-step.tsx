@@ -24,8 +24,7 @@ type CreateProjectFileProps = {
 const BlockedLanguagesStyles = {
   'Sequential Functional Chart':
     'hover:bg-white dark:hover:bg-neutral-950 cursor-not-allowed pointer-events-none opacity-30',
-  'Functional Block Diagram':
-    'hover:bg-white dark:hover:bg-neutral-950 cursor-not-allowed pointer-events-none opacity-30',
+  'Functional Block Diagram': '',
   'Ladder Diagram': '',
   'Structured Text': '',
   'Instruction List': '',

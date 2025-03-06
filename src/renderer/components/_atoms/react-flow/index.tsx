@@ -7,7 +7,6 @@ type ReactFlowPanelProps = PropsWithChildren & {
   backgroundConfig?: BackgroundProps
   controls?: boolean
   controlsConfig?: ControlProps
-  controlsStyle?: string
   viewportConfig?: ReactFlowProps
 }
 
@@ -17,22 +16,21 @@ export const ReactFlowPanel = ({
   backgroundConfig,
   controls = false,
   controlsConfig,
-  controlsStyle,
   viewportConfig,
 }: ReactFlowPanelProps) => {
-
   const getDeleteKeyCodes = () => {
     if (!viewportConfig?.deleteKeyCode) return ['Delete', 'Backspace']
     return viewportConfig.deleteKeyCode
   }
 
   return (
-    <ReactFlow
-      deleteKeyCode={getDeleteKeyCodes()}
-      {...viewportConfig}
-    >
+    <ReactFlow deleteKeyCode={getDeleteKeyCodes()} {...viewportConfig}>
       {background && <Background {...backgroundConfig} />}
-      {controls && <Controls {...controlsConfig} className={controlsStyle} />}
+      {controls && (
+        <Controls {...controlsConfig} className={controlsConfig?.className}>
+          {controlsConfig?.children}
+        </Controls>
+      )}
       {children}
     </ReactFlow>
   )
