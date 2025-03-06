@@ -1,5 +1,5 @@
 import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
-import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
+import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'

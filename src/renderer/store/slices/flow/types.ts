@@ -38,7 +38,7 @@ const zodRungStateSchema = z.object({
   id: z.string(),
   comment: z.string().default(''),
   defaultBounds: z.array(z.number()),
-  flowViewport: z.array(z.number()),
+  reactFlowViewport: z.array(z.number()),
   nodes: z.array(nodeSchema),
   edges: z.array(edgeSchema),
 })
@@ -66,7 +66,7 @@ type RungState = {
   id: string
   comment: string
   defaultBounds: number[]
-  flowViewport: number[]
+  reactFlowViewport: number[]
   selectedNodes: Node[]
   nodes: Node[]
   edges: Edge[]
@@ -94,12 +94,12 @@ type FlowActions = {
     editorName,
     rungId,
     defaultBounds,
-    flowViewport,
+    reactFlowViewport,
   }: {
     editorName: string
     rungId: string
     defaultBounds: [number, number]
-    flowViewport?: [number, number]
+    reactFlowViewport?: [number, number]
   }) => void
   setRungs: ({ rungs, editorName }: { rungs: RungState[]; editorName: string }) => void
   removeRung: (editorName: string, rungId: string) => void
@@ -162,12 +162,12 @@ type FlowActions = {
   /**
    * Control the flow viewport of the rung
    */
-  updateFlowViewport: ({
-    flowViewport,
+  updateReactFlowViewport: ({
+    reactFlowViewport,
     rungId,
     editorName,
   }: {
-    flowViewport: [number, number]
+    reactFlowViewport: [number, number]
     rungId: string
     editorName: string
   }) => void

@@ -14,8 +14,8 @@ import {
 } from '@dnd-kit/core'
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { CreateRung } from '@root/renderer/components/_molecules/rung/create-rung'
-import { Rung } from '@root/renderer/components/_organisms/rung'
+import { CreateRung } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/create-rung'
+import { Rung } from '@root/renderer/components/_organisms/graphical-editor/ladder/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungState, zodFlowSchema } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
@@ -88,7 +88,7 @@ export default function LadderEditor() {
       editorName: editor.meta.name,
       rungId: `rung_${editor.meta.name}_${uuidv4()}`,
       defaultBounds: defaultViewport,
-      flowViewport: defaultViewport,
+      reactFlowViewport: defaultViewport,
     })
   }
 

@@ -1,12 +1,12 @@
-import { defaultCustomNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/react-flow/custom-nodes'
-import type { BlockNode, BlockVariant } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
-import type { CoilNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/coil'
-import type { ContactNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/contact'
-import type { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
-import type { PowerRailNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/power-rail'
-import type { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
-import type { VariableNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/variable'
-import { removeElements } from '@root/renderer/components/_molecules/rung/ladder-utils/elements'
+import { defaultCustomNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/graphical-editor/ladder'
+import type { BlockNode, BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
+import type { CoilNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/coil'
+import type { ContactNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/contact'
+import type { ParallelNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/parallel'
+import type { PowerRailNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/power-rail'
+import type { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
+import type { VariableNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/variable'
+import { removeElements } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements'
 import { generateNumericUUID } from '@root/utils'
 import type { Edge, Node } from '@xyflow/react'
 import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
@@ -54,7 +54,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     /**
      * Control the rungs of the flow
      */
-    startLadderRung: ({ editorName, rungId, defaultBounds, flowViewport }) => {
+    startLadderRung: ({ editorName, rungId, defaultBounds, reactFlowViewport }) => {
       setState(
         produce(({ flows }: FlowState) => {
           if (!flows.find((flow) => flow.name === editorName)) {
@@ -91,7 +91,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
             id: rungId,
             comment: '',
             defaultBounds,
-            flowViewport: flowViewport && flowViewport > defaultBounds ? flowViewport : defaultBounds,
+            reactFlowViewport: reactFlowViewport && reactFlowViewport > defaultBounds ? reactFlowViewport : defaultBounds,
             nodes: [...railNodes],
             edges: [
               {
@@ -309,7 +309,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
             id: `rung_${editorName}_${crypto.randomUUID()}`,
             comment: rung.comment,
             defaultBounds: rung.defaultBounds,
-            flowViewport: rung.flowViewport,
+            reactFlowViewport: rung.reactFlowViewport,
             selectedNodes: [],
             nodes: newNodes,
             edges: newEdges,
@@ -523,7 +523,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
     /**
      * Control the flow viewport of the rung
      */
-    updateFlowViewport({ editorName, flowViewport, rungId }) {
+    updateReactFlowViewport({ editorName, reactFlowViewport, rungId }) {
       setState(
         produce(({ flows }: FlowState) => {
           const flow = flows.find((flow) => flow.name === editorName)
@@ -532,7 +532,7 @@ export const createFlowSlice: StateCreator<FlowSlice, [], [], FlowSlice> = (setS
           const rung = flow.rungs.find((rung) => rung.id === rungId)
           if (!rung) return
 
-          rung.flowViewport = flowViewport
+          rung.reactFlowViewport = reactFlowViewport
           flow.updated = true
         }),
       )

@@ -1,10 +1,10 @@
-import { BlockNode, BlockVariant } from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
-import { CoilNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/coil'
-import { ContactNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/contact'
-import { ParallelNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/parallel'
-import { PowerRailNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/power-rail'
-import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
-import { VariableNode } from '@root/renderer/components/_atoms/react-flow/custom-nodes/variable'
+import { BlockNode, BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
+import { CoilNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/coil'
+import { ContactNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/contact'
+import { ParallelNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/parallel'
+import { PowerRailNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/power-rail'
+import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
+import { VariableNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/variable'
 import { RungState } from '@root/renderer/store/slices'
 import {
   BlockLadderXML,
@@ -646,7 +646,7 @@ const ladderToXml = (rungs: RungState[]) => {
           break
       }
     })
-    offsetY += rung.flowViewport[1]
+    offsetY += rung.reactFlowViewport[1]
   })
 
   return ladderXML

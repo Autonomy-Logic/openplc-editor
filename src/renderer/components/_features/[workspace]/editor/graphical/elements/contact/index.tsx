@@ -1,5 +1,5 @@
-import { ContactNode, DEFAULT_CONTACT_TYPES } from '@root/renderer/components/_atoms/react-flow/custom-nodes/contact'
-import { getPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils'
+import { ContactNode, DEFAULT_CONTACT_TYPES } from '@root/renderer/components/_atoms/graphical-editor/ladder/contact'
+import { getPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils'
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useState } from 'react'

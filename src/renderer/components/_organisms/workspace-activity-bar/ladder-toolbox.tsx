@@ -2,7 +2,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 
-import { BasicNodeData } from '../../_atoms/react-flow/custom-nodes/utils/types'
+import { BasicNodeData } from '../../_atoms/graphical-editor/ladder/utils/types'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { DeleteElementButton } from '../../_molecules/workspace-activity-bar/default'
 import { BlockButton, CoilButton, ContactButton } from '../../_molecules/workspace-activity-bar/ladder'

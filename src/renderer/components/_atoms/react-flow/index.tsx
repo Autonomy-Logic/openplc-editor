@@ -2,7 +2,7 @@ import type { BackgroundProps, ControlProps, ReactFlowProps } from '@xyflow/reac
 import { Background, Controls, ReactFlow } from '@xyflow/react'
 import { PropsWithChildren } from 'react'
 
-type FlowPanelProps = PropsWithChildren & {
+type ReactFlowPanelProps = PropsWithChildren & {
   background?: boolean
   backgroundConfig?: BackgroundProps
   controls?: boolean
@@ -11,7 +11,7 @@ type FlowPanelProps = PropsWithChildren & {
   viewportConfig?: ReactFlowProps
 }
 
-export const FlowPanel = ({
+export const ReactFlowPanel = ({
   children,
   background,
   backgroundConfig,
@@ -19,7 +19,7 @@ export const FlowPanel = ({
   controlsConfig,
   controlsStyle,
   viewportConfig,
-}: FlowPanelProps) => {
+}: ReactFlowPanelProps) => {
 
   const getDeleteKeyCodes = () => {
     if (!viewportConfig?.deleteKeyCode) return ['Delete', 'Backspace']
