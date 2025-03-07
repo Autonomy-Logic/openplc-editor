@@ -1,5 +1,5 @@
 import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
-import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
+import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -31,7 +31,7 @@ const ConfirmDeleteElementModal = ({
   const {
     editor,
     projectActions: { deletePou, deleteDatatype, deleteVariable },
-    flowActions: { removeFlow, removeRung },
+    ladderFlowActions: { removeLadderFlow, removeRung },
     editorActions: { updateModelVariables },
     libraryActions: { removeUserLibrary },
     modalActions: { onOpenChange, closeModal },
@@ -107,7 +107,7 @@ const ConfirmDeleteElementModal = ({
         }
 
         deleteDatatype(targetLabel)
-        removeFlow(targetLabel)
+        removeLadderFlow(targetLabel)
         removeUserLibrary(targetLabel)
         handleRemoveTab(targetLabel)
 
@@ -126,7 +126,7 @@ const ConfirmDeleteElementModal = ({
           throw new Error('No label found for POU deletion.')
         }
         deletePou(targetLabel)
-        removeFlow(targetLabel)
+        removeLadderFlow(targetLabel)
         removeUserLibrary(targetLabel)
         handleRemoveTab(targetLabel)
         toast({

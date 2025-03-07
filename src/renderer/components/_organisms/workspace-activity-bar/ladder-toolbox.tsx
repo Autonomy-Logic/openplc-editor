@@ -2,7 +2,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 
-import { BasicNodeData } from '../../_atoms/react-flow/custom-nodes/utils/types'
+import { BasicNodeData } from '../../_atoms/graphical-editor/ladder/utils/types'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { DeleteElementButton } from '../../_molecules/workspace-activity-bar/default'
 import { BlockButton, CoilButton, ContactButton } from '../../_molecules/workspace-activity-bar/ladder'
@@ -12,8 +12,8 @@ export const LadderToolbox = () => {
   const {
     editor,
     editorActions: { updateModelVariables },
-    flows,
-    flowActions,
+    ladderFlows,
+    ladderFlowActions,
     project: {
       data: { pous },
     },
@@ -23,7 +23,7 @@ export const LadderToolbox = () => {
   const editorName = editor.meta.name
   const pou = pous.find((pou) => pou.data.name === editorName)
 
-  const flow = flows.find((flow) => flow.name === editor.meta.name)
+  const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
   const selectedNodes = flow?.rungs.flatMap((rung) => rung.selectedNodes) || []
 
   // useEffect(() => {
@@ -37,12 +37,12 @@ export const LadderToolbox = () => {
 
   const handleRemoveNodes = () => {
     flow?.rungs.forEach((rung) => {
-      flowActions.removeNodes({
+      ladderFlowActions.removeNodes({
         nodes: rung.selectedNodes || [],
         editorName: editor.meta.name,
         rungId: rung.id,
       })
-      flowActions.setSelectedNodes({
+      ladderFlowActions.setSelectedNodes({
         editorName: editor.meta.name,
         rungId: rung.id,
         nodes: [],

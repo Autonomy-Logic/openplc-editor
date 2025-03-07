@@ -5,7 +5,7 @@ import { create } from 'zustand'
 import type {
   ConsoleSlice,
   EditorSlice,
-  FlowSlice,
+  LadderFlowSlice,
   LibrarySlice,
   ModalSlice,
   ProjectSlice,
@@ -17,7 +17,7 @@ import type {
 import {
   createConsoleSlice,
   createEditorSlice,
-  createFlowSlice,
+  createLadderFlowSlice,
   createLibrarySlice,
   createModalSlice,
   createProjectSlice,
@@ -31,7 +31,7 @@ export const openPLCStoreBase = create<
   WorkspaceSlice &
     EditorSlice &
     TabsSlice &
-    FlowSlice &
+    LadderFlowSlice &
     SearchSlice &
     SharedSlice &
     LibrarySlice &
@@ -44,7 +44,7 @@ export const openPLCStoreBase = create<
   ...createTabsSlice(...a),
   ...createSearchSlice(...a),
   ...createSharedSlice(...a),
-  ...createFlowSlice(...a),
+  ...createLadderFlowSlice(...a),
   ...createLibrarySlice(...a),
   ...createProjectSlice(...a),
   ...createConsoleSlice(...a),

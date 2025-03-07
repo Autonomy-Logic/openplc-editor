@@ -6,7 +6,7 @@ import { StateCreator } from 'zustand'
 
 import { ProjectResponse, ProjectSlice } from './types'
 import { getVariableBasedOnRowIdOrVariableId } from './utils'
-import { createInstanceValidation, updateInstancevalidation } from './validation/instances'
+import { createInstanceValidation, updateInstanceValidation } from './validation/instances'
 import { createTaskValidation, updateTaskValidation } from './validation/tasks'
 import {
   createGlobalVariableValidation,
@@ -702,7 +702,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           const { rowId } = dataToBeUpdated
           switch (rowId) {
             case rowId: {
-              const validationResponse = updateInstancevalidation(
+              const validationResponse = updateInstanceValidation(
                 project.data.configuration.resource.instances,
                 dataToBeUpdated.data,
               )

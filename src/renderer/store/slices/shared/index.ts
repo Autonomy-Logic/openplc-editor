@@ -1,4 +1,4 @@
- 
+
 import { CreateProjectFileProps } from '@root/main/modules/ipc/renderer'
 import { IProjectServiceResponse } from '@root/main/services'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
@@ -6,7 +6,7 @@ import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
-import { FlowSlice, FlowType } from '../flow'
+import { LadderFlowSlice, LadderFlowType } from '../ladder'
 import { LibrarySlice } from '../library'
 import { ModalSlice } from '../modal'
 import { ProjectSlice } from '../project'
@@ -56,7 +56,7 @@ export type SharedSlice = {
 }
 
 export const createSharedSlice: StateCreator<
-  EditorSlice & TabsSlice & ProjectSlice & LibrarySlice & ModalSlice & FlowSlice & WorkspaceSlice & SharedSlice,
+  EditorSlice & TabsSlice & ProjectSlice & LibrarySlice & ModalSlice & LadderFlowSlice & WorkspaceSlice & SharedSlice,
   [],
   [],
   SharedSlice
@@ -175,7 +175,7 @@ export const createSharedSlice: StateCreator<
       getState().editorActions.clearEditor()
       getState().tabsActions.clearTabs()
       getState().libraryActions.clearUserLibraries()
-      getState().flowActions.clearFlows()
+      getState().ladderFlowActions.clearLadderFlows()
       getState().projectActions.clearProjects()
       window.bridge.rebuildMenu()
     },
@@ -208,7 +208,7 @@ export const createSharedSlice: StateCreator<
         const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
         if (ladderPous.length)
           ladderPous.forEach((pou) => {
-            if (pou.data.body.language === 'ld') getState().flowActions.addFlow(pou.data.body.value as FlowType)
+            if (pou.data.body.language === 'ld') getState().ladderFlowActions.addLadderFlow(pou.data.body.value as LadderFlowType)
           })
 
         projectData.pous.map(
