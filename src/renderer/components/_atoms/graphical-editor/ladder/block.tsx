@@ -392,7 +392,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     if (inputVariableRef.current && selected) {
       switch (blockType) {
         case 'function-block': {
-          inputVariableRef.current.focus()
           if (!data.variable || data.variable.name === '') {
             const { variables } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
               nodeId: id,
@@ -400,7 +399,9 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             // @ts-expect-error - type is dynamic
             const { name, number } = checkVariableName(variables.all, (data.variant as BlockVariant).name.toUpperCase())
             handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`)
+            return
           }
+          inputVariableRef.current.focus()
           return
         }
         default:
