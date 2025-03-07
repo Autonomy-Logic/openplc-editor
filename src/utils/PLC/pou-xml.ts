@@ -71,7 +71,7 @@ export const parseInterface = (pou: PLCPou) => {
     if (variable.documentation)
       v.documentation = {
         'xhtml:p': {
-          $: variable.documentation,
+          $: variable.documentation === '' ? ' ' : variable.documentation,
         },
       }
 
@@ -143,7 +143,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           body: result.body,
           documentation: {
             'xhtml:p': {
-              $: pou.data.documentation,
+              $: pou.data.documentation === '' ? " " : pou.data.documentation,
             },
           },
         })
@@ -158,7 +158,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           body: result.body,
           documentation: {
             'xhtml:p': {
-              $: pou.data.documentation,
+              $: pou.data.documentation === '' ? " " : pou.data.documentation,
             },
           },
         })
@@ -174,7 +174,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           body: result.body,
           documentation: {
             'xhtml:p': {
-              $: pou.data.documentation,
+              $: pou.data.documentation === '' ? " " : pou.data.documentation,
             },
           },
         })
