@@ -1,5 +1,5 @@
 // import { PLCVariable } from '@root/types/PLC'
-import { RungState } from '@root/renderer/store/slices'
+import { RungLadderState } from '@root/renderer/store/slices'
 import { baseTypes } from '@root/shared/data'
 import { PLCPou } from '@root/types/PLC/open-plc'
 import { BaseXml } from '@root/types/PLC/xml-data'
@@ -166,7 +166,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
       }
       case 'ld': {
         const rungs = pou.data.body.value.rungs
-        const result = ladderToXml(rungs as RungState[])
+        const result = ladderToXml(rungs as RungLadderState[])
         xml.project.types.pous.pou.push({
           '@name': pou.data.name,
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,

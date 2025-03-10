@@ -9,14 +9,14 @@ import { DragHandleIcon } from '@root/renderer/assets/icons/interface/DragHandle
 import { DuplicateIcon } from '@root/renderer/assets/icons/interface/Duplicate'
 import { StickArrowIcon } from '@root/renderer/assets/icons/interface/StickArrow'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { RungState } from '@root/renderer/store/slices'
+import { RungLadderState } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../../../_atoms'
 
 type RungHeaderProps = {
-  rung: RungState
+  rung: RungLadderState
   isOpen: boolean
   draggableHandleProps: SyntheticListenerMap | undefined
   className: string

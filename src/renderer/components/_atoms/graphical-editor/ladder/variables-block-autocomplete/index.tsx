@@ -8,8 +8,8 @@ import { Node } from '@xyflow/react'
 import { ComponentPropsWithRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
+import { getLadderPouVariablesRungNodeAndEdges, getVariableRestrictionType } from '../../utils'
 import { BlockNodeData } from '../block'
-import { getPouVariablesRungNodeAndEdges, getVariableRestrictionType } from '../utils'
 import { BasicNodeData } from '../utils/types'
 import { VariableNode } from '../variable'
 
@@ -192,7 +192,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     const submitVariableToBlock = ({ clickedVariable }: { clickedVariable?: number }) => {
       closeModal()
 
-      const { rung, node: variableNode } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+      const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
       if (!rung || !variableNode) return
@@ -260,7 +260,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
     }
 
     const submitAddVariable = ({ variableName }: { variableName: string }) => {
-      const { rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+      const { rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
       if (!rung || !node) return

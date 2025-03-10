@@ -6,18 +6,18 @@ import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
+import { BasicNodeData, BuilderBasicProps } from '../ladder/utils/types'
 import { getLadderPouVariablesRungNodeAndEdges } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
-import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 
 export type BlockVariant = {
   name: string
   type: string
+  variable: { id?: string, name: string } | PLCVariable
   variables: { name: string; class: string; type: { definition: string; value: string } }[]
   documentation: string
   extensible: boolean
@@ -78,8 +78,8 @@ export const BlockNodeElement = <T extends object>({
     editor,
     editorActions: { updateModelVariables },
     libraries,
-    ladderFlows,
-    ladderFlowActions: { setNodes, setEdges },
+    fbdFlows,
+    fbdFlowActions: { setNodes, setEdges },
     project: {
       data: { pous },
     },
@@ -150,7 +150,7 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
-    const { pou, rung, node, variables, edges } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { pou, rung, node, variables, edges } = getLadderPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: nodeId ?? '',
     })
     if (!pou || !rung || !node) return
@@ -222,7 +222,7 @@ export const BlockNodeElement = <T extends object>({
      * The new block node have a new ID to not conflict with the old block node and to no occur any error of rendering
      */
     const newBlockNode = buildBlockNode({
-      id: `BLOCK_${uuidv4()}`,
+      id: `BLOCK_${crypto.randomUUID()}`,
       posX: node.position.x,
       posY: node.position.y,
       handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
@@ -338,7 +338,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       data: { pous },
     },
     projectActions: { createVariable, updateVariable },
-    ladderFlows,
+    fbdFlows,
     ladderFlowActions: { updateNode },
   } = useOpenPLCStore()
   const {
@@ -393,7 +393,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       switch (blockType) {
         case 'function-block': {
           if (!data.variable || data.variable.name === '') {
-            const { variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+            const { variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
               nodeId: id,
             })
             // @ts-expect-error - type is dynamic
@@ -419,7 +419,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    const { variables, node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { variables, node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
     if (!node || !rung) return
@@ -461,7 +461,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    const { rung, node, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { rung, node, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
     if (!rung || !node) return
@@ -499,7 +499,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     } else {
       const res = createVariable({
         data: {
-          id: uuidv4(),
+          id: crypto.randomUUID(),
           name: variableNameToSubmit,
           type: {
             definition: 'derived',
@@ -579,7 +579,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             setTextAreaValue={setBlockVariableValue}
             handleSubmit={handleSubmitBlockVariableOnTextareaBlur}
             onFocus={() => {
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
@@ -595,7 +595,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
               return
             }}
             onBlur={() => {
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return

@@ -4,10 +4,10 @@ import type { PLCPou } from '@root/types/PLC/open-plc'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
 import { ZodLiteral } from 'zod'
 
-import { BlockVariant } from '../block'
-import { BasicNodeData } from './types'
+import { BlockVariant } from '../ladder/block'
+import { BasicNodeData } from '../ladder/utils/types'
 
-export const getPouVariablesRungNodeAndEdges = (
+export const getLadderPouVariablesRungNodeAndEdges = (
   editor: EditorModel,
   pous: PLCPou[],
   ladderFlows: LadderFlowType[],

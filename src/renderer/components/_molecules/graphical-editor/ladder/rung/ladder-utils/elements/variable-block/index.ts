@@ -1,12 +1,12 @@
 import { defaultCustomNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/graphical-editor/ladder'
 import { BlockNode, BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
-import { RungState } from '@root/renderer/store/slices'
+import { RungLadderState } from '@root/renderer/store/slices'
 import { Edge, Node } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { buildEdge } from '../../edges'
 
-export const renderVariableBlock = <T>(rung: RungState, block: Node) => {
+export const renderVariableBlock = <T>(rung: RungLadderState, block: Node) => {
   const variableElements: Node[] = []
   const variableEdges: Edge[] = []
   const variableElementStyle = defaultCustomNodesStyles.variable
@@ -103,13 +103,13 @@ export const renderVariableBlock = <T>(rung: RungState, block: Node) => {
   return { nodes: [...rung.nodes, ...variableElements], edges: [...rung.edges, ...variableEdges] }
 }
 
-export const removeVariableBlock = (rung: RungState) => {
+export const removeVariableBlock = (rung: RungLadderState) => {
   const newNodes = rung.nodes.filter((node) => node.type !== 'variable')
   const newEdges = rung.edges.filter((edge) => !edge.source.toLowerCase().includes('variable') && !edge.target.toLowerCase().includes('variable'))
   return { nodes: newNodes, edges: newEdges }
 }
 
-export const updateVariableBlockPosition = (rung: RungState) => {
+export const updateVariableBlockPosition = (rung: RungLadderState) => {
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 

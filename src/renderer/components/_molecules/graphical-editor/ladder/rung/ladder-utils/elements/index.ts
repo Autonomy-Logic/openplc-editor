@@ -1,6 +1,6 @@
 import type { PlaceholderNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/placeholder'
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
-import type { RungState } from '@root/renderer/store/slices'
+import type { RungLadderState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
 import { disconnectNodes } from '../edges'
@@ -12,7 +12,7 @@ import { removePlaceholderElements } from './placeholder'
 import { appendSerialConnection } from './serial'
 
 export const addNewElement = <T>(
-  rung: RungState,
+  rung: RungLadderState,
   newNode: {
     elementType: string
     blockVariant?: T
@@ -85,7 +85,7 @@ export const addNewElement = <T>(
   return { nodes: newNodes, edges: newEdges }
 }
 
-export const removeElement = (rung: RungState, element: Node): { nodes: Node[]; edges: Edge[] } => {
+export const removeElement = (rung: RungLadderState, element: Node): { nodes: Node[]; edges: Edge[] } => {
   /**
    * Remove the selected element from the rung
    */
@@ -132,15 +132,15 @@ export const removeElement = (rung: RungState, element: Node): { nodes: Node[]; 
   return { nodes: newNodes, edges: newEdges }
 }
 
-export const removeElements = (rung: RungState, nodesToRemove: Node[]): { nodes: Node[]; edges: Edge[] } => {
+export const removeElements = (rung: RungLadderState, nodesToRemove: Node[]): { nodes: Node[]; edges: Edge[] } => {
   if (!nodesToRemove || nodesToRemove.length === 0) return { nodes: rung.nodes, edges: rung.edges }
 
-  const rungState = { ...rung }
+  const RungLadderState = { ...rung }
   for (const node of nodesToRemove) {
-    const { nodes, edges } = removeElement(rungState, node)
-    rungState.nodes = nodes
-    rungState.edges = edges
+    const { nodes, edges } = removeElement(RungLadderState, node)
+    RungLadderState.nodes = nodes
+    RungLadderState.edges = edges
   }
 
-  return { nodes: rungState.nodes, edges: rungState.edges }
+  return { nodes: RungLadderState.nodes, edges: RungLadderState.edges }
 }

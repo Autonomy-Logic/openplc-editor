@@ -1,5 +1,5 @@
 import type { PlaceholderNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/placeholder'
-import type { RungState } from '@root/renderer/store/slices'
+import type { RungLadderState } from '@root/renderer/store/slices'
 import type { Edge, Node, ReactFlowInstance } from '@xyflow/react'
 import { toInteger } from 'lodash'
 
@@ -12,7 +12,7 @@ import { renderPlaceholderElements, searchNearestPlaceholder } from '../placehol
 import { appendSerialConnection } from '../serial'
 import { removeVariableBlock } from '../variable-block'
 
-export const onElementDragStart = (rung: RungState, draggedNode: Node) => {
+export const onElementDragStart = (rung: RungLadderState, draggedNode: Node) => {
   /**
    * Check if the dragged node is draggable
    * If not, return the rung as it is
@@ -69,7 +69,7 @@ export const onElementDragStart = (rung: RungState, draggedNode: Node) => {
  * @returns The nearest placeholder node
  */
 export const onElementDragOver = (
-  rung: RungState,
+  rung: RungLadderState,
   reactFlowInstance: ReactFlowInstance,
   position: { x: number; y: number },
 ) => {
@@ -85,8 +85,8 @@ export const onElementDragOver = (
  * @returns The new nodes and edges
  */
 export const onElementDrop = (
-  rung: RungState,
-  oldStateRung: RungState,
+  rung: RungLadderState,
+  oldStateRung: RungLadderState,
   node: Node,
 ): { nodes: Node[]; edges: Edge[] } => {
   /**

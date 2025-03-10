@@ -12,6 +12,7 @@ export type IProjectServiceResponse = {
   error?: {
     title: string
     description: string
+    error: unknown
   }
   message?: string
   data?: {
@@ -86,24 +87,26 @@ class ProjectService {
       await promises.access(projectPath)
       const fileContent = await promises.readFile(projectPath, 'utf-8')
       const parsedFile = PLCProjectSchema.safeParse(JSON.parse(fileContent))
+      console.log("parsedFile", parsedFile.error)
 
       if (!parsedFile.success) {
-        return this.createErrorResponse('Error parsing project file.')
+        return this.createErrorResponse('Error parsing project file.', parsedFile.error.errors)
       }
 
       await this.updateProjectHistory(projectPath)
       return this.createSuccessResponse(projectPath, parsedFile.data)
-    } catch (_error) {
+    } catch (error) {
       await this.removeProjectFromHistory(projectPath)
-      return this.createErrorResponse('Error reading project file.')
+      return this.createErrorResponse('Error reading project file.', error)
     }
   }
-  private createErrorResponse(description: string): IProjectServiceResponse {
+  private createErrorResponse(description: string, error: unknown): IProjectServiceResponse {
     return {
       success: false,
       error: {
         title: 'Error reading project file',
         description,
+        error,
       },
     }
   }
@@ -128,6 +131,7 @@ class ProjectService {
         error: {
           title: i18n.t('projectServiceResponses:createProject.errors.canceled.title'),
           description: i18n.t('projectServiceResponses:createProject.errors.canceled.description'),
+          error: null,
         },
       }
     }
@@ -151,6 +155,7 @@ class ProjectService {
         error: {
           title: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.title'),
           description: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.description'),
+          error: null,
         },
       }
     }
@@ -184,6 +189,7 @@ class ProjectService {
         error: {
           title: i18n.t('projectServiceResponses:openProject.errors.canceled.title'),
           description: i18n.t('projectServiceResponses:openProject.errors.canceled.description'),
+          error: null,
         },
       }
     }
@@ -205,6 +211,7 @@ class ProjectService {
           description: i18n.t('projectServiceResponses:openProject.errors.readFile.description', {
             filePath,
           }),
+          error: null,
         },
       }
     }
@@ -215,6 +222,7 @@ class ProjectService {
         error: {
           title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
           description: i18n.t('projectServiceResponses:openProject.errors.readFile.description'),
+          error: null,
         },
       }
     }
@@ -240,6 +248,7 @@ class ProjectService {
         error: {
           title: i18n.t('projectServiceResponses:saveProject.errors.missingParams.title'),
           description: i18n.t('projectServiceResponses:saveProject.errors.missingParams.description'),
+          error: null,
         },
       }
     }

@@ -1,6 +1,6 @@
 import { TitleBar } from '@root/renderer/components/_organisms/title-bar'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { RungState } from '@root/renderer/store/slices'
+import { RungLadderState } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 
@@ -65,7 +65,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           <ConfirmDeleteElementModal
             isOpen={modals['confirm-delete-element'].open}
             validationContext={modals['confirm-delete-element'].data as string}
-            rung={modals['confirm-delete-element'].data as RungState}
+            rung={modals['confirm-delete-element'].data as RungLadderState}
             modalData={modals['confirm-delete-element'].data as ModalData}
           />
         )}

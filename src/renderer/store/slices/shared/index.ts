@@ -258,6 +258,8 @@ export const createSharedSlice: StateCreator<
     },
     openProjectByPath: async (projectPath: string) => {
       const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
+      console.log("data", data)
+      console.log("error", error)
       if (success) {
         getState().sharedWorkspaceActions.handleOpenProjectRequest(data)
         return {

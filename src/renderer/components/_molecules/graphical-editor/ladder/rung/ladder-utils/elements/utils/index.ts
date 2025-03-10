@@ -1,6 +1,6 @@
 import type { CustomHandleProps } from '@root/renderer/components/_atoms/graphical-editor/ladder/handle'
 import type { ParallelNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/parallel'
-import type { RungState } from '@root/renderer/store/slices'
+import type { RungLadderState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
 import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
@@ -8,13 +8,13 @@ import { getDefaultNodeStyle, isNodeOfType } from '../../nodes'
 /**
  * Get the previous element by searching with edge in the rung
  *
- * @param rung: RungState
+ * @param rung: RungLadderState
  * @param node: Node
  *
  * @returns obj: { nodes: { serial: Node[]; parallel: Node[]; all: Node[] }; edges: Edge[] }
  */
 export const getPreviousElementsByEdge = (
-  rung: RungState,
+  rung: RungLadderState,
   node: Node,
 ): { nodes: { serial: Node[]; parallel: Node[]; all: Node[] }; edges: Edge[] } => {
   const { edges } = rung
@@ -64,12 +64,12 @@ export const getPreviousElementsByEdge = (
  * Get the previous node when adding a new element
  * It works when removing the placeholder and variables elements
  *
- * @param rung: RungState
+ * @param rung: RungLadderState
  * @param nodeIndex: number
  *
  * @returns Node
  */
-export const getPreviousElement = (rung: RungState, nodeIndex: number): Node => {
+export const getPreviousElement = (rung: RungLadderState, nodeIndex: number): Node => {
   const nodesWithNoPlaceholderAndVariables = rung.nodes.filter(
     (n) => n.type !== 'placeholder' && n.type !== 'parallelPlaceholder' && n.type !== 'variable',
   )
@@ -168,7 +168,7 @@ export const getNodePositionBasedOnPreviousNode = (
  *
  * @returns ParallelNode[]
  */
-export const findParallelsInRung = (rung: RungState): ParallelNode[] => {
+export const findParallelsInRung = (rung: RungLadderState): ParallelNode[] => {
   const parallels: Node[] = []
   let isAnotherParallel = true
   let parallel: ParallelNode | undefined = undefined
@@ -198,7 +198,7 @@ export const findParallelsInRung = (rung: RungState): ParallelNode[] => {
  *
  * @returns ParallelNode
  */
-export const findDeepestParallelInsideParallel = (rung: RungState, parallel: Node): ParallelNode => {
+export const findDeepestParallelInsideParallel = (rung: RungLadderState, parallel: Node): ParallelNode => {
   const parallelIndex = rung.nodes.findIndex((node) => node.id === parallel.id)
   for (let i = parallelIndex; i < rung.nodes.length; i++) {
     const node = rung.nodes[i]
@@ -220,7 +220,7 @@ export const findDeepestParallelInsideParallel = (rung: RungState, parallel: Nod
  * @returns object: { [key: string]: { parent: ParallelNode | undefined, parallels: { open: ParallelNode, close: ParallelNode }, depth: number, height: number, highestNode: Node, nodes: { serial: Node[], parallel: Node[] } } }
  */
 export const findAllParallelsDepthAndNodes = (
-  rung: RungState,
+  rung: RungLadderState,
   openParallel: ParallelNode,
   depth: number = 0,
   parentNode: ParallelNode | undefined = undefined,
@@ -307,7 +307,7 @@ export const findAllParallelsDepthAndNodes = (
  *
  * @returns Node[]
  */
-export const getDeepestNodesInsideParallels = (rung: RungState): Node[] => {
+export const getDeepestNodesInsideParallels = (rung: RungLadderState): Node[] => {
   const parallels = findParallelsInRung(rung)
   const nodes: Node[] = []
   parallels.forEach((parallel) => {
@@ -325,7 +325,7 @@ export const getDeepestNodesInsideParallels = (rung: RungState): Node[] => {
  *
  * @returns Node[]
  */
-export const getNodesInsideAllParallels = (rung: RungState): Node[] => {
+export const getNodesInsideAllParallels = (rung: RungLadderState): Node[] => {
   const closeParallels = rung.nodes.filter(
     (node) => node.type === 'parallel' && (node as ParallelNode).data.type === 'close',
   )
@@ -346,7 +346,7 @@ export const getNodesInsideAllParallels = (rung: RungState): Node[] => {
  * @returns object: { serial: Node[], parallel: Node[] }
  */
 export const getNodesInsideParallel = (
-  rung: RungState,
+  rung: RungLadderState,
   closeParallelNode: Node,
 ): { serial: Node[]; parallel: Node[] } => {
   const openParallelNode = rung.nodes.find(

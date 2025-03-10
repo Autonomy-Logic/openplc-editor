@@ -3,7 +3,7 @@ import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { RungState } from '@root/renderer/store/slices'
+import { RungLadderState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
 import { useEffect } from 'react'
 
@@ -15,7 +15,7 @@ type ModalData = {
 }
 
 type ConfirmDeleteElementProps = {
-  rung?: RungState | null
+  rung?: RungLadderState | null
   isOpen: boolean
   validationContext: string | null
   modalData?: ModalData

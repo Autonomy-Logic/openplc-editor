@@ -3,7 +3,7 @@ import type { CustomHandleProps } from '@root/renderer/components/_atoms/graphic
 import type { ParallelNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/parallel'
 import type { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
 // import type { VariableNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/variable'
-import type { RungState } from '@root/renderer/store/slices'
+import type { RungLadderState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 
@@ -25,7 +25,7 @@ import { updateVariableBlockPosition } from '../variable-block'
  *
  * @returns The new right rail node
  */
-export const changeRailBounds = (rung: RungState, defaultBounds: [number, number]): { nodes: Node[] } => {
+export const changeRailBounds = (rung: RungLadderState, defaultBounds: [number, number]): { nodes: Node[] } => {
   const rightRail = rung.nodes.find((node) => node.id === 'right-rail')
   if (!rightRail) return { nodes: rung.nodes }
 
@@ -85,7 +85,7 @@ export const changeRailBounds = (rung: RungState, defaultBounds: [number, number
  * @returns The new nodes
  */
 export const updateDiagramElementsPosition = (
-  rung: RungState,
+  rung: RungLadderState,
   defaultBounds: [number, number],
 ): { nodes: Node[]; edges: Edge[] } => {
   const { nodes } = rung

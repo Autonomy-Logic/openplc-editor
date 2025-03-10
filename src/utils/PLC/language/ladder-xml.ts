@@ -5,7 +5,7 @@ import { ParallelNode } from '@root/renderer/components/_atoms/graphical-editor/
 import { PowerRailNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/power-rail'
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
 import { VariableNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/variable'
-import { RungState } from '@root/renderer/store/slices'
+import { RungLadderState } from '@root/renderer/store/slices'
 import {
   BlockLadderXML,
   CoilLadderXML,
@@ -23,7 +23,7 @@ import { Node } from '@xyflow/react'
  */
 const findNodeBasedOnParallelOpen = (
   parallelNode: ParallelNode,
-  rung: RungState,
+  rung: RungLadderState,
   path: {
     nodes: Node<BasicNodeData>[]
     parallels: ParallelNode[]
@@ -47,7 +47,7 @@ const findNodeBasedOnParallelOpen = (
 
 const findNodesBasedOnParallelClose = (
   parallelNode: ParallelNode,
-  rung: RungState,
+  rung: RungLadderState,
   path: {
     nodes: Node<BasicNodeData>[]
     parallels: ParallelNode[]
@@ -80,7 +80,7 @@ const findNodesBasedOnParallelClose = (
   return findNodesBasedOnParallelClose(bottomNode as ParallelNode, rung, path)
 }
 
-const findConnections = (node: Node<BasicNodeData>, rung: RungState, offsetY: number = 0) => {
+const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offsetY: number = 0) => {
   const { nodes: rungNodes, edges: rungEdges } = rung
 
   const connectedEdges = rungEdges.filter((edge) => edge.target === node.id)
@@ -320,7 +320,7 @@ const leftRailToXML = (leftRail: PowerRailNode, offsetY: number = 0): LeftPowerR
   }
 }
 
-const rightRailToXML = (rightRail: PowerRailNode, rung: RungState, offsetY: number = 0): RightPowerRailLadderXML => {
+const rightRailToXML = (rightRail: PowerRailNode, rung: RungLadderState, offsetY: number = 0): RightPowerRailLadderXML => {
   const connections = findConnections(rightRail, rung, offsetY)
 
   return {
@@ -341,7 +341,7 @@ const rightRailToXML = (rightRail: PowerRailNode, rung: RungState, offsetY: numb
   }
 }
 
-const contactToXML = (contact: ContactNode, rung: RungState, offsetY: number = 0): ContactLadderXML => {
+const contactToXML = (contact: ContactNode, rung: RungLadderState, offsetY: number = 0): ContactLadderXML => {
   const connections = findConnections(contact, rung, offsetY)
 
   return {
@@ -372,7 +372,7 @@ const contactToXML = (contact: ContactNode, rung: RungState, offsetY: number = 0
   }
 }
 
-const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLadderXML => {
+const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0): CoilLadderXML => {
   const connections = findConnections(coil, rung, offsetY)
 
   return {
@@ -404,7 +404,7 @@ const coilToXml = (coil: CoilNode, rung: RungState, offsetY: number = 0): CoilLa
   }
 }
 
-const blockToXml = (block: BlockNode<BlockVariant>, rung: RungState, offsetY: number = 0): BlockLadderXML => {
+const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offsetY: number = 0): BlockLadderXML => {
   const connections = findConnections(block, rung, offsetY)
 
   const inputVariables = block.data.inputHandles.map((handle) => {
@@ -554,7 +554,7 @@ const inVariableToXML = (variable: VariableNode, offsetY: number = 0): InVariabl
   }
 }
 
-const outVariableToXML = (variable: VariableNode, rung: RungState, offsetY: number = 0): OutVariableLadderXML => {
+const outVariableToXML = (variable: VariableNode, rung: RungLadderState, offsetY: number = 0): OutVariableLadderXML => {
   const connectedBlock = rung.nodes.find((node) => node.id === variable.data.block.id) as BlockNode<BlockVariant>
 
   return {
@@ -597,7 +597,7 @@ const outVariableToXML = (variable: VariableNode, rung: RungState, offsetY: numb
 /**
  * Entry point to parse nodes to XML
  */
-const ladderToXml = (rungs: RungState[]) => {
+const ladderToXml = (rungs: RungLadderState[]) => {
   const ladderXML: {
     body: {
       LD: LadderXML

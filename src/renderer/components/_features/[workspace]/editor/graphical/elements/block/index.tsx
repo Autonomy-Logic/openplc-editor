@@ -8,8 +8,8 @@ import {
   buildBlockNode,
   getBlockSize,
 } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
-import { getPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils'
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
+import { getLadderPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/utils'
 import {
   Modal,
   ModalContent,
@@ -418,7 +418,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       executionOrder: Number(formState.executionOrder),
     }
 
-    const { rung, edges, variables } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { rung, edges, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: selectedNode.id,
     })
     if (!rung) return

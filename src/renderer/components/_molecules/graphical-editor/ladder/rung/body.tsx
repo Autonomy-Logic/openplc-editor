@@ -1,6 +1,6 @@
 import * as Portal from '@radix-ui/react-portal'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { RungState } from '@root/renderer/store/slices'
+import type { RungLadderState } from '@root/renderer/store/slices'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import type { CoordinateExtent, Node as FlowNode, OnNodesChange, ReactFlowInstance } from '@xyflow/react'
@@ -28,7 +28,7 @@ import {
 import { findNode } from './ladder-utils/nodes'
 
 type RungBodyProps = {
-  rung: RungState
+  rung: RungLadderState
   className?: string
 }
 
@@ -51,7 +51,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
   const nodeTypes = useMemo(() => customNodeTypes, [])
 
-  const [rungLocal, setRungLocal] = useState<RungState>(rung)
+  const [rungLocal, setRungLocal] = useState<RungLadderState>(rung)
   const [dragging, setDragging] = useState(false)
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
@@ -72,7 +72,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
    * To make the getNodesBounds function work, the nodes must have width and height properties set in the node data
    * This useEffect will run every time the nodes array changes (i.e. when a node is added or removed)
    */
-  const updateReactFlowPanelExtent = (rung: RungState) => {
+  const updateReactFlowPanelExtent = (rung: RungLadderState) => {
     const zeroPositionNode: FlowNode = {
       id: '-1',
       position: { x: 0, y: 0 },

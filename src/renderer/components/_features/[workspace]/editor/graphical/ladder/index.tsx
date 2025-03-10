@@ -17,7 +17,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CreateRung } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/graphical-editor/ladder/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { RungState, zodLadderFlowSchema } from '@root/renderer/store/slices'
+import { RungLadderState, zodLadderFlowSchema } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -37,7 +37,7 @@ export default function LadderEditor() {
   const rungs = flow?.rungs || []
   const flowUpdated = flow?.updated
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
-  const [activeItem, setActiveItem] = useState<RungState | null>(null)
+  const [activeItem, setActiveItem] = useState<RungLadderState | null>(null)
 
   const scrollableRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
