@@ -1,5 +1,5 @@
-import { ContactNode, DEFAULT_CONTACT_TYPES } from '@root/renderer/components/_atoms/react-flow/custom-nodes/contact'
-import { getPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils'
+import { ContactNode, DEFAULT_CONTACT_TYPES } from '@root/renderer/components/_atoms/graphical-editor/ladder/contact'
+import { getPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils'
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useState } from 'react'
@@ -13,11 +13,11 @@ type ContactElementProps = {
 const ContactElement = ({ isOpen, onClose, node }: ContactElementProps) => {
   const {
     editor,
-    flows,
+    ladderFlows,
     project: {
       data: { pous },
     },
-    flowActions: { updateNode },
+    ladderFlowActions: { updateNode },
     modalActions: { onOpenChange },
   } = useOpenPLCStore()
 
@@ -39,7 +39,7 @@ const ContactElement = ({ isOpen, onClose, node }: ContactElementProps) => {
   }
 
   const handleConfirmAlteration = () => {
-    const { rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: node.id,
     })
     if (!rung) return

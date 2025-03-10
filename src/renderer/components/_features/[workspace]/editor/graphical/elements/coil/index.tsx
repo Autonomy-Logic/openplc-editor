@@ -1,5 +1,5 @@
-import { CoilNode, DEFAULT_COIL_TYPES } from '@root/renderer/components/_atoms/react-flow/custom-nodes/coil'
-import { getPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils'
+import { CoilNode, DEFAULT_COIL_TYPES } from '@root/renderer/components/_atoms/graphical-editor/ladder/coil'
+import { getPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils'
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useState } from 'react'
@@ -13,11 +13,11 @@ type CoilElementProps = {
 const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
   const {
     editor,
-    flows,
+    ladderFlows,
     project: {
       data: { pous },
     },
-    flowActions: { updateNode },
+    ladderFlowActions: { updateNode },
     modalActions: { onOpenChange },
   } = useOpenPLCStore()
 
@@ -39,7 +39,7 @@ const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
   }
 
   const handleConfirmAlteration = () => {
-    const { rung } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: node.id,
     })
     if (!rung) return

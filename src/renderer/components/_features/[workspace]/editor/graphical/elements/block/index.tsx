@@ -7,16 +7,16 @@ import {
   BlockVariant,
   buildBlockNode,
   getBlockSize,
-} from '@root/renderer/components/_atoms/react-flow/custom-nodes/block'
-import { getPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils'
-import { BasicNodeData } from '@root/renderer/components/_atoms/react-flow/custom-nodes/utils/types'
+} from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
+import { getPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils'
+import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
 import {
   Modal,
   ModalContent,
   ModalTitle,
   // ModalTrigger,
 } from '@root/renderer/components/_molecules'
-import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/diagram'
+import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 // import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
@@ -46,7 +46,7 @@ const searchLibraryByPouName = (
     (library) =>
       pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
         ? library.pous.some((pou) => pou.type === 'function')
-        : true, 
+        : true,
   )
 
   for (const block of filteredLibraries) {
@@ -64,8 +64,8 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const {
     editor,
     editorActions: { updateModelVariables },
-    flows,
-    flowActions: { setNodes, setEdges },
+    ladderFlows,
+    ladderFlowActions: { setNodes, setEdges },
     project: {
       data: { pous },
     },
@@ -418,7 +418,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       executionOrder: Number(formState.executionOrder),
     }
 
-    const { rung, edges, variables } = getPouVariablesRungNodeAndEdges(editor, pous, flows, {
+    const { rung, edges, variables } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: selectedNode.id,
     })
     if (!rung) return
