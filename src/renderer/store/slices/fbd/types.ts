@@ -4,10 +4,7 @@ import { z } from 'zod'
 import { edgeSchema, nodeSchema } from '../react-flow'
 
 const zodFBDRungStateSchema = z.object({
-  id: z.string(),
   comment: z.string().default(''),
-  defaultBounds: z.array(z.number()),
-  reactFlowViewport: z.array(z.number()),
   nodes: z.array(nodeSchema),
   edges: z.array(edgeSchema),
 })
@@ -24,7 +21,7 @@ const zodFBDFlowStateSchema = z.object({
 })
 type ZodFBDFlowState = z.infer<typeof zodFBDFlowStateSchema>
 
-const zodFBDNodeTypesSchema = z.enum(['block', 'contact', 'coil', 'parallel', 'powerRail', 'variable'])
+const zodFBDNodeTypesSchema = z.enum(['block', 'connector', 'connection', 'input', 'output', 'inout'])
 type ZodFBDNodeType = z.infer<typeof zodFBDNodeTypesSchema>
 
 /**
@@ -32,10 +29,7 @@ type ZodFBDNodeType = z.infer<typeof zodFBDNodeTypesSchema>
  */
 
 type RungFBDState = {
-  id: string
   comment: string
-  defaultBounds: number[]
-  reactFlowViewport: number[]
   selectedNodes: Node[]
   nodes: Node[]
   edges: Edge[]
@@ -44,7 +38,7 @@ type RungFBDState = {
 type FBDFlowType = {
   name: string
   updated: boolean
-  rungs: RungFBDState[]
+  rung: RungFBDState
 }
 
 type FBDFlowState = {
@@ -53,92 +47,31 @@ type FBDFlowState = {
 
 type FBDFlowActions = {
   clearFBDFlows: () => void
-  addFBDFlow: (flow: FBDFlowType) => void
   removeFBDFlow: (flowId: string) => void
 
   /**
    * Control the rungs of the flow
    */
-  startFBDRung: ({
-    editorName,
-    rungId,
-    defaultBounds,
-    reactFlowViewport,
-  }: {
-    editorName: string
-    rungId: string
-    defaultBounds: [number, number]
-    reactFlowViewport?: [number, number]
-  }) => void
-  setRungs: ({ rungs, editorName }: { rungs: RungFBDState[]; editorName: string }) => void
-  removeRung: (editorName: string, rungId: string) => void
-  addComment: ({ editorName, rungId, comment }: { editorName: string; rungId: string; comment: string }) => void
+  startFBDRung: ({ editorName }: { editorName: string }) => void
+  setRung: ({ rung, editorName }: { rung: RungFBDState; editorName: string }) => void
+  addComment: ({ editorName, comment }: { editorName: string; comment: string }) => void
 
   /**
    * Control the rungs transactions
    */
-  onNodesChange: ({
-    changes,
-    rungId,
-    editorName,
-  }: {
-    changes: NodeChange<Node>[]
-    rungId: string
-    editorName: string
-  }) => void
-  onEdgesChange: ({
-    changes,
-    rungId,
-    editorName,
-  }: {
-    changes: EdgeChange<Edge>[]
-    rungId: string
-    editorName: string
-  }) => void
-  onConnect: ({ changes, rungId, editorName }: { changes: Connection; rungId: string; editorName: string }) => void
+  onNodesChange: ({ changes, editorName }: { changes: NodeChange<Node>[]; editorName: string }) => void
+  onEdgesChange: ({ changes, editorName }: { changes: EdgeChange<Edge>[]; editorName: string }) => void
+  onConnect: ({ changes, editorName }: { changes: Connection; editorName: string }) => void
 
-  setNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
-  updateNode: ({
-    node,
-    nodeId,
-    rungId,
-    editorName,
-  }: {
-    node: Node
-    nodeId: string
-    rungId: string
-    editorName: string
-  }) => void
-  addNode: ({ node, rungId, editorName }: { node: Node; rungId: string; editorName: string }) => void
-  removeNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
-  setSelectedNodes: ({ nodes, rungId, editorName }: { nodes: Node[]; rungId: string; editorName: string }) => void
+  setNodes: ({ nodes, editorName }: { nodes: Node[]; editorName: string }) => void
+  updateNode: ({ node, nodeId, editorName }: { node: Node; nodeId: string; editorName: string }) => void
+  addNode: ({ node, editorName }: { node: Node; editorName: string }) => void
+  removeNodes: ({ nodes, editorName }: { nodes: Node[]; editorName: string }) => void
+  setSelectedNodes: ({ nodes, editorName }: { nodes: Node[]; editorName: string }) => void
 
-  setEdges: ({ edges, rungId, editorName }: { edges: Edge[]; rungId: string; editorName: string }) => void
-  updateEdge: ({
-    edge,
-    edgeId,
-    rungId,
-    editorName,
-  }: {
-    edge: Edge
-    edgeId: string
-    rungId: string
-    editorName: string
-  }) => void
-  addEdge: ({ edge, rungId, editorName }: { edge: Edge; rungId: string; editorName: string }) => void
-
-  /**
-   * Control the flow viewport of the rung
-   */
-  updateReactFlowViewport: ({
-    reactFlowViewport,
-    rungId,
-    editorName,
-  }: {
-    reactFlowViewport: [number, number]
-    rungId: string
-    editorName: string
-  }) => void
+  setEdges: ({ edges, editorName }: { edges: Edge[]; editorName: string }) => void
+  updateEdge: ({ edge, edgeId, editorName }: { edge: Edge; edgeId: string; editorName: string }) => void
+  addEdge: ({ edge, editorName }: { edge: Edge; editorName: string }) => void
 
   setFlowUpdated: ({ editorName, updated }: { editorName: string; updated: boolean }) => void
 }
@@ -153,6 +86,6 @@ export { FBDFlowActions, FBDFlowSlice, FBDFlowState, FBDFlowType, RungFBDState }
 /**
  * Zod exports
  */
-export { zodFBDFlowSchema, zodFBDFlowStateSchema,zodFBDNodeTypesSchema, zodFBDRungStateSchema }
+export { zodFBDFlowSchema, zodFBDFlowStateSchema, zodFBDNodeTypesSchema, zodFBDRungStateSchema }
 
-export type { ZodFBDFlowState,ZodFBDFlowType, ZodFBDNodeType, ZodFBDRungType }
+export type { ZodFBDFlowState, ZodFBDFlowType, ZodFBDNodeType, ZodFBDRungType }

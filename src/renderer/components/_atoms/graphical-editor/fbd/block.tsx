@@ -1,7 +1,4 @@
-import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { checkVariableName } from '@root/renderer/store/slices/project/validation/variables'
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -11,13 +8,12 @@ import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { BasicNodeData, BuilderBasicProps } from '../ladder/utils/types'
-import { getLadderPouVariablesRungNodeAndEdges } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
 
 export type BlockVariant = {
   name: string
   type: string
-  variable: { id?: string, name: string } | PLCVariable
+  variable: { id?: string; name: string } | PLCVariable
   variables: { name: string; class: string; type: { definition: string; value: string } }[]
   documentation: string
   extensible: boolean
@@ -56,7 +52,6 @@ export const DEFAULT_BLOCK_TYPE = {
 }
 
 export const BlockNodeElement = <T extends object>({
-  nodeId,
   data,
   disabled = false,
   height,
@@ -74,17 +69,7 @@ export const BlockNodeElement = <T extends object>({
   wrongVariable?: boolean
   scale?: number
 }) => {
-  const {
-    editor,
-    editorActions: { updateModelVariables },
-    libraries,
-    fbdFlows,
-    fbdFlowActions: { setNodes, setEdges },
-    project: {
-      data: { pous },
-    },
-    projectActions: { updateVariable, deleteVariable },
-  } = useOpenPLCStore()
+  const _store = useOpenPLCStore()
 
   const {
     name: blockName,
@@ -100,7 +85,7 @@ export const BlockNodeElement = <T extends object>({
     .map((variable) => variable.name)
 
   const [blockNameValue, setBlockNameValue] = useState<string>(blockType === 'generic' ? '' : blockName)
-  const [wrongName, setWrongName] = useState<boolean>(false)
+  const [wrongName, _setWrongName] = useState<boolean>(false)
 
   const inputNameRef = useRef<HTMLInputElement>(null)
   const [inputNameFocus, setInputNameFocus] = useState<boolean>(true)
@@ -132,152 +117,7 @@ export const BlockNodeElement = <T extends object>({
     }
   }, [data])
 
-  const handleNameInputOnBlur = () => {
-    setInputNameFocus(false)
-
-    if (blockNameValue === '' || blockNameValue === blockName) {
-      return
-    }
-
-    const libraryBlock = libraries.system
-      // @ts-expect-error - type is dynamic
-      .flatMap((block) => block.pous)
-      // @ts-expect-error - type is dynamic
-      .find((pou) => pou.name === blockNameValue)
-
-    if (!libraryBlock) {
-      setWrongName(true)
-      return
-    }
-
-    const { pou, rung, node, variables, edges } = getLadderPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
-      nodeId: nodeId ?? '',
-    })
-    if (!pou || !rung || !node) return
-
-    if (libraryBlock && pou.type === 'function' && (libraryBlock as BlockVariant).type !== 'function') {
-      setWrongName(true)
-      toast({
-        title: 'Can not add block',
-        description: `You can not add a ${(libraryBlock as BlockVariant).type} block to an function POU`,
-        variant: 'fail',
-      })
-      return
-    }
-
-    let variable = variables.selected
-    const variableIndex = variable ? variables.all.indexOf(variable) : -1
-
-    if (variable) {
-      let res: { ok: boolean; data?: unknown; message?: string; title?: string } = {
-        ok: true,
-        data: undefined,
-        message: '',
-        title: '',
-      }
-
-      if ((libraryBlock as BlockVariant).type !== 'function-block') {
-        deleteVariable({
-          rowId: variableIndex,
-          scope: 'local',
-          associatedPou: editor.meta.name,
-        })
-        if (
-          editor.type === 'plc-graphical' &&
-          editor.variable.display === 'table' &&
-          parseInt(editor.variable.selectedRow) === variableIndex
-        ) {
-          updateModelVariables({ display: 'table', selectedRow: -1 })
-        }
-        variable = undefined
-      } else {
-        res = updateVariable({
-          data: {
-            type: {
-              definition: 'derived',
-              value: blockNameValue,
-            },
-          },
-          rowId: variableIndex,
-          scope: 'local',
-          associatedPou: editor.meta.name,
-        })
-        if (!res.ok) {
-          toast({
-            title: res.title,
-            description: res.message,
-            variant: 'fail',
-          })
-          return
-        }
-        variable = res.data as PLCVariable | undefined
-      }
-    }
-
-    let newNodes = [...rung.nodes]
-    let newEdges = [...rung.edges]
-
-    /**
-     * Update the node with the new block node
-     * The new block node have a new ID to not conflict with the old block node and to no occur any error of rendering
-     */
-    const newBlockNode = buildBlockNode({
-      id: `BLOCK_${crypto.randomUUID()}`,
-      posX: node.position.x,
-      posY: node.position.y,
-      handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
-      handleY: (node.data as BasicNodeData).handles[0].glbPosition.y,
-      variant: libraryBlock,
-      executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
-    })
-    newBlockNode.data = {
-      ...newBlockNode.data,
-      variable: variable ?? { name: '' },
-    }
-
-    newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n))
-
-    edges.source?.forEach((edge) => {
-      const newEdge = {
-        ...edge,
-        id: edge.id.replace(node.id, newBlockNode.id),
-        source: newBlockNode.id,
-        sourceHandle: newBlockNode.data.outputConnector.id,
-      }
-      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
-    })
-    edges.target?.forEach((edge) => {
-      const newEdge = {
-        ...edge,
-        id: edge.id.replace(node.id, newBlockNode.id),
-        target: newBlockNode.id,
-        targetHandle: newBlockNode.data.inputConnector.id,
-      }
-      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
-    })
-
-    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
-      {
-        ...rung,
-        nodes: newNodes,
-        edges: newEdges,
-      },
-      [rung.defaultBounds[0], rung.defaultBounds[1]],
-    )
-
-    setNodes({
-      editorName: editor.meta.name,
-      rungId: rung.id,
-      nodes: variableNodes,
-    })
-    setEdges({
-      editorName: editor.meta.name,
-      rungId: rung.id,
-      edges: variableEdges,
-    })
-
-    setWrongName(false)
-  }
+  const handleNameInputOnBlur = () => {}
 
   return (
     <div
@@ -332,15 +172,7 @@ export const BlockNodeElement = <T extends object>({
 export const Block = <T extends object>(block: BlockProps<T>) => {
   const { data, dragging, height, width, selected, id } = block
 
-  const {
-    editor,
-    project: {
-      data: { pous },
-    },
-    projectActions: { createVariable, updateVariable },
-    fbdFlows,
-    ladderFlowActions: { updateNode },
-  } = useOpenPLCStore()
+  const _store = useOpenPLCStore()
   const {
     documentation: variantDocumentation,
     type: blockType,
@@ -371,7 +203,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             .join('')}`
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
-  const [wrongVariable, setWrongVariable] = useState<boolean>(false)
+  const [wrongVariable, _setWrongVariable] = useState<boolean>(false)
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
@@ -381,166 +213,9 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   >(null)
 
   /**
-   * useEffect to focus the variable input when the correct block type is selected
-   */
-  useEffect(() => {
-    if (data.variable && data.variable.name !== '' && blockType === 'function-block') {
-      setBlockVariableValue(data.variable.name)
-      return
-    }
-
-    if (inputVariableRef.current && selected) {
-      switch (blockType) {
-        case 'function-block': {
-          if (!data.variable || data.variable.name === '') {
-            const { variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
-              nodeId: id,
-            })
-            // @ts-expect-error - type is dynamic
-            const { name, number } = checkVariableName(variables.all, (data.variant as BlockVariant).name.toUpperCase())
-            handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`)
-            return
-          }
-          inputVariableRef.current.focus()
-          return
-        }
-        default:
-          break
-      }
-    }
-  }, [data])
-
-  /**
-   * Update wrongVariable state when the table of variables is updated
-   */
-  useEffect(() => {
-    if (blockType !== 'function-block') {
-      setWrongVariable(false)
-      return
-    }
-
-    const { variables, node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
-      nodeId: id,
-    })
-    if (!node || !rung) return
-
-    const variable = variables.selected
-    if (!variable) {
-      setWrongVariable(true)
-      return
-    }
-
-    if ((node.data as BasicNodeData).variable.id !== variable.id) {
-      updateNode({
-        editorName: editor.meta.name,
-        rungId: rung.id,
-        nodeId: node.id,
-        node: {
-          ...node,
-          data: {
-            ...node.data,
-            variable,
-          },
-        },
-      })
-      setWrongVariable(false)
-      return
-    }
-
-    setWrongVariable(false)
-  }, [pous])
-
-  /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string) => {
-    const variableNameToSubmit = variableName || blockVariableValue
-
-    if (variableNameToSubmit === '') {
-      setWrongVariable(true)
-      return
-    }
-
-    const { rung, node, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
-      nodeId: id,
-    })
-    if (!rung || !node) return
-
-    /**
-     * Check if the variable exists in the table of variables
-     * If exists, update the node variable
-     */
-    let variable: PLCVariable | undefined = variables.selected
-    if (variable) {
-      if (variable.name === variableNameToSubmit) return
-      const res = updateVariable({
-        data: {
-          ...variable,
-          name: variableNameToSubmit,
-          type: {
-            definition: 'derived',
-            value: (node.data as BlockNodeData<BlockVariant>).variant.name,
-          },
-        },
-        rowId: variables.all.indexOf(variable),
-        scope: 'local',
-        associatedPou: editor.meta.name,
-      })
-      if (!res.ok) {
-        toast({
-          title: res.title,
-          description: res.message,
-          variant: 'fail',
-        })
-        setBlockVariableValue(variable.name)
-        return
-      }
-      variable = res.data as PLCVariable | undefined
-    } else {
-      const res = createVariable({
-        data: {
-          id: crypto.randomUUID(),
-          name: variableNameToSubmit,
-          type: {
-            definition: 'derived',
-            value: (node.data as BlockNodeData<BlockVariant>).variant.name,
-          },
-          class: 'local',
-          location: '',
-          documentation: '',
-          debug: false,
-        },
-        scope: 'local',
-        associatedPou: editor.meta.name,
-      })
-      if (!res.ok) {
-        toast({
-          title: res.title,
-          description: res.message,
-          variant: 'fail',
-        })
-        return
-      }
-      variable = res.data as PLCVariable | undefined
-      if (variable?.name !== variableNameToSubmit) {
-        setBlockVariableValue(variable?.name ?? '')
-      }
-    }
-
-    updateNode({
-      editorName: editor.meta.name,
-      rungId: rung.id,
-      nodeId: node.id,
-      node: {
-        ...node,
-        data: {
-          ...node.data,
-          variable: variable ?? { name: '' },
-        },
-      },
-    })
-    setWrongVariable(false)
-  }
+  const handleSubmitBlockVariableOnTextareaBlur = (_variableName?: string) => {}
 
   return (
     <div
@@ -578,38 +253,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             textAreaValue={blockVariableValue}
             setTextAreaValue={setBlockVariableValue}
             handleSubmit={handleSubmitBlockVariableOnTextareaBlur}
-            onFocus={() => {
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
-                nodeId: id ?? '',
-              })
-              if (!node || !rung) return
-              updateNode({
-                editorName: editor.meta.name,
-                nodeId: node.id,
-                rungId: rung.id,
-                node: {
-                  ...node,
-                  draggable: false,
-                },
-              })
-              return
-            }}
-            onBlur={() => {
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
-                nodeId: id ?? '',
-              })
-              if (!node || !rung) return
-              updateNode({
-                editorName: editor.meta.name,
-                nodeId: node.id,
-                rungId: rung.id,
-                node: {
-                  ...node,
-                  draggable: node.data.draggable as boolean,
-                },
-              })
-              return
-            }}
+            onFocus={() => {}}
+            onBlur={() => {}}
             inputHeight={{
               height: 13,
               scrollLimiter: 14,
