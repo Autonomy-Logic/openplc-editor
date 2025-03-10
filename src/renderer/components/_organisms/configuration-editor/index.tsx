@@ -98,7 +98,7 @@ const DeviceConfiguration = ({
   useEffect(() => {
     const getSerialPorts = async () => {
       const ports = await window.bridge.listSerialPorts()
-      console.log(ports)
+      console.log('COM ports ->', ports)
     }
     void getSerialPorts()
   }, [])

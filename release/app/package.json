@@ -11,5 +11,6 @@
     "rebuild": "node -r ts-node/register ../../scripts/electron-rebuild.js",
     "postinstall": "npm run rebuild && npm run link-modules",
     "link-modules": "node -r ts-node/register ../../scripts/link-modules.ts"
-  }
+  },
+  "dependencies": {}
 }
