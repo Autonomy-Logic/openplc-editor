@@ -150,6 +150,13 @@ export const createSharedSlice: StateCreator<
             },
           })
         }
+        if (propsToCreatePou.language === 'ld') {
+          getState().ladderFlowActions.addLadderFlow({
+            name: propsToCreatePou.name,
+            updated: true,
+            rungs: [],
+          })
+        }
         if (propsToCreatePou.type !== 'program') {
           getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
         }
@@ -367,6 +374,13 @@ export const createSharedSlice: StateCreator<
               edges: [],
               selectedNodes: [],
             },
+          })
+        }
+        if (pou.data.language === 'ld') {
+          getState().ladderFlowActions.addLadderFlow({
+            name: pou.data.name,
+            updated: true,
+            rungs: [],
           })
         }
       })

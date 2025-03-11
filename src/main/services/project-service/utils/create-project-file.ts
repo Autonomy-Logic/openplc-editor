@@ -11,12 +11,12 @@ type CreateProjectFileProps = {
 const CreateProjectFile = (dataToCreateProjectFile: CreateProjectFileProps) => {
   const bodyData =
     dataToCreateProjectFile.language === 'ld'
-      ? { language: dataToCreateProjectFile.language, value: { name: dataToCreateProjectFile.name, rungs: [] } }
+      ? { language: dataToCreateProjectFile.language, value: { name: 'main', rungs: [] } }
       : dataToCreateProjectFile.language === 'fbd'
         ? {
             language: dataToCreateProjectFile.language,
             value: {
-              name: dataToCreateProjectFile.name,
+              name: 'main',
               rung: {
                 comment: '',
                 edges: [],
