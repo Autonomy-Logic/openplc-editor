@@ -141,7 +141,7 @@ export const createSharedSlice: StateCreator<
         if (propsToCreatePou.language === 'fbd') {
           getState().fbdFlowActions.addFBDFlow({
             name: propsToCreatePou.name,
-            updated: false,
+            updated: true,
             rung: {
               comment: '',
               nodes: [],
@@ -355,6 +355,22 @@ export const createSharedSlice: StateCreator<
         },
         data: result.data.content.data,
       })
+
+      result.data.content.data.pous.forEach((pou) => {
+        if (pou.data.language === 'fbd') {
+          getState().fbdFlowActions.addFBDFlow({
+            name: pou.data.name,
+            updated: true,
+            rung: {
+              comment: '',
+              nodes: [],
+              edges: [],
+              selectedNodes: [],
+            },
+          })
+        }
+      })
+
       window.bridge.rebuildMenu()
 
       toast({
