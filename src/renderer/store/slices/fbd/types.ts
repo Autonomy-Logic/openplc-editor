@@ -47,6 +47,7 @@ type FBDFlowState = {
 
 type FBDFlowActions = {
   clearFBDFlows: () => void
+  addFBDFlow: (flow: FBDFlowType) => void
   removeFBDFlow: (flowId: string) => void
 
   /**

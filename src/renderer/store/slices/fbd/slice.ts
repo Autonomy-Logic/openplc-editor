@@ -12,6 +12,24 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
     clearFBDFlows: () => {
       setState({ fbdFlows: [] })
     },
+    addFBDFlow: (flow) => {
+      setState(
+        produce(({ fbdFlows }: FBDFlowState) => {
+          const flowIndex = fbdFlows.findIndex((f) => f.name === flow.name)
+          const rung = {
+            ...flow.rung,
+            selectedNodes: [],
+          }
+          const newFlow = { ...flow, rung }
+
+          if (flowIndex === -1) {
+            fbdFlows.push(newFlow)
+          } else {
+            fbdFlows[flowIndex] = newFlow
+          }
+        }),
+      )
+    },
     removeFBDFlow: (flowId) => {
       setState(
         produce(({ fbdFlows }: FBDFlowState) => {
