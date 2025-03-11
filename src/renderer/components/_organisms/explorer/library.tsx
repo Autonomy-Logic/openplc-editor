@@ -170,6 +170,9 @@ const Library = ({
                         if (meta.language === 'ld') {
                           e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
                         }
+                        if (meta.language === 'fbd') {
+                          e.dataTransfer.setData('application/reactflow/fbd-blocks', 'block')
+                        }
                         e.dataTransfer.setData('application/library', `system/${library.name}/${pou.name}`)
                       }
                     }}
@@ -197,6 +200,9 @@ const Library = ({
                       else if (type === 'plc-graphical') {
                         if (meta.language === 'ld') {
                           e.dataTransfer.setData('application/reactflow/ladder-blocks', 'block')
+                        }
+                        if (meta.language === 'fbd') {
+                          e.dataTransfer.setData('application/reactflow/fbd-blocks', 'block')
                         }
                         e.dataTransfer.setData('application/library', `user/${userLibrary.name}`)
                       }

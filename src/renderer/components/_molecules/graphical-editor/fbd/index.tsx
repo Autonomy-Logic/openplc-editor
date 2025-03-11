@@ -145,6 +145,9 @@ export const FBDBody = ({ rung }: FBDProps) => {
     [rungLocal],
   )
 
+  /**
+   * When the node drag stops, update the fbd rung state
+   */
   const onNodeDragStop = useCallback(() => {
     fbdFlowActions.setRung({
       rung: rungLocal,
