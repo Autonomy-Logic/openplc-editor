@@ -1,4 +1,3 @@
-
 import { CreateProjectFileProps } from '@root/main/modules/ipc/renderer'
 import { IProjectServiceResponse } from '@root/main/services'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
@@ -6,7 +5,7 @@ import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
-import { FBDFlowSlice } from '../fbd'
+import { FBDFlowSlice, FBDFlowType } from '../fbd'
 import { LadderFlowSlice, LadderFlowType } from '../ladder'
 import { LibrarySlice } from '../library'
 import { ModalSlice } from '../modal'
@@ -57,7 +56,15 @@ export type SharedSlice = {
 }
 
 export const createSharedSlice: StateCreator<
-  EditorSlice & TabsSlice & ProjectSlice & LibrarySlice & ModalSlice & FBDFlowSlice & LadderFlowSlice & WorkspaceSlice & SharedSlice,
+  EditorSlice &
+    TabsSlice &
+    ProjectSlice &
+    LibrarySlice &
+    ModalSlice &
+    FBDFlowSlice &
+    LadderFlowSlice &
+    WorkspaceSlice &
+    SharedSlice,
   [],
   [],
   SharedSlice
@@ -176,6 +183,7 @@ export const createSharedSlice: StateCreator<
       getState().editorActions.clearEditor()
       getState().tabsActions.clearTabs()
       getState().libraryActions.clearUserLibraries()
+      getState().fbdFlowActions.clearFBDFlows()
       getState().ladderFlowActions.clearLadderFlows()
       getState().projectActions.clearProjects()
       window.bridge.rebuildMenu()
@@ -209,7 +217,15 @@ export const createSharedSlice: StateCreator<
         const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
         if (ladderPous.length)
           ladderPous.forEach((pou) => {
-            if (pou.data.body.language === 'ld') getState().ladderFlowActions.addLadderFlow(pou.data.body.value as LadderFlowType)
+            if (pou.data.body.language === 'ld')
+              getState().ladderFlowActions.addLadderFlow(pou.data.body.value as LadderFlowType)
+          })
+
+        const fbdPous = projectData.pous.filter((pou) => pou.data.language === 'fbd')
+        if (fbdPous.length)
+          fbdPous.forEach((pou) => {
+            if (pou.data.body.language === 'fbd')
+              getState().fbdFlowActions.addFBDFlow(pou.data.body.value as FBDFlowType)
           })
 
         projectData.pous.map(
@@ -259,8 +275,6 @@ export const createSharedSlice: StateCreator<
     },
     openProjectByPath: async (projectPath: string) => {
       const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
-      console.log("data", data)
-      console.log("error", error)
       if (success) {
         getState().sharedWorkspaceActions.handleOpenProjectRequest(data)
         return {

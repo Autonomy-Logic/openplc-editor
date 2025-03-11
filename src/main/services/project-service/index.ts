@@ -87,7 +87,6 @@ class ProjectService {
       await promises.access(projectPath)
       const fileContent = await promises.readFile(projectPath, 'utf-8')
       const parsedFile = PLCProjectSchema.safeParse(JSON.parse(fileContent))
-      console.log("parsedFile", parsedFile.error)
 
       if (!parsedFile.success) {
         return this.createErrorResponse('Error parsing project file.', parsedFile.error.errors)
