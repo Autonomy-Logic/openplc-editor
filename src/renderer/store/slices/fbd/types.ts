@@ -12,7 +12,7 @@ type ZodFBDRungType = z.infer<typeof zodFBDRungStateSchema>
 
 const zodFBDFlowSchema = z.object({
   name: z.string(),
-  rungs: zodFBDRungStateSchema,
+  rung: zodFBDRungStateSchema,
 })
 type ZodFBDFlowType = z.infer<typeof zodFBDFlowSchema>
 
