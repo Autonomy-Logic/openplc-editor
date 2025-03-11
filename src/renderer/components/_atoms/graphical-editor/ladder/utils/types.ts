@@ -17,7 +17,7 @@ export type BasicNodeData = {
   inputConnector: CustomHandleProps | undefined
   outputConnector: CustomHandleProps | undefined
   numericId: string
-  variable: { id?: string, name: string } | PLCVariable
+  variable: { id?: string; name: string } | PLCVariable
   executionOrder: number
   draggable: boolean
   selectable: boolean

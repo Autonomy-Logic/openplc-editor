@@ -7,8 +7,8 @@ import { useEffect, useRef, useState } from 'react'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
-import { BasicNodeData, BuilderBasicProps } from '../ladder/utils/types'
 import { buildHandle, CustomHandle } from './handle'
+import { BasicNodeData, BuilderBasicProps } from './utils'
 
 export type BlockVariant = {
   name: string
@@ -284,10 +284,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
  */
 export const buildBlockNode = <T extends object | undefined>({
   id,
-  posX,
-  posY,
-  handleX,
-  handleY,
+  position,
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
@@ -296,12 +293,16 @@ export const buildBlockNode = <T extends object | undefined>({
     executionControl: executionControlAux,
     lockExecutionControl,
   } = getBlockVariantAndExecutionControl({ ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) }, executionControl)
-  const { handles, leftHandles, rightHandles, height, width } = getBlockSize(variantLib, { x: handleX, y: handleY })
+  const handlePosition = {
+    x: position.x,
+    y: position.y + DEFAULT_BLOCK_CONNECTOR_Y,
+  }
+  const { handles, leftHandles, rightHandles, height, width } = getBlockSize(variantLib, handlePosition)
 
   return {
     id,
     type: 'block',
-    position: { x: posX, y: posY },
+    position,
     data: {
       handles,
       inputHandles: leftHandles,

@@ -3,6 +3,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { ExitButton } from '../../_molecules/workspace-activity-bar/default'
 import { DefaultWorkspaceActivityBar } from './default'
+import { FBDToolbox } from './fbd-toolbox'
 import { LadderToolbox } from './ladder-toolbox'
 
 type ActivityBarProps = {
@@ -19,6 +20,7 @@ export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) =
     sharedWorkspaceActions: { closeProject },
   } = useOpenPLCStore()
 
+  const isFBDEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'fbd'
   const isLadderEditor = editor?.type === 'plc-graphical' && editor?.meta.language === 'ld'
 
   const handleExitApplication = () => {
@@ -28,6 +30,12 @@ export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) =
     <>
       <div className='my-5 flex h-fit w-full flex-col items-center gap-10'>
         <DefaultWorkspaceActivityBar {...defaultActivityBar} />
+        {isFBDEditor && (
+          <>
+            <DividerActivityBar />
+            <FBDToolbox />
+          </>
+        )}
         {isLadderEditor && (
           <>
             <DividerActivityBar />
