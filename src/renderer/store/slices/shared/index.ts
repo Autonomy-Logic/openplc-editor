@@ -6,6 +6,7 @@ import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
+import { FBDFlowSlice } from '../fbd'
 import { LadderFlowSlice, LadderFlowType } from '../ladder'
 import { LibrarySlice } from '../library'
 import { ModalSlice } from '../modal'
@@ -56,7 +57,7 @@ export type SharedSlice = {
 }
 
 export const createSharedSlice: StateCreator<
-  EditorSlice & TabsSlice & ProjectSlice & LibrarySlice & ModalSlice & LadderFlowSlice & WorkspaceSlice & SharedSlice,
+  EditorSlice & TabsSlice & ProjectSlice & LibrarySlice & ModalSlice & FBDFlowSlice & LadderFlowSlice & WorkspaceSlice & SharedSlice,
   [],
   [],
   SharedSlice

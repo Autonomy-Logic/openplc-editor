@@ -11,7 +11,14 @@ type PouProps = {
 }
 
 const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
-  const bodyValue = language === 'ld' ? { language, value: { name, rungs: [] } } : { language, value: '' }
+  // const bodyValue = language === 'ld' ? { language, value: { name, rungs: [] } } : { language, value: '' }
+  const bodyValue =
+    language === 'ld'
+      ? { language, value: { name, rungs: [] } }
+      : language === 'fbd'
+        ? { language, value: { name, rung: { comment: '', edges: [], nodes: [] } } }
+        : { language, value: '' }
+
   switch (type) {
     case 'function':
       return {
