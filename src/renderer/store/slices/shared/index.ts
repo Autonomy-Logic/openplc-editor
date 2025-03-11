@@ -138,6 +138,18 @@ export const createSharedSlice: StateCreator<
             language: propsToCreatePou.language,
           },
         })
+        if (propsToCreatePou.language === 'fbd') {
+          getState().fbdFlowActions.addFBDFlow({
+            name: propsToCreatePou.name,
+            updated: false,
+            rung: {
+              comment: '',
+              nodes: [],
+              edges: [],
+              selectedNodes: [],
+            },
+          })
+        }
         if (propsToCreatePou.type !== 'program') {
           getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
         }
