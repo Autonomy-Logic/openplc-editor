@@ -12,7 +12,7 @@ type ZodFBDRungType = z.infer<typeof zodFBDRungStateSchema>
 
 const zodFBDFlowSchema = z.object({
   name: z.string(),
-  rungs: z.array(zodFBDRungStateSchema).default([]),
+  rungs: zodFBDRungStateSchema,
 })
 type ZodFBDFlowType = z.infer<typeof zodFBDFlowSchema>
 
@@ -28,7 +28,7 @@ type ZodFBDNodeType = z.infer<typeof zodFBDNodeTypesSchema>
  * Types used at the slice
  */
 
-type RungFBDState = {
+type FBDRungState = {
   comment: string
   selectedNodes: Node[]
   nodes: Node[]
@@ -38,7 +38,7 @@ type RungFBDState = {
 type FBDFlowType = {
   name: string
   updated: boolean
-  rung: RungFBDState
+  rung: FBDRungState
 }
 
 type FBDFlowState = {
@@ -53,7 +53,7 @@ type FBDFlowActions = {
    * Control the rungs of the flow
    */
   startFBDRung: ({ editorName }: { editorName: string }) => void
-  setRung: ({ rung, editorName }: { rung: RungFBDState; editorName: string }) => void
+  setRung: ({ rung, editorName }: { rung: FBDRungState; editorName: string }) => void
   addComment: ({ editorName, comment }: { editorName: string; comment: string }) => void
 
   /**
@@ -81,7 +81,7 @@ type FBDFlowSlice = FBDFlowState & {
   fbdFlowActions: FBDFlowActions
 }
 
-export { FBDFlowActions, FBDFlowSlice, FBDFlowState, FBDFlowType, RungFBDState }
+export { FBDFlowActions, FBDFlowSlice, FBDFlowState, FBDFlowType, FBDRungState }
 
 /**
  * Zod exports
