@@ -1,13 +1,13 @@
-import type { EditorModel, LadderFlowType } from '@root/renderer/store/slices'
+import type { EditorModel, FBDFlowType, LadderFlowType } from '@root/renderer/store/slices'
 import { genericTypeSchema } from '@root/types/PLC'
 import type { PLCPou } from '@root/types/PLC/open-plc'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
 import { ZodLiteral } from 'zod'
 
-import { BlockVariant } from '../block'
-import { BasicNodeData } from './types'
+import { BlockVariant } from '../ladder/block'
+import { BasicNodeData } from '../ladder/utils/types'
 
-export const getPouVariablesRungNodeAndEdges = (
+export const getLadderPouVariablesRungNodeAndEdges = (
   editor: EditorModel,
   pous: PLCPou[],
   ladderFlows: LadderFlowType[],
@@ -16,7 +16,10 @@ export const getPouVariablesRungNodeAndEdges = (
   pou: PLCPou | undefined
   rung: LadderFlowType['rungs'][0] | undefined
   variables: { all: PLCVariable[]; selected: PLCVariable | undefined }
-  edges: { source: LadderFlowType['rungs'][0]['edges'] | undefined; target: LadderFlowType['rungs'][0]['edges'] | undefined }
+  edges: {
+    source: LadderFlowType['rungs'][0]['edges'] | undefined
+    target: LadderFlowType['rungs'][0]['edges'] | undefined
+  }
   node: LadderFlowType['rungs'][0]['nodes'][0] | undefined
 } => {
   const pou = pous.find((pou) => pou.data.name === editor.meta.name)
@@ -38,6 +41,55 @@ export const getPouVariablesRungNodeAndEdges = (
         )
       // case 'variable':
       //   return variable.name === data.variableName && variable.type.definition !== 'derived'
+      default:
+        return (
+          ((node.data as BasicNodeData).variable.id !== undefined
+            ? variable.id === (node.data as BasicNodeData).variable.id
+            : variable.name === data.variableName) && variable.type.definition !== 'derived'
+        )
+    }
+  })
+
+  const edgesThatNodeIsSource = rung?.edges.filter((edge) => edge.source === data.nodeId)
+  const edgesThatNodeIsTarget = rung?.edges.filter((edge) => edge.target === data.nodeId)
+
+  return {
+    pou,
+    rung,
+    variables: { all: variables, selected: variable },
+    edges: { source: edgesThatNodeIsSource, target: edgesThatNodeIsTarget },
+    node,
+  }
+}
+
+export const getFBDPouVariablesRungNodeAndEdges = (
+  editor: EditorModel,
+  pous: PLCPou[],
+  fbdFlows: FBDFlowType[],
+  data: { nodeId: string; variableName?: string },
+): {
+  pou: PLCPou | undefined
+  rung: FBDFlowType['rung'] | undefined
+  variables: { all: PLCVariable[]; selected: PLCVariable | undefined }
+  edges: {
+    source: LadderFlowType['rungs'][0]['edges'] | undefined
+    target: LadderFlowType['rungs'][0]['edges'] | undefined
+  }
+  node: LadderFlowType['rungs'][0]['nodes'][0] | undefined
+} => {
+  const pou = pous.find((pou) => pou.data.name === editor.meta.name)
+  const rung = fbdFlows.find((flow) => flow.name === editor.meta.name)?.rung
+  const node = rung?.nodes.find((node) => node.id === data.nodeId)
+
+  const variables: PLCVariable[] = pou?.data.variables as PLCVariable[]
+  const variable = variables.find((variable) => {
+    if (!node) return undefined
+    switch (node.type) {
+      case 'block':
+        return (
+          (node.data as BasicNodeData).variable.id !== undefined &&
+          (node.data as BasicNodeData).variable.id === variable.id
+        )
       default:
         return (
           ((node.data as BasicNodeData).variable.id !== undefined

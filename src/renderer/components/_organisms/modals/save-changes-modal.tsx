@@ -2,7 +2,7 @@ import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { LadderFlowType } from '@root/renderer/store/slices/ladder'
+import { FBDFlowType, LadderFlowType } from '@root/renderer/store/slices'
 import _ from 'lodash'
 import { ComponentPropsWithoutRef } from 'react'
 
@@ -21,6 +21,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     modalActions: { closeModal, onOpenChange, openModal },
     tabsActions: { clearTabs },
     projectActions: { setProject, clearProjects },
+    fbdFlowActions: { addFBDFlow, clearFBDFlows },
     ladderFlowActions: { addLadderFlow, clearLadderFlows },
     libraryActions: { addLibrary, clearUserLibraries },
     editorActions: { clearEditor },
@@ -32,6 +33,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     clearEditor()
     clearTabs()
     clearUserLibraries()
+    clearFBDFlows()
     clearLadderFlows()
     clearProjects()
   }
@@ -84,6 +86,18 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
               }
             })
           }
+
+          const fdbPous = projectData.pous.filter(
+            (pou: { data: { language: string } }) => pou.data.language === 'fbd',
+          )
+          if (fdbPous.length) {
+            fdbPous.forEach((pou) => {
+              if (pou.data.body.language === 'fbd') {
+                addFBDFlow(pou.data.body.value as FBDFlowType)
+              }
+            })
+          }
+
           data.content.data.pous.forEach((pou) => {
             if (pou.type !== 'program') {
               addLibrary(pou.data.name, pou.type)

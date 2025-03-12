@@ -12,8 +12,8 @@ import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
+import { getLadderPouVariablesRungNodeAndEdges } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
-import { getPouVariablesRungNodeAndEdges } from './utils'
 import type { BasicNodeData, BuilderBasicProps } from './utils/types'
 import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 
@@ -137,7 +137,7 @@ export const Contact = (block: ContactProps) => {
    * Update wrongVariable state when the table of variables is updated
    */
   useEffect(() => {
-    const { variables, node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { variables, node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
       variableName: contactVariableValue,
     })
@@ -203,7 +203,7 @@ export const Contact = (block: ContactProps) => {
    */
   const handleSubmitContactVariableOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || contactVariableValue
-    const { rung, node, variables } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { rung, node, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
       variableName: variableNameToSubmit,
     })
@@ -282,7 +282,7 @@ export const Contact = (block: ContactProps) => {
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
             onFocus={() => {
-              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return
@@ -298,7 +298,7 @@ export const Contact = (block: ContactProps) => {
               return
             }}
             onBlur={() => {
-              const { node, rung } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
               if (!node || !rung) return

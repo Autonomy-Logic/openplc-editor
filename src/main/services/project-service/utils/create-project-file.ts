@@ -11,8 +11,20 @@ type CreateProjectFileProps = {
 const CreateProjectFile = (dataToCreateProjectFile: CreateProjectFileProps) => {
   const bodyData =
     dataToCreateProjectFile.language === 'ld'
-      ? { language: dataToCreateProjectFile.language, value: { name: dataToCreateProjectFile.name, rungs: [] } }
-      : { language: dataToCreateProjectFile.language, value: '' }
+      ? { language: dataToCreateProjectFile.language, value: { name: 'main', rungs: [] } }
+      : dataToCreateProjectFile.language === 'fbd'
+        ? {
+            language: dataToCreateProjectFile.language,
+            value: {
+              name: 'main',
+              rung: {
+                comment: '',
+                edges: [],
+                nodes: [],
+              },
+            },
+          }
+        : { language: dataToCreateProjectFile.language, value: '' }
 
   const _projectJSONStructure: PLCProject = {
     meta: {

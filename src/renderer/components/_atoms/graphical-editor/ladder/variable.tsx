@@ -1,14 +1,14 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { RungState } from '@root/renderer/store/slices'
+import { RungLadderState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
+import { getLadderPouVariablesRungNodeAndEdges, getVariableByName, validateVariableType } from '../utils'
 import { BlockNodeData, BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
-import { getPouVariablesRungNodeAndEdges, getVariableByName, validateVariableType } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
 import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 
@@ -64,7 +64,7 @@ const VariableElement = (block: VariableProps) => {
   const [inputError, setInputError] = useState<boolean>(false)
   const [isAVariable, setIsAVariable] = useState<boolean>(false)
 
-  const updateRelatedNode = (rung: RungState, variableNode: VariableNode, variable: PLCVariable) => {
+  const updateRelatedNode = (rung: RungLadderState, variableNode: VariableNode, variable: PLCVariable) => {
     const relatedBlock = rung.nodes.find((node) => node.id === variableNode.data.block.id)
     if (!relatedBlock) {
       setInputError(true)
@@ -109,7 +109,7 @@ const VariableElement = (block: VariableProps) => {
       node: variableNode,
       rung,
       variables,
-    } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
       variableName: variableValue,
     })
@@ -179,7 +179,7 @@ const VariableElement = (block: VariableProps) => {
   const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || variableValue
 
-    const { pou, rung, node } = getPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
     })
     if (!pou || !rung || !node) return

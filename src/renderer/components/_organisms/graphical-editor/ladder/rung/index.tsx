@@ -6,7 +6,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { RungBody, RungHeader } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { RungState } from '@root/renderer/store/slices'
+import { RungLadderState } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 
@@ -14,7 +14,7 @@ type RungProps = {
   className?: string
   index: number
   id: string
-  rung: RungState
+  rung: RungLadderState
 }
 
 export const Rung = ({ className, index, id, rung }: RungProps) => {

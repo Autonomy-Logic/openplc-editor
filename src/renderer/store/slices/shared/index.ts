@@ -1,4 +1,3 @@
-
 import { CreateProjectFileProps } from '@root/main/modules/ipc/renderer'
 import { IProjectServiceResponse } from '@root/main/services'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
@@ -6,6 +5,7 @@ import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@
 import { StateCreator } from 'zustand'
 
 import { EditorSlice } from '../editor'
+import { FBDFlowSlice, FBDFlowType } from '../fbd'
 import { LadderFlowSlice, LadderFlowType } from '../ladder'
 import { LibrarySlice } from '../library'
 import { ModalSlice } from '../modal'
@@ -56,7 +56,15 @@ export type SharedSlice = {
 }
 
 export const createSharedSlice: StateCreator<
-  EditorSlice & TabsSlice & ProjectSlice & LibrarySlice & ModalSlice & LadderFlowSlice & WorkspaceSlice & SharedSlice,
+  EditorSlice &
+    TabsSlice &
+    ProjectSlice &
+    LibrarySlice &
+    ModalSlice &
+    FBDFlowSlice &
+    LadderFlowSlice &
+    WorkspaceSlice &
+    SharedSlice,
   [],
   [],
   SharedSlice
@@ -130,6 +138,25 @@ export const createSharedSlice: StateCreator<
             language: propsToCreatePou.language,
           },
         })
+        if (propsToCreatePou.language === 'fbd') {
+          getState().fbdFlowActions.addFBDFlow({
+            name: propsToCreatePou.name,
+            updated: true,
+            rung: {
+              comment: '',
+              nodes: [],
+              edges: [],
+              selectedNodes: [],
+            },
+          })
+        }
+        if (propsToCreatePou.language === 'ld') {
+          getState().ladderFlowActions.addLadderFlow({
+            name: propsToCreatePou.name,
+            updated: true,
+            rungs: [],
+          })
+        }
         if (propsToCreatePou.type !== 'program') {
           getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
         }
@@ -175,6 +202,7 @@ export const createSharedSlice: StateCreator<
       getState().editorActions.clearEditor()
       getState().tabsActions.clearTabs()
       getState().libraryActions.clearUserLibraries()
+      getState().fbdFlowActions.clearFBDFlows()
       getState().ladderFlowActions.clearLadderFlows()
       getState().projectActions.clearProjects()
       window.bridge.rebuildMenu()
@@ -208,7 +236,15 @@ export const createSharedSlice: StateCreator<
         const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
         if (ladderPous.length)
           ladderPous.forEach((pou) => {
-            if (pou.data.body.language === 'ld') getState().ladderFlowActions.addLadderFlow(pou.data.body.value as LadderFlowType)
+            if (pou.data.body.language === 'ld')
+              getState().ladderFlowActions.addLadderFlow(pou.data.body.value as LadderFlowType)
+          })
+
+        const fbdPous = projectData.pous.filter((pou) => pou.data.language === 'fbd')
+        if (fbdPous.length)
+          fbdPous.forEach((pou) => {
+            if (pou.data.body.language === 'fbd')
+              getState().fbdFlowActions.addFBDFlow(pou.data.body.value as FBDFlowType)
           })
 
         projectData.pous.map(
@@ -326,6 +362,29 @@ export const createSharedSlice: StateCreator<
         },
         data: result.data.content.data,
       })
+
+      result.data.content.data.pous.forEach((pou) => {
+        if (pou.data.language === 'fbd') {
+          getState().fbdFlowActions.addFBDFlow({
+            name: pou.data.name,
+            updated: true,
+            rung: {
+              comment: '',
+              nodes: [],
+              edges: [],
+              selectedNodes: [],
+            },
+          })
+        }
+        if (pou.data.language === 'ld') {
+          getState().ladderFlowActions.addLadderFlow({
+            name: pou.data.name,
+            updated: true,
+            rungs: [],
+          })
+        }
+      })
+
       window.bridge.rebuildMenu()
 
       toast({

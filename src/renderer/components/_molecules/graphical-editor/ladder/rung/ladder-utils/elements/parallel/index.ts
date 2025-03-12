@@ -3,7 +3,7 @@ import { BlockNodeData } from '@root/renderer/components/_atoms/graphical-editor
 import type { ParallelNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/parallel'
 import type { PlaceholderNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/placeholder'
 import type { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
-import type { RungState } from '@root/renderer/store/slices'
+import type { RungLadderState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -31,7 +31,7 @@ import {
  * @returns object: { nodes: Node[], edges: Edge[] }
  */
 export const startParallelConnection = <T>(
-  rung: RungState,
+  rung: RungLadderState,
   placeholder: { index: number; selected: PlaceholderNode },
   node: Node | { elementType: string; blockVariant?: T },
 ): { nodes: Node[]; edges: Edge[]; newNode?: Node } => {
@@ -250,7 +250,7 @@ export const startParallelConnection = <T>(
  *
  * @returns object: { nodes: Node[], edges: Edge[] }
  */
-export const removeEmptyParallelConnections = (rung: RungState): { nodes: Node[]; edges: Edge[] } => {
+export const removeEmptyParallelConnections = (rung: RungLadderState): { nodes: Node[]; edges: Edge[] } => {
   const { nodes, edges } = rung
 
   let newNodes = [...nodes]

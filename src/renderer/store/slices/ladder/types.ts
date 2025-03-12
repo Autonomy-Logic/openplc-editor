@@ -1,40 +1,12 @@
 import { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
 import { z } from 'zod'
 
+import { edgeSchema, nodeSchema } from '../react-flow'
+
 /**
  * Types used to save at the json
  */
-const nodeSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  position: z.object({
-    x: z.number(),
-    y: z.number(),
-  }),
-  height: z.number(),
-  width: z.number(),
-  measured: z
-    .object({
-      width: z.number(),
-      height: z.number(),
-    })
-    .optional(),
-  draggable: z.boolean(),
-  selectable: z.boolean(),
-  data: z.any(),
-})
-type NodeType = z.infer<typeof nodeSchema>
-
-const edgeSchema = z.object({
-  id: z.string(),
-  source: z.string(),
-  sourceHandle: z.string(),
-  target: z.string(),
-  targetHandle: z.string(),
-})
-type EdgeType = z.infer<typeof edgeSchema>
-
-const zodRungStateSchema = z.object({
+const zodRungLadderStateSchema = z.object({
   id: z.string(),
   comment: z.string().default(''),
   defaultBounds: z.array(z.number()),
@@ -42,27 +14,27 @@ const zodRungStateSchema = z.object({
   nodes: z.array(nodeSchema),
   edges: z.array(edgeSchema),
 })
-type ZodRungType = z.infer<typeof zodRungStateSchema>
+type ZodLadderRungType = z.infer<typeof zodRungLadderStateSchema>
 
 const zodLadderFlowSchema = z.object({
   name: z.string(),
-  rungs: z.array(zodRungStateSchema).default([]),
+  rungs: z.array(zodRungLadderStateSchema).default([]),
 })
 type ZodLadderFlowType = z.infer<typeof zodLadderFlowSchema>
 
-const zodFlowStateSchema = z.object({
+const zodLadderFlowStateSchema = z.object({
   ladderFlows: z.array(zodLadderFlowSchema),
 })
-type ZodFlowState = z.infer<typeof zodFlowStateSchema>
+type ZodLadderFlowState = z.infer<typeof zodLadderFlowStateSchema>
 
-const zodNodeTypesSchema = z.enum(['block', 'contact', 'coil', 'parallel', 'powerRail', 'variable'])
-type ZodNodeType = z.infer<typeof zodNodeTypesSchema>
+const zodLadderNodeTypesSchema = z.enum(['block', 'contact', 'coil', 'parallel', 'powerRail', 'variable'])
+type ZodLadderNodeType = z.infer<typeof zodLadderNodeTypesSchema>
 
-/**
+/**import { edgeSchema, nodeSchema } from '../react-flow'
  * Types used at the slice
  */
 
-type RungState = {
+type RungLadderState = {
   id: string
   comment: string
   defaultBounds: number[]
@@ -75,7 +47,7 @@ type RungState = {
 type LadderFlowType = {
   name: string
   updated: boolean
-  rungs: RungState[]
+  rungs: RungLadderState[]
 }
 
 type LadderFlowState = {
@@ -101,7 +73,7 @@ type LadderFlowActions = {
     defaultBounds: [number, number]
     reactFlowViewport?: [number, number]
   }) => void
-  setRungs: ({ rungs, editorName }: { rungs: RungState[]; editorName: string }) => void
+  setRungs: ({ rungs, editorName }: { rungs: RungLadderState[]; editorName: string }) => void
   removeRung: (editorName: string, rungId: string) => void
   addComment: ({ editorName, rungId, comment }: { editorName: string; rungId: string; comment: string }) => void
   duplicateRung: ({ editorName, rungId }: { editorName: string; rungId: string }) => void
@@ -180,11 +152,11 @@ type LadderFlowSlice = LadderFlowState & {
   ladderFlowActions: LadderFlowActions
 }
 
-export { LadderFlowActions, LadderFlowSlice, LadderFlowState, LadderFlowType, RungState }
+export { LadderFlowActions, LadderFlowSlice, LadderFlowState, LadderFlowType, RungLadderState }
 
 /**
  * Zod exports
  */
-export { edgeSchema, nodeSchema, zodFlowStateSchema, zodLadderFlowSchema, zodNodeTypesSchema,zodRungStateSchema }
+export { zodLadderFlowSchema, zodLadderFlowStateSchema, zodLadderNodeTypesSchema,zodRungLadderStateSchema }
 
-export type { EdgeType, NodeType, ZodFlowState, ZodLadderFlowType, ZodNodeType,ZodRungType }
+export type { ZodLadderFlowState, ZodLadderFlowType, ZodLadderNodeType,ZodLadderRungType }

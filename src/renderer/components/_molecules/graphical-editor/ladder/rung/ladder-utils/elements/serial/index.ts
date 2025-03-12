@@ -1,7 +1,7 @@
 import { checkIfElementIsNode } from '@root/renderer/components/_atoms/graphical-editor/ladder'
 import type { ParallelNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/parallel'
 import type { PlaceholderNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/placeholder'
-import type { RungState } from '@root/renderer/store/slices'
+import type { RungLadderState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -11,7 +11,7 @@ import { removePlaceholderElements } from '../placeholder'
 import { getElementPositionBasedOnPlaceholderElement, getPreviousElement, getPreviousElementsByEdge } from '../utils'
 
 export const appendSerialConnection = <T>(
-  rung: RungState,
+  rung: RungLadderState,
   placeholder: {
     index: number
     selected: PlaceholderNode

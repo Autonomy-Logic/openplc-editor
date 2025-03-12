@@ -1,5 +1,5 @@
 import { nodesBuilder } from '@root/renderer/components/_atoms/graphical-editor/ladder'
-import type { RungState } from '@root/renderer/store/slices'
+import type { RungLadderState } from '@root/renderer/store/slices'
 import type { Node, ReactFlowInstance } from '@xyflow/react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -18,7 +18,7 @@ export const removePlaceholderElements = (nodes: Node[]) => {
  *
  * TODO: Refactor this function to make only one placeholder between nodes
  */
-export const renderPlaceholderElements = (rung: RungState) => {
+export const renderPlaceholderElements = (rung: RungLadderState) => {
   const { nodes } = rung
   const placeholderNodes: Node[] = []
   const nodesInsideParallels = getNodesInsideAllParallels(rung)
@@ -138,7 +138,7 @@ export const renderPlaceholderElements = (rung: RungState) => {
  * @returns The nearest placeholder node
  */
 export const searchNearestPlaceholder = (
-  rung: RungState,
+  rung: RungLadderState,
   reactFlowInstance: ReactFlowInstance,
   position: { x: number; y: number },
 ) => {

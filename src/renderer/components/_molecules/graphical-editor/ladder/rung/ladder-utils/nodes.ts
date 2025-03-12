@@ -1,16 +1,16 @@
 import { defaultCustomNodesStyles, nodesBuilder } from '@root/renderer/components/_atoms/graphical-editor/ladder'
 import type { BuilderBasicProps } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
-import { RungState } from '@root/renderer/store/slices'
+import { RungLadderState } from '@root/renderer/store/slices'
 import type { Node } from '@xyflow/react'
 
-export const findNode = (rung: RungState, nodeId: string): { node: Node | undefined; position: number | undefined } => {
+export const findNode = (rung: RungLadderState, nodeId: string): { node: Node | undefined; position: number | undefined } => {
   return {
     node: rung.nodes.find((node) => node.id === nodeId),
     position: rung.nodes.findIndex((node) => node.id === nodeId),
   }
 }
 
-export const removeNode = (rung: RungState, nodeId: string): Node[] => {
+export const removeNode = (rung: RungLadderState, nodeId: string): Node[] => {
   return rung.nodes.filter((node) => node.id !== nodeId)
 }
 

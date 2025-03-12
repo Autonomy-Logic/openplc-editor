@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { zodFBDFlowSchema } from '../../renderer/store/slices/fbd/types'
 import { zodLadderFlowSchema } from '../../renderer/store/slices/ladder/types'
 
 const baseTypeSchema = z.enum([
@@ -194,7 +195,7 @@ const bodySchema = z.discriminatedUnion('language', [
   }),
   z.object({
     language: z.literal('fbd'),
-    value: z.string(),
+    value: zodFBDFlowSchema,
   }),
 ])
 //

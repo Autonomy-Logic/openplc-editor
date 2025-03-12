@@ -1,5 +1,6 @@
 export * from './console'
 export * from './editor'
+export * from './fbd'
 export * from './ladder'
 export * from './library'
 export * from './modal'
