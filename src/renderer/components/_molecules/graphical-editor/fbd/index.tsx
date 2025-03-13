@@ -6,6 +6,7 @@ import { FBDRungState } from '@root/renderer/store/slices'
 import {
   applyEdgeChanges,
   applyNodeChanges,
+  Connection,
   Edge as FlowEdge,
   Node as FlowNode,
   OnEdgesChange,
@@ -102,6 +103,29 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
     fbdFlowActions.addNode({
       node: newNode,
+      editorName: editor.meta.name,
+    })
+  }
+
+  const handleOnDelete = (nodes: FlowNode[], edges: FlowEdge[]) => {
+    if (nodes.length > 0) {
+     fbdFlowActions.removeNodes({
+        nodes: nodes,
+        editorName: editor.meta.name,
+      })
+    }
+
+    if (edges.length > 0) {
+      fbdFlowActions.removeEdges({
+        edges: edges,
+        editorName: editor.meta.name
+      })
+    }
+  }
+
+  const handleOnConnect = (connection: Connection) => {
+    fbdFlowActions.onConnect({
+      changes: connection,
       editorName: editor.meta.name,
     })
   }
@@ -251,6 +275,13 @@ export const FBDBody = ({ rung }: FBDProps) => {
           nodeTypes,
           nodes: rungLocal.nodes,
           edges: rungLocal.edges,
+
+          onDelete: ({ nodes, edges }) => {
+            handleOnDelete(nodes, edges)
+          },
+          onConnect: (connection) => {
+            handleOnConnect(connection)
+          },
 
           onDragEnter: onDragEnterViewport,
           onDragLeave: onDragLeaveViewport,

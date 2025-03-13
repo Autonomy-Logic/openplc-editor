@@ -1,11 +1,11 @@
-import { nodesBuilder } from "@root/renderer/components/_atoms/graphical-editor/fbd"
-import { BuilderBasicProps } from "@root/renderer/components/_atoms/graphical-editor/fbd/utils"
+import { nodesBuilder } from '@root/renderer/components/_atoms/graphical-editor/fbd'
+import { BuilderBasicProps } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils'
 
-export const buildGenericNode = <T> ({
+export const buildGenericNode = <T>({
   nodeType,
   blockType,
   id,
-  position
+  position,
 }: BuilderBasicProps & {
   nodeType: string
   blockType?: T | undefined
