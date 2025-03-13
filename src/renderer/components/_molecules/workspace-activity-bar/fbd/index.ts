@@ -1,6 +1,6 @@
 export * from './block'
-export * from './connection'
 export * from './connector'
+export * from './continuation'
 export * from './inout-variable'
 export * from './input-variable'
 export * from './out-variable'

@@ -127,7 +127,15 @@ export const createSharedSlice: StateCreator<
           graphical:
             propsToCreatePou.language === 'ld'
               ? { language: propsToCreatePou.language, openedRungs: [] }
-              : { language: propsToCreatePou.language },
+              : propsToCreatePou.language === 'fbd'
+                ? {
+                    language: propsToCreatePou.language,
+                    hoveringElement: {
+                      elementId: null,
+                      hovering: false,
+                    },
+                  }
+                : { language: propsToCreatePou.language },
         })
         getState().editorActions.addModel(data)
         getState().editorActions.setEditor(data)

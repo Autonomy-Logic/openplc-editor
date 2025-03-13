@@ -26,6 +26,13 @@ export const buildGenericNode = <T>({
         variant: nodeType,
         variable: undefined,
       })
+    case 'connector':
+    case 'continuation':
+      return nodesBuilder.connection({
+        id,
+        position,
+        variant: nodeType,
+      })
     default:
       return undefined
   }

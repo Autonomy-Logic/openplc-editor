@@ -1,4 +1,4 @@
-import { BlockButton, Connection, Connector, InOutVariable, InputVariable, OutVariable } from '../../_molecules/workspace-activity-bar/fbd'
+import { BlockButton, Connector, Continuation, InOutVariable, InputVariable, OutVariable } from '../../_molecules/workspace-activity-bar/fbd'
 
 export const FBDToolbox = () => {
   const handleDragStart = (event: React.DragEvent<HTMLDivElement>, iconType: string) => {
@@ -12,7 +12,7 @@ export const FBDToolbox = () => {
       <InputVariable onDragStart={(event) => handleDragStart(event, 'input-variable')} />
       <OutVariable onDragStart={(event) => handleDragStart(event, 'output-variable')} />
       <Connector onDragStart={(event) => handleDragStart(event, 'connector')} />
-      <Connection onDragStart={(event) => handleDragStart(event, 'connection')} />
+      <Continuation onDragStart={(event) => handleDragStart(event, 'continuation')} />
     </>
   )
 }

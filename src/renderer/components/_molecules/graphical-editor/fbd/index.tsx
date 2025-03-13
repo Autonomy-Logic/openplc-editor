@@ -36,6 +36,13 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
+  const isElementBeingHovered = useMemo(() => {
+    if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
+      return editor.graphical.hoveringElement.hovering
+    }
+    return false
+  }, [editor])
+
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
@@ -264,6 +271,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
   return (
     <div className='h-full w-full rounded-lg border p-1 dark:border-neutral-800' ref={reactFlowViewportRef}>
       <ReactFlowPanel
+        key={'fbd-react-flow'}
         background={true}
         controls={true}
         controlsConfig={{
@@ -295,6 +303,8 @@ export const FBDBody = ({ rung }: FBDProps) => {
           onNodesChange: onNodesChange,
           onEdgesChange: onEdgesChange,
           onNodeDragStop: onNodeDragStop,
+
+          preventScrolling: !isElementBeingHovered,
         }}
       />
     </div>

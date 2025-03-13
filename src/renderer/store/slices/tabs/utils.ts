@@ -44,7 +44,12 @@ const CreatePLCGraphicalObject = (
       classFilter: 'All',
       selectedRow: '-1',
     },
-    graphical: language === 'ld' ? { language, openedRungs: [] } : { language },
+    graphical:
+      language === 'ld'
+        ? { language, openedRungs: [] }
+        : language === 'fbd'
+          ? { language, hoveringElement: { elementId: null, hovering: false } }
+          : { language },
   })
   return editor
 }

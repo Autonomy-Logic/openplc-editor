@@ -59,6 +59,7 @@ const editorGraphicalSchema = z.discriminatedUnion('language', [
   }),
   z.object({
     language: z.literal('fbd'),
+    hoveringElement: z.object({ elementId: z.string().nullable(), hovering: z.boolean() }),
   }),
 ])
 
@@ -171,6 +172,10 @@ const _editorActionsSchema = z.object({
     .function()
     .args(z.object({ rungId: z.string() }))
     .returns(z.boolean()),
+  updateModelFBD: z
+    .function()
+    .args(z.object({ hoveringElement: z.object({ elementId: z.string().nullable(), hovering: z.boolean() }) }))
+    .returns(z.void()),
 
   setEditor: z.function().args(editorModelSchema).returns(z.void()),
   clearEditor: z.function().returns(z.void()),

@@ -30,16 +30,20 @@ type VariableBuilderProps = BuilderBasicProps & {
   variable: PLCVariable | undefined
 }
 
-export const DEFAULT_VARIABLE_WIDTH = 120
-export const DEFAULT_VARIABLE_HEIGHT = 48
+export const DEFAULT_VARIABLE_WIDTH = 80
+export const DEFAULT_VARIABLE_HEIGHT = 32
+
+export const ELEMENT_SIZE = 128
+export const ELEMENT_HEIGHT = 48
 
 export const DEFAULT_VARIABLE_CONNECTOR_X = DEFAULT_VARIABLE_WIDTH
 export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
 
 const VariableElement = (block: VariableProps) => {
-  const { id, data } = block
+  const { id, data, selected } = block
   const {
     editor,
+    editorActions: { updateModelFBD },
     project: {
       data: { pous },
     },
@@ -119,44 +123,71 @@ const VariableElement = (block: VariableProps) => {
     }
   }
 
+  const onMouseEnter = () => {
+    updateModelFBD({
+      hoveringElement: { elementId: id, hovering: true },
+    })
+  }
+
+  const onMouseLeave = () => {
+    updateModelFBD({
+      hoveringElement: { elementId: null, hovering: false },
+    })
+  }
+
   return (
     <>
       <div
-        style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}
-        className='flex items-center rounded-md  border border-neutral-850 p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50'
+        style={{ width: ELEMENT_SIZE, height: ELEMENT_HEIGHT }}
+        className={cn(
+          'flex items-center justify-center rounded-md border border-neutral-850 p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
+          'hover:border-transparent hover:ring-2 hover:ring-brand',
+          {
+            'border-transparent ring-2 ring-brand': selected,
+          },
+        )}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
       >
-        <HighlightedTextArea
-          textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
-            'text-yellow-500': !isAVariable,
-            'text-red-500': inputError,
-            'text-left': data.variant === 'output-variable' || 'inout-variable',
-            'text-right': data.variant === 'input-variable',
-          })}
-          highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {
-            'text-left': data.variant === 'output-variable' || 'inout-variable',
-            'text-right': data.variant === 'input-variable',
-          })}
-          scrollableIndicatorClassName={cn({
-            '-right-3': data.variant === 'output-variable' || 'inout-variable',
-            '-left-3': data.variant === 'input-variable',
-          })}
-          placeholder={`${data.block ? `(*${data.block?.variableType.type.value}*)` : 'NOT CONNECTED'}`}
-          textAreaValue={variableValue}
-          setTextAreaValue={setVariableValue}
-          handleSubmit={handleSubmitVariableValueOnTextareaBlur}
-          inputHeight={{
+        <div
+          className='flex items-center'
+          style={{
+            width: DEFAULT_VARIABLE_WIDTH,
             height: DEFAULT_VARIABLE_HEIGHT,
-            scrollLimiter: DEFAULT_VARIABLE_HEIGHT,
           }}
-          ref={inputVariableRef}
-          onChange={onChangeHandler}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
-            setKeyPressedAtTextarea(e.key)
-          }}
-          onKeyUp={() => setKeyPressedAtTextarea('')}
-        />
-        {/* {openAutocomplete && (
+        >
+          <HighlightedTextArea
+            textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
+              'text-yellow-500': !isAVariable,
+              'text-red-500': inputError,
+              'text-left': data.variant === 'output-variable' || 'inout-variable',
+              'text-right': data.variant === 'input-variable',
+            })}
+            highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {
+              'text-left': data.variant === 'output-variable' || 'inout-variable',
+              'text-right': data.variant === 'input-variable',
+            })}
+            scrollableIndicatorClassName={cn({
+              '-right-3': data.variant === 'output-variable' || 'inout-variable',
+              '-left-3': data.variant === 'input-variable',
+            })}
+            placeholder={`${data.block ? `(*${data.block?.variableType.type.value}*)` : 'NOT CONNECTED'}`}
+            textAreaValue={variableValue}
+            setTextAreaValue={setVariableValue}
+            handleSubmit={handleSubmitVariableValueOnTextareaBlur}
+            inputHeight={{
+              height: DEFAULT_VARIABLE_HEIGHT,
+              scrollLimiter: DEFAULT_VARIABLE_HEIGHT,
+            }}
+            ref={inputVariableRef}
+            onChange={onChangeHandler}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
+              setKeyPressedAtTextarea(e.key)
+            }}
+            onKeyUp={() => setKeyPressedAtTextarea('')}
+          />
+          {/* {openAutocomplete && (
           <div className='relative flex justify-center'>
             <div className='absolute -bottom-1'>
               <VariablesBlockAutoComplete
@@ -170,6 +201,7 @@ const VariableElement = (block: VariableProps) => {
             </div>
           </div>
         )} */}
+        </div>
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
@@ -199,7 +231,7 @@ const buildVariableNode = ({ id, position, variant, variable }: VariableBuilderP
           type: 'source',
           glbX: position.x + DEFAULT_VARIABLE_CONNECTOR_X,
           glbY: position.y + DEFAULT_VARIABLE_CONNECTOR_Y,
-          relX: DEFAULT_VARIABLE_WIDTH,
+          relX: DEFAULT_VARIABLE_CONNECTOR_X,
           relY: DEFAULT_VARIABLE_CONNECTOR_Y,
         })
       : undefined
@@ -208,11 +240,11 @@ const buildVariableNode = ({ id, position, variant, variable }: VariableBuilderP
     id,
     type: variant,
     position,
-    width: DEFAULT_VARIABLE_WIDTH,
-    height: DEFAULT_VARIABLE_HEIGHT,
+    width: ELEMENT_SIZE,
+    height: ELEMENT_HEIGHT,
     measured: {
-      width: DEFAULT_VARIABLE_WIDTH,
-      height: DEFAULT_VARIABLE_HEIGHT,
+      width: ELEMENT_SIZE,
+      height: ELEMENT_HEIGHT,
     },
     data: {
       handles: [inputHandle, outputHandle].filter((handle) => handle !== undefined),

@@ -1,11 +1,11 @@
 import { ActivityBarButton } from "@root/renderer/components/_atoms/buttons"
 import { ComponentPropsWithoutRef } from "react"
 
-export const Connection = ({ onDragStart, onDragEnd }: ComponentPropsWithoutRef<'div'>) => {
+export const Continuation = ({ onDragStart, onDragEnd }: ComponentPropsWithoutRef<'div'>) => {
   return (
     <ActivityBarButton aria-label='Input variable'>
       <div draggable onDragStart={onDragStart} onDragEnd={onDragEnd}>
-        <span> Connection </span>
+        <span> Continuation </span>
       </div>
     </ActivityBarButton>
   )
