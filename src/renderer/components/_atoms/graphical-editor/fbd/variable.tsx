@@ -184,7 +184,6 @@ const buildVariableNode = ({ id, position, variant, variable }: VariableBuilderP
       ? buildHandle({
           id: 'input-variable',
           position: Position.Left,
-          isConnectable: false,
           type: 'target',
           glbX: position.x,
           glbY: position.y + DEFAULT_VARIABLE_CONNECTOR_Y,
@@ -197,7 +196,6 @@ const buildVariableNode = ({ id, position, variant, variable }: VariableBuilderP
       ? buildHandle({
           id: 'output-variable',
           position: Position.Right,
-          isConnectable: false,
           type: 'source',
           glbX: position.x + DEFAULT_VARIABLE_CONNECTOR_X,
           glbY: position.y + DEFAULT_VARIABLE_CONNECTOR_Y,
