@@ -1,5 +1,5 @@
 import { cn } from '@root/utils'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { deviceType } from './device'
 import { CheckBox } from './elements/checkBox'
@@ -95,14 +95,6 @@ const DeviceConfiguration = ({
   setSerialPort: (value: string) => void
   serialPortsOptions: string[]
 }) => {
-  useEffect(() => {
-    const getSerialPorts = async () => {
-      const ports = await window.bridge.listSerialPorts()
-      console.log('COM ports ->', ports)
-    }
-    void getSerialPorts()
-  }, [])
-
   return (
     <div className='flex h-full w-1/2 flex-col gap-6'>
       <div className='h-[60%]' />

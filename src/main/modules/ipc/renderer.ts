@@ -228,7 +228,6 @@ const rendererProcessBridge = {
   retrieveRecent: (): Promise<{ name: string; path: string; lastOpenedAt: string; createdAt: string }[]> =>
     ipcRenderer.invoke('app:store-retrieve-recent'),
 
-  listSerialPorts: (): Promise<string[]> => ipcRenderer.invoke('hardware:list-serial-ports'),
   /**
    * Sends the 'window-controls:close' event to close the window.
    */
@@ -356,7 +355,6 @@ const rendererProcessBridge = {
     rendererProcessPort.onmessage = (event) => callback(event.data)
     rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
   },
-
   /**
    * Execute the generation of the C files.
    * Creates an instance using the MessageChannel API to establish a communication between the two Electron processes to generate the C files.

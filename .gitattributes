@@ -24,3 +24,6 @@ resources/compilers/Linux/arduino-cli/**/*  binary
 resources/compilers/MacOS/iec2c/**/*  binary
 resources/compilers/Windows/iec2c/**/*  binary
 resources/compilers/Linux/iec2c/**/*  binary
+resources/serial-communication/Macos/**/*  binary
+resources/serial-communication/Linux/**/*  binary
+resources/serial-communication/Windows/**/*  binary

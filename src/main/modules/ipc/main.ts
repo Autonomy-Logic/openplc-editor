@@ -172,7 +172,6 @@ class MainProcessBridge implements MainIpcModule {
       (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data']) =>
         this.compilerService.buildXmlFile(pathToUserProject, dataToCreateXml),
     )
-    this.ipcMain.handle('hardware:list-serial-ports', (_ev) => this.hardwareService.listSerialPorts())
     /**
      * This is a mock implementation to be used as a presentation.
      * !! Do not use this on production !!
@@ -200,7 +199,6 @@ class MainProcessBridge implements MainIpcModule {
         this.mainWindow?.maximize()
       }
     })
-
     /**
      * Window
      */

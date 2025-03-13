@@ -284,6 +284,7 @@ const createMainWindow = async () => {
   const compilerService = new CompilerService()
 
   const hardwareService = new HardwareService()
+
   const mainIpcModule = new MainProcessBridge({
     mainWindow,
     ipcMain,
