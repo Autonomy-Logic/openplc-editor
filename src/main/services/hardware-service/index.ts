@@ -1,37 +1,43 @@
-import { exec } from 'child_process'
-import { promisify } from 'util'
-
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import { spawn } from 'child_process'
+import { join } from 'path'
 class HardwareService {
   constructor() {}
 
-  async listSerialPorts() {
-    const runListPortsCmd = promisify(exec)
-    try {
-      let ports: string[] = []
-      if (process.platform === 'win32') {
-        const { stderr, stdout } = await runListPortsCmd('mode | findstr /i "COM"')
-        ports = stdout
-          .split('\n')
-          .filter((line) => line.trim() !== '' && !line.includes('DeviceID'))
-          .map((line) => line.trim())
+  listSerialPorts() {
+    let availablePorts = 'No ports available'
+    // Construct the path to the python script
+    const scriptPath = join(process.cwd(), 'resources', 'serial-communication', 'main.py')
+    // Spawn the Python process
+    const serialCommunication = spawn('python3', [scriptPath])
 
-        console.error('Error object ->', stderr)
-      } else if (process.platform === 'linux' || process.platform === 'darwin') {
-        const cmd =
-          process.platform === 'linux'
-            ? 'ls /dev/ttyS* /dev/ttyUSB* /dev/ttyACM* 2>/dev/null'
-            : 'ls /dev/tty.* 2>/dev/null'
-        const { stderr, stdout } = await runListPortsCmd(cmd)
-        ports = stdout.split('\n').filter((line) => line.trim() !== '')
-        console.error('Error object ->', stderr)
-      } else {
-        throw new Error(`Unsupported platform: ${process.platform}`)
-      }
-      return ports
-    } catch (error) {
-      console.error('Error listing serial ports: ', error)
-      throw error
+    // Request the list of available ports
+    const listPortsCommand = {
+      action: 'list_ports',
     }
+    serialCommunication.stdin.write(JSON.stringify(listPortsCommand) + '\n')
+
+    serialCommunication.stdout.on('data', (data) => {
+      const response = JSON.parse(data.toString())
+      console.log('Python Process:', response)
+
+      if (response.status === 'success' && response.ports) {
+        availablePorts = response.ports
+      }
+    })
+    // Handle errors from the Python process
+    serialCommunication.stderr.on('data', (data) => {
+      console.error('Python Process Error:', data.toString())
+    })
+
+    // Handle Python process exit
+    serialCommunication.on('close', (code) => {
+      console.log(`Python process exited with code ${code}`)
+    })
+    return availablePorts
   }
 }
 
