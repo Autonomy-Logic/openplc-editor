@@ -6,35 +6,32 @@ import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
-import { getLadderPouVariablesRungNodeAndEdges, getVariableByName, validateVariableType } from '../utils'
-import { BlockNodeData, BlockVariant } from './block'
+import { getLadderPouVariablesRungNodeAndEdges, getVariableByName } from '../utils'
+import { BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
-import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 
 export type VariableNode = Node<
   BasicNodeData & {
-    variant: 'input' | 'output'
-    block: {
-      id: string
-      handleId: string
-      variableType: BlockVariant['variables'][0]
-    }
+    variant: 'input-variable' | 'output-variable' | 'inout-variable'
+    block:
+      | {
+          id: string
+          handleId: string
+          variableType: BlockVariant['variables'][0]
+        }
+      | undefined
+    variable: PLCVariable | { name: string }
   }
 >
 type VariableProps = NodeProps<VariableNode>
 type VariableBuilderProps = BuilderBasicProps & {
-  variant: 'input' | 'output'
-  block: {
-    id: string
-    handleId: string
-    variableType: BlockVariant['variables'][0]
-  }
+  variant: 'input-variable' | 'output-variable' | 'inout-variable'
   variable: PLCVariable | undefined
 }
 
-export const DEFAULT_VARIABLE_WIDTH = 80
-export const DEFAULT_VARIABLE_HEIGHT = 32
+export const DEFAULT_VARIABLE_WIDTH = 120
+export const DEFAULT_VARIABLE_HEIGHT = 48
 
 export const DEFAULT_VARIABLE_CONNECTOR_X = DEFAULT_VARIABLE_WIDTH
 export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
@@ -44,7 +41,7 @@ const VariableElement = (block: VariableProps) => {
   const {
     editor,
     project: {
-      data: { pous, dataTypes },
+      data: { pous },
     },
     ladderFlows,
     ladderFlowActions: { updateNode },
@@ -58,120 +55,23 @@ const VariableElement = (block: VariableProps) => {
   >(null)
 
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
-  const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
+  const [_keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
-  const [variableValue, setVariableValue] = useState(data.variable.name)
+  const [variableValue, setVariableValue] = useState('')
   const [inputError, setInputError] = useState<boolean>(false)
   const [isAVariable, setIsAVariable] = useState<boolean>(false)
 
-  const updateRelatedNode = (rung: RungLadderState, variableNode: VariableNode, variable: PLCVariable) => {
-    const relatedBlock = rung.nodes.find((node) => node.id === variableNode.data.block.id)
-    if (!relatedBlock) {
-      setInputError(true)
-      return
-    }
-
-    updateNode({
-      editorName: editor.meta.name,
-      rungId: rung.id,
-      nodeId: relatedBlock.id,
-      node: {
-        ...relatedBlock,
-        data: {
-          ...relatedBlock.data,
-          connectedVariables: {
-            ...(relatedBlock.data as BlockNodeData<object>).connectedVariables,
-            [variableNode.data.block.handleId]: {
-              variable: variable,
-              type: variableNode.data.variant,
-            },
-          },
-        },
-      },
-    })
-  }
+  const updateRelatedNode = (_rung: RungLadderState, _variableNode: VariableNode, _variable: PLCVariable) => {}
 
   /**
    * useEffect to focus the variable input when the block is selected
    */
-  useEffect(() => {
-    if (data.variable && data.variable.name !== '') {
-      setVariableValue(data.variable.name)
-      return
-    }
-  }, [])
+  useEffect(() => {}, [])
 
   /**
    * Update inputError state when the table of variables is updated
    */
-  useEffect(() => {
-    const {
-      node: variableNode,
-      rung,
-      variables,
-    } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
-      nodeId: id,
-      variableName: variableValue,
-    })
-    if (!rung || !variableNode) return
-
-    const variable = variables.selected
-    if (!variable || !inputVariableRef) {
-      setIsAVariable(false)
-    } else {
-      // if the variable is not the same as the one in the node, update the node
-      if (variable.id !== (variableNode as VariableNode).data.variable.id) {
-        updateNode({
-          editorName: editor.meta.name,
-          rungId: rung.id,
-          nodeId: variableNode.id,
-          node: {
-            ...variableNode,
-            data: {
-              ...variableNode.data,
-              variable: variable,
-            },
-          },
-        })
-        updateRelatedNode(rung, variableNode as VariableNode, variable)
-      }
-
-      // if the variable is the same as the one in the node, update the node
-      if (variable.id === (variableNode as VariableNode).data.variable.id && variable.name !== (variableNode as VariableNode).data.variable.name) {
-        updateNode({
-          editorName: editor.meta.name,
-          rungId: rung.id,
-          nodeId: variableNode.id,
-          node: {
-            ...variableNode,
-            data: {
-              ...variableNode.data,
-              variable: variable,
-            },
-          },
-        })
-        updateRelatedNode(rung, variableNode as VariableNode, variable)
-      }
-
-      const validation = validateVariableType(variable.type.value, data.block.variableType)
-      if (!validation.isValid && dataTypes.length > 0) {
-        const userDataTypes = dataTypes.map((dataType) => dataType.name)
-        validation.isValid = userDataTypes.includes(variable.type.value)
-        validation.error = undefined
-      }
-      setVariableValue(variable.name)
-      setInputError(!validation.isValid)
-      setIsAVariable(true)
-    }
-
-    if (!rung) return
-
-    const relatedBlock = rung.nodes.find((node) => node.id === data.block.id)
-    if (!relatedBlock) {
-      setInputError(true)
-      return
-    }
-  }, [pous])
+  useEffect(() => {}, [pous])
 
   /**
    * Handle with the variable input onBlur event
@@ -221,23 +121,26 @@ const VariableElement = (block: VariableProps) => {
 
   return (
     <>
-      <div style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}>
+      <div
+        style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}
+        className='flex items-center rounded-md  border border-neutral-850 p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50'
+      >
         <HighlightedTextArea
           textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
             'text-yellow-500': !isAVariable,
             'text-red-500': inputError,
-            'text-left': data.variant === 'output',
-            'text-right': data.variant === 'input',
+            'text-left': data.variant === 'output-variable' || 'inout-variable',
+            'text-right': data.variant === 'input-variable',
           })}
           highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {
-            'text-left': data.variant === 'output',
-            'text-right': data.variant === 'input',
+            'text-left': data.variant === 'output-variable' || 'inout-variable',
+            'text-right': data.variant === 'input-variable',
           })}
           scrollableIndicatorClassName={cn({
-            '-right-3': data.variant === 'output',
-            '-left-3': data.variant === 'input',
+            '-right-3': data.variant === 'output-variable' || 'inout-variable',
+            '-left-3': data.variant === 'input-variable',
           })}
-          placeholder={`(*${data.block.variableType.type.value}*)`}
+          placeholder={`${data.block ? `(*${data.block?.variableType.type.value}*)` : 'NOT CONNECTED'}`}
           textAreaValue={variableValue}
           setTextAreaValue={setVariableValue}
           handleSubmit={handleSubmitVariableValueOnTextareaBlur}
@@ -253,7 +156,7 @@ const VariableElement = (block: VariableProps) => {
           }}
           onKeyUp={() => setKeyPressedAtTextarea('')}
         />
-        {openAutocomplete && (
+        {/* {openAutocomplete && (
           <div className='relative flex justify-center'>
             <div className='absolute -bottom-1'>
               <VariablesBlockAutoComplete
@@ -266,7 +169,7 @@ const VariableElement = (block: VariableProps) => {
               />
             </div>
           </div>
-        )}
+        )} */}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
@@ -275,38 +178,29 @@ const VariableElement = (block: VariableProps) => {
   )
 }
 
-const buildVariableNode = ({
-  id,
-  posX,
-  posY,
-  handleX,
-  handleY,
-  variant,
-  block,
-  variable,
-}: VariableBuilderProps): VariableNode => {
+const buildVariableNode = ({ id, position, variant, variable }: VariableBuilderProps): VariableNode => {
   const inputHandle =
-    variant === 'output'
+    variant === 'output-variable' || variant === 'inout-variable'
       ? buildHandle({
-          id: 'input',
+          id: 'input-variable',
           position: Position.Left,
           isConnectable: false,
           type: 'target',
-          glbX: handleX,
-          glbY: handleY,
+          glbX: position.x,
+          glbY: position.y + DEFAULT_VARIABLE_CONNECTOR_Y,
           relX: 0,
           relY: DEFAULT_VARIABLE_CONNECTOR_Y,
         })
       : undefined
   const outputHandle =
-    variant === 'input'
+    variant === 'input-variable' || variant === 'inout-variable'
       ? buildHandle({
-          id: 'output',
+          id: 'output-variable',
           position: Position.Right,
           isConnectable: false,
           type: 'source',
-          glbX: handleX + DEFAULT_VARIABLE_WIDTH,
-          glbY: handleY,
+          glbX: position.x + DEFAULT_VARIABLE_CONNECTOR_X,
+          glbY: position.y + DEFAULT_VARIABLE_CONNECTOR_Y,
           relX: DEFAULT_VARIABLE_WIDTH,
           relY: DEFAULT_VARIABLE_CONNECTOR_Y,
         })
@@ -314,11 +208,8 @@ const buildVariableNode = ({
 
   return {
     id,
-    type: 'variable',
-    position: {
-      x: posX,
-      y: posY,
-    },
+    type: variant,
+    position,
     width: DEFAULT_VARIABLE_WIDTH,
     height: DEFAULT_VARIABLE_HEIGHT,
     measured: {
@@ -335,14 +226,14 @@ const buildVariableNode = ({
       variable: variable ?? { name: '' },
       executionOrder: 0,
       variant,
-      block,
-      draggable: false,
+      block: undefined,
+      draggable: true,
       selectable: true,
-      deletable: false,
+      deletable: true,
     },
-    deletable: false,
+    deletable: true,
     selectable: true,
-    draggable: false,
+    draggable: true,
   }
 }
 

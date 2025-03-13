@@ -21,7 +21,14 @@ const zodFBDFlowStateSchema = z.object({
 })
 type ZodFBDFlowState = z.infer<typeof zodFBDFlowStateSchema>
 
-const zodFBDNodeTypesSchema = z.enum(['block', 'connector', 'connection', 'input', 'output', 'inout'])
+const zodFBDNodeTypesSchema = z.enum([
+  'block',
+  'connector',
+  'connection',
+  'input-variable',
+  'output-variable',
+  'inout-variable',
+])
 type ZodFBDNodeType = z.infer<typeof zodFBDNodeTypesSchema>
 
 /**

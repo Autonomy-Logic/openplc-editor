@@ -1,4 +1,4 @@
-import { customNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
+import { CustomNodeTypes, customNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
 import { ReactFlowPanel } from '@root/renderer/components/_atoms/react-flow'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -46,7 +46,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
   const handleAddElementByDropping = (
     position: XYPosition,
-    newNodeType: string = 'mockNode',
+    newNodeType: CustomNodeTypes,
     library: string | undefined,
   ) => {
     let pouLibrary = undefined
@@ -109,7 +109,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
   const handleOnDelete = (nodes: FlowNode[], edges: FlowEdge[]) => {
     if (nodes.length > 0) {
-     fbdFlowActions.removeNodes({
+      fbdFlowActions.removeNodes({
         nodes: nodes,
         editorName: editor.meta.name,
       })
@@ -118,7 +118,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
     if (edges.length > 0) {
       fbdFlowActions.removeEdges({
         edges: edges,
-        editorName: editor.meta.name
+        editorName: editor.meta.name,
       })
     }
   }
@@ -238,7 +238,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
         event.dataTransfer.getData('application/reactflow/fbd-blocks') === ''
           ? undefined
           : event.dataTransfer.getData('application/reactflow/fbd-blocks')
-      if (!blockType) {
+      if (!blockType || !Object.keys(customNodeTypes).includes(blockType)) {
         return
       }
 
@@ -256,7 +256,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
         y: 0,
       }
 
-      handleAddElementByDropping(position, blockType, library)
+      handleAddElementByDropping(position, blockType as CustomNodeTypes, library)
     },
     [rung, reactFlowInstance],
   )
