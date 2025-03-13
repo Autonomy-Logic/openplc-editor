@@ -276,6 +276,10 @@ export const FBDBody = ({ rung }: FBDProps) => {
           nodes: rungLocal.nodes,
           edges: rungLocal.edges,
 
+          defaultEdgeOptions: {
+            type: 'smoothstep',
+          },
+
           onDelete: ({ nodes, edges }) => {
             handleOnDelete(nodes, edges)
           },
