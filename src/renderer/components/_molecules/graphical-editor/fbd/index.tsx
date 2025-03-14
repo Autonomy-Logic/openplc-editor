@@ -1,4 +1,4 @@
-import { customNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
+import { CustomNodeTypes, customNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
 import { ReactFlowPanel } from '@root/renderer/components/_atoms/react-flow'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -6,6 +6,7 @@ import { FBDRungState } from '@root/renderer/store/slices'
 import {
   applyEdgeChanges,
   applyNodeChanges,
+  Connection,
   Edge as FlowEdge,
   Node as FlowNode,
   OnEdgesChange,
@@ -35,6 +36,13 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
+  const isElementBeingHovered = useMemo(() => {
+    if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
+      return editor.graphical.hoveringElement.hovering
+    }
+    return false
+  }, [editor])
+
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
@@ -45,7 +53,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
   const handleAddElementByDropping = (
     position: XYPosition,
-    newNodeType: string = 'mockNode',
+    newNodeType: CustomNodeTypes,
     library: string | undefined,
   ) => {
     let pouLibrary = undefined
@@ -102,6 +110,29 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
     fbdFlowActions.addNode({
       node: newNode,
+      editorName: editor.meta.name,
+    })
+  }
+
+  const handleOnDelete = (nodes: FlowNode[], edges: FlowEdge[]) => {
+    if (nodes.length > 0) {
+      fbdFlowActions.removeNodes({
+        nodes: nodes,
+        editorName: editor.meta.name,
+      })
+    }
+
+    if (edges.length > 0) {
+      fbdFlowActions.removeEdges({
+        edges: edges,
+        editorName: editor.meta.name,
+      })
+    }
+  }
+
+  const handleOnConnect = (connection: Connection) => {
+    fbdFlowActions.onConnect({
+      changes: connection,
       editorName: editor.meta.name,
     })
   }
@@ -214,7 +245,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
         event.dataTransfer.getData('application/reactflow/fbd-blocks') === ''
           ? undefined
           : event.dataTransfer.getData('application/reactflow/fbd-blocks')
-      if (!blockType) {
+      if (!blockType || !Object.keys(customNodeTypes).includes(blockType)) {
         return
       }
 
@@ -232,7 +263,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
         y: 0,
       }
 
-      handleAddElementByDropping(position, blockType, library)
+      handleAddElementByDropping(position, blockType as CustomNodeTypes, library)
     },
     [rung, reactFlowInstance],
   )
@@ -240,6 +271,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
   return (
     <div className='h-full w-full rounded-lg border p-1 dark:border-neutral-800' ref={reactFlowViewportRef}>
       <ReactFlowPanel
+        key={'fbd-react-flow'}
         background={true}
         controls={true}
         controlsConfig={{
@@ -252,6 +284,17 @@ export const FBDBody = ({ rung }: FBDProps) => {
           nodes: rungLocal.nodes,
           edges: rungLocal.edges,
 
+          defaultEdgeOptions: {
+            type: 'smoothstep',
+          },
+
+          onDelete: ({ nodes, edges }) => {
+            handleOnDelete(nodes, edges)
+          },
+          onConnect: (connection) => {
+            handleOnConnect(connection)
+          },
+
           onDragEnter: onDragEnterViewport,
           onDragLeave: onDragLeaveViewport,
           onDragOver: onDragOver,
@@ -260,6 +303,8 @@ export const FBDBody = ({ rung }: FBDProps) => {
           onNodesChange: onNodesChange,
           onEdgesChange: onEdgesChange,
           onNodeDragStop: onNodeDragStop,
+
+          preventScrolling: !isElementBeingHovered,
         }}
       />
     </div>

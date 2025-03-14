@@ -1,4 +1,4 @@
-import { Connection, Edge, EdgeChange, Node, NodeChange } from '@xyflow/react'
+import { Connection, Edge, Node } from '@xyflow/react'
 import { z } from 'zod'
 
 import { edgeSchema, nodeSchema } from '../react-flow'
@@ -21,7 +21,14 @@ const zodFBDFlowStateSchema = z.object({
 })
 type ZodFBDFlowState = z.infer<typeof zodFBDFlowStateSchema>
 
-const zodFBDNodeTypesSchema = z.enum(['block', 'connector', 'connection', 'input', 'output', 'inout'])
+const zodFBDNodeTypesSchema = z.enum([
+  'block',
+  'connector',
+  'connection',
+  'input-variable',
+  'output-variable',
+  'inout-variable',
+])
 type ZodFBDNodeType = z.infer<typeof zodFBDNodeTypesSchema>
 
 /**
@@ -60,12 +67,11 @@ type FBDFlowActions = {
   /**
    * Control the rungs transactions
    */
-  onNodesChange: ({ changes, editorName }: { changes: NodeChange<Node>[]; editorName: string }) => void
-  onEdgesChange: ({ changes, editorName }: { changes: EdgeChange<Edge>[]; editorName: string }) => void
   onConnect: ({ changes, editorName }: { changes: Connection; editorName: string }) => void
 
   setNodes: ({ nodes, editorName }: { nodes: Node[]; editorName: string }) => void
   updateNode: ({ node, nodeId, editorName }: { node: Node; nodeId: string; editorName: string }) => void
+
   addNode: ({ node, editorName }: { node: Node; editorName: string }) => void
   removeNodes: ({ nodes, editorName }: { nodes: Node[]; editorName: string }) => void
   setSelectedNodes: ({ nodes, editorName }: { nodes: Node[]; editorName: string }) => void
@@ -73,6 +79,7 @@ type FBDFlowActions = {
   setEdges: ({ edges, editorName }: { edges: Edge[]; editorName: string }) => void
   updateEdge: ({ edge, edgeId, editorName }: { edge: Edge; edgeId: string; editorName: string }) => void
   addEdge: ({ edge, editorName }: { edge: Edge; editorName: string }) => void
+  removeEdges: ({ edges, editorName }: { edges: Edge[]; editorName: string }) => void
 
   setFlowUpdated: ({ editorName, updated }: { editorName: string; updated: boolean }) => void
 }

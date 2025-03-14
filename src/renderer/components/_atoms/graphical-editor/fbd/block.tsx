@@ -18,7 +18,7 @@ export type BlockVariant = {
   documentation: string
   extensible: boolean
 }
-type variables = {
+type Variables = {
   [key: string]: {
     variable: PLCVariable | undefined
     type: 'input' | 'output'
@@ -29,7 +29,7 @@ export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
   lockExecutionControl: boolean
-  connectedVariables: variables
+  connectedVariables: Variables
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
@@ -275,11 +275,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 /**
  *
  * @param id: string - The id of the block node
- * @param posX: number - The x coordinate of the block node in the flow panel
- * @param posY: number - The y coordinate of the block node in the flow panel
- * @param handleX: number - The x coordinate of the handle based on the global position (inside the flow panel)
- * @param handleY: number - The y coordinate of the handle based on the global position (inside the flow panel)
- * @param blockType: 'template' - The type of the block node
+ * @param position: { x: number, y: number } - The position of the block node
+ * @param variant: 'template' - The type of the block node
  * @returns BlockNode
  */
 export const buildBlockNode = <T extends object | undefined>({

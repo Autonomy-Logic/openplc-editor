@@ -223,13 +223,13 @@ const VariableElement = (block: VariableProps) => {
     <>
       <div style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}>
         <HighlightedTextArea
-          textAreaClassName={cn('text-center text-xs leading-3', {
+          textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
             'text-yellow-500': !isAVariable,
             'text-red-500': inputError,
             'text-left': data.variant === 'output',
             'text-right': data.variant === 'input',
           })}
-          highlightClassName={cn('text-center text-xs leading-3', {
+          highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {
             'text-left': data.variant === 'output',
             'text-right': data.variant === 'input',
           })}

@@ -1,5 +1,5 @@
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils'
-import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
+import { addEdge } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
@@ -98,26 +98,6 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
     /**
      * Control the rungs transactions
      */
-    onNodesChange: ({ changes, editorName }) => {
-      setState(
-        produce(({ fbdFlows }: FBDFlowState) => {
-          const flow = fbdFlows.find((flow) => flow.name === editorName)
-          if (!flow) return
-
-          flow.rung.nodes = applyNodeChanges(changes, flow.rung.nodes)
-        }),
-      )
-    },
-    onEdgesChange: ({ changes, editorName }) => {
-      setState(
-        produce(({ fbdFlows }: FBDFlowState) => {
-          const flow = fbdFlows.find((flow) => flow.name === editorName)
-          if (!flow) return
-
-          flow.rung.edges = applyEdgeChanges(changes, flow.rung.edges)
-        }),
-      )
-    },
     onConnect: ({ changes, editorName }) => {
       setState(
         produce(({ fbdFlows }: FBDFlowState) => {
@@ -125,6 +105,7 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
           if (!flow) return
 
           flow.rung.edges = addEdge(changes, flow.rung.edges)
+          flow.updated = true
         }),
       )
     },
@@ -165,18 +146,13 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
         }),
       )
     },
-    removeNodes({ editorName, nodes: _nodes }) {
+    removeNodes({ editorName, nodes }) {
       setState(
         produce(({ fbdFlows }: FBDFlowState) => {
           const flow = fbdFlows.find((flow) => flow.name === editorName)
           if (!flow) return
 
-          const rung = flow.rung
-          if (!rung) return
-
-          // const { nodes: newNodes, edges: newEdges } = removeElements(rung, nodes)
-          // rung.nodes = newNodes
-          // rung.edges = newEdges
+          flow.rung.nodes = flow.rung.nodes.filter((node) => !nodes.find((n) => n.id === node.id))
           flow.updated = true
         }),
       )
@@ -259,6 +235,17 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
           if (!flow) return
 
           flow.rung.edges.push(edge)
+          flow.updated = true
+        }),
+      )
+    },
+    removeEdges({ editorName, edges }) {
+      setState(
+        produce(({ fbdFlows }: FBDFlowState) => {
+          const flow = fbdFlows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          flow.rung.edges = flow.rung.edges.filter((edge) => !edges.find((e) => e.id === edge.id))
           flow.updated = true
         }),
       )

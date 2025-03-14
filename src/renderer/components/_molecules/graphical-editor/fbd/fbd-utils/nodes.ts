@@ -1,13 +1,13 @@
-import { nodesBuilder } from "@root/renderer/components/_atoms/graphical-editor/fbd"
-import { BuilderBasicProps } from "@root/renderer/components/_atoms/graphical-editor/fbd/utils"
+import { CustomNodeTypes, nodesBuilder } from '@root/renderer/components/_atoms/graphical-editor/fbd'
+import { BuilderBasicProps } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils'
 
-export const buildGenericNode = <T> ({
+export const buildGenericNode = <T>({
   nodeType,
   blockType,
   id,
-  position
+  position,
 }: BuilderBasicProps & {
-  nodeType: string
+  nodeType: CustomNodeTypes
   blockType?: T | undefined
 }) => {
   switch (nodeType) {
@@ -16,6 +16,22 @@ export const buildGenericNode = <T> ({
         id,
         position,
         variant: blockType ?? undefined,
+      })
+    case 'input-variable':
+    case 'output-variable':
+    case 'inout-variable':
+      return nodesBuilder.variable({
+        id,
+        position,
+        variant: nodeType,
+        variable: undefined,
+      })
+    case 'connector':
+    case 'continuation':
+      return nodesBuilder.connection({
+        id,
+        position,
+        variant: nodeType,
       })
     default:
       return undefined

@@ -166,6 +166,19 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       return false
     },
 
+    updateModelFBD: ({ hoveringElement }) =>
+      setState(
+        produce((state: EditorState) => {
+          const { editor } = state
+          if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
+            editor.graphical.hoveringElement = {
+              elementId: hoveringElement.elementId,
+              hovering: hoveringElement.hovering,
+            }
+          }
+        }),
+      ),
+
     updateEditorModel: (currentEditor: string, newEditor: string) => {
       if (currentEditor === newEditor) return
       setState(
