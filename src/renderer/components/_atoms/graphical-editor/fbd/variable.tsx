@@ -160,13 +160,8 @@ const VariableElement = (block: VariableProps) => {
             textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
               'text-yellow-500': !isAVariable,
               'text-red-500': inputError,
-              'text-left': data.variant === 'output-variable' || 'inout-variable',
-              'text-right': data.variant === 'input-variable',
             })}
-            highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {
-              'text-left': data.variant === 'output-variable' || 'inout-variable',
-              'text-right': data.variant === 'input-variable',
-            })}
+            highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {})}
             scrollableIndicatorClassName={cn({
               '-right-3': data.variant === 'output-variable' || 'inout-variable',
               '-left-3': data.variant === 'input-variable',
