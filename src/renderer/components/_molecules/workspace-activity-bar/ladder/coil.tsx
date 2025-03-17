@@ -1,4 +1,4 @@
-import CoilIcon from '@root/renderer/assets/icons/project/Coil'
+import CoilIcon from '@root/renderer/assets/icons/project/ladder/Coil'
 import { ActivityBarButton } from '@root/renderer/components/_atoms/buttons'
 import { ComponentPropsWithoutRef } from 'react'
 

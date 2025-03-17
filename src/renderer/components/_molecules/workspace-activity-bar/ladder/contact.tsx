@@ -1,4 +1,4 @@
-import ContactIcon from '@root/renderer/assets/icons/project/Contact'
+import ContactIcon from '@root/renderer/assets/icons/project/ladder/Contact'
 import { ActivityBarButton } from '@root/renderer/components/_atoms/buttons'
 import { ComponentPropsWithoutRef } from 'react'
 

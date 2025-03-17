@@ -1,4 +1,4 @@
-import BlockIcon from "@root/renderer/assets/icons/project/Block"
+import BlockIcon from "@root/renderer/assets/icons/project/fbd/Block"
 import { ActivityBarButton } from "@root/renderer/components/_atoms/buttons"
 import { ComponentPropsWithoutRef } from "react"
 
@@ -6,7 +6,7 @@ export const BlockButton = ({ onDragStart, onDragEnd }: ComponentPropsWithoutRef
   return (
     <ActivityBarButton aria-label='Block'>
       <div draggable onDragStart={onDragStart} onDragEnd={onDragEnd}>
-        <BlockIcon />
+        <BlockIcon size="md" />
       </div>
     </ActivityBarButton>
   )
