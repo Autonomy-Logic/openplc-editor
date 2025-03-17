@@ -8,6 +8,7 @@
         "loglevel",
         "lreal",
         "lword",
+        "modbus",
         "sublabel",
         "tailwindcss",
         "udint",
