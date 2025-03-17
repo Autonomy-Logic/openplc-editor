@@ -24,12 +24,19 @@ type Variables = {
     type: 'input' | 'output'
   }
 }
+type Blocks = {
+  [key: string]: {
+    block: BasicNodeData
+    type: 'input' | 'output'
+  }
+}
 
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
   lockExecutionControl: boolean
   connectedVariables: Variables
+  connectedBlocks: Blocks
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>

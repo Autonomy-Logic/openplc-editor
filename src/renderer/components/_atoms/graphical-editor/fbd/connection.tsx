@@ -4,6 +4,7 @@ import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
+import { BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { ConnectorSVGComponent, ContinuationSVGComponent } from './svg'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
@@ -11,7 +12,14 @@ import { BasicNodeData, BuilderBasicProps } from './utils/types'
 export type ConnectionNode = Node<
   BasicNodeData & {
     variant: 'connector' | 'continuation'
-    blockLabel: string
+    name: string
+    block:
+      | {
+          id: string
+          handleId: string
+          variableType: BlockVariant['variables'][0]
+        }
+      | undefined
   }
 >
 type ConnectionProps = NodeProps<ConnectionNode>
@@ -230,7 +238,8 @@ const buildConnectionNode = ({ id, position, variant }: ConnectionBuilderProps):
       numericId: generateNumericUUID(),
       executionOrder: 0,
       variant,
-      blockLabel: '',
+      name: '',
+      block: undefined,
       draggable: true,
       selectable: true,
       deletable: true,

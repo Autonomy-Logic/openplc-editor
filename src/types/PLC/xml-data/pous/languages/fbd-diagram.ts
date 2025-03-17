@@ -204,6 +204,76 @@ const outVariableSchema = z.object({
 type OutVariableFbdXML = z.infer<typeof outVariableSchema>
 
 /**
+ * connectorSchema is a zod schema for the connector element of the Fbd Diagram.
+ * It includes the following properties:
+ * - @name: a string that represents the name of the connector.
+ * - @localId: a string that represents the local identifier of the connector.
+ * - @width: a number that represents the width of the connector.
+ * - @height: a number that represents the height of the connector.
+ * - position: an object that represents the position of the connector. It includes x and y coordinates.
+ * - connectionPointIn: an object that represents the connection point in of the connector. It includes a relPosition object with x and y coordinates and an array of connections.
+ * Each connection is an object that includes a @refLocalId and an array of position. Each position is an object that includes x and y coordinates representing the path of the connection.
+ * Each connection also includes a @formalParameter.
+ */
+const connectorSchema = z.object({
+  '@name': z.string(),
+  '@localId': z.string(),
+  '@width': z.number(),
+  '@height': z.number(),
+  position: z.object({
+    '@x': z.number(),
+    '@y': z.number(),
+  }),
+  connectionPointIn: z.object({
+    relPosition: z.object({
+      '@x': z.number(),
+      '@y': z.number(),
+    }),
+    connection: z.array(
+      z.object({
+        '@refLocalId': z.string(),
+        '@formalParameter': z.string().optional(),
+        position: z.array(
+          z.object({
+            '@x': z.number(),
+            '@y': z.number(),
+          }),
+        ),
+      }),
+    ),
+  }),
+})
+type ConnectorFbdXML = z.infer<typeof connectorSchema>
+
+/**
+ * continuationSchema is a zod schema for the continuation element of the Fbd Diagram.
+ * It includes the following properties:
+ * - @name: a string that represents the name of the continuation.
+ * - @localId: a string that represents the local identifier of the continuation.
+ * - @width: a number that represents the width of the continuation.
+ * - @height: a number that represents the height of the continuation.
+ * - position: an object that represents the position of the continuation. It includes x and y coordinates.
+ * - connectionPointOut: an object that represents the connection point out of the continuation. It includes a relPosition object with x and y coordinates.
+ */
+const continuationSchema = z.object({
+  '@name': z.string(),
+  '@localId': z.string(),
+  '@width': z.number(),
+  '@height': z.number(),
+  position: z.object({
+    '@x': z.number(),
+    '@y': z.number(),
+  }),
+  connectionPointOut: z.object({
+    relPosition: z.object({
+      '@x': z.number(),
+      '@y': z.number(),
+    }),
+  }),
+})
+type ContinuationFbdXML = z.infer<typeof continuationSchema>
+
+/**
  * Fbd Diagram XML data types.
  */
 const fbdXMLSchema = z.object({
@@ -216,6 +286,8 @@ type FbdXML = z.infer<typeof fbdXMLSchema>
 
 export {
   blockSchema,
+  connectorSchema,
+  continuationSchema,
   fbdXMLSchema,
   inOutVariableSchema,
   inVariableSchema,
@@ -223,6 +295,8 @@ export {
 }
 export type {
   BlockFbdXML,
+  ConnectorFbdXML,
+  ContinuationFbdXML,
   FbdXML,
   InOutVariableFbdXML,
   InVariableFbdXML,
