@@ -305,6 +305,9 @@ export const FBDBody = ({ rung }: FBDProps) => {
           onNodeDragStop: onNodeDragStop,
 
           preventScrolling: !isElementBeingHovered,
+
+          snapGrid: [10, 10],
+          snapToGrid: true,
         }}
       />
     </div>
