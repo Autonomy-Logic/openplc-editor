@@ -10,7 +10,7 @@ export const customNodeTypes = {
   'connector': connectionNode.ConnectionElement,
   'continuation': connectionNode.ConnectionElement,
 }
-export type CustomNodeTypes = keyof typeof customNodeTypes
+export type CustomFbdNodeTypes = keyof typeof customNodeTypes
 
 export const nodesBuilder = {
   block: blockNode.buildBlockNode,

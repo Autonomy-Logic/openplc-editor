@@ -1,4 +1,4 @@
-import { CustomNodeTypes, customNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
+import { CustomFbdNodeTypes, customNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
 import { ReactFlowPanel } from '@root/renderer/components/_atoms/react-flow'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -53,7 +53,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
   const handleAddElementByDropping = (
     position: XYPosition,
-    newNodeType: CustomNodeTypes,
+    newNodeType: CustomFbdNodeTypes,
     library: string | undefined,
   ) => {
     let pouLibrary = undefined
@@ -263,7 +263,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
         y: 0,
       }
 
-      handleAddElementByDropping(position, blockType as CustomNodeTypes, library)
+      handleAddElementByDropping(position, blockType as CustomFbdNodeTypes, library)
     },
     [rung, reactFlowInstance],
   )
@@ -305,6 +305,9 @@ export const FBDBody = ({ rung }: FBDProps) => {
           onNodeDragStop: onNodeDragStop,
 
           preventScrolling: !isElementBeingHovered,
+
+          snapGrid: [10, 10],
+          snapToGrid: true,
         }}
       />
     </div>

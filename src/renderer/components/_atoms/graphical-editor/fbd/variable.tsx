@@ -22,6 +22,7 @@ export type VariableNode = Node<
         }
       | undefined
     variable: PLCVariable | { name: string }
+    negated: boolean
   }
 >
 type VariableProps = NodeProps<VariableNode>
@@ -140,7 +141,7 @@ const VariableElement = (block: VariableProps) => {
       <div
         style={{ width: ELEMENT_SIZE, height: ELEMENT_HEIGHT }}
         className={cn(
-          'flex items-center justify-center rounded-md border border-neutral-850 p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
+          'flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
           'hover:border-transparent hover:ring-2 hover:ring-brand',
           {
             'border-transparent ring-2 ring-brand': selected,
@@ -160,13 +161,8 @@ const VariableElement = (block: VariableProps) => {
             textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
               'text-yellow-500': !isAVariable,
               'text-red-500': inputError,
-              'text-left': data.variant === 'output-variable' || 'inout-variable',
-              'text-right': data.variant === 'input-variable',
             })}
-            highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {
-              'text-left': data.variant === 'output-variable' || 'inout-variable',
-              'text-right': data.variant === 'input-variable',
-            })}
+            highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {})}
             scrollableIndicatorClassName={cn({
               '-right-3': data.variant === 'output-variable' || 'inout-variable',
               '-left-3': data.variant === 'input-variable',
@@ -257,6 +253,7 @@ const buildVariableNode = ({ id, position, variant, variable }: VariableBuilderP
       executionOrder: 0,
       variant,
       block: undefined,
+      negated: false,
       draggable: true,
       selectable: true,
       deletable: true,

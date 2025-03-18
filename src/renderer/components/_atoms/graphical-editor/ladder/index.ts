@@ -23,7 +23,7 @@ export const customNodeTypes = {
   mockNode: mockNode.MockNode,
 }
 
-type CustomNodeTypes = {
+type CustomFbdNodeTypes = {
   [key: string]: {
     width: number
     height: number
@@ -36,7 +36,7 @@ type CustomNodeTypes = {
     }
   }
 }
-export const defaultCustomNodesStyles: CustomNodeTypes = {
+export const defaultCustomNodesStyles: CustomFbdNodeTypes = {
   block: {
     width: blockNode.DEFAULT_BLOCK_WIDTH,
     height: blockNode.DEFAULT_BLOCK_HEIGHT,

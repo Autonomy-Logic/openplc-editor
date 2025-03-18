@@ -12,6 +12,7 @@ import { BasicNodeData, BuilderBasicProps } from './utils/types'
 export type ConnectionNode = Node<
   BasicNodeData & {
     variant: 'connector' | 'continuation'
+    name: string
     block:
       | {
           id: string
@@ -119,7 +120,7 @@ const ConnectionElement = (block: ConnectionProps) => {
                 '-right-3': data.variant === 'continuation',
                 '-left-3': data.variant === 'connector',
               })}
-              placeholder={`${data.block ? `(*${data.block?.variableType.type.value}*)` : 'NOT CONNECTED'}`}
+              placeholder={'Block to connect'}
               textAreaValue={connectionValue}
               setTextAreaValue={setConnectionValue}
               handleSubmit={handleSubmitConnectionValueOnTextareaBlur}
@@ -237,6 +238,7 @@ const buildConnectionNode = ({ id, position, variant }: ConnectionBuilderProps):
       numericId: generateNumericUUID(),
       executionOrder: 0,
       variant,
+      name: '',
       block: undefined,
       draggable: true,
       selectable: true,
