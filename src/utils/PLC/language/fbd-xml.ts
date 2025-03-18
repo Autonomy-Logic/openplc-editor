@@ -251,7 +251,7 @@ const continuationToXml = (node: ConnectionNode): ContinuationFbdXML => {
 /**
  * Entry point to parse nodes to XML
  */
-const fbdToXml = (rungs: FBDRungState[]) => {
+const fbdToXml = (rung: FBDRungState) => {
   const fbdXML: {
     body: {
       FBD: FbdXML
@@ -269,29 +269,27 @@ const fbdToXml = (rungs: FBDRungState[]) => {
     },
   }
 
-  rungs.forEach((rung, _index) => {
-    const { nodes, edges: _edges } = rung
-    nodes.forEach((node) => {
-      switch (node.type as CustomFbdNodeTypes) {
-        case 'block':
-          fbdXML.body.FBD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung))
-          break
-        case 'input-variable':
-          fbdXML.body.FBD.inVariable.push(inputVariableToXml(node as VariableNode))
-          break
-        case 'output-variable':
-          fbdXML.body.FBD.outVariable.push(outputVariableToXml(node as VariableNode, rung))
-          break
-        case 'connector':
-          fbdXML.body.FBD.connector.push(connectorToXml(node as ConnectionNode, rung))
-          break
-        case 'continuation':
-          fbdXML.body.FBD.continuation.push(continuationToXml(node as ConnectionNode))
-          break
-        default:
-          break
-      }
-    })
+  const { nodes, edges: _edges } = rung
+  nodes.forEach((node) => {
+    switch (node.type as CustomFbdNodeTypes) {
+      case 'block':
+        fbdXML.body.FBD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung))
+        break
+      case 'input-variable':
+        fbdXML.body.FBD.inVariable.push(inputVariableToXml(node as VariableNode))
+        break
+      case 'output-variable':
+        fbdXML.body.FBD.outVariable.push(outputVariableToXml(node as VariableNode, rung))
+        break
+      case 'connector':
+        fbdXML.body.FBD.connector.push(connectorToXml(node as ConnectionNode, rung))
+        break
+      case 'continuation':
+        fbdXML.body.FBD.continuation.push(continuationToXml(node as ConnectionNode))
+        break
+      default:
+        break
+    }
   })
 
   return fbdXML
