@@ -281,6 +281,8 @@ const fbdXMLSchema = z.object({
   inVariable: z.array(inVariableSchema),
   inOutVariable: z.array(inOutVariableSchema),
   outVariable: z.array(outVariableSchema),
+  connector: z.array(connectorSchema),
+  continuation: z.array(continuationSchema),
 })
 type FbdXML = z.infer<typeof fbdXMLSchema>
 

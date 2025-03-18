@@ -22,6 +22,7 @@ export type VariableNode = Node<
         }
       | undefined
     variable: PLCVariable | { name: string }
+    negated: boolean
   }
 >
 type VariableProps = NodeProps<VariableNode>
@@ -252,6 +253,7 @@ const buildVariableNode = ({ id, position, variant, variable }: VariableBuilderP
       executionOrder: 0,
       variant,
       block: undefined,
+      negated: false,
       draggable: true,
       selectable: true,
       deletable: true,

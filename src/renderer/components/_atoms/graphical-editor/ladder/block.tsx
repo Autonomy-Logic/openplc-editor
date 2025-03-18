@@ -34,6 +34,7 @@ export type BlockNodeData<T> = BasicNodeData & {
   executionControl: boolean
   lockExecutionControl: boolean
   connectedVariables: variables
+  variable: { id: string; name: string } | PLCVariable
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>

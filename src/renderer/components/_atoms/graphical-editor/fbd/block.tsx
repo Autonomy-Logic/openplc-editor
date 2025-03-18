@@ -13,7 +13,6 @@ import { BasicNodeData, BuilderBasicProps } from './utils'
 export type BlockVariant = {
   name: string
   type: string
-  variable: { id?: string; name: string } | PLCVariable
   variables: { name: string; class: string; type: { definition: string; value: string } }[]
   documentation: string
   extensible: boolean
@@ -37,6 +36,7 @@ export type BlockNodeData<T> = BasicNodeData & {
   lockExecutionControl: boolean
   connectedVariables: Variables
   connectedBlocks: Blocks
+  variable: { id?: string; name: string } | PLCVariable
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
