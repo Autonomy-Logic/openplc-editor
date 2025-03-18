@@ -33,7 +33,6 @@ type Blocks = {
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
-  lockExecutionControl: boolean
   connectedVariables: Variables
   connectedBlocks: Blocks
   variable: { id?: string; name: string } | PLCVariable
@@ -292,11 +291,10 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
-  const {
-    variant: variantLib,
-    executionControl: executionControlAux,
-    lockExecutionControl,
-  } = getBlockVariantAndExecutionControl({ ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) }, executionControl)
+  const { variant: variantLib, executionControl: executionControlAux } = getBlockVariantAndExecutionControl(
+    { ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) },
+    executionControl,
+  )
   const handlePosition = {
     x: position.x,
     y: position.y + DEFAULT_BLOCK_CONNECTOR_Y,
@@ -318,7 +316,6 @@ export const buildBlockNode = <T extends object | undefined>({
       variable: { name: '' },
       executionOrder: 0,
       executionControl: executionControlAux,
-      lockExecutionControl,
       connectedVariables: {},
       draggable: true,
       selectable: true,
@@ -418,26 +415,7 @@ export const getBlockSize = (
 const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionControl: boolean) => {
   const variant = { ...variantLib }
 
-  const inputConnectors = variant.variables
-    .filter((variable) => variable.class === 'input')
-    .map((variable) => ({
-      name: variable.name,
-      type: variable.type,
-    }))
-  const outputConnectors = variant.variables
-    .filter((variable) => variable.class === 'output')
-    .map((variable) => ({
-      name: variable.name,
-      type: variable.type,
-    }))
-
-  const mustHaveExecutionControlEnabled =
-    inputConnectors.length === 0 ||
-    inputConnectors[0].type.value !== 'BOOL' ||
-    outputConnectors.length === 0 ||
-    outputConnectors[0].type.value !== 'BOOL'
-
-  if (executionControl || mustHaveExecutionControlEnabled) {
+  if (executionControl) {
     const executionControlVariable = variant.variables.some(
       (variable) => variable.name === 'EN' || variable.name === 'ENO',
     )
@@ -463,7 +441,6 @@ const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionC
 
   return {
     variant: variant,
-    executionControl: executionControl || mustHaveExecutionControlEnabled,
-    lockExecutionControl: mustHaveExecutionControlEnabled,
+    executionControl: executionControl,
   }
 }
