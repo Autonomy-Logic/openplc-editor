@@ -141,7 +141,7 @@ const VariableElement = (block: VariableProps) => {
       <div
         style={{ width: ELEMENT_SIZE, height: ELEMENT_HEIGHT }}
         className={cn(
-          'flex items-center justify-center rounded-md border border-neutral-850 p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
+          'flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
           'hover:border-transparent hover:ring-2 hover:ring-brand',
           {
             'border-transparent ring-2 ring-brand': selected,
