@@ -382,5 +382,9 @@ const rendererProcessBridge = {
      */
     rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
   },
+  /**
+   * Requests the device configuration options from the main process.
+   */
+  getDeviceConfigurationOptions: () => ipcRenderer.invoke('hardware:device-configuration-options'),
 }
 export default rendererProcessBridge

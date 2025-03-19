@@ -204,6 +204,12 @@ class MainProcessBridge implements MainIpcModule {
      */
     this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
     this.ipcMain.on('window:rebuild-menu', () => void this.menuBuilder.buildMenu())
+    /**
+     * Hardware
+     */
+    this.ipcMain.handle('hardware:device-configuration-options', async () =>
+      this.hardwareService.getDeviceConfigurationOptions(),
+    )
   }
 
   mainIpcEventHandlers = {

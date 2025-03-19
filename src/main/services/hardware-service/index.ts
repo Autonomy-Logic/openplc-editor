@@ -1,5 +1,5 @@
 import { exec } from 'child_process'
-import { app, type MessagePortMain } from 'electron'
+import { app } from 'electron'
 import { readFile } from 'fs/promises'
 import { produce } from 'immer'
 import { join } from 'path'
@@ -33,7 +33,7 @@ type HalsFile = {
 class HardwareService {
   constructor() {}
 
-  async getAvailableSerialPorts(mainProcessPort?: MessagePortMain) {
+  async getAvailableSerialPorts(): Promise<unknown> {
     const serialCommunication = promisify(exec)
     const isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -63,15 +63,10 @@ class HardwareService {
     // Spawn the Python process
     const { stderr, stdout } = await serialCommunication(`"${serialCommunicationBinary}" list_ports`)
 
-    console.log('Result -> ', stdout)
     if (stderr) {
-      mainProcessPort?.postMessage({ type: 'error', message: stderr })
-      return
+      throw new Error(stderr)
     }
-
-    mainProcessPort?.postMessage({ type: 'info', message: stdout })
-
-    mainProcessPort?.close()
+    return JSON.parse(stdout)
   }
 
   async getAvailableBoards() {
@@ -99,6 +94,12 @@ class HardwareService {
     /**
      * TODO: Implement the function that will be executed in the program startup and will send the device option to the renderer process!!!!
      */
+    const [communicationPorts, availableBoards] = await Promise.all([
+      this.getAvailableSerialPorts(),
+      this.getAvailableBoards(),
+    ])
+
+    return { ports: communicationPorts, boards: availableBoards }
   }
 }
 

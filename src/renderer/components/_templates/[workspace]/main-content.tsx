@@ -14,11 +14,20 @@ const WorkspaceMainContent = (props: IWorkspaceMainContentProps) => {
     workspace: {
       systemConfigs: { OS },
     },
-
     tabsActions: { updateTabs },
     editorActions: { addModel, setEditor },
   } = useOpenPLCStore()
   const { children, ...res } = props
+  useEffect(() => {
+    const handleInitialDeviceConfigs = async () => {
+      /**
+       * Todo: Should get the information received and fill the store with it.
+       */
+      const response = await window.bridge.getDeviceConfigurationOptions()
+      console.log('Base config ->', response)
+    }
+    handleInitialDeviceConfigs()
+  }, [])
 
   useEffect(() => {
     // Bad code! - this is only for development purpose
