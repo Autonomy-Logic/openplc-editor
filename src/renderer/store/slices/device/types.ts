@@ -1,20 +1,81 @@
 import z from 'zod'
 
-export const _deviceConfigurationSchema = z.object({
-  deviceBoard: z.string(),
+const staticHostConfigurationSchema = z.object({
+  ipAddress: z.string(), // This should have the format: XXX.XXX.XXX.XXX
+  dns: z.string(), // This should have the format: XXX.XXX.XXX.XXX
+  gateway: z.string(), // This should have the format: XXX.XXX.XXX.XXX
+  subnet: z.string(), // This should have the format: XXX.XXX.XXX.XXX
+})
+
+type StaticHostConfiguration = z.infer<typeof staticHostConfigurationSchema>
+
+const deviceConfigurationSchema = z.object({
+  deviceBoard: z.string(), // Can be one from the list of boards in the hals file.
   communicationPort: z.string(),
   communicationConfiguration: z.object({
     modbusRTU: z.object({
       rtuInterface: z.string(),
       rtuBaudrate: z.string(),
-      rtuSlaveId: z.string(),
-      rtuRS485TXPin: z.string(),
+      rtuSlaveId: z.string(), // Can be any integer number from 0 to 255
+      rtuRS485TXPin: z.string().optional(), // Can be any integer number from 0 to 255
     }),
-    modbusTCP: z.object({
-      tcpInterface: z.string(), // Can be either 'wifi' or 'ethernet', this will differ the other attributes.
-      tcpPort: z.string(),
-      tcpSlaveId: z.string(),
-      tcpRS485TXPin: z.string(),
-    }),
+    modbusTCP: z.discriminatedUnion('tcpInterface', [
+      z.object({
+        tcpInterface: z.literal('wifi'),
+        tcpMacAddress: z.string(), // This should have the format: XX:XX:XX:XX:XX:XX
+        tcpWifiSSID: z.string(),
+        tcpWifiPassword: z.string(),
+        tcpStaticHostConfiguration: staticHostConfigurationSchema.optional(), // When this is omitted the user has chosen DHCP.
+      }),
+      z.object({
+        tcpInterface: z.literal('ethernet'),
+        tcpMacAddress: z.string(),
+        tcpStaticHostConfiguration: staticHostConfigurationSchema.optional(), // When this is omitted the user has chosen DHCP.
+      }),
+    ]),
   }),
 })
+type DeviceConfiguration = z.infer<typeof deviceConfigurationSchema>
+
+const devicePinSchema = z.object({
+  pin: z.string().max(6),
+  type: z.enum(['digitalInput', 'digitalOutput', 'analogInput', 'analogOutput']),
+  address: z.string(), // This will be populated automatically
+  name: z.string().optional(),
+})
+
+type DevicePin = z.infer<typeof devicePinSchema>
+
+const devicePinMappingSchema = z.array(devicePinSchema)
+
+type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
+
+const deviceStateSchema = z.object({
+  device: z.object({
+    configuration: deviceConfigurationSchema,
+    pinMapping: devicePinMappingSchema,
+  }),
+})
+
+type DeviceState = z.infer<typeof deviceStateSchema>
+
+const deviceActionSchema = z.object({
+  addPin: z.function().args(z.string().optional()).returns(z.void()),
+})
+
+type DeviceActions = z.infer<typeof deviceActionSchema>
+
+type DeviceSlice = DeviceState & {
+  deviceActions: DeviceActions
+}
+
+export type {
+  DeviceActions,
+  DeviceConfiguration,
+  DevicePin,
+  DevicePinMapping,
+  DeviceSlice,
+  DeviceState,
+  StaticHostConfiguration,
+}
+export { deviceActionSchema, deviceConfigurationSchema, devicePinMappingSchema, devicePinSchema, deviceStateSchema }

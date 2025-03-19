@@ -1,4 +1,5 @@
 export * from './console'
+export * from './device'
 export * from './editor'
 export * from './flow'
 export * from './library'
