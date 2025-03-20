@@ -8,8 +8,9 @@ import { Node } from '@xyflow/react'
 import { ComponentPropsWithRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import { getLadderPouVariablesRungNodeAndEdges, getVariableRestrictionType } from '../../utils'
+import { getVariableRestrictionType } from '../../utils'
 import { BlockNodeData } from '../block'
+import { getLadderPouVariablesRungNodeAndEdges } from '../utils'
 import { BasicNodeData } from '../utils/types'
 import { VariableNode } from '../variable'
 

@@ -3,7 +3,7 @@ import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 
 import { buildHandle, CustomHandle } from './handle'
-import { BasicNodeData, BuilderBasicProps } from './utils/types'
+import { BasicNodeData, BuilderBasicProps } from './utils'
 
 export type PlaceholderNode = Node<
   BasicNodeData & { relatedNode: Node | undefined; position: 'left' | 'right' | 'bottom' }

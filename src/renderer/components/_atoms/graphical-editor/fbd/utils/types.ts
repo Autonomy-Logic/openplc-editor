@@ -1,3 +1,4 @@
+import { PLCVariable } from '@root/types/PLC/open-plc'
 import { XYPosition } from '@xyflow/react'
 
 import { CustomHandleProps } from '../handle'
@@ -15,6 +16,7 @@ export type BasicNodeData = {
   outputConnector: CustomHandleProps | undefined
   numericId: string
   executionOrder: number
+  variable: { id?: string; name: string } | PLCVariable
   draggable: boolean
   selectable: boolean
   deletable: boolean

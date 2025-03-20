@@ -1,8 +1,8 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { checkVariableName } from '@root/renderer/store/slices/project/validation/variables'
-import type { PLCVariable } from '@root/types/PLC'
+import { checkVariableNameUnit } from '@root/renderer/store/slices/project/validation/variables'
+import type { PLCVariable } from '@root/types/PLC/units/variable'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
@@ -11,9 +11,9 @@ import { v4 as uuidv4 } from 'uuid'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
-import { getLadderPouVariablesRungNodeAndEdges } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
-import type { BasicNodeData, BuilderBasicProps } from './utils/types'
+import type { BasicNodeData, BuilderBasicProps } from './utils'
+import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 
 export type BlockVariant = {
   name: string
@@ -22,7 +22,7 @@ export type BlockVariant = {
   documentation: string
   extensible: boolean
 }
-type variables = {
+type Variables = {
   [key: string]: {
     variable: PLCVariable | undefined
     type: 'input' | 'output'
@@ -33,7 +33,7 @@ export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
   lockExecutionControl: boolean
-  connectedVariables: variables
+  connectedVariables: Variables
   variable: { id: string; name: string } | PLCVariable
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
@@ -355,7 +355,10 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           .map(
             (variable, index) =>
               `${variable.name}: ${variable.type.value}${
-                index < blockVariables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1 ? '\n' : ''
+                index <
+                blockVariables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1
+                  ? '\n'
+                  : ''
               }`,
           )
           .join('')}
@@ -366,7 +369,12 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             .map(
               (variable, index) =>
                 `${variable.name}: ${variable.type.value}${
-                  index < blockVariables.filter((variable) => variable.class === 'output' || variable.class === 'inOut').length - 1 ? '\n' : ''
+                  index <
+                  blockVariables.filter((variable) => variable.class === 'output' || variable.class === 'inOut')
+                    .length -
+                    1
+                    ? '\n'
+                    : ''
                 }`,
             )
             .join('')}`
@@ -397,8 +405,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             const { variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
               nodeId: id,
             })
-            // @ts-expect-error - type is dynamic
-            const { name, number } = checkVariableName(variables.all, (data.variant as BlockVariant).name.toUpperCase())
+            const { name, number } = checkVariableNameUnit(variables.all, (data.variant as BlockVariant).name.toUpperCase())
             handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`)
             return
           }

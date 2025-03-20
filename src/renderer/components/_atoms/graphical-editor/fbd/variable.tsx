@@ -6,8 +6,7 @@ import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
-import { getLadderPouVariablesRungNodeAndEdges, getVariableByName } from '../utils'
-import { BlockVariant } from './block'
+import type { BlockVariant } from '../types/block'
 import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
 
@@ -21,7 +20,6 @@ export type VariableNode = Node<
           variableType: BlockVariant['variables'][0]
         }
       | undefined
-    variable: PLCVariable | { name: string }
     negated: boolean
   }
 >
@@ -43,13 +41,13 @@ export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
 const VariableElement = (block: VariableProps) => {
   const { id, data, selected } = block
   const {
-    editor,
+    // editor,
     editorActions: { updateModelFBD },
     project: {
       data: { pous },
     },
-    ladderFlows,
-    ladderFlowActions: { updateNode },
+    // ladderFlows,
+    // ladderFlowActions: { updateNode },
   } = useOpenPLCStore()
 
   const inputVariableRef = useRef<
@@ -63,10 +61,10 @@ const VariableElement = (block: VariableProps) => {
   const [_keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   const [variableValue, setVariableValue] = useState('')
-  const [inputError, setInputError] = useState<boolean>(false)
-  const [isAVariable, setIsAVariable] = useState<boolean>(false)
+  const [inputError, _setInputError] = useState<boolean>(false)
+  const [isAVariable, _setIsAVariable] = useState<boolean>(false)
 
-  const updateRelatedNode = (_rung: RungLadderState, _variableNode: VariableNode, _variable: PLCVariable) => {}
+  const _updateRelatedNode = (_rung: RungLadderState, _variableNode: VariableNode, _variable: PLCVariable) => {}
 
   /**
    * useEffect to focus the variable input when the block is selected
@@ -81,42 +79,7 @@ const VariableElement = (block: VariableProps) => {
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
-    const variableNameToSubmit = variableName || variableValue
-
-    const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
-      nodeId: id,
-    })
-    if (!pou || !rung || !node) return
-    const variableNode = node as VariableNode
-
-    let variable: PLCVariable | { name: string } | undefined = getVariableByName(
-      pou.data.variables as PLCVariable[],
-      variableNameToSubmit,
-    )
-    if (!variable) {
-      setIsAVariable(false)
-      variable = { name: variableNameToSubmit }
-    } else {
-      setIsAVariable(true)
-    }
-
-    updateNode({
-      editorName: editor.meta.name,
-      rungId: rung.id,
-      nodeId: variableNode.id,
-      node: {
-        ...variableNode,
-        data: {
-          ...variableNode.data,
-          variable: variable,
-        },
-      },
-    })
-
-    updateRelatedNode(rung, variableNode, variable as PLCVariable)
-    setInputError(false)
-  }
+  const handleSubmitVariableValueOnTextareaBlur = (_variableName?: string) => {}
 
   const onChangeHandler = () => {
     if (!openAutocomplete) {

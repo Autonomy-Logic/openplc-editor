@@ -8,16 +8,14 @@ import {
   buildBlockNode,
   getBlockSize,
 } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
+import { getLadderPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils'
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
-import { getLadderPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/utils'
 import {
   Modal,
   ModalContent,
   ModalTitle,
-  // ModalTrigger,
 } from '@root/renderer/components/_molecules'
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
-// import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
 import { PLCPou } from '@root/types/PLC/open-plc'
@@ -25,7 +23,7 @@ import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import ArrowButtonGroup from '../arrow-button-group'
+import ArrowButtonGroup from '../../arrow-button-group'
 import { ModalBlockLibrary } from './library'
 
 type BlockElementProps<T> = {

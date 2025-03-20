@@ -1,16 +1,16 @@
-import { CoilNode, DEFAULT_COIL_TYPES } from '@root/renderer/components/_atoms/graphical-editor/ladder/coil'
-import { getLadderPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/utils'
+import { ContactNode, DEFAULT_CONTACT_TYPES } from '@root/renderer/components/_atoms/graphical-editor/ladder/contact'
+import { getLadderPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils'
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useState } from 'react'
 
-type CoilElementProps = {
+type ContactElementProps = {
   isOpen: boolean
   onClose?: () => void
-  node: CoilNode
+  node: ContactNode
 }
 
-const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
+const ContactElement = ({ isOpen, onClose, node }: ContactElementProps) => {
   const {
     editor,
     ladderFlows,
@@ -22,15 +22,15 @@ const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
   } = useOpenPLCStore()
 
   const [selectedModifier, setSelectedModifier] = useState<string | null>(node?.data.variant as string)
-  const coilModifiers = Object.entries(DEFAULT_COIL_TYPES).map(([label, coil]) => ({
+  const contactModifiers = Object.entries(DEFAULT_CONTACT_TYPES).map(([label, contact]) => ({
     label: label.replace(/([a-z])([A-Z])/g, '$1 $2'),
     value: label,
-    coil,
+    contact,
   }))
 
-  const getModifierCoil = (value: string) => {
-    const modifier = coilModifiers.find((modifier) => modifier.value === value)
-    return modifier ? modifier.coil.svg(false) : ''
+  const getModifierContact = (value: string) => {
+    const modifier = contactModifiers.find((modifier) => modifier.value === value)
+    return modifier ? modifier.contact.svg(false) : ''
   }
 
   const handleCloseModal = () => {
@@ -60,7 +60,8 @@ const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
   }
 
   return (
-    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('coil-ladder-element', open)}>
+    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('contact-ladder-element', open)}>
+      {/* <ModalTrigger>Open Contact</ModalTrigger> */}
       <ModalContent
         onEscapeKeyDown={(event) => {
           event.preventDefault()
@@ -72,12 +73,12 @@ const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
         }}
         className='h-[400px] w-[468px] select-none flex-col justify-between px-8 py-4'
       >
-        <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Edit Coil Values</ModalTitle>
+        <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Edit Contact Values</ModalTitle>
         <div className='flex h-[260px] w-full gap-10'>
           <div className='relative h-full w-full text-base font-medium text-neutral-950'>
             <span className='dark:text-neutral-300'>Modifier</span>
             <ul className='mt-4 flex flex-col gap-3 dark:text-neutral-300'>
-              {coilModifiers.map((modifier, index) => (
+              {contactModifiers.map((modifier, index) => (
                 <li
                   key={index}
                   className='flex cursor-pointer items-center gap-2 rounded-md border-0 p-1 hover:bg-slate-100 dark:hover:bg-neutral-900'
@@ -103,11 +104,11 @@ const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
               Preview
             </label>
             <div className='flex h-full w-full items-center justify-center rounded-lg border-[2px] border-brand-dark dark:border-neutral-850 dark:bg-neutral-900'>
-              <div className='scale-150'>{selectedModifier && getModifierCoil(selectedModifier)}</div>
+              <div className='scale-150'>{selectedModifier && getModifierContact(selectedModifier)}</div>
             </div>
           </div>
         </div>
-        <div className='flex !h-8 w-full gap-6'>
+        <div className='flex !h-8 w-full gap-6 '>
           <button
             className='h-full w-full items-center rounded-lg bg-neutral-100 text-center font-medium text-neutral-1000 hover:bg-neutral-300 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
             onClick={handleCloseModal}
@@ -127,4 +128,4 @@ const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
   )
 }
 
-export default CoilElement
+export default ContactElement

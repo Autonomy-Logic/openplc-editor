@@ -15,9 +15,9 @@ import type { ContactNode } from '../../../../_atoms/graphical-editor/ladder/con
 import type { BasicNodeData } from '../../../../_atoms/graphical-editor/ladder/utils/types'
 import { ReactFlowPanel } from '../../../../_atoms/react-flow'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
-import BlockElement from '../../../../_features/[workspace]/editor/graphical/elements/block'
-import CoilElement from '../../../../_features/[workspace]/editor/graphical/elements/coil'
-import ContactElement from '../../../../_features/[workspace]/editor/graphical/elements/contact'
+import BlockElement from '../../../../_features/[workspace]/editor/graphical/elements/ladder/block'
+import CoilElement from '../../../../_features/[workspace]/editor/graphical/elements/ladder/coil'
+import ContactElement from '../../../../_features/[workspace]/editor/graphical/elements/ladder/contact'
 import { addNewElement, removeElements } from './ladder-utils/elements'
 import { onElementDragOver, onElementDragStart, onElementDrop } from './ladder-utils/elements/drag-n-drop'
 import {

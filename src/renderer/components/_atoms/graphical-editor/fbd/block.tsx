@@ -7,26 +7,20 @@ import { useEffect, useRef, useState } from 'react'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
+import { BlockVariant } from '../types/block'
 import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils'
 
-export type BlockVariant = {
-  name: string
-  type: string
-  variables: { name: string; class: string; type: { definition: string; value: string } }[]
-  documentation: string
-  extensible: boolean
-}
 type Variables = {
   [key: string]: {
     variable: PLCVariable | undefined
-    type: 'input' | 'output'
+    type: 'input' | 'output' | 'inOut'
   }
 }
 type Blocks = {
   [key: string]: {
     block: BasicNodeData
-    type: 'input' | 'output'
+    type: 'input' | 'output' | 'generic'
   }
 }
 
@@ -35,7 +29,6 @@ export type BlockNodeData<T> = BasicNodeData & {
   executionControl: boolean
   connectedVariables: Variables
   connectedBlocks: Blocks
-  variable: { id?: string; name: string } | PLCVariable
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
@@ -192,7 +185,10 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           .map(
             (variable, index) =>
               `${variable.name}: ${variable.type.value}${
-                index < blockVariables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1 ? '\n' : ''
+                index <
+                blockVariables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1
+                  ? '\n'
+                  : ''
               }`,
           )
           .join('')}
@@ -203,7 +199,12 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             .map(
               (variable, index) =>
                 `${variable.name}: ${variable.type.value}${
-                  index < blockVariables.filter((variable) => variable.class === 'output' || variable.class === 'inOut').length - 1 ? '\n' : ''
+                  index <
+                  blockVariables.filter((variable) => variable.class === 'output' || variable.class === 'inOut')
+                    .length -
+                    1
+                    ? '\n'
+                    : ''
                 }`,
             )
             .join('')}`
@@ -291,7 +292,7 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
-  console.log("variant", variant)
+  console.log('variant', variant)
 
   const { variant: variantLib, executionControl: executionControlAux } = getBlockVariantAndExecutionControl(
     { ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) },
@@ -427,12 +428,12 @@ const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionC
         {
           name: 'EN',
           class: 'input',
-          type: { definition: 'generic-type', value: 'BOOL' },
+          type: { definition: 'base-type', value: 'BOOL' },
         },
         {
           name: 'ENO',
           class: 'output',
-          type: { definition: 'generic-type', value: 'BOOL' },
+          type: { definition: 'base-type', value: 'BOOL' },
         },
         ...variant.variables,
       ]
