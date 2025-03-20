@@ -90,22 +90,22 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
     INPUT:
     ${blockVariant.variables
-      .filter((variable) => variable.class === 'input' || variable.class === 'inout')
+      .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
       .map(
         (variable, index) =>
           `${variable.name}: ${variable.type.value}${
-            index < blockVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inout').length - 1 ? '\n' : ''
+            index < blockVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1 ? '\n' : ''
           }`,
       )
       .join('')}
 
     OUTPUT:
     ${blockVariant.variables
-      .filter((variable) => variable.class === 'output' || variable.class === 'inout')
+      .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
       .map(
         (variable, index) =>
           `${variable.name}: ${variable.type.value}${
-            index < blockVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inout').length - 1 ? '\n' : ''
+            index < blockVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inOut').length - 1 ? '\n' : ''
           }`,
       )
       .join('')}`,
@@ -119,7 +119,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     name: blockVariant.name === '???' ? '' : blockVariant.name,
     inputs:
       blockVariant?.variables
-        .filter((variable) => variable.class === 'input' || variable.class === 'inout' && variable.name !== 'EN')
+        .filter((variable) => variable.class === 'input' || variable.class === 'inOut' && variable.name !== 'EN')
         .length.toString() || '0',
     executionOrder: selectedNode.data.executionOrder.toString(),
     executionControl: selectedNode.data.executionControl,
@@ -164,7 +164,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       const newNodeDataVariant = newNode.data.variant as BlockVariant
       const formName: string = newNodeDataVariant.name
       const formInputs: string = newNodeDataVariant.variables
-        .filter((variable) => variable.class === 'input' || variable.class === 'inout' && variable.name !== 'EN')
+        .filter((variable) => variable.class === 'input' || variable.class === 'inOut' && variable.name !== 'EN')
         .length.toString()
 
       setFormState((prevState) => ({
@@ -178,11 +178,11 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
         -- INPUT --
         ${newNodeDataVariant.variables
-          .filter((variable) => variable.class === 'input' || variable.class === 'inout')
+          .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
           .map(
             (variable, index) =>
               `${variable.name}: ${variable.type.value}${
-                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inout').length - 1
+                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1
                   ? '\n'
                   : ''
               }`,
@@ -191,11 +191,11 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
         -- OUTPUT --
         ${newNodeDataVariant.variables
-          .filter((variable) => variable.class === 'output' || variable.class === 'inout')
+          .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
           .map(
             (variable, index) =>
               `${variable.name}: ${variable.type.value}${
-                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inout').length - 1
+                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inOut').length - 1
                   ? '\n'
                   : ''
               }`,

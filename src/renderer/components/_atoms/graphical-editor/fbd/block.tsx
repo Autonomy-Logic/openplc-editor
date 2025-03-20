@@ -84,10 +84,10 @@ export const BlockNodeElement = <T extends object>({
   } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
 
   const inputConnectors = blockVariables
-    .filter((variable) => variable.class === 'input')
+    .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
     .map((variable) => variable.name)
   const outputConnectors = blockVariables
-    .filter((variable) => variable.class === 'output')
+    .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
     .map((variable) => variable.name)
 
   const [blockNameValue, setBlockNameValue] = useState<string>(blockType === 'generic' ? '' : blockName)
@@ -188,22 +188,22 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
 
         -- INPUT --
         ${blockVariables
-          .filter((variable) => variable.class === 'input' || variable.class === 'inout')
+          .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
           .map(
             (variable, index) =>
               `${variable.name}: ${variable.type.value}${
-                index < blockVariables.filter((variable) => variable.class === 'input' || variable.class === 'inout').length - 1 ? '\n' : ''
+                index < blockVariables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1 ? '\n' : ''
               }`,
           )
           .join('')}
 
         -- OUTPUT --
           ${blockVariables
-            .filter((variable) => variable.class === 'output' || variable.class === 'inout')
+            .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
             .map(
               (variable, index) =>
                 `${variable.name}: ${variable.type.value}${
-                  index < blockVariables.filter((variable) => variable.class === 'output' || variable.class === 'inout').length - 1 ? '\n' : ''
+                  index < blockVariables.filter((variable) => variable.class === 'output' || variable.class === 'inOut').length - 1 ? '\n' : ''
                 }`,
             )
             .join('')}`
@@ -291,6 +291,8 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
+  console.log("variant", variant)
+
   const { variant: variantLib, executionControl: executionControlAux } = getBlockVariantAndExecutionControl(
     { ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) },
     executionControl,
@@ -341,10 +343,10 @@ export const getBlockSize = (
   },
 ) => {
   const inputConnectors = variant.variables
-    .filter((variable) => variable.class === 'input' || variable.class === 'inout')
+    .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
     .map((variable) => variable.name)
   const outputConnectors = variant.variables
-    .filter((variable) => variable.class === 'output' || variable.class === 'inout')
+    .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
     .map((variable) => variable.name)
 
   const blockHeight =
@@ -365,7 +367,7 @@ export const getBlockSize = (
   })
 
   const blockWidth = Math.min(
-    Math.max(variableInputWidth + 18 + variableOutputWidth, blockNameWidth),
+    Math.max(variableInputWidth + 12 + variableOutputWidth, blockNameWidth),
     DEFAULT_BLOCK_WIDTH,
   )
 
