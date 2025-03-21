@@ -1,5 +1,6 @@
 import type { EditorModel, FBDFlowType, LadderFlowType } from "@root/renderer/store/slices";
-import type { PLCPou, PLCVariable } from "@root/types/PLC/open-plc";
+import type { PLCPou } from "@root/types/PLC/open-plc";
+import type { PLCVariable } from "@root/types/PLC/units/variable";
 
 import type { BasicNodeData } from "./types";
 

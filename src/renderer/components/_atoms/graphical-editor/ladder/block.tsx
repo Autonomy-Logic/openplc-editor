@@ -405,7 +405,10 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             const { variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
               nodeId: id,
             })
-            const { name, number } = checkVariableNameUnit(variables.all, (data.variant as BlockVariant).name.toUpperCase())
+            const { name, number } = checkVariableNameUnit(
+              variables.all,
+              (data.variant as BlockVariant).name.toUpperCase(),
+            )
             handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`)
             return
           }
@@ -438,21 +441,23 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    if ((node.data as BasicNodeData).variable.id !== variable.id) {
-      updateNode({
-        editorName: editor.meta.name,
-        rungId: rung.id,
-        nodeId: node.id,
-        node: {
-          ...node,
-          data: {
-            ...node.data,
-            variable,
+    if ((node.data as BasicNodeData).variable.id === variable.id) {
+      if ((node.data as BasicNodeData).variable.name !== variable.name) {
+        updateNode({
+          editorName: editor.meta.name,
+          rungId: rung.id,
+          nodeId: node.id,
+          node: {
+            ...node,
+            data: {
+              ...node.data,
+              variable,
+            },
           },
-        },
-      })
-      setWrongVariable(false)
-      return
+        })
+        setWrongVariable(false)
+        return
+      }
     }
 
     setWrongVariable(false)
