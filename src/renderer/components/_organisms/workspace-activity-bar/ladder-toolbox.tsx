@@ -58,6 +58,7 @@ export const LadderToolbox = () => {
        *    -- src/renderer/components/_molecules/rung/body.tsx
        *    -- src/renderer/components/_molecules/menu-bar/modals/delete-confirmation-modal.tsx
        *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
+       *    -- src/renderer/components/_molecules/graphical-editor/fbd/index.tsx
        */
       const blockNodes = selectedNodes.filter((node) => node.type === 'block')
       if (blockNodes.length > 0) {
