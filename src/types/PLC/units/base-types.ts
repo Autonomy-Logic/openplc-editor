@@ -1,8 +1,8 @@
-import { baseTypes} from '@root/shared/data'
+import { baseTypes } from '@root/shared/data'
 import { z } from 'zod'
 
-const PLCBasetypesSchema = z.enum(baseTypes)
+const PLCBaseTypesSchema = z.enum(baseTypes)
 
-type PLCBasetypes = z.infer<typeof PLCBasetypesSchema>
+type PLCBaseTypes = z.infer<typeof PLCBaseTypesSchema>
 
-export { PLCBasetypes, PLCBasetypesSchema }
+export { PLCBaseTypes, PLCBaseTypesSchema }

@@ -12,9 +12,9 @@ import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
-import { getLadderPouVariablesRungNodeAndEdges } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
-import type { BasicNodeData, BuilderBasicProps } from './utils/types'
+import type { BasicNodeData, BuilderBasicProps } from './utils'
+import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 
 export type ContactNode = Node<BasicNodeData & { variant: 'default' | 'negated' | 'risingEdge' | 'fallingEdge' }>

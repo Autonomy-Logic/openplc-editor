@@ -3,7 +3,7 @@ import type { Node, NodeProps } from '@xyflow/react'
 import { Position } from '@xyflow/react'
 
 import { buildHandle, CustomHandle, CustomHandleProps } from './handle'
-import type { BasicNodeData, BuilderBasicProps } from './utils/types'
+import type { BasicNodeData, BuilderBasicProps } from './utils'
 
 export type ParallelNode = Node<
   BasicNodeData & {

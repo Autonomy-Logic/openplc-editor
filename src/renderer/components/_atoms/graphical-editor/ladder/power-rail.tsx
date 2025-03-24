@@ -2,7 +2,7 @@ import { generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 
 import { buildHandle, CustomHandle } from './handle'
-import type { BasicNodeData, BuilderBasicProps } from './utils/types'
+import type { BasicNodeData, BuilderBasicProps } from './utils'
 
 export type PowerRailNode = Node<BasicNodeData & { variant: 'left' | 'right' }>
 type PowerRailProps = NodeProps<PowerRailNode>

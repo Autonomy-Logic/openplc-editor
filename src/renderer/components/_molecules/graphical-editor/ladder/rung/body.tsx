@@ -15,9 +15,9 @@ import type { ContactNode } from '../../../../_atoms/graphical-editor/ladder/con
 import type { BasicNodeData } from '../../../../_atoms/graphical-editor/ladder/utils/types'
 import { ReactFlowPanel } from '../../../../_atoms/react-flow'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
-import BlockElement from '../../../../_features/[workspace]/editor/graphical/elements/block'
-import CoilElement from '../../../../_features/[workspace]/editor/graphical/elements/coil'
-import ContactElement from '../../../../_features/[workspace]/editor/graphical/elements/contact'
+import BlockElement from '../../../../_features/[workspace]/editor/graphical/elements/ladder/block'
+import CoilElement from '../../../../_features/[workspace]/editor/graphical/elements/ladder/coil'
+import ContactElement from '../../../../_features/[workspace]/editor/graphical/elements/ladder/contact'
 import { addNewElement, removeElements } from './ladder-utils/elements'
 import { onElementDragOver, onElementDragStart, onElementDrop } from './ladder-utils/elements/drag-n-drop'
 import {
@@ -229,6 +229,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
      *    -- src/renderer/components/_molecules/rung/body.tsx
      *    -- src/renderer/components/_molecules/menu-bar/modals/delete-confirmation-modal.tsx
      *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
+     *    -- src/renderer/components/_molecules/graphical-editor/fbd/index.tsx
      */
     const blockNodes = nodes.filter((node) => node.type === 'block')
     if (blockNodes.length > 0) {

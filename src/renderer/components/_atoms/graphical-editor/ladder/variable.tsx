@@ -6,9 +6,10 @@ import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
-import { getLadderPouVariablesRungNodeAndEdges, getVariableByName, validateVariableType } from '../utils'
+import { getVariableByName, validateVariableType } from '../utils'
 import { BlockNodeData, BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
+import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
 import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 
@@ -137,7 +138,10 @@ const VariableElement = (block: VariableProps) => {
       }
 
       // if the variable is the same as the one in the node, update the node
-      if (variable.id === (variableNode as VariableNode).data.variable.id && variable.name !== (variableNode as VariableNode).data.variable.name) {
+      if (
+        variable.id === (variableNode as VariableNode).data.variable.id &&
+        variable.name !== (variableNode as VariableNode).data.variable.name
+      ) {
         updateNode({
           editorName: editor.meta.name,
           rungId: rung.id,
@@ -226,12 +230,12 @@ const VariableElement = (block: VariableProps) => {
           textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
             'text-yellow-500': !isAVariable,
             'text-red-500': inputError,
-            'text-left': data.variant === 'output',
-            'text-right': data.variant === 'input',
+            'text-left placeholder:text-left': data.variant === 'output',
+            'text-right placeholder:text-right': data.variant === 'input',
           })}
           highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {
-            'text-left': data.variant === 'output',
-            'text-right': data.variant === 'input',
+            'text-left placeholder:text-left': data.variant === 'output',
+            'text-right placeholder:text-right': data.variant === 'input',
           })}
           scrollableIndicatorClassName={cn({
             '-right-3': data.variant === 'output',

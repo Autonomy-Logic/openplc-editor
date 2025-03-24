@@ -1,8 +1,10 @@
 import { CustomFbdNodeTypes, customNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
+import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils'
 import { ReactFlowPanel } from '@root/renderer/components/_atoms/react-flow'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FBDRungState } from '@root/renderer/store/slices'
+import { PLCVariable } from '@root/types/PLC/units/variable'
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -26,13 +28,16 @@ interface FBDProps {
 export const FBDBody = ({ rung }: FBDProps) => {
   const {
     editor,
+    editorActions: { updateModelVariables },
     libraries,
     project: {
       data: { pous },
     },
+    projectActions: { deleteVariable },
     fbdFlowActions,
   } = useOpenPLCStore()
 
+  const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
@@ -120,6 +125,45 @@ export const FBDBody = ({ rung }: FBDProps) => {
         nodes: nodes,
         editorName: editor.meta.name,
       })
+
+      /**
+       * Remove the variable associated with the block node
+       * If the editor is a graphical editor and the variable display is set to table, update the model variables
+       * If the variable is the selected row, set the selected row to -1
+       *
+       * !IMPORTANT: This function must be used inside of components, because the functions deleteVariable and updateModelVariables are just available at the useOpenPLCStore hook
+       * -- This block of code references at project:
+       *    -- src/renderer/components/_molecules/rung/body.tsx
+       *    -- src/renderer/components/_molecules/menu-bar/modals/delete-confirmation-modal.tsx
+       *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
+       *    -- src/renderer/components/_molecules/graphical-editor/fbd/index.tsx
+       */
+      const blockNodes = nodes.filter((node) => node.type === 'block')
+      if (blockNodes.length > 0) {
+        let variables: PLCVariable[] = []
+        if (pouRef) variables = [...pouRef.data.variables] as PLCVariable[]
+
+        blockNodes.forEach((blockNode) => {
+          const variableData = (blockNode.data as BasicNodeData)?.variable
+          const variableIndex = variables.findIndex((variable) => variable.id === variableData?.id)
+
+          if (variableIndex !== -1) {
+            deleteVariable({
+              variableId: (blockNode.data as BasicNodeData).variable.id,
+              scope: 'local',
+              associatedPou: editor.meta.name,
+            })
+            variables.splice(variableIndex, 1)
+          }
+          if (
+            editor.type === 'plc-graphical' &&
+            editor.variable.display === 'table' &&
+            parseInt(editor.variable.selectedRow) === variableIndex
+          ) {
+            updateModelVariables({ display: 'table', selectedRow: -1 })
+          }
+        })
+      }
     }
 
     if (edges.length > 0) {

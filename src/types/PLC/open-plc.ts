@@ -149,9 +149,6 @@ const PLCVariableSchema = z.object({
       }),
     }),
     z.object({
-      /**
-       * This should be omitted at variable table type options
-       */
       definition: z.literal('derived'),
       value: z.string(),
     }),

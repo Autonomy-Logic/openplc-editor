@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { PLCBasetypesSchema } from './base-types'
+import { PLCBaseTypesSchema } from './base-types'
 
 const PLCVariableSchema = z.object({
   id: z.string().optional(),
@@ -9,29 +9,30 @@ const PLCVariableSchema = z.object({
   type: z.discriminatedUnion('definition', [
     z.object({
       definition: z.literal('base-type'),
-      value: PLCBasetypesSchema,
+      value: PLCBaseTypesSchema,
     }),
     z.object({
       definition: z.literal('user-data-type'),
-      /** In fact this will be filled by the data types created by the user
-       *  This is a mock type just for a presentation.
-       * @deprecated
-       */
-      value: z.enum(['userDt1', 'userDt2', 'userDt3']),
+      value: z.string(),
     }),
     z.object({
       definition: z.literal('array'),
       value: z.string(),
       data: z.object({
-        /** This must also include the data types created by the user */
-        'base-type': PLCBasetypesSchema,
-        dimensions: z.array(z.string()),
+        baseType: z.discriminatedUnion('definition', [
+          z.object({
+            definition: z.literal('base-type'),
+            value: PLCBaseTypesSchema,
+          }),
+          z.object({
+            definition: z.literal('user-data-type'),
+            value: z.string(),
+          }),
+        ]),
+        dimensions: z.array(z.object({ dimension: z.string() })),
       }),
     }),
     z.object({
-      /**
-       * This should be ommited at variable table type options
-       */
       definition: z.literal('derived'),
       value: z.string(),
     }),

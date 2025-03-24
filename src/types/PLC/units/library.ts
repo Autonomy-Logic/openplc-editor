@@ -97,6 +97,7 @@ const BaseLibraryPouSchema = z.object({
   documentation: z.string(),
   extensible: z.boolean().optional(),
 })
+type BaseLibraryPou = z.infer<typeof BaseLibraryPouSchema>
 
 /**
  * This schema defines the structure of the libraries that are used in the PLC.
@@ -113,3 +114,4 @@ const BaseLibrarySchema = z.object({
 })
 
 export { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema, baseTypeSchema, genericTypeSchema }
+export type { BaseLibraryPou }

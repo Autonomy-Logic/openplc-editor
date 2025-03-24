@@ -8,16 +8,14 @@ import {
   buildBlockNode,
   getBlockSize,
 } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
+import { getLadderPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils'
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
-import { getLadderPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/utils'
 import {
   Modal,
   ModalContent,
   ModalTitle,
-  // ModalTrigger,
 } from '@root/renderer/components/_molecules'
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
-// import { updateVariableBlockPosition } from '@root/renderer/components/_molecules/rung/ladder-utils/elements/variable-block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
 import { PLCPou } from '@root/types/PLC/open-plc'
@@ -25,7 +23,7 @@ import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import ArrowButtonGroup from '../arrow-button-group'
+import ArrowButtonGroup from '../../arrow-button-group'
 import { ModalBlockLibrary } from './library'
 
 type BlockElementProps<T> = {
@@ -90,22 +88,22 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
     INPUT:
     ${blockVariant.variables
-      .filter((variable) => variable.class === 'input' || variable.class === 'inout')
+      .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
       .map(
         (variable, index) =>
           `${variable.name}: ${variable.type.value}${
-            index < blockVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inout').length - 1 ? '\n' : ''
+            index < blockVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1 ? '\n' : ''
           }`,
       )
       .join('')}
 
     OUTPUT:
     ${blockVariant.variables
-      .filter((variable) => variable.class === 'output' || variable.class === 'inout')
+      .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
       .map(
         (variable, index) =>
           `${variable.name}: ${variable.type.value}${
-            index < blockVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inout').length - 1 ? '\n' : ''
+            index < blockVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inOut').length - 1 ? '\n' : ''
           }`,
       )
       .join('')}`,
@@ -119,7 +117,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     name: blockVariant.name === '???' ? '' : blockVariant.name,
     inputs:
       blockVariant?.variables
-        .filter((variable) => variable.class === 'input' || variable.class === 'inout' && variable.name !== 'EN')
+        .filter((variable) => variable.class === 'input' || variable.class === 'inOut' && variable.name !== 'EN')
         .length.toString() || '0',
     executionOrder: selectedNode.data.executionOrder.toString(),
     executionControl: selectedNode.data.executionControl,
@@ -164,7 +162,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       const newNodeDataVariant = newNode.data.variant as BlockVariant
       const formName: string = newNodeDataVariant.name
       const formInputs: string = newNodeDataVariant.variables
-        .filter((variable) => variable.class === 'input' || variable.class === 'inout' && variable.name !== 'EN')
+        .filter((variable) => variable.class === 'input' || variable.class === 'inOut' && variable.name !== 'EN')
         .length.toString()
 
       setFormState((prevState) => ({
@@ -178,11 +176,11 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
         -- INPUT --
         ${newNodeDataVariant.variables
-          .filter((variable) => variable.class === 'input' || variable.class === 'inout')
+          .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
           .map(
             (variable, index) =>
               `${variable.name}: ${variable.type.value}${
-                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inout').length - 1
+                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1
                   ? '\n'
                   : ''
               }`,
@@ -191,11 +189,11 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
         -- OUTPUT --
         ${newNodeDataVariant.variables
-          .filter((variable) => variable.class === 'output' || variable.class === 'inout')
+          .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
           .map(
             (variable, index) =>
               `${variable.name}: ${variable.type.value}${
-                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inout').length - 1
+                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inOut').length - 1
                   ? '\n'
                   : ''
               }`,
