@@ -14,24 +14,9 @@ import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
-type Variables = {
-  [key: string]: {
-    variable: PLCVariable | undefined
-    type: 'input' | 'output' | 'inOut'
-  }
-}
-type Blocks = {
-  [key: string]: {
-    block: BasicNodeData
-    type: 'input' | 'output' | 'generic'
-  }
-}
-
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
-  connectedVariables: Variables
-  connectedBlocks: Blocks
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
@@ -634,7 +619,6 @@ export const buildBlockNode = <T extends object | undefined>({
       variable: { name: '' },
       executionOrder: 0,
       executionControl: executionControlAux,
-      connectedVariables: {},
       draggable: true,
       selectable: true,
       deletable: true,
@@ -650,6 +634,11 @@ export const buildBlockNode = <T extends object | undefined>({
     selected: variantLib.type === 'function' ? false : true,
   }
 }
+
+
+/**
+ * ==== UTILITARIAN FUNCTIONS ====
+ */
 
 export const getBlockSize = (
   variant: BlockVariant,

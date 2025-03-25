@@ -188,16 +188,27 @@ export const FBDBody = ({ rung }: FBDProps) => {
    */
   const onNodesChange: OnNodesChange<FlowNode> = useCallback(
     (changes) => {
-      const selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
+      let selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
       changes.forEach((change) => {
-        if (change.type === 'select') {
-          const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
-          if (!change.selected) {
-            const index = selectedNodes.findIndex((n) => n.id === change.id)
-            if (index !== -1) selectedNodes.splice(index, 1)
+        switch (change.type) {
+          case 'select': {
+            const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
+            if (!change.selected) {
+              const index = selectedNodes.findIndex((n) => n.id === change.id)
+              if (index !== -1) selectedNodes.splice(index, 1)
+              return
+            }
+            selectedNodes.push(node)
             return
           }
-          selectedNodes.push(node)
+          case 'add': {
+            selectedNodes = selectedNodes.filter((node) => node.id === change.item.id)
+            return
+          }
+          case 'remove': {
+            selectedNodes = selectedNodes.filter((node) => node.id !== change.id)
+            return
+          }
         }
       })
 

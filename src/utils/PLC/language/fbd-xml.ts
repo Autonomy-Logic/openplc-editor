@@ -214,7 +214,7 @@ const connectorToXml = (node: ConnectionNode, rung: FBDRungState): ConnectorFbdX
   }
 
   const connectorXML: ConnectorFbdXML = {
-    '@name': node.data.name,
+    '@name': node.data.variable.name,
     '@localId': node.data.numericId,
     '@height': node.height as number,
     '@width': node.width as number,
@@ -230,7 +230,7 @@ const connectorToXml = (node: ConnectionNode, rung: FBDRungState): ConnectorFbdX
 
 const continuationToXml = (node: ConnectionNode): ContinuationFbdXML => {
   const continuationXML: ContinuationFbdXML = {
-    '@name': node.data.name,
+    '@name': node.data.variable.name,
     '@localId': node.data.numericId,
     '@height': node.height as number,
     '@width': node.width as number,

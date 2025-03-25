@@ -4,22 +4,14 @@ import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
-import { BlockVariant } from '../types/block'
 import { buildHandle, CustomHandle } from './handle'
 import { ConnectorSVGComponent, ContinuationSVGComponent } from './svg'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
+import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
 export type ConnectionNode = Node<
   BasicNodeData & {
     variant: 'connector' | 'continuation'
-    name: string
-    block:
-      | {
-          id: string
-          handleId: string
-          variableType: BlockVariant['variables'][0]
-        }
-      | undefined
   }
 >
 type ConnectionProps = NodeProps<ConnectionNode>
@@ -39,7 +31,10 @@ export const DEFAULT_CONNECTION_CONNECTOR_Y = ELEMENT_HEIGHT / 2
 const ConnectionElement = (block: ConnectionProps) => {
   const { id, data, selected } = block
   const {
+    editor,
     editorActions: { updateModelFBD },
+    fbdFlows,
+    fbdFlowActions: { updateNode },
     project: {
       data: { pous },
     },
@@ -56,22 +51,93 @@ const ConnectionElement = (block: ConnectionProps) => {
   const [_keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   const [connectionValue, setConnectionValue] = useState('')
-  const [inputError, _setInputError] = useState<boolean>(false)
+  const [inputError, setInputError] = useState<boolean>(false)
 
   /**
    * useEffect to focus the variable input when the block is selected
    */
-  useEffect(() => {}, [])
+  useEffect(() => {
+    console.log('ConnectionElement useEffect', { data })
+    if (data.variable && data.variable.name !== '') {
+      setConnectionValue(data.variable.name)
+      return
+    }
+
+    if (inputConnectionRef.current && selected) {
+      inputConnectionRef.current.focus()
+    }
+  }, [])
 
   /**
    * Update inputError state when the table of variables is updated
    */
-  useEffect(() => {}, [pous])
+  useEffect(() => {
+    const { variables, node, rung } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      nodeId: id,
+    })
+    if (!node || !rung) return
+
+    const variable = variables.selected
+    if (!variable) {
+      setInputError(true)
+      return
+    }
+
+    if ((node.data as BasicNodeData).variable.id === variable.id) {
+      if ((node.data as BasicNodeData).variable.name !== variable.name) {
+        updateNode({
+          editorName: editor.meta.name,
+          nodeId: node.id,
+          node: {
+            ...node,
+            data: {
+              ...node.data,
+              variable,
+            },
+          },
+        })
+        setConnectionValue(variable.name)
+        setInputError(false)
+        return
+      }
+    }
+
+    setInputError(false)
+  }, [pous])
 
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitConnectionValueOnTextareaBlur = (_variableName?: string) => {}
+  const handleSubmitConnectionValueOnTextareaBlur = (connectionName?: string) => {
+    const connectionNameToSubmit = connectionName || connectionValue
+
+    const { pou, rung, node } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      nodeId: id,
+    })
+    if (!pou || !rung || !node) return
+
+    const connectionBlock = fbdFlows
+      .find((flow) => flow.name === editor.meta.name)
+      ?.rung?.nodes.find((node) => (node.data as BasicNodeData).variable.name == connectionNameToSubmit)
+
+    if (!connectionBlock) {
+      setInputError(true)
+    } else {
+      setInputError(false)
+    }
+
+    updateNode({
+      editorName: editor.meta.name,
+      nodeId: id,
+      node: {
+        ...node,
+        data: {
+          ...node.data,
+          variable: connectionBlock ? connectionBlock.data.variable : { id: '', name: '' },
+        },
+      },
+    })
+  }
 
   const onChangeHandler = () => {
     if (!openAutocomplete) {
@@ -238,9 +304,7 @@ const buildConnectionNode = ({ id, position, variant }: ConnectionBuilderProps):
       numericId: generateNumericUUID(),
       executionOrder: 0,
       variant,
-      name: '',
-      block: undefined,
-      variable: { id: "", name: "" },
+      variable: { id: '', name: '' },
       draggable: true,
       selectable: true,
       deletable: true,

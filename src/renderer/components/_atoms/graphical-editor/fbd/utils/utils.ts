@@ -1,8 +1,9 @@
-import type { EditorModel, FBDFlowType, LadderFlowType } from "@root/renderer/store/slices";
-import type { PLCPou } from "@root/types/PLC/open-plc";
-import type { PLCVariable } from "@root/types/PLC/units/variable";
+import type { EditorModel, FBDFlowType, LadderFlowType } from '@root/renderer/store/slices'
+import type { PLCPou } from '@root/types/PLC/open-plc'
+import type { PLCVariable } from '@root/types/PLC/units/variable'
 
-import type { BasicNodeData } from "./types";
+import { customNodeTypes } from '..'
+import type { BasicNodeData } from './types'
 
 export const getFBDPouVariablesRungNodeAndEdges = (
   editor: EditorModel,
@@ -26,11 +27,18 @@ export const getFBDPouVariablesRungNodeAndEdges = (
   const variables: PLCVariable[] = pou?.data.variables as PLCVariable[]
   const variable = variables.find((variable) => {
     if (!node) return undefined
-    switch (node.type) {
+    switch (node.type as keyof typeof customNodeTypes) {
       case 'block':
         return (
           (node.data as BasicNodeData).variable.id !== undefined &&
           (node.data as BasicNodeData).variable.id === variable.id
+        )
+      case 'connector':
+      case 'continuation':
+        return (
+          (node.data as BasicNodeData).variable.id !== undefined &&
+          (node.data as BasicNodeData).variable.id === variable.id &&
+          variable.type.definition === 'derived'
         )
       default:
         return (
