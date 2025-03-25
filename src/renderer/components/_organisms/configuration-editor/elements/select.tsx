@@ -44,7 +44,7 @@ const SelectField = ({
           sideOffset={-28}
           className='box max-h-52 w-[--radix-select-trigger-width] rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
-          <ScrollArea className="max-h-52 overflow-y-auto">
+          <ScrollArea className='max-h-52 overflow-y-auto'>
             {options.map((option, idx) => (
               <SelectItem
                 key={idx}

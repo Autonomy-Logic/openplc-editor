@@ -1,3 +1,4 @@
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { useState } from 'react'
 
@@ -87,7 +88,6 @@ const DeviceConfiguration = ({
   setSelectDevice,
   serialPort,
   setSerialPort,
-  serialPortsOptions,
 }: {
   selectDevice: string
   setSelectDevice: (value: string) => void
@@ -95,6 +95,15 @@ const DeviceConfiguration = ({
   setSerialPort: (value: string) => void
   serialPortsOptions: string[]
 }) => {
+  const {
+    device: { availableBoards, availableCommunicationPorts },
+  } = useOpenPLCStore()
+
+  const formatBoardsForLabel = (boards: { board: string; version: string }[]) => {
+    const formattedBoards = boards.map(({ board, version }) => `${board} (${version})`)
+    return formattedBoards
+  }
+
   return (
     <div className='flex h-full w-1/2 flex-col gap-6'>
       <div className='h-[60%]' />
@@ -104,11 +113,11 @@ const DeviceConfiguration = ({
             label='Device'
             placeholder={selectDevice}
             setSelectedOption={setSelectDevice}
-            options={deviceType}
+            options={formatBoardsForLabel(availableBoards)}
             ariaLabel='Device select'
           />
           <SelectField
-            options={serialPortsOptions}
+            options={availableCommunicationPorts}
             setSelectedOption={setSerialPort}
             label='Programming Port'
             placeholder={serialPort}

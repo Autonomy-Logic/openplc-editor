@@ -385,6 +385,12 @@ const rendererProcessBridge = {
   /**
    * Requests the device configuration options from the main process.
    */
-  getDeviceConfigurationOptions: () => ipcRenderer.invoke('hardware:device-configuration-options'),
+  getDeviceConfigurationOptions: (): Promise<{
+    ports: { port: string }[]
+    boards: {
+      board: string
+      version: string
+    }[]
+  }> => ipcRenderer.invoke('hardware:device-configuration-options'),
 }
 export default rendererProcessBridge

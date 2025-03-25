@@ -5,6 +5,8 @@ import type { DeviceSlice } from './types'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
   device: {
+    availableBoards: [],
+    availableCommunicationPorts: [],
     configuration: {
       deviceBoard: '',
       communicationPort: '',
@@ -27,11 +29,27 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
   },
 
   deviceActions: {
+    setAvailableOptions: ({ availableBoards, availableCommunicationPorts }): void => {
+      setState(
+        produce(({ device }: DeviceSlice) => {
+          device.availableBoards = availableBoards
+          device.availableCommunicationPorts = availableCommunicationPorts
+        }),
+      )
+    },
     addPin: (pinProp): void => {
       setState(
         produce(({ device }: DeviceSlice) => {
           console.log('Pin parameter:', pinProp)
           console.log('Device state:', device)
+        }),
+      )
+    },
+    setDeviceConfiguration: (deviceBoard, communicationPort): void => {
+      setState(
+        produce(({ device }: DeviceSlice) => {
+          device.configuration.deviceBoard = deviceBoard
+          device.configuration.communicationPort = communicationPort
         }),
       )
     },

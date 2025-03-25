@@ -754,5 +754,6 @@ export const HALS_DATA = {
   },
   'OpenPLC Runtime': {
     core: 'OpenPLC:Runtime',
+    version: 'default',
   },
 }

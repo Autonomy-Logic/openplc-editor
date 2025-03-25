@@ -52,6 +52,8 @@ type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
 
 const deviceStateSchema = z.object({
   device: z.object({
+    availableBoards: z.array(z.object({ board: z.string(), version: z.string() })),
+    availableCommunicationPorts: z.array(z.string()),
     configuration: deviceConfigurationSchema,
     pinMapping: devicePinMappingSchema,
   }),
@@ -60,7 +62,17 @@ const deviceStateSchema = z.object({
 type DeviceState = z.infer<typeof deviceStateSchema>
 
 const deviceActionSchema = z.object({
+  setAvailableOptions: z
+    .function()
+    .args(
+      z.object({
+        availableBoards: z.array(z.object({ board: z.string(), version: z.string() })),
+        availableCommunicationPorts: z.array(z.string()),
+      }),
+    )
+    .returns(z.void()),
   addPin: z.function().args(z.string().optional()).returns(z.void()),
+  setDeviceConfiguration: z.function().args(z.string(), z.string()).returns(z.void()),
 })
 
 type DeviceActions = z.infer<typeof deviceActionSchema>

@@ -7,9 +7,9 @@ type LabelProps = ComponentPropsWithoutRef<'label'> & {
 const Label = (props: LabelProps) => {
   const { label, className, ...res } = props
   return (
-    <span className={cn('text-white', className)} {...res}>
+    <label className={cn('text-white', className)} {...res}>
       {label}
-    </span>
+    </label>
   )
 }
 export { Label }
