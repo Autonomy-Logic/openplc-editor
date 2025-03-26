@@ -72,7 +72,8 @@ const deviceActionSchema = z.object({
     )
     .returns(z.void()),
   addPin: z.function().args(z.string().optional()).returns(z.void()),
-  setDeviceConfiguration: z.function().args(z.string(), z.string()).returns(z.void()),
+  setDeviceBoard: z.function().args(z.string()).returns(z.void()),
+  setCommunicationPort: z.function().args(z.string()).returns(z.void()),
 })
 
 type DeviceActions = z.infer<typeof deviceActionSchema>

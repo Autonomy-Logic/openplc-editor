@@ -8,7 +8,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     availableBoards: [],
     availableCommunicationPorts: [],
     configuration: {
-      deviceBoard: '',
+      deviceBoard: 'OpenPLC Runtime { default }',
       communicationPort: '',
       communicationConfiguration: {
         modbusRTU: {
@@ -45,10 +45,16 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
-    setDeviceConfiguration: (deviceBoard, communicationPort): void => {
+    setDeviceBoard: (deviceBoard): void => {
       setState(
         produce(({ device }: DeviceSlice) => {
           device.configuration.deviceBoard = deviceBoard
+        }),
+      )
+    },
+    setCommunicationPort: (communicationPort): void => {
+      setState(
+        produce(({ device }: DeviceSlice) => {
           device.configuration.communicationPort = communicationPort
         }),
       )

@@ -2,7 +2,6 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { useState } from 'react'
 
-import { deviceType } from './device'
 import { CheckBox } from './elements/checkBox'
 import { InputField } from './elements/input'
 import { SelectField } from './elements/select'
@@ -10,7 +9,6 @@ import { SelectField } from './elements/select'
 const ConfigurationEditor = () => {
   const [modbusConfig, setModbusConfig] = useState({ RTU: false, TCP: false })
   const [enableDHCP, setEnableDHCP] = useState(false)
-  const [selectDevice, setSelectDevice] = useState(deviceType[0])
   const [selectedOption, setSelectedOption] = useState('Wi-Fi')
   const [selectBaudRateOption, setSelectBaudRateOption] = useState('115200')
   const [selectInterfaceOption, setSelectInterfaceOption] = useState('Serial')
@@ -20,8 +18,6 @@ const ConfigurationEditor = () => {
   const [gatewayValue, setGatewayValue] = useState('192.168.1.1')
   const [DNSValue, setDNSValue] = useState('8.8.8.8')
   const [subnetValue, setSubnetValue] = useState('255.255.255.0')
-  const serialPortsOptions = ['/dev/ttyUSB0', 'Porta de comunicação (COM1) (COM1)']
-  const [serialPort, setSerialPort] = useState(serialPortsOptions[0])
 
   const toggleModbus = (type: 'RTU' | 'TCP') => {
     setModbusConfig((prev) => ({ ...prev, [type]: !prev[type] }))
@@ -29,13 +25,7 @@ const ConfigurationEditor = () => {
 
   return (
     <div className='flex h-full w-full select-none'>
-      <DeviceConfiguration
-        setSerialPort={setSerialPort}
-        serialPort={serialPort}
-        selectDevice={selectDevice}
-        setSelectDevice={setSelectDevice}
-        serialPortsOptions={serialPortsOptions}
-      />
+      <DeviceConfiguration />
 
       <hr className='mx-4 h-[99%] w-[1px] self-stretch bg-brand-light pb-12' />
 
@@ -83,24 +73,18 @@ const ConfigurationEditor = () => {
   )
 }
 
-const DeviceConfiguration = ({
-  selectDevice,
-  setSelectDevice,
-  serialPort,
-  setSerialPort,
-}: {
-  selectDevice: string
-  setSelectDevice: (value: string) => void
-  serialPort: string
-  setSerialPort: (value: string) => void
-  serialPortsOptions: string[]
-}) => {
+const DeviceConfiguration = () => {
   const {
-    device: { availableBoards, availableCommunicationPorts },
+    device: {
+      availableBoards,
+      availableCommunicationPorts,
+      configuration: { deviceBoard, communicationPort },
+    },
+    deviceActions: { setDeviceBoard, setCommunicationPort },
   } = useOpenPLCStore()
 
   const formatBoardsForLabel = (boards: { board: string; version: string }[]) => {
-    const formattedBoards = boards.map(({ board, version }) => `${board} (${version})`)
+    const formattedBoards = boards.map(({ board, version }) => `${board} { ${version} }`)
     return formattedBoards
   }
 
@@ -111,16 +95,16 @@ const DeviceConfiguration = ({
         <div className='flex flex-col gap-3'>
           <SelectField
             label='Device'
-            placeholder={selectDevice}
-            setSelectedOption={setSelectDevice}
+            placeholder={deviceBoard}
+            setSelectedOption={setDeviceBoard}
             options={formatBoardsForLabel(availableBoards)}
             ariaLabel='Device select'
           />
           <SelectField
             options={availableCommunicationPorts}
-            setSelectedOption={setSerialPort}
+            setSelectedOption={setCommunicationPort}
             label='Programming Port'
-            placeholder={serialPort}
+            placeholder={communicationPort}
             width='188px'
             ariaLabel='Programming port select'
           />
