@@ -361,8 +361,12 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
           preventScrolling: !isElementBeingHovered,
 
-          snapGrid: [10, 10],
+          snapGrid: [16, 16],
           snapToGrid: true,
+
+          proOptions: {
+            hideAttribution: true,
+          },
         }}
       />
     </div>

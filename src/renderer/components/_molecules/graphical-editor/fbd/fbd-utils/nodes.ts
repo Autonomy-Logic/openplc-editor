@@ -24,7 +24,6 @@ export const buildGenericNode = <T>({
         id,
         position,
         variant: nodeType,
-        variable: undefined,
       })
     case 'connector':
     case 'continuation':

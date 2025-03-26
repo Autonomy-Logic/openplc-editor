@@ -25,8 +25,8 @@ type BlockBuilderProps<T> = BuilderBasicProps & { variant: T; executionControl?:
 export const DEFAULT_BLOCK_WIDTH = 216
 export const DEFAULT_BLOCK_HEIGHT = 128
 
-export const DEFAULT_BLOCK_CONNECTOR_Y = 36
-export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 40
+export const DEFAULT_BLOCK_CONNECTOR_Y = 48
+export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 48
 
 export const DEFAULT_BLOCK_TYPE = {
   name: '???',
@@ -272,7 +272,7 @@ export const BlockNodeElement = <T extends object>({
         onChange={(e) => setBlockNameValue(e.target.value.toUpperCase())}
         maxLength={20}
         placeholder='???'
-        className='w-full bg-transparent p-1 text-center text-xs outline-none'
+        className='absolute top-2 w-full bg-transparent text-center text-xs outline-none'
         disabled={disabled}
         onFocus={() => setInputNameFocus(true)}
         onBlur={() => inputNameFocus && handleNameInputOnBlur()}
@@ -634,7 +634,6 @@ export const buildBlockNode = <T extends object | undefined>({
     selected: variantLib.type === 'function' ? false : true,
   }
 }
-
 
 /**
  * ==== UTILITARIAN FUNCTIONS ====

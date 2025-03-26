@@ -3,37 +3,30 @@ import { RungLadderState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
-import type { BlockVariant } from '../types/block'
+import { BlockVariant } from '../types/block'
+import { BlockNode } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
 
 export type VariableNode = Node<
   BasicNodeData & {
     variant: 'input-variable' | 'output-variable' | 'inout-variable'
-    block:
-      | {
-          id: string
-          handleId: string
-          variableType: BlockVariant['variables'][0]
-        }
-      | undefined
     negated: boolean
   }
 >
 type VariableProps = NodeProps<VariableNode>
 type VariableBuilderProps = BuilderBasicProps & {
   variant: 'input-variable' | 'output-variable' | 'inout-variable'
-  variable: PLCVariable | undefined
 }
 
 export const DEFAULT_VARIABLE_WIDTH = 80
 export const DEFAULT_VARIABLE_HEIGHT = 32
 
 export const ELEMENT_SIZE = 128
-export const ELEMENT_HEIGHT = 48
+export const ELEMENT_HEIGHT = 32
 
 export const DEFAULT_VARIABLE_CONNECTOR_X = DEFAULT_VARIABLE_WIDTH
 export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
@@ -41,13 +34,12 @@ export const DEFAULT_VARIABLE_CONNECTOR_Y = DEFAULT_VARIABLE_HEIGHT / 2
 const VariableElement = (block: VariableProps) => {
   const { id, data, selected } = block
   const {
-    // editor,
+    editor,
     editorActions: { updateModelFBD },
+    fbdFlows,
     project: {
       data: { pous },
     },
-    // ladderFlows,
-    // ladderFlowActions: { updateNode },
   } = useOpenPLCStore()
 
   const inputVariableRef = useRef<
@@ -75,6 +67,37 @@ const VariableElement = (block: VariableProps) => {
    * Update inputError state when the table of variables is updated
    */
   useEffect(() => {}, [pous])
+
+  /**
+   * Get the connection type
+   */
+  const flow = useMemo(() => fbdFlows.find((flow) => flow.name === editor.meta.name), [fbdFlows, editor])
+  const connection = useMemo(() => {
+    const rung = flow?.rung
+    if (!rung)
+      return {
+        node: undefined,
+        edge: undefined,
+      }
+
+    const sourceEdge = rung.edges.find((edge) => edge.source === id)
+    const targetNode = rung.nodes.find((block) => block.id === sourceEdge?.target && block.type === 'block')
+
+    const targetEdge = rung.edges.find((edge) => edge.target === id)
+    const sourceNode = rung.nodes.find((block) => block.id === targetEdge?.source && block.type === 'block')
+
+    const connectedBlock = sourceNode || targetNode
+    return {
+      node: connectedBlock ? (connectedBlock as BlockNode<BlockVariant>) : undefined,
+      targetEdge: targetEdge,
+      sourceEdge: sourceEdge,
+    }
+  }, [flow])
+  const connectionType = useMemo(() => {
+    return connection.node
+      ? `(*${connection.node.data.variant.variables.find((variable) => variable.name === connection.sourceEdge?.targetHandle || variable.name === connection.targetEdge?.sourceHandle)?.type.value}*)`
+      : 'NOT CONNECTED'
+  }, [connection])
 
   /**
    * Handle with the variable input onBlur event
@@ -127,15 +150,15 @@ const VariableElement = (block: VariableProps) => {
             })}
             highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {})}
             scrollableIndicatorClassName={cn({
-              '-right-3': data.variant === 'output-variable' || 'inout-variable',
-              '-left-3': data.variant === 'input-variable',
+              '-right-2': data.variant === 'output-variable' || 'inout-variable',
+              '-left-2': data.variant === 'input-variable',
             })}
-            placeholder={`${data.block ? `(*${data.block?.variableType.type.value}*)` : 'NOT CONNECTED'}`}
+            placeholder={connectionType}
             textAreaValue={variableValue}
             setTextAreaValue={setVariableValue}
             handleSubmit={handleSubmitVariableValueOnTextareaBlur}
             inputHeight={{
-              height: DEFAULT_VARIABLE_HEIGHT,
+              height: DEFAULT_VARIABLE_HEIGHT / 2,
               scrollLimiter: DEFAULT_VARIABLE_HEIGHT,
             }}
             ref={inputVariableRef}
@@ -169,7 +192,7 @@ const VariableElement = (block: VariableProps) => {
   )
 }
 
-const buildVariableNode = ({ id, position, variant, variable }: VariableBuilderProps): VariableNode => {
+const buildVariableNode = ({ id, position, variant }: VariableBuilderProps): VariableNode => {
   const inputHandle =
     variant === 'output-variable' || variant === 'inout-variable'
       ? buildHandle({
@@ -212,10 +235,9 @@ const buildVariableNode = ({ id, position, variant, variable }: VariableBuilderP
       inputConnector: inputHandle,
       outputConnector: outputHandle,
       numericId: generateNumericUUID(),
-      variable: variable ?? { name: '' },
+      variable: { id: '', name: '' },
       executionOrder: 0,
       variant,
-      block: undefined,
       negated: false,
       draggable: true,
       selectable: true,

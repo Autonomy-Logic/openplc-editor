@@ -19,11 +19,11 @@ type ConnectionBuilderProps = BuilderBasicProps & {
   variant: 'connector' | 'continuation'
 }
 
-export const DEFAULT_CONNECTION_WIDTH = 112
+export const DEFAULT_CONNECTION_WIDTH = 88
 export const DEFAULT_CONNECTION_HEIGHT = 32
 
-export const ELEMENT_WIDTH = 112 + 24
-export const ELEMENT_HEIGHT = 48
+export const ELEMENT_WIDTH = 88 + 24
+export const ELEMENT_HEIGHT = 32
 
 export const DEFAULT_CONNECTION_CONNECTOR_X = ELEMENT_WIDTH
 export const DEFAULT_CONNECTION_CONNECTOR_Y = ELEMENT_HEIGHT / 2
@@ -57,7 +57,6 @@ const ConnectionElement = (block: ConnectionProps) => {
    * useEffect to focus the variable input when the block is selected
    */
   useEffect(() => {
-    console.log('ConnectionElement useEffect', { data })
     if (data.variable && data.variable.name !== '') {
       setConnectionValue(data.variable.name)
       return
@@ -183,15 +182,15 @@ const ConnectionElement = (block: ConnectionProps) => {
               })}
               highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {})}
               scrollableIndicatorClassName={cn({
-                '-right-3': data.variant === 'continuation',
-                '-left-3': data.variant === 'connector',
+                '-right-2': data.variant === 'continuation',
+                '-left-2': data.variant === 'connector',
               })}
               placeholder={'Block to connect'}
               textAreaValue={connectionValue}
               setTextAreaValue={setConnectionValue}
               handleSubmit={handleSubmitConnectionValueOnTextareaBlur}
               inputHeight={{
-                height: DEFAULT_CONNECTION_HEIGHT,
+                height: DEFAULT_CONNECTION_HEIGHT / 2,
                 scrollLimiter: DEFAULT_CONNECTION_HEIGHT,
               }}
               ref={inputConnectionRef}
