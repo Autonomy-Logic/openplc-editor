@@ -29,7 +29,7 @@ export const DEFAULT_CONNECTION_CONNECTOR_X = ELEMENT_WIDTH
 export const DEFAULT_CONNECTION_CONNECTOR_Y = ELEMENT_HEIGHT / 2
 
 const ConnectionElement = (block: ConnectionProps) => {
-  const { id, data, selected } = block
+  const { id, data, selected, type } = block
   const {
     editor,
     editorActions: { updateModelFBD },
@@ -71,37 +71,22 @@ const ConnectionElement = (block: ConnectionProps) => {
    * Update inputError state when the table of variables is updated
    */
   useEffect(() => {
-    const { variables, node, rung } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const { rung, node: connectionNode } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
-    if (!node || !rung) return
+    if (!rung || !connectionNode) return
 
-    const variable = variables.selected
-    if (!variable) {
+    const connectionBlock = rung.nodes.find(
+      (node) =>
+        (node.data as BasicNodeData).variable.name == (connectionNode.data as BasicNodeData).variable.name &&
+        (type === 'connector' ? node.type === 'continuation' : node.type === 'connector'),
+    )
+
+    if (!connectionBlock) {
       setInputError(true)
-      return
+    } else {
+      setInputError(false)
     }
-
-    if ((node.data as BasicNodeData).variable.id === variable.id) {
-      if ((node.data as BasicNodeData).variable.name !== variable.name) {
-        updateNode({
-          editorName: editor.meta.name,
-          nodeId: node.id,
-          node: {
-            ...node,
-            data: {
-              ...node.data,
-              variable,
-            },
-          },
-        })
-        setConnectionValue(variable.name)
-        setInputError(false)
-        return
-      }
-    }
-
-    setInputError(false)
   }, [pous])
 
   /**
@@ -110,14 +95,22 @@ const ConnectionElement = (block: ConnectionProps) => {
   const handleSubmitConnectionValueOnTextareaBlur = (connectionName?: string) => {
     const connectionNameToSubmit = connectionName || connectionValue
 
-    const { pou, rung, node } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+    const {
+      pou,
+      rung,
+      node: connectionNode,
+    } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
-    if (!pou || !rung || !node) return
+    if (!pou || !rung || !connectionNode) return
 
     const connectionBlock = fbdFlows
       .find((flow) => flow.name === editor.meta.name)
-      ?.rung?.nodes.find((node) => (node.data as BasicNodeData).variable.name == connectionNameToSubmit)
+      ?.rung?.nodes.find(
+        (node) =>
+          (type === 'connector' ? node.type === 'continuation' : node.type === 'connector') &&
+          (node.data as BasicNodeData).variable.name == connectionNameToSubmit,
+      )
 
     if (!connectionBlock) {
       setInputError(true)
@@ -129,10 +122,10 @@ const ConnectionElement = (block: ConnectionProps) => {
       editorName: editor.meta.name,
       nodeId: id,
       node: {
-        ...node,
+        ...connectionNode,
         data: {
-          ...node.data,
-          variable: connectionBlock ? connectionBlock.data.variable : { id: '', name: '' },
+          ...connectionNode.data,
+          variable: { id: 'connection', name: connectionNameToSubmit },
         },
       },
     })

@@ -35,11 +35,7 @@ export const getFBDPouVariablesRungNodeAndEdges = (
         )
       case 'connector':
       case 'continuation':
-        return (
-          (node.data as BasicNodeData).variable.id !== undefined &&
-          (node.data as BasicNodeData).variable.id === variable.id &&
-          variable.type.definition === 'derived'
-        )
+        return undefined
       default:
         return (
           ((node.data as BasicNodeData).variable.id !== undefined
