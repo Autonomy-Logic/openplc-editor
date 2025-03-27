@@ -48,7 +48,7 @@ export const BlockNodeElement = <T extends object>({
   wrongVariable = false,
   scale = 1,
 }: {
-  nodeId?: string
+  nodeId: string
   data: BlockNodeData<T>
   height: number
   width: number
@@ -59,7 +59,7 @@ export const BlockNodeElement = <T extends object>({
 }) => {
   const {
     editor,
-    editorActions: { updateModelVariables },
+    editorActions: { updateModelVariables, updateModelFBD },
     libraries,
     fbdFlows,
     fbdFlowActions: { setNodes, setEdges },
@@ -251,6 +251,18 @@ export const BlockNodeElement = <T extends object>({
     setWrongName(false)
   }
 
+  const onMouseEnter = () => {
+    updateModelFBD({
+      hoveringElement: { elementId: nodeId, hovering: true },
+    })
+  }
+
+  const onMouseLeave = () => {
+    updateModelFBD({
+      hoveringElement: { elementId: null, hovering: false },
+    })
+  }
+
   return (
     <div
       className={cn(
@@ -266,6 +278,8 @@ export const BlockNodeElement = <T extends object>({
         height: height,
         transform: `scale(${scale})`,
       }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <InputWithRef
         value={blockNameValue}

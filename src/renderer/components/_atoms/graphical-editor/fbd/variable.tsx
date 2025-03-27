@@ -1,5 +1,4 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { RungLadderState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -7,9 +6,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { BlockVariant } from '../types/block'
+import { getVariableByName, validateVariableType } from '../utils'
 import { BlockNode } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
+import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
 export type VariableNode = Node<
   BasicNodeData & {
@@ -37,8 +38,9 @@ const VariableElement = (block: VariableProps) => {
     editor,
     editorActions: { updateModelFBD },
     fbdFlows,
+    fbdFlowActions: { updateNode },
     project: {
-      data: { pous },
+      data: { pous, dataTypes },
     },
   } = useOpenPLCStore()
 
@@ -53,20 +55,8 @@ const VariableElement = (block: VariableProps) => {
   const [_keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   const [variableValue, setVariableValue] = useState('')
-  const [inputError, _setInputError] = useState<boolean>(false)
-  const [isAVariable, _setIsAVariable] = useState<boolean>(false)
-
-  const _updateRelatedNode = (_rung: RungLadderState, _variableNode: VariableNode, _variable: PLCVariable) => {}
-
-  /**
-   * useEffect to focus the variable input when the block is selected
-   */
-  useEffect(() => {}, [])
-
-  /**
-   * Update inputError state when the table of variables is updated
-   */
-  useEffect(() => {}, [pous])
+  const [inputError, setInputError] = useState<boolean>(false)
+  const [isAVariable, setIsAVariable] = useState<boolean>(false)
 
   /**
    * Get the connection type
@@ -94,15 +84,146 @@ const VariableElement = (block: VariableProps) => {
     }
   }, [flow])
   const connectionType = useMemo(() => {
-    return connection.node
-      ? `(*${connection.node.data.variant.variables.find((variable) => variable.name === connection.sourceEdge?.targetHandle || variable.name === connection.targetEdge?.sourceHandle)?.type.value}*)`
-      : 'NOT CONNECTED'
+    const variable = connection.node?.data.variant.variables.find(
+      (variable) =>
+        variable.name === connection.sourceEdge?.targetHandle || variable.name === connection.targetEdge?.sourceHandle,
+    )
+    return variable
+      ? {
+          string: `(*${variable.type.value}*)`,
+          variable: {
+            name: variable.name,
+            class: variable.class,
+            type: {
+              value: variable.type.value,
+              definition: variable.type.definition,
+            },
+          },
+        }
+      : {
+          string: 'NOT CONNECTED',
+          variable: {
+            name: '',
+            class: '',
+            type: {
+              value: '',
+              definition: '',
+            },
+          },
+        }
   }, [connection])
+
+  /**
+   * useEffect to focus the variable input when the block is selected
+   */
+  useEffect(() => {
+    if (data.variable && data.variable.name !== '') {
+      setVariableValue(data.variable.name)
+      return
+    }
+  }, [])
+
+  /**
+   * Update inputError state when the table of variables is updated
+   */
+  useEffect(() => {
+    const { node: variableNode, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      nodeId: id,
+      variableName: variableValue,
+    })
+    if (!variableNode) return
+
+    const variable = variables.selected
+    if (!variable || !inputVariableRef) {
+      setIsAVariable(false)
+    } else {
+      // if the variable is not the same as the one in the node, update the node
+      if (variable.id !== (variableNode as VariableNode).data.variable.id) {
+        updateNode({
+          editorName: editor.meta.name,
+          nodeId: variableNode.id,
+          node: {
+            ...variableNode,
+            data: {
+              ...variableNode.data,
+              variable: variable,
+            },
+          },
+        })
+      }
+
+      // if the variable is the same as the one in the node, update the node
+      if (
+        variable.id === (variableNode as VariableNode).data.variable.id &&
+        variable.name !== (variableNode as VariableNode).data.variable.name
+      ) {
+        updateNode({
+          editorName: editor.meta.name,
+          nodeId: variableNode.id,
+          node: {
+            ...variableNode,
+            data: {
+              ...variableNode.data,
+              variable: variable,
+            },
+          },
+        })
+      }
+
+      const validation = validateVariableType(variable.type.value, connectionType.variable)
+      if (!validation.isValid && dataTypes.length > 0) {
+        const userDataTypes = dataTypes.map((dataType) => dataType.name)
+        validation.isValid = userDataTypes.includes(variable.type.value)
+        validation.error = undefined
+      }
+      setVariableValue(variable.name)
+      setInputError(!validation.isValid)
+      setIsAVariable(true)
+    }
+
+    if (!connection.node) {
+      setInputError(true)
+      return
+    }
+  }, [pous])
 
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitVariableValueOnTextareaBlur = (_variableName?: string) => {}
+  const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
+    const variableNameToSubmit = variableName || variableValue
+
+    const { pou, rung, node } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      nodeId: id,
+    })
+    if (!pou || !rung || !node) return
+    const variableNode = node as VariableNode
+
+    let variable: PLCVariable | { name: string } | undefined = getVariableByName(
+      pou.data.variables as PLCVariable[],
+      variableNameToSubmit,
+    )
+    if (!variable) {
+      setIsAVariable(false)
+      variable = { name: variableNameToSubmit }
+    } else {
+      setIsAVariable(true)
+    }
+
+    updateNode({
+      editorName: editor.meta.name,
+      nodeId: variableNode.id,
+      node: {
+        ...variableNode,
+        data: {
+          ...variableNode.data,
+          variable: variable,
+        },
+      },
+    })
+
+    setInputError(false)
+  }
 
   const onChangeHandler = () => {
     if (!openAutocomplete) {
@@ -153,7 +274,7 @@ const VariableElement = (block: VariableProps) => {
               '-right-2': data.variant === 'output-variable' || 'inout-variable',
               '-left-2': data.variant === 'input-variable',
             })}
-            placeholder={connectionType}
+            placeholder={connectionType.string}
             textAreaValue={variableValue}
             setTextAreaValue={setVariableValue}
             handleSubmit={handleSubmitVariableValueOnTextareaBlur}
