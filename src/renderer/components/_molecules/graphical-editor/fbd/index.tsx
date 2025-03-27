@@ -1,7 +1,9 @@
 import { CustomFbdNodeTypes, customNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
+import { BlockNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/block'
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils'
 import { ReactFlowPanel } from '@root/renderer/components/_atoms/react-flow'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import BlockElement from '@root/renderer/components/_features/[workspace]/editor/graphical/elements/fbd/block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FBDRungState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC/units/variable'
@@ -29,12 +31,14 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const {
     editor,
     editorActions: { updateModelVariables },
+    fbdFlowActions,
     libraries,
     project: {
       data: { pous },
     },
     projectActions: { deleteVariable },
-    fbdFlowActions,
+    modals,
+    modalActions: { closeModal, openModal },
   } = useOpenPLCStore()
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
@@ -323,6 +327,23 @@ export const FBDBody = ({ rung }: FBDProps) => {
     [rung, reactFlowInstance],
   )
 
+  /**
+   * Handle the double click of a node
+   */
+  const handleNodeDoubleClick = (node: FlowNode) => {
+    const modalToOpen = node.type === 'block' && 'block-fbd-element'
+    if (!modalToOpen) return
+
+    openModal(modalToOpen, node)
+  }
+
+  /**
+   * Handle the close of the modal
+   */
+  const handleModalClose = () => {
+    closeModal()
+  }
+
   return (
     <div className='h-full w-full rounded-lg border p-1 dark:border-neutral-800' ref={reactFlowViewportRef}>
       <ReactFlowPanel
@@ -349,6 +370,9 @@ export const FBDBody = ({ rung }: FBDProps) => {
           onConnect: (connection) => {
             handleOnConnect(connection)
           },
+          onNodeDoubleClick: (_event, node) => {
+            handleNodeDoubleClick(node)
+          },
 
           onDragEnter: onDragEnterViewport,
           onDragLeave: onDragLeaveViewport,
@@ -369,6 +393,13 @@ export const FBDBody = ({ rung }: FBDProps) => {
           },
         }}
       />
+      {modals['block-fbd-element']?.open && (
+        <BlockElement
+          onClose={handleModalClose}
+          selectedNode={modals['block-fbd-element'].data as BlockNode<object>}
+          isOpen={modals['block-fbd-element'].open}
+        />
+      )}
     </div>
   )
 }

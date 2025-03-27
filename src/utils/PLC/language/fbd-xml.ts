@@ -105,10 +105,10 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
       '@x': node.position.x,
       '@y': node.position.y,
     },
-    inOutVariables: '',
     inputVariables: {
       variable: inputVariables,
     },
+    inOutVariables: '',
     outputVariables: {
       variable: outputVariable,
     },
@@ -124,6 +124,10 @@ const inputVariableToXml = (node: VariableNode): InVariableFbdXML => {
     '@height': node.height as number,
     '@width': node.width as number,
     '@negated': node.data.negated,
+    position: {
+      '@x': node.position.x,
+      '@y': node.position.y,
+    },
     connectionPointOut: {
       relPosition: {
         '@x': node.data.outputConnector?.relPosition.x || 0,
@@ -131,10 +135,6 @@ const inputVariableToXml = (node: VariableNode): InVariableFbdXML => {
       },
     },
     expression: node.data.variable.name,
-    position: {
-      '@x': node.position.x,
-      '@y': node.position.y,
-    },
   }
 
   return inputVariableXML
@@ -174,12 +174,12 @@ const outputVariableToXml = (node: VariableNode, rung: FBDRungState): OutVariabl
     '@height': node.height as number,
     '@width': node.width as number,
     '@negated': node.data.negated,
-    connectionPointIn: inputConnection,
-    expression: node.data.variable.name,
     position: {
       '@x': node.position.x,
       '@y': node.position.y,
     },
+    connectionPointIn: inputConnection,
+    expression: node.data.variable.name,
   }
 
   return outputVariableXML
@@ -218,11 +218,11 @@ const connectorToXml = (node: ConnectionNode, rung: FBDRungState): ConnectorFbdX
     '@localId': node.data.numericId,
     '@height': node.height as number,
     '@width': node.width as number,
-    connectionPointIn: inputConnection,
     position: {
       '@x': node.position.x,
       '@y': node.position.y,
     },
+    connectionPointIn: inputConnection,
   }
 
   return connectorXML
@@ -234,15 +234,15 @@ const continuationToXml = (node: ConnectionNode): ContinuationFbdXML => {
     '@localId': node.data.numericId,
     '@height': node.height as number,
     '@width': node.width as number,
+    position: {
+      '@x': node.position.x,
+      '@y': node.position.y,
+    },
     connectionPointOut: {
       relPosition: {
         '@x': node.data.outputConnector?.relPosition.x || 0,
         '@y': node.data.outputConnector?.relPosition.y || 0,
       },
-    },
-    position: {
-      '@x': node.position.x,
-      '@y': node.position.y,
     },
   }
 
