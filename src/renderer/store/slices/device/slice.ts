@@ -12,8 +12,8 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       communicationPort: '',
       communicationConfiguration: {
         modbusRTU: {
-          rtuInterface: '',
-          rtuBaudrate: '',
+          rtuInterface: [],
+          rtuBaudrate: [],
           rtuSlaveId: '',
           rtuRS485TXPin: '',
         },
@@ -56,6 +56,15 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       setState(
         produce(({ device }: DeviceSlice) => {
           device.configuration.communicationPort = communicationPort
+        }),
+      )
+    },
+    setRTUSettings: (rtuSettings): void => {
+      setState(
+        produce(({ device }: DeviceSlice) => {
+          for (const prop in rtuSettings) {
+            device.configuration.communicationConfiguration.modbusRTU[prop] = rtuSettings[prop]
+          }
         }),
       )
     },

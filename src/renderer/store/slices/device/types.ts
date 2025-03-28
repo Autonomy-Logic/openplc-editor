@@ -14,10 +14,10 @@ const deviceConfigurationSchema = z.object({
   communicationPort: z.string(),
   communicationConfiguration: z.object({
     modbusRTU: z.object({
-      rtuInterface: z.string(),
-      rtuBaudrate: z.string(),
-      rtuSlaveId: z.string(), // Can be any integer number from 0 to 255
-      rtuRS485TXPin: z.string().optional(), // Can be any integer number from 0 to 255
+      rtuInterface: z.array(z.string()), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
+      rtuBaudrate: z.array(z.string()), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
+      rtuSlaveId: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.
+      rtuRS485TXPin: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.Í
     }),
     modbusTCP: z.discriminatedUnion('tcpInterface', [
       z.object({
@@ -74,6 +74,10 @@ const deviceActionSchema = z.object({
   addPin: z.function().args(z.string().optional()).returns(z.void()),
   setDeviceBoard: z.function().args(z.string()).returns(z.void()),
   setCommunicationPort: z.function().args(z.string()).returns(z.void()),
+  setRTUSettings: z
+    .function()
+    .args(deviceConfigurationSchema.shape.communicationConfiguration.shape.modbusRTU.partial())
+    .returns(z.void()),
 })
 
 type DeviceActions = z.infer<typeof deviceActionSchema>

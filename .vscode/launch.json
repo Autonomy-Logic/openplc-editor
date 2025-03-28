@@ -7,7 +7,7 @@
       "request": "launch",
       "protocol": "inspector",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start"],
+      "runtimeArgs": ["run", "start:dev"],
       "env": {
         "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223"
       }

@@ -73,6 +73,13 @@ const ConfigurationEditor = () => {
   )
 }
 
+/**
+ * Component for the device configuration section in the Configuration Editor.
+ * This component includes two SelectField components for the user to select the device and the programming port.
+ * It also includes a DeviceSpecs component that displays the current device configuration.
+ * The user can select a device and a programming port from a list of available options.
+ * @returns A JSX element containing the device configuration section.
+ */
 const DeviceConfiguration = () => {
   const {
     device: {
@@ -84,7 +91,7 @@ const DeviceConfiguration = () => {
   } = useOpenPLCStore()
 
   const formatBoardsForLabel = (boards: { board: string; version: string }[]) => {
-    const formattedBoards = boards.map(({ board, version }) => `${board} { ${version} }`)
+    const formattedBoards = boards.map(({ board, version }) => `${board} ${version !== '0' && `[ ${version} ]`}`)
     return formattedBoards
   }
 
