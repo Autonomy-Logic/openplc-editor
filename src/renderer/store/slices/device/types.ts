@@ -50,6 +50,15 @@ const devicePinMappingSchema = z.array(devicePinSchema)
 
 type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
 
+const _deviceAvailableOptions = z.object({
+  availableBoards: z.array(z.object({ board: z.string(), version: z.string() })),
+  availableCommunicationPorts: z.array(z.string()),
+  availableRTUInterfaces: z.array(z.string()),
+  availableRTUBaudrates: z.array(z.string()),
+})
+
+type _DeviceAvailableOptions = z.infer<typeof _deviceAvailableOptions>
+
 const deviceStateSchema = z.object({
   device: z.object({
     availableBoards: z.array(z.object({ board: z.string(), version: z.string() })),

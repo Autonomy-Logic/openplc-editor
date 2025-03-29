@@ -12,8 +12,8 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       communicationPort: '',
       communicationConfiguration: {
         modbusRTU: {
-          rtuInterface: [],
-          rtuBaudrate: [],
+          rtuInterface: ['Serial', 'Serial1', 'Serial2', 'Serial3'],
+          rtuBaudrate: ['115200', '9600', '19200', '38400', '57600', '115200'],
           rtuSlaveId: '',
           rtuRS485TXPin: '',
         },
@@ -62,9 +62,14 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setRTUSettings: (rtuSettings): void => {
       setState(
         produce(({ device }: DeviceSlice) => {
-          for (const prop in rtuSettings) {
-            device.configuration.communicationConfiguration.modbusRTU[prop] = rtuSettings[prop]
-          }
+          ;(Object.entries(rtuSettings) as [keyof typeof rtuSettings, string | string[]][]).forEach(([key, value]) => {
+            const target = device.configuration.communicationConfiguration.modbusRTU
+            if (key === 'rtuInterface' || key === 'rtuBaudrate') {
+              target[key] = value as string[]
+            } else {
+              target[key] = value as string
+            }
+          })
         }),
       )
     },

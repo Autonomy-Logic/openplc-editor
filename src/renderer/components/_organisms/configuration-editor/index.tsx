@@ -152,6 +152,7 @@ const RTUSettings = ({
   pin: string
   setPin: (value: string) => void
 }) => {
+  const { device: { configuration: { communicationConfiguration: { modbusRTU } } } } = useOpenPLCStore()
   const baudRateOptions = ['115200', '9600', '14400', '19200', '38400', '57600']
   const interfaceOptions = ['Serial', 'Serial1', 'Serial2', 'Serial3']
 
