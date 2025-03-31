@@ -14,8 +14,8 @@ const deviceConfigurationSchema = z.object({
   communicationPort: z.string(),
   communicationConfiguration: z.object({
     modbusRTU: z.object({
-      rtuInterface: z.array(z.string()), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
-      rtuBaudrate: z.array(z.string()), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
+      rtuInterface: z.string(), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
+      rtuBaudrate: z.string(), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
       rtuSlaveId: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.
       rtuRS485TXPin: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.Í
     }),
@@ -50,19 +50,19 @@ const devicePinMappingSchema = z.array(devicePinSchema)
 
 type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
 
-const _deviceAvailableOptions = z.object({
+const deviceAvailableOptionsSchema = z.object({
   availableBoards: z.array(z.object({ board: z.string(), version: z.string() })),
   availableCommunicationPorts: z.array(z.string()),
   availableRTUInterfaces: z.array(z.string()),
   availableRTUBaudrates: z.array(z.string()),
+  availableTCPInterfaces: z.array(z.string()),
 })
 
-type _DeviceAvailableOptions = z.infer<typeof _deviceAvailableOptions>
+type DeviceAvailableOptions = z.infer<typeof deviceAvailableOptionsSchema>
 
 const deviceStateSchema = z.object({
-  device: z.object({
-    availableBoards: z.array(z.object({ board: z.string(), version: z.string() })),
-    availableCommunicationPorts: z.array(z.string()),
+  deviceAvailableOptions: deviceAvailableOptionsSchema,
+  deviceDefinitions: z.object({
     configuration: deviceConfigurationSchema,
     pinMapping: devicePinMappingSchema,
   }),
@@ -97,6 +97,7 @@ type DeviceSlice = DeviceState & {
 
 export type {
   DeviceActions,
+  DeviceAvailableOptions,
   DeviceConfiguration,
   DevicePin,
   DevicePinMapping,
@@ -104,4 +105,11 @@ export type {
   DeviceState,
   StaticHostConfiguration,
 }
-export { deviceActionSchema, deviceConfigurationSchema, devicePinMappingSchema, devicePinSchema, deviceStateSchema }
+export {
+  deviceActionSchema,
+  deviceAvailableOptionsSchema,
+  deviceConfigurationSchema,
+  devicePinMappingSchema,
+  devicePinSchema,
+  deviceStateSchema,
+}

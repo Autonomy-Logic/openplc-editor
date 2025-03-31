@@ -4,16 +4,21 @@ import { StateCreator } from 'zustand'
 import type { DeviceSlice } from './types'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
-  device: {
+  deviceAvailableOptions: {
     availableBoards: [],
     availableCommunicationPorts: [],
+    availableRTUInterfaces: [],
+    availableRTUBaudrates: [],
+    availableTCPInterfaces: ['ethernet', 'wifi'], // The available TCP interfaces is always ['ethernet', 'wifi'], so we can set it on the slice creation.
+  },
+  deviceDefinitions: {
     configuration: {
       deviceBoard: 'OpenPLC Runtime { default }',
       communicationPort: '',
       communicationConfiguration: {
         modbusRTU: {
-          rtuInterface: ['Serial', 'Serial1', 'Serial2', 'Serial3'],
-          rtuBaudrate: ['115200', '9600', '19200', '38400', '57600', '115200'],
+          rtuInterface: 'Serial',
+          rtuBaudrate: '115200',
           rtuSlaveId: '',
           rtuRS485TXPin: '',
         },
@@ -31,44 +36,39 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
   deviceActions: {
     setAvailableOptions: ({ availableBoards, availableCommunicationPorts }): void => {
       setState(
-        produce(({ device }: DeviceSlice) => {
-          device.availableBoards = availableBoards
-          device.availableCommunicationPorts = availableCommunicationPorts
+        produce(({ deviceAvailableOptions }: DeviceSlice) => {
+          deviceAvailableOptions.availableBoards = availableBoards
+          deviceAvailableOptions.availableCommunicationPorts = availableCommunicationPorts
         }),
       )
     },
     addPin: (pinProp): void => {
       setState(
-        produce(({ device }: DeviceSlice) => {
+        produce(({ deviceDefinitions }: DeviceSlice) => {
           console.log('Pin parameter:', pinProp)
-          console.log('Device state:', device)
+          console.log('Device state:', deviceDefinitions)
         }),
       )
     },
     setDeviceBoard: (deviceBoard): void => {
       setState(
-        produce(({ device }: DeviceSlice) => {
-          device.configuration.deviceBoard = deviceBoard
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          deviceDefinitions.configuration.deviceBoard = deviceBoard
         }),
       )
     },
     setCommunicationPort: (communicationPort): void => {
       setState(
-        produce(({ device }: DeviceSlice) => {
-          device.configuration.communicationPort = communicationPort
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          deviceDefinitions.configuration.communicationPort = communicationPort
         }),
       )
     },
     setRTUSettings: (rtuSettings): void => {
       setState(
-        produce(({ device }: DeviceSlice) => {
-          ;(Object.entries(rtuSettings) as [keyof typeof rtuSettings, string | string[]][]).forEach(([key, value]) => {
-            const target = device.configuration.communicationConfiguration.modbusRTU
-            if (key === 'rtuInterface' || key === 'rtuBaudrate') {
-              target[key] = value as string[]
-            } else {
-              target[key] = value as string
-            }
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          ;(Object.entries(rtuSettings) as [keyof typeof rtuSettings, string][]).forEach(([key, value]) => {
+            deviceDefinitions.configuration.communicationConfiguration.modbusRTU[key] = value
           })
         }),
       )

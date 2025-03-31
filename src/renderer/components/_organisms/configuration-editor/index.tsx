@@ -82,9 +82,8 @@ const ConfigurationEditor = () => {
  */
 const DeviceConfiguration = () => {
   const {
-    device: {
-      availableBoards,
-      availableCommunicationPorts,
+    deviceAvailableOptions: { availableBoards, availableCommunicationPorts },
+    deviceDefinitions: {
       configuration: { deviceBoard, communicationPort },
     },
     deviceActions: { setDeviceBoard, setCommunicationPort },
@@ -134,9 +133,7 @@ const DeviceSpecs = () => (
 const RTUSettings = ({
   enabled,
   setSelectBaudRateOption,
-  selectBaudRateOption,
   setSelectInterfaceOption,
-  selectInterfaceOption,
   slaveId,
   setSlaveId,
   pin,
@@ -152,9 +149,17 @@ const RTUSettings = ({
   pin: string
   setPin: (value: string) => void
 }) => {
-  const { device: { configuration: { communicationConfiguration: { modbusRTU } } } } = useOpenPLCStore()
-  const baudRateOptions = ['115200', '9600', '14400', '19200', '38400', '57600']
-  const interfaceOptions = ['Serial', 'Serial1', 'Serial2', 'Serial3']
+  const {
+    deviceAvailableOptions: { availableRTUInterfaces, availableRTUBaudrates },
+    deviceDefinitions: {
+      configuration: {
+        communicationConfiguration: {
+          modbusRTU: { rtuInterface, rtuBaudrate },
+        },
+      },
+    },
+    // deviceActions: { setRTUSettings },
+  } = useOpenPLCStore()
 
   return (
     <div className={cn('flex flex-col gap-4', { hidden: !enabled })}>
@@ -162,8 +167,8 @@ const RTUSettings = ({
         <div className='flex flex-1 flex-col gap-4'>
           <SelectField
             setSelectedOption={setSelectInterfaceOption}
-            selectedOption={selectInterfaceOption}
-            options={interfaceOptions}
+            selectedOption={rtuInterface}
+            options={availableRTUInterfaces}
             label='Interface'
             placeholder='Select interface'
             ariaLabel='Interface select'
@@ -173,9 +178,9 @@ const RTUSettings = ({
         <div className='flex flex-1 flex-col gap-4'>
           <SelectField
             setSelectedOption={setSelectBaudRateOption}
-            selectedOption={selectBaudRateOption}
+            selectedOption={rtuBaudrate}
+            options={availableRTUBaudrates}
             label='Baudrate'
-            options={baudRateOptions}
           />
           <InputField label='RS485 TX Pin' value={pin} onChange={setPin} />
         </div>

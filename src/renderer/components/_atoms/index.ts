@@ -1,5 +1,6 @@
 export * from './buttons'
 export * from './card'
+export * from './checkbox'
 export { File } from './file'
 export { HighlightedTextArea } from './highlighted-textarea'
 export { InputWithRef } from './input'

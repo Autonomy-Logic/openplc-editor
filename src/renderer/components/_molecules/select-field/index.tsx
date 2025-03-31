@@ -1,7 +1,7 @@
 // import { ScrollArea } from '@radix-ui/react-scroll-area'
 import { cn } from '@root/utils'
 
-import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../_atoms'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 
 const SelectField = ({
   label,
