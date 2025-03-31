@@ -1,6 +1,7 @@
 import { CustomFbdNodeTypes, customNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
 import { BlockNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/block'
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils'
+import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '@root/renderer/components/_atoms/react-flow'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import BlockElement from '@root/renderer/components/_features/[workspace]/editor/graphical/elements/fbd/block'
@@ -78,14 +79,27 @@ export const FBDBody = ({ rung }: FBDProps) => {
         const library = libraries.user.find((library) => library.name === blockLibrary)
         const pou = pous.find((pou) => pou.data.name === library?.name)
         if (!pou) return
+        const variables = pou.data.variables.map((variable) => ({
+          name: variable.name,
+          class: variable.class,
+          type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
+        }))
+        if (pou.type === 'function') {
+          const variable = getVariableRestrictionType(pou.data.returnType)
+          variables.push({
+            name: 'OUT',
+            class: 'output',
+            type: {
+              definition: (variable.definition as 'array' | 'base-type' | 'user-data-type' | 'derived') ?? 'derived',
+              value: pou.data.returnType.toUpperCase(),
+            },
+          })
+        }
+
         pouLibrary = {
           name: pou.data.name,
           type: pou.type,
-          variables: pou.data.variables.map((variable) => ({
-            name: variable.name,
-            class: variable.class,
-            type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
-          })),
+          variables: variables,
           documentation: pou.data.documentation,
           extensible: false,
         }

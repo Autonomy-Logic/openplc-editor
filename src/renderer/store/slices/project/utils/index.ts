@@ -6,7 +6,7 @@ export const getVariableBasedOnRowIdOrVariableId = (
   variableId?: string,
 ): PLCVariable | Omit<PLCVariable, 'class'> | null => {
   if (rowId !== undefined) {
-    const variable = variables.filter((variable) => variable.id !== 'OUT')[rowId]
+    const variable = variables[rowId]
     if (!variable) {
       console.error('Variable not found')
       return null

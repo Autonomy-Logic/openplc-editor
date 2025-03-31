@@ -10,6 +10,7 @@ import {
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils/types'
 import { getFBDPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils/utils'
 import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/types/block'
+import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
@@ -75,7 +76,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const blockVariant = node.data.variant as BlockVariant
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
-  const [selectedFile, setSelectedFile] = useState<T | null>(null)
+  const [selectedFile, setSelectedFile] = useState<BlockVariant | null>(null)
   const [documentation, setDocumentation] = useState<string | null>(
     `${blockVariant.documentation}
 
@@ -109,7 +110,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
               : ''
           }`,
       )
-      .join('')}`,
+      .join('')}`.trim(),
   )
   const [formState, setFormState] = useState<{
     name: string
@@ -135,22 +136,61 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     const [type, selectedLibrary, selectedPou] = selectedFileKey?.split('/') || []
     if (type === 'system' && selectedLibrary && selectedPou) {
       const library = libraries.system.find((library) => library.name === selectedLibrary)
-      const pou = library?.pous.find((pou) => pou.name === selectedPou) as T
+      const pou = library?.pous.find((pou) => pou.name === selectedPou) as BlockVariant
       setSelectedFile(pou)
       return
+    }
+    if (type === 'user' && selectedLibrary) {
+      const library = libraries.user.find((library) => library.name === selectedLibrary)
+      if (library) {
+        setSelectedFile(library as BlockVariant)
+        return
+      }
     }
     setSelectedFile(null)
   }, [selectedFileKey])
 
   useEffect(() => {
     if (selectedFile && selectedFile !== selectedNode.data.variant) {
+      const [type, _selectedLibrary, _selectedPou] = selectedFileKey?.split('/') || []
+
+      let pouLibrary = undefined
+      if (type === 'user') {
+        const pou = pous.find((pou) => pou.data.name === selectedFile?.name)
+        if (!pou) return
+        const variables = pou.data.variables.map((variable) => ({
+          name: variable.name,
+          class: variable.class,
+          type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
+        }))
+        if (pou.type === 'function') {
+          const variable = getVariableRestrictionType(pou.data.returnType)
+          variables.push({
+            name: 'OUT',
+            class: 'output',
+            type: {
+              definition: (variable.definition as 'array' | 'base-type' | 'user-data-type' | 'derived') ?? 'derived',
+              value: pou.data.returnType.toUpperCase(),
+            },
+          })
+        }
+
+        pouLibrary = {
+          name: pou.data.name,
+          type: pou.type as 'function-block' | 'function',
+          variables: variables,
+          documentation: pou.data.documentation,
+          extensible: false,
+        }
+      }
+
       const newNode = buildBlockNode({
         id: node.id,
         position: {
           x: node.position.x,
           y: node.position.y,
         },
-        variant: selectedFile,
+        variant: pouLibrary ?? selectedFile,
         executionControl: formState.executionControl,
       })
       setNode({
@@ -209,7 +249,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
                   : ''
               }`,
           )
-          .join('')}`,
+          .join('')}`.trim(),
       )
     }
   }, [selectedFile])
@@ -226,7 +266,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const handleNameInputSubmit = () => {
     const libraryBlock = searchLibraryByPouName(libraries, editor, pous, formState.name)
     if (libraryBlock) {
-      setSelectedFile(libraryBlock as T)
+      setSelectedFile(libraryBlock as BlockVariant)
     }
   }
 
@@ -249,13 +289,10 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       blockVariables.push(variable)
     })
 
-    const { height } = getBlockSize(
-      { ...blockVariant, variables: blockVariables } as BlockVariant,
-      {
-        x: (node.data as BasicNodeData).inputConnector?.glbPosition.x || 0,
-        y: (node.data as BasicNodeData).inputConnector?.glbPosition.y || 0,
-      },
-    )
+    const { height } = getBlockSize({ ...blockVariant, variables: blockVariables } as BlockVariant, {
+      x: (node.data as BasicNodeData).inputConnector?.glbPosition.x || 0,
+      y: (node.data as BasicNodeData).inputConnector?.glbPosition.y || 0,
+    })
 
     setNode((node) => ({
       ...node,
@@ -276,9 +313,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       inputs: String(
         Math.max(
           Number(prevState.inputs) - 1,
-          (selectedFile &&
-            (selectedFile as BlockVariant).variables.filter((variable) => variable.class === 'input').length) ||
-            2,
+          (selectedFile && selectedFile.variables.filter((variable) => variable.class === 'input').length) || 2,
         ),
       ),
     }))

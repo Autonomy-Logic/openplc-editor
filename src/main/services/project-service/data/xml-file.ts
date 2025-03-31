@@ -18,8 +18,8 @@ export const baseXmlStructure = {
     coordinateInfo: {
       fbd: {
         scaling: {
-          '@x': '10',
-          '@y': '10',
+          '@x': '16',
+          '@y': '16',
         },
       },
       ld: {

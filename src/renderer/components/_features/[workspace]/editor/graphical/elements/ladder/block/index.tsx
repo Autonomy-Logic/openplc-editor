@@ -10,11 +10,8 @@ import {
 } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
 import { getLadderPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils'
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
-import {
-  Modal,
-  ModalContent,
-  ModalTitle,
-} from '@root/renderer/components/_molecules'
+import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
+import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
@@ -40,11 +37,10 @@ const searchLibraryByPouName = (
 ) => {
   let libraryBlock: unknown = undefined
 
-  const filteredLibraries = libraries.system.filter(
-    (library) =>
-      pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
-        ? library.pous.some((pou) => pou.type === 'function')
-        : true,
+  const filteredLibraries = libraries.system.filter((library) =>
+    pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
+      ? library.pous.some((pou) => pou.type === 'function')
+      : true,
   )
 
   for (const block of filteredLibraries) {
@@ -82,7 +78,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const lockExecutionControl = node.data.lockExecutionControl
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
-  const [selectedFile, setSelectedFile] = useState<T | null>(null)
+  const [selectedFile, setSelectedFile] = useState<BlockVariant | null>(null)
   const [documentation, setDocumentation] = useState<string | null>(
     `${blockVariant.documentation}
 
@@ -92,7 +88,12 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       .map(
         (variable, index) =>
           `${variable.name}: ${variable.type.value}${
-            index < blockVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1 ? '\n' : ''
+            index <
+            blockVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut')
+              .length -
+              1
+              ? '\n'
+              : ''
           }`,
       )
       .join('')}
@@ -103,7 +104,12 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       .map(
         (variable, index) =>
           `${variable.name}: ${variable.type.value}${
-            index < blockVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inOut').length - 1 ? '\n' : ''
+            index <
+            blockVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inOut')
+              .length -
+              1
+              ? '\n'
+              : ''
           }`,
       )
       .join('')}`,
@@ -117,7 +123,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     name: blockVariant.name === '???' ? '' : blockVariant.name,
     inputs:
       blockVariant?.variables
-        .filter((variable) => variable.class === 'input' || variable.class === 'inOut' && variable.name !== 'EN')
+        .filter((variable) => variable.class === 'input' || (variable.class === 'inOut' && variable.name !== 'EN'))
         .length.toString() || '0',
     executionOrder: selectedNode.data.executionOrder.toString(),
     executionControl: selectedNode.data.executionControl,
@@ -132,22 +138,61 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     const [type, selectedLibrary, selectedPou] = selectedFileKey?.split('/') || []
     if (type === 'system' && selectedLibrary && selectedPou) {
       const library = libraries.system.find((library) => library.name === selectedLibrary)
-      const pou = library?.pous.find((pou) => pou.name === selectedPou) as T
+      const pou = library?.pous.find((pou) => pou.name === selectedPou) as BlockVariant
       setSelectedFile(pou)
       return
+    }
+    if (type === 'user' && selectedLibrary) {
+      const library = libraries.user.find((library) => library.name === selectedLibrary) as BlockVariant
+      if (library) {
+        setSelectedFile(library)
+        return
+      }
     }
     setSelectedFile(null)
   }, [selectedFileKey])
 
   useEffect(() => {
     if (selectedFile && selectedFile !== selectedNode.data.variant) {
+      const [type, _selectedLibrary, _selectedPou] = selectedFileKey?.split('/') || []
+
+      let pouLibrary = undefined
+      if (type === 'user') {
+        const pou = pous.find((pou) => pou.data.name === selectedFile?.name)
+        if (!pou) return
+        const variables = pou.data.variables.map((variable) => ({
+          name: variable.name,
+          class: variable.class,
+          type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
+        }))
+        if (pou.type === 'function') {
+          const variable = getVariableRestrictionType(pou.data.returnType)
+          variables.push({
+            name: 'OUT',
+            class: 'output',
+            type: {
+              definition: (variable.definition as 'array' | 'base-type' | 'user-data-type' | 'derived') ?? 'derived',
+              value: pou.data.returnType.toUpperCase(),
+            },
+          })
+        }
+
+        pouLibrary = {
+          name: pou.data.name,
+          type: pou.type as 'function-block' | 'function',
+          variables: variables,
+          documentation: pou.data.documentation,
+          extensible: false,
+        }
+      }
+
       const newNode = buildBlockNode({
         id: node.id,
         posX: node.position.x,
         posY: node.position.y,
         handleX: node.data.inputConnector?.glbPosition.x || 0,
         handleY: node.data.inputConnector?.glbPosition.y || 0,
-        variant: selectedFile,
+        variant: pouLibrary ?? selectedFile,
         executionControl: formState.executionControl,
       })
       setNode({
@@ -162,7 +207,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       const newNodeDataVariant = newNode.data.variant as BlockVariant
       const formName: string = newNodeDataVariant.name
       const formInputs: string = newNodeDataVariant.variables
-        .filter((variable) => variable.class === 'input' || variable.class === 'inOut' && variable.name !== 'EN')
+        .filter((variable) => variable.class === 'input' || (variable.class === 'inOut' && variable.name !== 'EN'))
         .length.toString()
 
       setFormState((prevState) => ({
@@ -180,7 +225,11 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
           .map(
             (variable, index) =>
               `${variable.name}: ${variable.type.value}${
-                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1
+                index <
+                newNodeDataVariant.variables.filter(
+                  (variable) => variable.class === 'input' || variable.class === 'inOut',
+                ).length -
+                  1
                   ? '\n'
                   : ''
               }`,
@@ -193,7 +242,11 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
           .map(
             (variable, index) =>
               `${variable.name}: ${variable.type.value}${
-                index < newNodeDataVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inOut').length - 1
+                index <
+                newNodeDataVariant.variables.filter(
+                  (variable) => variable.class === 'output' || variable.class === 'inOut',
+                ).length -
+                  1
                   ? '\n'
                   : ''
               }`,
@@ -215,7 +268,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const handleNameInputSubmit = () => {
     const libraryBlock = searchLibraryByPouName(libraries, editor, pous, formState.name)
     if (libraryBlock) {
-      setSelectedFile(libraryBlock as T)
+      setSelectedFile(libraryBlock as BlockVariant)
     }
   }
 
@@ -265,9 +318,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       inputs: String(
         Math.max(
           Number(prevState.inputs) - 1,
-          (selectedFile &&
-            (selectedFile as BlockVariant).variables.filter((variable) => variable.class === 'input').length) ||
-            2,
+          (selectedFile && selectedFile.variables.filter((variable) => variable.class === 'input').length) || 2,
         ),
       ),
     }))

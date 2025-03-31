@@ -377,7 +377,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
                     : ''
                 }`,
             )
-            .join('')}`
+            .join('')}`.trim()
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)

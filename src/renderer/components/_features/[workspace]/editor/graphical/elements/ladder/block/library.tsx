@@ -16,15 +16,20 @@ export const ModalBlockLibrary = ({
     project: {
       data: { pous },
     },
-    libraries: { system },
+    libraries: { system, user },
   } = useOpenPLCStore()
 
   const [filterText, setFilterText] = useState('')
 
-  const filteredLibraries = system.filter((library) =>
+  const systemLibraries = system.filter((library) =>
     pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
       ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')
       : library.pous.some((pou) => pou.name.toLowerCase().includes(filterText)),
+  )
+  const userLibraries = user.filter((library) =>
+    pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
+      ? library.type === 'function' && library.name
+      : library.name,
   )
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,7 +57,7 @@ export const ModalBlockLibrary = ({
       <div className='border-neural-100 h-[388px] w-full rounded-lg border px-1 py-4 dark:border-neutral-850'>
         <div className='h-full w-full overflow-auto'>
           <LibraryRoot>
-            {filteredLibraries.map((library) => (
+            {systemLibraries.map((library) => (
               <LibraryFolder
                 key={library.name}
                 label={library.name}
@@ -72,6 +77,24 @@ export const ModalBlockLibrary = ({
                   ))}
               </LibraryFolder>
             ))}
+            <LibraryFolder
+              key={'user'}
+              label={'User Libraries'}
+              initiallyOpen={false}
+              shouldBeOpen={filterText.length > 0}
+            >
+              {userLibraries
+                .filter((library) => library.name.toLowerCase().includes(filterText))
+                .map((library) => (
+                  <LibraryFile
+                    key={library.name}
+                    label={library.name}
+                    isSelected={selectedFileKey === library.name}
+                    onSelect={() => setSelectedFileKey(`user/${library.name}`)}
+                    onClick={() => setSelectedFileKey(`user/${library.name}`)}
+                  />
+                ))}
+            </LibraryFolder>
           </LibraryRoot>
         </div>
       </div>
