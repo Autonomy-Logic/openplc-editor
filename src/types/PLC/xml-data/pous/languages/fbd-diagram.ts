@@ -44,6 +44,7 @@ const blockSchema = z.object({
           connection: z.array(
             z.object({
               '@refLocalId': z.string(), // was just @localId, but it seems to be a reference to other element @localId.
+              '@formalParameter': z.string().optional(),
               position: z.array(
                 z.object({
                   '@x': z.number(),
@@ -140,6 +141,7 @@ const inOutVariableSchema = z.object({
     connection: z.array(
       z.object({
         '@refLocalId': z.string(),
+        '@formalParameter': z.string().optional(),
         position: z.array(
           z.object({
             '@x': z.number(),

@@ -13,8 +13,7 @@ import {
   InVariableFbdXML,
   OutVariableFbdXML,
 } from '@root/types/PLC/xml-data/pous/languages/fbd-diagram'
-import { parseSvgPath } from '@root/utils/svg-path-to-xy'
-import { Edge as FlowEdge, getSmoothStepPath, Node as FlowNode } from '@xyflow/react'
+import { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react'
 
 const getEdgePaths = (edge: FlowEdge, nodes: FlowNode[]) => {
   const sourceNodeHandle = (nodes.find((node) => node.id === edge.source)?.data as BasicNodeData).outputHandles?.find(
@@ -31,13 +30,32 @@ const getEdgePaths = (edge: FlowEdge, nodes: FlowNode[]) => {
     return
   }
 
-  const [path] = getSmoothStepPath({
-    sourceX: sourceNodeHandle.glbPosition.x,
-    sourceY: sourceNodeHandle.glbPosition.y,
-    targetX: targetNodeHandle.glbPosition.x,
-    targetY: targetNodeHandle.glbPosition.y,
+  const xyPath: { x: number; y: number }[] = []
+
+  // First add the source handle position
+  xyPath.push({
+    x: sourceNodeHandle.glbPosition.x,
+    y: sourceNodeHandle.glbPosition.y,
   })
-  const xyPath = parseSvgPath(path)
+  // Then add the path between the source and target handles
+  if (sourceNodeHandle.glbPosition.y !== targetNodeHandle.glbPosition.y) {
+    // First add the horizontal path to the middle path
+    const middleX = (sourceNodeHandle.glbPosition.x + targetNodeHandle.glbPosition.x) / 2
+    xyPath.push({
+      x: middleX,
+      y: sourceNodeHandle.glbPosition.y,
+    })
+    xyPath.push({
+      x: middleX,
+      y: targetNodeHandle.glbPosition.y,
+    })
+  }
+  // Finally add the target handle position
+  xyPath.push({
+    x: targetNodeHandle.glbPosition.x,
+    y: targetNodeHandle.glbPosition.y,
+  })
+
   return xyPath
 }
 
@@ -68,6 +86,7 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
             connection: [
               {
                 '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
+                '@formalParameter': sourceNode.type === 'block' ? edge.sourceHandle as string : undefined,
                 position: path.reverse().map((point) => ({
                   '@x': point.x,
                   '@y': point.y,
@@ -158,7 +177,7 @@ const outputVariableToXml = (node: VariableNode, rung: FBDRungState): OutVariabl
 
         return {
           '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-          '@formalParameter': edge.sourceHandle ? edge.sourceHandle : '',
+          '@formalParameter': sourceNode.type === 'block' ? edge.sourceHandle as string : undefined,
           position: path.reverse().map((point) => ({
             '@x': point.x,
             '@y': point.y,
@@ -203,7 +222,7 @@ const connectorToXml = (node: ConnectionNode, rung: FBDRungState): ConnectorFbdX
 
         return {
           '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-          '@formalParameter': edge.sourceHandle ? edge.sourceHandle : '',
+          '@formalParameter': sourceNode.type === 'block' ? edge.sourceHandle as string : undefined,
           position: path.reverse().map((point) => ({
             '@x': point.x,
             '@y': point.y,
