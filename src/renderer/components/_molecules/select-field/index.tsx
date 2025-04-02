@@ -35,7 +35,7 @@ const SelectField = ({
           placeholder={placeholder}
           className={cn(
             'flex h-7 min-w-0 items-center justify-between rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 dark:border-neutral-850 dark:bg-neutral-900 dark:text-neutral-300',
-            width ? `w-[${width}]` : 'flex-1',
+            width ? { [`w-[${width}]`]: true } : 'flex-1',
           )}
         />
         <SelectContent

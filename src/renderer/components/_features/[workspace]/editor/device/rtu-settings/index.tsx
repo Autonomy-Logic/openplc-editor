@@ -12,7 +12,6 @@ const RTUSettings = () => {
         },
       },
     },
-    // deviceActions: { setRTUSettings },
   } = useOpenPLCStore()
 
   return (

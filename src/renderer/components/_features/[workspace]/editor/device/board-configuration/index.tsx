@@ -13,20 +13,29 @@ const BoardConfiguration = () => {
   } = useOpenPLCStore()
 
   const formatBoardsForLabel = (boards: { board: string; version: string }[]) => {
-    const formattedBoards = boards.map(({ board, version }) => `${board} ${version !== '0' && `[ ${version} ]`}`)
-    return formattedBoards
+    return boards.map(({ board, version }) => `${board}${version !== '0' ? ` [ ${version} ]` : ''}`)
   }
 
   const refreshCommunicationPorts = async (e: React.MouseEvent) => {
     e.preventDefault()
-    const ports = await window.bridge.refreshCommunicationPorts()
-    setAvailableOptions({ availableCommunicationPorts: ports.map(({ port }) => port) })
+    try {
+      const ports = await window.bridge.refreshCommunicationPorts()
+      setAvailableOptions({ availableCommunicationPorts: ports.map(({ port }) => port) })
+    } catch (error) {
+      // TODO: Add a toast notification for error and for success
+      console.error(error)
+    }
   }
 
   const refreshAvailableOptions = async (e: React.MouseEvent) => {
     e.preventDefault()
-    const boards = await window.bridge.refreshAvailableBoards()
-    setAvailableOptions({ availableBoards: boards })
+    try {
+      const boards = await window.bridge.refreshAvailableBoards()
+      setAvailableOptions({ availableBoards: boards })
+    } catch (error) {
+      // TODO: Add a toast notification for error and for success
+      console.error(error)
+    }
   }
 
   return (
