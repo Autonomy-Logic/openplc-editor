@@ -392,5 +392,15 @@ const rendererProcessBridge = {
       version: string
     }[]
   }> => ipcRenderer.invoke('hardware:device-configuration-options'),
+  /**
+   * Requests the refresh of the communication ports from the main process.
+   */
+  refreshCommunicationPorts: (): Promise<{ port: string }[]> =>
+    ipcRenderer.invoke('hardware:refresh-communication-ports'),
+  /**
+   * Requests the refresh of the available boards from the main process.
+   */
+  refreshAvailableBoards: (): Promise<{ board: string; version: string }[]> =>
+    ipcRenderer.invoke('hardware:refresh-available-boards'),
 }
 export default rendererProcessBridge

@@ -75,8 +75,8 @@ const deviceActionSchema = z.object({
     .function()
     .args(
       z.object({
-        availableBoards: z.array(z.object({ board: z.string(), version: z.string() })),
-        availableCommunicationPorts: z.array(z.string()),
+        availableBoards: z.array(z.object({ board: z.string(), version: z.string() })).optional(),
+        availableCommunicationPorts: z.array(z.string()).optional(),
       }),
     )
     .returns(z.void()),

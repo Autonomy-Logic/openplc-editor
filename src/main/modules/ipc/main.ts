@@ -210,6 +210,10 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('hardware:device-configuration-options', async () =>
       this.hardwareService.getDeviceConfigurationOptions(),
     )
+    this.ipcMain.handle('hardware:refresh-communication-ports', async () =>
+      this.hardwareService.getAvailableSerialPorts(),
+    )
+    this.ipcMain.handle('hardware:refresh-available-boards', async () => this.hardwareService.getAvailableBoards())
   }
 
   mainIpcEventHandlers = {

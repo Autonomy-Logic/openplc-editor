@@ -86,7 +86,6 @@ class HardwareService {
         draft.push({ board, version: halsContent[board]['version'] })
       })
     }
-
     return availableBoardsAndVersion
   }
 

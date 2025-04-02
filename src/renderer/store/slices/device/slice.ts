@@ -37,8 +37,12 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setAvailableOptions: ({ availableBoards, availableCommunicationPorts }): void => {
       setState(
         produce(({ deviceAvailableOptions }: DeviceSlice) => {
-          deviceAvailableOptions.availableBoards = availableBoards
-          deviceAvailableOptions.availableCommunicationPorts = availableCommunicationPorts
+          if (availableBoards) {
+            deviceAvailableOptions.availableBoards = availableBoards
+          }
+          if (availableCommunicationPorts) {
+            deviceAvailableOptions.availableCommunicationPorts = availableCommunicationPorts
+          }
         }),
       )
     },

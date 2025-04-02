@@ -2,6 +2,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { useState } from 'react'
 
+import { BoardConfiguration } from '../../_features/[workspace]/editor/device/board-configuration'
 import { CheckBox } from './elements/checkBox'
 import { InputField } from './elements/input'
 import { SelectField } from './elements/select'
@@ -25,7 +26,7 @@ const ConfigurationEditor = () => {
 
   return (
     <div className='flex h-full w-full select-none'>
-      <DeviceConfiguration />
+      <BoardConfiguration />
 
       <hr className='mx-4 h-[99%] w-[1px] self-stretch bg-brand-light pb-12' />
 
@@ -80,7 +81,7 @@ const ConfigurationEditor = () => {
  * The user can select a device and a programming port from a list of available options.
  * @returns A JSX element containing the device configuration section.
  */
-const DeviceConfiguration = () => {
+const _DeviceConfiguration = () => {
   const {
     deviceAvailableOptions: { availableBoards, availableCommunicationPorts },
     deviceDefinitions: {
