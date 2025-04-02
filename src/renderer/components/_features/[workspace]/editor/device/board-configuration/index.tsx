@@ -32,7 +32,7 @@ const BoardConfiguration = () => {
   return (
     <div id='board-configuration-container' className='flex h-full w-1/2 flex-col gap-6'>
       <div id='board-figure-container' className='h-[60%]'></div>
-      <div id='board-specs-container' className='flex h-[40%]  flex-col items-start justify-center gap-3 p-16'>
+      <div id='board-specs-container' className='flex h-[40%]  flex-col items-start justify-center gap-3 p-32 sm:p-16'>
         <div id='board-selection' className='flex items-center justify-center gap-1'>
           <SelectField
             label='Device'
