@@ -1,3 +1,6 @@
+import './style.css'
+
+import { cn } from '@root/utils'
 import type { BackgroundProps, ControlProps, ReactFlowProps } from '@xyflow/react'
 import { Background, Controls, ReactFlow } from '@xyflow/react'
 import { PropsWithChildren } from 'react'
@@ -27,7 +30,10 @@ export const ReactFlowPanel = ({
     <ReactFlow deleteKeyCode={getDeleteKeyCodes()} {...viewportConfig}>
       {background && <Background {...backgroundConfig} />}
       {controls && (
-        <Controls {...controlsConfig} className={controlsConfig?.className}>
+        <Controls
+          {...controlsConfig}
+          className={cn(controlsConfig?.className)}
+        >
           {controlsConfig?.children}
         </Controls>
       )}
