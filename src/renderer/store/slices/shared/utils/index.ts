@@ -27,17 +27,7 @@ const CreatePouObject = ({ type, name, language }: PouProps): PouDTO => {
           language,
           body: bodyValue,
           returnType: 'BOOL',
-          variables: [
-            {
-              id: 'OUT',
-              name: 'OUT',
-              type: { definition: 'base-type', value: 'bool' },
-              class: 'output',
-              documentation: '',
-              location: '',
-              debug: false,
-            },
-          ],
+          variables: [],
           documentation: '',
         },
       }

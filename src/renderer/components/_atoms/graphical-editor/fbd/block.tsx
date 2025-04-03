@@ -14,24 +14,9 @@ import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
-type Variables = {
-  [key: string]: {
-    variable: PLCVariable | undefined
-    type: 'input' | 'output' | 'inOut'
-  }
-}
-type Blocks = {
-  [key: string]: {
-    block: BasicNodeData
-    type: 'input' | 'output' | 'generic'
-  }
-}
-
 export type BlockNodeData<T> = BasicNodeData & {
   variant: T
   executionControl: boolean
-  connectedVariables: Variables
-  connectedBlocks: Blocks
 }
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
@@ -40,8 +25,8 @@ type BlockBuilderProps<T> = BuilderBasicProps & { variant: T; executionControl?:
 export const DEFAULT_BLOCK_WIDTH = 216
 export const DEFAULT_BLOCK_HEIGHT = 128
 
-export const DEFAULT_BLOCK_CONNECTOR_Y = 36
-export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 40
+export const DEFAULT_BLOCK_CONNECTOR_Y = 48
+export const DEFAULT_BLOCK_CONNECTOR_Y_OFFSET = 48
 
 export const DEFAULT_BLOCK_TYPE = {
   name: '???',
@@ -63,7 +48,7 @@ export const BlockNodeElement = <T extends object>({
   wrongVariable = false,
   scale = 1,
 }: {
-  nodeId?: string
+  nodeId: string
   data: BlockNodeData<T>
   height: number
   width: number
@@ -74,7 +59,7 @@ export const BlockNodeElement = <T extends object>({
 }) => {
   const {
     editor,
-    editorActions: { updateModelVariables },
+    editorActions: { updateModelVariables, updateModelFBD },
     libraries,
     fbdFlows,
     fbdFlowActions: { setNodes, setEdges },
@@ -266,6 +251,18 @@ export const BlockNodeElement = <T extends object>({
     setWrongName(false)
   }
 
+  const onMouseEnter = () => {
+    updateModelFBD({
+      hoveringElement: { elementId: nodeId, hovering: true },
+    })
+  }
+
+  const onMouseLeave = () => {
+    updateModelFBD({
+      hoveringElement: { elementId: null, hovering: false },
+    })
+  }
+
   return (
     <div
       className={cn(
@@ -281,13 +278,15 @@ export const BlockNodeElement = <T extends object>({
         height: height,
         transform: `scale(${scale})`,
       }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <InputWithRef
         value={blockNameValue}
         onChange={(e) => setBlockNameValue(e.target.value.toUpperCase())}
         maxLength={20}
         placeholder='???'
-        className='w-full bg-transparent p-1 text-center text-xs outline-none'
+        className='absolute top-2 w-full bg-transparent text-center text-xs outline-none'
         disabled={disabled}
         onFocus={() => setInputNameFocus(true)}
         onBlur={() => inputNameFocus && handleNameInputOnBlur()}
@@ -634,7 +633,6 @@ export const buildBlockNode = <T extends object | undefined>({
       variable: { name: '' },
       executionOrder: 0,
       executionControl: executionControlAux,
-      connectedVariables: {},
       draggable: true,
       selectable: true,
       deletable: true,
@@ -650,6 +648,10 @@ export const buildBlockNode = <T extends object | undefined>({
     selected: variantLib.type === 'function' ? false : true,
   }
 }
+
+/**
+ * ==== UTILITARIAN FUNCTIONS ====
+ */
 
 export const getBlockSize = (
   variant: BlockVariant,

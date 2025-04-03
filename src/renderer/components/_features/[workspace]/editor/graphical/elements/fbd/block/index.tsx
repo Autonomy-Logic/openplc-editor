@@ -4,15 +4,14 @@ import {
   BlockNode,
   BlockNodeData,
   BlockNodeElement,
-  BlockVariant,
   buildBlockNode,
   getBlockSize,
-} from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
-import { getLadderPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils'
-import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
+} from '@root/renderer/components/_atoms/graphical-editor/fbd/block'
+import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils/types'
+import { getFBDPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils/utils'
+import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/types/block'
 import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
-import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
 import { PLCPou } from '@root/types/PLC/open-plc'
@@ -58,8 +57,8 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const {
     editor,
     editorActions: { updateModelVariables },
-    ladderFlows,
-    ladderFlowActions: { setNodes, setEdges },
+    fbdFlows,
+    fbdFlowActions: { setNodes, setEdges },
     project: {
       data: { pous },
     },
@@ -75,7 +74,6 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
   const [node, setNode] = useState<BlockNode<object>>(selectedNode)
   const blockVariant = node.data.variant as BlockVariant
-  const lockExecutionControl = node.data.lockExecutionControl
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<BlockVariant | null>(null)
@@ -112,7 +110,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
               : ''
           }`,
       )
-      .join('')}`,
+      .join('')}`.trim(),
   )
   const [formState, setFormState] = useState<{
     name: string
@@ -143,9 +141,9 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       return
     }
     if (type === 'user' && selectedLibrary) {
-      const library = libraries.user.find((library) => library.name === selectedLibrary) as BlockVariant
+      const library = libraries.user.find((library) => library.name === selectedLibrary)
       if (library) {
-        setSelectedFile(library)
+        setSelectedFile(library as BlockVariant)
         return
       }
     }
@@ -188,10 +186,10 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
       const newNode = buildBlockNode({
         id: node.id,
-        posX: node.position.x,
-        posY: node.position.y,
-        handleX: node.data.inputConnector?.glbPosition.x || 0,
-        handleY: node.data.inputConnector?.glbPosition.y || 0,
+        position: {
+          x: node.position.x,
+          y: node.position.y,
+        },
         variant: pouLibrary ?? selectedFile,
         executionControl: formState.executionControl,
       })
@@ -251,7 +249,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
                   : ''
               }`,
           )
-          .join('')}`,
+          .join('')}`.trim(),
       )
     }
   }, [selectedFile])
@@ -291,13 +289,10 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       blockVariables.push(variable)
     })
 
-    const { height } = getBlockSize(
-      { ...blockVariant, variables: blockVariables },
-      {
-        x: (node.data as BasicNodeData).inputConnector?.glbPosition.x || 0,
-        y: (node.data as BasicNodeData).inputConnector?.glbPosition.y || 0,
-      },
-    )
+    const { height } = getBlockSize({ ...blockVariant, variables: blockVariables } as BlockVariant, {
+      x: (node.data as BasicNodeData).inputConnector?.glbPosition.x || 0,
+      y: (node.data as BasicNodeData).inputConnector?.glbPosition.y || 0,
+    })
 
     setNode((node) => ({
       ...node,
@@ -369,7 +364,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       blockVariables.push({
         name: 'EN',
         class: 'input',
-        type: { definition: 'generic-type', value: 'BOOL' },
+        type: { definition: 'base-type', value: 'BOOL' },
       })
     }
     for (let i = 0; i < value; i++) {
@@ -421,16 +416,14 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleExecutionControlChange = (checked: boolean) => {
-    if (lockExecutionControl) return
-
     setFormState((prevState) => ({ ...prevState, executionControl: checked }))
 
     const newNode = buildBlockNode({
       id: node.id,
-      posX: node.position.x,
-      posY: node.position.y,
-      handleX: node.data.inputConnector?.glbPosition.x || 0,
-      handleY: node.data.inputConnector?.glbPosition.y || 0,
+      position: {
+        x: node.position.x,
+        y: node.position.y,
+      },
       variant: blockVariant,
       executionControl: checked,
     })
@@ -455,10 +448,10 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const handleBlockSubmit = () => {
     const newNode = buildBlockNode({
       id: `BLOCK_${uuidv4()}`,
-      posX: selectedNode.position.x,
-      posY: selectedNode.position.y,
-      handleX: selectedNode.data.inputConnector?.glbPosition.x || 0,
-      handleY: selectedNode.data.inputConnector?.glbPosition.y || 0,
+      position: {
+        x: selectedNode.position.x,
+        y: selectedNode.position.y,
+      },
       variant: blockVariant,
       executionControl: formState.executionControl,
     })
@@ -467,7 +460,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       executionOrder: Number(formState.executionOrder),
     }
 
-    const { rung, edges, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    const { rung, edges, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: selectedNode.id,
     })
     if (!rung) return
@@ -527,24 +520,13 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
-    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
-      {
-        ...rung,
-        nodes: newNodes,
-        edges: newEdges,
-      },
-      [rung.defaultBounds[0], rung.defaultBounds[1]],
-    )
-
     setNodes({
       editorName: editor.meta.name,
-      rungId: rung.id,
-      nodes: variableNodes,
+      nodes: newNodes,
     })
     setEdges({
       editorName: editor.meta.name,
-      rungId: rung.id,
-      edges: variableEdges,
+      edges: newEdges,
     })
 
     handleCloseModal()
@@ -555,7 +537,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     'border dark:bg-neutral-900 dark:text-neutral-100 dark:border-neutral-850 h-[30px] w-full rounded-lg border-neutral-300 px-[10px] text-xs text-neutral-700 outline-none focus:border-brand'
 
   return (
-    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('block-ladder-element', open)}>
+    <Modal open={isOpen} onOpenChange={(open) => onOpenChange('block-fbd-element', open)}>
       {/* <ModalTrigger>Open</ModalTrigger> */}
       <ModalContent
         onEscapeKeyDown={(event) => {
@@ -645,9 +627,6 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
               <Switch.Root
                 className={cn(
                   'relative h-4 w-[29px] cursor-pointer rounded-full bg-neutral-300 shadow-[0_4_4_1px] outline-none transition-all duration-150 data-[state=checked]:bg-brand dark:bg-neutral-850',
-                  {
-                    'cursor-not-allowed opacity-50': lockExecutionControl,
-                  },
                 )}
                 id='executionControlSwitch'
                 onCheckedChange={handleExecutionControlChange}
@@ -665,6 +644,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
               className='flex h-[330px] items-center justify-center rounded-lg border-[2px] border-brand-dark bg-transparent dark:border-neutral-850'
             >
               <BlockNodeElement
+                nodeId={node.id || ''}
                 data={node.data}
                 height={node.height || 0}
                 width={node.width || 0}

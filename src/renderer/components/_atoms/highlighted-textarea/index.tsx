@@ -106,7 +106,10 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
     }
 
     return (
-      <div className='[&::-webkit-text-size-adjust]:none relative h-full w-full' aria-label={props['aria-label']}>
+      <div
+        className='[&::-webkit-text-size-adjust]:none relative h-full w-full'
+        aria-label={props['aria-label'] ?? 'HighlightedTextArea'}
+      >
         <div
           className={cn(
             'pointer-events-none absolute -z-10 w-full overflow-y-scroll [&::-webkit-scrollbar]:hidden',

@@ -1,4 +1,5 @@
 import * as Portal from '@radix-ui/react-portal'
+import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RungLadderState } from '@root/renderer/store/slices'
 import type { PLCVariable } from '@root/types/PLC'
@@ -173,14 +174,27 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
         const library = libraries.user.find((library) => library.name === blockLibrary)
         const pou = pous.find((pou) => pou.data.name === library?.name)
         if (!pou) return
+        const variables = pou.data.variables.map((variable) => ({
+          name: variable.name,
+          class: variable.class,
+          type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
+        }))
+        if (pou.type === 'function') {
+          const variable = getVariableRestrictionType(pou.data.returnType)
+          variables.push({
+            name: 'OUT',
+            class: 'output',
+            type: {
+              definition: (variable.definition as 'array' | 'base-type' | 'user-data-type' | 'derived') ?? 'derived',
+              value: pou.data.returnType.toUpperCase(),
+            },
+          })
+        }
+
         pouLibrary = {
           name: pou.data.name,
           type: pou.type,
-          variables: pou.data.variables.map((variable) => ({
-            name: variable.name,
-            class: variable.class,
-            type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
-          })),
+          variables: variables,
           documentation: pou.data.documentation,
           extensible: false,
         }
@@ -385,7 +399,11 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
     (event) => {
       // Check if the dragged element is a child of the flow viewport
       const { relatedTarget } = event
-      if (!reactFlowViewportRef.current || !relatedTarget || reactFlowViewportRef.current.contains(relatedTarget as Node)) {
+      if (
+        !reactFlowViewportRef.current ||
+        !relatedTarget ||
+        reactFlowViewportRef.current.contains(relatedTarget as Node)
+      ) {
         return
       }
 

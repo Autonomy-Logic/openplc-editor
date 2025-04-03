@@ -200,15 +200,9 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 id: variableToBeCreated.data.id ? variableToBeCreated.data.id : uuidv4(),
               }
               if (variableToBeCreated.rowToInsert !== undefined) {
-                const variablesWithoutOUT = pou.data.variables.filter((variable) => variable.id !== 'OUT')
-                const variableOUT = pou.data.variables.find((variable) => variable.id === 'OUT')
-                variablesWithoutOUT.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
-
-                if (variableOUT) {
-                  pou.data.variables = [variableOUT, ...variablesWithoutOUT]
-                  break
-                }
-                pou.data.variables = [...variablesWithoutOUT]
+                const pouVariables = pou.data.variables.filter((variable) => variable.id !== 'OUT')
+                pouVariables.splice(variableToBeCreated.rowToInsert, 0, variableToBeCreated.data)
+                pou.data.variables = [...pouVariables]
                 break
               }
               pou.data.variables.push(variableToBeCreated.data)

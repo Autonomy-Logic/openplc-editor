@@ -18,6 +18,11 @@ const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState
       data: null,
     },
 
+    'block-fbd-element': {
+      open: false,
+      data: null,
+    },
+
     'create-project': {
       open: false,
       data: null,

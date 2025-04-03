@@ -11,8 +11,8 @@ export const ContinuationSVGComponent = ({
   style,
 }: ContinuationSVGComponentProps & React.PropsWithChildren) => {
   return (
-    <svg className={className} style={style} viewBox='0 0 152 48' xmlns='http://www.w3.org/2000/svg'>
-      <path d='M126.343 0C127.404 0 128.421 0.421427 129.172 1.17157L149.172 21.1716C150.734 22.7337 150.734 25.2663 149.172 26.8284L129.172 46.8284C128.421 47.5786 127.404 48 126.343 48H4C1.79086 48 0 46.2091 0 44V4C0 1.79086 1.79086 0 4 0H126.343Z' />
+    <svg className={className} style={style} viewBox='0 0 112 32' xmlns='http://www.w3.org/2000/svg'>
+      <path d="M0 4C0 1.79086 1.79086 0 4 0H86.7889C87.5786 0 88.3506 0.233752 89.0077 0.671799L107.008 12.6718C109.383 14.2551 109.383 17.7449 107.008 19.3282L89.0077 31.3282C88.3506 31.7662 87.5786 32 86.7889 32H4C1.79086 32 0 30.2091 0 28V4Z" />
       {children}
     </svg>
   )

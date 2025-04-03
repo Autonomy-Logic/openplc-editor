@@ -4,6 +4,7 @@ const modalTypes = z.enum([
   'block-ladder-element',
   'coil-ladder-element',
   'contact-ladder-element',
+  'block-fbd-element',
   'create-project',
   'save-changes-project',
   'confirm-delete-element',

@@ -144,7 +144,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           body: result.body,
           documentation: {
             'xhtml:p': {
-              $: pou.data.documentation === '' ? " " : pou.data.documentation,
+              $: pou.data.documentation === '' ? ' ' : pou.data.documentation,
             },
           },
         })
@@ -159,7 +159,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           body: result.body,
           documentation: {
             'xhtml:p': {
-              $: pou.data.documentation === '' ? " " : pou.data.documentation,
+              $: pou.data.documentation === '' ? ' ' : pou.data.documentation,
             },
           },
         })
@@ -175,7 +175,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           body: result.body,
           documentation: {
             'xhtml:p': {
-              $: pou.data.documentation === '' ? " " : pou.data.documentation,
+              $: pou.data.documentation === '' ? ' ' : pou.data.documentation,
             },
           },
         })
@@ -191,7 +191,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           body: result.body,
           documentation: {
             'xhtml:p': {
-              $: pou.data.documentation === '' ? " " : pou.data.documentation,
+              $: pou.data.documentation === '' ? ' ' : pou.data.documentation,
             },
           },
         })

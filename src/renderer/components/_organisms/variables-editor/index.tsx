@@ -28,7 +28,6 @@ const VariablesEditor = () => {
       rearrangeVariables,
       updatePouDocumentation,
       updatePouReturnType,
-      updateVariable,
     },
   } = useOpenPLCStore()
 
@@ -68,18 +67,23 @@ const VariablesEditor = () => {
    * Update the table data and the editor's variables when the editor or the pous change
    */
   useEffect(() => {
-    const combinedReturnTypeOptions = [...baseTypes, ...dataTypes.map((type) => type.name)]
-    setReturnTypeOptions(combinedReturnTypeOptions)
-
     if (pou) {
-      setTableData(pou.data.variables.filter((variable) => variable.id !== 'OUT'))
+      setTableData(pou.data.variables)
       if (pou.type === 'function') {
         setReturnType(pou.data.returnType)
       }
     } else {
       setTableData([])
     }
-  }, [editor, pou?.data.variables, dataTypes])
+  }, [editor, pou])
+
+  /**
+   * Update the return type options when the data types change
+   */
+  useEffect(() => {
+    const combinedReturnTypeOptions = [...baseTypes, ...dataTypes.map((type) => type.name)]
+    setReturnTypeOptions(combinedReturnTypeOptions)
+  }, [dataTypes])
 
   /**
    * If the editor name is not the same as the current editor name
@@ -130,9 +134,7 @@ const VariablesEditor = () => {
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
 
-    const variables = pous
-      .filter((pou) => pou.data.name === editor.meta.name)[0]
-      .data.variables.filter((variable) => variable.id !== 'OUT')
+    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     const selectedRow = parseInt(editorVariables.selectedRow)
 
     if (variables.length === 0) {
@@ -197,9 +199,7 @@ const VariablesEditor = () => {
     const selectedVariable = tableData[selectedRow]
     deleteVariable({ scope: 'local', associatedPou: editor.meta.name, variableId: selectedVariable.id })
 
-    const variables = pous
-      .filter((pou) => pou.data.name === editor.meta.name)[0]
-      .data.variables.filter((variable) => variable.id !== 'OUT')
+    const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     if (selectedRow === variables.length - 1) {
       updateModelVariables({
         display: 'table',
@@ -229,19 +229,6 @@ const VariablesEditor = () => {
 
   const handleReturnTypeChange = (value: BaseType) => {
     updatePouReturnType(editor.meta.name, value)
-    // If function block, update the return type of the function
-    if (!(editor.type === 'plc-textual' && editor.meta.pouType === 'function')) return
-    updateVariable({
-      scope: 'local',
-      associatedPou: editor.meta.name,
-      variableId: 'OUT',
-      data: {
-        type: {
-          definition: 'base-type',
-          value: value.toLowerCase() as BaseType,
-        },
-      },
-    })
   }
 
   const forbiddenVariableToBeRemoved =
@@ -269,7 +256,7 @@ const VariablesEditor = () => {
             aria-label='Variables editor table actions container'
             className='flex h-full w-full select-none justify-between'
           >
-            {editor.type === 'plc-textual' && editor.meta.pouType === 'function' && (
+            {(editor.type === 'plc-textual' || editor.type === 'plc-graphical') && editor.meta.pouType === 'function' && (
               <div className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'>
                 <label
                   htmlFor='return type'

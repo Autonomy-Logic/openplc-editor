@@ -1,4 +1,4 @@
-import { genericTypeSchema } from '@root/types/PLC'
+import { baseTypeSchema,genericTypeSchema } from '@root/types/PLC'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
 import { ZodLiteral } from 'zod'
 
@@ -102,8 +102,10 @@ export const getVariableRestrictionType = (variableType: string) => {
     }
   }
 
+  const isABaseType = baseTypeSchema.safeParse(variableType)
+
   return {
     values: variableType.toLowerCase(),
-    definition: 'base-type',
+    definition: isABaseType.success ? 'base-type' : 'derived',
   }
 }

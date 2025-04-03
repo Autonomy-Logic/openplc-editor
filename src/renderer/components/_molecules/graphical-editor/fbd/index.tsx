@@ -1,7 +1,10 @@
 import { CustomFbdNodeTypes, customNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
+import { BlockNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/block'
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils'
+import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
 import { ReactFlowPanel } from '@root/renderer/components/_atoms/react-flow'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import BlockElement from '@root/renderer/components/_features/[workspace]/editor/graphical/elements/fbd/block'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { FBDRungState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC/units/variable'
@@ -29,12 +32,14 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const {
     editor,
     editorActions: { updateModelVariables },
+    fbdFlowActions,
     libraries,
     project: {
       data: { pous },
     },
     projectActions: { deleteVariable },
-    fbdFlowActions,
+    modals,
+    modalActions: { closeModal, openModal },
   } = useOpenPLCStore()
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
@@ -74,14 +79,27 @@ export const FBDBody = ({ rung }: FBDProps) => {
         const library = libraries.user.find((library) => library.name === blockLibrary)
         const pou = pous.find((pou) => pou.data.name === library?.name)
         if (!pou) return
+        const variables = pou.data.variables.map((variable) => ({
+          name: variable.name,
+          class: variable.class,
+          type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
+        }))
+        if (pou.type === 'function') {
+          const variable = getVariableRestrictionType(pou.data.returnType)
+          variables.push({
+            name: 'OUT',
+            class: 'output',
+            type: {
+              definition: (variable.definition as 'array' | 'base-type' | 'user-data-type' | 'derived') ?? 'derived',
+              value: pou.data.returnType.toUpperCase(),
+            },
+          })
+        }
+
         pouLibrary = {
           name: pou.data.name,
           type: pou.type,
-          variables: pou.data.variables.map((variable) => ({
-            name: variable.name,
-            class: variable.class,
-            type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
-          })),
+          variables: variables,
           documentation: pou.data.documentation,
           extensible: false,
         }
@@ -188,16 +206,27 @@ export const FBDBody = ({ rung }: FBDProps) => {
    */
   const onNodesChange: OnNodesChange<FlowNode> = useCallback(
     (changes) => {
-      const selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
+      let selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
       changes.forEach((change) => {
-        if (change.type === 'select') {
-          const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
-          if (!change.selected) {
-            const index = selectedNodes.findIndex((n) => n.id === change.id)
-            if (index !== -1) selectedNodes.splice(index, 1)
+        switch (change.type) {
+          case 'select': {
+            const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
+            if (!change.selected) {
+              const index = selectedNodes.findIndex((n) => n.id === change.id)
+              if (index !== -1) selectedNodes.splice(index, 1)
+              return
+            }
+            selectedNodes.push(node)
             return
           }
-          selectedNodes.push(node)
+          case 'add': {
+            selectedNodes = selectedNodes.filter((node) => node.id === change.item.id)
+            return
+          }
+          case 'remove': {
+            selectedNodes = selectedNodes.filter((node) => node.id !== change.id)
+            return
+          }
         }
       })
 
@@ -312,6 +341,23 @@ export const FBDBody = ({ rung }: FBDProps) => {
     [rung, reactFlowInstance],
   )
 
+  /**
+   * Handle the double click of a node
+   */
+  const handleNodeDoubleClick = (node: FlowNode) => {
+    const modalToOpen = node.type === 'block' && 'block-fbd-element'
+    if (!modalToOpen) return
+
+    openModal(modalToOpen, node)
+  }
+
+  /**
+   * Handle the close of the modal
+   */
+  const handleModalClose = () => {
+    closeModal()
+  }
+
   return (
     <div className='h-full w-full rounded-lg border p-1 dark:border-neutral-800' ref={reactFlowViewportRef}>
       <ReactFlowPanel
@@ -338,6 +384,9 @@ export const FBDBody = ({ rung }: FBDProps) => {
           onConnect: (connection) => {
             handleOnConnect(connection)
           },
+          onNodeDoubleClick: (_event, node) => {
+            handleNodeDoubleClick(node)
+          },
 
           onDragEnter: onDragEnterViewport,
           onDragLeave: onDragLeaveViewport,
@@ -350,10 +399,21 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
           preventScrolling: !isElementBeingHovered,
 
-          snapGrid: [10, 10],
+          snapGrid: [16, 16],
           snapToGrid: true,
+
+          proOptions: {
+            hideAttribution: true,
+          },
         }}
       />
+      {modals['block-fbd-element']?.open && (
+        <BlockElement
+          onClose={handleModalClose}
+          selectedNode={modals['block-fbd-element'].data as BlockNode<object>}
+          isOpen={modals['block-fbd-element'].open}
+        />
+      )}
     </div>
   )
 }
