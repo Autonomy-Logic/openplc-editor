@@ -28,8 +28,8 @@ export const ModalBlockLibrary = ({
   )
   const userLibraries = user.filter((library) =>
     pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
-      ? library.type === 'function' && library.name
-      : library.name,
+      ? library.type === 'function' && library.name.toLowerCase().includes(filterText)
+      : library.name.toLowerCase().includes(filterText),
   )
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {

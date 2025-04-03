@@ -228,7 +228,6 @@ const VariablesEditor = () => {
   }
 
   const handleReturnTypeChange = (value: BaseType) => {
-    console.log('handleReturnTypeChange', value)
     updatePouReturnType(editor.meta.name, value)
   }
 
@@ -257,7 +256,7 @@ const VariablesEditor = () => {
             aria-label='Variables editor table actions container'
             className='flex h-full w-full select-none justify-between'
           >
-            {editor.type === 'plc-textual' && editor.meta.pouType === 'function' && (
+            {(editor.type === 'plc-textual' || editor.type === 'plc-graphical') && editor.meta.pouType === 'function' && (
               <div className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'>
                 <label
                   htmlFor='return type'
