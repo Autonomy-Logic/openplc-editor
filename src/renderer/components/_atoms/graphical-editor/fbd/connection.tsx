@@ -19,7 +19,7 @@ type ConnectionBuilderProps = BuilderBasicProps & {
   variant: 'connector' | 'continuation'
 }
 
-export const DEFAULT_CONNECTION_WIDTH = 88 + 8
+export const DEFAULT_CONNECTION_WIDTH = 88
 export const DEFAULT_CONNECTION_HEIGHT = 32
 
 export const ELEMENT_WIDTH = 88 + 24
