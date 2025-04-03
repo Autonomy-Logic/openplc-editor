@@ -1,6 +1,6 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { BoardConfiguration } from '../../_features/[workspace]/editor/device/board-configuration'
 import { CheckBox } from './elements/checkBox'
@@ -29,6 +29,16 @@ const ConfigurationEditor = () => {
   const toggleModbus = (type: 'RTU' | 'TCP') => {
     setModbusConfig((prev) => ({ ...prev, [type]: !prev[type] }))
   }
+
+  useEffect(() => {
+    const updateModbusConfig = () => {
+      if (deviceBoard === 'OpenPLC Runtime [ default ]') {
+        setModbusConfig({ RTU: false, TCP: false })
+      }
+    }
+
+    updateModbusConfig()
+  }, [deviceBoard])
 
   return (
     <div className='flex h-full w-full select-none'>
@@ -81,55 +91,7 @@ const ConfigurationEditor = () => {
   )
 }
 
-/**
- * Component for the device configuration section in the Configuration Editor.
- * This component includes two SelectField components for the user to select the device and the programming port.
- * It also includes a DeviceSpecs component that displays the current device configuration.
- * The user can select a device and a programming port from a list of available options.
- * @returns A JSX element containing the device configuration section.
- */
-const _DeviceConfiguration = () => {
-  const {
-    deviceAvailableOptions: { availableBoards, availableCommunicationPorts },
-    deviceDefinitions: {
-      configuration: { deviceBoard, communicationPort },
-    },
-    deviceActions: { setDeviceBoard, setCommunicationPort },
-  } = useOpenPLCStore()
-
-  const formatBoardsForLabel = (boards: { board: string; version: string }[]) => {
-    const formattedBoards = boards.map(({ board, version }) => `${board} ${version !== '0' && `[ ${version} ]`}`)
-    return formattedBoards
-  }
-
-  return (
-    <div className='flex h-full w-1/2 flex-col gap-6'>
-      <div className='h-[60%]' />
-      <div className='flex h-[40%] flex-col items-center justify-center'>
-        <div className='flex flex-col gap-3'>
-          <SelectField
-            label='Device'
-            placeholder={deviceBoard}
-            setSelectedOption={setDeviceBoard}
-            options={formatBoardsForLabel(availableBoards)}
-            ariaLabel='Device select'
-          />
-          <SelectField
-            options={availableCommunicationPorts}
-            setSelectedOption={setCommunicationPort}
-            label='Programming Port'
-            placeholder={communicationPort}
-            width='188px'
-            ariaLabel='Programming port select'
-          />
-          <DeviceSpecs />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const DeviceSpecs = () => (
+const _DeviceSpecs = () => (
   <div className='flex flex-col gap-1.5 text-xs font-medium text-neutral-850 dark:text-neutral-300'>
     <span className='text-neutral-950 dark:text-white'>Specs:</span>
     <span>CPU: ATmega328P @ 16MHz</span>
