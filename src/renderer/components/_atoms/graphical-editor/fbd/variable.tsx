@@ -23,7 +23,7 @@ type VariableBuilderProps = BuilderBasicProps & {
   variant: 'input-variable' | 'output-variable' | 'inout-variable'
 }
 
-export const DEFAULT_VARIABLE_WIDTH = 80
+export const DEFAULT_VARIABLE_WIDTH = 112
 export const DEFAULT_VARIABLE_HEIGHT = 32
 
 export const ELEMENT_SIZE = 128

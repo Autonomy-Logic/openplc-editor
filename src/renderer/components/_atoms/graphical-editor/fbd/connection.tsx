@@ -19,7 +19,7 @@ type ConnectionBuilderProps = BuilderBasicProps & {
   variant: 'connector' | 'continuation'
 }
 
-export const DEFAULT_CONNECTION_WIDTH = 88
+export const DEFAULT_CONNECTION_WIDTH = 88 + 8
 export const DEFAULT_CONNECTION_HEIGHT = 32
 
 export const ELEMENT_WIDTH = 88 + 24
@@ -157,8 +157,8 @@ const ConnectionElement = (block: ConnectionProps) => {
             width: DEFAULT_CONNECTION_WIDTH,
           }}
           className={cn('absolute flex h-full items-center justify-center p-0.5', {
-            'right-2': data.variant === 'connector',
-            'left-2': data.variant === 'continuation',
+            'right-0': data.variant === 'connector',
+            'left-0': data.variant === 'continuation',
           })}
           onMouseEnter={onMouseEnter}
           onMouseLeave={onMouseLeave}
