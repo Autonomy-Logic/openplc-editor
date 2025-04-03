@@ -20,6 +20,12 @@ const ConfigurationEditor = () => {
   const [DNSValue, setDNSValue] = useState('8.8.8.8')
   const [subnetValue, setSubnetValue] = useState('255.255.255.0')
 
+  const {
+    deviceDefinitions: {
+      configuration: { deviceBoard },
+    },
+  } = useOpenPLCStore()
+
   const toggleModbus = (type: 'RTU' | 'TCP') => {
     setModbusConfig((prev) => ({ ...prev, [type]: !prev[type] }))
   }
@@ -38,6 +44,7 @@ const ConfigurationEditor = () => {
           label='Enable Modbus RTU (Serial)'
           checked={modbusConfig.RTU}
           onChange={() => toggleModbus('RTU')}
+          disabled={deviceBoard === 'OpenPLC Runtime [ default ]'}
         />
         <RTUSettings
           slaveId={slaveId}
@@ -56,7 +63,7 @@ const ConfigurationEditor = () => {
         <TCPSettings
           ipValue={ipValue}
           setIpValue={setIpValue}
-          enableModbusTCP={modbusConfig.TCP}
+          enableModbusTCP={modbusConfig.TCP || deviceBoard !== 'OpenPLC Runtime [ default ]'}
           enableDHCP={enableDHCP}
           onToggle={() => toggleModbus('TCP')}
           setEnableDHCP={setEnableDHCP}

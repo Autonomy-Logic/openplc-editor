@@ -27,17 +27,6 @@ const BoardConfiguration = () => {
     }
   }
 
-  const refreshAvailableOptions = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    try {
-      const boards = await window.bridge.refreshAvailableBoards()
-      setAvailableOptions({ availableBoards: boards })
-    } catch (error) {
-      // TODO: Add a toast notification for error and for success
-      console.error(error)
-    }
-  }
-
   return (
     <div id='board-configuration-container' className='flex h-full w-1/2 flex-col gap-6'>
       <div id='board-figure-container' className='h-[60%]'></div>
@@ -50,9 +39,6 @@ const BoardConfiguration = () => {
             options={formatBoardsForLabel(availableBoards)}
             ariaLabel='Device selection'
           />
-          <button type='button' onClick={refreshAvailableOptions}>
-            <RefreshIcon size='sm' />
-          </button>
         </div>
         <div id='programming-port-selection' className='flex items-center justify-center gap-1'>
           <SelectField

@@ -6,11 +6,13 @@ const CheckBox = ({
   label,
   checked,
   onChange,
+  disabled,
 }: {
   id: string
   label: string
   checked: boolean
   onChange: () => void
+  disabled?: boolean
 }) => (
   <div className='flex items-center gap-2'>
     <Checkbox.Root
@@ -20,13 +22,14 @@ const CheckBox = ({
       )}
       id={id}
       checked={checked}
+      disabled={disabled}
       onCheckedChange={onChange}
     >
       <Checkbox.Indicator>
         <CheckIcon className='stroke-brand' />
       </Checkbox.Indicator>
     </Checkbox.Root>
-    <label htmlFor={id} className='text-sm font-medium text-neutral-950 dark:text-white'>
+    <label htmlFor={id} className={cn('text-sm font-medium text-neutral-950 dark:text-white')}>
       {label}
     </label>
   </div>
