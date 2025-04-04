@@ -6,7 +6,7 @@ import { Node } from '@xyflow/react'
 import { ComponentPropsWithRef, forwardRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
-import { GraphicalEditorAutocomplete } from '../../autcomplete'
+import { GraphicalEditorAutocomplete } from '../../autocomplete'
 import { getVariableRestrictionType } from '../../utils'
 import { BlockNodeData } from '../block'
 import { getLadderPouVariablesRungNodeAndEdges } from '../utils'
