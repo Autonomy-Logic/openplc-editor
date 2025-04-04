@@ -1,13 +1,12 @@
-import * as Popover from '@radix-ui/react-popover'
-import { PlusIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { extractNumberAtEnd } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCVariable } from '@root/types/PLC'
 import { cn } from '@root/utils'
 import { Node } from '@xyflow/react'
-import { ComponentPropsWithRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { ComponentPropsWithRef, forwardRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
+import { GraphicalEditorAutocomplete } from '../../autcomplete'
 import { getVariableRestrictionType } from '../../utils'
 import { BlockNodeData } from '../block'
 import { getLadderPouVariablesRungNodeAndEdges } from '../utils'
@@ -56,15 +55,7 @@ const blockTypeRestrictions = (block: unknown, blockType: VariablesBlockAutoComp
 
 const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAutoCompleteProps>(
   (
-    {
-      block,
-      blockType = 'other',
-      isOpen,
-      setIsOpen,
-      keyPressed,
-      onFocus: focusEvent,
-      valueToSearch,
-    }: VariablesBlockAutoCompleteProps,
+    { block, blockType = 'other', isOpen, setIsOpen, keyPressed, valueToSearch }: VariablesBlockAutoCompleteProps,
     ref,
   ) => {
     const {
@@ -77,21 +68,17 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       ladderFlowActions: { updateNode },
     } = useOpenPLCStore()
 
-    const popoverRef = useRef<HTMLDivElement>(null)
-    const [autocompleteFocus, setAutocompleteFocus] = useState<boolean>(false)
-    const [keyDown, setKeyDown] = useState<string>('')
-
     const pou = pous.find((pou) => pou.data.name === editor.meta.name)
     const variables = pou?.data.variables || []
     const variableRestrictions = blockTypeRestrictions(block, blockType)
 
-    const filteredDivRef = useRef<HTMLDivElement>(null)
     const filteredVariables =
       blockType !== 'block'
         ? variables
             .filter(
               (variable) =>
                 variable.name.toLowerCase().includes(valueToSearch.toLowerCase()) &&
+                // Variable type restrictions
                 (variableRestrictions.values === undefined ||
                   variableRestrictions.values.includes(variable.type.value.toLowerCase())) &&
                 (variableRestrictions.limitations === undefined ||
@@ -106,118 +93,13 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
               return aNumber - bNumber
             })
         : []
+    console.log('filteredVariables', filteredVariables)
 
-    const [selectedVariable, setSelectedVariable] = useState<{ positionInArray: number; variableName: string }>({
-      positionInArray: -1,
-      variableName: '',
-    })
-    const selectableValues = [
-      ...filteredVariables.map((variable) => ({
-        type: 'variable',
-        value: variable.name,
-      })),
-      {
-        type: 'add',
-        value: valueToSearch,
-      },
-    ].filter((variable) => variable !== undefined)
-
-    // @ts-expect-error - not all properties are used
-    useImperativeHandle(ref, () => {
-      return {
-        focus: () => {
-          popoverRef.current?.focus()
-        },
-        isFocused: autocompleteFocus,
-        selectedVariable: selectedVariable,
-      }
-    }, [selectedVariable, popoverRef, autocompleteFocus])
-
-    useEffect(() => {
-      switch (keyDown) {
-        case 'ArrowDown':
-          setSelectedVariable((prev) => {
-            const newPosition = prev.positionInArray + 1
-            if (newPosition >= selectableValues.length) {
-              return prev
-            }
-            return {
-              positionInArray: newPosition,
-              variableName: selectableValues[newPosition].value,
-            }
-          })
-          break
-        case 'ArrowUp':
-          setSelectedVariable((prev) => {
-            const newPosition = prev.positionInArray - 1
-            if (newPosition < 0) {
-              return prev
-            }
-            return {
-              positionInArray: newPosition,
-              variableName: selectableValues[newPosition].value,
-            }
-          })
-          break
-        case 'Tab':
-        case 'Enter':
-          submitVariableToBlock({})
-          break
-        default:
-          break
-      }
-      setKeyDown('')
-    }, [keyDown])
-
-    useEffect(() => {
-      setKeyDown((prev) => keyPressed || prev)
-    }, [keyPressed])
-
-    useEffect(() => {
-      scrollWhenSelectedIsChanged()
-    }, [selectedVariable])
-
-    const scrollWhenSelectedIsChanged = () => {
-      if (filteredDivRef.current) {
-        const selectedElement = filteredDivRef.current.children[selectedVariable.positionInArray]
-        selectedElement?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
-    }
-
-    const closeModal = () => {
-      setAutocompleteFocus(false)
-      setSelectedVariable({ positionInArray: -1, variableName: '' })
-      if (setIsOpen) setIsOpen(false)
-    }
-
-    const submitVariableToBlock = ({ clickedVariable }: { clickedVariable?: number }) => {
-      closeModal()
-
+    const submitVariableToBlock = (variable: PLCVariable) => {
       const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
         nodeId: (block as Node<BasicNodeData>).id,
       })
       if (!rung || !variableNode) return
-
-      // Get the variable that was clicked or the selected one
-      const variable =
-        clickedVariable !== undefined
-          ? filteredVariables[clickedVariable]
-          : selectedVariable.positionInArray !== -1
-            ? selectableValues[selectedVariable.positionInArray].type === 'variable'
-              ? filteredVariables.find((variable) => selectedVariable.variableName === variable.name)
-              : undefined
-            : undefined
-
-      /// If the variable is undefined, check if the selected variable is an add variable
-      if (!variable) {
-        if (
-          selectedVariable.positionInArray !== -1 &&
-          selectableValues[selectedVariable.positionInArray].type === 'add'
-        ) {
-          submitAddVariable({ variableName: selectedVariable.variableName })
-        }
-        return
-      }
 
       updateNode({
         editorName: editor.meta.name,
@@ -309,72 +191,35 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           },
         },
       })
+    }
 
-      setAutocompleteFocus(false)
-      if (setIsOpen) setIsOpen(false)
+    const submit = ({ variable }: { variable: { id: string; name: string } }) => {
+      if (variable.id === 'add') {
+        submitAddVariable({ variableName: valueToSearch })
+        return
+      }
+
+      const selectedVariable =
+        filteredVariables.find((v) => v.id === variable.id) ?? filteredVariables.find((v) => v.name === variable.name)
+      if (!selectedVariable) {
+        submitAddVariable({ variableName: valueToSearch })
+        return
+      }
+
+      submitVariableToBlock(selectedVariable as PLCVariable)
     }
 
     return (
-      <Popover.Root open={isOpen ? isOpen : false}>
-        <Popover.Trigger />
-        <Popover.Portal>
-          <Popover.Content
-            className='box flex w-32 flex-col items-center rounded-lg bg-white text-xs text-neutral-950 outline-none dark:bg-neutral-950 dark:text-white'
-            side='bottom'
-            sideOffset={5}
-            ref={popoverRef}
-            onOpenAutoFocus={(e) => e.preventDefault()}
-            onCloseAutoFocus={closeModal}
-            onEscapeKeyDown={closeModal}
-            onPointerDownOutside={closeModal}
-            onFocusOutside={closeModal}
-            onInteractOutside={closeModal}
-            onFocus={(e) => {
-              if (focusEvent) focusEvent(e)
-              setAutocompleteFocus(true)
-            }}
-            onBlur={() => setAutocompleteFocus(false)}
-            onKeyDown={(e) => setKeyDown(e.key)}
-          >
-            {filteredVariables.length > 0 && (
-              <div className='h-fit w-full p-1'>
-                <div className='flex max-h-32 w-full flex-col overflow-y-auto' ref={filteredDivRef}>
-                  {filteredVariables.map((variable, index) => (
-                    <div
-                      key={variable.name}
-                      className={cn(
-                        'flex h-fit w-full cursor-pointer select-none items-center justify-center p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
-                        {
-                          'bg-neutral-400 dark:bg-neutral-800': selectedVariable.variableName === variable.name,
-                        },
-                      )}
-                      onClick={() => {
-                        submitVariableToBlock({ clickedVariable: index })
-                      }}
-                    >
-                      {variable.name}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {filteredVariables.length > 0 && <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />}
-            <div
-              className={cn(
-                'flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
-                {
-                  'bg-neutral-400 dark:bg-neutral-800':
-                    selectedVariable.positionInArray === selectableValues.length - 1,
-                },
-              )}
-              onClick={() => submitAddVariable({ variableName: valueToSearch })}
-            >
-              <PlusIcon className='h-3 w-3 stroke-brand' />
-              <div className='ml-2'>Add variable</div>
-            </div>
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+      <GraphicalEditorAutocomplete
+        ref={ref}
+        className={cn('h-[200px] w-[200px] overflow-auto', isOpen ? 'block' : 'hidden')}
+        isOpen={isOpen}
+        setIsOpen={setIsOpen}
+        keyPressed={keyPressed}
+        searchValue={valueToSearch}
+        variables={filteredVariables as PLCVariable[]}
+        submit={submit}
+      />
     )
   },
 )
