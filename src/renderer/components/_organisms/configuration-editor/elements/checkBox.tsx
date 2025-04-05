@@ -14,7 +14,7 @@ const CheckBox = ({
   onChange: () => void
   disabled?: boolean
 }) => (
-  <div className='flex items-center gap-2'>
+  <div className={cn('flex items-center gap-2', disabled ?? 'opacity-50')}>
     <Checkbox.Root
       className={cn(
         'flex h-4 w-4 appearance-none items-center justify-center rounded-[4px] border bg-white outline-none dark:border-neutral-850',

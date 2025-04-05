@@ -2,7 +2,9 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 
+import { Checkbox } from '../../_atoms'
 import { BoardConfiguration } from '../../_features/[workspace]/editor/device/board-configuration'
+import { RTUSettings } from '../../_features/[workspace]/editor/device/rtu-settings'
 import { CheckBox } from './elements/checkBox'
 import { InputField } from './elements/input'
 import { SelectField } from './elements/select'
@@ -11,10 +13,10 @@ const ConfigurationEditor = () => {
   const [modbusConfig, setModbusConfig] = useState({ RTU: false, TCP: false })
   const [enableDHCP, setEnableDHCP] = useState(false)
   const [selectedOption, setSelectedOption] = useState('Wi-Fi')
-  const [selectBaudRateOption, setSelectBaudRateOption] = useState('115200')
-  const [selectInterfaceOption, setSelectInterfaceOption] = useState('Serial')
-  const [slaveId, setSlaveId] = useState('1')
-  const [pin, setPin] = useState('-1')
+  // const [selectBaudRateOption, setSelectBaudRateOption] = useState('115200')
+  // const [selectInterfaceOption, setSelectInterfaceOption] = useState('Serial')
+  // const [slaveId, setSlaveId] = useState('1')
+  // const [pin, setPin] = useState('-1')
   const [ipValue, setIpValue] = useState('192.168.1.195')
   const [gatewayValue, setGatewayValue] = useState('192.168.1.1')
   const [DNSValue, setDNSValue] = useState('8.8.8.8')
@@ -49,27 +51,31 @@ const ConfigurationEditor = () => {
       <div className='flex h-full w-1/2 flex-col gap-6 overflow-auto px-8 py-3'>
         <span className='text-lg font-medium text-white'>Communication</span>
 
-        <CheckBox
+        {/** TODO: disable user selection to not be permitted enable option */}
+        <Checkbox
           id='modbus-rtu'
           label='Enable Modbus RTU (Serial)'
           checked={modbusConfig.RTU}
-          onChange={() => toggleModbus('RTU')}
+          onCheckedChange={() => toggleModbus('RTU')}
           disabled={deviceBoard === 'OpenPLC Runtime [ default ]'}
         />
-        <RTUSettings
+
+        {/* <_RTUSettings
           slaveId={slaveId}
           setSlaveId={setSlaveId}
           pin={pin}
           setPin={setPin}
-          enabled={modbusConfig.RTU}
+          enabled={modbusConfig.RTU || deviceBoard !== 'OpenPLC Runtime [ default ]'}
           selectInterfaceOption={selectInterfaceOption}
           setSelectInterfaceOption={setSelectInterfaceOption}
           selectBaudRateOption={selectBaudRateOption}
           setSelectBaudRateOption={setSelectBaudRateOption}
-        />
+        /> */}
+        <RTUSettings userEnabled={modbusConfig.RTU} />
 
         <hr className='h-[1px] w-full self-stretch bg-brand-light' />
 
+        {/** TODO: disable user selection to not be permitted enable option; refactor component */}
         <TCPSettings
           ipValue={ipValue}
           setIpValue={setIpValue}
@@ -91,16 +97,7 @@ const ConfigurationEditor = () => {
   )
 }
 
-const _DeviceSpecs = () => (
-  <div className='flex flex-col gap-1.5 text-xs font-medium text-neutral-850 dark:text-neutral-300'>
-    <span className='text-neutral-950 dark:text-white'>Specs:</span>
-    <span>CPU: ATmega328P @ 16MHz</span>
-    <span>RAM: 2KB</span>
-    <span>Flash: 32KB</span>
-  </div>
-)
-
-const RTUSettings = ({
+const _RTUSettings = ({
   enabled,
   setSelectBaudRateOption,
   setSelectInterfaceOption,
