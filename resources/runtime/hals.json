@@ -336,23 +336,23 @@
   },
   "CONTROLLINO MINI": {
     "board_manager_url": "https://raw.githubusercontent.com/CONTROLLINO-PLC/CONTROLLINO_Library/master/Boards/package_ControllinoHardware_index.json",
+    "compiler": "arduino-cli",
     "core": "CONTROLLINO_Boards:avr",
     "default_ain": "A0, A1",
     "default_aout": "5, 6",
     "default_din": "A2, A3, A6, A7, 2, 3",
     "default_dout": "4, 7, 8, 9, A4, A5",
     "extra_libraries": [],
-
     "platform": "CONTROLLINO_Boards:avr:controllino_mini",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "controllino_mini.cpp",
     "specs": []
   },
   "ESP32 Generic": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
-    "c_flags": ["-MMD", "-c"],
+    "compiler": "arduino-cli",
     "core": "esp32:esp32",
+    "c_flags": ["-MMD", "-c"],
     "cxx_flags": ["-MMD", "-c"],
     "default_ain": "34, 35, 36, 39",
     "default_aout": "25, 26",
@@ -360,17 +360,16 @@
     "default_dout": "02, 04, 05, 12, 13, 14, 15, 16",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-
     "platform": "esp32:esp32:esp32:UploadSpeed=230400",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "esp32.cpp",
     "specs": []
   },
   "ESP32 WROOM": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
-    "c_flags": ["-MMD", "-c"],
+    "compiler": "arduino-cli",
     "core": "esp32:esp32",
+    "c_flags": ["-MMD", "-c"],
     "cxx_flags": ["-MMD", "-c"],
     "default_ain": "34, 35, 36, 39",
     "default_aout": "25, 26",
@@ -378,17 +377,16 @@
     "default_dout": "02, 04, 05, 12, 13, 14, 15, 16",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-
     "platform": "esp32:esp32:esp32:UploadSpeed=230400",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "esp32.cpp",
     "specs": []
   },
   "ESP32 WROVER": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
-    "c_flags": ["-MMD", "-c"],
+    "compiler": "arduino-cli",
     "core": "esp32:esp32",
+    "c_flags": ["-MMD", "-c"],
     "cxx_flags": ["-MMD", "-c"],
     "default_ain": "34, 35, 36, 39",
     "default_aout": "25, 26",
@@ -396,17 +394,16 @@
     "default_dout": "02, 04, 05, 12, 13, 14, 15",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-
     "platform": "esp32:esp32:esp32wrover:UploadSpeed=230400,PartitionScheme=huge_app,FlashMode=qio,FlashFreq=40,PSRAM=enabled",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "esp32.cpp",
     "specs": []
   },
   "ESP32-C3": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
-    "c_flags": ["-MMD", "-c"],
+    "compiler": "arduino-cli",
     "core": "esp32:esp32",
+    "c_flags": ["-MMD", "-c"],
     "cxx_flags": ["-MMD", "-c"],
     "default_ain": "34, 35, 36, 39",
     "default_aout": "25, 26",
@@ -414,17 +411,16 @@
     "default_dout": "01, 02, 03, 04, 05, 12, 13, 14, 15, 16",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-
     "platform": "esp32:esp32:esp32c3",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "esp32.cpp",
     "specs": []
   },
   "ESP32-C6-DevKitC-1 V1.2": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
-    "c_flags": ["-MMD", "-c"],
+    "compiler": "arduino-cli",
     "core": "esp32:esp32",
+    "c_flags": ["-MMD", "-c"],
     "cxx_flags": ["-MMD", "-c"],
     "default_ain": "0, 1, 2, 3",
     "default_aout": "18, 19, 20, 21",
@@ -432,17 +428,16 @@
     "default_dout": "15, 9, 22, 23, 39",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-
     "platform": "esp32:esp32:esp32c6",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "esp32.cpp",
     "specs": []
   },
   "ESP32-DOIT DEVKIT V1": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
-    "c_flags": ["-MMD", "-c"],
+    "compiler": "arduino-cli",
     "core": "esp32:esp32",
+    "c_flags": ["-MMD", "-c"],
     "cxx_flags": ["-MMD", "-c"],
     "default_ain": "34, 35, 36, 39",
     "default_aout": "25, 26",
@@ -450,17 +445,16 @@
     "default_dout": "02, 04, 05, 12, 13, 14, 15, 16",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-
     "platform": "esp32:esp32:esp32doit-devkit-v1",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "esp32.cpp",
     "specs": []
   },
   "ESP32-S2": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
-    "c_flags": ["-MMD", "-c"],
+    "compiler": "arduino-cli",
     "core": "esp32:esp32",
+    "c_flags": ["-MMD", "-c"],
     "cxx_flags": ["-MMD", "-c"],
     "default_ain": "34, 35, 36, 39",
     "default_aout": "25, 26",
@@ -468,17 +462,16 @@
     "default_dout": "01, 02, 03, 04, 05, 12, 13, 14, 15, 16",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-
     "platform": "esp32:esp32:esp32s2",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "esp32.cpp",
     "specs": []
   },
   "ESP32-S3": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
-    "c_flags": ["-MMD", "-c"],
+    "compiler": "arduino-cli",
     "core": "esp32:esp32",
+    "c_flags": ["-MMD", "-c"],
     "cxx_flags": ["-MMD", "-c"],
     "default_ain": "1, 2, 3, 4",
     "default_aout": "36, 37",
@@ -486,15 +479,14 @@
     "default_dout": "34, 35",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-
     "platform": "esp32:esp32:esp32s3",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "esp32.cpp",
     "specs": []
   },
   "ESP8266 D1-mini": {
     "board_manager_url": "https://arduino.esp8266.com/stable/package_esp8266com_index.json",
+    "compiler": "arduino-cli",
     "core": "esp8266:esp8266",
     "default_ain": "A0",
     "default_aout": "NODE_PIN_D8",
@@ -502,13 +494,14 @@
     "default_dout": "NODE_PIN_D0, NODE_PIN_D1, NODE_PIN_D2, NODE_PIN_D3",
     "define": "BOARD_ESP8266",
     "extra_libraries": [],
-    "updatedAt": 1739188760.2973802,
     "platform": "esp8266:esp8266:d1_mini",
+    "preview": "",
     "source": "esp8266.cpp",
-    "version": "3.1.2"
+    "specs": []
   },
   "ESP8266 NodeMCU": {
     "board_manager_url": "https://arduino.esp8266.com/stable/package_esp8266com_index.json",
+    "compiler": "arduino-cli",
     "core": "esp8266:esp8266",
     "default_ain": "A0",
     "default_aout": "NODE_PIN_D8",
@@ -516,62 +509,60 @@
     "default_dout": "NODE_PIN_D0, NODE_PIN_D1, NODE_PIN_D2, NODE_PIN_D3",
     "define": "BOARD_ESP8266",
     "extra_libraries": [],
-
     "platform": "esp8266:esp8266:nodemcuv2",
+    "preview": "",
     "source": "esp8266.cpp",
-    "version": "3.1.2"
+    "specs": []
   },
   "FX3U-14M / LE3U-14M": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
+    "compiler": "arduino-cli",
     "core": "STMicroelectronics:stm32",
     "default_ain": "A0, A1, A2, A3",
     "default_aout": "2, 3, 4, 5",
     "default_din": "A4, A5, A6, A7, A8, A9, 18, 19",
     "default_dout": "6, 7, 8, 9, 10, 11, 12, 13, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31",
     "extra_libraries": [],
-
     "platform": "STMicroelectronics:stm32:GenF1:pnum=GENERIC_F103VCTX,upload_method=serialMethod",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "fx3u-14.cpp",
     "specs": []
   },
   "FX3U-14M / WS3U-14Mx": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
+    "compiler": "arduino-cli",
     "core": "STMicroelectronics:stm32",
     "default_ain": "PA1, PA3, PC4, PC5, PC0, PC1",
     "default_aout": "PA4, PA5",
     "default_din": "PB13, PB14, PB11, PB12, PE15, PB10, PE13, PE14",
     "default_dout": "PC9, PC8, PA8, PA0, PB3, PD12",
     "extra_libraries": [],
-
     "platform": "STMicroelectronics:stm32:GenF1:pnum=GENERIC_F103VETX,upload_method=serialMethod",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "fx3u-14-WS3U.cpp",
     "specs": []
   },
   "FX3U-24MR / DollaTek": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
+    "compiler": "arduino-cli",
     "core": "STMicroelectronics:stm32",
     "default_ain": "PA1, PA3, PC4, PC5, PC0, PC1",
     "default_aout": "PA4, PA5",
     "default_din": "PB13, PB14, PB11, PB12, PE15, PB10, PE13, PE14, PE11, PE12, PE9, PE10, PE7, PE8",
     "default_dout": "PC9, PC8, PA8, PA0, PB3, PD12, PB15, PA7, PA6, PA2",
     "extra_libraries": [],
-
     "platform": "STMicroelectronics:stm32:GenF1:pnum=GENERIC_F103VCTX,upload_method=serialMethod",
+    "preview": "",
     "source": "fx3u-24MR-DT.cpp",
+    "specs": [],
     "user_ain": "PA1, PA3, PC4, PC5, PC0, PC1",
     "user_aout": "PA4, PA5",
     "user_din": "PB13, PB14, PB11, PB12, PE15, PB10, PE13, PE14, PE11, PE12, PE9, PE10, PE7, PE8",
-    "compiler": "arduino-cli",
-    "preview": "",
-    "specs": [],
     "user_dout": "PC9, PC8, PA8, PA0, PB3, PD12, PB15, PA7, PA6, PA2"
   },
   "Iruino VEA": {
     "board_manager_url": "https://raw.githubusercontent.com/VEA-SRL/IRUINO_Library/main/package_vea_index.json",
+    "compiler": "arduino-cli",
     "core": "iruino:esp32",
     "default_ain": "A0, A1",
     "default_aout": "",
@@ -579,136 +570,128 @@
     "default_dout": "O0, O1, O2, O3, O4, O5, O6, O7",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-
     "platform": "iruino:esp32:iruino",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "iruinoVEA.cpp",
     "specs": []
   },
   "Mkr WiFi": {
+    "compiler": "arduino-cli",
     "core": "arduino:samd",
     "default_ain": "A1, A2, A3, A4, A5, A6",
     "default_aout": "6, 15",
     "default_din": "0, 1, 2, 3, 4, 5",
     "default_dout": "7, 8, 9, 10, 11, 12",
     "define": "BOARD_WIFININA",
-
     "platform": "arduino:samd:mkrwifi1010",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "mkr.cpp",
     "specs": []
   },
   "Mkr Zero": {
+    "compiler": "arduino-cli",
     "core": "arduino:samd",
     "default_ain": "A1, A2, A3, A4, A5, A6",
     "default_aout": "6, 15",
     "default_din": "0, 1, 2, 3, 4, 5",
     "default_dout": "7, 8, 9, 10, 11, 12",
-
     "platform": "arduino:samd:mkrzero",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "mkr.cpp",
     "specs": []
   },
   "Nano 33 BLE": {
+    "compiler": "arduino-cli",
     "core": "arduino:mbed_nano",
     "default_ain": "15, 16, 17, 18, 19, 20, 21",
     "default_aout": "9, 14",
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 10, 11, 12, 13",
-
     "platform": "arduino:mbed_nano:nano33ble",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "nano_every.cpp",
     "specs": []
   },
   "Nano 33 IoT": {
     "core": "arduino:samd",
+    "compiler": "arduino-cli",
     "default_ain": "15, 16, 17, 18, 19, 20, 21",
     "default_aout": "9, 14",
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 10, 11, 12, 13",
     "define": "BOARD_WIFININA",
-
     "platform": "arduino:samd:nano_33_iot",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "nano_every.cpp",
     "specs": []
   },
   "Nano Every": {
+    "compiler": "arduino-cli",
     "core": "arduino:megaavr",
     "default_ain": "15, 16, 17, 18, 19, 20, 21",
     "default_aout": "9, 14",
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 10, 11, 12, 13",
-
     "platform": "arduino:megaavr:nona4809",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "nano_every.cpp",
     "specs": []
   },
   "Nano RP2040 Connect": {
+    "compiler": "arduino-cli",
     "core": "arduino:mbed_nano",
     "default_ain": "A1, A2, A3",
     "default_aout": "14",
     "default_din": "2, 3, 4, 5, 6, 7",
     "default_dout": "8, 9, 10, 11, 12, 13",
     "define": "BOARD_WIFININA",
-
     "platform": "arduino:mbed_nano:nanorp2040connect",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "rp2040.cpp",
     "specs": []
   },
   "P1AM-100": {
+    "compiler": "arduino-cli",
     "core": "arduino:samd",
     "default_ain": "A1, A2, A5, A6",
     "default_aout": "A0",
     "default_din": "31, 0, 1, 2, 3, 4",
     "default_dout": "32, 6, 7, 11, 12, 13, 14",
-
     "platform": "arduino:samd:mkrzero",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "p1am.cpp",
     "specs": []
   },
   "P1AM-200": {
     "board_manager_url": "https://raw.githubusercontent.com/facts-engineering/facts-engineering.github.io/master/package_productivity-P1AM-boardmanagermodule_index.json",
+    "compiler": "arduino-cli",
     "core": "FACTS:samd",
     "default_ain": "A1, A2, A5, A6",
     "default_aout": "A0",
     "default_din": "31, 0, 1, 2, 3, 4",
     "default_dout": "32, 6, 7, 11, 12, 13, 14",
     "extra_libraries": [],
-
     "platform": "FACTS:samd:P1AM-200",
+    "preview": "",
     "source": "p1am.cpp",
-    "version": "1.7.13"
+    "specs": []
   },
   "Portenta Machine Control H7": {
+    "compiler": "arduino-cli",
     "core": "arduino:mbed_portenta",
     "default_ain": "0, 1, 2",
     "default_aout": "0, 1, 2, 3",
     "default_din": "DIN_READ_CH_PIN_00, DIN_READ_CH_PIN_01, DIN_READ_CH_PIN_02, DIN_READ_CH_PIN_03, DIN_READ_CH_PIN_04, DIN_READ_CH_PIN_05, DIN_READ_CH_PIN_06, DIN_READ_CH_PIN_07",
     "default_dout": "0, 1, 2, 3, 4, 5, 6, 7",
     "define": "BOARD_PORTENTA",
-
     "platform": "arduino:mbed_portenta:envie_m7",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "machine_control.cpp",
     "specs": []
   },
   "Project Jaguar": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
+    "compiler": "arduino-cli",
     "core": "rp2040:rp2040",
     "default_ain": "-1",
     "default_aout": "-1",
@@ -716,39 +699,35 @@
     "default_dout": "-1",
     "define": "BOARD_JAGUAR",
     "extra_libraries": [],
-
     "platform": "rp2040:rp2040:jaguar",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "jaguar.cpp",
     "specs": []
   },
   "Raspberry Pico": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
+    "compiler": "arduino-cli",
     "core": "rp2040:rp2040",
     "default_ain": "26, 27, 28",
     "default_aout": "4,5",
     "default_din": "6, 7, 8, 9, 10, 11, 12, 13",
     "default_dout": "14, 15, 16, 17, 18, 19, 20, 21",
     "extra_libraries": [],
-
     "platform": "rp2040:rp2040:rpipico",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "rp2040pico.cpp",
     "specs": []
   },
   "Raspberry Pico 2": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
+    "compiler": "arduino-cli",
     "core": "rp2040:rp2040",
     "default_ain": "26, 27, 28",
     "default_aout": "4,5",
     "default_din": "6, 7, 8, 9, 10, 11, 12, 13",
     "default_dout": "14, 15, 16, 17, 18, 19, 20, 21",
     "extra_libraries": [],
-
     "platform": "rp2040:rp2040:rpipico2",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "rp2040pico.cpp",
     "specs": []
@@ -756,21 +735,21 @@
   "Raspberry Pico 2 (RISCV)": {
     "arch": "riscv",
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
+    "compiler": "arduino-cli",
     "core": "rp2040:rp2040",
     "default_ain": "26, 27, 28",
     "default_aout": "4,5",
     "default_din": "6, 7, 8, 9, 10, 11, 12, 13",
     "default_dout": "14, 15, 16, 17, 18, 19, 20, 21",
     "extra_libraries": [],
-
     "platform": "rp2040:rp2040:rpipico2:arch=riscv",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "rp2040pico.cpp",
     "specs": []
   },
   "Raspberry Pico W": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
+    "compiler": "arduino-cli",
     "core": "rp2040:rp2040",
     "default_ain": "26, 27, 28",
     "default_aout": "4,5",
@@ -778,17 +757,16 @@
     "default_dout": "14, 15, 16, 17, 18, 19, 20, 21",
     "define": "BOARD_PICOW",
     "extra_libraries": [],
-
     "platform": "rp2040:rp2040:rpipicow",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "rp2040pico.cpp",
     "specs": []
   },
   "SEQUENT-ESP32-PI": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
-    "c_flags": ["-MMD", "-c"],
+    "compiler": "arduino-cli",
     "core": "esp32:esp32",
+    "c_flags": ["-MMD", "-c"],
     "cxx_flags": ["-MMD", "-c"],
     "default_ain": "34, 35",
     "default_aout": "25",
@@ -796,15 +774,14 @@
     "default_dout": "12, 13, 14, 15",
     "define": "BOARD_ESP32",
     "extra_libraries": [],
-
     "platform": "esp32:esp32:esp32doit-devkit-v1",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "sequent_esp32.cpp",
     "specs": []
   },
   "STM32-F446ZET (NUCLEO)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
+    "compiler": "arduino-cli",
     "core": "STMicroelectronics:stm32",
     "default_ain": "PA0, PA1, PA4, PA5, PA6, PA7",
     "default_aout": "PB0, PB1",
@@ -812,9 +789,7 @@
     "default_dout": "PB10, PB12, PB13, PB14, PB15, PC13, PC14, PC15",
     "define": "BOARD_STM32_F446ZET_NUCLEO",
     "extra_libraries": [],
-
     "platform": "STMicroelectronics:stm32:Nucleo_144:pnum=NUCLEO_F446ZE",
-    "compiler": "arduino-cli",
     "preview": "",
     "source": "stm32_f446zet_nucleo.cpp",
     "specs": []
