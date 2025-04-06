@@ -1,5 +1,4 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 
 import { Checkbox } from '../../_atoms'
@@ -13,10 +12,6 @@ const ConfigurationEditor = () => {
   const [modbusConfig, setModbusConfig] = useState({ RTU: false, TCP: false })
   const [enableDHCP, setEnableDHCP] = useState(false)
   const [selectedOption, setSelectedOption] = useState('Wi-Fi')
-  // const [selectBaudRateOption, setSelectBaudRateOption] = useState('115200')
-  // const [selectInterfaceOption, setSelectInterfaceOption] = useState('Serial')
-  // const [slaveId, setSlaveId] = useState('1')
-  // const [pin, setPin] = useState('-1')
   const [ipValue, setIpValue] = useState('192.168.1.195')
   const [gatewayValue, setGatewayValue] = useState('192.168.1.1')
   const [DNSValue, setDNSValue] = useState('8.8.8.8')
@@ -28,9 +23,7 @@ const ConfigurationEditor = () => {
     },
   } = useOpenPLCStore()
 
-  const toggleModbus = (type: 'RTU' | 'TCP') => {
-    setModbusConfig((prev) => ({ ...prev, [type]: !prev[type] }))
-  }
+  const toggleModbus = (type: 'RTU' | 'TCP') => setModbusConfig((prev) => ({ ...prev, [type]: !prev[type] }))
 
   useEffect(() => {
     const updateModbusConfig = () => {
@@ -59,22 +52,17 @@ const ConfigurationEditor = () => {
           onCheckedChange={() => toggleModbus('RTU')}
           disabled={deviceBoard === 'OpenPLC Runtime [ default ]'}
         />
-
-        {/* <_RTUSettings
-          slaveId={slaveId}
-          setSlaveId={setSlaveId}
-          pin={pin}
-          setPin={setPin}
-          enabled={modbusConfig.RTU || deviceBoard !== 'OpenPLC Runtime [ default ]'}
-          selectInterfaceOption={selectInterfaceOption}
-          setSelectInterfaceOption={setSelectInterfaceOption}
-          selectBaudRateOption={selectBaudRateOption}
-          setSelectBaudRateOption={setSelectBaudRateOption}
-        /> */}
         <RTUSettings userEnabled={modbusConfig.RTU} />
 
         <hr className='h-[1px] w-full self-stretch bg-brand-light' />
 
+        <Checkbox
+          id='modbus-tcp'
+          label='Enable Modbus TCP'
+          checked={modbusConfig.TCP}
+          onCheckedChange={() => toggleModbus('TCP')}
+          disabled={true}
+        />
         {/** TODO: disable user selection to not be permitted enable option; refactor component */}
         <TCPSettings
           ipValue={ipValue}
@@ -92,65 +80,6 @@ const ConfigurationEditor = () => {
           subnetValue={subnetValue}
           setSubnetValue={setSubnetValue}
         />
-      </div>
-    </div>
-  )
-}
-
-const _RTUSettings = ({
-  enabled,
-  setSelectBaudRateOption,
-  setSelectInterfaceOption,
-  slaveId,
-  setSlaveId,
-  pin,
-  setPin,
-}: {
-  enabled: boolean
-  setSelectBaudRateOption: (value: string) => void
-  selectBaudRateOption: string
-  setSelectInterfaceOption: (value: string) => void
-  selectInterfaceOption: string
-  slaveId: string
-  setSlaveId: (value: string) => void
-  pin: string
-  setPin: (value: string) => void
-}) => {
-  const {
-    deviceAvailableOptions: { availableRTUInterfaces, availableRTUBaudrates },
-    deviceDefinitions: {
-      configuration: {
-        communicationConfiguration: {
-          modbusRTU: { rtuInterface, rtuBaudrate },
-        },
-      },
-    },
-    // deviceActions: { setRTUSettings },
-  } = useOpenPLCStore()
-
-  return (
-    <div className={cn('flex flex-col gap-4', { hidden: !enabled })}>
-      <div className='flex gap-6'>
-        <div className='flex flex-1 flex-col gap-4'>
-          <SelectField
-            setSelectedOption={setSelectInterfaceOption}
-            selectedOption={rtuInterface}
-            options={availableRTUInterfaces}
-            label='Interface'
-            placeholder='Select interface'
-            ariaLabel='Interface select'
-          />
-          <InputField label='Slave ID' value={slaveId} onChange={setSlaveId} />
-        </div>
-        <div className='flex flex-1 flex-col gap-4'>
-          <SelectField
-            setSelectedOption={setSelectBaudRateOption}
-            selectedOption={rtuBaudrate}
-            options={availableRTUBaudrates}
-            label='Baudrate'
-          />
-          <InputField label='RS485 TX Pin' value={pin} onChange={setPin} />
-        </div>
       </div>
     </div>
   )
