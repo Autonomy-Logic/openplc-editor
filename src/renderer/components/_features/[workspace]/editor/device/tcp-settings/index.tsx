@@ -1,6 +1,6 @@
 import { Checkbox } from '@root/renderer/components/_atoms'
+import { InputField } from '@root/renderer/components/_molecules/input-field'
 import { SelectField } from '@root/renderer/components/_molecules/select-field'
-import { InputField } from '@root/renderer/components/_organisms/configuration-editor/elements/input'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, useState } from 'react'
 
