@@ -4,6 +4,7 @@ import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
+import { FBDBlockAutoComplete } from './autocomplete'
 import { buildHandle, CustomHandle } from './handle'
 import { ConnectorSVGComponent, ContinuationSVGComponent } from './svg'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
@@ -48,7 +49,7 @@ const ConnectionElement = (block: ConnectionProps) => {
   >(null)
 
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
-  const [_keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
+  const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   const [connectionValue, setConnectionValue] = useState('')
   const [inputError, setInputError] = useState<boolean>(false)
@@ -195,20 +196,19 @@ const ConnectionElement = (block: ConnectionProps) => {
               onKeyUp={() => setKeyPressedAtTextarea('')}
             />
 
-            {/* {openAutocomplete && (
-          <div className='relative flex justify-center'>
-          <div className='absolute -bottom-1'>
-          <ConnectionsBlockAutoComplete
-          block={block}
-          blockType={'variable'}
-          valueToSearch={variableValue}
-          isOpen={openAutocomplete}
-          setIsOpen={(value) => setOpenAutocomplete(value)}
-          keyPressed={keyPressedAtTextarea}
-          />
-          </div>
-          </div>
-          )} */}
+            {openAutocomplete && (
+              <div className='relative flex justify-center'>
+                <div className='absolute -bottom-1'>
+                  <FBDBlockAutoComplete
+                    block={block}
+                    valueToSearch={connectionValue}
+                    isOpen={openAutocomplete}
+                    setIsOpen={(value) => setOpenAutocomplete(value)}
+                    keyPressed={keyPressedAtTextarea}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </foreignObject>

@@ -7,6 +7,7 @@ import { ComponentPropsWithRef, forwardRef, useEffect, useImperativeHandle, useM
 export type GraphicalEditorAutocompleteProps = ComponentPropsWithRef<'div'> & {
   isOpen?: boolean
   setIsOpen?: (isOpen: boolean) => void
+  canCreateNewVariable?: boolean
   keyPressed?: string
   searchValue: string
   submit: ({ variable }: { variable: { id: string; name: string } }) => void
@@ -19,6 +20,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
       onFocus: focusEvent,
       isOpen,
       setIsOpen,
+      canCreateNewVariable = true,
       keyPressed,
       searchValue,
       submit,
@@ -188,19 +190,23 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                 <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />
               </>
             )}
-            <div
-              className={cn(
-                'flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
-                {
-                  'bg-neutral-400 dark:bg-neutral-800':
-                    selectedVariable.positionInArray === selectableValues.length - 1,
-                },
-              )}
-              onClick={() => submitAutocompletion({ variable: selectableValues[selectableValues.length - 1].variable })}
-            >
-              <PlusIcon className='h-3 w-3 stroke-brand' />
-              <div className='ml-2'>Add variable</div>
-            </div>
+            {canCreateNewVariable && (
+              <div
+                className={cn(
+                  'flex h-fit w-full cursor-pointer flex-row items-center justify-center rounded-b-lg border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                  {
+                    'bg-neutral-400 dark:bg-neutral-800':
+                      selectedVariable.positionInArray === selectableValues.length - 1,
+                  },
+                )}
+                onClick={() =>
+                  submitAutocompletion({ variable: selectableValues[selectableValues.length - 1].variable })
+                }
+              >
+                <PlusIcon className='h-3 w-3 stroke-brand' />
+                <div className='ml-2'>Add variable</div>
+              </div>
+            )}
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>

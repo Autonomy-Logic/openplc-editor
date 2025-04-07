@@ -93,7 +93,6 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
               return aNumber - bNumber
             })
         : []
-    console.log('filteredVariables', filteredVariables)
 
     const submitVariableToBlock = (variable: PLCVariable) => {
       const { rung, node: variableNode } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
