@@ -7,9 +7,19 @@
     "default_din": "62, 63, 64, 65, 66, 67, 68, 69, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52",
     "default_dout": "14, 15, 16, 17, 18, 19, 20, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53",
     "platform": "arduino:sam:arduino_due_x",
-    "preview": "",
+    "preview": "due.png",
     "source": "mega_due.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "Atmel SAM3X8E ARM Cortex-M3 at 84MHz",
+      "RAM": "96 KB",
+      "Flash": "512 KB",
+      "Digital Pins": "54",
+      "Analog Pins": "12",
+      "PWM Pins": "12",
+      "WiFi":"No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Arduino Due (programming port)": {
     "compiler": "arduino-cli",
@@ -19,9 +29,19 @@
     "default_din": "62, 63, 64, 65, 66, 67, 68, 69, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52",
     "default_dout": "14, 15, 16, 17, 18, 19, 20, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53",
     "platform": "arduino:sam:arduino_due_x_dbg",
-    "preview": "",
+    "preview": "due.png",
     "source": "mega_due.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "Atmel SAM3X8E ARM Cortex-M3 at 84MHz",
+      "RAM": "96 KB",
+      "Flash": "512 KB",
+      "Digital Pins": "54",
+      "Analog Pins": "12",
+      "PWM Pins": "12",
+      "WiFi":"No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Arduino Edge Control": {
     "compiler": "arduino-cli",
@@ -31,9 +51,19 @@
     "default_din": "IRQ_CH1, IRQ_CH2, IRQ_CH3, IRQ_CH4, IRQ_CH5, IRQ_CH6",
     "default_dout": "RELAY_CH01, RELAY_CH02, RELAY_CH03, RELAY_CH04",
     "platform": "arduino:mbed_edge:edge_control",
-    "preview": "",
+    "preview": "generic.png",
     "source": "edge_control.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "nRF52840 ARM Cortex-M4F at 64MHz",
+      "RAM": "256 KB",
+      "Flash": "1 MB",
+      "Digital Pins": "26",
+      "Analog Pins": "28",
+      "PWM Pins": "N/A",
+      "WiFi": "Yes - requires Arduino MKR board",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "Arduino Giga": {
     "compiler": "arduino-cli",
@@ -44,9 +74,19 @@
     "default_dout": "14, 15, 16, 17, 18, 19, 20, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 87",
     "define": "BOARD_PORTENTA",
     "platform": "arduino:mbed_giga:giga",
-    "preview": "",
+    "preview": "generic.png",
     "source": "giga.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32H747xI ARM Cortex-M7 at 480MHz",
+      "RAM": "1 MB",
+      "Flash": "2 MB",
+      "Digital Pins": "76",
+      "Analog Pins": "12",
+      "PWM Pins": "12",
+      "WiFi": "Yes",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "Arduino Leonardo": {
     "compiler": "arduino-cli",
@@ -56,9 +96,19 @@
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 12, 13",
     "platform": "arduino:avr:leonardo",
-    "preview": "",
+    "preview": "uno.png",
     "source": "uno_leonardo_nano_micro_zero.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ATmega 32u4 at 16MHz",
+      "RAM": "2.5 KB",
+      "Flash": "32 KB",
+      "Digital Pins": "20",
+      "Analog Pins": "12",
+      "PWM Pins": "7",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Arduino Mega": {
     "compiler": "arduino-cli",
@@ -68,9 +118,19 @@
     "default_din": "62, 63, 64, 65, 66, 67, 68, 69, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52",
     "default_dout": "14, 15, 16, 17, 18, 19, 20, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53",
     "platform": "arduino:avr:mega",
-    "preview": "",
+    "preview": "mega.png",
     "source": "mega_due.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ATmega 2560 at 16MHz",
+      "RAM": "8 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "70",
+      "Analog Pins": "16",
+      "PWM Pins": "15",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Arduino Micro": {
     "compiler": "arduino-cli",
@@ -80,9 +140,19 @@
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 12, 13",
     "platform": "arduino:avr:micro",
-    "preview": "",
+    "preview": "micro.png",
     "source": "uno_leonardo_nano_micro_zero.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ATmega 32u4 at 16MHz",
+      "RAM": "2.5 KB",
+      "Flash": "32 KB",
+      "Digital Pins": "20",
+      "Analog Pins": "12",
+      "PWM Pins": "7",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Arduino Nano": {
     "compiler": "arduino-cli",
@@ -92,9 +162,19 @@
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 12, 13",
     "platform": "arduino:avr:nano",
-    "preview": "",
+    "preview": "nano.png",
     "source": "uno_leonardo_nano_micro_zero.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ATmega 328P at 16MHz",
+      "RAM": "2 KB",
+      "Flash": "32 KB",
+      "Digital Pins": "22",
+      "Analog Pins": "8",
+      "PWM Pins": "6",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Arduino Nano ESP32": {
     "compiler": "arduino-cli",
@@ -105,9 +185,19 @@
     "default_dout": "7, 8, 12, 13",
     "define": ["BOARD_PORTENTA"],
     "platform": "esp32:esp32:nano_nora",
-    "preview": "",
+    "preview": "generic.png",
     "source": "esp32.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP32-D0WDQ6",
+      "RAM": "520 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "22",
+      "Analog Pins": "8",
+      "PWM Pins": "6",
+      "WiFi": "Yes",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "Arduino Opta": {
     "compiler": "arduino-cli",
@@ -118,9 +208,19 @@
     "default_dout": "D0, D1, D2, D3",
     "define": "BOARD_PORTENTA",
     "platform": "arduino:mbed_opta:opta",
-    "preview": "",
+    "preview": "generic.png",
     "source": "arduino_opta.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32H747xI ARM Cortex-M7 at 480MHz",
+      "RAM": "1 MB",
+      "Flash": "2 MB",
+      "Digital Pins": "12",
+      "Analog Pins": "8",
+      "PWM Pins": "N/A",
+      "WiFi": "Yes - on the Opta WiFi model",
+      "Bluetooth": "Yes - on the Opta WiFi model",
+      "Ethernet": "Yes"
+    }
   },
   "Arduino Uno": {
     "compiler": "arduino-cli",
@@ -130,9 +230,19 @@
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 12, 13",
     "platform": "arduino:avr:uno",
-    "preview": "",
+    "preview": "uno.png",
     "source": "uno_leonardo_nano_micro_zero.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ATmega 328P at 16MHz",
+      "RAM": "2 KB",
+      "Flash": "32 KB",
+      "Digital Pins": "14",
+      "Analog Pins": "6",
+      "PWM Pins": "6",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Arduino Zero (native USB port)": {
     "compiler": "arduino-cli",
@@ -142,9 +252,19 @@
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 12, 13",
     "platform": "arduino:samd:arduino_zero_native",
-    "preview": "",
+    "preview": "generic.png",
     "source": "uno_leonardo_nano_micro_zero.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ATSAMD21G18 ARM Cortex-M0+ at 48MHz",
+      "RAM": "32 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "14",
+      "Analog Pins": "6",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Arduino Zero (programming port)": {
     "compiler": "arduino-cli",
@@ -154,9 +274,19 @@
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 12, 13",
     "platform": "arduino:samd:arduino_zero_edbg",
-    "preview": "",
+    "preview": "generic.png",
     "source": "uno_leonardo_nano_micro_zero.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ATSAMD21G18 ARM Cortex-M0+ at 48MHz",
+      "RAM": "32 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "14",
+      "Analog Pins": "6",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Blackpill STM32-F411CE (DFU STM32 Bootloader)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -169,9 +299,19 @@
     "define": "BOARD_STM32_F411CE",
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F411CE,upload_method=dfuMethod,usb=CDCgen",
-    "preview": "",
+    "preview": "generic.png",
     "source": "stm32_f411ce.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32F411CE ARM Cortex-M4 at 100MHz",
+      "RAM": "128 KB",
+      "Flash": "512 KB",
+      "Digital Pins": "37",
+      "Analog Pins": "10",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Blackpill STM32-F411CE (HID Bootloader 2.2)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -184,9 +324,19 @@
     "define": "BOARD_STM32_F411CE",
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F411CE,upload_method=hidMethod,usb=CDCgen",
-    "preview": "",
+    "preview": "generic.png",
     "source": "stm32_f411ce.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32F411CE ARM Cortex-M4 at 100MHz",
+      "RAM": "128 KB",
+      "Flash": "512 KB",
+      "Digital Pins": "37",
+      "Analog Pins": "10",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Blackpill STM32-F411CE (SWD Programmer)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -199,9 +349,19 @@
     "define": "BOARD_STM32_F411CE",
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F411CE,upload_method=swdMethod,usb=CDCgen",
-    "preview": "",
+    "preview": "generic.png",
     "source": "stm32_f411ce.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32F411CE ARM Cortex-M4 at 100MHz",
+      "RAM": "128 KB",
+      "Flash": "512 KB",
+      "Digital Pins": "37",
+      "Analog Pins": "10",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Blackpill STM32-F411CE (Serial Programmer)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -214,9 +374,19 @@
     "define": "BOARD_STM32_F411CE",
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF4:pnum=BLACKPILL_F411CE,upload_method=serialMethod,usb=CDCgen",
-    "preview": "",
+    "preview": "generic.png",
     "source": "stm32_f411ce.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32F411CE ARM Cortex-M4 at 100MHz",
+      "RAM": "128 KB",
+      "Flash": "512 KB",
+      "Digital Pins": "37",
+      "Analog Pins": "10",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Bluepill STM32-F103CB (DFU STM32 Bootloader)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -229,9 +399,19 @@
     "define": "BOARD_STM32_F103CB",
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8,upload_method=dfuMethod,usb=CDCgen",
-    "preview": "",
+    "preview": "generic.png",
     "source": "stm32_f103cb.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32F103CB ARM Cortex-M3 at 72MHz",
+      "RAM": "20 KB",
+      "Flash": "128 KB",
+      "Digital Pins": "37",
+      "Analog Pins": "10",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Bluepill STM32-F103CB (HID Bootloader 2.2)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -244,9 +424,19 @@
     "define": "BOARD_STM32_F103CB",
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8,upload_method=hidMethod,usb=CDCgen",
-    "preview": "",
+    "preview": "generic.png",
     "source": "stm32_f103cb.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32F103CB ARM Cortex-M3 at 72MHz",
+      "RAM": "20 KB",
+      "Flash": "128 KB",
+      "Digital Pins": "37",
+      "Analog Pins": "10",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Bluepill STM32-F103CB (SWD Programmer)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -259,9 +449,19 @@
     "define": "BOARD_STM32_F103CB",
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8,upload_method=swdMethod,usb=CDCgen",
-    "preview": "",
+    "preview": "generic.png",
     "source": "stm32_f103cb.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32F103CB ARM Cortex-M3 at 72MHz",
+      "RAM": "20 KB",
+      "Flash": "128 KB",
+      "Digital Pins": "37",
+      "Analog Pins": "10",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Bluepill STM32-F103CB (Serial Programmer)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -274,9 +474,19 @@
     "define": "BOARD_STM32_F103CB",
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8,upload_method=serialMethod,usb=CDCgen",
-    "preview": "",
+    "preview": "generic.png",
     "source": "stm32_f103cb.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32F103CB ARM Cortex-M3 at 72MHz",
+      "RAM": "20 KB",
+      "Flash": "128 KB",
+      "Digital Pins": "37",
+      "Analog Pins": "10",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "CONTROLLINO MAXI": {
     "board_manager_url": "https://raw.githubusercontent.com/CONTROLLINO-PLC/CONTROLLINO_Library/master/Boards/package_ControllinoHardware_index.json",
@@ -288,9 +498,19 @@
     "default_dout": "6, 7, 8, 9, 10, 11, 12, 13, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31",
     "extra_libraries": [],
     "platform": "CONTROLLINO_Boards:avr:controllino_maxi",
-    "preview": "",
+    "preview": "generic.png",
     "source": "controllino_maxi.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ATmega 2560 at 16MHz",
+      "RAM": "8 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "70",
+      "Analog Pins": "16",
+      "PWM Pins": "15",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "Yes"
+    }
   },
   "CONTROLLINO MAXI Automation": {
     "board_manager_url": "https://raw.githubusercontent.com/CONTROLLINO-PLC/CONTROLLINO_Library/master/Boards/package_ControllinoHardware_index.json",
@@ -302,9 +522,19 @@
     "default_dout": "2, 3, 4, 5, 6, 7, 8, 9, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31",
     "extra_libraries": [],
     "platform": "CONTROLLINO_Boards:avr:controllino_maxi_automation",
-    "preview": "",
+    "preview": "generic.png",
     "source": "controllino_maxi_automation.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ATmega 2560 at 16MHz",
+      "RAM": "8 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "70",
+      "Analog Pins": "16",
+      "PWM Pins": "15",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "Yes"
+    }
   },
   "CONTROLLINO MEGA": {
     "board_manager_url": "https://raw.githubusercontent.com/CONTROLLINO-PLC/CONTROLLINO_Library/master/Boards/package_ControllinoHardware_index.json",
@@ -316,9 +546,19 @@
     "default_dout": "42, 43, 44, 45, 46, 47, 48, 49, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37",
     "extra_libraries": [],
     "platform": "CONTROLLINO_Boards:avr:controllino_mega",
-    "preview": "",
+    "preview": "generic.png",
     "source": "controllino_mega.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ATmega 2560 at 16MHz",
+      "RAM": "8 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "70",
+      "Analog Pins": "16",
+      "PWM Pins": "15",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "Yes"
+    }
   },
   "CONTROLLINO MICRO": {
     "board_manager_url": "https://github.com/CONTROLLINO-PLC/controllino_rp2/releases/download/global/package_controllino_rp2_index.json",
@@ -330,9 +570,19 @@
     "default_dout": "13, 14, 15, 20, 21, 22",
     "extra_libraries": [],
     "platform": "controllino_rp2:rp2040:controllino_micro",
-    "preview": "",
+    "preview": "generic.png",
     "source": "controllino_micro.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "RP2040 ARM Cortex-M0+ at 133MHz",
+      "RAM": "264 KB",
+      "Flash": "16 MB",
+      "Digital Pins": "18",
+      "Analog Pins": "6",
+      "PWM Pins": "8",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "Yes"
+    }
   },
   "CONTROLLINO MINI": {
     "board_manager_url": "https://raw.githubusercontent.com/CONTROLLINO-PLC/CONTROLLINO_Library/master/Boards/package_ControllinoHardware_index.json",
@@ -344,9 +594,19 @@
     "default_dout": "4, 7, 8, 9, A4, A5",
     "extra_libraries": [],
     "platform": "CONTROLLINO_Boards:avr:controllino_mini",
-    "preview": "",
+    "preview": "generic.png",
     "source": "controllino_mini.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ATmega 328P at 16MHz",
+      "RAM": "2 KB",
+      "Flash": "32 KB",
+      "Digital Pins": "14",
+      "Analog Pins": "6",
+      "PWM Pins": "6",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "ESP32 Generic": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -361,9 +621,19 @@
     "define": "BOARD_ESP32",
     "extra_libraries": [],
     "platform": "esp32:esp32:esp32:UploadSpeed=230400",
-    "preview": "",
+    "preview": "esp32.png",
     "source": "esp32.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP32-D0WDQ6",
+      "RAM": "520 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "34",
+      "Analog Pins": "18",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "ESP32 WROOM": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -378,9 +648,19 @@
     "define": "BOARD_ESP32",
     "extra_libraries": [],
     "platform": "esp32:esp32:esp32:UploadSpeed=230400",
-    "preview": "",
+    "preview": "esp32.png",
     "source": "esp32.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP32-D0WDQ6",
+      "RAM": "520 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "34",
+      "Analog Pins": "18",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "ESP32 WROVER": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -395,9 +675,19 @@
     "define": "BOARD_ESP32",
     "extra_libraries": [],
     "platform": "esp32:esp32:esp32wrover:UploadSpeed=230400,PartitionScheme=huge_app,FlashMode=qio,FlashFreq=40,PSRAM=enabled",
-    "preview": "",
+    "preview": "esp32.png",
     "source": "esp32.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP32-D0WDQ6",
+      "RAM": "520 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "34",
+      "Analog Pins": "18",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "ESP32-C3": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -412,9 +702,19 @@
     "define": "BOARD_ESP32",
     "extra_libraries": [],
     "platform": "esp32:esp32:esp32c3",
-    "preview": "",
+    "preview": "esp32.png",
     "source": "esp32.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP32-C3",
+      "RAM": "400 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "34",
+      "Analog Pins": "18",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "ESP32-C6-DevKitC-1 V1.2": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -429,9 +729,19 @@
     "define": "BOARD_ESP32",
     "extra_libraries": [],
     "platform": "esp32:esp32:esp32c6",
-    "preview": "",
+    "preview": "esp32.png",
     "source": "esp32.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP32-C6",
+      "RAM": "400 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "34",
+      "Analog Pins": "18",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "ESP32-DOIT DEVKIT V1": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -446,9 +756,19 @@
     "define": "BOARD_ESP32",
     "extra_libraries": [],
     "platform": "esp32:esp32:esp32doit-devkit-v1",
-    "preview": "",
+    "preview": "esp32.png",
     "source": "esp32.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP32-D0WDQ6",
+      "RAM": "520 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "34",
+      "Analog Pins": "18",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "ESP32-S2": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -463,9 +783,19 @@
     "define": "BOARD_ESP32",
     "extra_libraries": [],
     "platform": "esp32:esp32:esp32s2",
-    "preview": "",
+    "preview": "esp32.png",
     "source": "esp32.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP32-S2",
+      "RAM": "320 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "34",
+      "Analog Pins": "18",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "ESP32-S3": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -480,9 +810,19 @@
     "define": "BOARD_ESP32",
     "extra_libraries": [],
     "platform": "esp32:esp32:esp32s3",
-    "preview": "",
+    "preview": "esp32.png",
     "source": "esp32.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP32-S3",
+      "RAM": "512 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "34",
+      "Analog Pins": "18",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "ESP8266 D1-mini": {
     "board_manager_url": "https://arduino.esp8266.com/stable/package_esp8266com_index.json",
@@ -495,9 +835,19 @@
     "define": "BOARD_ESP8266",
     "extra_libraries": [],
     "platform": "esp8266:esp8266:d1_mini",
-    "preview": "",
+    "preview": "generic.png",
     "source": "esp8266.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP8266",
+      "RAM": "80 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "16",
+      "Analog Pins": "1",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "ESP8266 NodeMCU": {
     "board_manager_url": "https://arduino.esp8266.com/stable/package_esp8266com_index.json",
@@ -510,9 +860,19 @@
     "define": "BOARD_ESP8266",
     "extra_libraries": [],
     "platform": "esp8266:esp8266:nodemcuv2",
-    "preview": "",
+    "preview": "generic.png",
     "source": "esp8266.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP8266",
+      "RAM": "80 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "16",
+      "Analog Pins": "1",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "FX3U-14M / LE3U-14M": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -524,11 +884,21 @@
     "default_dout": "6, 7, 8, 9, 10, 11, 12, 13, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31",
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF1:pnum=GENERIC_F103VCTX,upload_method=serialMethod",
-    "preview": "",
+    "preview": "generic.png",
     "source": "fx3u-14.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32F103VCT6 ARM Cortex-M3 at 72MHz",
+      "RAM": "64 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "14",
+      "Analog Pins": "4",
+      "PWM Pins": "N/A",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
-  "FX3U-14M / WS3U-14Mx": {
+  "WS3U-14Mx": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
     "compiler": "arduino-cli",
     "core": "STMicroelectronics:stm32",
@@ -538,9 +908,19 @@
     "default_dout": "PC9, PC8, PA8, PA0, PB3, PD12",
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF1:pnum=GENERIC_F103VETX,upload_method=serialMethod",
-    "preview": "",
+    "preview": "generic.png",
     "source": "fx3u-14-WS3U.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32F103VCT6 ARM Cortex-M3 at 72MHz",
+      "RAM": "64 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "14",
+      "Analog Pins": "4",
+      "PWM Pins": "N/A",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "FX3U-24MR / DollaTek": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -552,9 +932,19 @@
     "default_dout": "PC9, PC8, PA8, PA0, PB3, PD12, PB15, PA7, PA6, PA2",
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:GenF1:pnum=GENERIC_F103VCTX,upload_method=serialMethod",
-    "preview": "",
+    "preview": "generic.png",
     "source": "fx3u-24MR-DT.cpp",
-    "specs": [],
+    "specs": {
+      "CPU": "STM32F103VCT6 ARM Cortex-M3 at 72MHz",
+      "RAM": "64 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "24",
+      "Analog Pins": "4",
+      "PWM Pins": "N/A",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    },
     "user_ain": "PA1, PA3, PC4, PC5, PC0, PC1",
     "user_aout": "PA4, PA5",
     "user_din": "PB13, PB14, PB11, PB12, PE15, PB10, PE13, PE14, PE11, PE12, PE9, PE10, PE7, PE8",
@@ -571,9 +961,19 @@
     "define": "BOARD_ESP32",
     "extra_libraries": [],
     "platform": "iruino:esp32:iruino",
-    "preview": "",
+    "preview": "generic.png",
     "source": "iruinoVEA.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP32-D0WDQ6",
+      "RAM": "520 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "34",
+      "Analog Pins": "18",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "Mkr WiFi": {
     "compiler": "arduino-cli",
@@ -584,9 +984,19 @@
     "default_dout": "7, 8, 9, 10, 11, 12",
     "define": "BOARD_WIFININA",
     "platform": "arduino:samd:mkrwifi1010",
-    "preview": "",
+    "preview": "generic.png",
     "source": "mkr.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "SAMD21 ARM Cortex-M0+ at 48MHz",
+      "RAM": "32 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "14",
+      "Analog Pins": "6",
+      "PWM Pins": "12",
+      "WiFi": "Yes",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Mkr Zero": {
     "compiler": "arduino-cli",
@@ -596,9 +1006,19 @@
     "default_din": "0, 1, 2, 3, 4, 5",
     "default_dout": "7, 8, 9, 10, 11, 12",
     "platform": "arduino:samd:mkrzero",
-    "preview": "",
+    "preview": "generic.png",
     "source": "mkr.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "SAMD21 ARM Cortex-M0+ at 48MHz",
+      "RAM": "32 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "14",
+      "Analog Pins": "6",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Nano 33 BLE": {
     "compiler": "arduino-cli",
@@ -608,9 +1028,19 @@
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 10, 11, 12, 13",
     "platform": "arduino:mbed_nano:nano33ble",
-    "preview": "",
+    "preview": "nano33iot.png",
     "source": "nano_every.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "nRF52840 ARM Cortex-M4 at 64MHz",
+      "RAM": "256 KB",
+      "Flash": "1 MB",
+      "Digital Pins": "14",
+      "Analog Pins": "8",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "Nano 33 IoT": {
     "core": "arduino:samd",
@@ -621,9 +1051,19 @@
     "default_dout": "7, 8, 10, 11, 12, 13",
     "define": "BOARD_WIFININA",
     "platform": "arduino:samd:nano_33_iot",
-    "preview": "",
+    "preview": "nano33iot.png",
     "source": "nano_every.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "SAMD21 ARM Cortex-M0+ at 48MHz",
+      "RAM": "32 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "14",
+      "Analog Pins": "8",
+      "PWM Pins": "12",
+      "WiFi": "Yes",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Nano Every": {
     "compiler": "arduino-cli",
@@ -633,9 +1073,19 @@
     "default_din": "2, 3, 4, 5, 6",
     "default_dout": "7, 8, 10, 11, 12, 13",
     "platform": "arduino:megaavr:nona4809",
-    "preview": "",
+    "preview": "generic.png",
     "source": "nano_every.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ATmega4809 at 20MHz",
+      "RAM": "6 KB",
+      "Flash": "48 KB",
+      "Digital Pins": "14",
+      "Analog Pins": "8",
+      "PWM Pins": "12",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Nano RP2040 Connect": {
     "compiler": "arduino-cli",
@@ -646,9 +1096,19 @@
     "default_dout": "8, 9, 10, 11, 12, 13",
     "define": "BOARD_WIFININA",
     "platform": "arduino:mbed_nano:nanorp2040connect",
-    "preview": "",
+    "preview": "generic.png",
     "source": "rp2040.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "RP2040 ARM Cortex-M0+ at 133MHz",
+      "RAM": "264 KB",
+      "Flash": "16 MB",
+      "Digital Pins": "26",
+      "Analog Pins": "3",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "P1AM-100": {
     "compiler": "arduino-cli",
@@ -658,9 +1118,19 @@
     "default_din": "31, 0, 1, 2, 3, 4",
     "default_dout": "32, 6, 7, 11, 12, 13, 14",
     "platform": "arduino:samd:mkrzero",
-    "preview": "",
+    "preview": "p1am100.png",
     "source": "p1am.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "SAMD21 ARM Cortex-M0+ at 48MHz",
+      "RAM": "32 KB",
+      "Flash": "256 KB",
+      "Digital Pins": "14+ (expansion modules)",
+      "Analog Pins": "6+ (expansion modules)",
+      "PWM Pins": "12+ (expansion modules)",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "Yes with Ethernet module"
+    }
   },
   "P1AM-200": {
     "board_manager_url": "https://raw.githubusercontent.com/facts-engineering/facts-engineering.github.io/master/package_productivity-P1AM-boardmanagermodule_index.json",
@@ -672,9 +1142,19 @@
     "default_dout": "32, 6, 7, 11, 12, 13, 14",
     "extra_libraries": [],
     "platform": "FACTS:samd:P1AM-200",
-    "preview": "",
+    "preview": "p1am200.png",
     "source": "p1am.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "SAMD51P20 ARM Cortex-M4F at 120MHz",
+      "RAM": "256 KB",
+      "Flash": "2 MB",
+      "Digital Pins": "14+ (expansion modules)",
+      "Analog Pins": "6+ (expansion modules)",
+      "PWM Pins": "12+ (expansion modules)",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "Yes with Ethernet module"
+    }
   },
   "Portenta Machine Control H7": {
     "compiler": "arduino-cli",
@@ -685,24 +1165,19 @@
     "default_dout": "0, 1, 2, 3, 4, 5, 6, 7",
     "define": "BOARD_PORTENTA",
     "platform": "arduino:mbed_portenta:envie_m7",
-    "preview": "",
+    "preview": "generic.png",
     "source": "machine_control.cpp",
-    "specs": []
-  },
-  "Project Jaguar": {
-    "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
-    "compiler": "arduino-cli",
-    "core": "rp2040:rp2040",
-    "default_ain": "-1",
-    "default_aout": "-1",
-    "default_din": "-1",
-    "default_dout": "-1",
-    "define": "BOARD_JAGUAR",
-    "extra_libraries": [],
-    "platform": "rp2040:rp2040:jaguar",
-    "preview": "",
-    "source": "jaguar.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32H747 ARM Cortex-M7 at 480MHz",
+      "RAM": "8 MB",
+      "Flash": "16 MB",
+      "Digital Pins": "8",
+      "Analog Pins": "3",
+      "PWM Pins": "8",
+      "WiFi": "Yes",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "Raspberry Pico": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
@@ -714,9 +1189,19 @@
     "default_dout": "14, 15, 16, 17, 18, 19, 20, 21",
     "extra_libraries": [],
     "platform": "rp2040:rp2040:rpipico",
-    "preview": "",
+    "preview": "generic.png",
     "source": "rp2040pico.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "RP2040 ARM Cortex-M0+ at 133MHz",
+      "RAM": "264 KB",
+      "Flash": "16 MB",
+      "Digital Pins": "26",
+      "Analog Pins": "3",
+      "PWM Pins": "16",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Raspberry Pico 2": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
@@ -728,9 +1213,19 @@
     "default_dout": "14, 15, 16, 17, 18, 19, 20, 21",
     "extra_libraries": [],
     "platform": "rp2040:rp2040:rpipico2",
-    "preview": "",
+    "preview": "generic.png",
     "source": "rp2040pico.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "RP2350 ARM Cortex-M33 at 150MHz",
+      "RAM": "520 KB",
+      "Flash": "16 MB",
+      "Digital Pins": "26",
+      "Analog Pins": "3",
+      "PWM Pins": "16",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Raspberry Pico 2 (RISCV)": {
     "arch": "riscv",
@@ -743,9 +1238,19 @@
     "default_dout": "14, 15, 16, 17, 18, 19, 20, 21",
     "extra_libraries": [],
     "platform": "rp2040:rp2040:rpipico2:arch=riscv",
-    "preview": "",
+    "preview": "generic.png",
     "source": "rp2040pico.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "RP2350 RISCV at 150MHz",
+      "RAM": "520 KB",
+      "Flash": "16 MB",
+      "Digital Pins": "26",
+      "Analog Pins": "3",
+      "PWM Pins": "16",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "Raspberry Pico W": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
@@ -758,9 +1263,19 @@
     "define": "BOARD_PICOW",
     "extra_libraries": [],
     "platform": "rp2040:rp2040:rpipicow",
-    "preview": "",
+    "preview": "generic.png",
     "source": "rp2040pico.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "RP2040 ARM Cortex-M0+ at 133MHz",
+      "RAM": "264 KB",
+      "Flash": "16 MB",
+      "Digital Pins": "26",
+      "Analog Pins": "3",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   },
   "SEQUENT-ESP32-PI": {
     "board_manager_url": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
@@ -775,9 +1290,19 @@
     "define": "BOARD_ESP32",
     "extra_libraries": [],
     "platform": "esp32:esp32:esp32doit-devkit-v1",
-    "preview": "",
+    "preview": "generic.png",
     "source": "sequent_esp32.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "ESP32-D0WDQ6",
+      "RAM": "520 KB",
+      "Flash": "4 MB",
+      "Digital Pins": "34",
+      "Analog Pins": "18",
+      "PWM Pins": "16",
+      "WiFi": "Yes",
+      "Bluetooth": "Yes",
+      "Ethernet": "No"
+    }
   },
   "STM32-F446ZET (NUCLEO)": {
     "board_manager_url": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
@@ -790,8 +1315,18 @@
     "define": "BOARD_STM32_F446ZET_NUCLEO",
     "extra_libraries": [],
     "platform": "STMicroelectronics:stm32:Nucleo_144:pnum=NUCLEO_F446ZE",
-    "preview": "",
+    "preview": "generic.png",
     "source": "stm32_f446zet_nucleo.cpp",
-    "specs": []
+    "specs": {
+      "CPU": "STM32F446ZET6 ARM Cortex-M4 at 180MHz",
+      "RAM": "128 KB",
+      "Flash": "512 KB",
+      "Digital Pins": "16",
+      "Analog Pins": "6",
+      "PWM Pins": "16",
+      "WiFi": "No",
+      "Bluetooth": "No",
+      "Ethernet": "No"
+    }
   }
 }
