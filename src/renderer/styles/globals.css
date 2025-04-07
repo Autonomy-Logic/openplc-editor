@@ -5,11 +5,8 @@
 ::-webkit-scrollbar {
   display: flex;
   height: 0.25rem;
-  width: 0.5rem;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0.5rem;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0.5rem;
+  width: 0.25rem;
+  border-radius: 0.5rem;
   background-color: rgb(221 226 232 / var(--tw-bg-opacity));
   transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
@@ -18,10 +15,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0.5rem;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0.5rem;
+  border-radius: 0.5rem;
   background-color: var(--primary-medium);
   transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
