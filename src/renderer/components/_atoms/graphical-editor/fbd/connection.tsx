@@ -69,7 +69,7 @@ const ConnectionElement = (block: ConnectionProps) => {
   }, [])
 
   /**
-   * Update inputError state when the table of variables is updated
+   * Update inputError state when the variable is updated
    */
   useEffect(() => {
     const { rung, node: connectionNode } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
@@ -79,7 +79,7 @@ const ConnectionElement = (block: ConnectionProps) => {
 
     const connectionBlock = rung.nodes.find(
       (node) =>
-        (node.data as BasicNodeData).variable.name == (connectionNode.data as BasicNodeData).variable.name &&
+        (node.data as BasicNodeData).variable.name === (connectionNode.data as BasicNodeData).variable.name &&
         (type === 'connector' ? node.type === 'continuation' : node.type === 'connector'),
     )
 
@@ -87,6 +87,10 @@ const ConnectionElement = (block: ConnectionProps) => {
       setInputError(true)
     } else {
       setInputError(false)
+    }
+
+    if ((connectionNode.data as BasicNodeData).variable.name !== connectionValue) {
+      setConnectionValue((connectionNode.data as BasicNodeData).variable.name)
     }
   }, [pous])
 
@@ -158,8 +162,8 @@ const ConnectionElement = (block: ConnectionProps) => {
             width: DEFAULT_CONNECTION_WIDTH,
           }}
           className={cn('absolute flex h-full items-center justify-center p-0.5', {
-            'right-0': data.variant === 'connector',
-            'left-0': data.variant === 'continuation',
+            'right-1': data.variant === 'connector',
+            'left-1': data.variant === 'continuation',
           })}
           onMouseEnter={onMouseEnter}
           onMouseLeave={onMouseLeave}

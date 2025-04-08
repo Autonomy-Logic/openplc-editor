@@ -28,8 +28,9 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
       project: {
         data: { pous },
       },
+      projectActions: { createVariable },
       fbdFlows,
-      // projectActions: { createVariable },
+      fbdFlowActions: { updateNode },
     } = useOpenPLCStore()
 
     const block = unknownBlock as Node<BasicNodeData>
@@ -118,16 +119,89 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
           : ([] as PLCVariable[])
         : ([] as PLCVariable[])
 
+    const submitVariableToBlock = (variable: PLCVariable) => {
+      const { rung, node: variableNode } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+        nodeId: block.id,
+      })
+      if (!rung || !variableNode) return
+
+      updateNode({
+        editorName: editor.meta.name,
+        nodeId: variableNode.id,
+        node: {
+          ...variableNode,
+          data: {
+            ...variableNode.data,
+            variable: variable,
+          },
+        },
+      })
+    }
+
+    const submitAddVariable = ({ variableName }: { variableName: string }) => {
+      const { rung, node } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+        nodeId: block.id,
+      })
+      if (!rung || !node) return
+
+      const variableTypeRestriction = {
+        definition: variableRestrictions.definition || 'base-type',
+        value: variableRestrictions.values
+          ? Array.isArray(variableRestrictions.values)
+            ? variableRestrictions.values[0]
+            : variableRestrictions.values
+          : 'dint',
+      }
+      if (!variableTypeRestriction.definition || !variableTypeRestriction.value) return
+
+      const res = createVariable({
+        data: {
+          id: crypto.randomUUID(),
+          name: variableName,
+          // @ts-expect-error - type is dynamic
+          type: {
+            definition: variableTypeRestriction.definition as 'base-type' | 'derived' | 'array' | 'user-data-type',
+            value: variableTypeRestriction.value,
+          },
+          class: 'local',
+          location: '',
+          documentation: '',
+          debug: false,
+        },
+        scope: 'local',
+        associatedPou: editor.meta.name,
+      })
+      if (!res.ok) return
+
+      const variable = res.data as PLCVariable | undefined
+
+      updateNode({
+        editorName: editor.meta.name,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: {
+            ...node.data,
+            variable: variable ?? { id: '', name: '' },
+          },
+        },
+      })
+    }
+
     const submit = ({ variable }: { variable: { id: string; name: string } }) => {
       if (variable.id === 'add') {
+        submitAddVariable({ variableName: valueToSearch })
         return
       }
 
-      // const selectedVariable =
-      //   filteredVariables.find((v) => v.id === variable.id) ?? filteredVariables.find((v) => v.name === variable.name)
-      // if (!selectedVariable) {
-      //   return
-      // }
+      const selectedVariable =
+        filteredVariables.find((v) => v.id === variable.id) ?? filteredVariables.find((v) => v.name === variable.name)
+      if (!selectedVariable) {
+        submitAddVariable({ variableName: valueToSearch })
+        return
+      }
+
+      submitVariableToBlock(selectedVariable)
     }
 
     return (
@@ -136,7 +210,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         className={cn('h-[200px] w-[200px] overflow-auto', isOpen ? 'block' : 'hidden')}
         isOpen={isOpen}
         setIsOpen={setIsOpen}
-        canCreateNewVariable={block.type === 'connector' || block.type === 'continuation'}
+        canCreateNewVariable={!(block.type === 'connector' || block.type === 'continuation')}
         keyPressed={keyPressed}
         searchValue={valueToSearch}
         variables={filteredVariables}

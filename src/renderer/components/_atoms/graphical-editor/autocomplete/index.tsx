@@ -53,13 +53,15 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
             name: variable.name,
           },
         })) || []),
-        {
-          type: 'add',
-          variable: {
-            id: 'add',
-            name: searchValue,
-          },
-        },
+        canCreateNewVariable
+          ? {
+              type: 'add',
+              variable: {
+                id: 'add',
+                name: searchValue,
+              },
+            }
+          : undefined,
       ].filter((variable) => variable !== undefined)
     }, [variables, searchValue])
 
@@ -187,7 +189,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
                     ))}
                   </div>
                 </div>
-                <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />
+                {canCreateNewVariable && <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />}
               </>
             )}
             {canCreateNewVariable && (

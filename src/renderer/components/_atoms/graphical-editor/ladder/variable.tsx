@@ -7,11 +7,11 @@ import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { getVariableByName, validateVariableType } from '../utils'
+import { VariablesBlockAutoComplete } from './autocomplete'
 import { BlockNodeData, BlockVariant } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
-import { VariablesBlockAutoComplete } from './variables-block-autocomplete'
 
 export type VariableNode = Node<
   BasicNodeData & {
