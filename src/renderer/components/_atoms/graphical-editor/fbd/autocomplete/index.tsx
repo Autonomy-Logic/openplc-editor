@@ -44,10 +44,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
       switch (block.type as keyof typeof customNodeTypes) {
         case 'input-variable':
         case 'output-variable': {
-          const connections =
-            block.type === 'input-variable'
-              ? edges.source?.filter((edge) => edge.target === block.id) ?? []
-              : edges.source?.filter((edge) => edge.source === block.id) ?? []
+          const connections = block.type === 'input-variable' ? edges.source : edges.target
           const restrictions: {
             values: string[]
             definition: string[]
