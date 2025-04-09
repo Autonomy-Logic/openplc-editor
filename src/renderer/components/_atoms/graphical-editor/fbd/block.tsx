@@ -606,8 +606,6 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
-  console.log('variant', variant)
-
   const { variant: variantLib, executionControl: executionControlAux } = getBlockVariantAndExecutionControl(
     { ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) },
     executionControl,
