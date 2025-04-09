@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { BlockVariant } from '../types/block'
 import { getVariableByName, validateVariableType } from '../utils'
+import { FBDBlockAutoComplete } from './autocomplete'
 import { BlockNode } from './block'
 import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
@@ -52,7 +53,7 @@ const VariableElement = (block: VariableProps) => {
   >(null)
 
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
-  const [_keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
+  const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   const [variableValue, setVariableValue] = useState('')
   const [inputError, setInputError] = useState<boolean>(false)
@@ -248,7 +249,7 @@ const VariableElement = (block: VariableProps) => {
       <div
         style={{ width: ELEMENT_SIZE, height: ELEMENT_HEIGHT }}
         className={cn(
-          'flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
+          'relative flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
           'hover:border-transparent hover:ring-2 hover:ring-brand',
           {
             'border-transparent ring-2 ring-brand': selected,
@@ -290,21 +291,18 @@ const VariableElement = (block: VariableProps) => {
             }}
             onKeyUp={() => setKeyPressedAtTextarea('')}
           />
-          {/* {openAutocomplete && (
-          <div className='relative flex justify-center'>
-            <div className='absolute -bottom-1'>
-              <VariablesBlockAutoComplete
-                block={block}
-                blockType={'variable'}
-                valueToSearch={variableValue}
-                isOpen={openAutocomplete}
-                setIsOpen={(value) => setOpenAutocomplete(value)}
-                keyPressed={keyPressedAtTextarea}
-              />
-            </div>
-          </div>
-        )} */}
         </div>
+        {openAutocomplete && (
+          <div className='absolute -bottom-1'>
+            <FBDBlockAutoComplete
+              block={block}
+              valueToSearch={variableValue}
+              isOpen={openAutocomplete}
+              setIsOpen={(value) => setOpenAutocomplete(value)}
+              keyPressed={keyPressedAtTextarea}
+            />
+          </div>
+        )}
       </div>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />

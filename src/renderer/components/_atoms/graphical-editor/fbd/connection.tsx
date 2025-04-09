@@ -199,22 +199,19 @@ const ConnectionElement = (block: ConnectionProps) => {
               }}
               onKeyUp={() => setKeyPressedAtTextarea('')}
             />
-
-            {openAutocomplete && (
-              <div className='relative flex justify-center'>
-                <div className='absolute -bottom-1'>
-                  <FBDBlockAutoComplete
-                    block={block}
-                    valueToSearch={connectionValue}
-                    isOpen={openAutocomplete}
-                    setIsOpen={(value) => setOpenAutocomplete(value)}
-                    keyPressed={keyPressedAtTextarea}
-                  />
-                </div>
-              </div>
-            )}
           </div>
         </div>
+        {openAutocomplete && (
+          <div className='absolute -bottom-1 left-1/2'>
+            <FBDBlockAutoComplete
+              block={block}
+              valueToSearch={connectionValue}
+              isOpen={openAutocomplete}
+              setIsOpen={(value) => setOpenAutocomplete(value)}
+              keyPressed={keyPressedAtTextarea}
+            />
+          </div>
+        )}
       </foreignObject>
     )
   }
