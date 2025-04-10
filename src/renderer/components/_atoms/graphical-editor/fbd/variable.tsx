@@ -285,6 +285,7 @@ const VariableElement = (block: VariableProps) => {
             }}
             ref={inputVariableRef}
             onChange={onChangeHandler}
+            onFocus={onChangeHandler}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
               setKeyPressedAtTextarea(e.key)
@@ -293,7 +294,7 @@ const VariableElement = (block: VariableProps) => {
           />
         </div>
         {openAutocomplete && (
-          <div className='absolute -bottom-1'>
+          <div className='absolute -bottom-2'>
             <FBDBlockAutoComplete
               block={block}
               valueToSearch={variableValue}

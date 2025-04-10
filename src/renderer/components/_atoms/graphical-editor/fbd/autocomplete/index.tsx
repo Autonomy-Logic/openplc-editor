@@ -75,7 +75,8 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
             )
           })
           return {
-            ...restrictions,
+            values: restrictions.values.length > 0 ? restrictions.values : undefined,
+            definition: restrictions.definition.length > 0 ? restrictions.definition : undefined,
             limitations: ['derived'],
           }
         }
@@ -114,6 +115,8 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
             })
             .filter((name) => name !== '') as PLCVariable[]) ?? ([] as PLCVariable[])
         : ([] as PLCVariable[])
+
+    console.log('filteredVariables', filteredVariables)
 
     const submitVariableToBlock = (variable: PLCVariable) => {
       const { rung, node: variableNode } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {

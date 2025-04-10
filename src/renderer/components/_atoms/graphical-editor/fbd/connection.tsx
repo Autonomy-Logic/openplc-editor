@@ -194,6 +194,7 @@ const ConnectionElement = (block: ConnectionProps) => {
               }}
               ref={inputConnectionRef}
               onChange={onChangeHandler}
+              onFocus={onChangeHandler}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
                 setKeyPressedAtTextarea(e.key)
