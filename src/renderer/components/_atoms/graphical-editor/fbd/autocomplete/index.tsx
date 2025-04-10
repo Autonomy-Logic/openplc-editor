@@ -1,3 +1,4 @@
+import { buildGenericNode } from '@root/renderer/components/_molecules/graphical-editor/fbd/fbd-utils/nodes'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { extractNumberAtEnd } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCVariable } from '@root/types/PLC'
@@ -9,7 +10,7 @@ import { ComponentPropsWithRef, forwardRef, useMemo } from 'react'
 import { GraphicalEditorAutocomplete } from '../../autocomplete'
 import { BlockVariant } from '../../types/block'
 import { getVariableRestrictionType } from '../../utils'
-import { customNodeTypes } from '..'
+import { CustomFbdNodeTypes, customNodeTypes } from '..'
 import { BasicNodeData } from '../utils'
 import { getFBDPouVariablesRungNodeAndEdges } from '../utils/utils'
 
@@ -30,10 +31,10 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
       },
       projectActions: { createVariable },
       fbdFlows,
-      fbdFlowActions: { updateNode },
+      fbdFlowActions: { updateNode, addNode },
     } = useOpenPLCStore()
 
-    const block = unknownBlock as Node<BasicNodeData>
+    const block = unknownBlock as Node<BasicNodeData> & { positionAbsoluteX?: number; positionAbsoluteY?: number }
     const { edges, pou, variables, rung } = useMemo(() => {
       return getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
         nodeId: block.id,
@@ -106,14 +107,12 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
             return aNumber - bNumber
           })
       : block.type === 'connector' || block.type === 'continuation'
-        ? rung
-          ? (rung.nodes
-              .filter((node) => (block.type === 'connector' ? node.type === 'continuation' : node.type === 'connector'))
-              .map((node) => {
-                return node.data.variable
-              })
-              .filter((name) => name !== '') as PLCVariable[])
-          : ([] as PLCVariable[])
+        ? (rung?.nodes
+            .filter((node) => (block.type === 'connector' ? node.type === 'continuation' : node.type === 'connector'))
+            .map((node) => {
+              return node.data.variable
+            })
+            .filter((name) => name !== '') as PLCVariable[]) ?? ([] as PLCVariable[])
         : ([] as PLCVariable[])
 
     const submitVariableToBlock = (variable: PLCVariable) => {
@@ -185,9 +184,32 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
       })
     }
 
+    const submitCreateANewBlock = (blockType: CustomFbdNodeTypes) => {
+      const newBlock = buildGenericNode({
+        id: crypto.randomUUID(),
+        position:
+          block.positionAbsoluteX && block.positionAbsoluteY
+            ? { x: block.positionAbsoluteX, y: block.positionAbsoluteY + (block.height ?? 0) + 16 }
+            : { x: 0, y: 0 },
+        nodeType: blockType,
+        connectionLabel: valueToSearch,
+      })
+      if (!newBlock) return
+
+      addNode({
+        editorName: editor.meta.name,
+        node: newBlock,
+      })
+    }
+
     const submit = ({ variable }: { variable: { id: string; name: string } }) => {
       if (variable.id === 'add') {
         submitAddVariable({ variableName: valueToSearch })
+        return
+      }
+
+      if (variable.id === 'newBlock') {
+        submitCreateANewBlock(variable.name as CustomFbdNodeTypes)
         return
       }
 
@@ -208,6 +230,15 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
         isOpen={isOpen}
         setIsOpen={setIsOpen}
         canCreateNewVariable={!(block.type === 'connector' || block.type === 'continuation')}
+        newBlock={{
+          canCreate: block.type === 'connector' || block.type === 'continuation',
+          options: {
+            label: `Add ${block.type === 'connector' ? 'continuation' : 'connector'}`,
+            block: {
+              name: block.type === 'connector' ? 'continuation' : 'connector',
+            },
+          },
+        }}
         keyPressed={keyPressed}
         searchValue={valueToSearch}
         variables={filteredVariables}

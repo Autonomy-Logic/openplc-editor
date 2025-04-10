@@ -18,6 +18,7 @@ export type ConnectionNode = Node<
 type ConnectionProps = NodeProps<ConnectionNode>
 type ConnectionBuilderProps = BuilderBasicProps & {
   variant: 'connector' | 'continuation'
+  label?: string
 }
 
 export const DEFAULT_CONNECTION_WIDTH = 88
@@ -252,7 +253,7 @@ const ConnectionElement = (block: ConnectionProps) => {
   )
 }
 
-const buildConnectionNode = ({ id, position, variant }: ConnectionBuilderProps): ConnectionNode => {
+const buildConnectionNode = ({ id, position, variant, label }: ConnectionBuilderProps): ConnectionNode => {
   const inputHandle =
     variant === 'connector'
       ? buildHandle({
@@ -297,7 +298,7 @@ const buildConnectionNode = ({ id, position, variant }: ConnectionBuilderProps):
       numericId: generateNumericUUID(),
       executionOrder: 0,
       variant,
-      variable: { id: '', name: '' },
+      variable: label ? { id: 'connection', name: label } : { id: '', name: '' },
       draggable: true,
       selectable: true,
       deletable: true,
