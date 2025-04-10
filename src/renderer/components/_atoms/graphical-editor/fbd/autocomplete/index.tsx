@@ -54,8 +54,13 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
             definition: [],
           }
           connections?.forEach((edge) => {
-            const connectedNode = rung?.nodes.find((node) => node.id === edge.target)
-            const variableType = (connectedNode?.data.variant as BlockVariant).variables.find(
+            const connectedNode = rung?.nodes.find(
+              (node) => node.id === (block.type === 'input-variable' ? edge.target : edge.source),
+            )
+            if (!connectedNode) return
+
+
+            const variableType = (connectedNode.data.variant as BlockVariant).variables.find(
               (v) => v.name === edge.targetHandle,
             )?.type.value
             if (!variableType) return
