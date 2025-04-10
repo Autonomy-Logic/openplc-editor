@@ -163,105 +163,107 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
       <Popover.Root open={isOpen ? isOpen : false}>
         <Popover.Trigger />
         <Popover.Portal>
-          <Popover.Content
-            className='box flex w-36 flex-col items-center rounded-lg bg-white text-xs text-neutral-950 outline-none dark:bg-neutral-950 dark:text-white'
-            side='bottom'
-            sideOffset={5}
-            ref={popoverRef}
-            onOpenAutoFocus={(e) => e.preventDefault()}
-            onCloseAutoFocus={closeModal}
-            onEscapeKeyDown={closeModal}
-            onPointerDownOutside={closeModal}
-            onFocusOutside={closeModal}
-            onInteractOutside={closeModal}
-            onFocus={(e) => {
-              if (focusEvent) focusEvent(e)
-              setAutocompleteFocus(true)
-            }}
-            onBlur={() => setAutocompleteFocus(false)}
-            onKeyDown={(e) => setKeyDown(e.key)}
-          >
-            {variables && variables.length > 0 && (
-              <>
-                <div className='h-fit w-full p-1'>
-                  <div className='flex max-h-32 w-full flex-col overflow-y-auto' ref={variablesDivRef}>
-                    {variables.map((variable) => (
-                      <div
-                        key={variable.name}
-                        className={cn(
-                          'flex h-fit w-full cursor-pointer select-none items-center justify-center p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
-                          {
-                            'bg-neutral-400 dark:bg-neutral-800': selectedVariable.variable.name === variable.name,
-                          },
-                        )}
-                        onClick={() => {
-                          submitAutocompletion({
-                            variable: {
-                              id: variable.id ?? '',
-                              name: variable.name,
+          {selectableValues.length > 0 && (
+            <Popover.Content
+              className='box flex w-36 flex-col items-center rounded-lg bg-white text-xs text-neutral-950 outline-none dark:bg-neutral-950 dark:text-white'
+              side='bottom'
+              sideOffset={5}
+              ref={popoverRef}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              onCloseAutoFocus={closeModal}
+              onEscapeKeyDown={closeModal}
+              onPointerDownOutside={closeModal}
+              onFocusOutside={closeModal}
+              onInteractOutside={closeModal}
+              onFocus={(e) => {
+                if (focusEvent) focusEvent(e)
+                setAutocompleteFocus(true)
+              }}
+              onBlur={() => setAutocompleteFocus(false)}
+              onKeyDown={(e) => setKeyDown(e.key)}
+            >
+              {variables && variables.length > 0 && (
+                <>
+                  <div className='h-fit w-full p-1'>
+                    <div className='flex max-h-32 w-full flex-col overflow-y-auto' ref={variablesDivRef}>
+                      {variables.map((variable) => (
+                        <div
+                          key={variable.name}
+                          className={cn(
+                            'flex h-fit w-full cursor-pointer select-none items-center justify-center p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                            {
+                              'bg-neutral-400 dark:bg-neutral-800': selectedVariable.variable.name === variable.name,
                             },
-                          })
-                        }}
-                      >
-                        {variable.name}
-                      </div>
-                    ))}
+                          )}
+                          onClick={() => {
+                            submitAutocompletion({
+                              variable: {
+                                id: variable.id ?? '',
+                                name: variable.name,
+                              },
+                            })
+                          }}
+                        >
+                          {variable.name}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                {(canCreateNewVariable || newBlock.canCreate) && (
-                  <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />
-                )}
-              </>
-            )}
-            {canCreateNewVariable && (
-              <>
+                  {(canCreateNewVariable || newBlock.canCreate) && (
+                    <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />
+                  )}
+                </>
+              )}
+              {canCreateNewVariable && (
+                <>
+                  <div
+                    className={cn(
+                      'flex h-fit w-full cursor-pointer flex-row items-center justify-center border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                      {
+                        'bg-neutral-400 dark:bg-neutral-800': newBlock.canCreate
+                          ? selectedVariable.positionInArray === selectableValues.length - 2
+                          : selectedVariable.positionInArray === selectableValues.length - 1,
+                        'rounded-b-lg': !newBlock.canCreate && variables && variables.length > 0,
+                        'rounded-lg': !variables || variables.length === 0,
+                      },
+                    )}
+                    onClick={() =>
+                      submitAutocompletion({
+                        variable: newBlock.canCreate
+                          ? selectableValues[selectableValues.length - 2].variable
+                          : selectableValues[selectableValues.length - 1].variable,
+                      })
+                    }
+                  >
+                    <PlusIcon className='h-3 w-3 stroke-brand' />
+                    <div className='ml-2'>Add variable</div>
+                  </div>
+                  {newBlock.canCreate && <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />}
+                </>
+              )}
+              {newBlock.canCreate && (
                 <div
                   className={cn(
-                    'flex h-fit w-full cursor-pointer flex-row items-center justify-center border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                    'flex h-fit w-full cursor-pointer flex-row items-center justify-center  border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
                     {
-                      'bg-neutral-400 dark:bg-neutral-800': newBlock.canCreate
-                        ? selectedVariable.positionInArray === selectableValues.length - 2
-                        : selectedVariable.positionInArray === selectableValues.length - 1,
-                      'rounded-b-lg': !newBlock.canCreate && variables && variables.length > 0,
+                      'bg-neutral-400 dark:bg-neutral-800':
+                        selectedVariable.positionInArray === selectableValues.length - 1,
+                      'rounded-b-lg': variables && variables.length > 0,
                       'rounded-lg': !variables || variables.length === 0,
                     },
                   )}
-                  onClick={() =>
-                    submitAutocompletion({
-                      variable: newBlock.canCreate
-                        ? selectableValues[selectableValues.length - 2].variable
-                        : selectableValues[selectableValues.length - 1].variable,
-                    })
-                  }
+                  onClick={() => {
+                    if (newBlock.options) {
+                      submitAutocompletion({ variable: selectableValues[selectableValues.length - 1].variable })
+                    }
+                  }}
                 >
                   <PlusIcon className='h-3 w-3 stroke-brand' />
-                  <div className='ml-2'>Add variable</div>
+                  <div className='ml-2'>{newBlock.options?.label}</div>
                 </div>
-                {newBlock.canCreate && <div className='h-px w-full bg-neutral-300 dark:bg-neutral-700' />}
-              </>
-            )}
-            {newBlock.canCreate && (
-              <div
-                className={cn(
-                  'flex h-fit w-full cursor-pointer flex-row items-center justify-center  border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
-                  {
-                    'bg-neutral-400 dark:bg-neutral-800':
-                      selectedVariable.positionInArray === selectableValues.length - 1,
-                    'rounded-b-lg': variables && variables.length > 0,
-                    'rounded-lg': !variables || variables.length === 0,
-                  },
-                )}
-                onClick={() => {
-                  if (newBlock.options) {
-                    submitAutocompletion({ variable: selectableValues[selectableValues.length - 1].variable })
-                  }
-                }}
-              >
-                <PlusIcon className='h-3 w-3 stroke-brand' />
-                <div className='ml-2'>{newBlock.options?.label}</div>
-              </div>
-            )}
-          </Popover.Content>
+              )}
+            </Popover.Content>
+          )}
         </Popover.Portal>
       </Popover.Root>
     )
