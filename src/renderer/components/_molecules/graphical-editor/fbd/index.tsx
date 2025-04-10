@@ -70,6 +70,11 @@ export const FBDBody = ({ rung }: FBDProps) => {
     if (library) {
       const [blockLibraryType, blockLibrary, pouName] = library.split('/')
 
+      if (!blockLibraryType || !blockLibrary || !pouName) {
+        toast({ title: 'Invalid library string', description: library, variant: 'fail' })
+        return
+      }
+
       if (blockLibraryType === 'system')
         pouLibrary = libraries.system
           .find((Library) => Library.name === blockLibrary)
@@ -84,6 +89,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
           class: variable.class,
           type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
         }))
+
         if (pou.type === 'function') {
           const variable = getVariableRestrictionType(pou.data.returnType)
           variables.push({

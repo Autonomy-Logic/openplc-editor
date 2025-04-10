@@ -272,7 +272,7 @@ const VariableElement = (block: VariableProps) => {
             })}
             highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {})}
             scrollableIndicatorClassName={cn({
-              '-right-2': data.variant === 'output-variable' || 'inout-variable',
+              '-right-2': data.variant === 'output-variable' || data.variant === 'inout-variable',
               '-left-2': data.variant === 'input-variable',
             })}
             placeholder={connectionType.string}

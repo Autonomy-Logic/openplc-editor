@@ -30,7 +30,7 @@ type ZodLadderFlowState = z.infer<typeof zodLadderFlowStateSchema>
 const zodLadderNodeTypesSchema = z.enum(['block', 'contact', 'coil', 'parallel', 'powerRail', 'variable'])
 type ZodLadderNodeType = z.infer<typeof zodLadderNodeTypesSchema>
 
-/**import { edgeSchema, nodeSchema } from '../react-flow'
+/**
  * Types used at the slice
  */
 

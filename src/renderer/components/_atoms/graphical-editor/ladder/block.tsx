@@ -433,7 +433,10 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const { variables, node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
     })
-    if (!node || !rung) return
+    if (!node || !rung) {
+      console.error('Node or rung not found for ID:', id)
+      return
+    }
 
     const variable = variables.selected
     if (!variable) {
@@ -477,7 +480,14 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const { rung, node, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
       nodeId: id,
     })
-    if (!rung || !node) return
+    if (!rung || !node) {
+      toast({
+        title: 'Error',
+        description: 'Could not find the related rung or node',
+        variant: 'fail',
+      })
+      return
+    }
 
     /**
      * Check if the variable exists in the table of variables
