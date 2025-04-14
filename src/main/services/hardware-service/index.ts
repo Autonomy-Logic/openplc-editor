@@ -6,34 +6,52 @@ import { join } from 'path'
 import { promisify } from 'util'
 
 type BoardInfo = {
+  board_manager_url?: string
+  compiler: string
   core: string
+  c_flags?: string[]
+  cxx_flags?: string[]
   default_ain: string
   default_aout: string
   default_din: string
   default_dout: string
-  updatedAt: number
-  platform: string
-  source: string
-  version: string
-  board_manager_url?: string
-  extra_libraries?: string[]
   define?: string | string[]
+  extra_libraries?: string[]
+  platform: string
+  preview: string
+  source: string
+  specs: {
+    CPU: string
+    RAM: string
+    Flash: string
+    DigitalPins: string
+    AnalogPins: string
+    PWMPins: string
+    WiFi: string
+    Bluetooth: string
+    Ethernet: string
+  }
   user_ain?: string
   user_aout?: string
   user_din?: string
   user_dout?: string
-  c_flags?: string[]
-  cxx_flags?: string[]
-  arch?: string
 }
 
 type HalsFile = {
   [boardName: string]: BoardInfo
 }
 class HardwareService {
-  constructor() {}
+  resourcesDirectory: string
+  constructor() {
+    this.resourcesDirectory = this.#constructResourcesDirectory()
+  }
 
-  async getAvailableSerialPorts(): Promise<unknown> {
+  #constructResourcesDirectory(): string {
+    const isDevelopment = process.env.NODE_ENV === 'development'
+    return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '')
+  }
+
+  async getAvailableSerialPorts(): Promise<string[]> {
     const serialCommunication = promisify(exec)
     const isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -66,27 +84,39 @@ class HardwareService {
     if (stderr) {
       throw new Error(stderr)
     }
-    return JSON.parse(stdout)
+    const primitiveResponse = JSON.parse(stdout) as { port: string }[]
+
+    const availablePorts = primitiveResponse.map(({ port }) => port)
+
+    return availablePorts
   }
 
   async getAvailableBoards() {
-    const halsFilePath = join(app.getPath('userData'), 'User', 'Runtime', 'hals.json')
+    const arduinoCorePath = join(app.getPath('userData'), 'User', 'runtime', 'arduino-core-control.json')
+    const halsPath = join(this.resourcesDirectory, 'runtime', 'hals.json')
 
     const readJSONFile = async (path: string) => {
       const file = await readFile(path, 'utf8')
-      return JSON.parse(file) as HalsFile
+      return JSON.parse(file) as unknown
     }
 
-    const halsContent = await readJSONFile(halsFilePath)
+    const halsContent = (await readJSONFile(halsPath)) as HalsFile
+    const arduinoCoreContent = (await readJSONFile(arduinoCorePath)) as string[]
 
-    let availableBoardsAndVersion: { board: string; version: string }[] = []
+    let availableBoards: Map<string, Pick<BoardInfo, 'core' | 'preview' | 'specs'> & { isCoreInstalled: boolean }> =
+      new Map()
 
     for (const board in halsContent) {
-      availableBoardsAndVersion = produce(availableBoardsAndVersion, (draft) => {
-        draft.push({ board, version: halsContent[board]['version'] })
+      availableBoards = produce(availableBoards, (draft) => {
+        draft.set(board, {
+          core: halsContent[board].core,
+          preview: halsContent[board].preview,
+          specs: halsContent[board].specs,
+          isCoreInstalled: arduinoCoreContent.includes(halsContent[board].core),
+        })
       })
     }
-    return availableBoardsAndVersion
+    return availableBoards
   }
 
   async getDeviceConfigurationOptions() {

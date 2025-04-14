@@ -1,7 +1,6 @@
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
 import * as Tabs from '@radix-ui/react-tabs'
 import { cn } from '@root/utils'
-import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
@@ -96,7 +95,7 @@ const WorkspaceScreen = () => {
   useEffect(() => {
     const getAvailableDeviceOptions = async () => {
       const { ports, boards } = await window.bridge.getDeviceConfigurationOptions()
-      setAvailableOptions({ availableBoards: boards, availableCommunicationPorts: ports.map(({ port }) => port) })
+      setAvailableOptions({ availableBoards: boards, availableCommunicationPorts: ports })
     }
     void getAvailableDeviceOptions()
   }, [])

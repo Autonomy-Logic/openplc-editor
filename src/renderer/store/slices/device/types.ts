@@ -50,8 +50,27 @@ const devicePinMappingSchema = z.array(devicePinSchema)
 
 type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
 
+const availableBoardInfo = z.object({
+  core: z.string(),
+  preview: z.string(),
+  specs: z.object({
+    CPU: z.string(),
+    RAM: z.string(),
+    Flash: z.string(),
+    DigitalPins: z.string(),
+    AnalogPins: z.string(),
+    PWMPins: z.string(),
+    WiFi: z.string(),
+    Bluetooth: z.string(),
+    Ethernet: z.string(),
+  }),
+  isCoreInstalled: z.boolean(),
+})
+
+type AvailableBoardInfo = z.infer<typeof availableBoardInfo>
+
 const deviceAvailableOptionsSchema = z.object({
-  availableBoards: z.array(z.object({ board: z.string(), version: z.string() })),
+  availableBoards: z.map(z.string(), availableBoardInfo),
   availableCommunicationPorts: z.array(z.string()),
   availableRTUInterfaces: z.array(z.string()),
   availableRTUBaudrates: z.array(z.string()),
@@ -75,7 +94,7 @@ const deviceActionSchema = z.object({
     .function()
     .args(
       z.object({
-        availableBoards: z.array(z.object({ board: z.string(), version: z.string() })).optional(),
+        availableBoards: z.map(z.string(), availableBoardInfo).optional(),
         availableCommunicationPorts: z.array(z.string()).optional(),
       }),
     )
@@ -96,6 +115,7 @@ type DeviceSlice = DeviceState & {
 }
 
 export type {
+  AvailableBoardInfo,
   DeviceActions,
   DeviceAvailableOptions,
   DeviceConfiguration,

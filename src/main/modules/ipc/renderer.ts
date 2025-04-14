@@ -386,17 +386,31 @@ const rendererProcessBridge = {
    * Requests the device configuration options from the main process.
    */
   getDeviceConfigurationOptions: (): Promise<{
-    ports: { port: string }[]
-    boards: {
-      board: string
-      version: string
-    }[]
+    ports: string[]
+    boards: Map<
+      string,
+      {
+        core: string
+        preview: string
+        specs: {
+          CPU: string
+          RAM: string
+          Flash: string
+          DigitalPins: string
+          AnalogPins: string
+          PWMPins: string
+          WiFi: string
+          Bluetooth: string
+          Ethernet: string
+        }
+        isCoreInstalled: boolean
+      }
+    >
   }> => ipcRenderer.invoke('hardware:device-configuration-options'),
   /**
    * Requests the refresh of the communication ports from the main process.
    */
-  refreshCommunicationPorts: (): Promise<{ port: string }[]> =>
-    ipcRenderer.invoke('hardware:refresh-communication-ports'),
+  refreshCommunicationPorts: (): Promise<string[]> => ipcRenderer.invoke('hardware:refresh-communication-ports'),
   /**
    * Requests the refresh of the available boards from the main process.
    */

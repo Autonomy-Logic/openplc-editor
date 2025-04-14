@@ -5,7 +5,7 @@ import type { DeviceSlice } from './types'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
   deviceAvailableOptions: {
-    availableBoards: [],
+    availableBoards: new Map(),
     availableCommunicationPorts: [],
     availableRTUInterfaces: [],
     availableRTUBaudrates: [],

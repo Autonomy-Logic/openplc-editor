@@ -10,8 +10,9 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
 import { autoUpdater } from 'electron-updater'
+import { enableMapSet } from 'immer'
 import { platform, release } from 'os'
-import path, { resolve } from 'path'
+import { join, resolve } from 'path'
 
 // TODO: Refactor this type declaration
 import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
@@ -21,6 +22,9 @@ import { store } from './modules/store'
 import { HardwareService, ProjectService, UserService } from './services'
 import { CompilerService } from './services/compiler-service'
 import { resolveHtmlPath } from './utils'
+
+// Enable MapSet plugin for Immer
+enableMapSet()
 
 class AppUpdater {
   constructor() {
@@ -100,14 +104,12 @@ const createMainWindow = async () => {
     await installExtensions()
   }
   // Create a string with the resources folder path based on app environment;
-  const RESOURCES_PATH = app.isPackaged
-    ? path.join(process.resourcesPath, 'assets')
-    : path.join(__dirname, '../../assets')
+  const RESOURCES_PATH = app.isPackaged ? join(process.resourcesPath, 'assets') : join(__dirname, '../../assets')
 
   /**
    * Create a function that return the asset that the name was given;
    */
-  const getAssetPath = (...paths: string[]): string => path.join(RESOURCES_PATH, ...paths)
+  const getAssetPath = (...paths: string[]): string => join(RESOURCES_PATH, ...paths)
 
   /**
    * Get the window bounds from the store.
@@ -158,9 +160,7 @@ const createMainWindow = async () => {
     ...titlebarStyles,
     webPreferences: {
       sandbox: true,
-      preload: app.isPackaged
-        ? path.join(__dirname, 'preload.js')
-        : path.join(__dirname, '../../configs/dll/preload.js'),
+      preload: app.isPackaged ? join(__dirname, 'preload.js') : join(__dirname, '../../configs/dll/preload.js'),
     },
   })
 

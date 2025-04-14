@@ -16,7 +16,7 @@
       "Digital Pins": "54",
       "Analog Pins": "12",
       "PWM Pins": "12",
-      "WiFi":"No",
+      "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
     }
@@ -38,7 +38,7 @@
       "Digital Pins": "54",
       "Analog Pins": "12",
       "PWM Pins": "12",
-      "WiFi":"No",
+      "WiFi": "No",
       "Bluetooth": "No",
       "Ethernet": "No"
     }
@@ -1109,6 +1109,9 @@
       "Bluetooth": "Yes",
       "Ethernet": "No"
     }
+  },
+  "OpenPLC Runtime": {
+    "compiler": "openplc"
   },
   "P1AM-100": {
     "compiler": "arduino-cli",

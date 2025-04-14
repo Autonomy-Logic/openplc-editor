@@ -14,16 +14,14 @@ const BoardConfiguration = () => {
     deviceActions: { setDeviceBoard, setCommunicationPort, setAvailableOptions },
   } = useOpenPLCStore()
 
-  const formatBoardsForLabel = (boards: { board: string; version: string }[]) => {
-    return boards.map(({ board, version }) => `${board}${version !== '0' ? ` [ ${version} ]` : ''}`)
-  }
+  console.log('Boards', availableBoards)
 
   const refreshCommunicationPorts = async (e: React.MouseEvent) => {
     e.preventDefault()
     try {
       setIsPressed(true)
       const ports = await window.bridge.refreshCommunicationPorts()
-      setAvailableOptions({ availableCommunicationPorts: ports.map(({ port }) => port) })
+      setAvailableOptions({ availableCommunicationPorts: ports })
     } catch (error) {
       // TODO: Add a toast notification for error and for success
       console.error(error)
@@ -41,7 +39,7 @@ const BoardConfiguration = () => {
             label='Device'
             placeholder={deviceBoard}
             setSelectedOption={setDeviceBoard}
-            options={formatBoardsForLabel(availableBoards)}
+            options={Array.from(availableBoards.keys())}
             ariaLabel='Device selection'
           />
         </div>
