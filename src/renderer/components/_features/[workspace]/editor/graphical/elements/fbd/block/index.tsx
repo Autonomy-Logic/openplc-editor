@@ -310,9 +310,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const handleInputsDecrement = () => {
     const newInputsNumber = Math.max(
       Number(formState.inputs) - 1,
-      (selectedFile &&
-        selectedFile.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length) ||
-        2,
+      (selectedFile?.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length ?? 2),
     )
 
     setFormState((prevState) => ({
