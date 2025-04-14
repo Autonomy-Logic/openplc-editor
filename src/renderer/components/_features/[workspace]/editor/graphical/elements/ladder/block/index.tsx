@@ -313,20 +313,25 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   }
 
   const handleInputsDecrement = () => {
+    const newInputsNumber = Math.max(
+      Number(formState.inputs) - 1,
+      (selectedFile &&
+        selectedFile.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length) ||
+        2,
+    )
+
     setFormState((prevState) => ({
       ...prevState,
-      inputs: String(
-        Math.max(
-          Number(prevState.inputs) - 1,
-          (selectedFile && selectedFile.variables.filter((variable) => variable.class === 'input').length) || 2,
-        ),
-      ),
+      inputs: String(newInputsNumber),
     }))
 
     const blockVariables = [...blockVariant.variables]
-      .filter((variable) => variable.class === 'input')
-      .slice(0, Number(formState.inputs))
-    const outputVariable = blockVariant.variables.filter((variable) => variable.class === 'output')
+      .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
+      .slice(0, newInputsNumber)
+
+    const outputVariable = [...blockVariant.variables].filter(
+      (variable) => variable.class === 'output' || variable.class === 'inOut',
+    )
     outputVariable.forEach((variable) => {
       blockVariables.push(variable)
     })
