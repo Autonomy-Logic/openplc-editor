@@ -61,6 +61,17 @@ export const FBDBody = ({ rung }: FBDProps) => {
     console.log(rung)
   }, [rung])
 
+  /**
+   *  Update the local rung state when the rung state changes
+   */
+  useEffect(() => {
+    // Update the selected nodes in the rung state
+    fbdFlowActions.setSelectedNodes({
+      editorName: editor.meta.name,
+      nodes: rungLocal.selectedNodes,
+    })
+  }, [rungLocal.selectedNodes])
+
   const handleAddElementByDropping = (
     position: XYPosition,
     newNodeType: CustomFbdNodeTypes,
@@ -212,20 +223,22 @@ export const FBDBody = ({ rung }: FBDProps) => {
         switch (change.type) {
           case 'select': {
             const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
-            if (!change.selected) {
-              const index = selectedNodes.findIndex((n) => n.id === change.id)
-              if (index !== -1) selectedNodes.splice(index, 1)
+            if (change.selected) {
+              selectedNodes.push(node)
               return
             }
-            selectedNodes.push(node)
+
+            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
             return
           }
+
           case 'add': {
-            selectedNodes = selectedNodes.filter((node) => node.id === change.item.id)
+            selectedNodes = []
             return
           }
+
           case 'remove': {
-            selectedNodes = selectedNodes.filter((node) => node.id !== change.id)
+            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
             return
           }
         }
@@ -237,7 +250,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
         selectedNodes: selectedNodes,
       }))
     },
-    [rungLocal],
+    [rungLocal, rung],
   )
 
   const onEdgesChange: OnEdgesChange<FlowEdge> = useCallback(

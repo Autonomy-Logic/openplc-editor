@@ -307,6 +307,7 @@ const buildConnectionNode = ({ id, position, variant, label }: ConnectionBuilder
     deletable: true,
     selectable: true,
     draggable: true,
+    selected: true,
   }
 }
 

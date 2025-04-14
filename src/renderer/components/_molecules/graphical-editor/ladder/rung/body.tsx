@@ -348,16 +348,27 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
    */
   const onNodesChange: OnNodesChange<FlowNode> = useCallback(
     (changes) => {
-      const selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
+      let selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
       changes.forEach((change) => {
-        if (change.type === 'select') {
-          const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
-          if (!change.selected) {
-            const index = selectedNodes.findIndex((n) => n.id === change.id)
-            if (index !== -1) selectedNodes.splice(index, 1)
+        switch (change.type) {
+          case 'select': {
+            const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
+            if (change.selected) {
+              selectedNodes.push(node)
+              return
+            }
+
+            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
             return
           }
-          selectedNodes.push(node)
+          case 'add': {
+            selectedNodes = []
+            return
+          }
+          case 'remove': {
+            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
+            return
+          }
         }
       })
 

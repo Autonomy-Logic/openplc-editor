@@ -366,6 +366,7 @@ const buildVariableNode = ({ id, position, variant }: VariableBuilderProps): Var
     deletable: true,
     selectable: true,
     draggable: true,
+    selected: true,
   }
 }
 

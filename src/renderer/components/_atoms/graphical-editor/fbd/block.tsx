@@ -69,6 +69,8 @@ export const BlockNodeElement = <T extends object>({
     projectActions: { updateVariable, deleteVariable },
   } = useOpenPLCStore()
 
+  console.log('BlockNodeElement', nodeId, selected)
+
   const {
     name: blockName,
     variables: blockVariables,
