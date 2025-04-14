@@ -61,8 +61,9 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
 
 
             const variableType = (connectedNode.data.variant as BlockVariant).variables.find(
-              (v) => v.name === edge.targetHandle,
+              (v) => v.name === (block.type === 'input-variable' ? edge.targetHandle : edge.sourceHandle),
             )?.type.value
+
             if (!variableType) return
             const restriction = getVariableRestrictionType(variableType)
             restrictions.values = Array.from(
@@ -120,8 +121,6 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
             })
             .filter((name) => name !== '') as PLCVariable[]) ?? ([] as PLCVariable[])
         : ([] as PLCVariable[])
-
-    console.log('filteredVariables', filteredVariables)
 
     const submitVariableToBlock = (variable: PLCVariable) => {
       const { rung, node: variableNode } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {

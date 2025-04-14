@@ -84,9 +84,6 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
       ].filter((variable) => variable !== undefined)
     }, [variables, searchValue])
 
-    console.log('selectableValues', selectableValues)
-    console.log('isOpen', isOpen)
-
     // @ts-expect-error - not all properties are used
     useImperativeHandle(ref, () => {
       return {
