@@ -2,8 +2,10 @@
 import { RefreshIcon } from '@root/renderer/assets/icons'
 import { SelectField } from '@root/renderer/components/_molecules/select-field'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { useState } from 'react'
 
 const BoardConfiguration = () => {
+  const [isPressed, setIsPressed] = useState(false)
   const {
     deviceAvailableOptions: { availableBoards, availableCommunicationPorts },
     deviceDefinitions: {
@@ -19,11 +21,14 @@ const BoardConfiguration = () => {
   const refreshCommunicationPorts = async (e: React.MouseEvent) => {
     e.preventDefault()
     try {
+      setIsPressed(true)
       const ports = await window.bridge.refreshCommunicationPorts()
       setAvailableOptions({ availableCommunicationPorts: ports.map(({ port }) => port) })
     } catch (error) {
       // TODO: Add a toast notification for error and for success
       console.error(error)
+    } finally {
+      setTimeout(() => setIsPressed(false), 500)
     }
   }
 
@@ -49,8 +54,8 @@ const BoardConfiguration = () => {
             width='188px'
             ariaLabel='Programming port selection'
           />
-          <button type='button' onClick={refreshCommunicationPorts}>
-            <RefreshIcon size='sm' />
+          <button type='button' onClick={refreshCommunicationPorts} className='group' aria-pressed={isPressed}>
+            <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
           </button>
         </div>
         <div id='board-specs'>Here goes the specs</div>
