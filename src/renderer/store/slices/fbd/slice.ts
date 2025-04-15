@@ -142,6 +142,20 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
           if (!flow) return
 
           flow.rung.nodes.push(node)
+
+          flow.rung.nodes.map((n) => {
+            if (n.id === node.id) {
+              return {
+                ...n,
+                selected: true,
+              }
+            }
+            return {
+              ...n,
+              selected: false,
+            }
+          })
+
           flow.updated = true
         }),
       )
@@ -166,24 +180,6 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
           const selectedNodes = nodes
           if (!flow.rung.selectedNodes) flow.rung.selectedNodes = []
           flow.rung.selectedNodes = selectedNodes
-
-          if (selectedNodes.length > 1) {
-            flow.rung.nodes = flow.rung.nodes.map((node) => {
-              if (selectedNodes.find((n) => n.id === node.id)) {
-                return {
-                  ...node,
-                  selected: true,
-                  draggable: false,
-                }
-              }
-              return {
-                ...node,
-                selected: false,
-                draggable: false,
-              }
-            })
-            return
-          }
 
           flow.rung.nodes = flow.rung.nodes.map((node) => {
             if (selectedNodes.find((n) => n.id === node.id)) {

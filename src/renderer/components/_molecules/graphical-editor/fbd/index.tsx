@@ -225,29 +225,33 @@ export const FBDBody = ({ rung }: FBDProps) => {
             const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
             if (change.selected) {
               selectedNodes.push(node)
+              setRungLocal((rung) => ({
+                ...rung,
+                selectedNodes: selectedNodes,
+              }))
               return
             }
 
             selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
+            setRungLocal((rung) => ({
+              ...rung,
+              selectedNodes: selectedNodes,
+            }))
             return
           }
-
-          case 'add': {
-            selectedNodes = []
-            return
-          }
-
           case 'remove': {
             selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
+            setRungLocal((rung) => ({
+              ...rung,
+              selectedNodes: selectedNodes,
+            }))
             return
           }
         }
       })
-
       setRungLocal((rung) => ({
         ...rung,
         nodes: applyNodeChanges(changes, rung.nodes),
-        selectedNodes: selectedNodes,
       }))
     },
     [rungLocal, rung],
