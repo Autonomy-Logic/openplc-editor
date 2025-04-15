@@ -143,7 +143,7 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
 
           flow.rung.nodes.push(node)
 
-          flow.rung.nodes.map((n) => {
+          flow.rung.nodes = flow.rung.nodes.map((n) => {
             if (n.id === node.id) {
               return {
                 ...n,
