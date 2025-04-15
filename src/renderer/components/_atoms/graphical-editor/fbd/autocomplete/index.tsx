@@ -57,14 +57,13 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
             const connectedNode = rung?.nodes.find(
               (node) => node.id === (block.type === 'input-variable' ? edge.target : edge.source),
             )
-            if (!connectedNode) return
-
+            if (!connectedNode || !(connectedNode.data.variant as BlockVariant).variables) return
 
             const variableType = (connectedNode.data.variant as BlockVariant).variables.find(
               (v) => v.name === (block.type === 'input-variable' ? edge.targetHandle : edge.sourceHandle),
             )?.type.value
-
             if (!variableType) return
+
             const restriction = getVariableRestrictionType(variableType)
             restrictions.values = Array.from(
               new Set([
@@ -80,6 +79,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
               new Set([...restrictions.definition, restriction.definition ?? undefined].filter((v) => v !== undefined)),
             )
           })
+
           return {
             values: restrictions.values.length > 0 ? restrictions.values : undefined,
             definition: restrictions.definition.length > 0 ? restrictions.definition : undefined,
