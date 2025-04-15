@@ -8,6 +8,14 @@ import { TCPSettings } from '../elements/tcp-settings'
 
 const ConfigurationEditor = () => {
   const [modbusConfig, setModbusConfig] = useState({ RTU: false, TCP: false })
+  const onlyCompileBoards = [
+    'OpenPLC Runtime',
+    'Raspberry Pi',
+    'Raspberry Pi 2',
+    'Raspberry Pi 3',
+    'Raspberry Pi 4',
+    'Raspberry Pi 5',
+  ]
   const {
     deviceDefinitions: {
       configuration: { deviceBoard },
@@ -16,7 +24,7 @@ const ConfigurationEditor = () => {
 
   useEffect(() => {
     const updateModbusConfig = () => {
-      if (deviceBoard === 'OpenPLC Runtime [ default ]') {
+      if (onlyCompileBoards.includes(deviceBoard)) {
         setModbusConfig({ RTU: false, TCP: false })
       }
     }
@@ -31,7 +39,7 @@ const ConfigurationEditor = () => {
   const handleEnableModbusTCP = () => toggleModbus('TCP')
 
   return (
-    <div aria-label='configuration-editor container' className='flex h-full w-full select-none'>
+    <div aria-label='configuration-editor container' className='flex h-full w-full select-none overflow-x-auto'>
       <BoardConfiguration />
       <hr className='mx-4 h-[99%] w-[1px] self-stretch bg-brand-light pb-12' />
       <div className='flex h-full w-1/2 flex-col gap-6 overflow-auto px-8 py-3'>
@@ -43,7 +51,7 @@ const ConfigurationEditor = () => {
           label='Enable Modbus RTU (Serial)'
           checked={modbusConfig.RTU}
           onCheckedChange={handleEnableModbusRTU}
-          disabled={deviceBoard === 'OpenPLC Runtime [ default ]'}
+          disabled={onlyCompileBoards.includes(deviceBoard)}
         />
         <RTUSettings userEnabled={modbusConfig.RTU} />
 
@@ -54,7 +62,7 @@ const ConfigurationEditor = () => {
           label='Enable Modbus TCP'
           checked={modbusConfig.TCP}
           onCheckedChange={handleEnableModbusTCP}
-          disabled={deviceBoard === 'OpenPLC Runtime [ default ]'}
+          disabled={onlyCompileBoards.includes(deviceBoard)}
         />
         {/** TODO: disable user selection to not be permitted enable option */}
         <TCPSettings userEnabled={modbusConfig.TCP} />

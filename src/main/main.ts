@@ -253,9 +253,9 @@ const createMainWindow = async () => {
   }
 
   // Open devtools if the app is not packaged;
-  if (isDebug) {
-    mainWindow.webContents.openDevTools()
-  }
+  // if (isDebug) {
+  //   mainWindow.webContents.openDevTools()
+  // }
 
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {

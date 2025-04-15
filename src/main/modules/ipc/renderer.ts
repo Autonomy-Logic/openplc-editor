@@ -416,5 +416,9 @@ const rendererProcessBridge = {
    */
   refreshAvailableBoards: (): Promise<{ board: string; version: string }[]> =>
     ipcRenderer.invoke('hardware:refresh-available-boards'),
+  /**
+   * Request the preview images folder from the main process.
+   */
+  getPreviewImage: (image: string): Promise<string> => ipcRenderer.invoke('util:get-preview-image', image),
 }
 export default rendererProcessBridge

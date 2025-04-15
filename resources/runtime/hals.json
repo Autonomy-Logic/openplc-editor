@@ -1111,7 +1111,8 @@
     }
   },
   "OpenPLC Runtime": {
-    "compiler": "openplc"
+    "compiler": "openplc-compiler",
+    "preview": "generic.png"
   },
   "P1AM-100": {
     "compiler": "arduino-cli",
@@ -1181,6 +1182,26 @@
       "Bluetooth": "Yes",
       "Ethernet": "No"
     }
+  },
+  "Raspberry Pi": {
+    "compiler": "openplc-compiler",
+    "preview": "generic.png"
+  },
+  "Raspberry Pi 2": {
+    "compiler": "openplc-compiler",
+    "preview": "generic.png"
+  },
+  "Raspberry Pi 3": {
+    "compiler": "openplc-compiler",
+    "preview": "generic.png"
+  },
+  "Raspberry Pi 4": {
+    "compiler": "openplc-compiler",
+    "preview": "generic.png"
+  },
+  "Raspberry Pi 5": {
+    "compiler": "openplc-compiler",
+    "preview": "generic.png"
   },
   "Raspberry Pico": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",

@@ -2,10 +2,11 @@
 import { RefreshIcon } from '@root/renderer/assets/icons'
 import { SelectField } from '@root/renderer/components/_molecules/select-field'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const BoardConfiguration = () => {
   const [isPressed, setIsPressed] = useState(false)
+  const [previewImage, setPreviewImage] = useState('')
   const {
     deviceAvailableOptions: { availableBoards, availableCommunicationPorts },
     deviceDefinitions: {
@@ -13,6 +14,14 @@ const BoardConfiguration = () => {
     },
     deviceActions: { setDeviceBoard, setCommunicationPort, setAvailableOptions },
   } = useOpenPLCStore()
+
+  useEffect(() => {
+    const fetchPreviewImage = async () => {
+      const folder = await window.bridge.getPreviewImage(availableBoards.get(deviceBoard)?.preview || '')
+      setPreviewImage(folder)
+    }
+    void fetchPreviewImage()
+  }, [deviceBoard])
 
   const refreshCommunicationPorts = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -29,20 +38,22 @@ const BoardConfiguration = () => {
   }
 
   return (
-    <div id='board-configuration-container' className='flex h-full w-1/2 flex-col gap-6'>
-      <div id='board-figure-container' className='h-[55%]'></div>
+    <div id='board-configuration-container' className='flex h-full w-1/2 flex-col gap-6 overflow-x-auto'>
+      <div id='board-figure-container' className='flex h-[40%] w-full items-center justify-center p-24'>
+        <img src={previewImage} alt='Device preview' className='mt-4 aspect-square h-80 w-80 object-contain' />
+      </div>
       <div
         id='board-preferences-container'
-        className='flex h-[45%] flex-col items-start justify-center gap-3 p-32 sm:p-16'
+        className='flex h-[60%] flex-col items-start justify-center gap-3 p-32 sm:p-16'
       >
         <div id='board-selection' className='flex items-center justify-center gap-1'>
           <SelectField
             label='Device'
             placeholder={deviceBoard}
             setSelectedOption={setDeviceBoard}
+            width='200px'
             options={Array.from(availableBoards.keys())}
             ariaLabel='Device selection'
-            className={availableBoards.get(deviceBoard)?.isCoreInstalled ? '[&_span]:opacity-60' : ''}
           />
         </div>
         <div id='programming-port-selection' className='flex items-center justify-center gap-1'>
@@ -58,7 +69,7 @@ const BoardConfiguration = () => {
             <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
           </button>
         </div>
-        <p className='text-start font-caption text-xs font-semibold text-neutral-850 dark:text-white'>Specs</p>
+        <p className='text-start font-caption text-xs font-semibold text-neutral-850 dark:text-white '>Specs</p>
         <div id='board-specs-container' className='grid grid-cols-2 place-content-around gap-2 overflow-auto'>
           {Object.entries(availableBoards.get(deviceBoard)?.specs || {}).map(([spec, value]) => (
             <p className='text-start font-caption text-cp-sm font-semibold text-neutral-850 dark:text-white' key={spec}>

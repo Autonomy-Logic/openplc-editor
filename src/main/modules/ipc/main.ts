@@ -1,4 +1,5 @@
 import { app, nativeTheme, shell } from 'electron'
+import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { platform } from 'process'
 
@@ -214,6 +215,30 @@ class MainProcessBridge implements MainIpcModule {
       this.hardwareService.getAvailableSerialPorts(),
     )
     this.ipcMain.handle('hardware:refresh-available-boards', async () => this.hardwareService.getAvailableBoards())
+    /**
+     * Utilities
+     */
+    this.ipcMain.handle('util:get-preview-image', async (_event, image: string) => {
+      if (image === '') return
+
+      const isDevelopment = process.env.NODE_ENV === 'development'
+
+      const previewImage = join(
+        isDevelopment ? process.cwd() : process.resourcesPath,
+        isDevelopment ? 'resources' : '',
+        'runtime',
+        'previews',
+        image,
+      )
+
+      const imageBuffer = await readFile(previewImage)
+
+      const mimeType = 'image/png'
+
+      const base64 = imageBuffer.toString('base64')
+
+      return `data:${mimeType};base64,${base64}`
+    })
   }
 
   mainIpcEventHandlers = {
