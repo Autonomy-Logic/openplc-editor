@@ -418,7 +418,10 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const { variables, node, rung } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
-    if (!node || !rung) return
+    if (!node || !rung) {
+      console.error('Node or rung not found for ID:', id)
+      return
+    }
 
     const variable = variables.selected
     if (!variable) {
@@ -461,7 +464,14 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
-    if (!rung || !node) return
+    if (!rung || !node) {
+      toast({
+        title: 'Error',
+        description: 'Could not find the related rung or node',
+        variant: 'fail',
+      })
+      return
+    }
 
     /**
      * Check if the variable exists in the table of variables
@@ -606,8 +616,6 @@ export const buildBlockNode = <T extends object | undefined>({
   variant,
   executionControl = false,
 }: BlockBuilderProps<T>) => {
-  console.log('variant', variant)
-
   const { variant: variantLib, executionControl: executionControlAux } = getBlockVariantAndExecutionControl(
     { ...((variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE) },
     executionControl,

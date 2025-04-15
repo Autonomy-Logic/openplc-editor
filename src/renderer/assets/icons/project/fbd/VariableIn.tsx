@@ -33,7 +33,7 @@ export default function VariableInIcon(props: IBlockIconProps) {
         height='10.2273'
         rx='0.863636'
         stroke='#B4D0FE'
-        stroke-width='1.22727'
+        strokeWidth='1.22727'
       />
       <line
         x1='18'
@@ -42,7 +42,7 @@ export default function VariableInIcon(props: IBlockIconProps) {
         y2='13.3864'
         stroke='#B4D0FE'
         stroke-opacity='0.5'
-        stroke-width='1.22727'
+        strokeWidth='1.22727'
       />
     </svg>
   )

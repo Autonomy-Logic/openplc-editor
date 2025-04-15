@@ -4,11 +4,13 @@ import { BuilderBasicProps } from '@root/renderer/components/_atoms/graphical-ed
 export const buildGenericNode = <T>({
   nodeType,
   blockType,
+  connectionLabel,
   id,
   position,
 }: BuilderBasicProps & {
   nodeType: CustomFbdNodeTypes
   blockType?: T | undefined
+  connectionLabel?: string
 }) => {
   switch (nodeType) {
     case 'block':
@@ -31,6 +33,7 @@ export const buildGenericNode = <T>({
         id,
         position,
         variant: nodeType,
+        label: connectionLabel,
       })
     default:
       return undefined

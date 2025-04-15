@@ -4,6 +4,7 @@ import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
+import { FBDBlockAutoComplete } from './autocomplete'
 import { buildHandle, CustomHandle } from './handle'
 import { ConnectorSVGComponent, ContinuationSVGComponent } from './svg'
 import { BasicNodeData, BuilderBasicProps } from './utils/types'
@@ -17,6 +18,7 @@ export type ConnectionNode = Node<
 type ConnectionProps = NodeProps<ConnectionNode>
 type ConnectionBuilderProps = BuilderBasicProps & {
   variant: 'connector' | 'continuation'
+  label?: string
 }
 
 export const DEFAULT_CONNECTION_WIDTH = 88
@@ -48,7 +50,7 @@ const ConnectionElement = (block: ConnectionProps) => {
   >(null)
 
   const [openAutocomplete, setOpenAutocomplete] = useState<boolean>(false)
-  const [_keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
+  const [keyPressedAtTextarea, setKeyPressedAtTextarea] = useState<string>('')
 
   const [connectionValue, setConnectionValue] = useState('')
   const [inputError, setInputError] = useState<boolean>(false)
@@ -68,7 +70,7 @@ const ConnectionElement = (block: ConnectionProps) => {
   }, [])
 
   /**
-   * Update inputError state when the table of variables is updated
+   * Update inputError state when the variable is updated
    */
   useEffect(() => {
     const { rung, node: connectionNode } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
@@ -78,7 +80,7 @@ const ConnectionElement = (block: ConnectionProps) => {
 
     const connectionBlock = rung.nodes.find(
       (node) =>
-        (node.data as BasicNodeData).variable.name == (connectionNode.data as BasicNodeData).variable.name &&
+        (node.data as BasicNodeData).variable.name === (connectionNode.data as BasicNodeData).variable.name &&
         (type === 'connector' ? node.type === 'continuation' : node.type === 'connector'),
     )
 
@@ -86,6 +88,10 @@ const ConnectionElement = (block: ConnectionProps) => {
       setInputError(true)
     } else {
       setInputError(false)
+    }
+
+    if ((connectionNode.data as BasicNodeData).variable.name !== connectionValue) {
+      setConnectionValue((connectionNode.data as BasicNodeData).variable.name)
     }
   }, [pous])
 
@@ -157,8 +163,8 @@ const ConnectionElement = (block: ConnectionProps) => {
             width: DEFAULT_CONNECTION_WIDTH,
           }}
           className={cn('absolute flex h-full items-center justify-center p-0.5', {
-            'right-0': data.variant === 'connector',
-            'left-0': data.variant === 'continuation',
+            'right-1': data.variant === 'connector',
+            'left-1': data.variant === 'continuation',
           })}
           onMouseEnter={onMouseEnter}
           onMouseLeave={onMouseLeave}
@@ -188,29 +194,26 @@ const ConnectionElement = (block: ConnectionProps) => {
               }}
               ref={inputConnectionRef}
               onChange={onChangeHandler}
+              onFocus={onChangeHandler}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
                 setKeyPressedAtTextarea(e.key)
               }}
               onKeyUp={() => setKeyPressedAtTextarea('')}
             />
-
-            {/* {openAutocomplete && (
-          <div className='relative flex justify-center'>
-          <div className='absolute -bottom-1'>
-          <ConnectionsBlockAutoComplete
-          block={block}
-          blockType={'variable'}
-          valueToSearch={variableValue}
-          isOpen={openAutocomplete}
-          setIsOpen={(value) => setOpenAutocomplete(value)}
-          keyPressed={keyPressedAtTextarea}
-          />
-          </div>
-          </div>
-          )} */}
           </div>
         </div>
+        {openAutocomplete && (
+          <div className='absolute -bottom-1 left-1/2'>
+            <FBDBlockAutoComplete
+              block={block}
+              valueToSearch={connectionValue}
+              isOpen={openAutocomplete}
+              setIsOpen={(value) => setOpenAutocomplete(value)}
+              keyPressed={keyPressedAtTextarea}
+            />
+          </div>
+        )}
       </foreignObject>
     )
   }
@@ -251,7 +254,7 @@ const ConnectionElement = (block: ConnectionProps) => {
   )
 }
 
-const buildConnectionNode = ({ id, position, variant }: ConnectionBuilderProps): ConnectionNode => {
+const buildConnectionNode = ({ id, position, variant, label }: ConnectionBuilderProps): ConnectionNode => {
   const inputHandle =
     variant === 'connector'
       ? buildHandle({
@@ -296,7 +299,7 @@ const buildConnectionNode = ({ id, position, variant }: ConnectionBuilderProps):
       numericId: generateNumericUUID(),
       executionOrder: 0,
       variant,
-      variable: { id: '', name: '' },
+      variable: label ? { id: 'connection', name: label } : { id: '', name: '' },
       draggable: true,
       selectable: true,
       deletable: true,
@@ -304,6 +307,7 @@ const buildConnectionNode = ({ id, position, variant }: ConnectionBuilderProps):
     deletable: true,
     selectable: true,
     draggable: true,
+    selected: true,
   }
 }
 
