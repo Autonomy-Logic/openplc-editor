@@ -15,8 +15,10 @@ import {
   Edge as FlowEdge,
   Node as FlowNode,
   OnEdgesChange,
+  OnNodeDrag,
   OnNodesChange,
   ReactFlowInstance,
+  SelectionMode,
   XYPosition,
 } from '@xyflow/react'
 import _ from 'lodash'
@@ -44,6 +46,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
+  const [dragging, setDragging] = useState(false)
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
   const isElementBeingHovered = useMemo(() => {
@@ -58,13 +61,17 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
   useEffect(() => {
     setRungLocal(rung)
-    console.log(rung)
+    // console.log('rung', rung)
   }, [rung])
 
   /**
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
+    if (dragging) {
+      return
+    }
+
     // Update the selected nodes in the rung state
     fbdFlowActions.setSelectedNodes({
       editorName: editor.meta.name,
@@ -225,36 +232,30 @@ export const FBDBody = ({ rung }: FBDProps) => {
             const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
             if (change.selected) {
               selectedNodes.push(node)
-              setRungLocal((rung) => ({
-                ...rung,
-                selectedNodes: selectedNodes,
-              }))
               return
             }
 
             selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
-            setRungLocal((rung) => ({
-              ...rung,
-              selectedNodes: selectedNodes,
-            }))
+            return
+          }
+          case 'add': {
+            selectedNodes = []
             return
           }
           case 'remove': {
             selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
-            setRungLocal((rung) => ({
-              ...rung,
-              selectedNodes: selectedNodes,
-            }))
             return
           }
         }
       })
+
       setRungLocal((rung) => ({
         ...rung,
-        nodes: applyNodeChanges(changes, rung.nodes),
+        nodes: applyNodeChanges(changes, rungLocal.nodes),
+        selectedNodes: selectedNodes,
       }))
     },
-    [rungLocal, rung],
+    [rungLocal, rung, dragging],
   )
 
   const onEdgesChange: OnEdgesChange<FlowEdge> = useCallback(
@@ -264,18 +265,30 @@ export const FBDBody = ({ rung }: FBDProps) => {
         edges: applyEdgeChanges(changes, rung.edges),
       }))
     },
-    [rungLocal],
+    [rungLocal, rung, dragging],
   )
+
+  const onNodeDragStart = useCallback(() => {
+    setDragging(true)
+  }, [rungLocal, dragging])
 
   /**
    * When the node drag stops, update the fbd rung state
    */
-  const onNodeDragStop = useCallback(() => {
-    fbdFlowActions.setRung({
-      rung: rungLocal,
-      editorName: editor.meta.name,
-    })
-  }, [rungLocal])
+  const onNodeDragStop: OnNodeDrag = useCallback(
+    (_e, _node, nodes) => {
+      setDragging(false)
+      fbdFlowActions.setRung({
+        editorName: editor.meta.name,
+        rung: {
+          ...rungLocal,
+          nodes: rungLocal.nodes.map((node) => nodes.find((n) => n.id === node.id) ?? node),
+          edges: rungLocal.edges,
+        },
+      })
+    },
+    [rungLocal, dragging],
+  )
 
   /**
    * Handle the drag enter of the viewport
@@ -413,6 +426,9 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
           onNodesChange: onNodesChange,
           onEdgesChange: onEdgesChange,
+          selectionMode: SelectionMode.Partial,
+
+          onNodeDragStart: onNodeDragStart,
           onNodeDragStop: onNodeDragStop,
 
           preventScrolling: !isElementBeingHovered,

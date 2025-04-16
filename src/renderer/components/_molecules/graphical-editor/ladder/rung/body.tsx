@@ -374,11 +374,11 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
 
       setRungLocal((rung) => ({
         ...rung,
-        nodes: applyNodeChanges(changes, rung.nodes),
+        nodes: applyNodeChanges(changes, rungLocal.nodes),
         selectedNodes: selectedNodes,
       }))
     },
-    [rungLocal, rung],
+    [rungLocal, rung, dragging],
   )
 
   /**
