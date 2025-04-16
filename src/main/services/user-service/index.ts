@@ -1,5 +1,6 @@
 import { exec } from 'child_process'
 import { app } from 'electron'
+import { rm } from 'fs'
 import { access, constants, mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { promisify } from 'util'
@@ -163,10 +164,17 @@ class UserService {
     const cores = JSON.parse(stdout)
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    const coreControl = cores.platforms.map((core: { id: string }) => core.id)
+    const coreControl = cores.platforms.map((core: { id: string; installed_version: string }) => ({
+      [core.id]: core.installed_version,
+    }))
 
     await UserService.createDirectoryIfNotExists(pathToRuntimeFolder)
     await UserService.createJSONFileIfNotExists(pathToArduinoCoreControlFile, coreControl as object)
+
+    // This is a legacy file that is no longer used, should be removed in the next major release!!!
+    const removeLegacy = promisify(rm)
+    const pathToLegacyHals = join(pathToRuntimeFolder, 'hals.json')
+    await removeLegacy(pathToLegacyHals, { recursive: true, force: true })
   }
   /**
    * Initializes user settings and history by checking the relevant folders and files.

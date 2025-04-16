@@ -2,7 +2,7 @@
 import { RefreshIcon } from '@root/renderer/assets/icons'
 import { SelectField } from '@root/renderer/components/_molecules/select-field'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 const BoardConfiguration = () => {
   const [isPressed, setIsPressed] = useState(false)
@@ -37,6 +37,23 @@ const BoardConfiguration = () => {
     }
   }
 
+  const handleSetDeviceBoard = useCallback(
+    (board: string) => {
+      const normalizedBoard = board.split('[')[0].trim()
+      setDeviceBoard(normalizedBoard)
+    },
+    [setDeviceBoard],
+  )
+
+  const deviceOptions = useMemo(
+    () =>
+      Array.from(availableBoards.entries()).map(([board, data]) => {
+        const version = data.coreVersion
+        return `${board}${version ? ` [${version}]` : ''}`
+      }),
+    [availableBoards],
+  )
+
   return (
     <div id='board-configuration-container' className='flex h-full w-1/2 flex-col gap-6 overflow-x-auto'>
       <div id='board-figure-container' className='flex h-[40%] w-full items-center justify-center p-24'>
@@ -50,9 +67,9 @@ const BoardConfiguration = () => {
           <SelectField
             label='Device'
             placeholder={deviceBoard}
-            setSelectedOption={setDeviceBoard}
+            setSelectedOption={handleSetDeviceBoard}
             width='200px'
-            options={Array.from(availableBoards.keys())}
+            options={deviceOptions}
             ariaLabel='Device selection'
           />
         </div>

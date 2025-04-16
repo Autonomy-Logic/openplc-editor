@@ -64,7 +64,7 @@ const availableBoardInfo = z.object({
     Bluetooth: z.string(),
     Ethernet: z.string(),
   }),
-  isCoreInstalled: z.boolean(),
+  coreVersion: z.string().optional(),
 })
 
 type AvailableBoardInfo = z.infer<typeof availableBoardInfo>

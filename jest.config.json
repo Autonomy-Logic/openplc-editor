@@ -1,4 +1,6 @@
 {
+  "setupFiles": ["<rootDir>/jest.setup.js"],
+  "modulePathIgnorePatterns": ["<rootDir>/release/"],
   "moduleDirectories": ["node_modules", "release/app/node_modules"],
   "moduleFileExtensions": ["js", "json", "jsx", "ts", "tsx"],
   "moduleNameMapper": {

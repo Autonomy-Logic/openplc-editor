@@ -101,9 +101,9 @@ class HardwareService {
     }
 
     const halsContent = (await readJSONFile(halsPath)) as HalsFile
-    const arduinoCoreContent = (await readJSONFile(arduinoCorePath)) as string[]
+    const arduinoCoreContent = (await readJSONFile(arduinoCorePath)) as { [core: string]: string }[]
 
-    let availableBoards: Map<string, Pick<BoardInfo, 'core' | 'preview' | 'specs'> & { isCoreInstalled: boolean }> =
+    let availableBoards: Map<string, Pick<BoardInfo, 'core' | 'preview' | 'specs'> & { coreVersion?: string }> =
       new Map()
 
     for (const board in halsContent) {
@@ -112,7 +112,10 @@ class HardwareService {
           core: halsContent[board].core,
           preview: halsContent[board].preview,
           specs: halsContent[board].specs,
-          isCoreInstalled: arduinoCoreContent.includes(halsContent[board].core),
+          coreVersion:
+            Object.values(
+              arduinoCoreContent.find((core) => Object.keys(core)[0] === halsContent[board].core) ?? {},
+            )[0] ?? undefined,
         })
       })
     }
