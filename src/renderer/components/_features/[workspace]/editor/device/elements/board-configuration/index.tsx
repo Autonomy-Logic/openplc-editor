@@ -55,7 +55,7 @@ const BoardConfiguration = () => {
   )
 
   return (
-    <div id='board-configuration-container' className='flex h-full w-1/2 flex-col gap-6 overflow-x-auto'>
+    <div id='board-configuration-container' className='flex h-full w-1/2 flex-col gap-6 overflow-hidden'>
       <div id='board-figure-container' className='flex h-[40%] w-full items-center justify-center p-24'>
         <img src={previewImage} alt='Device preview' className='mt-4 aspect-square h-80 w-80 object-contain' />
       </div>
