@@ -2,6 +2,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { ExitButton } from '../../_molecules/workspace-activity-bar/default'
+import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
 import { DefaultWorkspaceActivityBar } from './default'
 import { FBDToolbox } from './fbd-toolbox'
 import { LadderToolbox } from './ladder-toolbox'
@@ -44,7 +45,9 @@ export const WorkspaceActivityBar = ({ defaultActivityBar }: ActivityBarProps) =
         )}
       </div>
       <div className='flex h-7 w-full flex-col gap-6'>
-        <ExitButton onClick={handleExitApplication} />
+        <TooltipSidebarWrapperButton tooltipContent='Exit'>
+          <ExitButton onClick={handleExitApplication} />
+        </TooltipSidebarWrapperButton>
       </div>
     </>
   )

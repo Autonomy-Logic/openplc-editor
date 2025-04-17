@@ -6,7 +6,7 @@ import { BasicNodeData } from '../../_atoms/graphical-editor/ladder/utils/types'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { DeleteElementButton } from '../../_molecules/workspace-activity-bar/default'
 import { BlockButton, CoilButton, ContactButton } from '../../_molecules/workspace-activity-bar/ladder'
-import { TooltipButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
+import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
 // import { CloseFilledIcon } from '@root/renderer/assets'
 
 export const LadderToolbox = () => {
@@ -92,27 +92,27 @@ export const LadderToolbox = () => {
 
   return (
     <>
-      <TooltipButton tooltipContent='Block'>
+      <TooltipSidebarWrapperButton tooltipContent='Block'>
         <BlockButton
           onDragStart={(event) => handleDragStart(event, 'block')}
           // onDragEnd={(_event) => console.log('drag end ladder toolbox')}
         />
-      </TooltipButton>
-      <TooltipButton tooltipContent='Coil'>
+      </TooltipSidebarWrapperButton>
+      <TooltipSidebarWrapperButton tooltipContent='Coil'>
         <CoilButton onDragStart={(event) => handleDragStart(event, 'coil')} />
-      </TooltipButton>
-      <TooltipButton tooltipContent='Contact'>
+      </TooltipSidebarWrapperButton>
+      <TooltipSidebarWrapperButton tooltipContent='Contact'>
         <ContactButton onDragStart={(event) => handleDragStart(event, 'contact')} />
-      </TooltipButton>
+      </TooltipSidebarWrapperButton>
       <DividerActivityBar />
-      <TooltipButton tooltipContent='Delete selected elements'>
+      <TooltipSidebarWrapperButton tooltipContent='Delete selected elements'>
         <DeleteElementButton
           onClick={handleRemoveNodes}
           className={cn({
             'disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent': selectedNodes.length === 0,
           })}
         />
-      </TooltipButton>
+      </TooltipSidebarWrapperButton>
     </>
   )
 }
