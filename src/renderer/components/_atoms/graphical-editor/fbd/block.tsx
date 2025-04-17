@@ -317,7 +317,6 @@ export const BlockNodeElement = <T extends object>({
 
 export const Block = <T extends object>(block: BlockProps<T>) => {
   const { data, dragging, height, width, selected, id } = block
-
   const {
     editor,
     project: {
