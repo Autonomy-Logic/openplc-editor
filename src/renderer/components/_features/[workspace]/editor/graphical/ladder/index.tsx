@@ -14,6 +14,11 @@ import {
 } from '@dnd-kit/core'
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import * as Portal from '@radix-ui/react-portal'
+import { BlockNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
+import { CoilNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/coil'
+import { ContactNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/contact'
+import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/types/block'
 import { CreateRung } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/graphical-editor/ladder/rung'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -23,6 +28,10 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
+import BlockElement from '../elements/ladder/block'
+import CoilElement from '../elements/ladder/coil'
+import ContactElement from '../elements/ladder/contact'
+
 export default function LadderEditor() {
   const {
     ladderFlows,
@@ -31,6 +40,9 @@ export default function LadderEditor() {
     searchNodePosition,
     projectActions: { updatePou },
     workspaceActions: { setEditingState },
+
+    modals,
+    modalActions: { closeModal },
   } = useOpenPLCStore()
 
   const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
@@ -140,6 +152,13 @@ export default function LadderEditor() {
     }
   }
 
+  /**
+   * Handle the close of the modal
+   */
+  const handleModalClose = () => {
+    closeModal()
+  }
+
   return (
     <div className='h-full w-full overflow-y-auto' ref={scrollableRef} style={{ scrollbarGutter: 'stable' }}>
       <div className='flex flex-1 flex-col gap-4 px-2'>
@@ -173,6 +192,29 @@ export default function LadderEditor() {
           </div>
         </DndContext>
         <CreateRung onClick={handleAddNewRung} />
+        <Portal.Root>
+          {modals['block-ladder-element']?.open && (
+            <BlockElement
+              onClose={handleModalClose}
+              selectedNode={modals['block-ladder-element'].data as BlockNode<BlockVariant>}
+              isOpen={modals['block-ladder-element'].open}
+            />
+          )}
+          {modals['contact-ladder-element']?.open && (
+            <ContactElement
+              onClose={handleModalClose}
+              node={modals['contact-ladder-element'].data as ContactNode}
+              isOpen={modals['contact-ladder-element'].open}
+            />
+          )}
+          {modals['coil-ladder-element']?.open && (
+            <CoilElement
+              onClose={handleModalClose}
+              node={modals['coil-ladder-element'].data as CoilNode}
+              isOpen={modals['coil-ladder-element'].open}
+            />
+          )}
+        </Portal.Root>
       </div>
     </div>
   )
