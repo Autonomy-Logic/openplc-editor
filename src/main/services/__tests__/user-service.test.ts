@@ -3,7 +3,7 @@ import { app } from 'electron'
 import { access, constants, mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 
-import { UserService } from './index'
+import { UserService } from '../index'
 
 // Mock dependencies
 jest.mock('electron', () => ({

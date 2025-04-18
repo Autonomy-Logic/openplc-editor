@@ -68,7 +68,7 @@ const BoardConfiguration = () => {
             label='Device'
             placeholder={deviceBoard}
             setSelectedOption={handleSetDeviceBoard}
-            width='200px'
+            width='300px'
             options={deviceOptions}
             ariaLabel='Device selection'
           />
@@ -79,7 +79,7 @@ const BoardConfiguration = () => {
             setSelectedOption={setCommunicationPort}
             label='Programming Port'
             placeholder={communicationPort}
-            width='188px'
+            className='[&_button]:w-[234px]'
             ariaLabel='Programming port selection'
           />
           <button type='button' onClick={refreshCommunicationPorts} className='group' aria-pressed={isPressed}>

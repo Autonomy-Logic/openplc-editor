@@ -1187,22 +1187,6 @@
     "compiler": "openplc-compiler",
     "preview": "generic.png"
   },
-  "Raspberry Pi 2": {
-    "compiler": "openplc-compiler",
-    "preview": "generic.png"
-  },
-  "Raspberry Pi 3": {
-    "compiler": "openplc-compiler",
-    "preview": "generic.png"
-  },
-  "Raspberry Pi 4": {
-    "compiler": "openplc-compiler",
-    "preview": "generic.png"
-  },
-  "Raspberry Pi 5": {
-    "compiler": "openplc-compiler",
-    "preview": "generic.png"
-  },
   "Raspberry Pico": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
     "compiler": "arduino-cli",
