@@ -1,6 +1,6 @@
 import { PropsWithChildren } from 'react'
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../_atoms/tooltip'
+import { SidebarTooltipContent, Tooltip, TooltipProvider, TooltipTrigger } from '../../_atoms/tooltip'
 
 export const TooltipSidebarWrapperButton = ({
   children,
@@ -10,9 +10,9 @@ export const TooltipSidebarWrapperButton = ({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger>{children}</TooltipTrigger>
-        <TooltipContent side='right' sideOffset={5} >
-          <div className='text-sm font-normal'>{tooltipContent}</div>
-        </TooltipContent>
+        <SidebarTooltipContent side='right' sideOffset={5} arrow={false}>
+          <div className='w-full text-center font-caption text-xs'>{tooltipContent}</div>
+        </SidebarTooltipContent>
       </Tooltip>
     </TooltipProvider>
   )
