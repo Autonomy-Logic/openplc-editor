@@ -6,6 +6,7 @@ import { BasicNodeData } from '../../_atoms/graphical-editor/ladder/utils/types'
 import { DividerActivityBar } from '../../_atoms/workspace-activity-bar/divider'
 import { DeleteElementButton } from '../../_molecules/workspace-activity-bar/default'
 import { BlockButton, CoilButton, ContactButton } from '../../_molecules/workspace-activity-bar/ladder'
+import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
 // import { CloseFilledIcon } from '@root/renderer/assets'
 
 export const LadderToolbox = () => {
@@ -91,19 +92,27 @@ export const LadderToolbox = () => {
 
   return (
     <>
-      <BlockButton
-        onDragStart={(event) => handleDragStart(event, 'block')}
-        // onDragEnd={(_event) => console.log('drag end ladder toolbox')}
-      />
-      <CoilButton onDragStart={(event) => handleDragStart(event, 'coil')} />
-      <ContactButton onDragStart={(event) => handleDragStart(event, 'contact')} />
+      <TooltipSidebarWrapperButton tooltipContent='Block'>
+        <BlockButton
+          onDragStart={(event) => handleDragStart(event, 'block')}
+          // onDragEnd={(_event) => console.log('drag end ladder toolbox')}
+        />
+      </TooltipSidebarWrapperButton>
+      <TooltipSidebarWrapperButton tooltipContent='Coil'>
+        <CoilButton onDragStart={(event) => handleDragStart(event, 'coil')} />
+      </TooltipSidebarWrapperButton>
+      <TooltipSidebarWrapperButton tooltipContent='Contact'>
+        <ContactButton onDragStart={(event) => handleDragStart(event, 'contact')} />
+      </TooltipSidebarWrapperButton>
       <DividerActivityBar />
-      <DeleteElementButton
-        onClick={handleRemoveNodes}
-        className={cn({
-          'disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent': selectedNodes.length === 0,
-        })}
-      />
+      <TooltipSidebarWrapperButton tooltipContent='Delete selected elements'>
+        <DeleteElementButton
+          onClick={handleRemoveNodes}
+          className={cn({
+            'disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent': selectedNodes.length === 0,
+          })}
+        />
+      </TooltipSidebarWrapperButton>
     </>
   )
 }

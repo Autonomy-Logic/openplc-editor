@@ -1,4 +1,3 @@
-import * as Portal from '@radix-ui/react-portal'
 import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { RungLadderState } from '@root/renderer/store/slices'
@@ -10,15 +9,9 @@ import { differenceWith, isEqual, parseInt } from 'lodash'
 import { DragEventHandler, MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { customNodeTypes } from '../../../../_atoms/graphical-editor/ladder'
-import type { BlockNode } from '../../../../_atoms/graphical-editor/ladder/block'
-import type { CoilNode } from '../../../../_atoms/graphical-editor/ladder/coil'
-import type { ContactNode } from '../../../../_atoms/graphical-editor/ladder/contact'
 import type { BasicNodeData } from '../../../../_atoms/graphical-editor/ladder/utils/types'
 import { ReactFlowPanel } from '../../../../_atoms/react-flow'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
-import BlockElement from '../../../../_features/[workspace]/editor/graphical/elements/ladder/block'
-import CoilElement from '../../../../_features/[workspace]/editor/graphical/elements/ladder/coil'
-import ContactElement from '../../../../_features/[workspace]/editor/graphical/elements/ladder/contact'
 import { addNewElement, removeElements } from './ladder-utils/elements'
 import { onElementDragOver, onElementDragStart, onElementDrop } from './ladder-utils/elements/drag-n-drop'
 import {
@@ -43,8 +36,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
       data: { pous },
     },
     projectActions: { deleteVariable },
-    modals,
-    modalActions: { closeModal, openModal },
+    modalActions: { openModal },
     searchQuery,
     searchActions: { setSearchNodePosition },
   } = useOpenPLCStore()
@@ -335,13 +327,6 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
   }
 
   /**
-   * Handle the close of the modal
-   */
-  const handleModalClose = () => {
-    closeModal()
-  }
-
-  /**
    * Handle the change of the nodes
    * This function is called every time the nodes change
    * It is used to update the local rung state
@@ -563,29 +548,6 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
           />
         </div>
       </div>
-      <Portal.Root>
-        {modals['block-ladder-element']?.open && (
-          <BlockElement
-            onClose={handleModalClose}
-            selectedNode={modals['block-ladder-element'].data as BlockNode<object>}
-            isOpen={modals['block-ladder-element'].open}
-          />
-        )}
-        {modals['contact-ladder-element']?.open && (
-          <ContactElement
-            onClose={handleModalClose}
-            node={modals['contact-ladder-element'].data as ContactNode}
-            isOpen={modals['contact-ladder-element'].open}
-          />
-        )}
-        {modals['coil-ladder-element']?.open && (
-          <CoilElement
-            onClose={handleModalClose}
-            node={modals['coil-ladder-element'].data as CoilNode}
-            isOpen={modals['coil-ladder-element'].open}
-          />
-        )}
-      </Portal.Root>
     </div>
   )
 }
