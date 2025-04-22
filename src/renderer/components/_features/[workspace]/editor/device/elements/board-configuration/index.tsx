@@ -56,12 +56,14 @@ const BoardConfiguration = () => {
 
   return (
     <div id='board-configuration-container' className='flex h-full w-1/2 flex-col gap-6 overflow-hidden'>
-      <div id='board-figure-container' className='flex h-[40%] w-full items-center justify-center p-24'>
-        <img src={previewImage} alt='Device preview' className='mt-4 aspect-square h-80 w-80 object-contain' />
+      <div id='board-figure-container' className='mt-24 flex h-[30%] w-full items-center justify-center p-12'>
+        <div className='flex h-[500px] w-[500px] items-center justify-center'>
+          <img src={previewImage} alt='Device preview' className='mt-4 aspect-square h-80 w-80 object-contain' />
+        </div>
       </div>
       <div
         id='board-preferences-container'
-        className='flex h-[60%] flex-col items-start justify-center gap-3 p-32 sm:p-16'
+        className='flex h-[70%] flex-col items-start justify-center gap-3 p-32 sm:p-16'
       >
         <div id='board-selection' className='flex items-center justify-center gap-1'>
           <SelectField
