@@ -138,10 +138,10 @@ const WorkspaceScreen = () => {
                 <ResizablePanel
                   id='editorPanel'
                   order={1}
-                  minSize={15}
+                  minSize={45}
                   defaultSize={75}
                   className={cn(
-                    'relative  flex min-h-[500px] flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white px-4 py-4 dark:border-neutral-800 dark:bg-neutral-950',
+                    'relative  flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white px-4 py-4 dark:border-neutral-800 dark:bg-neutral-950',
                     {
                       'py-0 pb-4': isVariablesPanelCollapsed,
                     },

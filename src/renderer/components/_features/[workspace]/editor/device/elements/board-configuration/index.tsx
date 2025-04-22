@@ -63,7 +63,7 @@ const BoardConfiguration = () => {
       </div>
       <div
         id='board-preferences-container'
-        className='flex h-[70%] flex-col items-start justify-center gap-3 p-32 sm:p-16'
+        className='flex h-[70%] flex-col items-start justify-center gap-3 overflow-y-auto overflow-x-hidden p-32 sm:p-16'
       >
         <div id='board-selection' className='flex items-center justify-center gap-1'>
           <SelectField
