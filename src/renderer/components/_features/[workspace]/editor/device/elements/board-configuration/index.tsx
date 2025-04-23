@@ -56,14 +56,14 @@ const BoardConfiguration = () => {
 
   return (
     <div id='board-configuration-container' className='flex h-full w-1/2 flex-col gap-6 overflow-hidden'>
-      <div id='board-figure-container' className='mt-24 flex h-[30%] w-full items-center justify-center p-12'>
+      <div id='board-figure-container' className='my-24 flex h-[30%] w-full items-center justify-center p-12'>
         <div className='flex h-[500px] w-[500px] items-center justify-center'>
           <img src={previewImage} alt='Device preview' className='mt-4 aspect-square h-80 w-80 object-contain' />
         </div>
       </div>
       <div
         id='board-preferences-container'
-        className='flex h-[70%] flex-col items-start justify-center gap-3 overflow-y-auto overflow-x-hidden p-32 sm:p-16'
+        className='flex h-[70%] w-full flex-col items-start justify-center gap-3 overflow-y-auto overflow-x-hidden px-28 sm:px-16'
       >
         <div id='board-selection' className='flex items-center justify-center gap-1'>
           <SelectField
@@ -89,7 +89,7 @@ const BoardConfiguration = () => {
           </button>
         </div>
         <p className='text-start font-caption text-xs font-semibold text-neutral-850 dark:text-white '>Specs</p>
-        <div id='board-specs-container' className='grid grid-cols-2 place-content-around gap-2 overflow-auto'>
+        <div id='board-specs-container' className='grid grid-cols-2 place-content-around gap-2'>
           {Object.entries(availableBoards.get(deviceBoard)?.specs || {}).map(([spec, value]) => (
             <p className='text-start font-caption text-cp-sm font-semibold text-neutral-850 dark:text-white' key={spec}>
               {spec}: <span className='font-light text-neutral-600 dark:text-neutral-400'>{value}</span>

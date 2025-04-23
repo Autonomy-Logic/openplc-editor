@@ -1185,7 +1185,7 @@
   },
   "Raspberry Pi": {
     "compiler": "openplc-compiler",
-    "preview": "generic.png"
+    "preview": "raspberry-pi.png"
   },
   "Raspberry Pico": {
     "board_manager_url": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
