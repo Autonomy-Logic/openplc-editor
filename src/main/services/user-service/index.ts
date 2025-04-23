@@ -1,9 +1,11 @@
+import { exec } from 'child_process'
 import { app } from 'electron'
+import { rm } from 'fs'
 import { access, constants, mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
+import { promisify } from 'util'
 
 import { ARDUINO_DATA } from './data/arduino'
-import { HALS_DATA } from './data/hals'
 import { HISTORY_DATA } from './data/history'
 import { SETTINGS_DATA } from './data/settings'
 
@@ -14,8 +16,10 @@ import { SETTINGS_DATA } from './data/settings'
  * This approach is taken to avoid the need for a singleton instance and to leave room for future changes in the class structure.
  */
 class UserService {
+  compilerDirectory: string
   constructor() {
     void this.#initializeUserSettingsAndHistory()
+    this.compilerDirectory = this.#constructCompilerDirectoryPath()
   }
 
   /**
@@ -27,8 +31,6 @@ class UserService {
   static DEFAULT_HISTORY = HISTORY_DATA
 
   static ARDUINO_FILE_CONTENT = ARDUINO_DATA
-
-  static HALS_FILE_CONTENT = HALS_DATA
 
   static async createDirectoryIfNotExists(path: string): Promise<void> {
     /**
@@ -43,7 +45,7 @@ class UserService {
       } catch (err) {
         // If the error is due to the directory already existing, log a warning and continue.
         if (err instanceof Error && err.message.includes('EEXIST')) {
-          console.warn(`Directory already exists at ${path}. Skipping creation.`)
+          console.warn(`Directory already exists at ${path}.\nSkipping creation.`)
         } else if (err instanceof Error) {
           console.error(`Error creating directory at ${path}: ${String(err)}`)
         } else {
@@ -59,13 +61,18 @@ class UserService {
     } catch (err) {
       // If the error is due to the file already existing, log a warning and continue.
       if (err instanceof Error && err.message.includes('EEXIST')) {
-        console.warn(`File already exists at ${filePath}. Skipping creation.`)
+        console.warn(`File already exists at ${filePath}.\nSkipping creation.`)
       } else if (err instanceof Error) {
         console.error(`Error creating file at ${filePath}: ${String(err)}`)
       } else {
         console.error(`Error creating file at ${filePath}: ${String(err)}`)
       }
     }
+  }
+
+  #constructCompilerDirectoryPath() {
+    const isDevelopment = process.env.NODE_ENV === 'development'
+    return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'compilers')
   }
 
   /**
@@ -112,7 +119,7 @@ class UserService {
     } catch (err) {
       // If the error is due to the file already existing, log a warning and continue.
       if (err instanceof Error && err.message.includes('EEXIST')) {
-        console.warn(`File already exists at ${pathToArduinoCliConfig}. Skipping creation.`)
+        console.warn(`File already exists at ${pathToArduinoCliConfig}.\nSkipping creation.`)
       } else if (err instanceof Error) {
         console.error(`Error creating Arduino CLI config at ${pathToArduinoCliConfig}: ${String(err)}`)
       } else {
@@ -122,18 +129,52 @@ class UserService {
   }
 
   /**
-   * Checks if the Hals file exists and creates it if it doesn't.
+   * Checks if the Core List file exists and creates it if it doesn't.
    * TODO: This function must be refactored.
    * - Must be validate if the json content is being written correctly.
-   * - Must validate if this implementation for the hals.json file is correct.
+   * - Must validate if this implementation for the core list file is correct.
    */
 
-  async #checkIfHalsFileExists(): Promise<void> {
+  async #checkIfArduinoCoreControlFileExists(): Promise<void> {
+    const arduinoCli = promisify(exec)
     const pathToRuntimeFolder = join(app.getPath('userData'), 'User', 'Runtime')
-    const pathToHalsFile = join(pathToRuntimeFolder, 'hals.json')
+    const pathToArduinoCoreControlFile = join(pathToRuntimeFolder, 'arduino-core-control.json')
+    let pathToArduinoCliBinary = ''
+
+    switch (process.platform) {
+      case 'win32':
+        pathToArduinoCliBinary = join(this.compilerDirectory, 'Windows', 'arduino-cli', 'bin', 'arduino-cli.exe')
+        break
+      case 'darwin':
+        pathToArduinoCliBinary = join(this.compilerDirectory, 'MacOS', 'arduino-cli', 'bin', 'arduino-cli')
+        break
+      case 'linux':
+        pathToArduinoCliBinary = join(this.compilerDirectory, 'Linux', 'arduino-cli', 'bin', 'arduino-cli')
+        break
+      default:
+        throw new Error(`Unsupported platform: ${process.platform}`)
+    }
+
+    const { stderr, stdout } = await arduinoCli(`"${pathToArduinoCliBinary}" core list --json`)
+    if (stderr) {
+      console.error(`Error listing cores: ${String(stderr)}`)
+      return
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const cores = JSON.parse(stdout)
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    const coreControl = cores.platforms.map((core: { id: string; installed_version: string }) => ({
+      [core.id]: core.installed_version,
+    }))
 
     await UserService.createDirectoryIfNotExists(pathToRuntimeFolder)
-    await UserService.createJSONFileIfNotExists(pathToHalsFile, UserService.HALS_FILE_CONTENT)
+    await UserService.createJSONFileIfNotExists(pathToArduinoCoreControlFile, coreControl as object)
+
+    // This is a legacy file that is no longer used, should be removed in the next major release!!!
+    const removeLegacy = promisify(rm)
+    const pathToLegacyHals = join(pathToRuntimeFolder, 'hals.json')
+    await removeLegacy(pathToLegacyHals, { recursive: true, force: true })
   }
   /**
    * Initializes user settings and history by checking the relevant folders and files.
@@ -145,7 +186,7 @@ class UserService {
     await this.#checkIfUserBaseSettingsExists()
     await this.#checkIfUserHistoryFolderExists()
     await this.#checkIfArduinoCliConfigExists()
-    await this.#checkIfHalsFileExists()
+    await this.#checkIfArduinoCoreControlFileExists()
   }
 }
 

@@ -355,7 +355,6 @@ const rendererProcessBridge = {
     rendererProcessPort.onmessage = (event) => callback(event.data)
     rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
   },
-
   /**
    * Execute the generation of the C files.
    * Creates an instance using the MessageChannel API to establish a communication between the two Electron processes to generate the C files.
@@ -383,5 +382,43 @@ const rendererProcessBridge = {
      */
     rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
   },
+  /**
+   * Requests the device configuration options from the main process.
+   */
+  getDeviceConfigurationOptions: (): Promise<{
+    ports: string[]
+    boards: Map<
+      string,
+      {
+        core: string
+        preview: string
+        specs: {
+          CPU: string
+          RAM: string
+          Flash: string
+          DigitalPins: string
+          AnalogPins: string
+          PWMPins: string
+          WiFi: string
+          Bluetooth: string
+          Ethernet: string
+        }
+        isCoreInstalled: boolean
+      }
+    >
+  }> => ipcRenderer.invoke('hardware:device-configuration-options'),
+  /**
+   * Requests the refresh of the communication ports from the main process.
+   */
+  refreshCommunicationPorts: (): Promise<string[]> => ipcRenderer.invoke('hardware:refresh-communication-ports'),
+  /**
+   * Requests the refresh of the available boards from the main process.
+   */
+  refreshAvailableBoards: (): Promise<{ board: string; version: string }[]> =>
+    ipcRenderer.invoke('hardware:refresh-available-boards'),
+  /**
+   * Request the preview images folder from the main process.
+   */
+  getPreviewImage: (image: string): Promise<string> => ipcRenderer.invoke('util:get-preview-image', image),
 }
 export default rendererProcessBridge

@@ -1,7 +1,6 @@
 import { ClearConsoleButton } from '@components/_atoms/buttons/console/clear-console'
 import * as Tabs from '@radix-ui/react-tabs'
 import { cn } from '@root/utils'
-import _ from 'lodash'
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
@@ -31,6 +30,7 @@ const WorkspaceScreen = () => {
     editor,
     workspaceActions: { toggleCollapse },
     searchResults,
+    deviceActions: { setAvailableOptions },
   } = useOpenPLCStore()
 
   const variables = [
@@ -92,6 +92,14 @@ const WorkspaceScreen = () => {
     })
   }, [])
 
+  useEffect(() => {
+    const getAvailableDeviceOptions = async () => {
+      const { ports, boards } = await window.bridge.getDeviceConfigurationOptions()
+      setAvailableOptions({ availableBoards: boards, availableCommunicationPorts: ports })
+    }
+    void getAvailableDeviceOptions()
+  }, [])
+
   return (
     <div className='flex h-full w-full bg-brand-dark dark:bg-neutral-950'>
       <AboutModal />
@@ -130,7 +138,7 @@ const WorkspaceScreen = () => {
                 <ResizablePanel
                   id='editorPanel'
                   order={1}
-                  minSize={15}
+                  minSize={45}
                   defaultSize={75}
                   className={cn(
                     'relative  flex flex-1 grow flex-col overflow-hidden rounded-lg border-2 border-neutral-200 bg-white px-4 py-4 dark:border-neutral-800 dark:bg-neutral-950',

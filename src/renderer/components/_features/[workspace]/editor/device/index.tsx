@@ -1,6 +1,6 @@
-import { ConfigurationEditor } from '@root/renderer/components/_organisms/configuration-editor'
-import { PinMappingEditor } from '@root/renderer/components/_organisms/pin-mapping-editor'
 import { ComponentPropsWithoutRef } from 'react'
+
+import { ConfigurationEditor, PinMappingEditor } from './components'
 
 type DeviceType = 'Pin Mapping' | 'Configuration'
 

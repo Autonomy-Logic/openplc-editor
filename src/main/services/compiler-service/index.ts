@@ -555,7 +555,7 @@ class CompilerService {
       'compilers',
       'Linux',
       'xml2st',
-      'xml2st.py',
+      'xml2st',
     )
 
     const draftPath = pathToProjectFile.replace('project.json', '')
@@ -568,7 +568,7 @@ class CompilerService {
     } else if (isMac) {
       execCompilerScript = spawn(darwinCompilerPath, [pathToXMLFile])
     } else if (isLinux) {
-      execCompilerScript = spawn('python3', [linuxCompilerPath, pathToXMLFile])
+      execCompilerScript = spawn(linuxCompilerPath, [pathToXMLFile])
     }
 
     execCompilerScript?.stdout.on('data', (data: Buffer) => {

@@ -111,3 +111,16 @@
 .apexcharts-xaxis-label tspan {
   @apply fill-neutral-1000 !text-[10px] dark:fill-neutral-50;
 }
+
+@keyframes spin-refresh {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.spin-refresh {
+  animation: spin-refresh 0.5s linear;
+}

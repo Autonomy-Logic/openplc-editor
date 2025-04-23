@@ -1,4 +1,5 @@
 export * from './console'
+export * from './device'
 export * from './editor'
 export * from './fbd'
 export * from './ladder'

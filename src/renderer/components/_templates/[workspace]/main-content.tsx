@@ -14,7 +14,6 @@ const WorkspaceMainContent = (props: IWorkspaceMainContentProps) => {
     workspace: {
       systemConfigs: { OS },
     },
-
     tabsActions: { updateTabs },
     editorActions: { addModel, setEditor },
   } = useOpenPLCStore()

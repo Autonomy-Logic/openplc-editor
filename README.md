@@ -38,29 +38,6 @@ npm install
 npm run start:dev
 ```
 
-### Not required but necessary if you intend to use the compiler
-
-You'll need the following:
-
-- [Python](https://www.python.org/downloads/), version `>3.x`
-    - [lxml](https://lxml.de/installation.html)
-
-Step by step
-
-- Install required Python package
-
-On Windows
-```bash
-py -m pip install lxml
-```
-
-On MacOS
-```bash
-python3 -m pip install lxml
-```
-
-*Note that each operating system has its own way to handle the Python package manager; those are only a suggestion and may work in most of the cases.*
-
 ## Documentation
 
 Please go to the repository [wiki](https://github.com/Autonomy-Logic/openplc-editor/wiki) page to get instruction about the project.

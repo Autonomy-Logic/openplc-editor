@@ -4,9 +4,11 @@
     "dictionaryDefinitions": [],
     "dictionaries": [],
     "words": [
+        "baudrate",
         "loglevel",
         "lreal",
         "lword",
+        "modbus",
         "sublabel",
         "tailwindcss",
         "udint",

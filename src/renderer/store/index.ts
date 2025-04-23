@@ -1,9 +1,9 @@
-// store/index.ts
 import { createSelectorHooks } from 'auto-zustand-selectors-hook'
 import { create } from 'zustand'
 
 import type {
   ConsoleSlice,
+  DeviceSlice,
   EditorSlice,
   FBDFlowSlice,
   LadderFlowSlice,
@@ -17,6 +17,7 @@ import type {
 } from './slices'
 import {
   createConsoleSlice,
+  createDeviceSlice,
   createEditorSlice,
   createFBDFlowSlice,
   createLadderFlowSlice,
@@ -40,7 +41,8 @@ export const openPLCStoreBase = create<
     LibrarySlice &
     ProjectSlice &
     ConsoleSlice &
-    ModalSlice
+    ModalSlice &
+    DeviceSlice
 >()((...a) => ({
   ...createWorkspaceSlice(...a),
   ...createEditorSlice(...a),
@@ -53,6 +55,7 @@ export const openPLCStoreBase = create<
   ...createProjectSlice(...a),
   ...createConsoleSlice(...a),
   ...createModalSlice(...a),
+  ...createDeviceSlice(...a),
 }))
 
 export const useOpenPLCStore = createSelectorHooks(openPLCStoreBase)

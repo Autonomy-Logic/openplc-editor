@@ -1,4 +1,5 @@
 import { app, nativeTheme, shell } from 'electron'
+import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { platform } from 'process'
 
@@ -26,14 +27,24 @@ class MainProcessBridge implements MainIpcModule {
   store
   compilerService
   menuBuilder
+  hardwareService
 
-  constructor({ ipcMain, mainWindow, projectService, store, compilerService, menuBuilder }: MainIpcModuleConstructor) {
+  constructor({
+    ipcMain,
+    mainWindow,
+    projectService,
+    store,
+    compilerService,
+    menuBuilder,
+    hardwareService,
+  }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
     this.projectService = projectService
     this.compilerService = compilerService
     this.store = store
     this.menuBuilder = menuBuilder
+    this.hardwareService = hardwareService
   }
 
   setupMainIpcListener() {
@@ -189,12 +200,46 @@ class MainProcessBridge implements MainIpcModule {
         this.mainWindow?.maximize()
       }
     })
-
     /**
      * Window
      */
     this.ipcMain.on('window:reload', () => this.mainWindow?.webContents.reload())
     this.ipcMain.on('window:rebuild-menu', () => void this.menuBuilder.buildMenu())
+    /**
+     * Hardware
+     */
+    this.ipcMain.handle('hardware:device-configuration-options', async () =>
+      this.hardwareService.getDeviceConfigurationOptions(),
+    )
+    this.ipcMain.handle('hardware:refresh-communication-ports', async () =>
+      this.hardwareService.getAvailableSerialPorts(),
+    )
+    this.ipcMain.handle('hardware:refresh-available-boards', async () => this.hardwareService.getAvailableBoards())
+    /**
+     * Utilities
+     */
+    this.ipcMain.handle('util:get-preview-image', async (_event, image: string) => {
+      if (image === '') return
+
+      const isDevelopment = process.env.NODE_ENV === 'development'
+
+      const previewImage = join(
+        isDevelopment ? process.cwd() : process.resourcesPath,
+        isDevelopment ? 'resources' : '',
+        'runtime',
+        'previews',
+        image,
+      )
+
+      console.log('Samerdaqui', previewImage)
+      const imageBuffer = await readFile(previewImage)
+
+      const mimeType = 'image/png'
+
+      const base64 = imageBuffer.toString('base64')
+
+      return `data:${mimeType};base64,${base64}`
+    })
   }
 
   mainIpcEventHandlers = {
