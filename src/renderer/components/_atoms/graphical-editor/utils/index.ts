@@ -1,4 +1,4 @@
-import { baseTypeSchema,genericTypeSchema } from '@root/types/PLC'
+import { baseTypeSchema, genericTypeSchema } from '@root/types/PLC'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
 import { ZodLiteral } from 'zod'
 
@@ -9,10 +9,10 @@ export const getVariableByName = (variables: PLCVariable[], name: string): PLCVa
 
 export const validateVariableType = (
   selectedType: string,
-  expectedType: BlockVariant['variables'][0],
+  expectedType: BlockVariant['variables'][0] | string,
 ): { isValid: boolean; error?: string } => {
   const upperSelectedType = selectedType.toUpperCase()
-  const upperExpectedType = expectedType.type.value.toUpperCase()
+  const upperExpectedType = typeof expectedType === 'string' ? expectedType : expectedType.type.value.toUpperCase()
 
   if (upperExpectedType === 'ANY') {
     return {
@@ -41,6 +41,7 @@ export const validateVariableType = (
           return
         }
       })
+
       return {
         isValid: subValues.includes(upperSelectedType.toLowerCase()),
         error: subValues.includes(upperSelectedType.toLowerCase())
