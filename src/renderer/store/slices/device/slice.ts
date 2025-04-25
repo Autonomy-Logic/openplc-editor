@@ -30,7 +30,32 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         },
       },
     },
-    pinMapping: [],
+    pinMapping: [
+      {
+        pin: '1',
+        type: 'digitalInput',
+        address: 'someRandomAddress',
+        name: 'pin1',
+      },
+      {
+        pin: '2',
+        type: 'digitalOutput',
+        address: 'someRandomAddress',
+        name: 'pin2',
+      },
+      {
+        pin: '3',
+        type: 'analogInput',
+        address: 'someRandomAddress',
+        name: 'pin3',
+      },
+      {
+        pin: '4',
+        type: 'analogOutput',
+        address: 'someRandomAddress',
+        name: 'pin4',
+      },
+    ],
   },
 
   deviceActions: {
