@@ -30,6 +30,9 @@ export const FBDToolbox = () => {
       <TooltipSidebarWrapperButton tooltipContent='Continuation'>
         <Continuation onDragStart={(event) => handleDragStart(event, 'continuation')} />
       </TooltipSidebarWrapperButton>
+      <TooltipSidebarWrapperButton tooltipContent='Comment'>
+        <InputVariable onDragStart={(event) => handleDragStart(event, 'comment')} />
+      </TooltipSidebarWrapperButton>
     </>
   )
 }
