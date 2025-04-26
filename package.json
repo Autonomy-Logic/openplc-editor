@@ -24,6 +24,7 @@
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
     "test:unit": "jest --watch --no-coverage",
+    "test:e2e": "playwright test",
     "test": "jest --collectCoverage --"
   },
   "browserslist": [],
@@ -85,6 +86,7 @@
     "@electron/notarize": "^2.1.0",
     "@electron/rebuild": "^3.3.0",
     "@eslint/js": "^9.20.0",
+    "@playwright/test": "^1.52.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.11",
     "@svgr/webpack": "^8.1.0",
     "@teamsupercell/typings-for-css-modules-loader": "^2.5.2",
