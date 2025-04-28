@@ -1,7 +1,7 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, NodeResizer } from '@xyflow/react'
-import { useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils'
@@ -72,6 +72,10 @@ const CommentElement = (block: CommentProps) => {
   return (
     <>
       <div
+        style={{
+          minWidth: MINIMUM_ELEMENT_WIDTH,
+          minHeight: MINIMUM_ELEMENT_HEIGHT,
+        }}
         className={cn(
           'relative flex h-full w-full items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
           'hover:border-transparent hover:ring-2 hover:ring-brand',
@@ -103,12 +107,6 @@ const buildCommentNode = ({ id, position }: CommentBuilderProps): CommentNode =>
     id,
     type: 'comment',
     position,
-    width: MINIMUM_ELEMENT_WIDTH,
-    height: MINIMUM_ELEMENT_HEIGHT,
-    measured: {
-      width: MINIMUM_ELEMENT_WIDTH,
-      height: MINIMUM_ELEMENT_HEIGHT,
-    },
     data: {
       numericId: generateNumericUUID(),
       draggable: true,
@@ -123,4 +121,6 @@ const buildCommentNode = ({ id, position }: CommentBuilderProps): CommentNode =>
   }
 }
 
-export { buildCommentNode, CommentElement }
+const exportCommentElement = memo(CommentElement)
+
+export { buildCommentNode, exportCommentElement as CommentElement }
