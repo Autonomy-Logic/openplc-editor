@@ -5,8 +5,7 @@ import { enumeratedValidation } from '@root/renderer/store/slices/project/valida
 import { PLCDataType, PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils/cn'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
-import { useEffect, useRef } from 'react'
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 
 import { DescriptionCell } from './editable-cell'
 
@@ -19,7 +18,14 @@ type DataTypeEnumeratedTableProps = {
   setArrayTable: React.Dispatch<React.SetStateAction<{ selectedRow: number }>>
 }
 
-const EnumeratedTable = ({ name, values, initialValue, selectedRow, handleRowClick, setArrayTable }: DataTypeEnumeratedTableProps) => {
+const EnumeratedTable = ({
+  name,
+  values,
+  initialValue,
+  selectedRow,
+  handleRowClick,
+  setArrayTable,
+}: DataTypeEnumeratedTableProps) => {
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
@@ -182,8 +188,8 @@ const EnumeratedTable = ({ name, values, initialValue, selectedRow, handleRowCli
 
   return (
     <div className='flex w-full flex-auto flex-col gap-4 overflow-hidden'>
-      <div className='flex h-fit  w-[355px] scroll-ml-1 overflow-y-auto'>
-        <Table context='data-type-enumerated'>
+      <div className='flex h-fit w-full scroll-ml-1 overflow-y-auto'>
+        <Table context='data-type-enumerated' className='w-full'>
           <TableBody ref={tableBodyRef}>
             {table.getRowModel().rows.map((row, index) => (
               <TableRow
