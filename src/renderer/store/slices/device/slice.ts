@@ -8,7 +8,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     availableBoards: new Map(),
     availableCommunicationPorts: [],
     availableRTUInterfaces: [],
-    availableRTUBaudrates: [],
+    availableRTUBaudRates: [],
     availableTCPInterfaces: ['ethernet', 'wifi'], // The available TCP interfaces is always ['ethernet', 'wifi'], so we can set it on the slice creation.
   },
   deviceDefinitions: {
@@ -18,7 +18,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       communicationConfiguration: {
         modbusRTU: {
           rtuInterface: 'Serial',
-          rtuBaudrate: '115200',
+          rtuBaudRate: '115200',
           rtuSlaveId: '',
           rtuRS485TXPin: '',
         },
@@ -72,7 +72,8 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
           ;(Object.entries(rtuSettings) as [keyof typeof rtuSettings, string][]).forEach(([key, value]) => {
-            deviceDefinitions.configuration.communicationConfiguration.modbusRTU[key] = value
+            deviceDefinitions.configuration.communicationConfiguration.modbusRTU[key] =
+              value as keyof (typeof rtuSettings)[keyof typeof rtuSettings]
           })
         }),
       )

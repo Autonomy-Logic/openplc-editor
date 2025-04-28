@@ -1,5 +1,9 @@
 import z from 'zod'
 
+const baudRateOptions = ['9600', '14400', '19200', '38400', '57600', '115200'] as const
+
+const interfaceOptions = ['Serial', 'Serial 1', 'Serial 2', 'Serial 3'] as const
+
 const staticHostConfigurationSchema = z.object({
   ipAddress: z.string(), // This should have the format: XXX.XXX.XXX.XXX
   dns: z.string(), // This should have the format: XXX.XXX.XXX.XXX
@@ -14,8 +18,8 @@ const deviceConfigurationSchema = z.object({
   communicationPort: z.string(),
   communicationConfiguration: z.object({
     modbusRTU: z.object({
-      rtuInterface: z.string(), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
-      rtuBaudrate: z.string(), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
+      rtuInterface: z.enum(interfaceOptions), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
+      rtuBaudRate: z.enum(baudRateOptions), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
       rtuSlaveId: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.
       rtuRS485TXPin: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.Í
     }),
@@ -73,7 +77,7 @@ const deviceAvailableOptionsSchema = z.object({
   availableBoards: z.map(z.string(), availableBoardInfo),
   availableCommunicationPorts: z.array(z.string()),
   availableRTUInterfaces: z.array(z.string()),
-  availableRTUBaudrates: z.array(z.string()),
+  availableRTUBaudRates: z.array(z.string()),
   availableTCPInterfaces: z.array(z.string()),
 })
 
