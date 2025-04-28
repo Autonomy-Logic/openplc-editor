@@ -102,6 +102,9 @@ export const FBDBody = ({ rung }: FBDProps) => {
     debouncedUpdateRungStateCallback()
   }, [rungLocal])
 
+  /**
+   * Handle the addition of a new element by dropping it in the viewport
+   */
   const handleAddElementByDropping = (
     position: XYPosition,
     newNodeType: CustomFbdNodeTypes,
@@ -179,6 +182,11 @@ export const FBDBody = ({ rung }: FBDProps) => {
     })
   }
 
+  /**
+   * Handle the deletion of nodes and edges
+   * This function is called when the user presses the delete key
+   * It is used to remove the selected nodes and edges from the flow
+   */
   const handleOnDelete = (nodes: FlowNode[], edges: FlowEdge[]) => {
     if (nodes.length > 0) {
       fbdFlowActions.removeNodes({
@@ -234,6 +242,11 @@ export const FBDBody = ({ rung }: FBDProps) => {
     }
   }
 
+  /**
+   * Handle the connection of two nodes
+   * This function is called when the user connects two nodes
+   * It is used to update the local rung state
+   */
   const handleOnConnect = (connection: Connection) => {
     fbdFlowActions.onConnect({
       changes: connection,
