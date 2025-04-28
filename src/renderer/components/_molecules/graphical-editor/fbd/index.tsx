@@ -66,6 +66,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
   /**
    *  Update the local rung state when the rung state changes
+   *  * FYI: This implementation came from https://www.developerway.com/posts/debouncing-in-react
    */
   const updateRungState = () => {
     // console.log('trying to update rung state', '\n dragging:', dragging, '\n isEqual:', _.isEqual(rungLocal, rung))
