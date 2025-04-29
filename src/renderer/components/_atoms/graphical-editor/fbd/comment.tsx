@@ -44,6 +44,7 @@ const CommentElement = (block: CommentProps) => {
       nodeId: id,
     })
     if (!commentaryBlock) return
+
     updateNode({
       editorName: editor.meta.name,
       nodeId: id,

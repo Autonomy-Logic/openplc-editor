@@ -1,5 +1,6 @@
 import {
   BlockButton,
+  Comment,
   Connector,
   Continuation,
   InputVariable,
@@ -31,7 +32,7 @@ export const FBDToolbox = () => {
         <Continuation onDragStart={(event) => handleDragStart(event, 'continuation')} />
       </TooltipSidebarWrapperButton>
       <TooltipSidebarWrapperButton tooltipContent='Comment'>
-        <InputVariable onDragStart={(event) => handleDragStart(event, 'comment')} />
+        <Comment onDragStart={(event) => handleDragStart(event, 'comment')} />
       </TooltipSidebarWrapperButton>
     </>
   )
