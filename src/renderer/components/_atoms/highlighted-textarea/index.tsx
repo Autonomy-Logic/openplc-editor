@@ -17,6 +17,7 @@ type HighlightedTextAreaProps = ComponentPropsWithRef<'textarea'> & {
   }
   textAreaClassName?: string
   highlightClassName?: string
+  scrollableIndicator?: boolean
   scrollableIndicatorClassName?: string
 }
 
@@ -25,6 +26,7 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
     {
       textAreaClassName,
       highlightClassName,
+      scrollableIndicator = true,
       scrollableIndicatorClassName,
       placeholder,
       textAreaValue,
@@ -112,8 +114,9 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
       >
         <div
           className={cn(
-            'pointer-events-none absolute -z-10 w-full overflow-y-scroll [&::-webkit-scrollbar]:hidden',
+            'pointer-events-none absolute -z-10 w-full overflow-y-scroll',
             'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
+            scrollableIndicator ? '[&::-webkit-scrollbar]:hidden' : '',
             highlightClassName,
           )}
           ref={highlightDivRef}
@@ -128,8 +131,9 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
           onChange={onChangeHandler}
           placeholder={placeholder ?? '???'}
           className={cn(
-            'absolute w-full resize-none bg-transparent outline-none [&::-webkit-scrollbar]:hidden',
+            'absolute w-full resize-none bg-transparent outline-none',
             'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
+            scrollableIndicator ? '[&::-webkit-scrollbar]:hidden' : '',
             textAreaClassName,
           )}
           onFocus={(e) => {
@@ -159,15 +163,17 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
           rows={1}
           spellCheck={false}
         />
-        <div
-          className={cn(
-            'pointer-events-none absolute -right-2 top-1/2 hidden -translate-y-1/2 text-cp-sm',
-            scrollableIndicatorClassName,
-          )}
-          ref={scrollableIndicatorRef}
-        >
-          ↕
-        </div>
+        {scrollableIndicator && (
+          <div
+            className={cn(
+              'pointer-events-none absolute -right-2 top-1/2 hidden -translate-y-1/2 text-cp-sm',
+              scrollableIndicatorClassName,
+            )}
+            ref={scrollableIndicatorRef}
+          >
+            ↕
+          </div>
+        )}
       </div>
     )
   },

@@ -1,7 +1,7 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, NodeResizer } from '@xyflow/react'
-import { memo, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils'
@@ -19,7 +19,7 @@ const MINIMUM_ELEMENT_WIDTH = 128
 const MINIMUM_ELEMENT_HEIGHT = 64
 
 const CommentElement = (block: CommentProps) => {
-  const { id, selected, data } = block
+  const { id, selected, data, width, height } = block
   const {
     editor,
     editorActions: { updateModelFBD },
@@ -39,12 +39,25 @@ const CommentElement = (block: CommentProps) => {
 
   const [commentValue, setCommentValue] = useState(data.content)
 
+  useEffect(() => {
+    if (selected) inputVariableRef.current?.focus()
+  }, [selected])
+
   const handleSubmitCommentaryValueOnTextareaBlur = () => {
     const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
     if (!commentaryBlock) return
 
+    const parsedCommentValue = commentValue
+      .split('\n')
+      .filter(
+        (line, index, arr) => line.trim() !== '' || arr.slice(index + 1).some((nextLine) => nextLine.trim() !== ''),
+      )
+      .join('\n')
+      .trim()
+
+    setCommentValue(parsedCommentValue)
     updateNode({
       editorName: editor.meta.name,
       nodeId: id,
@@ -52,7 +65,7 @@ const CommentElement = (block: CommentProps) => {
         ...commentaryBlock,
         data: {
           ...block.data,
-          content: commentValue,
+          content: parsedCommentValue,
         },
       },
     })
@@ -74,11 +87,11 @@ const CommentElement = (block: CommentProps) => {
     <>
       <div
         style={{
-          minWidth: MINIMUM_ELEMENT_WIDTH,
-          minHeight: MINIMUM_ELEMENT_HEIGHT,
+          width: width ?? MINIMUM_ELEMENT_WIDTH,
+          height: height ?? MINIMUM_ELEMENT_HEIGHT,
         }}
         className={cn(
-          'relative flex h-full w-full items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
+          'flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
           'hover:border-transparent hover:ring-2 hover:ring-brand',
           {
             'border-transparent ring-2 ring-brand': selected,
@@ -87,16 +100,28 @@ const CommentElement = (block: CommentProps) => {
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
       >
-        <HighlightedTextArea
-          textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3')}
-          highlightClassName={cn('text-center placeholder:text-center text-xs leading-3')}
-          scrollableIndicatorClassName={cn('-right-2')}
-          placeholder={'Add some text...'}
-          textAreaValue={commentValue}
-          setTextAreaValue={setCommentValue}
-          handleSubmit={handleSubmitCommentaryValueOnTextareaBlur}
-          ref={inputVariableRef}
-        />
+        <div
+          className='flex items-center justify-center'
+          style={{ width: width ?? MINIMUM_ELEMENT_WIDTH, height: height ?? MINIMUM_ELEMENT_HEIGHT }}
+        >
+          <HighlightedTextArea
+            textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3')}
+            highlightClassName={cn('text-center placeholder:text-center text-xs leading-3')}
+            scrollableIndicator={false}
+            placeholder={'Add some text...'}
+            textAreaValue={commentValue}
+            setTextAreaValue={setCommentValue}
+            handleSubmit={handleSubmitCommentaryValueOnTextareaBlur}
+            inputHeight={{
+              height: (height ?? MINIMUM_ELEMENT_HEIGHT) - 8,
+              scrollLimiter: (height ?? MINIMUM_ELEMENT_HEIGHT) - 8,
+            }}
+            submitWith={{
+              enter: false,
+            }}
+            ref={inputVariableRef}
+          />
+        </div>
       </div>
       <NodeResizer isVisible={selected} minWidth={MINIMUM_ELEMENT_WIDTH} minHeight={MINIMUM_ELEMENT_HEIGHT} />
     </>
