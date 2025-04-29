@@ -1,5 +1,6 @@
 import { CustomFbdNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
 import { BlockNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/block'
+import { CommentNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/comment'
 import { ConnectionNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/connection'
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils'
 import { VariableNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/variable'
@@ -7,6 +8,7 @@ import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/
 import { FBDRungState } from '@root/renderer/store/slices'
 import {
   BlockFbdXML,
+  CommentFbdXML,
   ConnectorFbdXML,
   ContinuationFbdXML,
   FbdXML,
@@ -86,7 +88,7 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
             connection: [
               {
                 '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-                '@formalParameter': sourceNode.type === 'block' ? edge.sourceHandle as string : undefined,
+                '@formalParameter': sourceNode.type === 'block' ? (edge.sourceHandle as string) : undefined,
                 position: path.reverse().map((point) => ({
                   '@x': point.x,
                   '@y': point.y,
@@ -177,7 +179,7 @@ const outputVariableToXml = (node: VariableNode, rung: FBDRungState): OutVariabl
 
         return {
           '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-          '@formalParameter': sourceNode.type === 'block' ? edge.sourceHandle as string : undefined,
+          '@formalParameter': sourceNode.type === 'block' ? (edge.sourceHandle as string) : undefined,
           position: path.reverse().map((point) => ({
             '@x': point.x,
             '@y': point.y,
@@ -222,7 +224,7 @@ const connectorToXml = (node: ConnectionNode, rung: FBDRungState): ConnectorFbdX
 
         return {
           '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-          '@formalParameter': sourceNode.type === 'block' ? edge.sourceHandle as string : undefined,
+          '@formalParameter': sourceNode.type === 'block' ? (edge.sourceHandle as string) : undefined,
           position: path.reverse().map((point) => ({
             '@x': point.x,
             '@y': point.y,
@@ -268,6 +270,25 @@ const continuationToXml = (node: ConnectionNode): ContinuationFbdXML => {
   return continuationXML
 }
 
+const commentToXml = (node: CommentNode): CommentFbdXML => {
+  const commentXML: CommentFbdXML = {
+    '@localId': node.data.numericId,
+    '@height': node.height ?? (node.measured?.height as number),
+    '@width': node.width ?? (node.measured?.width as number),
+    position: {
+      '@x': node.position.x,
+      '@y': node.position.y,
+    },
+    content: {
+      'xhtml:p': {
+        $: node.data.content,
+      },
+    },
+  }
+
+  return commentXML
+}
+
 /**
  * Entry point to parse nodes to XML
  */
@@ -285,6 +306,7 @@ const fbdToXml = (rung: FBDRungState) => {
         outVariable: [],
         connector: [],
         continuation: [],
+        comment: [],
       },
     },
   }
@@ -306,6 +328,9 @@ const fbdToXml = (rung: FBDRungState) => {
         break
       case 'continuation':
         fbdXML.body.FBD.continuation.push(continuationToXml(node as ConnectionNode))
+        break
+      case 'comment':
+        fbdXML.body.FBD.comment.push(commentToXml(node as CommentNode))
         break
       default:
         break

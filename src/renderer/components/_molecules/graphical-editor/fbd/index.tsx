@@ -95,7 +95,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
       debounceUpdateRungRef.current?.()
     }
     // debounce the func that was created once, but has access to the latest sendRequest
-    return _.debounce(func, 1000)
+    return _.debounce(func, 100)
     // no dependencies! never gets updated
   }, [])
   useEffect(() => {

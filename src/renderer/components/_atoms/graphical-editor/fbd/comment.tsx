@@ -19,7 +19,7 @@ const MINIMUM_ELEMENT_WIDTH = 128
 const MINIMUM_ELEMENT_HEIGHT = 64
 
 const CommentElement = (block: CommentProps) => {
-  const { id, selected } = block
+  const { id, selected, data } = block
   const {
     editor,
     editorActions: { updateModelFBD },
@@ -37,7 +37,7 @@ const CommentElement = (block: CommentProps) => {
     }
   >(null)
 
-  const [commentValue, setCommentValue] = useState('')
+  const [commentValue, setCommentValue] = useState(data.content)
 
   const handleSubmitCommentaryValueOnTextareaBlur = () => {
     const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
