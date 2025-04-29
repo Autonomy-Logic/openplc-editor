@@ -68,7 +68,8 @@ const BoardConfiguration = () => {
         <div id='board-selection' className='flex items-center justify-center gap-1'>
           <SelectField
             label='Device'
-            placeholder={deviceBoard}
+            placeholder='Select a device'
+            selectedOption={deviceBoard}
             setSelectedOption={handleSetDeviceBoard}
             width='300px'
             options={deviceOptions}
@@ -81,6 +82,7 @@ const BoardConfiguration = () => {
             setSelectedOption={setCommunicationPort}
             label='Programming Port'
             placeholder={communicationPort}
+            selectedOption={communicationPort}
             className='[&_button]:w-[234px]'
             ariaLabel='Programming port selection'
           />

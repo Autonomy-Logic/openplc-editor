@@ -21,7 +21,7 @@ const deviceConfigurationSchema = z.object({
       rtuInterface: z.enum(interfaceOptions), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
       rtuBaudRate: z.enum(baudRateOptions), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
       rtuSlaveId: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.
-      rtuRS485TXPin: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.Í
+      rtuTS485ENPin: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.Í
     }),
     modbusTCP: z.discriminatedUnion('tcpInterface', [
       z.object({
@@ -39,6 +39,7 @@ const deviceConfigurationSchema = z.object({
     ]),
   }),
 })
+
 type DeviceConfiguration = z.infer<typeof deviceConfigurationSchema>
 
 const devicePinSchema = z.object({
@@ -93,6 +94,13 @@ const deviceStateSchema = z.object({
 
 type DeviceState = z.infer<typeof deviceStateSchema>
 
+const setRTUConfigParams = z.discriminatedUnion('rtuConfig', [
+  z.object({ rtuConfig: z.literal('rtuInterface'), value: z.enum(interfaceOptions) }),
+  z.object({ rtuConfig: z.literal('rtuBaudRate'), value: z.enum(baudRateOptions) }),
+  z.object({ rtuConfig: z.literal('rtuSlaveId'), value: z.string() }),
+  z.object({ rtuConfig: z.literal('rtuTS485ENPin'), value: z.string() }),
+])
+
 const deviceActionSchema = z.object({
   setAvailableOptions: z
     .function()
@@ -106,10 +114,7 @@ const deviceActionSchema = z.object({
   addPin: z.function().args(z.string().optional()).returns(z.void()),
   setDeviceBoard: z.function().args(z.string()).returns(z.void()),
   setCommunicationPort: z.function().args(z.string()).returns(z.void()),
-  setRTUSettings: z
-    .function()
-    .args(deviceConfigurationSchema.shape.communicationConfiguration.shape.modbusRTU.partial())
-    .returns(z.void()),
+  setRTUConfig: z.function().args(setRTUConfigParams).returns(z.void()),
 })
 
 type DeviceActions = z.infer<typeof deviceActionSchema>
@@ -130,10 +135,12 @@ export type {
   StaticHostConfiguration,
 }
 export {
+  baudRateOptions,
   deviceActionSchema,
   deviceAvailableOptionsSchema,
   deviceConfigurationSchema,
   devicePinMappingSchema,
   devicePinSchema,
   deviceStateSchema,
+  interfaceOptions,
 }

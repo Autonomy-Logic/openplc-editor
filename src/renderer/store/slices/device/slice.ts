@@ -20,7 +20,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           rtuInterface: 'Serial',
           rtuBaudRate: '115200',
           rtuSlaveId: '',
-          rtuRS485TXPin: '',
+          rtuTS485ENPin: '',
         },
         modbusTCP: {
           tcpInterface: 'wifi',
@@ -68,13 +68,26 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
-    setRTUSettings: (rtuSettings): void => {
+    setRTUConfig: (rtuConfigOption): void => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
-          ;(Object.entries(rtuSettings) as [keyof typeof rtuSettings, string][]).forEach(([key, value]) => {
-            deviceDefinitions.configuration.communicationConfiguration.modbusRTU[key] =
-              value as keyof (typeof rtuSettings)[keyof typeof rtuSettings]
-          })
+          const { rtuConfig, value } = rtuConfigOption
+          switch (rtuConfig) {
+            case 'rtuBaudRate':
+              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuBaudRate = value
+              break
+            case 'rtuInterface':
+              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuInterface = value
+              break
+            case 'rtuSlaveId':
+              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuSlaveId = value
+              break
+            case 'rtuTS485ENPin':
+              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuTS485ENPin = value
+              break
+            default:
+              break
+          }
         }),
       )
     },
