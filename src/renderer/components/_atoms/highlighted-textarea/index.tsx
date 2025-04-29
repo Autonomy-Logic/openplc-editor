@@ -90,7 +90,7 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
             inputRef.current.scrollHeight > inputHeight.scrollLimiter ? 'block' : 'none'
         }
       }
-    }, [textAreaValue])
+    }, [textAreaValue, inputHeight])
 
     useEffect(() => {
       if (highlightDivRef.current) {
