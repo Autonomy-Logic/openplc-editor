@@ -48,7 +48,7 @@ const CreatePLCGraphicalObject = (
       language === 'ld'
         ? { language, openedRungs: [] }
         : language === 'fbd'
-          ? { language, hoveringElement: { elementId: null, hovering: false } }
+          ? { language, hoveringElement: { elementId: null, hovering: false }, canEditorZoom: true, canEditorPan: true }
           : { language },
   })
   return editor

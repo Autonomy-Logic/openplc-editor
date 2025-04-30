@@ -23,6 +23,7 @@ type ZodFBDFlowState = z.infer<typeof zodFBDFlowStateSchema>
 
 const zodFBDNodeTypesSchema = z.enum([
   'block',
+  'comment',
   'connector',
   'connection',
   'input-variable',
@@ -74,6 +75,9 @@ type FBDFlowActions = {
 
   addNode: ({ node, editorName }: { node: Node; editorName: string }) => void
   removeNodes: ({ nodes, editorName }: { nodes: Node[]; editorName: string }) => void
+
+  addSelectedNode: ({ node, editorName }: { node: Node; editorName: string }) => void
+  removeSelectedNode: ({ node, editorName }: { node: Node; editorName: string }) => void
   setSelectedNodes: ({ nodes, editorName }: { nodes: Node[]; editorName: string }) => void
 
   setEdges: ({ edges, editorName }: { edges: Edge[]; editorName: string }) => void

@@ -231,7 +231,6 @@ class MainProcessBridge implements MainIpcModule {
         image,
       )
 
-      console.log('Samerdaqui', previewImage)
       const imageBuffer = await readFile(previewImage)
 
       const mimeType = 'image/png'

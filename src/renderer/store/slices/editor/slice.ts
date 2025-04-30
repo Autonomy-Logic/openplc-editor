@@ -166,14 +166,24 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       return false
     },
 
-    updateModelFBD: ({ hoveringElement }) =>
+    updateModelFBD: ({ hoveringElement, canEditorZoom, canEditorPan }) =>
       setState(
         produce((state: EditorState) => {
           const { editor } = state
           if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
-            editor.graphical.hoveringElement = {
-              elementId: hoveringElement.elementId,
-              hovering: hoveringElement.hovering,
+            if (canEditorZoom !== undefined) {
+              editor.graphical.canEditorZoom = canEditorZoom
+            }
+
+            if (canEditorPan !== undefined) {
+              editor.graphical.canEditorPan = canEditorPan
+            }
+
+            if (hoveringElement) {
+              editor.graphical.hoveringElement = {
+                elementId: hoveringElement.elementId,
+                hovering: hoveringElement.hovering,
+              }
             }
           }
         }),
