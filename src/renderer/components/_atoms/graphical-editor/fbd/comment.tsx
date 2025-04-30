@@ -133,6 +133,12 @@ const buildCommentNode = ({ id, position }: CommentBuilderProps): CommentNode =>
     id,
     type: 'comment',
     position,
+    width: MINIMUM_ELEMENT_WIDTH,
+    height: MINIMUM_ELEMENT_HEIGHT,
+    measured: {
+      width: MINIMUM_ELEMENT_WIDTH,
+      height: MINIMUM_ELEMENT_HEIGHT,
+    },
     data: {
       numericId: generateNumericUUID(),
       draggable: true,
