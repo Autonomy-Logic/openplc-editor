@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
+import { validateVariableType } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
@@ -808,9 +809,9 @@ const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionC
 
   const mustHaveExecutionControlEnabled =
     inputConnectors.length === 0 ||
-    inputConnectors[0].type.value !== 'BOOL' ||
+    !validateVariableType('BOOL', inputConnectors[0].type.value).isValid ||
     outputConnectors.length === 0 ||
-    outputConnectors[0].type.value !== 'BOOL'
+    !validateVariableType('BOOL', outputConnectors[0].type.value).isValid
 
   if (executionControl || mustHaveExecutionControlEnabled) {
     const executionControlVariable = variant.variables.some(
