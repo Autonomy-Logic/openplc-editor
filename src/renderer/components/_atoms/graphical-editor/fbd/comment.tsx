@@ -1,7 +1,7 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, NodeResizer } from '@xyflow/react'
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils'
@@ -38,10 +38,6 @@ const CommentElement = (block: CommentProps) => {
   >(null)
 
   const [commentValue, setCommentValue] = useState(data.content)
-
-  useEffect(() => {
-    if (selected) inputVariableRef.current?.focus()
-  }, [selected])
 
   const handleSubmitCommentaryValueOnTextareaBlur = () => {
     const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
