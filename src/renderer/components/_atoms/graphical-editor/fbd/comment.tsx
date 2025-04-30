@@ -1,7 +1,7 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, NodeResizer } from '@xyflow/react'
-import { memo, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils'
@@ -38,6 +38,43 @@ const CommentElement = (block: CommentProps) => {
   >(null)
 
   const [commentValue, setCommentValue] = useState(data.content)
+  const [commentFocused, setCommentFocused] = useState(false)
+
+  useEffect(() => {
+    const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
+      nodeId: id,
+    })
+    if (!commentaryBlock) return
+
+    if (commentFocused) {
+      updateNode({
+        editorName: editor.meta.name,
+        nodeId: id,
+        node: {
+          ...commentaryBlock,
+          draggable: false,
+        },
+      })
+      updateModelFBD({
+        canEditorZoom: false,
+        canEditorPan: false,
+      })
+      return
+    }
+
+    updateNode({
+      editorName: editor.meta.name,
+      nodeId: id,
+      node: {
+        ...commentaryBlock,
+        draggable: (commentaryBlock as CommentNode).data.draggable,
+      },
+    })
+    updateModelFBD({
+      canEditorZoom: true,
+      canEditorPan: true,
+    })
+  }, [commentFocused])
 
   const handleSubmitCommentaryValueOnTextareaBlur = () => {
     const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
@@ -101,6 +138,7 @@ const CommentElement = (block: CommentProps) => {
           style={{ width: width ?? MINIMUM_ELEMENT_WIDTH, height: height ?? MINIMUM_ELEMENT_HEIGHT }}
         >
           <HighlightedTextArea
+            ref={inputVariableRef}
             textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3')}
             highlightClassName={cn('text-center placeholder:text-center text-xs leading-3')}
             scrollableIndicator={false}
@@ -108,6 +146,12 @@ const CommentElement = (block: CommentProps) => {
             textAreaValue={commentValue}
             setTextAreaValue={setCommentValue}
             handleSubmit={handleSubmitCommentaryValueOnTextareaBlur}
+            onFocus={() => {
+              setCommentFocused(true)
+            }}
+            onBlur={() => {
+              setCommentFocused(false)
+            }}
             inputHeight={{
               height: (height ?? MINIMUM_ELEMENT_HEIGHT) - 8,
               scrollLimiter: (height ?? MINIMUM_ELEMENT_HEIGHT) - 8,
@@ -115,11 +159,10 @@ const CommentElement = (block: CommentProps) => {
             submitWith={{
               enter: false,
             }}
-            ref={inputVariableRef}
           />
         </div>
       </div>
-      <NodeResizer isVisible={selected} minWidth={MINIMUM_ELEMENT_WIDTH} minHeight={MINIMUM_ELEMENT_HEIGHT} />
+      <NodeResizer isVisible={selected ?? false} minWidth={MINIMUM_ELEMENT_WIDTH} minHeight={MINIMUM_ELEMENT_HEIGHT} />
     </>
   )
 }

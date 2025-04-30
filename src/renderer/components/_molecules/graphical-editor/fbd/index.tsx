@@ -49,12 +49,20 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const [dragging, setDragging] = useState(false)
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
-  const isElementBeingHovered = useMemo(() => {
+  const canZoom = useMemo(() => {
     if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
-      return editor.graphical.hoveringElement.hovering
+      return editor.graphical.canEditorZoom
     }
     return false
   }, [editor])
+  const canPan = useMemo(() => {
+    if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
+      return editor.graphical.canEditorPan
+    }
+    return false
+  }, [editor])
+
+  console.log('canZoom', canZoom, '\ncanPan', canPan)
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
@@ -487,7 +495,8 @@ export const FBDBody = ({ rung }: FBDProps) => {
           onNodeDragStart: onNodeDragStart,
           onNodeDragStop: onNodeDragStop,
 
-          preventScrolling: !isElementBeingHovered,
+          preventScrolling: canZoom,
+          panOnDrag: canPan,
 
           snapGrid: [16, 16],
           snapToGrid: true,
