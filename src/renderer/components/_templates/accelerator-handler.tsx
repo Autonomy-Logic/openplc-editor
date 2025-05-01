@@ -29,6 +29,7 @@ export const saveProjectRequest = async (
   })
 
   const projectData = PLCProjectSchema.safeParse(project)
+  console.log('projectData', projectData)
   if (!projectData.success) {
     setEditingState('unsaved')
     toast({

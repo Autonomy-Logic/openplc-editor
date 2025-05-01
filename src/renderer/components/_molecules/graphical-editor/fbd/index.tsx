@@ -62,13 +62,10 @@ export const FBDBody = ({ rung }: FBDProps) => {
     return false
   }, [editor])
 
-  console.log('canZoom', canZoom, '\ncanPan', canPan)
-
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // console.log('rung', rung)
     setRungLocal(rung)
   }, [rung])
 
