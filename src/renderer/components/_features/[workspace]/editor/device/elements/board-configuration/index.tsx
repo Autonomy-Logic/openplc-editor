@@ -55,48 +55,57 @@ const BoardConfiguration = () => {
   )
 
   return (
-    <div id='board-configuration-container' className='flex h-full w-1/2 flex-col gap-6 overflow-hidden'>
-      <div id='board-figure-container' className='my-24 flex h-[30%] w-full items-center justify-center p-12'>
-        <div className='flex h-[500px] w-[500px] items-center justify-center'>
-          <img src={previewImage} alt='Device preview' className='mt-4 aspect-square h-80 w-80 object-contain' />
+    <div
+      id='board-configuration-container'
+      className='flex h-1/2 w-[600px] flex-col overflow-hidden lg:w-[1000px] xl:w-[1400px]'
+    >
+      <h2 id='screen-title' className='mx-8 my-3 text-lg font-medium text-neutral-950 dark:text-white'>
+        Board Configuration
+      </h2>
+      <div id='board-configuration' className='mt-[18px] flex h-full w-full justify-between px-8'>
+        <div className='h-[20rem] w-[24rem] rounded-lg border-[0.75px] border-neutral-200 p-6 dark:border-neutral-800'>
+          <img src={previewImage} alt='Device preview' className='h-full w-full object-contain' />
         </div>
-      </div>
-      <div
-        id='board-preferences-container'
-        className='flex h-[70%] w-full flex-col items-start justify-center gap-3 overflow-y-auto overflow-x-hidden px-28 sm:px-16'
-      >
-        <div id='board-selection' className='flex items-center justify-center gap-1'>
-          <SelectField
-            label='Device'
-            placeholder='Select a device'
-            selectedOption={deviceBoard}
-            setSelectedOption={handleSetDeviceBoard}
-            width='300px'
-            options={deviceOptions}
-            ariaLabel='Device selection'
-          />
-        </div>
-        <div id='programming-port-selection' className='flex items-center justify-center gap-1'>
-          <SelectField
-            options={availableCommunicationPorts}
-            setSelectedOption={setCommunicationPort}
-            label='Programming Port'
-            placeholder={communicationPort}
-            selectedOption={communicationPort}
-            className='[&_button]:w-[234px]'
-            ariaLabel='Programming port selection'
-          />
-          <button type='button' onClick={refreshCommunicationPorts} className='group' aria-pressed={isPressed}>
-            <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
-          </button>
-        </div>
-        <p className='text-start font-caption text-xs font-semibold text-neutral-850 dark:text-white '>Specs</p>
-        <div id='board-specs-container' className='grid grid-cols-2 place-content-around gap-2'>
-          {Object.entries(availableBoards.get(deviceBoard)?.specs || {}).map(([spec, value]) => (
-            <p className='text-start font-caption text-cp-sm font-semibold text-neutral-850 dark:text-white' key={spec}>
-              {spec}: <span className='font-light text-neutral-600 dark:text-neutral-400'>{value}</span>
-            </p>
-          ))}
+        <div
+          id='board-preferences-container'
+          className='flex h-[70%] w-1/2 flex-col items-start justify-start gap-3 overflow-hidden'
+        >
+          <div id='board-selection' className='flex items-center justify-center gap-1'>
+            <SelectField
+              label='Device'
+              placeholder='Select a device'
+              selectedOption={deviceBoard}
+              setSelectedOption={handleSetDeviceBoard}
+              width='300px'
+              options={deviceOptions}
+              ariaLabel='Device selection'
+            />
+          </div>
+          <div id='programming-port-selection' className='flex items-center justify-center gap-1'>
+            <SelectField
+              options={availableCommunicationPorts}
+              setSelectedOption={setCommunicationPort}
+              label='Programming Port'
+              placeholder={communicationPort}
+              selectedOption={communicationPort}
+              className='[&_button]:w-[234px]'
+              ariaLabel='Programming port selection'
+            />
+            <button type='button' onClick={refreshCommunicationPorts} className='group' aria-pressed={isPressed}>
+              <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
+            </button>
+          </div>
+          <p className='text-start font-caption text-xs font-semibold text-neutral-850 dark:text-white '>Specs</p>
+          <div id='board-specs-container' className='grid grid-cols-2 place-content-around gap-2'>
+            {Object.entries(availableBoards.get(deviceBoard)?.specs || {}).map(([spec, value]) => (
+              <p
+                className='text-start font-caption text-cp-sm font-semibold text-neutral-850 dark:text-white'
+                key={spec}
+              >
+                {spec}: <span className='font-light text-neutral-600 dark:text-neutral-400'>{value}</span>
+              </p>
+            ))}
+          </div>
         </div>
       </div>
     </div>
