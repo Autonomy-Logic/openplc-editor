@@ -4,7 +4,7 @@ import { checkVariableNameUnit } from '@root/renderer/store/slices/project/valid
 import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
-import { useEffect, useRef, useState } from 'react'
+import { FocusEvent, useEffect, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
@@ -83,6 +83,7 @@ export const BlockNodeElement = <T extends object>({
     .map((variable) => variable.name)
 
   const [blockNameValue, setBlockNameValue] = useState<string>(blockType === 'generic' ? '' : blockName)
+  const [validBlockNameValue, setValidBlockNameValue] = useState<string>(blockNameValue)
   const [wrongName, setWrongName] = useState<boolean>(false)
 
   const inputNameRef = useRef<HTMLInputElement>(null)
@@ -118,7 +119,7 @@ export const BlockNodeElement = <T extends object>({
   const handleNameInputOnBlur = () => {
     setInputNameFocus(false)
 
-    if (blockNameValue === '' || blockNameValue === blockName) {
+    if (blockNameValue === blockName) {
       return
     }
 
@@ -130,6 +131,8 @@ export const BlockNodeElement = <T extends object>({
 
     if (!libraryBlock) {
       setWrongName(true)
+      setBlockNameValue(validBlockNameValue)
+      toast({ title: 'Invalid name', description: 'The name could not be changed', variant: 'fail' })
       return
     }
 
@@ -263,6 +266,12 @@ export const BlockNodeElement = <T extends object>({
     })
   }
 
+  const handleFocusInput = (e: FocusEvent<HTMLInputElement, Element>) => {
+    e.target.select()
+    setValidBlockNameValue(blockNameValue)
+    setInputNameFocus(true)
+  }
+
   return (
     <div
       className={cn(
@@ -288,7 +297,7 @@ export const BlockNodeElement = <T extends object>({
         placeholder='???'
         className='absolute top-2 w-full bg-transparent text-center text-xs outline-none'
         disabled={disabled}
-        onFocus={() => setInputNameFocus(true)}
+        onFocus={handleFocusInput}
         onBlur={() => inputNameFocus && handleNameInputOnBlur()}
         onKeyDown={(e) => e.key === 'Enter' && inputNameRef.current?.blur()}
         ref={inputNameRef}
