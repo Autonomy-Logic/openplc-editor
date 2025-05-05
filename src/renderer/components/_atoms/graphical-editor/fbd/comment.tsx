@@ -1,3 +1,4 @@
+import EditButton from '@root/renderer/assets/icons/interface/EditButton'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, NodeResizer } from '@xyflow/react'
@@ -30,6 +31,7 @@ const CommentElement = (block: CommentProps) => {
     },
   } = useOpenPLCStore()
 
+  const blockRef = useRef<HTMLDivElement>(null)
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
       blur: ({ submit }: { submit?: boolean }) => void
@@ -59,6 +61,7 @@ const CommentElement = (block: CommentProps) => {
         node: {
           ...commentaryBlock,
           draggable: false,
+          selected: true,
         },
       })
       updateModelFBD({
@@ -74,6 +77,7 @@ const CommentElement = (block: CommentProps) => {
       node: {
         ...commentaryBlock,
         draggable: (commentaryBlock as CommentNode).data.draggable,
+        selected: false,
       },
     })
     updateModelFBD({
@@ -125,12 +129,13 @@ const CommentElement = (block: CommentProps) => {
   return (
     <>
       <div
+        ref={blockRef}
         style={{
           width: width ?? MINIMUM_ELEMENT_WIDTH,
           height: height ?? MINIMUM_ELEMENT_HEIGHT,
         }}
         className={cn(
-          'flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
+          'relative flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
           'hover:border-transparent hover:ring-2 hover:ring-brand',
           {
             'border-transparent ring-2 ring-brand': selected,
@@ -140,7 +145,10 @@ const CommentElement = (block: CommentProps) => {
         onMouseLeave={onMouseLeave}
       >
         <div
-          className='flex items-center justify-center'
+          className={cn(
+            'flex items-center justify-center',
+            commentFocused ? 'pointer-events-auto' : 'pointer-events-none',
+          )}
           style={{ width: width ?? MINIMUM_ELEMENT_WIDTH, height: height ?? MINIMUM_ELEMENT_HEIGHT }}
         >
           <HighlightedTextArea
@@ -152,10 +160,33 @@ const CommentElement = (block: CommentProps) => {
             textAreaValue={commentValue}
             setTextAreaValue={setCommentValue}
             handleSubmit={handleSubmitCommentaryValueOnTextareaBlur}
-            onFocus={() => {
+            onFocus={(e) => {
+              e.currentTarget.select()
               setCommentFocused(true)
             }}
-            onBlur={() => {
+            onBlur={(e) => {
+              const blockId =
+                e.relatedTarget?.getAttributeNode('data-id')?.value ||
+                e.relatedTarget?.parentElement?.getAttributeNode('data-id')?.value ||
+                undefined
+              if (blockId === id) {
+                // If the focus is inside the blockRef, do not blur
+                inputVariableRef.current?.focus()
+                return
+              }
+
+              // Focus inside blockRef or focus on parent element
+              if (
+                blockRef.current?.contains(e.relatedTarget) ||
+                blockRef.current?.isSameNode(e.relatedTarget) ||
+                blockRef.current?.parentElement?.contains(e.relatedTarget) ||
+                blockRef.current?.parentElement?.isSameNode(e.relatedTarget)
+              ) {
+                // If the focus is inside the blockRef or its parent, do not blur
+                inputVariableRef.current?.focus()
+                return
+              }
+
               setCommentFocused(false)
             }}
             inputHeight={{
@@ -166,6 +197,21 @@ const CommentElement = (block: CommentProps) => {
               enter: false,
             }}
           />
+        </div>
+        <div
+          className={cn(
+            'absolute right-[2px] top-[2px] h-5 w-5 cursor-pointer rounded text-white',
+            'hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-brand',
+            commentFocused ? 'hidden' : 'block',
+          )}
+          onClick={() => {
+            inputVariableRef.current?.focus()
+          }}
+          title='Click to edit'
+        >
+          <div className='flex h-full w-full items-center justify-center'>
+            <EditButton className='h-3 w-3' />
+          </div>
         </div>
       </div>
       <NodeResizer isVisible={selected ?? false} minWidth={MINIMUM_ELEMENT_WIDTH} minHeight={MINIMUM_ELEMENT_HEIGHT} />

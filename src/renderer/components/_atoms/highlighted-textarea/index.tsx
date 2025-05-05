@@ -145,8 +145,8 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
               inputRef.current.scrollTop = 0
               highlightDivRef.current.scrollTop = 0
             }
-            if (canSubmit && handleSubmit) handleSubmit()
             props.onBlur?.(e)
+            if (canSubmit && handleSubmit) handleSubmit()
             setCanSubmit(true)
           }}
           onScroll={(e) => onScrollHandler(e)}
