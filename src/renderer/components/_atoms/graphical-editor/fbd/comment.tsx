@@ -41,6 +41,12 @@ const CommentElement = (block: CommentProps) => {
   const [commentFocused, setCommentFocused] = useState(false)
 
   useEffect(() => {
+    if (data.content) {
+      setCommentValue(data.content)
+    }
+  }, [])
+
+  useEffect(() => {
     const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
