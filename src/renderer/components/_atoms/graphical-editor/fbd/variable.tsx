@@ -5,6 +5,7 @@ import { Node, NodeProps, Position } from '@xyflow/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { BlockVariant } from '../types/block'
 import { getVariableByName, validateVariableType } from '../utils'
 import { FBDBlockAutoComplete } from './autocomplete'
@@ -57,37 +58,54 @@ const VariableElement = (block: VariableProps) => {
 
   const [variableValue, setVariableValue] = useState('')
   const [inputError, setInputError] = useState<boolean>(false)
+  const [errorDescription, setErrorDescription] = useState<string>('')
   const [isAVariable, setIsAVariable] = useState<boolean>(false)
 
   /**
    * Get the connection type
    */
   const flow = useMemo(() => fbdFlows.find((flow) => flow.name === editor.meta.name), [fbdFlows, editor])
-  const connection = useMemo(() => {
+
+  const connections = useMemo(() => {
     const rung = flow?.rung
-    if (!rung)
-      return {
-        node: undefined,
-        edge: undefined,
-      }
+    if (!rung) return []
 
-    const sourceEdge = rung.edges.find((edge) => edge.source === id)
-    const targetNode = rung.nodes.find((block) => block.id === sourceEdge?.target && block.type === 'block')
+    const connectedEdges = rung.edges.filter((edge) => edge.source === id || edge.target === id)
+    const connectionsTmp = connectedEdges.map((edge) => {
+      const isSource = edge.source === id
+      const connectedNodeId = isSource ? edge.target : edge.source
+      return rung.nodes.find((block) => block.id === connectedNodeId && block.type === 'block')
+    })
 
-    const targetEdge = rung.edges.find((edge) => edge.target === id)
-    const sourceNode = rung.nodes.find((block) => block.id === targetEdge?.source && block.type === 'block')
-
-    const connectedBlock = sourceNode || targetNode
-    return {
-      node: connectedBlock ? (connectedBlock as BlockNode<BlockVariant>) : undefined,
-      targetEdge: targetEdge,
-      sourceEdge: sourceEdge,
-    }
+    return connectionsTmp
+      .filter((node): node is BlockNode<BlockVariant> => node !== undefined)
+      .map((node, index) => ({
+        node,
+        edge: connectedEdges[index],
+        isSource: connectedEdges[index].source === id,
+      }))
   }, [flow])
-  const connectionType = useMemo(() => {
-    const variable = connection.node?.data.variant.variables.find(
+
+  const primaryConnection = useMemo(() => {
+    const primaryConnection = connections[0]
+    return primaryConnection
+      ? {
+          node: primaryConnection.node,
+          targetEdge: primaryConnection.isSource ? undefined : primaryConnection.edge,
+          sourceEdge: primaryConnection.isSource ? primaryConnection.edge : undefined,
+        }
+      : {
+          node: undefined,
+          targetEdge: undefined,
+          sourceEdge: undefined,
+        }
+  }, [connections])
+
+  const primaryConnectionType = useMemo(() => {
+    const variable = primaryConnection.node?.data.variant.variables.find(
       (variable) =>
-        variable.name === connection.sourceEdge?.targetHandle || variable.name === connection.targetEdge?.sourceHandle,
+        variable.name === primaryConnection.sourceEdge?.targetHandle ||
+        variable.name === primaryConnection.targetEdge?.sourceHandle,
     )
     return variable
       ? {
@@ -112,7 +130,38 @@ const VariableElement = (block: VariableProps) => {
             },
           },
         }
-  }, [connection])
+  }, [primaryConnection])
+
+  const allConnectionsType = useMemo(() => {
+    return connections.map((connection) => {
+      const variable = connection.node?.data.variant.variables.find(
+        (variable) => variable.name === connection.edge.sourceHandle || variable.name === connection.edge.targetHandle,
+      )
+      return variable
+        ? {
+            string: `(*${variable.type.value}*)`,
+            variable: {
+              name: variable.name,
+              class: variable.class,
+              type: {
+                value: variable.type.value,
+                definition: variable.type.definition,
+              },
+            },
+          }
+        : {
+            string: 'NOT CONNECTED',
+            variable: {
+              name: '',
+              class: '',
+              type: {
+                value: '',
+                definition: '',
+              },
+            },
+          }
+    })
+  }, [connections])
 
   /**
    * useEffect to focus the variable input when the block is selected
@@ -171,18 +220,43 @@ const VariableElement = (block: VariableProps) => {
         })
       }
 
-      const validation = validateVariableType(variable.type.value, connectionType.variable)
-      if (!validation.isValid && dataTypes.length > 0) {
+      let isValid = allConnectionsType.every(
+        (connection) => validateVariableType(variable.type.value, connection.variable).isValid,
+      )
+
+      if (!isValid && dataTypes.length > 0) {
         const userDataTypes = dataTypes.map((dataType) => dataType.name)
-        validation.isValid = userDataTypes.includes(variable.type.value)
-        validation.error = undefined
+        isValid = userDataTypes.includes(variable.type.value)
       }
+
+      if (!isValid) {
+        const validWithPrimaryConnection = validateVariableType(
+          variable.type.value,
+          primaryConnectionType.variable,
+        ).isValid
+
+        if (!validWithPrimaryConnection) {
+          setErrorDescription(
+            `Variable type ${variable.type.value} is not compatible with ${primaryConnectionType.variable.name}`,
+          )
+        } else {
+          setErrorDescription(
+            `Variable type ${variable.type.value} is not compatible with one or more connections: ${allConnectionsType
+              .map((connection) => connection.variable.name)
+              .join(', ')}`,
+          )
+        }
+      } else {
+        setErrorDescription('')
+      }
+
       setVariableValue(variable.name)
-      setInputError(!validation.isValid)
+      setInputError(!isValid)
       setIsAVariable(true)
     }
 
-    if (!connection.node) {
+    if (!connections.length) {
+      setErrorDescription('Variable not connected')
       setInputError(true)
       return
     }
@@ -246,65 +320,80 @@ const VariableElement = (block: VariableProps) => {
 
   return (
     <>
-      <div
-        style={{ width: ELEMENT_SIZE, height: ELEMENT_HEIGHT }}
-        className={cn(
-          'relative flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
-          'hover:border-transparent hover:ring-2 hover:ring-brand',
-          {
-            'border-transparent ring-2 ring-brand': selected,
-          },
-        )}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-      >
-        <div
-          className='flex items-center'
-          style={{
-            width: DEFAULT_VARIABLE_WIDTH,
-            height: DEFAULT_VARIABLE_HEIGHT,
-          }}
-        >
-          <HighlightedTextArea
-            textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
-              'text-yellow-500': !isAVariable,
-              'text-red-500': inputError,
-            })}
-            highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {})}
-            scrollableIndicatorClassName={cn({
-              '-right-2': data.variant === 'output-variable' || data.variant === 'inout-variable',
-              '-left-2': data.variant === 'input-variable',
-            })}
-            placeholder={connectionType.string}
-            textAreaValue={variableValue}
-            setTextAreaValue={setVariableValue}
-            handleSubmit={handleSubmitVariableValueOnTextareaBlur}
-            inputHeight={{
-              height: DEFAULT_VARIABLE_HEIGHT / 2,
-              scrollLimiter: DEFAULT_VARIABLE_HEIGHT,
-            }}
-            ref={inputVariableRef}
-            onChange={onChangeHandler}
-            onFocus={onChangeHandler}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
-              setKeyPressedAtTextarea(e.key)
-            }}
-            onKeyUp={() => setKeyPressedAtTextarea('')}
-          />
-        </div>
-        {openAutocomplete && (
-          <div className='absolute -bottom-2'>
-            <FBDBlockAutoComplete
-              block={block}
-              valueToSearch={variableValue}
-              isOpen={openAutocomplete}
-              setIsOpen={(value) => setOpenAutocomplete(value)}
-              keyPressed={keyPressedAtTextarea}
-            />
-          </div>
-        )}
-      </div>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger>
+            <div
+              style={{ width: ELEMENT_SIZE, height: ELEMENT_HEIGHT }}
+              className={cn(
+                'relative flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
+                'hover:border-transparent hover:ring-2 hover:ring-brand',
+                {
+                  'border-transparent ring-2 ring-brand': selected,
+                },
+              )}
+              onMouseEnter={onMouseEnter}
+              onMouseLeave={onMouseLeave}
+            >
+              <div
+                className='flex items-center'
+                style={{
+                  width: DEFAULT_VARIABLE_WIDTH,
+                  height: DEFAULT_VARIABLE_HEIGHT,
+                }}
+              >
+                <HighlightedTextArea
+                  textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3', {
+                    'text-yellow-500': !isAVariable,
+                    'text-red-500': inputError,
+                  })}
+                  highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {})}
+                  scrollableIndicatorClassName={cn({
+                    '-right-2': data.variant === 'output-variable' || data.variant === 'inout-variable',
+                    '-left-2': data.variant === 'input-variable',
+                  })}
+                  placeholder={primaryConnectionType.string}
+                  textAreaValue={variableValue}
+                  setTextAreaValue={setVariableValue}
+                  handleSubmit={handleSubmitVariableValueOnTextareaBlur}
+                  inputHeight={{
+                    height: DEFAULT_VARIABLE_HEIGHT / 2,
+                    scrollLimiter: DEFAULT_VARIABLE_HEIGHT,
+                  }}
+                  ref={inputVariableRef}
+                  onChange={onChangeHandler}
+                  onFocus={onChangeHandler}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') e.preventDefault()
+                    setKeyPressedAtTextarea(e.key)
+                  }}
+                  onKeyUp={() => setKeyPressedAtTextarea('')}
+                />
+              </div>
+              {openAutocomplete && (
+                <div className='absolute -bottom-2'>
+                  <FBDBlockAutoComplete
+                    block={block}
+                    valueToSearch={variableValue}
+                    isOpen={openAutocomplete}
+                    setIsOpen={(value) => setOpenAutocomplete(value)}
+                    keyPressed={keyPressedAtTextarea}
+                  />
+                </div>
+              )}
+            </div>
+          </TooltipTrigger>
+          {inputError && (
+            <TooltipContent>
+              {errorDescription && (
+                <div className='flex items-center justify-center text-xs'>
+                  <span className='text-red-500'>{errorDescription}</span>
+                </div>
+              )}
+            </TooltipContent>
+          )}
+        </Tooltip>
+      </TooltipProvider>
       {data.handles.map((handle, index) => (
         <CustomHandle key={index} {...handle} />
       ))}

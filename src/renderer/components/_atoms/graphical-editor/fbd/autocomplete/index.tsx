@@ -1,3 +1,4 @@
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { buildGenericNode } from '@root/renderer/components/_molecules/graphical-editor/fbd/fbd-utils/nodes'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { extractNumberAtEnd } from '@root/renderer/store/slices/project/validation/variables'
@@ -147,15 +148,38 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
       })
       if (!rung || !node) return
 
+      // If there is more than one variable definition, we can't create a variable
+      if (
+        !variableRestrictions.definition ||
+        variableRestrictions.definition.length === 0 ||
+        variableRestrictions.definition.length > 1
+      ) {
+        toast({
+          title: 'Error',
+          description: 'Cannot create a variable with multiple definitions',
+          variant: 'fail',
+        })
+        return
+      }
+
       const variableTypeRestriction = {
-        definition: variableRestrictions.definition || 'base-type',
+        definition: variableRestrictions.definition[0] || 'base-type',
         value: variableRestrictions.values
           ? Array.isArray(variableRestrictions.values)
             ? variableRestrictions.values[0]
             : variableRestrictions.values
           : 'dint',
       }
-      if (!variableTypeRestriction.definition || !variableTypeRestriction.value) return
+
+      // If there is no type restriction, we can't create a variable
+      if (!variableTypeRestriction.value) {
+        toast({
+          title: 'Error',
+          description: 'Cannot create a variable with no type',
+          variant: 'fail',
+        })
+        return
+      }
 
       const res = createVariable({
         data: {
