@@ -130,7 +130,6 @@ export const BlockNodeElement = <T extends object>({
       .find((pou) => pou.name === blockNameValue)
 
     if (!libraryBlock) {
-      setWrongName(true)
       setBlockNameValue(validBlockNameValue)
       toast({ title: 'Invalid name', description: 'The name could not be changed', variant: 'fail' })
       return
@@ -592,7 +591,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             textAreaValue={blockVariableValue}
             setTextAreaValue={setBlockVariableValue}
             handleSubmit={handleSubmitBlockVariableOnTextareaBlur}
-            onFocus={() => {}}
+            onFocus={(e) => e.target.select()}
             onBlur={() => {}}
             inputHeight={{
               height: 13,
