@@ -71,13 +71,13 @@ const VariableElement = (block: VariableProps) => {
     if (!rung) return []
 
     const connectedEdges = rung.edges.filter((edge) => edge.source === id || edge.target === id)
-    const connectedNodes = connectedEdges.map((edge) => {
+    const connectionsTmp = connectedEdges.map((edge) => {
       const isSource = edge.source === id
       const connectedNodeId = isSource ? edge.target : edge.source
       return rung.nodes.find((block) => block.id === connectedNodeId && block.type === 'block')
     })
 
-    return connectedNodes
+    return connectionsTmp
       .filter((node): node is BlockNode<BlockVariant> => node !== undefined)
       .map((node, index) => ({
         node,
