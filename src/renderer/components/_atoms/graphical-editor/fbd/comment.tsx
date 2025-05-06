@@ -45,7 +45,7 @@ const CommentElement = (block: CommentProps) => {
     if (data.content) {
       setCommentValue(data.content)
     }
-  }, [])
+  }, [data])
 
   useEffect(() => {
     const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
@@ -145,13 +145,16 @@ const CommentElement = (block: CommentProps) => {
       >
         <div
           className={cn('flex items-center justify-center p-2')}
-          style={{ width: width ?? MINIMUM_ELEMENT_WIDTH, height: height ?? MINIMUM_ELEMENT_HEIGHT }}
+          style={{
+            width: width ?? MINIMUM_ELEMENT_WIDTH,
+            height: height ?? MINIMUM_ELEMENT_HEIGHT,
+          }}
         >
           <HighlightedTextArea
             ref={inputVariableRef}
             textAreaClassName={cn(
               'text-center placeholder:text-center text-xs leading-3',
-              !commentFocused && 'opacity-70',
+              !commentFocused && 'opacity-60',
             )}
             highlightClassName={cn('text-center placeholder:text-center text-xs leading-3')}
             scrollableIndicator={false}
@@ -159,35 +162,15 @@ const CommentElement = (block: CommentProps) => {
             textAreaValue={commentValue}
             setTextAreaValue={setCommentValue}
             handleSubmit={handleSubmitCommentaryValueOnTextareaBlur}
-            onFocus={(e) => {
-              e.currentTarget.select()
+            onFocus={() => {
               setCommentFocused(true)
             }}
-            onBlur={(_e) => {
-              // const blockId =
-              //   e.relatedTarget?.getAttributeNode('data-id')?.value ||
-              //   e.relatedTarget?.parentElement?.getAttributeNode('data-id')?.value ||
-              //   undefined
-              // if (blockId === id) {
-              //   inputVariableRef.current?.focus()
-              //   return
-              // }
-
-              // if (
-              //   blockRef.current?.contains(e.relatedTarget) ||
-              //   blockRef.current?.isSameNode(e.relatedTarget) ||
-              //   blockRef.current?.parentElement?.contains(e.relatedTarget) ||
-              //   blockRef.current?.parentElement?.isSameNode(e.relatedTarget)
-              // ) {
-              //   inputVariableRef.current?.focus()
-              //   return
-              // }
-
+            onBlur={() => {
               setCommentFocused(false)
             }}
             inputHeight={{
-              height: (height ?? MINIMUM_ELEMENT_HEIGHT) - 8,
-              scrollLimiter: (height ?? MINIMUM_ELEMENT_HEIGHT) - 8,
+              height: (height ?? MINIMUM_ELEMENT_HEIGHT) - 16,
+              scrollLimiter: (height ?? MINIMUM_ELEMENT_HEIGHT) - 16,
             }}
             submitWith={{
               enter: false,
