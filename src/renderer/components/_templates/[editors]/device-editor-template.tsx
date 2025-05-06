@@ -2,19 +2,45 @@ import { ComponentPropsWithoutRef } from 'react'
 
 type DeviceEditorTemplateProps = ComponentPropsWithoutRef<'div'>
 
-const _DeviceEditorLeftSlot = (props: ComponentPropsWithoutRef<'div'>) => {
-  return <div {...props}>{props.children}</div>
+type DeviceEditorSlotProps = ComponentPropsWithoutRef<'div'> & {
+  heading: string
 }
 
-const _DeviceEditorRightSlot = (props: ComponentPropsWithoutRef<'div'>) => {
-  return <div {...props}>{props.children}</div>
-}
-
-const DeviceEditorTemplate = (props: DeviceEditorTemplateProps) => {
+const DeviceEditorLeftSlot = (props: DeviceEditorSlotProps) => {
   return (
-    <div id='device-editor-template' {...props}>
+    <div
+      id='device-editor-left-slot'
+      className='flex h-full w-1/2 min-w-[325px] flex-col overflow-y-auto overflow-x-hidden p-4 lg:min-w-[625px] lg:p-8'
+      {...props}
+    >
+      <h2 id='slot-title' className='text-lg font-medium text-neutral-950 dark:text-white'>
+        {props.heading}
+      </h2>
       {props.children}
     </div>
   )
 }
-export { DeviceEditorTemplate }
+
+const DeviceEditorRightSlot = (props: DeviceEditorSlotProps) => {
+  return (
+    <div
+      id='device-editor-right-slot'
+      className='flex h-full w-1/2 min-w-[325px] flex-col overflow-y-auto overflow-x-hidden p-4 lg:min-w-[625px] lg:p-8'
+      {...props}
+    >
+      <h2 id='slot-title' className='text-lg font-medium text-neutral-950 dark:text-white'>
+        {props.heading}
+      </h2>
+      {props.children}
+    </div>
+  )
+}
+
+const DeviceEditorTemplate = (props: DeviceEditorTemplateProps) => {
+  return (
+    <div id='device-editor-template' className='flex h-full w-full overflow-hidden' {...props}>
+      {props.children}
+    </div>
+  )
+}
+export { DeviceEditorLeftSlot, DeviceEditorRightSlot, DeviceEditorTemplate }
