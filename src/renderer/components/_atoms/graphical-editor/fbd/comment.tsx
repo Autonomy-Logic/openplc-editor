@@ -115,12 +115,14 @@ const CommentElement = (block: CommentProps) => {
 
   const onMouseEnter = () => {
     updateModelFBD({
+      canEditorZoom: false,
       hoveringElement: { elementId: id, hovering: true },
     })
   }
 
   const onMouseLeave = () => {
     updateModelFBD({
+      canEditorZoom: true,
       hoveringElement: { elementId: null, hovering: false },
     })
   }

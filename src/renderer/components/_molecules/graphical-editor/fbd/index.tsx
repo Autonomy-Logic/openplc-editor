@@ -410,6 +410,9 @@ export const FBDBody = ({ rung }: FBDProps) => {
         event.dataTransfer.getData('application/reactflow/fbd-blocks') === ''
           ? undefined
           : event.dataTransfer.getData('application/reactflow/fbd-blocks')
+
+      console.log('blockType', blockType)
+
       if (!blockType || !Object.keys(customNodeTypes).includes(blockType)) {
         return
       }
