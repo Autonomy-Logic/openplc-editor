@@ -65,20 +65,45 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    setRungLocal(rung)
-  }, [rung])
+  // useEffect(() => {
+  //   console.log('rung', rung)
+  //   setRungLocal(rung)
+  // }, [rung])
+
+  // useEffect(() => {
+  //   console.log('rungLocal', rungLocal)
+  // }, [rungLocal])
 
   /**
-   *  Update the local rung state when the rung state changes
    *  * FYI: This implementation came from https://www.developerway.com/posts/debouncing-in-react
    */
+  const updateRungLocalFromStore = () => {
+    const newRung = rung
+    // console.log('updating rung local from store', newRung)
+    setRungLocal(newRung)
+  }
+
+  const debounceUpdateRungLocalFromStore = useRef(updateRungLocalFromStore)
+  useEffect(() => {
+    debounceUpdateRungLocalFromStore.current = updateRungLocalFromStore
+  }, [rungLocal, rung])
+  const debouncedUpdateRungLocalFromStoreCallback = useMemo(() => {
+    const func = () => {
+      debounceUpdateRungLocalFromStore.current?.()
+    }
+    return _.debounce(func, 100)
+  }, [])
+  useEffect(() => {
+    debouncedUpdateRungLocalFromStoreCallback()
+  }, [rung])
+
   const updateRungState = () => {
     // console.log('trying to update rung state', '\n dragging:', dragging, '\n isEqual:', _.isEqual(rungLocal, rung))
     if (dragging || _.isEqual(rungLocal, rung)) {
       // console.log('rung is equal to local rung')
       return
     }
+
     // console.log('updating rung', rungLocal)
     fbdFlowActions.setRung({
       editorName: editor.meta.name,
@@ -410,8 +435,6 @@ export const FBDBody = ({ rung }: FBDProps) => {
         event.dataTransfer.getData('application/reactflow/fbd-blocks') === ''
           ? undefined
           : event.dataTransfer.getData('application/reactflow/fbd-blocks')
-
-      console.log('blockType', blockType)
 
       if (!blockType || !Object.keys(customNodeTypes).includes(blockType)) {
         return

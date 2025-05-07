@@ -45,7 +45,7 @@ const CommentElement = (block: CommentProps) => {
     if (data.content) {
       setCommentValue(data.content)
     }
-  }, [data])
+  }, [])
 
   useEffect(() => {
     const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
@@ -59,6 +59,10 @@ const CommentElement = (block: CommentProps) => {
         nodeId: id,
         node: {
           ...commentaryBlock,
+          data: {
+            ...commentaryBlock.data,
+            content: commentValue,
+          },
           draggable: false,
           selected: true,
         },
@@ -75,6 +79,10 @@ const CommentElement = (block: CommentProps) => {
       nodeId: id,
       node: {
         ...commentaryBlock,
+        data: {
+          ...commentaryBlock.data,
+          content: commentValue,
+        },
         draggable: (commentaryBlock as CommentNode).data.draggable,
         selected: false,
       },
