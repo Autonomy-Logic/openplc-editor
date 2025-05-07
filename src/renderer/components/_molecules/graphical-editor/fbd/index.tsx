@@ -66,23 +66,10 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
-  /**
-   *  * FYI: This implementation came from https://www.developerway.com/posts/debouncing-in-react
-   */
   const updateRungLocalFromStore = () => {
     const newRung = rung
     setRungLocal(newRung)
   }
-  const debounceUpdateRungLocalFromStore = useRef(updateRungLocalFromStore)
-  useEffect(() => {
-    debounceUpdateRungLocalFromStore.current = updateRungLocalFromStore
-  }, [rung])
-  const _debouncedUpdateRungLocalFromStoreCallback = useMemo(() => {
-    const func = () => {
-      debounceUpdateRungLocalFromStore.current?.()
-    }
-    return _.debounce(func, 100)
-  }, [])
 
   const updateRungState = () => {
     setShouldDebounceToRung(false)
@@ -96,6 +83,21 @@ export const FBDBody = ({ rung }: FBDProps) => {
       rung: rungLocal,
     })
   }
+
+  /**
+   *  * FYI: This implementation came from https://www.developerway.com/posts/debouncing-in-react
+   */
+  const debounceUpdateRungLocalFromStore = useRef(updateRungLocalFromStore)
+  useEffect(() => {
+    debounceUpdateRungLocalFromStore.current = updateRungLocalFromStore
+  }, [rung])
+  const _debouncedUpdateRungLocalFromStoreCallback = useMemo(() => {
+    const func = () => {
+      debounceUpdateRungLocalFromStore.current?.()
+    }
+    return _.debounce(func, 100)
+  }, [])
+
   // creating ref and initializing it with the sendRequest function
   const debounceUpdateRungRef = useRef(updateRungState)
   useEffect(() => {
