@@ -1,6 +1,6 @@
 {
   "name": "open-plc-editor",
-  "version": "4.0.2-beta",
+  "version": "4.0.3-beta",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
   "license": "MIT",
   "author": {
