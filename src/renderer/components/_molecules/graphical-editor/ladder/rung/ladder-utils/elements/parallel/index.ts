@@ -106,6 +106,7 @@ export const startParallelConnection = <T>(
         })
   const newAboveElement = {
     ...buildedAboveElement,
+    selected: false,
     position: { x: newAboveElementPosition.posX, y: newAboveElementPosition.posY },
     data: {
       ...aboveElement.data,

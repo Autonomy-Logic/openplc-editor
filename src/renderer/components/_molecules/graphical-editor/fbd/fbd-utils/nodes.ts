@@ -35,6 +35,11 @@ export const buildGenericNode = <T>({
         variant: nodeType,
         label: connectionLabel,
       })
+    case 'comment':
+      return nodesBuilder.comment({
+        id,
+        position,
+      })
     default:
       return undefined
   }

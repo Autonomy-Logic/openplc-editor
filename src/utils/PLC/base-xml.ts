@@ -30,14 +30,14 @@ const getBaseXmlStructure = (): BaseXml => ({
         },
         ld: {
           scaling: {
-            '@x': '10',
-            '@y': '10',
+            '@x': '16',
+            '@y': '16',
           },
         },
         sfc: {
           scaling: {
-            '@x': '10',
-            '@y': '10',
+            '@x': '16',
+            '@y': '16',
           },
         },
       },

@@ -134,6 +134,8 @@ export const createSharedSlice: StateCreator<
                       elementId: null,
                       hovering: false,
                     },
+                    canEditorZoom: true,
+                    canEditorPan: true,
                   }
                 : { language: propsToCreatePou.language },
         })

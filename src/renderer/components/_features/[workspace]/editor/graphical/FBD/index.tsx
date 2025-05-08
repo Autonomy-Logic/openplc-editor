@@ -36,7 +36,7 @@ export default function FbdEditor() {
      */
     fbdFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
     setEditingState('unsaved')
-  }, [flowUpdated === true])
+  }, [flowUpdated])
 
   return (
     <div className='h-full w-full'>

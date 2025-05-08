@@ -1,4 +1,5 @@
 export * from './block'
+export * from './comment'
 export * from './connector'
 export * from './continuation'
 export * from './inout-variable'

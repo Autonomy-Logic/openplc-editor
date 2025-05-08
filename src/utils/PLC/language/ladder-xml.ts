@@ -288,7 +288,7 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
     return closeConnections
   })
 
-  return connections.filter((connection) => connection !== undefined) as {
+  return connections.flat().filter((connection) => connection !== undefined) as {
     '@refLocalId': string
     '@formalParameter': string
     position: {
@@ -320,7 +320,11 @@ const leftRailToXML = (leftRail: PowerRailNode, offsetY: number = 0): LeftPowerR
   }
 }
 
-const rightRailToXML = (rightRail: PowerRailNode, rung: RungLadderState, offsetY: number = 0): RightPowerRailLadderXML => {
+const rightRailToXML = (
+  rightRail: PowerRailNode,
+  rung: RungLadderState,
+  offsetY: number = 0,
+): RightPowerRailLadderXML => {
   const connections = findConnections(rightRail, rung, offsetY)
 
   return {
