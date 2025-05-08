@@ -22,7 +22,10 @@ const SelectTrigger = forwardRef<ElementRef<typeof PrimitiveSelect.Trigger>, ISe
   },
 )
 
-type ISelectContentProps = ComponentPropsWithoutRef<typeof PrimitiveSelect.Content>
+type ISelectContentProps = ComponentPropsWithoutRef<typeof PrimitiveSelect.Content> & {
+  'data-align'?: 'start' | 'end' | 'center'
+  'data-side'?: 'left' | 'right' | 'bottom' | 'top'
+}
 const SelectContent = ({
   children,
   sideOffset = 5,
@@ -47,9 +50,7 @@ const SelectContent = ({
         {/* <PrimitiveSelect.ScrollUpButton>
           <ArrowIcon direction='up' size='sm' className='stroke-brand' />
         </PrimitiveSelect.ScrollUpButton> */}
-        <PrimitiveSelect.Viewport className=' h-full w-full overflow-auto'>
-          {children}
-        </PrimitiveSelect.Viewport>
+        <PrimitiveSelect.Viewport className=' h-full w-full overflow-auto'>{children}</PrimitiveSelect.Viewport>
         {/* <PrimitiveSelect.ScrollDownButton>
           <ArrowIcon direction='down' size='sm' className='stroke-brand' />
         </PrimitiveSelect.ScrollDownButton> */}

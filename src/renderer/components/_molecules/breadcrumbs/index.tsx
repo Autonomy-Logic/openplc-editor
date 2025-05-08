@@ -1,7 +1,7 @@
 /**
  * This need to be refactored!!!!
  */
-import { ArrowIcon, ConfigIcon, DeviceTransferIcon, PLCIcon } from '@process:renderer/assets'
+import { ArrowIcon, ConfigIcon, PLCIcon } from '@process:renderer/assets'
 import { LanguageIcon, LanguageIconType, PouIcon, PouIconType } from '@process:renderer/data'
 import { ArrayIcon, EnumIcon, StructureIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -33,7 +33,6 @@ const Breadcrumbs = () => {
     structure: StructureIcon,
     array: ArrayIcon,
     configuration: ConfigIcon,
-    'pin-mapping': DeviceTransferIcon,
   }
 
   const getPouTypeOrDataTypeOrResource = ():
@@ -56,8 +55,7 @@ const Breadcrumbs = () => {
     if (dataTypeDerivation) {
       return [derivationIcons[dataTypeDerivation], dataTypeDerivation]
     }
-    const deviceTypeDerivation =
-      meta.name === 'Configuration' ? 'configuration' : meta.name === 'Pin Mapping' ? 'pin-mapping' : null
+    const deviceTypeDerivation = meta.name === 'Configuration' ? 'configuration' : null
     if (deviceTypeDerivation) {
       return [derivationIcons[deviceTypeDerivation], deviceTypeDerivation]
     }

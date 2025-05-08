@@ -1,16 +1,6 @@
-import {
-  DeviceEditorLeftSlot,
-  DeviceEditorRightSlot,
-  DeviceEditorTemplate,
-} from '@root/renderer/components/_templates/[editors]/device-editor-template'
+import { DeviceConfigurationEditor } from '../configuration'
 const PinMappingEditor = () => {
-  return (
-    <DeviceEditorTemplate>
-      <DeviceEditorLeftSlot heading='Board Configuration'></DeviceEditorLeftSlot>
-      <hr id='screen-split' className='h-[99%] w-[1px] self-stretch bg-brand-light' />
-      <DeviceEditorRightSlot heading='Communication'></DeviceEditorRightSlot>
-    </DeviceEditorTemplate>
-  )
+  return <DeviceConfigurationEditor />
 }
 
 export { PinMappingEditor }

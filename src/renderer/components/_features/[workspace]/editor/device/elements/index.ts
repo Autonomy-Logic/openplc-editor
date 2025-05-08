@@ -1,3 +1,5 @@
+export * from './board'
 export * from './board-configuration'
+export * from './communication'
 export * from './rtu-settings'
 export * from './tcp-settings'
