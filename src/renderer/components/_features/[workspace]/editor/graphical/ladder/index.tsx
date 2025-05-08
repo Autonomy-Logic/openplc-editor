@@ -84,7 +84,7 @@ export default function LadderEditor() {
      */
     ladderFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
     setEditingState('unsaved')
-  }, [flowUpdated === true])
+  }, [flowUpdated])
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
 

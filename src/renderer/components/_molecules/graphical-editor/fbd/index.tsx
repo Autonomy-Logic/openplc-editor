@@ -47,6 +47,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
   const [dragging, setDragging] = useState(false)
+  const [shouldDebounceToRung, setShouldDebounceToRung] = useState(false)
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
   const canZoom = useMemo(() => {
@@ -65,26 +66,38 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    setRungLocal(rung)
-  }, [rung])
+  const updateRungLocalFromStore = () => {
+    const newRung = rung
+    setRungLocal(newRung)
+  }
 
-  /**
-   *  Update the local rung state when the rung state changes
-   *  * FYI: This implementation came from https://www.developerway.com/posts/debouncing-in-react
-   */
   const updateRungState = () => {
-    // console.log('trying to update rung state', '\n dragging:', dragging, '\n isEqual:', _.isEqual(rungLocal, rung))
+    setShouldDebounceToRung(false)
+
     if (dragging || _.isEqual(rungLocal, rung)) {
-      // console.log('rung is equal to local rung')
       return
     }
-    // console.log('updating rung', rungLocal)
+
     fbdFlowActions.setRung({
       editorName: editor.meta.name,
       rung: rungLocal,
     })
   }
+
+  /**
+   *  * FYI: This implementation came from https://www.developerway.com/posts/debouncing-in-react
+   */
+  const debounceUpdateRungLocalFromStore = useRef(updateRungLocalFromStore)
+  useEffect(() => {
+    debounceUpdateRungLocalFromStore.current = updateRungLocalFromStore
+  }, [rung])
+  const _debouncedUpdateRungLocalFromStoreCallback = useMemo(() => {
+    const func = () => {
+      debounceUpdateRungLocalFromStore.current?.()
+    }
+    return _.debounce(func, 100)
+  }, [])
+
   // creating ref and initializing it with the sendRequest function
   const debounceUpdateRungRef = useRef(updateRungState)
   useEffect(() => {
@@ -103,9 +116,15 @@ export const FBDBody = ({ rung }: FBDProps) => {
     return _.debounce(func, 100)
     // no dependencies! never gets updated
   }, [])
+
   useEffect(() => {
-    debouncedUpdateRungStateCallback()
-  }, [rungLocal])
+    updateRungLocalFromStore()
+  }, [rung])
+
+  useEffect(() => {
+    if (shouldDebounceToRung) debouncedUpdateRungStateCallback()
+    return () => debouncedUpdateRungStateCallback.cancel()
+  }, [rungLocal, shouldDebounceToRung])
 
   /**
    * Handle the addition of a new element by dropping it in the viewport
@@ -314,6 +333,13 @@ export const FBDBody = ({ rung }: FBDProps) => {
 
       newRung.nodes = applyNodeChanges(changes, newRung.nodes)
       newRung.selectedNodes = selectedNodes
+
+      const changedDimensions = changes.some((change) => change.type === 'dimensions')
+      // Dimension changes need to be debounced to avoid multiple updates
+      if (changedDimensions) {
+        setShouldDebounceToRung(true)
+      }
+
       setRungLocal(newRung)
     },
     [rungLocal, dragging],
@@ -410,6 +436,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
         event.dataTransfer.getData('application/reactflow/fbd-blocks') === ''
           ? undefined
           : event.dataTransfer.getData('application/reactflow/fbd-blocks')
+
       if (!blockType || !Object.keys(customNodeTypes).includes(blockType)) {
         return
       }

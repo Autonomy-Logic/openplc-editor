@@ -115,12 +115,12 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
             return aNumber - bNumber
           })
       : block.type === 'connector' || block.type === 'continuation'
-        ? (rung?.nodes
+        ? rung?.nodes
             .filter((node) => (block.type === 'connector' ? node.type === 'continuation' : node.type === 'connector'))
             .map((node) => {
-              return node.data.variable
+              return node.data.variable as PLCVariable
             })
-            .filter((name) => name !== '') as PLCVariable[]) ?? ([] as PLCVariable[])
+            .filter((variable) => variable.name !== '') ?? ([] as PLCVariable[])
         : ([] as PLCVariable[])
 
     const submitVariableToBlock = (variable: PLCVariable) => {

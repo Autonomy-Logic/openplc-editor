@@ -308,12 +308,14 @@ const VariableElement = (block: VariableProps) => {
 
   const onMouseEnter = () => {
     updateModelFBD({
+      canEditorZoom: false,
       hoveringElement: { elementId: id, hovering: true },
     })
   }
 
   const onMouseLeave = () => {
     updateModelFBD({
+      canEditorZoom: true,
       hoveringElement: { elementId: null, hovering: false },
     })
   }
@@ -336,7 +338,7 @@ const VariableElement = (block: VariableProps) => {
               onMouseLeave={onMouseLeave}
             >
               <div
-                className='flex items-center'
+                className='relative flex items-center'
                 style={{
                   width: DEFAULT_VARIABLE_WIDTH,
                   height: DEFAULT_VARIABLE_HEIGHT,
@@ -349,8 +351,8 @@ const VariableElement = (block: VariableProps) => {
                   })}
                   highlightClassName={cn('text-center placeholder:text-center text-xs leading-3', {})}
                   scrollableIndicatorClassName={cn({
-                    '-right-2': data.variant === 'output-variable' || data.variant === 'inout-variable',
-                    '-left-2': data.variant === 'input-variable',
+                    '-right-1': data.variant === 'output-variable' || data.variant === 'inout-variable',
+                    '-left-1': data.variant === 'input-variable',
                   })}
                   placeholder={primaryConnectionType.string}
                   textAreaValue={variableValue}

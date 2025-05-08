@@ -15,8 +15,8 @@ export type CommentNode = Node<
 type CommentProps = NodeProps<CommentNode>
 type CommentBuilderProps = BuilderBasicProps
 
-const MINIMUM_ELEMENT_WIDTH = 128
-const MINIMUM_ELEMENT_HEIGHT = 64
+const MINIMUM_ELEMENT_WIDTH = 144
+const MINIMUM_ELEMENT_HEIGHT = 80
 
 const CommentElement = (block: CommentProps) => {
   const { id, selected, data, width, height } = block
@@ -30,6 +30,7 @@ const CommentElement = (block: CommentProps) => {
     },
   } = useOpenPLCStore()
 
+  const blockRef = useRef<HTMLDivElement>(null)
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
       blur: ({ submit }: { submit?: boolean }) => void
@@ -39,6 +40,12 @@ const CommentElement = (block: CommentProps) => {
 
   const [commentValue, setCommentValue] = useState(data.content)
   const [commentFocused, setCommentFocused] = useState(false)
+
+  useEffect(() => {
+    if (data.content) {
+      setCommentValue(data.content)
+    }
+  }, [])
 
   useEffect(() => {
     const { node: commentaryBlock } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
@@ -52,7 +59,12 @@ const CommentElement = (block: CommentProps) => {
         nodeId: id,
         node: {
           ...commentaryBlock,
+          data: {
+            ...commentaryBlock.data,
+            content: commentValue,
+          },
           draggable: false,
+          selected: true,
         },
       })
       updateModelFBD({
@@ -67,13 +79,22 @@ const CommentElement = (block: CommentProps) => {
       nodeId: id,
       node: {
         ...commentaryBlock,
+        data: {
+          ...commentaryBlock.data,
+          content: commentValue,
+        },
         draggable: (commentaryBlock as CommentNode).data.draggable,
+        selected: false,
       },
     })
     updateModelFBD({
       canEditorZoom: true,
       canEditorPan: true,
     })
+
+    return () => {
+      updateModelFBD({ canEditorZoom: true, canEditorPan: true })
+    }
   }, [commentFocused])
 
   const handleSubmitCommentaryValueOnTextareaBlur = () => {
@@ -106,12 +127,14 @@ const CommentElement = (block: CommentProps) => {
 
   const onMouseEnter = () => {
     updateModelFBD({
+      canEditorZoom: false,
       hoveringElement: { elementId: id, hovering: true },
     })
   }
 
   const onMouseLeave = () => {
     updateModelFBD({
+      canEditorZoom: true,
       hoveringElement: { elementId: null, hovering: false },
     })
   }
@@ -119,12 +142,13 @@ const CommentElement = (block: CommentProps) => {
   return (
     <>
       <div
+        ref={blockRef}
         style={{
           width: width ?? MINIMUM_ELEMENT_WIDTH,
           height: height ?? MINIMUM_ELEMENT_HEIGHT,
         }}
         className={cn(
-          'flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
+          'relative flex items-center justify-center rounded-md border border-neutral-850 bg-white p-1 text-neutral-1000 dark:bg-neutral-900 dark:text-neutral-50',
           'hover:border-transparent hover:ring-2 hover:ring-brand',
           {
             'border-transparent ring-2 ring-brand': selected,
@@ -134,12 +158,18 @@ const CommentElement = (block: CommentProps) => {
         onMouseLeave={onMouseLeave}
       >
         <div
-          className='flex items-center justify-center'
-          style={{ width: width ?? MINIMUM_ELEMENT_WIDTH, height: height ?? MINIMUM_ELEMENT_HEIGHT }}
+          className={cn('flex items-center justify-center p-2')}
+          style={{
+            width: width ?? MINIMUM_ELEMENT_WIDTH,
+            height: height ?? MINIMUM_ELEMENT_HEIGHT,
+          }}
         >
           <HighlightedTextArea
             ref={inputVariableRef}
-            textAreaClassName={cn('text-center placeholder:text-center text-xs leading-3')}
+            textAreaClassName={cn(
+              'text-center placeholder:text-center text-xs leading-3',
+              !commentFocused && 'opacity-60',
+            )}
             highlightClassName={cn('text-center placeholder:text-center text-xs leading-3')}
             scrollableIndicator={false}
             placeholder={'Add some text...'}
@@ -153,8 +183,8 @@ const CommentElement = (block: CommentProps) => {
               setCommentFocused(false)
             }}
             inputHeight={{
-              height: (height ?? MINIMUM_ELEMENT_HEIGHT) - 8,
-              scrollLimiter: (height ?? MINIMUM_ELEMENT_HEIGHT) - 8,
+              height: (height ?? MINIMUM_ELEMENT_HEIGHT) - 16,
+              scrollLimiter: (height ?? MINIMUM_ELEMENT_HEIGHT) - 16,
             }}
             submitWith={{
               enter: false,

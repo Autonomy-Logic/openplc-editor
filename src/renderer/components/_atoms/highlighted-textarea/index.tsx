@@ -145,8 +145,8 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
               inputRef.current.scrollTop = 0
               highlightDivRef.current.scrollTop = 0
             }
-            if (canSubmit && handleSubmit) handleSubmit()
             props.onBlur?.(e)
+            if (canSubmit && handleSubmit) handleSubmit()
             setCanSubmit(true)
           }}
           onScroll={(e) => onScrollHandler(e)}
@@ -166,8 +166,8 @@ const HighlightedTextArea = forwardRef<HTMLTextAreaElement, HighlightedTextAreaP
         {scrollableIndicator && (
           <div
             className={cn(
-              'pointer-events-none absolute -right-2 top-1/2 hidden -translate-y-1/2 text-cp-sm',
-              scrollableIndicatorClassName,
+              'pointer-events-none absolute top-1/2 hidden -translate-y-1/2 text-cp-sm',
+              scrollableIndicatorClassName ? scrollableIndicatorClassName : '-right-2',
             )}
             ref={scrollableIndicatorRef}
           >
