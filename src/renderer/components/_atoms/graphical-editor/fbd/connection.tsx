@@ -78,9 +78,6 @@ const ConnectionElement = (block: ConnectionProps) => {
     })
     if (!rung || !connectionNode) return
 
-    console.log('rung', rung)
-    console.log('connectionNode', connectionNode)
-
     const connectionBlock = rung.nodes.find(
       (node) =>
         (node.data as BasicNodeData).variable &&

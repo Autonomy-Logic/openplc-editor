@@ -180,7 +180,10 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
 
           const selectedNodes = flow.rung.selectedNodes
           if (!selectedNodes) flow.rung.selectedNodes = []
-          flow.rung.selectedNodes.push(node)
+          if (!flow.rung.selectedNodes.find((n) => n.id === node.id)) {
+            flow.rung.selectedNodes.push(node)
+            flow.updated = true
+          }
 
           flow.rung.nodes = flow.rung.nodes.map((n) => {
             if (n.id === node.id) {

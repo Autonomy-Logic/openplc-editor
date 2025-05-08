@@ -91,6 +91,10 @@ const CommentElement = (block: CommentProps) => {
       canEditorZoom: true,
       canEditorPan: true,
     })
+
+    return () => {
+      updateModelFBD({ canEditorZoom: true, canEditorPan: true })
+    }
   }, [commentFocused])
 
   const handleSubmitCommentaryValueOnTextareaBlur = () => {
