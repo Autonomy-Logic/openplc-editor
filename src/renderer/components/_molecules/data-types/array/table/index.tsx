@@ -5,8 +5,7 @@ import { arrayValidation } from '@root/renderer/store/slices/project/validation/
 import { PLCArrayDatatype, PLCDataType } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils/cn'
 import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
-import { useEffect, useRef } from 'react'
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 
 import { DimensionCell } from './editable-cell'
 
@@ -18,7 +17,13 @@ type DataTypeDimensionsTableProps = {
   setArrayTable: React.Dispatch<React.SetStateAction<{ selectedRow: number }>>
 }
 
-const DimensionsTable = ({ name, tableData, selectedRow, handleRowClick, setArrayTable }: DataTypeDimensionsTableProps) => {
+const DimensionsTable = ({
+  name,
+  tableData,
+  selectedRow,
+  handleRowClick,
+  setArrayTable,
+}: DataTypeDimensionsTableProps) => {
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
@@ -135,7 +140,7 @@ const DimensionsTable = ({ name, tableData, selectedRow, handleRowClick, setArra
 
   return (
     <>
-      <Table context='data-type-array'>
+      <Table context='data-type-array' className='w-full'>
         <TableBody ref={tableBodyRef}>
           {table.getRowModel().rows.map((row, index) => (
             <TableRow
