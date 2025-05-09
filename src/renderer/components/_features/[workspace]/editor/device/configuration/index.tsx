@@ -1,6 +1,7 @@
 import { DeviceEditorTemplate } from '@root/renderer/components/_templates/[editors]'
 
-import { Board, Communication } from '../elements'
+import { Board } from './board'
+import { Communication } from './communication'
 
 const DeviceConfigurationEditor = () => {
   return (

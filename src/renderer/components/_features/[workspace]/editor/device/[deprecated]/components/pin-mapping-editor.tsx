@@ -1,4 +1,4 @@
-import { DeviceConfigurationEditor } from '../configuration'
+import { DeviceConfigurationEditor } from '../../configuration'
 const PinMappingEditor = () => {
   return <DeviceConfigurationEditor />
 }

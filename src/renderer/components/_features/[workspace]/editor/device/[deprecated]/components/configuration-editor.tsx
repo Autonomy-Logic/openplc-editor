@@ -2,9 +2,9 @@ import { Checkbox } from '@root/renderer/components/_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { useEffect, useState } from 'react'
 
-import { BoardConfiguration } from '../elements/board-configuration'
-import { RTUSettings } from '../elements/rtu-settings'
-import { TCPSettings } from '../elements/tcp-settings'
+import { BoardConfiguration } from '../board-configuration'
+import { RTUSettings } from '../rtu-settings'
+import { TCPSettings } from '../tcp-settings'
 
 const ConfigurationEditor = () => {
   const [modbusConfig, setModbusConfig] = useState({ RTU: false, TCP: false })
