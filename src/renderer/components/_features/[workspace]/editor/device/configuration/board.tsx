@@ -24,6 +24,23 @@ const Board = () => {
   const [communicationSelectIsOpen, setCommunicationSelectIsOpen] = useState(false)
   const communicationSelectRef = useRef<HTMLDivElement>(null)
 
+  const scrollToSelectedOption = (selectRef: React.RefObject<HTMLDivElement>, selectIsOpen: boolean) => {
+    if (!selectIsOpen) return
+
+    const checkedElement = selectRef.current?.querySelector('[data-state="checked"]')
+    if (checkedElement) {
+      checkedElement.scrollIntoView({ block: 'start' })
+    }
+  }
+
+  useEffect(() => {
+    scrollToSelectedOption(deviceSelectRef, deviceSelectIsOpen)
+  }, [deviceSelectIsOpen])
+
+  useEffect(() => {
+    scrollToSelectedOption(communicationSelectRef, communicationSelectIsOpen)
+  }, [communicationSelectIsOpen])
+
   useEffect(() => {
     const fetchPreviewImage = async () => {
       const imagePath = await window.bridge.getPreviewImage(availableBoards.get(deviceBoard)?.preview || '')
@@ -31,26 +48,6 @@ const Board = () => {
     }
     void fetchPreviewImage()
   }, [deviceBoard])
-
-  useEffect(() => {
-    const selectIsOpen = deviceSelectIsOpen
-    if (!selectIsOpen) return
-
-    const checkedElement = deviceSelectRef.current?.querySelector('[data-state="checked"]')
-    if (checkedElement) {
-      checkedElement.scrollIntoView({ block: 'start' })
-    }
-  }, [deviceSelectIsOpen])
-
-  useEffect(() => {
-    const selectIsOpen = communicationSelectIsOpen
-    if (!selectIsOpen) return
-
-    const checkedElement = communicationSelectRef.current?.querySelector('[data-state="checked"]')
-    if (checkedElement) {
-      checkedElement.scrollIntoView({ block: 'start' })
-    }
-  }, [communicationSelectIsOpen])
 
   const refreshCommunicationPorts = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -86,7 +83,11 @@ const Board = () => {
             <Label id='device-selector-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
               Device
             </Label>
-            <Select value={formattedBoardState} onValueChange={handleSetDeviceBoard} onOpenChange={setDeviceSelectIsOpen}>
+            <Select
+              value={formattedBoardState}
+              onValueChange={handleSetDeviceBoard}
+              onOpenChange={setDeviceSelectIsOpen}
+            >
               <SelectTrigger
                 aria-label='Device selection'
                 placeholder='Select a board device'
@@ -101,23 +102,23 @@ const Board = () => {
                 side='bottom'
                 viewportRef={deviceSelectRef}
               >
-                  {Array.from(availableBoards.entries()).map(([board, data]) => {
-                    const formattedBoard = `${board}${data.coreVersion ? ` [${data.coreVersion}]` : ''}`
-                    return (
-                      <SelectItem
-                        key={board}
-                        className={cn(
-                          'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                          'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
-                        )}
-                        value={formattedBoard}
-                      >
-                        <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                          {formattedBoard}
-                        </span>
-                      </SelectItem>
-                    )
-                  })}
+                {Array.from(availableBoards.entries()).map(([board, data]) => {
+                  const formattedBoard = `${board}${data.coreVersion ? ` [${data.coreVersion}]` : ''}`
+                  return (
+                    <SelectItem
+                      key={board}
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+                      )}
+                      value={formattedBoard}
+                    >
+                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                        {formattedBoard}
+                      </span>
+                    </SelectItem>
+                  )
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -128,7 +129,11 @@ const Board = () => {
             >
               Communication Port
             </Label>
-            <Select value={communicationPort} onValueChange={setCommunicationPort} onOpenChange={setCommunicationSelectIsOpen}>
+            <Select
+              value={communicationPort}
+              onValueChange={setCommunicationPort}
+              onOpenChange={setCommunicationSelectIsOpen}
+            >
               <SelectTrigger
                 aria-label='Communication port selection'
                 placeholder='Select a communication port'
