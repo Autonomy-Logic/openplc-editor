@@ -3,6 +3,7 @@ import { RefreshIcon } from '@root/renderer/assets'
 import { Label, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { cn } from '@root/utils'
 import { useCallback, useEffect, useState } from 'react'
 
 const Board = () => {
@@ -59,7 +60,7 @@ const Board = () => {
             <Label id='device-selector-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
               Device
             </Label>
-            <Select value={formattedBoardState} onValueChange={handleSetDeviceBoard}>
+            <Select value={formattedBoardState} onValueChange={handleSetDeviceBoard} open={true}>
               <SelectTrigger
                 aria-label='Device selection'
                 placeholder='Select a board device'
@@ -78,7 +79,10 @@ const Board = () => {
                   return (
                     <SelectItem
                       key={board}
-                      className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+                      )}
                       value={formattedBoard}
                     >
                       <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
@@ -114,7 +118,10 @@ const Board = () => {
                 {availableCommunicationPorts.map((port) => (
                   <SelectItem
                     key={port}
-                    className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                    className={cn(
+                      'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                      'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+                    )}
                     value={port}
                   >
                     <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
