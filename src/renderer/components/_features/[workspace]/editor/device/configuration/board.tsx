@@ -4,7 +4,7 @@ import { Label, Select, SelectContent, SelectItem, SelectTrigger } from '@root/r
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const Board = () => {
   const [isPressed, setIsPressed] = useState(false)
@@ -18,6 +18,12 @@ const Board = () => {
     deviceActions: { setDeviceBoard, setCommunicationPort, setAvailableOptions },
   } = useOpenPLCStore()
 
+  const [deviceSelectIsOpen, setDeviceSelectIsOpen] = useState(false)
+  const deviceSelectRef = useRef<HTMLDivElement>(null)
+
+  const [communicationSelectIsOpen, setCommunicationSelectIsOpen] = useState(false)
+  const communicationSelectRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     const fetchPreviewImage = async () => {
       const imagePath = await window.bridge.getPreviewImage(availableBoards.get(deviceBoard)?.preview || '')
@@ -25,6 +31,26 @@ const Board = () => {
     }
     void fetchPreviewImage()
   }, [deviceBoard])
+
+  useEffect(() => {
+    const selectIsOpen = deviceSelectIsOpen
+    if (!selectIsOpen) return
+
+    const checkedElement = deviceSelectRef.current?.querySelector('[data-state="checked"]')
+    if (checkedElement) {
+      checkedElement.scrollIntoView({ block: 'start' })
+    }
+  }, [deviceSelectIsOpen])
+
+  useEffect(() => {
+    const selectIsOpen = communicationSelectIsOpen
+    if (!selectIsOpen) return
+
+    const checkedElement = communicationSelectRef.current?.querySelector('[data-state="checked"]')
+    if (checkedElement) {
+      checkedElement.scrollIntoView({ block: 'start' })
+    }
+  }, [communicationSelectIsOpen])
 
   const refreshCommunicationPorts = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -60,7 +86,7 @@ const Board = () => {
             <Label id='device-selector-label' className='w-fit text-xs text-neutral-950 dark:text-white'>
               Device
             </Label>
-            <Select value={formattedBoardState} onValueChange={handleSetDeviceBoard} open={true}>
+            <Select value={formattedBoardState} onValueChange={handleSetDeviceBoard} onOpenChange={setDeviceSelectIsOpen}>
               <SelectTrigger
                 aria-label='Device selection'
                 placeholder='Select a board device'
@@ -73,24 +99,25 @@ const Board = () => {
                 position='popper'
                 align='center'
                 side='bottom'
+                viewportRef={deviceSelectRef}
               >
-                {Array.from(availableBoards.entries()).map(([board, data]) => {
-                  const formattedBoard = `${board}${data.coreVersion ? ` [${data.coreVersion}]` : ''}`
-                  return (
-                    <SelectItem
-                      key={board}
-                      className={cn(
-                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                        'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
-                      )}
-                      value={formattedBoard}
-                    >
-                      <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                        {formattedBoard}
-                      </span>
-                    </SelectItem>
-                  )
-                })}
+                  {Array.from(availableBoards.entries()).map(([board, data]) => {
+                    const formattedBoard = `${board}${data.coreVersion ? ` [${data.coreVersion}]` : ''}`
+                    return (
+                      <SelectItem
+                        key={board}
+                        className={cn(
+                          'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                          'flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850',
+                        )}
+                        value={formattedBoard}
+                      >
+                        <span className='flex items-center gap-2 font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                          {formattedBoard}
+                        </span>
+                      </SelectItem>
+                    )
+                  })}
               </SelectContent>
             </Select>
           </div>
@@ -101,19 +128,20 @@ const Board = () => {
             >
               Communication Port
             </Label>
-            <Select value={communicationPort} onValueChange={setCommunicationPort}>
+            <Select value={communicationPort} onValueChange={setCommunicationPort} onOpenChange={setCommunicationSelectIsOpen}>
               <SelectTrigger
                 aria-label='Communication port selection'
                 placeholder='Select a communication port'
                 className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
               />
               <SelectContent
-                className='h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                className='h-[250px] w-[--radix-select-trigger-width] overflow-hidden rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
                 sideOffset={5}
                 alignOffset={5}
                 position='popper'
                 align='center'
                 side='bottom'
+                viewportRef={communicationSelectRef}
               >
                 {availableCommunicationPorts.map((port) => (
                   <SelectItem
