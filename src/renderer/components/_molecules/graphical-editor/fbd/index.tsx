@@ -9,6 +9,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { FBDRungState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC/units/variable'
 import {
+  addEdge,
   applyEdgeChanges,
   applyNodeChanges,
   Connection,
@@ -67,11 +68,12 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
   const updateRungLocalFromStore = () => {
-    const newRung = rung
-    setRungLocal(newRung)
+    // console.log('updateRungLocalFromStore', rung)
+    setRungLocal(rung)
   }
 
   const updateRungState = () => {
+    // console.log('updateRungState', rungLocal)
     setShouldDebounceToRung(false)
 
     if (dragging || _.isEqual(rungLocal, rung)) {
@@ -118,13 +120,18 @@ export const FBDBody = ({ rung }: FBDProps) => {
   }, [])
 
   useEffect(() => {
+    // console.log('rung', rung)
     updateRungLocalFromStore()
   }, [rung])
 
   useEffect(() => {
+    // console.log('rungLocal', rungLocal)
+  }, [rungLocal])
+
+  useEffect(() => {
     if (shouldDebounceToRung) debouncedUpdateRungStateCallback()
     return () => debouncedUpdateRungStateCallback.cancel()
-  }, [rungLocal, shouldDebounceToRung])
+  }, [shouldDebounceToRung])
 
   /**
    * Handle the addition of a new element by dropping it in the viewport
@@ -272,6 +279,11 @@ export const FBDBody = ({ rung }: FBDProps) => {
    * It is used to update the local rung state
    */
   const handleOnConnect = (connection: Connection) => {
+    setRungLocal((rung) => ({
+      ...rung,
+      edges: addEdge(connection, rung.edges),
+    }))
+
     fbdFlowActions.onConnect({
       changes: connection,
       editorName: editor.meta.name,
