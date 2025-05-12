@@ -21,7 +21,7 @@ const deviceConfigurationSchema = z.object({
       rtuInterface: z.enum(interfaceOptions), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
       rtuBaudRate: z.enum(baudRateOptions), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
       rtuSlaveId: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.
-      rtuTS485ENPin: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.Í
+      rtuRS485ENPin: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.Í
     }),
     modbusTCP: z.discriminatedUnion('tcpInterface', [
       z.object({
@@ -98,7 +98,7 @@ const setRTUConfigParams = z.discriminatedUnion('rtuConfig', [
   z.object({ rtuConfig: z.literal('rtuInterface'), value: z.enum(interfaceOptions) }),
   z.object({ rtuConfig: z.literal('rtuBaudRate'), value: z.enum(baudRateOptions) }),
   z.object({ rtuConfig: z.literal('rtuSlaveId'), value: z.string() }),
-  z.object({ rtuConfig: z.literal('rtuTS485ENPin'), value: z.string() }),
+  z.object({ rtuConfig: z.literal('rtuRS485ENPin'), value: z.string() }),
 ])
 
 const deviceActionSchema = z.object({

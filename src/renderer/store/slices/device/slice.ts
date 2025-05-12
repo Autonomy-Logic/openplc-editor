@@ -7,8 +7,8 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
   deviceAvailableOptions: {
     availableBoards: new Map(),
     availableCommunicationPorts: [],
-    availableRTUInterfaces: [],
-    availableRTUBaudRates: [],
+    availableRTUInterfaces: ['Serial', 'Serial 1', 'Serial 2', 'Serial 3'],
+    availableRTUBaudRates: ['9600', '14400', '19200', '38400', '57600', '115200'],
     availableTCPInterfaces: ['ethernet', 'wifi'], // The available TCP interfaces is always ['ethernet', 'wifi'], so we can set it on the slice creation.
   },
   deviceDefinitions: {
@@ -20,7 +20,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           rtuInterface: 'Serial',
           rtuBaudRate: '115200',
           rtuSlaveId: '',
-          rtuTS485ENPin: '',
+          rtuRS485ENPin: '',
         },
         modbusTCP: {
           tcpInterface: 'wifi',
@@ -82,8 +82,8 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             case 'rtuSlaveId':
               deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuSlaveId = value
               break
-            case 'rtuTS485ENPin':
-              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuTS485ENPin = value
+            case 'rtuRS485ENPin':
+              deviceDefinitions.configuration.communicationConfiguration.modbusRTU.rtuRS485ENPin = value
               break
             default:
               break
