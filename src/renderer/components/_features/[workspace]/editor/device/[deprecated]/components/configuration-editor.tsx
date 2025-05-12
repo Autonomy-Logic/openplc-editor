@@ -48,7 +48,6 @@ const ConfigurationEditor = () => {
         {/** TODO: disable user selection to not be permitted enable option */}
         <Checkbox
           id='modbus-rtu'
-          label='Enable Modbus RTU (Serial)'
           checked={modbusConfig.RTU}
           onCheckedChange={handleEnableModbusRTU}
           disabled={onlyCompileBoards.includes(deviceBoard)}
@@ -59,7 +58,6 @@ const ConfigurationEditor = () => {
 
         <Checkbox
           id='modbus-tcp'
-          label='Enable Modbus TCP'
           checked={modbusConfig.TCP}
           onCheckedChange={handleEnableModbusTCP}
           disabled={onlyCompileBoards.includes(deviceBoard)}

@@ -150,7 +150,7 @@ const Board = () => {
           </div>
         </div>
       </div>
-      <hr className='h-[1px] w-full self-stretch bg-brand-light' />
+      <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
       <div id='pin-mapping-container' className=' h-3/5 w-full'>
         <p>Pin Mapping</p>
       </div>

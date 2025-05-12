@@ -38,7 +38,7 @@ const TCPSettings = ({ userEnabled, ...props }: TCPSettingsProps) => {
         </div>
       )}
       <div aria-label='DHCP settings container' className='flex flex-col gap-5'>
-        <Checkbox id='enable-dhcp' label='Enable DHCP' checked={enableDHCP} onCheckedChange={handleEnableDHCPChange} />
+        <Checkbox id='enable-dhcp' checked={enableDHCP} onCheckedChange={handleEnableDHCPChange} />
         {!enableDHCP && (
           <div className='flex w-full justify-between gap-6'>
             <div className='flex w-full flex-col gap-4'>

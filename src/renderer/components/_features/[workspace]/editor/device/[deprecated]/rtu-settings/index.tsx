@@ -56,7 +56,7 @@ const RTUSettings = ({ userEnabled, ...props }: RTUSettingsProps) => {
           <Checkbox
             className='place-self-center [&>label]:absolute [&>label]:-top-2'
             id='enable-ts485-en-pin'
-            label={enableTS485ENPin ? '' : 'Enable'}
+            // label={enableTS485ENPin ? '' : 'Enable'}
             checked={enableTS485ENPin}
             onCheckedChange={handleEnableTS485ENPin}
           />
