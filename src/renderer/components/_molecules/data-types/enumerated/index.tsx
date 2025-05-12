@@ -4,6 +4,7 @@ import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tabl
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
+
 import { EnumeratedTable } from './table'
 
 type EnumDatatypeProps = ComponentPropsWithoutRef<'div'> & {

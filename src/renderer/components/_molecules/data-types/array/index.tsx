@@ -5,6 +5,7 @@ import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tabl
 import { useOpenPLCStore } from '@root/renderer/store'
 import { baseTypeSchema, PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
+
 import { DimensionsTable } from './table'
 
 type ArrayDatatypeProps = ComponentPropsWithoutRef<'div'> & {
