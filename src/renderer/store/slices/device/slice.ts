@@ -23,10 +23,16 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           rtuRS485ENPin: '',
         },
         modbusTCP: {
-          tcpInterface: 'wifi',
+          tcpInterface: 'ethernet',
           tcpMacAddress: '',
           tcpWifiSSID: '',
           tcpWifiPassword: '',
+          tcpStaticHostConfiguration: {
+            ipAddress: '',
+            dns: '',
+            gateway: '',
+            subnet: '',
+          },
         },
       },
     },
@@ -88,6 +94,54 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             default:
               break
           }
+        }),
+      )
+    },
+    setTCPConfig: (tcpConfigOption): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          const { tcpConfig, value } = tcpConfigOption
+          switch (tcpConfig) {
+            case 'tcpInterface':
+              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface = value
+              break
+            case 'tcpMacAddress':
+              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpMacAddress = value
+              break
+            default:
+              break
+          }
+        }),
+      )
+    },
+    setWifConfig: (wifiConfig): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          if (deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface === 'wifi') {
+            if (wifiConfig.wifiSSID)
+              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID = wifiConfig.wifiSSID
+            if (wifiConfig.wifiPassword)
+              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiPassword =
+                wifiConfig.wifiPassword
+          }
+        }),
+      )
+    },
+    setStaticHostConfiguration: (staticHostConfiguration): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          if (staticHostConfiguration.ipAddress)
+            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.ipAddress =
+              staticHostConfiguration.ipAddress
+          if (staticHostConfiguration.dns)
+            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.dns =
+              staticHostConfiguration.dns
+          if (staticHostConfiguration.gateway)
+            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.gateway =
+              staticHostConfiguration.gateway
+          if (staticHostConfiguration.subnet)
+            deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.subnet =
+              staticHostConfiguration.subnet
         }),
       )
     },
