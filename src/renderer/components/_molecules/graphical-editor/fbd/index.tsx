@@ -68,12 +68,10 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
   const updateRungLocalFromStore = () => {
-    // console.log('updateRungLocalFromStore', rung)
     setRungLocal(rung)
   }
 
   const updateRungState = () => {
-    // console.log('updateRungState', rungLocal)
     setShouldDebounceToRung(false)
 
     if (dragging || _.isEqual(rungLocal, rung)) {
@@ -120,13 +118,8 @@ export const FBDBody = ({ rung }: FBDProps) => {
   }, [])
 
   useEffect(() => {
-    // console.log('rung', rung)
     updateRungLocalFromStore()
   }, [rung])
-
-  useEffect(() => {
-    // console.log('rungLocal', rungLocal)
-  }, [rungLocal])
 
   useEffect(() => {
     if (shouldDebounceToRung) debouncedUpdateRungStateCallback()
