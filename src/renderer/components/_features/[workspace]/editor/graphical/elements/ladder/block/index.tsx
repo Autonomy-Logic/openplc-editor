@@ -278,12 +278,13 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       inputs: String(Math.min(Number(prevState.inputs) + 1, maxInputs)),
     }))
 
+    const defaultInputType = blockVariant.variables[0].type
     const blockVariables = [
       ...blockVariant.variables,
       {
         name: 'IN' + (Number(formState.inputs) + 1),
         class: 'input',
-        type: { definition: 'generic-type', value: 'ANY_NUM' },
+        type: defaultInputType,
       },
     ].filter((variable) => variable.class === 'input')
     const outputVariable = blockVariant.variables.filter((variable) => variable.class === 'output')
@@ -367,7 +368,9 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     )
     setFormState((prevState) => ({ ...prevState, inputs: String(value) }))
 
+    const defaultInputType = blockVariant.variables[0].type
     const blockVariables: BlockVariant['variables'] = []
+
     if (formState.executionControl) {
       blockVariables.push({
         name: 'EN',
@@ -379,7 +382,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       blockVariables.push({
         name: 'IN' + (i + 1),
         class: 'input',
-        type: { definition: 'generic-type', value: 'ANY_NUM' },
+        type: defaultInputType,
       })
     }
 
