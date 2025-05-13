@@ -68,6 +68,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
   const updateRungLocalFromStore = () => {
+    console.log('updateRungLocalFromStore', rung)
     setRungLocal(rung)
   }
 
@@ -78,6 +79,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
       return
     }
 
+    console.log('updateRungState', rungLocal)
     fbdFlowActions.setRung({
       editorName: editor.meta.name,
       rung: rungLocal,
@@ -122,9 +124,13 @@ export const FBDBody = ({ rung }: FBDProps) => {
   }, [rung])
 
   useEffect(() => {
-    if (shouldDebounceToRung) debouncedUpdateRungStateCallback()
+    console.log('rungLocal', rungLocal)
+    if (shouldDebounceToRung) {
+      console.log('debouncedUpdateRungStateCallback')
+      debouncedUpdateRungStateCallback()
+    }
     return () => debouncedUpdateRungStateCallback.cancel()
-  }, [shouldDebounceToRung])
+  }, [rungLocal, shouldDebounceToRung])
 
   /**
    * Handle the addition of a new element by dropping it in the viewport
@@ -291,6 +297,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const onNodesChange: OnNodesChange<FlowNode> = useCallback(
     (changes) => {
       const newRung = { ...rungLocal }
+      console.log('onNodesChange', changes)
 
       let selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
       changes.forEach((change) => {
@@ -340,6 +347,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
       newRung.selectedNodes = selectedNodes
 
       const changedDimensions = changes.some((change) => change.type === 'dimensions')
+      console.log('changedDimensions', changedDimensions)
       // Dimension changes need to be debounced to avoid multiple updates
       if (changedDimensions) {
         setShouldDebounceToRung(true)
