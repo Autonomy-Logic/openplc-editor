@@ -78,17 +78,17 @@ const SelectableIntervalCell = ({
     min: 0,
     sec: 0,
     ms: 0,
-    µs: 0,
+    us: 0,
   })
   const [tempValues, setTempValues] = useState(values)
 
   useEffect(() => {
-    const regex = /T#(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)min)?(?:(\d+)s)?(?:(\d+)ms)?(?:(\d+)µs)?/
+    const regex = /T#(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)min)?(?:(\d+)s)?(?:(\d+)ms)?(?:(\d+)us)?/
 
     const match = initialValue?.match(regex)
 
     if (match) {
-      const [, day = 0, hour = 0, min = 0, sec = 0, ms = 0, µs = 0] = match.map((v) => (v ? Number(v) : 0))
+      const [, day = 0, hour = 0, min = 0, sec = 0, ms = 0, us = 0] = match.map((v) => (v ? Number(v) : 0))
 
       const newValues = {
         day,
@@ -96,7 +96,7 @@ const SelectableIntervalCell = ({
         min,
         sec,
         ms,
-        µs,
+        us,
       }
 
       setValues(newValues)
@@ -105,18 +105,18 @@ const SelectableIntervalCell = ({
   }, [initialValue])
 
   const formattedInterval = useMemo(() => {
-    const { day, hour, min, sec, ms, µs } = values
+    const { day, hour, min, sec, ms, us } = values
   
 
-    return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}m` : ''}${sec > 0 ? `${sec}s` : ''}${ms > 0 ? `${ms}ms` : ''}${µs > 0 ? `${µs}µs` : ''}`
+    return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}m` : ''}${sec > 0 ? `${sec}s` : ''}${ms > 0 ? `${ms}ms` : ''}${us > 0 ? `${us}us` : ''}`
   }, [values])
   const handleSave = () => {
     const updatedValues = { ...tempValues }
 
-    if (tempValues.µs >= 1000) {
-      const additionalMs = Math.floor(tempValues.µs / 1000)
+    if (tempValues.us >= 1000) {
+      const additionalMs = Math.floor(tempValues.us / 1000)
       updatedValues.ms += additionalMs
-      updatedValues.µs = tempValues.µs % 1000
+      updatedValues.us = tempValues.us % 1000
     }
 
     if (updatedValues.ms >= 1000) {
@@ -128,7 +128,7 @@ const SelectableIntervalCell = ({
     setValues(updatedValues)
     setTempValues(updatedValues)
 
-    const formattedInterval = `T#${updatedValues.day > 0 ? `${updatedValues.day}d` : ''}${updatedValues.hour > 0 ? `${updatedValues.hour}h` : ''}${updatedValues.min > 0 ? `${updatedValues.min}min` : ''}${updatedValues.sec > 0 ? `${updatedValues.sec}s` : ''}${updatedValues.ms > 0 ? `${updatedValues.ms}ms` : ''}${updatedValues.µs > 0 ? `${updatedValues.µs}µs` : ''}`
+    const formattedInterval = `T#${updatedValues.day > 0 ? `${updatedValues.day}d` : ''}${updatedValues.hour > 0 ? `${updatedValues.hour}h` : ''}${updatedValues.min > 0 ? `${updatedValues.min}min` : ''}${updatedValues.sec > 0 ? `${updatedValues.sec}s` : ''}${updatedValues.ms > 0 ? `${updatedValues.ms}ms` : ''}${updatedValues.us > 0 ? `${updatedValues.us}us` : ''}`
 
     table.options.meta?.updateData(index, id, formattedInterval)
     setIntervalModalIsOpen(false)
@@ -171,7 +171,7 @@ const SelectableIntervalCell = ({
       >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Set interval</ModalTitle>
         <div className='flex h-24 w-full gap-2'>
-          {(['day', 'hour', 'min', 'sec', 'ms', 'µs'] as const).map((interval) => (
+          {(['day', 'hour', 'min', 'sec', 'ms', 'us'] as const).map((interval) => (
             <div key={interval} className='flex w-full flex-col justify-center gap-1 font-caption text-xs'>
               <label htmlFor={interval} className='w-full text-neutral-950 dark:text-white'>
                 {interval}
