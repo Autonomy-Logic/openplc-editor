@@ -48,7 +48,6 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
   const [dragging, setDragging] = useState(false)
-  const [shouldDebounceToRung, setShouldDebounceToRung] = useState(false)
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
   const canZoom = useMemo(() => {
@@ -68,18 +67,21 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
   const updateRungLocalFromStore = () => {
-    console.log('updateRungLocalFromStore', rung)
+    // console.log('updateRungLocalFromStore --')
+    // console.log('rung', rung)
     setRungLocal(rung)
   }
 
   const updateRungState = () => {
-    setShouldDebounceToRung(false)
+    // console.log('updateRungState --')
+    // console.log('rungLocal', rungLocal)
+    // console.log('dragging', dragging)
+    // console.log('isEqual', _.isEqual(rungLocal, rung))
 
     if (dragging || _.isEqual(rungLocal, rung)) {
       return
     }
 
-    console.log('updateRungState', rungLocal)
     fbdFlowActions.setRung({
       editorName: editor.meta.name,
       rung: rungLocal,
@@ -89,17 +91,6 @@ export const FBDBody = ({ rung }: FBDProps) => {
   /**
    *  * FYI: This implementation came from https://www.developerway.com/posts/debouncing-in-react
    */
-  const debounceUpdateRungLocalFromStore = useRef(updateRungLocalFromStore)
-  useEffect(() => {
-    debounceUpdateRungLocalFromStore.current = updateRungLocalFromStore
-  }, [rung])
-  const _debouncedUpdateRungLocalFromStoreCallback = useMemo(() => {
-    const func = () => {
-      debounceUpdateRungLocalFromStore.current?.()
-    }
-    return _.debounce(func, 100)
-  }, [])
-
   // creating ref and initializing it with the sendRequest function
   const debounceUpdateRungRef = useRef(updateRungState)
   useEffect(() => {
@@ -124,13 +115,10 @@ export const FBDBody = ({ rung }: FBDProps) => {
   }, [rung])
 
   useEffect(() => {
-    console.log('rungLocal', rungLocal)
-    if (shouldDebounceToRung) {
-      console.log('debouncedUpdateRungStateCallback')
-      debouncedUpdateRungStateCallback()
-    }
+
+    debouncedUpdateRungStateCallback()
     return () => debouncedUpdateRungStateCallback.cancel()
-  }, [rungLocal, shouldDebounceToRung])
+  }, [rungLocal])
 
   /**
    * Handle the addition of a new element by dropping it in the viewport
@@ -296,64 +284,49 @@ export const FBDBody = ({ rung }: FBDProps) => {
    */
   const onNodesChange: OnNodesChange<FlowNode> = useCallback(
     (changes) => {
-      const newRung = { ...rungLocal }
-      console.log('onNodesChange', changes)
+      setRungLocal((newRung) => {
+        let nodes = newRung.nodes
+        let selectedNodes: FlowNode[] = newRung.nodes.filter((node) => node.selected)
 
-      let selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
-      changes.forEach((change) => {
-        switch (change.type) {
-          case 'select': {
-            const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
-            if (change.selected) {
-              selectedNodes.push(node)
+        changes.forEach((change) => {
+          switch (change.type) {
+            case 'select': {
+              const node = newRung.nodes.find((n) => n.id === change.id) as FlowNode
+              if (change.selected) {
+                selectedNodes.push(node)
+                return
+              }
+              selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
               return
             }
-            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
-            return
-          }
 
-          case 'add': {
-            selectedNodes = []
-            return
-          }
-
-          case 'remove': {
-            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
-            return
-          }
-
-          case 'dimensions': {
-            if (change.resizing)
-              newRung.nodes = newRung.nodes.map((n) => {
-                if (n.id === change.id) {
-                  return {
-                    ...n,
-                    width: change.dimensions?.width,
-                    height: change.dimensions?.height,
-                    measured: {
+            case 'dimensions': {
+              if (change.resizing)
+                nodes = newRung.nodes.map((n) => {
+                  if (n.id === change.id) {
+                    return {
+                      ...n,
                       width: change.dimensions?.width,
                       height: change.dimensions?.height,
-                    },
+                      measured: {
+                        width: change.dimensions?.width,
+                        height: change.dimensions?.height,
+                      },
+                    }
                   }
-                }
-                return n
-              })
-            return
+                  return n
+                })
+              return
+            }
           }
+        })
+
+        return {
+          ...newRung,
+          nodes: applyNodeChanges(changes, nodes),
+          selectedNodes: selectedNodes,
         }
       })
-
-      newRung.nodes = applyNodeChanges(changes, newRung.nodes)
-      newRung.selectedNodes = selectedNodes
-
-      const changedDimensions = changes.some((change) => change.type === 'dimensions')
-      console.log('changedDimensions', changedDimensions)
-      // Dimension changes need to be debounced to avoid multiple updates
-      if (changedDimensions) {
-        setShouldDebounceToRung(true)
-      }
-
-      setRungLocal(newRung)
     },
     [rungLocal, dragging],
   )
@@ -365,7 +338,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
         edges: applyEdgeChanges(changes, rung.edges),
       }))
     },
-    [rungLocal, rung, dragging],
+    [rungLocal, dragging],
   )
 
   const onNodeDragStart = useCallback(() => {
