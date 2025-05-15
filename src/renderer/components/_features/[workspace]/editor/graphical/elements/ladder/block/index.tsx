@@ -4,13 +4,17 @@ import {
   BlockNode,
   BlockNodeData,
   BlockNodeElement,
-  BlockVariant,
+  BlockVariant as LadderBlockVariant,
   buildBlockNode,
   getBlockSize,
 } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
 import { getLadderPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils'
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
-import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
+import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/types/block'
+import {
+  getBlockDocumentation,
+  getVariableRestrictionType,
+} from '@root/renderer/components/_atoms/graphical-editor/utils'
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -74,45 +78,13 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const inputInputsRef = useRef<HTMLInputElement>(null)
 
   const [node, setNode] = useState<BlockNode<object>>(selectedNode)
-  const blockVariant = node.data.variant as BlockVariant
+  const LadderBlockVariant = node.data.variant as LadderBlockVariant
   const lockExecutionControl = node.data.lockExecutionControl
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
-  const [selectedFile, setSelectedFile] = useState<BlockVariant | null>(null)
+  const [selectedFile, setSelectedFile] = useState<LadderBlockVariant | null>(null)
   const [documentation, setDocumentation] = useState<string | null>(
-    `${blockVariant.documentation}
-
-    INPUT:
-    ${blockVariant.variables
-      .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-      .map(
-        (variable, index) =>
-          `${variable.name}: ${variable.type.value}${
-            index <
-            blockVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-              .length -
-              1
-              ? '\n'
-              : ''
-          }`,
-      )
-      .join('')}
-
-    OUTPUT:
-    ${blockVariant.variables
-      .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-      .map(
-        (variable, index) =>
-          `${variable.name}: ${variable.type.value}${
-            index <
-            blockVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-              .length -
-              1
-              ? '\n'
-              : ''
-          }`,
-      )
-      .join('')}`,
+    getBlockDocumentation(LadderBlockVariant as BlockVariant),
   )
   const [formState, setFormState] = useState<{
     name: string
@@ -120,9 +92,9 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     executionOrder: string
     executionControl: boolean
   }>({
-    name: blockVariant.name === '???' ? '' : blockVariant.name,
+    name: LadderBlockVariant.name === '???' ? '' : LadderBlockVariant.name,
     inputs:
-      blockVariant?.variables
+      LadderBlockVariant?.variables
         .filter((variable) => variable.class === 'input' || (variable.class === 'inOut' && variable.name !== 'EN'))
         .length.toString() || '0',
     executionOrder: selectedNode.data.executionOrder.toString(),
@@ -138,12 +110,12 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     const [type, selectedLibrary, selectedPou] = selectedFileKey?.split('/') || []
     if (type === 'system' && selectedLibrary && selectedPou) {
       const library = libraries.system.find((library) => library.name === selectedLibrary)
-      const pou = library?.pous.find((pou) => pou.name === selectedPou) as BlockVariant
+      const pou = library?.pous.find((pou) => pou.name === selectedPou) as LadderBlockVariant
       setSelectedFile(pou)
       return
     }
     if (type === 'user' && selectedLibrary) {
-      const library = libraries.user.find((library) => library.name === selectedLibrary) as BlockVariant
+      const library = libraries.user.find((library) => library.name === selectedLibrary) as LadderBlockVariant
       if (library) {
         setSelectedFile(library)
         return
@@ -204,7 +176,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         },
       })
 
-      const newNodeDataVariant = newNode.data.variant as BlockVariant
+      const newNodeDataVariant = newNode.data.variant as LadderBlockVariant
       const formName: string = newNodeDataVariant.name
       const formInputs: string = newNodeDataVariant.variables
         .filter((variable) => variable.class === 'input' || (variable.class === 'inOut' && variable.name !== 'EN'))
@@ -216,43 +188,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         inputs: formInputs,
         executionControl: newNode.data.executionControl,
       }))
-      setDocumentation(
-        `${newNodeDataVariant.documentation}
-
-        -- INPUT --
-        ${newNodeDataVariant.variables
-          .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-          .map(
-            (variable, index) =>
-              `${variable.name}: ${variable.type.value}${
-                index <
-                newNodeDataVariant.variables.filter(
-                  (variable) => variable.class === 'input' || variable.class === 'inOut',
-                ).length -
-                  1
-                  ? '\n'
-                  : ''
-              }`,
-          )
-          .join('')}
-
-        -- OUTPUT --
-        ${newNodeDataVariant.variables
-          .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-          .map(
-            (variable, index) =>
-              `${variable.name}: ${variable.type.value}${
-                index <
-                newNodeDataVariant.variables.filter(
-                  (variable) => variable.class === 'output' || variable.class === 'inOut',
-                ).length -
-                  1
-                  ? '\n'
-                  : ''
-              }`,
-          )
-          .join('')}`,
-      )
+      setDocumentation(getBlockDocumentation(newNodeDataVariant as BlockVariant))
     }
   }, [selectedFile])
 
@@ -268,7 +204,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const handleNameInputSubmit = () => {
     const libraryBlock = searchLibraryByPouName(libraries, editor, pous, formState.name)
     if (libraryBlock) {
-      setSelectedFile(libraryBlock as BlockVariant)
+      setSelectedFile(libraryBlock as LadderBlockVariant)
     }
   }
 
@@ -278,21 +214,22 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       inputs: String(Math.min(Number(prevState.inputs) + 1, maxInputs)),
     }))
 
+    const defaultInputType = LadderBlockVariant.variables[0].type
     const blockVariables = [
-      ...blockVariant.variables,
+      ...LadderBlockVariant.variables,
       {
         name: 'IN' + (Number(formState.inputs) + 1),
         class: 'input',
-        type: { definition: 'generic-type', value: 'ANY_NUM' },
+        type: defaultInputType,
       },
     ].filter((variable) => variable.class === 'input')
-    const outputVariable = blockVariant.variables.filter((variable) => variable.class === 'output')
+    const outputVariable = LadderBlockVariant.variables.filter((variable) => variable.class === 'output')
     outputVariable.forEach((variable) => {
       blockVariables.push(variable)
     })
 
     const { height } = getBlockSize(
-      { ...blockVariant, variables: blockVariables },
+      { ...LadderBlockVariant, variables: blockVariables },
       {
         x: (node.data as BasicNodeData).inputConnector?.glbPosition.x || 0,
         y: (node.data as BasicNodeData).inputConnector?.glbPosition.y || 0,
@@ -305,7 +242,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       data: {
         ...node.data,
         variant: {
-          ...blockVariant,
+          ...LadderBlockVariant,
           variables: blockVariables,
         },
       },
@@ -315,7 +252,8 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const handleInputsDecrement = () => {
     const newInputsNumber = Math.max(
       Number(formState.inputs) - 1,
-      (selectedFile?.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length ?? 2),
+      selectedFile?.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length ??
+        2,
     )
 
     setFormState((prevState) => ({
@@ -323,11 +261,11 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       inputs: String(newInputsNumber),
     }))
 
-    const blockVariables = [...blockVariant.variables]
+    const blockVariables = [...LadderBlockVariant.variables]
       .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
       .slice(0, newInputsNumber)
 
-    const outputVariable = [...blockVariant.variables].filter(
+    const outputVariable = [...LadderBlockVariant.variables].filter(
       (variable) => variable.class === 'output' || variable.class === 'inOut',
     )
     outputVariable.forEach((variable) => {
@@ -335,7 +273,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     })
 
     const { height } = getBlockSize(
-      { ...blockVariant, variables: blockVariables },
+      { ...LadderBlockVariant, variables: blockVariables },
       {
         x: (node.data as BasicNodeData).inputConnector?.glbPosition.x || 0,
         y: (node.data as BasicNodeData).inputConnector?.glbPosition.y || 0,
@@ -348,7 +286,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       data: {
         ...node.data,
         variant: {
-          ...blockVariant,
+          ...LadderBlockVariant,
           variables: blockVariables,
         },
       },
@@ -361,13 +299,15 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
     const value = Math.max(
       libraryBlock
-        ? (libraryBlock as BlockVariant).variables.filter((variable) => variable.class === 'input').length
+        ? (libraryBlock as LadderBlockVariant).variables.filter((variable) => variable.class === 'input').length
         : 2,
       Math.min(Number(EventValue), maxInputs),
     )
     setFormState((prevState) => ({ ...prevState, inputs: String(value) }))
 
-    const blockVariables: BlockVariant['variables'] = []
+    const defaultInputType = LadderBlockVariant.variables[0].type
+    const blockVariables: LadderBlockVariant['variables'] = []
+
     if (formState.executionControl) {
       blockVariables.push({
         name: 'EN',
@@ -379,17 +319,17 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       blockVariables.push({
         name: 'IN' + (i + 1),
         class: 'input',
-        type: { definition: 'generic-type', value: 'ANY_NUM' },
+        type: defaultInputType,
       })
     }
 
-    const outputVariable = blockVariant.variables.filter((variable) => variable.class === 'output')
+    const outputVariable = LadderBlockVariant.variables.filter((variable) => variable.class === 'output')
     outputVariable.forEach((variable) => {
       blockVariables.push(variable)
     })
 
     const { height } = getBlockSize(
-      { ...blockVariant, variables: blockVariables },
+      { ...LadderBlockVariant, variables: blockVariables },
       {
         x: (node.data as BasicNodeData).inputConnector?.glbPosition.x || 0,
         y: (node.data as BasicNodeData).inputConnector?.glbPosition.y || 0,
@@ -402,7 +342,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       data: {
         ...node.data,
         variant: {
-          ...blockVariant,
+          ...LadderBlockVariant,
           variables: blockVariables,
         },
       },
@@ -434,7 +374,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       posY: node.position.y,
       handleX: node.data.inputConnector?.glbPosition.x || 0,
       handleY: node.data.inputConnector?.glbPosition.y || 0,
-      variant: blockVariant,
+      variant: LadderBlockVariant,
       executionControl: checked,
     })
 
@@ -462,7 +402,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       posY: selectedNode.position.y,
       handleX: selectedNode.data.inputConnector?.glbPosition.x || 0,
       handleY: selectedNode.data.inputConnector?.glbPosition.y || 0,
-      variant: blockVariant,
+      variant: LadderBlockVariant,
       executionControl: formState.executionControl,
     })
     newNode.data = {
@@ -476,7 +416,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     if (!rung) return
 
     if (variables.selected && variables.all) {
-      if (blockVariant.type === 'function') {
+      if (LadderBlockVariant.type === 'function') {
         deleteVariable({
           rowId: variables.all.indexOf(variables.selected),
           scope: 'local',
@@ -495,7 +435,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
           data: {
             type: {
               definition: 'derived',
-              value: (newNode.data as BlockNodeData<BlockVariant>).variant.name,
+              value: (newNode.data as BlockNodeData<LadderBlockVariant>).variant.name,
             },
           },
           rowId: variables.all.indexOf(variables.selected),
@@ -599,7 +539,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
               onBlur={handleNameInputSubmit}
               onKeyDown={(e) => e.key === 'Enter' && inputNameRef.current?.blur()}
             />
-            {blockVariant.type === 'function' && blockVariant.extensible && (
+            {LadderBlockVariant.type === 'function' && LadderBlockVariant.extensible && (
               <>
                 <label htmlFor='inputs' className={labelStyle}>
                   Inputs:
