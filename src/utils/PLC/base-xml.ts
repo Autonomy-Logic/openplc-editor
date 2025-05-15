@@ -70,14 +70,14 @@ const getBaseXmlStructure = (): BaseXml => ({
  * This is not being used anymore.
  * @deprecated
  */
-export const parseProjectToXML = (project: ProjectState): string => {
+export const parseProjectToXML = (project: ProjectState, parseTo: 'open-plc' | 'codesys' = 'open-plc'): string => {
   let xmlResult = getBaseXmlStructure()
 
   /**
    * Parse POUs
    */
   const pous = project.data.pous
-  xmlResult = parsePousToXML(xmlResult, pous)
+  xmlResult = parsePousToXML(xmlResult, pous, parseTo)
 
   /**
    * Parse instances

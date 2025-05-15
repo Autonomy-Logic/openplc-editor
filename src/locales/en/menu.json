@@ -21,6 +21,7 @@
       "closeTab": "Close Tab",
       "closeProject": "Close Project",
       "exportToPLCOpenXml": "Export to PLCOpen XML",
+      "exportToCodeSys": "Export to CodeSys",
       "pageSetup": "Page Setup",
       "preview": "Preview",
       "print": "Print",

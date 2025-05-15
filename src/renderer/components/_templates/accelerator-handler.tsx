@@ -83,9 +83,13 @@ const AcceleratorHandler = () => {
    * Compiler Related Accelerators
    */
   useEffect(() => {
-    window.bridge.exportProjectRequest((_event) => setRequestFlag(true))
+    let parseTo: 'open-plc' | 'codesys' = 'open-plc'
+    window.bridge.exportProjectRequest((_event, value: 'open-plc' | 'codesys') => {
+      setRequestFlag(true)
+      parseTo = value
+    })
     if (requestFlag)
-      handleExportProject()
+      handleExportProject(parseTo)
         .then(() => setRequestFlag(false))
         .catch(() => setRequestFlag(false))
     return () => {
