@@ -1,3 +1,4 @@
+import { zodResolver } from '@hookform/resolvers/zod'
 import {
   Checkbox,
   InputWithRef,
@@ -11,6 +12,8 @@ import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, useCallback, useEffect, useRef, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
 type ModbusRTUComponentProps = ComponentPropsWithoutRef<'div'> & {
   isModbusRTUEnabled: boolean
 }
@@ -208,7 +211,25 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
 type ModbusTCPComponentProps = ComponentPropsWithoutRef<'div'> & {
   isModbusTCPEnabled: boolean
 }
+
+const _rtuConfigSchema = z.object({
+  slaveId: z.string(),
+})
+
+const staticHostSchema = z.object({
+  ipAddress: z.string().ip(),
+  gateway: z.string().ip(),
+  subnet: z.string().cidr(),
+  dns: z.string().ip(),
+})
+
+type StaticHostSchema = z.infer<typeof staticHostSchema>
+
 const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPComponentProps) => {
+  const { handleSubmit, register, getValues, formState } = useForm<StaticHostSchema>({
+    mode: 'onBlur',
+    resolver: zodResolver(staticHostSchema),
+  })
   const {
     deviceDefinitions: {
       configuration: {
@@ -216,26 +237,15 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
       },
     },
     deviceAvailableOptions: { availableTCPInterfaces },
-    deviceActions: { setTCPConfig, setWifConfig, setStaticHostConfiguration },
+    deviceActions: { setTCPConfig, setWifConfig },
   } = useOpenPLCStore()
   const [tcpConfigFields, setTCPConfigFields] = useState({
     tcpMACAddress: modbusTCP.tcpMacAddress,
     tcpWifiSSID: '',
     tcpWifiPassword: '',
   })
-  const [tcpStaticHostLocalConfiguration, setTCPStaticHostLocalConfiguration] = useState({
-    ipAddress: '',
-    dns: '',
-    gateway: '',
-    subnet: '',
-  })
 
   const [enableDHCPHost, setEnableDHCPHost] = useState(true)
-
-  console.group('Modbus TCP Component')
-  console.log('tcp global data', modbusTCP)
-  console.log('tcp local data', tcpConfigFields)
-  console.groupEnd()
 
   const handleEnableDHCPHost = useCallback(() => setEnableDHCPHost(!enableDHCPHost), [enableDHCPHost])
 
@@ -254,16 +264,20 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
     [],
   )
 
-  const writeStaticHostConfigurationInGlobalStore = () => setStaticHostConfiguration(tcpStaticHostLocalConfiguration)
+  // const writeStaticHostConfigurationInGlobalStore = () => setStaticHostConfiguration(tcpStaticHostLocalConfiguration)
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) =>
     setTCPConfigFields({ ...tcpConfigFields, [event.target.id]: event.target.value })
 
-  const handleStaticHostInputChange = (event: React.ChangeEvent<HTMLInputElement>) =>
-    setTCPStaticHostLocalConfiguration({
-      ...tcpStaticHostLocalConfiguration,
-      [event.target.id]: event.target.value,
-    })
+  // const handleStaticHostInputChange = (event: React.ChangeEvent<HTMLInputElement>) =>
+  //   setTCPStaticHostLocalConfiguration({
+  //     ...tcpStaticHostLocalConfiguration,
+  //     [event.target.id]: event.target.value,
+  //   })
+
+  console.log('Values:', getValues())
+  console.log('State touched:', formState.touchedFields)
+  console.log('State dirty:', formState.dirtyFields)
   return (
     <>
       <div
@@ -382,9 +396,14 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
           </Label>
         </div>
       )}
-      {!enableDHCPHost && (
-        <div id='static-host-config-container' className='flex gap-6'>
-          <div id='static-host-form-config-left-slot' className='flex flex-1 flex-col gap-4'>
+      {!enableDHCPHost && isModbusTCPEnabled && (
+        <form
+          id='static-host-config-form-container'
+          className='flex gap-6'
+          // eslint-disable-next-line @typescript-eslint/no-misused-promises
+          onSubmit={handleSubmit((d) => console.log(d))}
+        >
+          <section id='static-host-form-config-left-slot' className='flex flex-1 flex-col gap-4'>
             <div id='static-host-ip-container' className='flex w-full flex-1 items-center justify-start gap-1'>
               <Label
                 id='static-host-ip-config-id-input-label'
@@ -395,12 +414,14 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
               </Label>
               <InputWithRef
                 id='ipAddress'
-                placeholder='IP'
-                value={tcpStaticHostLocalConfiguration?.ipAddress}
-                onChange={handleStaticHostInputChange}
-                onBlur={writeStaticHostConfigurationInGlobalStore}
-                className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                placeholder='xxx.xxx.xxx.xxx'
+                // value={tcpStaticHostLocalConfiguration?.ipAddress}
+                // onChange={handleStaticHostInputChange}
+                // onBlur={writeStaticHostConfigurationInGlobalStore}
+                className='relative h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                {...register('ipAddress')}
               />
+              {formState.errors.ipAddress && <p className='text-xs font-light text-red-600'>Error</p>}
             </div>
             <div id='static-host-gateway-container' className='flex w-full flex-1 items-center justify-start gap-1'>
               <Label
@@ -412,15 +433,16 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
               </Label>
               <InputWithRef
                 id='gateway'
-                placeholder='Gateway'
-                value={tcpStaticHostLocalConfiguration?.gateway}
-                onChange={handleStaticHostInputChange}
-                onBlur={writeStaticHostConfigurationInGlobalStore}
+                placeholder='xxx.xxx.xxx.xxx'
+                // value={tcpStaticHostLocalConfiguration?.gateway}
+                // onChange={handleStaticHostInputChange}
+                // onBlur={writeStaticHostConfigurationInGlobalStore}
                 className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                {...register('gateway')}
               />
             </div>
-          </div>
-          <div id='static-host-form-config-right-slot' className='flex flex-1 flex-col gap-4'>
+          </section>
+          <section id='static-host-form-config-right-slot' className='flex flex-1 flex-col gap-4'>
             <div id='static-host-dns-container' className='flex w-full flex-1 items-center justify-start gap-1'>
               <Label
                 id='static-host-dns-id-input-label'
@@ -431,11 +453,12 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
               </Label>
               <InputWithRef
                 id='dns'
-                placeholder='DNS'
-                value={tcpStaticHostLocalConfiguration?.dns}
-                onChange={handleStaticHostInputChange}
-                onBlur={writeStaticHostConfigurationInGlobalStore}
+                placeholder='xxx.xxx.xxx.xxx'
+                // value={tcpStaticHostLocalConfiguration?.dns}
+                // onChange={handleStaticHostInputChange}
+                // onBlur={writeStaticHostConfigurationInGlobalStore}
                 className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                {...register('dns')}
               />
             </div>
             <div id='static-host-subnet-container' className='flex w-full flex-1 items-center justify-start gap-1'>
@@ -448,15 +471,17 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
               </Label>
               <InputWithRef
                 id='subnet'
-                placeholder='Subnet'
-                value={tcpStaticHostLocalConfiguration?.subnet}
-                onChange={handleStaticHostInputChange}
-                onBlur={writeStaticHostConfigurationInGlobalStore}
+                placeholder='xxx.xxx.xxx.xxx/xx'
+                // value={tcpStaticHostLocalConfiguration?.subnet}
+                // onChange={handleStaticHostInputChange}
+                // onBlur={writeStaticHostConfigurationInGlobalStore}
                 className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                {...register('subnet')}
               />
             </div>
-          </div>
-        </div>
+          </section>
+          <input type='submit' />
+        </form>
       )}
     </>
   )
