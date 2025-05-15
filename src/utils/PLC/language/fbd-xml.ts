@@ -65,7 +65,11 @@ const getEdgePaths = (edge: FlowEdge, nodes: FlowNode[]) => {
  * Translate react flow nodes to XML
  */
 
-const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbdXML => {
+const blockToXml = (
+  node: BlockNode<BlockVariant>,
+  rung: FBDRungState,
+  parseTo: 'open-plc' | 'codesys',
+): BlockFbdXML => {
   const inputVariables: BlockFbdXML['inputVariables']['variable'] = node.data.inputHandles
     .flatMap((handle) => {
       const edges = rung.edges.filter((edge) => edge.target === node.id && edge.targetHandle === handle.id)
@@ -104,7 +108,7 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
   const outputVariable: BlockFbdXML['outputVariables']['variable'] = node.data.outputHandles
     .map((handle) => {
       return {
-        '@formalParameter': handle.id || '',
+        '@formalParameter': parseTo !== 'codesys' ? handle.id || '' : '   ',
         connectionPointOut: {
           relPosition: {
             '@x': handle.relPosition.x || 0,
@@ -292,7 +296,7 @@ const commentToXml = (node: CommentNode): CommentFbdXML => {
 /**
  * Entry point to parse nodes to XML
  */
-const fbdToXml = (rung: FBDRungState) => {
+const fbdToXml = (rung: FBDRungState, parseTo: 'open-plc' | 'codesys') => {
   const fbdXML: {
     body: {
       FBD: FbdXML
@@ -315,7 +319,7 @@ const fbdToXml = (rung: FBDRungState) => {
   nodes.forEach((node) => {
     switch (node.type as CustomFbdNodeTypes) {
       case 'block':
-        fbdXML.body.FBD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung))
+        fbdXML.body.FBD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung, parseTo))
         break
       case 'input-variable':
         fbdXML.body.FBD.inVariable.push(inputVariableToXml(node as VariableNode))
