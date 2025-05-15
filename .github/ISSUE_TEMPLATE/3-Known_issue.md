@@ -1,8 +1,13 @@
 ---
-name: Bug report
-about: You're having technical issues. 🐞
-labels: 'bug'
+name: Known issue
+about: You noted that something isn't working right or can be improved in the current development editor build.
+labels: 'known-issue'
 ---
+
+## Prerequisites
+
+- [ ] Using NodeJS 20+
+- [ ] Using Npm 10+
 
 <!-- Please use the following issue template or your issue will be closed -->
 
@@ -40,5 +45,6 @@ labels: 'bug'
 
 <!--- Include as many relevant details about the environment you experienced the bug in -->
 
-- Version :
+- App version :
+- Branch :
 - Operating System and version :

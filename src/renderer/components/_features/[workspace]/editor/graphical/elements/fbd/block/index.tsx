@@ -10,7 +10,10 @@ import {
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils/types'
 import { getFBDPouVariablesRungNodeAndEdges } from '@root/renderer/components/_atoms/graphical-editor/fbd/utils/utils'
 import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/types/block'
-import { getVariableRestrictionType } from '@root/renderer/components/_atoms/graphical-editor/utils'
+import {
+  getBlockDocumentation,
+  getVariableRestrictionType,
+} from '@root/renderer/components/_atoms/graphical-editor/utils'
 import { Modal, ModalContent, ModalTitle } from '@root/renderer/components/_molecules'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { EditorModel, LibraryState } from '@root/renderer/store/slices'
@@ -77,41 +80,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
 
   const [selectedFileKey, setSelectedFileKey] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<BlockVariant | null>(null)
-  const [documentation, setDocumentation] = useState<string | null>(
-    `${blockVariant.documentation}
-
-    INPUT:
-    ${blockVariant.variables
-      .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-      .map(
-        (variable, index) =>
-          `${variable.name}: ${variable.type.value}${
-            index <
-            blockVariant.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-              .length -
-              1
-              ? '\n'
-              : ''
-          }`,
-      )
-      .join('')}
-
-    OUTPUT:
-    ${blockVariant.variables
-      .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-      .map(
-        (variable, index) =>
-          `${variable.name}: ${variable.type.value}${
-            index <
-            blockVariant.variables.filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-              .length -
-              1
-              ? '\n'
-              : ''
-          }`,
-      )
-      .join('')}`.trim(),
-  )
+  const [documentation, setDocumentation] = useState<string | null>(getBlockDocumentation(blockVariant))
   const [formState, setFormState] = useState<{
     name: string
     inputs: string
@@ -214,43 +183,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
         inputs: formInputs,
         executionControl: newNode.data.executionControl,
       }))
-      setDocumentation(
-        `${newNodeDataVariant.documentation}
-
-        -- INPUT --
-        ${newNodeDataVariant.variables
-          .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-          .map(
-            (variable, index) =>
-              `${variable.name}: ${variable.type.value}${
-                index <
-                newNodeDataVariant.variables.filter(
-                  (variable) => variable.class === 'input' || variable.class === 'inOut',
-                ).length -
-                  1
-                  ? '\n'
-                  : ''
-              }`,
-          )
-          .join('')}
-
-        -- OUTPUT --
-        ${newNodeDataVariant.variables
-          .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-          .map(
-            (variable, index) =>
-              `${variable.name}: ${variable.type.value}${
-                index <
-                newNodeDataVariant.variables.filter(
-                  (variable) => variable.class === 'output' || variable.class === 'inOut',
-                ).length -
-                  1
-                  ? '\n'
-                  : ''
-              }`,
-          )
-          .join('')}`.trim(),
-      )
+      setDocumentation(getBlockDocumentation(newNodeDataVariant))
     }
   }, [selectedFile])
 
@@ -276,14 +209,16 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       inputs: String(Math.min(Number(prevState.inputs) + 1, maxInputs)),
     }))
 
+    const defaultInputType = blockVariant.variables[0].type
     const blockVariables = [
       ...blockVariant.variables,
       {
         name: 'IN' + (Number(formState.inputs) + 1),
         class: 'input',
-        type: { definition: 'generic-type', value: 'ANY_NUM' },
+        type: defaultInputType,
       },
     ].filter((variable) => variable.class === 'input')
+
     const outputVariable = blockVariant.variables.filter((variable) => variable.class === 'output')
     outputVariable.forEach((variable) => {
       blockVariables.push(variable)
@@ -310,7 +245,8 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const handleInputsDecrement = () => {
     const newInputsNumber = Math.max(
       Number(formState.inputs) - 1,
-      (selectedFile?.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length ?? 2),
+      selectedFile?.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length ??
+        2,
     )
 
     setFormState((prevState) => ({
@@ -362,7 +298,9 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     )
     setFormState((prevState) => ({ ...prevState, inputs: String(value) }))
 
+    const defaultInputType = blockVariant.variables[0].type
     const blockVariables: BlockVariant['variables'] = []
+
     if (formState.executionControl) {
       blockVariables.push({
         name: 'EN',
@@ -374,7 +312,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       blockVariables.push({
         name: 'IN' + (i + 1),
         class: 'input',
-        type: { definition: 'generic-type', value: 'ANY_NUM' },
+        type: defaultInputType,
       })
     }
 

@@ -226,7 +226,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
                   posY: node.position.y,
                   handleX: (node as CoilNode).data.inputConnector?.glbPosition.x ?? 0,
                   handleY: (node as CoilNode).data.inputConnector?.glbPosition.y ?? 0,
-                  variant: 'default',
+                  variant: (node as CoilNode).data.variant,
                 })
                 return {
                   ...newCoil,
@@ -243,7 +243,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
                   posY: node.position.y,
                   handleX: (node as ContactNode).data.inputConnector?.glbPosition.x ?? 0,
                   handleY: (node as ContactNode).data.inputConnector?.glbPosition.y ?? 0,
-                  variant: 'default',
+                  variant: (node as ContactNode).data.variant,
                 })
                 return {
                   ...newContact,

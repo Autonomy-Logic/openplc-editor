@@ -4,7 +4,6 @@ import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast
 import { useOpenPLCStore } from '@root/renderer/store'
 import { StructureTableType } from '@root/renderer/store/slices'
 import { PLCStructureVariable } from '@root/types/PLC/open-plc'
-import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
 import { StructureTable } from './table'
@@ -183,7 +182,7 @@ const StructureDataType = () => {
       aria-label=' structure data type container'
       className='flex h-full w-full flex-1 flex-col gap-4 overflow-hidden bg-transparent'
     >
-      <div aria-label='Data type content actions container' className='flex h-8 w-full gap-8'>
+      <div aria-label='Data type content actions container' className='flex h-8 w-full'>
         <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
           <span className='select-none'>Structure</span>
           <div
@@ -238,3 +237,4 @@ const StructureDataType = () => {
 }
 
 export { StructureDataType }
+
