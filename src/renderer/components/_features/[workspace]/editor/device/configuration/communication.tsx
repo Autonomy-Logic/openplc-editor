@@ -12,7 +12,7 @@ import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, useCallback, useEffect, useRef, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 type ModbusRTUComponentProps = ComponentPropsWithoutRef<'div'> & {
   isModbusRTUEnabled: boolean
@@ -69,10 +69,6 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
   const writeRS485ENPinInGlobalStore = () =>
     setRTUConfig({ rtuConfig: 'rtuRS485ENPin', value: rtuConfigFields.rtuRS485ENPin })
 
-  console.group('Modbus RTU Component')
-  console.log('rtu global data', modbusRTU)
-  console.log('rtu local data', rtuConfigFields)
-  console.groupEnd()
   return (
     <div id='modbus-rtu-form-config-container' className={cn('flex gap-6', !isModbusRTUEnabled && 'hidden')} {...props}>
       <div id='modbus-rtu-form-config-left-slot' className='flex flex-1 flex-col gap-4'>
@@ -92,6 +88,7 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
             <SelectTrigger
               aria-label='modbus-rtu-interface-select-trigger'
               placeholder='Select interface'
+              withIndicator
               className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
             />
             <SelectContent
@@ -153,6 +150,7 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
             <SelectTrigger
               aria-label='modbus-rtu-baudrate-select-trigger'
               placeholder='Select baudrate'
+              withIndicator
               className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
             />
             <SelectContent
@@ -191,11 +189,11 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
             htmlFor='modbus-rtu-rs485en-pin-input'
             className={cn('whitespace-pre text-xs text-neutral-950 dark:text-white', !enableRS485Pin && 'opacity-50')}
           >
-            RS485EN Pin
+            RS485 EN Pin
           </Label>
           <InputWithRef
             id='rtuRS485ENPin'
-            placeholder='RS485EN Pin'
+            placeholder='RS485 EN Pin'
             value={rtuConfigFields.rtuRS485ENPin}
             onChange={handleInputChange}
             onBlur={writeRS485ENPinInGlobalStore}
@@ -225,11 +223,138 @@ const staticHostSchema = z.object({
 
 type StaticHostSchema = z.infer<typeof staticHostSchema>
 
-const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPComponentProps) => {
-  const { handleSubmit, register, getValues, formState } = useForm<StaticHostSchema>({
-    mode: 'onBlur',
+type StaticHostConfigurationComponentProps = ComponentPropsWithoutRef<'form'>
+const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponentProps) => {
+  const {
+    deviceDefinitions,
+    deviceActions: { setStaticHostConfiguration },
+  } = useOpenPLCStore()
+  const {
+    control,
+    formState: { errors },
+  } = useForm<StaticHostSchema>({
+    mode: 'onChange', // Can be on touched...
     resolver: zodResolver(staticHostSchema),
   })
+
+  console.log('Global State ->', deviceDefinitions)
+  console.log('Errors ->', errors)
+
+  return (
+    <form id='static-host-config-form-container' className='flex gap-6' {...props}>
+      <section id='static-host-form-config-left-slot' className='flex flex-1 flex-col gap-4'>
+        <div id='static-host-ip-container' className='flex w-full flex-1 items-center justify-start gap-1'>
+          <Label
+            id='static-host-ip-config-id-input-label'
+            htmlFor='static-host-ip-config-id-input'
+            className='whitespace-pre text-xs text-neutral-950 dark:text-white'
+          >
+            IP
+          </Label>
+          <Controller
+            name='ipAddress'
+            control={control}
+            defaultValue=''
+            render={({ field }) => (
+              <InputWithRef
+                id='ipAddress'
+                placeholder='xxx.xxx.xxx.xxx'
+                {...field}
+                onBlur={(_event) => {
+                  field.onBlur()
+                  if (!errors.ipAddress) setStaticHostConfiguration({ ipAddress: field.value })
+                }}
+                className='relative h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              />
+            )}
+          />
+        </div>
+        <div id='static-host-gateway-container' className='flex w-full flex-1 items-center justify-start gap-1'>
+          <Label
+            id='static-host-gateway-id-input-label'
+            htmlFor='static-host-gateway-id-input'
+            className='whitespace-pre text-xs text-neutral-950 dark:text-white'
+          >
+            Gateway
+          </Label>
+          <Controller
+            name='gateway'
+            control={control}
+            defaultValue=''
+            render={({ field }) => (
+              <InputWithRef
+                id='gateway'
+                placeholder='xxx.xxx.xxx.xxx'
+                {...field}
+                onBlur={(_event) => {
+                  field.onBlur()
+                  if (!errors.gateway) setStaticHostConfiguration({ gateway: field.value })
+                }}
+                className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              />
+            )}
+          />
+        </div>
+      </section>
+      <section id='static-host-form-config-right-slot' className='flex flex-1 flex-col gap-4'>
+        <div id='static-host-dns-container' className='flex w-full flex-1 items-center justify-start gap-1'>
+          <Label
+            id='static-host-dns-id-input-label'
+            htmlFor='static-host-dns-id-input'
+            className='whitespace-pre text-xs text-neutral-950 dark:text-white'
+          >
+            DNS
+          </Label>
+          <Controller
+            name='dns'
+            control={control}
+            defaultValue=''
+            render={({ field }) => (
+              <InputWithRef
+                id='dns'
+                placeholder='xxx.xxx.xxx.xxx'
+                {...field}
+                onBlur={(_event) => {
+                  field.onBlur()
+                  if (!errors.dns) setStaticHostConfiguration({ dns: field.value })
+                }}
+                className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              />
+            )}
+          />
+        </div>
+        <div id='static-host-subnet-container' className='flex w-full flex-1 items-center justify-start gap-1'>
+          <Label
+            id='static-host-subnet-id-input-label'
+            htmlFor='static-host-subnet-id-input'
+            className='whitespace-pre text-xs text-neutral-950 dark:text-white'
+          >
+            Subnet
+          </Label>
+          <Controller
+            name='subnet'
+            control={control}
+            defaultValue=''
+            render={({ field }) => (
+              <InputWithRef
+                id='subnet'
+                placeholder='xxx.xxx.xxx.xxx/xx'
+                {...field}
+                onBlur={(_event) => {
+                  field.onBlur()
+                  if (!errors.subnet) setStaticHostConfiguration({ subnet: field.value })
+                }}
+                className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              />
+            )}
+          />
+        </div>
+      </section>
+    </form>
+  )
+}
+
+const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPComponentProps) => {
   const {
     deviceDefinitions: {
       configuration: {
@@ -264,20 +389,9 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
     [],
   )
 
-  // const writeStaticHostConfigurationInGlobalStore = () => setStaticHostConfiguration(tcpStaticHostLocalConfiguration)
-
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) =>
     setTCPConfigFields({ ...tcpConfigFields, [event.target.id]: event.target.value })
 
-  // const handleStaticHostInputChange = (event: React.ChangeEvent<HTMLInputElement>) =>
-  //   setTCPStaticHostLocalConfiguration({
-  //     ...tcpStaticHostLocalConfiguration,
-  //     [event.target.id]: event.target.value,
-  //   })
-
-  console.log('Values:', getValues())
-  console.log('State touched:', formState.touchedFields)
-  console.log('State dirty:', formState.dirtyFields)
   return (
     <>
       <div
@@ -396,93 +510,7 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
           </Label>
         </div>
       )}
-      {!enableDHCPHost && isModbusTCPEnabled && (
-        <form
-          id='static-host-config-form-container'
-          className='flex gap-6'
-          // eslint-disable-next-line @typescript-eslint/no-misused-promises
-          onSubmit={handleSubmit((d) => console.log(d))}
-        >
-          <section id='static-host-form-config-left-slot' className='flex flex-1 flex-col gap-4'>
-            <div id='static-host-ip-container' className='flex w-full flex-1 items-center justify-start gap-1'>
-              <Label
-                id='static-host-ip-config-id-input-label'
-                htmlFor='static-host-ip-config-id-input'
-                className='whitespace-pre text-xs text-neutral-950 dark:text-white'
-              >
-                IP
-              </Label>
-              <InputWithRef
-                id='ipAddress'
-                placeholder='xxx.xxx.xxx.xxx'
-                // value={tcpStaticHostLocalConfiguration?.ipAddress}
-                // onChange={handleStaticHostInputChange}
-                // onBlur={writeStaticHostConfigurationInGlobalStore}
-                className='relative h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                {...register('ipAddress')}
-              />
-              {formState.errors.ipAddress && <p className='text-xs font-light text-red-600'>Error</p>}
-            </div>
-            <div id='static-host-gateway-container' className='flex w-full flex-1 items-center justify-start gap-1'>
-              <Label
-                id='static-host-gateway-id-input-label'
-                htmlFor='static-host-gateway-id-input'
-                className='whitespace-pre text-xs text-neutral-950 dark:text-white'
-              >
-                Gateway
-              </Label>
-              <InputWithRef
-                id='gateway'
-                placeholder='xxx.xxx.xxx.xxx'
-                // value={tcpStaticHostLocalConfiguration?.gateway}
-                // onChange={handleStaticHostInputChange}
-                // onBlur={writeStaticHostConfigurationInGlobalStore}
-                className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                {...register('gateway')}
-              />
-            </div>
-          </section>
-          <section id='static-host-form-config-right-slot' className='flex flex-1 flex-col gap-4'>
-            <div id='static-host-dns-container' className='flex w-full flex-1 items-center justify-start gap-1'>
-              <Label
-                id='static-host-dns-id-input-label'
-                htmlFor='static-host-dns-id-input'
-                className='whitespace-pre text-xs text-neutral-950 dark:text-white'
-              >
-                DNS
-              </Label>
-              <InputWithRef
-                id='dns'
-                placeholder='xxx.xxx.xxx.xxx'
-                // value={tcpStaticHostLocalConfiguration?.dns}
-                // onChange={handleStaticHostInputChange}
-                // onBlur={writeStaticHostConfigurationInGlobalStore}
-                className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                {...register('dns')}
-              />
-            </div>
-            <div id='static-host-subnet-container' className='flex w-full flex-1 items-center justify-start gap-1'>
-              <Label
-                id='static-host-subnet-id-input-label'
-                htmlFor='static-host-subnet-id-input'
-                className='whitespace-pre text-xs text-neutral-950 dark:text-white'
-              >
-                Subnet
-              </Label>
-              <InputWithRef
-                id='subnet'
-                placeholder='xxx.xxx.xxx.xxx/xx'
-                // value={tcpStaticHostLocalConfiguration?.subnet}
-                // onChange={handleStaticHostInputChange}
-                // onBlur={writeStaticHostConfigurationInGlobalStore}
-                className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                {...register('subnet')}
-              />
-            </div>
-          </section>
-          <input type='submit' />
-        </form>
-      )}
+      {!enableDHCPHost && isModbusTCPEnabled && <StaticHostConfigurationComponent />}
     </>
   )
 }

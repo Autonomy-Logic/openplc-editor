@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const Board = () => {
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
-  const [formattedBoardState, setFormattedBoardState] = useState('')
+  const [formattedBoardState, setFormattedBoardState] = useState('Select a device')
   const {
     deviceAvailableOptions: { availableBoards, availableCommunicationPorts },
     deviceDefinitions: {
@@ -91,6 +91,7 @@ const Board = () => {
               <SelectTrigger
                 aria-label='Device selection'
                 placeholder={formattedBoardState}
+                withIndicator
                 className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
               />
               <SelectContent
@@ -137,6 +138,7 @@ const Board = () => {
               <SelectTrigger
                 aria-label='Communication port selection'
                 placeholder='Select a communication port'
+                withIndicator
                 className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
               />
               <SelectContent
