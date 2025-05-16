@@ -8,7 +8,7 @@ import { PLCGlobalVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 
-import { TableActionButton } from '../../_atoms/buttons/tables-actions'
+import TableActions from '../../_atoms/table-actions'
 import { GlobalVariablesTable } from '../../_molecules/global-variables-table'
 
 const GlobalVariablesEditor = () => {
@@ -162,37 +162,41 @@ const GlobalVariablesEditor = () => {
               aria-label='Variables editor table actions container'
               className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
             >
-              {/** This can be reviewed */}
-              <TableActionButton aria-label='Add table row button' onClick={handleCreateVariable}>
-                <PlusIcon className='!stroke-brand' />
-              </TableActionButton>
-              <TableActionButton
-                aria-label='Remove table row button'
-                disabled={parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED}
-                onClick={handleRemoveVariable}
-              >
-                <MinusIcon />
-              </TableActionButton>
-              <TableActionButton
-                aria-label='Move table row up button'
-                disabled={
-                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                  parseInt(editorVariables.selectedRow) === 0
-                }
-                onClick={() => handleRearrangeVariables(-1)}
-              >
-                <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
-              </TableActionButton>
-              <TableActionButton
-                aria-label='Move table row down button'
-                disabled={
-                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                  parseInt(editorVariables.selectedRow) === tableData.length - 1
-                }
-                onClick={() => handleRearrangeVariables(1)}
-              >
-                <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
-              </TableActionButton>
+              <TableActions
+                actions={[
+                  {
+                    ariaLabel: 'Add table row button',
+                    onClick: handleCreateVariable,
+                    icon: <PlusIcon className='!stroke-brand' />,
+                    id: 'add-variable-button',
+                  },
+                  {
+                    ariaLabel: 'Remove table row button',
+                    onClick: handleRemoveVariable,
+                    disabled: parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED,
+                    icon: <MinusIcon />,
+                    id: 'remove-variable-button',
+                  },
+                  {
+                    ariaLabel: 'Move table row up button',
+                    onClick: () => handleRearrangeVariables(-1),
+                    disabled:
+                      parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
+                      parseInt(editorVariables.selectedRow) === 0,
+                    icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
+                    id: 'move-variable-up-button',
+                  },
+                  {
+                    ariaLabel: 'Move table row down button',
+                    onClick: () => handleRearrangeVariables(1),
+                    disabled:
+                      parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
+                      parseInt(editorVariables.selectedRow) === tableData.length - 1,
+                    icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
+                    id: 'move-variable-down-button',
+                  },
+                ]}
+              />
             </div>
           </div>
         ) : (

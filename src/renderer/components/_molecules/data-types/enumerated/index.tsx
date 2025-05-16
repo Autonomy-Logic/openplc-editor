@@ -1,10 +1,9 @@
 import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
 import { StickArrowIcon } from '@root/renderer/assets'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
-import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
+import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
-import _ from 'lodash'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
 import { EnumeratedTable } from './table'
@@ -177,31 +176,38 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
           aria-label='Data type table actions buttons container'
           className='flex-start flex h-full w-2/5 *:rounded-md *:p-1'
         >
-          <TableActionButton aria-label='Add table row button' onClick={addNewRow} id='add-new-row-button'>
-            <PlusIcon className='!stroke-brand' />
-          </TableActionButton>
-          <TableActionButton aria-label='Remove table row button' onClick={removeRow}>
-            <MinusIcon className='stroke-[#0464FB]' />
-          </TableActionButton>
-          <TableActionButton
-            aria-label='Move table row up button'
-            disabled={arrayTable.selectedRow === null || arrayTable.selectedRow === 0 || arrayTable.selectedRow === -1}
-            onClick={() => moveRowUp()}
-          >
-            <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
-          </TableActionButton>
-          <TableActionButton
-            aria-label='Move table row down button'
-            disabled={
-              arrayTable.selectedRow === null ||
-              arrayTable.selectedRow === tableData.length - 1 ||
-              tableData.length === 1 ||
-              arrayTable.selectedRow === -1
-            }
-            onClick={() => moveRowDown()}
-          >
-            <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
-          </TableActionButton>
+          <TableActions
+            actions={[
+              {
+                ariaLabel: 'Add table row button',
+                onClick: addNewRow,
+                icon: <PlusIcon className='!stroke-brand' />,
+                id: 'add-new-row-button',
+              },
+              {
+                ariaLabel: 'Remove table row button',
+                onClick: removeRow,
+                icon: <MinusIcon className='stroke-[#0464FB]' />,
+              },
+              {
+                ariaLabel: 'Move table row up button',
+                onClick: () => moveRowUp(),
+                disabled:
+                  arrayTable.selectedRow === null || arrayTable.selectedRow === 0 || arrayTable.selectedRow === -1,
+                icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
+              },
+              {
+                ariaLabel: 'Move table row down button',
+                onClick: () => moveRowDown(),
+                disabled:
+                  arrayTable.selectedRow === null ||
+                  arrayTable.selectedRow === tableData.length - 1 ||
+                  tableData.length === 1 ||
+                  arrayTable.selectedRow === -1,
+                icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
+              },
+            ]}
+          />
         </div>
       </div>
 

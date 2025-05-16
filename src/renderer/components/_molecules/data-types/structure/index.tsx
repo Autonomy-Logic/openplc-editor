@@ -1,10 +1,9 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
-import { TableActionButton } from '@root/renderer/components/_atoms/buttons/tables-actions'
+import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { StructureTableType } from '@root/renderer/store/slices'
 import { PLCStructureVariable } from '@root/types/PLC/open-plc'
-import _ from 'lodash'
 import { useEffect, useState } from 'react'
 
 import { StructureTable } from './table'
@@ -190,37 +189,38 @@ const StructureDataType = () => {
             aria-label='Variables editor table actions container'
             className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
           >
-            {/** This can be reviewed */}
-            <TableActionButton aria-label='Add table row button' onClick={() => handleCreateStructureVariable()}>
-              <PlusIcon className='!stroke-brand' />
-            </TableActionButton>
-            <TableActionButton
-              aria-label='Remove table row button'
-              disabled={parseInt(editorStructure.selectedRow) === ROWS_NOT_SELECTED}
-              onClick={() => handleDeleteStructureVariable()}
-            >
-              <MinusIcon />
-            </TableActionButton>
-            <TableActionButton
-              onClick={() => handleRearrangeStructureVariables(-1)}
-              aria-label='Move table row up button'
-              disabled={
-                parseInt(editorStructure.selectedRow) === ROWS_NOT_SELECTED ||
-                parseInt(editorStructure.selectedRow) === 0
-              }
-            >
-              <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
-            </TableActionButton>
-            <TableActionButton
-              onClick={() => handleRearrangeStructureVariables(1)}
-              aria-label='Move table row down button'
-              disabled={
-                parseInt(editorStructure.selectedRow) === ROWS_NOT_SELECTED ||
-                parseInt(editorStructure.selectedRow) === tableData.length - 1
-              }
-            >
-              <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
-            </TableActionButton>
+            <TableActions
+              actions={[
+                {
+                  ariaLabel: 'Add table row button',
+                  onClick: handleCreateStructureVariable,
+                  icon: <PlusIcon className='!stroke-brand' />,
+                  id: 'add-new-row-button',
+                },
+                {
+                  ariaLabel: 'Remove table row button',
+                  onClick: handleDeleteStructureVariable,
+                  disabled: parseInt(editorStructure.selectedRow) === ROWS_NOT_SELECTED,
+                  icon: <MinusIcon className='stroke-[#0464FB]' />,
+                },
+                {
+                  ariaLabel: 'Move table row up button',
+                  onClick: () => handleRearrangeStructureVariables(-1),
+                  disabled:
+                    parseInt(editorStructure.selectedRow) === ROWS_NOT_SELECTED ||
+                    parseInt(editorStructure.selectedRow) === 0,
+                  icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
+                },
+                {
+                  ariaLabel: 'Move table row down button',
+                  onClick: () => handleRearrangeStructureVariables(1),
+                  disabled:
+                    parseInt(editorStructure.selectedRow) === ROWS_NOT_SELECTED ||
+                    parseInt(editorStructure.selectedRow) === tableData.length - 1,
+                  icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
+                },
+              ]}
+            />
           </div>
         </div>
         <div aria-label='structure base type container' className='flex w-1/2 flex-col gap-3'></div>

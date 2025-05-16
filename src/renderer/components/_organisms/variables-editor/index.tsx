@@ -11,7 +11,7 @@ import { ColumnFiltersState } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
-import { TableActionButton } from '../../_atoms/buttons/tables-actions'
+import TableActions from '../../_atoms/table-actions'
 import { VariablesTable } from '../../_molecules'
 
 const VariablesEditor = () => {
@@ -22,13 +22,7 @@ const VariablesEditor = () => {
       data: { pous, dataTypes },
     },
     editorActions: { updateModelVariables },
-    projectActions: {
-      createVariable,
-      deleteVariable,
-      rearrangeVariables,
-      updatePouDocumentation,
-      updatePouReturnType,
-    },
+    projectActions: { createVariable, deleteVariable, rearrangeVariables, updatePouDocumentation, updatePouReturnType },
   } = useOpenPLCStore()
 
   const [pouDescription, setPouDescription] = useState<string>('')
@@ -256,42 +250,43 @@ const VariablesEditor = () => {
             aria-label='Variables editor table actions container'
             className='flex h-full w-full select-none justify-between'
           >
-            {(editor.type === 'plc-textual' || editor.type === 'plc-graphical') && editor.meta.pouType === 'function' && (
-              <div className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'>
-                <label
-                  htmlFor='return type'
-                  className='w-fit text-xs font-medium text-neutral-1000 dark:text-neutral-300'
-                >
-                  Return type :
-                </label>
-                <Select value={returnType} onValueChange={handleReturnTypeChange}>
-                  <SelectTrigger
-                    id='class-filter'
-                    placeholder={returnType}
-                    withIndicator
-                    className='group flex h-full w-44 items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
-                  />
-                  <SelectContent
-                    position='popper'
-                    sideOffset={3}
-                    align='center'
-                    className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+            {(editor.type === 'plc-textual' || editor.type === 'plc-graphical') &&
+              editor.meta.pouType === 'function' && (
+                <div className='flex h-full min-w-[425px] max-w-[40%] flex-1 items-center gap-2'>
+                  <label
+                    htmlFor='return type'
+                    className='w-fit text-xs font-medium text-neutral-1000 dark:text-neutral-300'
                   >
-                    {returnTypeOptions.map((filter) => (
-                      <SelectItem
-                        key={filter}
-                        value={filter}
-                        className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      >
-                        <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                          {filter}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+                    Return type :
+                  </label>
+                  <Select value={returnType} onValueChange={handleReturnTypeChange}>
+                    <SelectTrigger
+                      id='class-filter'
+                      placeholder={returnType}
+                      withIndicator
+                      className='group flex h-full w-44 items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
+                    />
+                    <SelectContent
+                      position='popper'
+                      sideOffset={3}
+                      align='center'
+                      className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                    >
+                      {returnTypeOptions.map((filter) => (
+                        <SelectItem
+                          key={filter}
+                          value={filter}
+                          className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                        >
+                          <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                            {filter}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             <div
               id='Pou documentation'
               aria-label='Variables editor table description container'
@@ -352,37 +347,42 @@ const VariablesEditor = () => {
               aria-label='Variables editor table actions container'
               className='flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
             >
-              {/** This can be reviewed */}
-              <TableActionButton aria-label='Add table row button' onClick={handleCreateVariable}>
-                <PlusIcon className='!stroke-brand' />
-              </TableActionButton>
-              <TableActionButton
-                aria-label='Remove table row button'
-                disabled={parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED || forbiddenVariableToBeRemoved}
-                onClick={handleRemoveVariable}
-              >
-                <MinusIcon />
-              </TableActionButton>
-              <TableActionButton
-                aria-label='Move table row up button'
-                disabled={
-                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                  parseInt(editorVariables.selectedRow) === 0
-                }
-                onClick={() => handleRearrangeVariables(-1)}
-              >
-                <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
-              </TableActionButton>
-              <TableActionButton
-                aria-label='Move table row down button'
-                disabled={
-                  parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                  parseInt(editorVariables.selectedRow) === tableData.length - 1
-                }
-                onClick={() => handleRearrangeVariables(1)}
-              >
-                <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
-              </TableActionButton>
+              <TableActions
+                actions={[
+                  {
+                    ariaLabel: 'Add table row button',
+                    onClick: handleCreateVariable,
+                    icon: <PlusIcon className='!stroke-brand' />,
+                    id: 'add-variable-button',
+                  },
+                  {
+                    ariaLabel: 'Remove table row button',
+                    onClick: handleRemoveVariable,
+                    disabled:
+                      parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED || forbiddenVariableToBeRemoved,
+                    icon: <MinusIcon />,
+                    id: 'remove-variable-button',
+                  },
+                  {
+                    ariaLabel: 'Move table row up button',
+                    onClick: () => handleRearrangeVariables(-1),
+                    disabled:
+                      parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
+                      parseInt(editorVariables.selectedRow) === 0,
+                    icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
+                    id: 'move-variable-up-button',
+                  },
+                  {
+                    ariaLabel: 'Move table row down button',
+                    onClick: () => handleRearrangeVariables(1),
+                    disabled:
+                      parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
+                      parseInt(editorVariables.selectedRow) === tableData.length - 1,
+                    icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
+                    id: 'move-variable-down-button',
+                  },
+                ]}
+              />
             </div>
           </div>
         ) : (
