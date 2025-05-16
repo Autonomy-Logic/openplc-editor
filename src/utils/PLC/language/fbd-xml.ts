@@ -107,14 +107,32 @@ const blockToXml = (
 
   const outputVariable: BlockFbdXML['outputVariables']['variable'] = node.data.outputHandles
     .map((handle) => {
+      const variableConnectedToHandle = rung.edges.find(
+        (edge) => edge.source === node.id && edge.sourceHandle === handle.id,
+      )
+      const targetNode = variableConnectedToHandle
+        ? rung.nodes.find((node) => node.id === variableConnectedToHandle.target)
+        : null
+
+      const connection =
+        parseTo !== 'codesys'
+          ? {
+              relPosition: {
+                '@x': handle.relPosition.x || 0,
+                '@y': handle.relPosition.y || 0,
+              },
+            }
+          : {
+              relPosition: {
+                '@x': handle.relPosition.x || 0,
+                '@y': handle.relPosition.y || 0,
+              },
+              expression: targetNode ? (targetNode.data as BasicNodeData).variable.name : '',
+            }
+
       return {
         '@formalParameter': parseTo !== 'codesys' ? handle.id || '' : '   ',
-        connectionPointOut: {
-          relPosition: {
-            '@x': handle.relPosition.x || 0,
-            '@y': handle.relPosition.y || 0,
-          },
-        },
+        connectionPointOut: connection,
       }
     })
     .filter((variable) => variable !== undefined)
