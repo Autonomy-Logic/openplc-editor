@@ -114,7 +114,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
-    setWifConfig: (wifiConfig): void => {
+    setWifiConfig: (wifiConfig): void => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
           if (deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface === 'wifi') {

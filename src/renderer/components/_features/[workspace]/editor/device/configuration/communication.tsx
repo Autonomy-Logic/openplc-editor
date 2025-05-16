@@ -14,6 +14,14 @@ import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, useCallback, useEffect, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
+
+const rtuConfigSchema = z.object({
+  rtuInterface: z.enum(['Serial', 'Serial 1', 'Serial 2', 'Serial 3']),
+  rtuBaudRate: z.enum(['9600', '14400', '19200', '38400', '57600', '115200']),
+  rtuSlaveId: z.string(),
+  rtuRS485ENPin: z.string(),
+})
+
 type ModbusRTUComponentProps = ComponentPropsWithoutRef<'div'> & {
   isModbusRTUEnabled: boolean
 }
@@ -191,15 +199,17 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
           >
             RS485 EN Pin
           </Label>
-          <InputWithRef
-            id='rtuRS485ENPin'
-            placeholder='RS485 EN Pin'
-            value={rtuConfigFields.rtuRS485ENPin}
-            onChange={handleInputChange}
-            onBlur={writeRS485ENPinInGlobalStore}
-            disabled={!enableRS485Pin}
-            className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-          />
+          {enableRS485Pin && (
+            <InputWithRef
+              id='rtuRS485ENPin'
+              placeholder='RS485 EN Pin'
+              value={rtuConfigFields.rtuRS485ENPin}
+              onChange={handleInputChange}
+              onBlur={writeRS485ENPinInGlobalStore}
+              disabled={!enableRS485Pin}
+              className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+            />
+          )}
         </div>
       </div>
     </div>
@@ -209,10 +219,6 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
 type ModbusTCPComponentProps = ComponentPropsWithoutRef<'div'> & {
   isModbusTCPEnabled: boolean
 }
-
-const _rtuConfigSchema = z.object({
-  slaveId: z.string(),
-})
 
 const staticHostSchema = z.object({
   ipAddress: z.string().ip(),
@@ -224,9 +230,16 @@ const staticHostSchema = z.object({
 type StaticHostSchema = z.infer<typeof staticHostSchema>
 
 type StaticHostConfigurationComponentProps = ComponentPropsWithoutRef<'form'>
+
 const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponentProps) => {
   const {
-    deviceDefinitions,
+    deviceDefinitions: {
+      configuration: {
+        communicationConfiguration: {
+          modbusTCP: { tcpStaticHostConfiguration },
+        },
+      },
+    },
     deviceActions: { setStaticHostConfiguration },
   } = useOpenPLCStore()
   const {
@@ -237,9 +250,13 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
     resolver: zodResolver(staticHostSchema),
   })
 
-  console.log('Global State ->', deviceDefinitions)
+  const INPUT_STYLES = {
+    default:
+      'h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300',
+    error:
+      'h-7 min-w-0 flex-1 rounded-lg border border-red-500 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:outline-none dark:bg-neutral-950 dark:text-neutral-300',
+  }
   console.log('Errors ->', errors)
-
   return (
     <form id='static-host-config-form-container' className='flex gap-6' {...props}>
       <section id='static-host-form-config-left-slot' className='flex flex-1 flex-col gap-4'>
@@ -254,7 +271,7 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
           <Controller
             name='ipAddress'
             control={control}
-            defaultValue=''
+            defaultValue={tcpStaticHostConfiguration.ipAddress !== '' ? tcpStaticHostConfiguration.ipAddress : ''}
             render={({ field }) => (
               <InputWithRef
                 id='ipAddress'
@@ -264,7 +281,7 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
                   field.onBlur()
                   if (!errors.ipAddress) setStaticHostConfiguration({ ipAddress: field.value })
                 }}
-                className='relative h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                className={errors.ipAddress ? INPUT_STYLES.error : INPUT_STYLES.default}
               />
             )}
           />
@@ -280,7 +297,7 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
           <Controller
             name='gateway'
             control={control}
-            defaultValue=''
+            defaultValue={tcpStaticHostConfiguration.gateway !== '' ? tcpStaticHostConfiguration.gateway : ''}
             render={({ field }) => (
               <InputWithRef
                 id='gateway'
@@ -290,7 +307,7 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
                   field.onBlur()
                   if (!errors.gateway) setStaticHostConfiguration({ gateway: field.value })
                 }}
-                className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                className={errors.gateway ? INPUT_STYLES.error : INPUT_STYLES.default}
               />
             )}
           />
@@ -308,7 +325,7 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
           <Controller
             name='dns'
             control={control}
-            defaultValue=''
+            defaultValue={tcpStaticHostConfiguration.dns !== '' ? tcpStaticHostConfiguration.dns : ''}
             render={({ field }) => (
               <InputWithRef
                 id='dns'
@@ -318,7 +335,7 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
                   field.onBlur()
                   if (!errors.dns) setStaticHostConfiguration({ dns: field.value })
                 }}
-                className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                className={errors.dns ? INPUT_STYLES.error : INPUT_STYLES.default}
               />
             )}
           />
@@ -334,7 +351,7 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
           <Controller
             name='subnet'
             control={control}
-            defaultValue=''
+            defaultValue={tcpStaticHostConfiguration.subnet !== '' ? tcpStaticHostConfiguration.subnet : ''}
             render={({ field }) => (
               <InputWithRef
                 id='subnet'
@@ -344,7 +361,7 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
                   field.onBlur()
                   if (!errors.subnet) setStaticHostConfiguration({ subnet: field.value })
                 }}
-                className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                className={errors.subnet ? INPUT_STYLES.error : INPUT_STYLES.default}
               />
             )}
           />
@@ -362,7 +379,7 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
       },
     },
     deviceAvailableOptions: { availableTCPInterfaces },
-    deviceActions: { setTCPConfig, setWifConfig },
+    deviceActions: { setTCPConfig, setWifiConfig },
   } = useOpenPLCStore()
   const [tcpConfigFields, setTCPConfigFields] = useState({
     tcpMACAddress: modbusTCP.tcpMacAddress,
@@ -383,9 +400,11 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
     () => setTCPConfig({ tcpConfig: 'tcpMacAddress', value: tcpConfigFields.tcpMACAddress }),
     [],
   )
-  const writeWifiSSIDInGlobalStore = useCallback(() => setWifConfig({ wifiSSID: tcpConfigFields.tcpWifiSSID }), [])
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+  const writeWifiSSIDInGlobalStore = useCallback(() => setWifiConfig({ wifiSSID: tcpConfigFields.tcpWifiSSID }), [])
   const writeWifiPasswordInGlobalStore = useCallback(
-    () => setWifConfig({ wifiPassword: tcpConfigFields.tcpWifiPassword }),
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
+    () => setWifiConfig({ wifiPassword: tcpConfigFields.tcpWifiPassword }),
     [],
   )
 
@@ -415,6 +434,7 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
               <SelectTrigger
                 aria-label='modbus-tcp-interface-select-trigger'
                 placeholder='Select interface'
+                withIndicator
                 className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
               />
               <SelectContent

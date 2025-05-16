@@ -121,7 +121,7 @@ const deviceActionSchema = z.object({
   setCommunicationPort: z.function().args(z.string()).returns(z.void()),
   setRTUConfig: z.function().args(setRTUConfigParams).returns(z.void()),
   setTCPConfig: z.function().args(setTCPConfigParams).returns(z.void()),
-  setWifConfig: z
+  setWifiConfig: z
     .function()
     .args(z.object({ wifiSSID: z.string(), wifiPassword: z.string() }).partial())
     .returns(z.void()),
