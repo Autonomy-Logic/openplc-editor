@@ -116,15 +116,72 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   return (
     <div
       aria-label='Enumerated data type container'
-      className='flex h-full w-full flex-1 flex-col gap-4 overflow-hidden bg-transparent'
+      className='flex h-full w-full flex-1 flex-row gap-4 overflow-hidden bg-transparent'
       {...rest}
     >
-      <div aria-label='Data type content actions container' className='flex h-8 w-full gap-8'>
-        <div aria-label='Enumerated base type container' className='flex w-1/2 flex-col gap-3'></div>
+      <div className='flex w-full justify-between gap-8'>
+        <div className='w-[600px]'>
+          <div aria-label='Enumerated base type container' className='flex flex-col gap-3'></div>
+          <div
+            aria-label='Enum data type table actions container'
+            className='mb-3 flex h-8 w-full items-center justify-between'
+          >
+            <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
+              Description
+            </p>
+            <div
+              aria-label='Data type table actions buttons container'
+              className='flex-start flex h-full *:rounded-md *:p-1'
+            >
+              <TableActions
+                actions={[
+                  {
+                    ariaLabel: 'Add table row button',
+                    onClick: addNewRow,
+                    icon: <PlusIcon className='!stroke-brand' />,
+                    id: 'add-new-row-button',
+                  },
+                  {
+                    ariaLabel: 'Remove table row button',
+                    onClick: removeRow,
+                    icon: <MinusIcon className='stroke-[#0464FB]' />,
+                  },
+                  {
+                    ariaLabel: 'Move table row up button',
+                    onClick: () => moveRowUp(),
+                    disabled:
+                      arrayTable.selectedRow === null || arrayTable.selectedRow === 0 || arrayTable.selectedRow === -1,
+                    icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
+                  },
+                  {
+                    ariaLabel: 'Move table row down button',
+                    onClick: () => moveRowDown(),
+                    disabled:
+                      arrayTable.selectedRow === null ||
+                      arrayTable.selectedRow === tableData.length - 1 ||
+                      tableData.length === 1 ||
+                      arrayTable.selectedRow === -1,
+                    icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
+                  },
+                ]}
+              />
+            </div>
+          </div>
+
+          <EnumeratedTable
+            name={data.name}
+            values={tableData}
+            initialValue={initialValueData}
+            selectedRow={arrayTable.selectedRow}
+            handleRowClick={(row) => setArrayTable({ selectedRow: Number.parseInt(row.id) })}
+            setArrayTable={setArrayTable}
+          />
+        </div>
+
         <div aria-label='Enumerated initial value container' className='w-1/2'>
           <div
             aria-label='Enumerated data type initial value container'
-            className='h- flex w-full items-center justify-end'
+            className='flex w-full items-center justify-end'
           >
             <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100 '>
               Initial Value:
@@ -168,57 +225,6 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
           </div>
         </div>
       </div>
-      <div aria-label='Enum data type table actions container' className='flex h-8 w-3/5 items-center justify-between'>
-        <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
-          Description
-        </p>
-        <div
-          aria-label='Data type table actions buttons container'
-          className='flex-start flex h-full w-2/5 *:rounded-md *:p-1'
-        >
-          <TableActions
-            actions={[
-              {
-                ariaLabel: 'Add table row button',
-                onClick: addNewRow,
-                icon: <PlusIcon className='!stroke-brand' />,
-                id: 'add-new-row-button',
-              },
-              {
-                ariaLabel: 'Remove table row button',
-                onClick: removeRow,
-                icon: <MinusIcon className='stroke-[#0464FB]' />,
-              },
-              {
-                ariaLabel: 'Move table row up button',
-                onClick: () => moveRowUp(),
-                disabled:
-                  arrayTable.selectedRow === null || arrayTable.selectedRow === 0 || arrayTable.selectedRow === -1,
-                icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
-              },
-              {
-                ariaLabel: 'Move table row down button',
-                onClick: () => moveRowDown(),
-                disabled:
-                  arrayTable.selectedRow === null ||
-                  arrayTable.selectedRow === tableData.length - 1 ||
-                  tableData.length === 1 ||
-                  arrayTable.selectedRow === -1,
-                icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
-              },
-            ]}
-          />
-        </div>
-      </div>
-
-      <EnumeratedTable
-        name={data.name}
-        values={tableData}
-        initialValue={initialValueData}
-        selectedRow={arrayTable.selectedRow}
-        handleRowClick={(row) => setArrayTable({ selectedRow: parseInt(row.id) })}
-        setArrayTable={setArrayTable}
-      />
     </div>
   )
 }

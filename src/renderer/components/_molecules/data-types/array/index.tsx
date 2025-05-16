@@ -203,55 +203,55 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
           </div>
         </div>
       </div>
-      <div
-        aria-label='Array data type table actions container'
-        className='flex h-fit w-3/5 items-center justify-between'
-      >
-        <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
-          Dimensions
-        </p>
-        <div
-          aria-label='Data type table actions buttons container'
-          className='flex-start flex h-full w-2/5 *:rounded-md *:p-1'
-        >
-          <TableActions
-            actions={[
-              {
-                ariaLabel: 'Add table row button',
-                onClick: addNewRow,
-                icon: <PlusIcon className='!stroke-brand' />,
-                id: 'add-new-row-button',
-              },
-              {
-                ariaLabel: 'Remove table row button',
-                onClick: removeRow,
-                icon: <MinusIcon className='stroke-[#0464FB]' />,
-              },
-              {
-                ariaLabel: 'Move table row up button',
-                onClick: moveRowUp,
-                disabled: arrayTable.selectedRow === ROWS_NOT_SELECTED || arrayTable.selectedRow === 0,
-                icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
-              },
-              {
-                ariaLabel: 'Move table row down button',
-                onClick: moveRowDown,
-                disabled:
-                  arrayTable.selectedRow === ROWS_NOT_SELECTED || arrayTable.selectedRow === tableData.length - 1,
-                icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
-              },
-            ]}
-          />
-        </div>
-      </div>
 
-      <DimensionsTable
-        name={data.name}
-        tableData={tableData}
-        handleRowClick={(row) => setArrayTable({ selectedRow: parseInt(row.id) })}
-        selectedRow={arrayTable.selectedRow}
-        setArrayTable={setArrayTable}
-      />
+      <div className='flex w-[600px] flex-col gap-3'>
+        <div aria-label='Array data type table actions container' className='flex h-fit items-center justify-between'>
+          <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
+            Dimensions
+          </p>
+          <div
+            aria-label='Data type table actions buttons container'
+            className='flex-start flex h-full *:rounded-md *:p-1'
+          >
+            <TableActions
+              actions={[
+                {
+                  ariaLabel: 'Add table row button',
+                  onClick: addNewRow,
+                  icon: <PlusIcon className='!stroke-brand' />,
+                  id: 'add-new-row-button',
+                },
+                {
+                  ariaLabel: 'Remove table row button',
+                  onClick: removeRow,
+                  icon: <MinusIcon className='stroke-[#0464FB]' />,
+                },
+                {
+                  ariaLabel: 'Move table row up button',
+                  onClick: moveRowUp,
+                  disabled: arrayTable.selectedRow === ROWS_NOT_SELECTED || arrayTable.selectedRow === 0,
+                  icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
+                },
+                {
+                  ariaLabel: 'Move table row down button',
+                  onClick: moveRowDown,
+                  disabled:
+                    arrayTable.selectedRow === ROWS_NOT_SELECTED || arrayTable.selectedRow === tableData.length - 1,
+                  icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
+                },
+              ]}
+            />
+          </div>
+        </div>
+
+        <DimensionsTable
+          name={data.name}
+          tableData={tableData}
+          handleRowClick={(row) => setArrayTable({ selectedRow: parseInt(row.id) })}
+          selectedRow={arrayTable.selectedRow}
+          setArrayTable={setArrayTable}
+        />
+      </div>
     </div>
   )
 }
