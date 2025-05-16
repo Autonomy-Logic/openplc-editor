@@ -137,6 +137,7 @@ const blockSchema = z.object({
             '@x': z.number(),
             '@y': z.number(),
           }),
+          expression: z.string().optional(),
         }),
       }),
     ),

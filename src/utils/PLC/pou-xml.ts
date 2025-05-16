@@ -130,7 +130,7 @@ export const parseInterface = (pou: PLCPou) => {
   return xml
 }
 
-export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
+export const parsePousToXML = (xml: BaseXml, pous: PLCPou[], parseTo: 'open-plc' | 'codesys') => {
   pous.forEach((pou) => {
     const interfaceResult = parseInterface(pou)
 
@@ -167,7 +167,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
       }
       case 'ld': {
         const rungs = pou.data.body.value.rungs
-        const result = ladderToXml(rungs as RungLadderState[])
+        const result = ladderToXml(rungs as RungLadderState[], parseTo)
         xml.project.types.pous.pou.push({
           '@name': pou.data.name,
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
@@ -183,7 +183,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
       }
       case 'fbd': {
         const rung = pou.data.body.value.rung
-        const result = fbdToXml(rung as FBDRungState)
+        const result = fbdToXml(rung as FBDRungState, parseTo)
         xml.project.types.pous.pou.push({
           '@name': pou.data.name,
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,

@@ -491,6 +491,7 @@ class CompilerService {
   async createXmlFile(
     pathToUserProject: string,
     dataToCreateXml: ProjectState['data'],
+    parseTo: 'open-plc' | 'codesys',
   ): Promise<{ success: boolean; message: string }> {
     const { filePath } = await dialog.showSaveDialog({
       title: 'Export Project',
@@ -503,7 +504,7 @@ class CompilerService {
       return { success: false, message: 'User canceled the save dialog' }
     }
 
-    const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml)
+    const { data: projectDataAsString, message } = XmlGenerator(dataToCreateXml, parseTo)
     if (!projectDataAsString) {
       return { success: false, message: message }
     }

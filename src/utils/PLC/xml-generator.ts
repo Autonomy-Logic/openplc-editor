@@ -6,7 +6,7 @@ import { parsePousToXML } from '../PLC/pou-xml'
 import { getBaseXmlStructure } from './base-xml'
 import { parseDataTypesToXML } from './data-type-xml'
 
-const XmlGenerator = (projectToGenerateXML: ProjectState['data']) => {
+const XmlGenerator = (projectToGenerateXML: ProjectState['data'], parseTo: 'open-plc' | 'codesys' = 'open-plc') => {
   let xmlResult = getBaseXmlStructure()
 
   /**
@@ -17,7 +17,7 @@ const XmlGenerator = (projectToGenerateXML: ProjectState['data']) => {
   const mainPou = pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
   if (!mainPou) return { ok: false, message: 'Main POU not found.', data: undefined }
 
-  xmlResult = parsePousToXML(xmlResult, pous)
+  xmlResult = parsePousToXML(xmlResult, pous, parseTo)
 
   /**
    * Parse data types

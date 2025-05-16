@@ -1,4 +1,3 @@
- 
 import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
 import { i18n } from '../utils/i18n'
@@ -59,8 +58,8 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-accelerator')
   }
 
-  handleExportProjectRequest() {
-    this.mainWindow.webContents.send('compiler:export-project-request')
+  handleExportProjectRequest(parseTo: 'open-plc' | 'codesys') {
+    this.mainWindow.webContents.send('compiler:export-project-request', parseTo)
   }
 
   async handleGetRecent() {
@@ -188,7 +187,11 @@ export default class MenuBuilder {
         },
         {
           label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
-          click: () => this.handleExportProjectRequest(),
+          click: () => this.handleExportProjectRequest('open-plc'),
+        },
+        {
+          label: i18n.t('menu:file.submenu.exportToCodeSys'),
+          click: () => this.handleExportProjectRequest('codesys'),
         },
         { type: 'separator' },
         {
@@ -367,7 +370,7 @@ export default class MenuBuilder {
         const projectPath = projectEntry.path.startsWith(homeDir)
           ? projectEntry.path.replace(homeDir, '~')
           : projectEntry.path
-          const projectName = projectEntry.name
+        const projectName = projectEntry.name
 
         return {
           label: `${projectName} (${projectPath})`,
@@ -442,7 +445,11 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
-            click: () => this.handleExportProjectRequest(),
+            click: () => this.handleExportProjectRequest('open-plc'),
+          },
+          {
+            label: i18n.t('menu:file.submenu.exportToCodeSys'),
+            click: () => this.handleExportProjectRequest('codesys'),
           },
           {
             type: 'separator',
