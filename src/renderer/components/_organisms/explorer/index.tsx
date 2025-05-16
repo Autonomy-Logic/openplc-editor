@@ -30,21 +30,20 @@ const Explorer = ({ collapse }: ExplorerProps): ReactElement => {
         return (
           (userLibrary.type === 'function' || userLibrary.type === 'function-block') &&
           userLibrary.name !== editor.meta.name
-        );
+        )
       } else if (editor.meta.pouType === 'function') {
-        return userLibrary.type === 'function' && userLibrary.name !== editor.meta.name;
+        return userLibrary.type === 'function' && userLibrary.name !== editor.meta.name
       } else if (editor.meta.pouType === 'function-block') {
         return (
           (userLibrary.type === 'function' || userLibrary.type === 'function-block') &&
           userLibrary.name !== editor.meta.name
-        );
+        )
       }
     }
 
     // Remove userLibrary if its name matches editor.meta.name (fallback case)
-    return userLibrary.name !== editor.meta.name;
-  });
-
+    return userLibrary.name !== editor.meta.name
+  })
 
   // System Libraries filtering with type and text filter
   const filteredLibraries = system.filter((library) =>
@@ -58,8 +57,6 @@ const Explorer = ({ collapse }: ExplorerProps): ReactElement => {
       .flatMap((library: { pous: { name: string; documentation?: string }[] }) => library.pous)
       .find((pou) => pou.name === selectedFileKey)?.documentation || null
 
-
-
   return (
     <ResizablePanel
       ref={collapse}
@@ -69,7 +66,7 @@ const Explorer = ({ collapse }: ExplorerProps): ReactElement => {
       minSize={13}
       defaultSize={16}
       maxSize={80}
-      className="flex h-full w-[200px] flex-col overflow-auto rounded-lg border-2 border-inherit border-neutral-200 bg-white data-[panel-size='0.0']:hidden dark:border-neutral-850 dark:bg-neutral-950"
+      className="flex h-full w-[200px] max-w-lg flex-col overflow-auto rounded-lg border-2 border-inherit border-neutral-200 bg-white data-[panel-size='0.0']:hidden dark:border-neutral-850 dark:bg-neutral-950"
     >
       <ResizablePanelGroup id='explorerPanelGroup' direction='vertical' className='h-full flex-1'>
         <ResizablePanel id='projectExplorerPanel' order={1} defaultSize={40} minSize={25} collapsible>
