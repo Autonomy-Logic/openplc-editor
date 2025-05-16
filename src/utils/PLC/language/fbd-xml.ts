@@ -131,7 +131,7 @@ const blockToXml = (
             }
 
       return {
-        '@formalParameter': parseTo !== 'codesys' ? handle.id || '' : '   ',
+        '@formalParameter': parseTo !== 'codesys' ? handle.id || '' : handle.id !== 'OUT' ? handle.id || '' : '   ',
         connectionPointOut: connection,
       }
     })

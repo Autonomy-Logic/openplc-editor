@@ -524,10 +524,12 @@ const blockToXml = (
               '@x': handle.relPosition.x || 0,
               '@y': handle.relPosition.y || 0,
             },
-            expression: block.data.connectedVariables[handle.id as string] ? block.data.connectedVariables[handle.id as string].variable?.name : '',
+            expression: block.data.connectedVariables[handle.id as string]
+              ? block.data.connectedVariables[handle.id as string].variable?.name
+              : '',
           }
     return {
-      '@formalParameter': parseTo !== 'codesys' ? handle.id || '' : '   ',
+      '@formalParameter': parseTo !== 'codesys' ? handle.id || '' : handle.id !== 'OUT' ? handle.id || '' : '   ',
       connectionPointOut: connection,
     }
   })
