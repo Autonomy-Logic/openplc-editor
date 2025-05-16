@@ -511,26 +511,14 @@ const blockToXml = (
   })
 
   const outputVariable = block.data.outputHandles.map((handle) => {
-    const connection =
-      parseTo !== 'codesys'
-        ? {
-            relPosition: {
-              '@x': handle.relPosition.x || 0,
-              '@y': handle.relPosition.y || 0,
-            },
-          }
-        : {
-            relPosition: {
-              '@x': handle.relPosition.x || 0,
-              '@y': handle.relPosition.y || 0,
-            },
-            expression: block.data.connectedVariables[handle.id as string]
-              ? block.data.connectedVariables[handle.id as string].variable?.name
-              : '',
-          }
     return {
       '@formalParameter': parseTo !== 'codesys' ? handle.id || '' : handle.id !== 'OUT' ? handle.id || '' : '   ',
-      connectionPointOut: connection,
+      connectionPointOut: {
+        relPosition: {
+          '@x': handle.relPosition.x || 0,
+          '@y': handle.relPosition.y || 0,
+        },
+      },
     }
   })
 
@@ -595,7 +583,7 @@ const outVariableToXML = (variable: VariableNode, rung: RungLadderState, offsetY
       connection: [
         {
           '@refLocalId': connectedBlock.data.numericId,
-          '@formalParameter': variable.data.block.handleId,
+          '@formalParameter': variable.data.block.handleId !== 'OUT' ? variable.data.block.handleId : '   ',
           position: [
             // Final edge destination
             {
@@ -660,7 +648,7 @@ const ladderToXml = (rungs: RungLadderState[], parseTo: 'open-plc' | 'codesys') 
           if ((node as VariableNode).data.variable.name === '') return
           if ((node as VariableNode).data.variant === 'input')
             ladderXML.body.LD.inVariable.push(inVariableToXML(node as VariableNode, offsetY))
-          if ((node as VariableNode).data.variant === 'output' && parseTo === 'open-plc')
+          if ((node as VariableNode).data.variant === 'output')
             ladderXML.body.LD.outVariable.push(outVariableToXML(node as VariableNode, rung, offsetY))
           break
         default:
