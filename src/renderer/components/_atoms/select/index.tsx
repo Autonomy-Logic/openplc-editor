@@ -22,41 +22,50 @@ const SelectTrigger = forwardRef<ElementRef<typeof PrimitiveSelect.Trigger>, ISe
   },
 )
 
-type ISelectContentProps = ComponentPropsWithoutRef<typeof PrimitiveSelect.Content>
-const SelectContent = ({
-  children,
-  sideOffset = 5,
-  alignOffset = 5,
-  position = 'popper',
-  align = 'center',
-  side = 'bottom',
-  className,
-  ...res
-}: ISelectContentProps) => {
-  return (
-    <PrimitiveSelect.Portal>
-      <PrimitiveSelect.Content
-        className={className}
-        sideOffset={sideOffset}
-        alignOffset={alignOffset}
-        position={position}
-        align={align}
-        side={side}
-        {...res}
-      >
-        {/* <PrimitiveSelect.ScrollUpButton>
+type ISelectContentProps = ComponentPropsWithoutRef<typeof PrimitiveSelect.Content> & {
+  'data-align'?: 'start' | 'end' | 'center'
+  'data-side'?: 'left' | 'right' | 'bottom' | 'top'
+  viewportRef?: React.Ref<HTMLDivElement>
+}
+const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISelectContentProps>(
+  (
+    {
+      children,
+      sideOffset = 5,
+      alignOffset = 5,
+      position = 'popper',
+      align = 'center',
+      side = 'bottom',
+      className,
+      viewportRef,
+      ...res
+    },
+    forwardedRef,
+  ) => {
+    return (
+      <PrimitiveSelect.Portal>
+        <PrimitiveSelect.Content
+          ref={forwardedRef}
+          className={className}
+          sideOffset={sideOffset}
+          alignOffset={alignOffset}
+          position={position}
+          align={align}
+          side={side}
+          {...res}
+        >
+          {/* <PrimitiveSelect.ScrollUpButton>
           <ArrowIcon direction='up' size='sm' className='stroke-brand' />
         </PrimitiveSelect.ScrollUpButton> */}
-        <PrimitiveSelect.Viewport className=' h-full w-full overflow-auto'>
-          {children}
-        </PrimitiveSelect.Viewport>
-        {/* <PrimitiveSelect.ScrollDownButton>
+          <PrimitiveSelect.Viewport ref={viewportRef} className=' h-full w-full overflow-auto'>{children}</PrimitiveSelect.Viewport>
+          {/* <PrimitiveSelect.ScrollDownButton>
           <ArrowIcon direction='down' size='sm' className='stroke-brand' />
         </PrimitiveSelect.ScrollDownButton> */}
-      </PrimitiveSelect.Content>
-    </PrimitiveSelect.Portal>
-  )
-}
+        </PrimitiveSelect.Content>
+      </PrimitiveSelect.Portal>
+    )
+  },
+)
 
 type ISelectItemProps = ComponentPropsWithoutRef<typeof PrimitiveSelect.Item> & {
   indicator?: ReactElement

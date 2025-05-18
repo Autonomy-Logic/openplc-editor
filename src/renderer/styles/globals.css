@@ -37,6 +37,7 @@
     /* Fallback variables to set the height of the titlebar based on OS */
     --oplc-title-bar-height: 2rem;
     --fallback-darwin-title-bar-height: 1.75rem;
+    --radix-popper-transform-origin: 100% 0px;
   }
 
   /* This can be useful to allocate the main container */

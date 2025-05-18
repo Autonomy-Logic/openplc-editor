@@ -1,19 +1,13 @@
 import { ComponentPropsWithoutRef } from 'react'
 
-import { ConfigurationEditor, PinMappingEditor } from './components'
-
-type DeviceType = 'Pin Mapping' | 'Configuration'
+import { DeviceConfigurationEditor } from './configuration'
 
 type DeviceEditorProps = ComponentPropsWithoutRef<'div'> & {
-  DeviceTypeName: DeviceType
+  editorDerivation: 'Configuration'
 }
 
-const DeviceEditor = ({ DeviceTypeName }: DeviceEditorProps) => {
-  return (
-    <div aria-label='Device content container' className='h-full w-full overflow-hidden'>
-      {DeviceTypeName === 'Pin Mapping' ? <PinMappingEditor /> : <ConfigurationEditor />}
-    </div>
-  )
+const DeviceEditor = ({ editorDerivation }: DeviceEditorProps) => {
+  return <>{editorDerivation === 'Configuration' && <DeviceConfigurationEditor />}</>
 }
 
 export { DeviceEditor }
