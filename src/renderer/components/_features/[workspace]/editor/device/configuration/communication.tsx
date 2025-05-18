@@ -12,8 +12,15 @@ import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, useCallback, useEffect, useRef, useState } from 'react'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
+
+const INPUT_STYLES = {
+  default:
+    'h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300',
+  error:
+    'h-7 min-w-0 flex-1 rounded-lg border border-red-500 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:outline-none dark:bg-neutral-950 dark:text-neutral-300',
+}
 
 const rtuConfigSchema = z.object({
   rtuInterface: z.enum(['Serial', 'Serial 1', 'Serial 2', 'Serial 3']),
@@ -22,10 +29,23 @@ const rtuConfigSchema = z.object({
   rtuRS485ENPin: z.string(),
 })
 
+type RTUConfigSchema = z.infer<typeof rtuConfigSchema>
+
 type ModbusRTUComponentProps = ComponentPropsWithoutRef<'div'> & {
   isModbusRTUEnabled: boolean
 }
 const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUComponentProps) => {
+  const {
+    control,
+    formState: { errors },
+  } = useForm<RTUConfigSchema>({
+    mode: 'onChange',
+    resolver: zodResolver(rtuConfigSchema),
+  })
+  const rtuInterfaceWatched = useWatch({
+    control,
+    name: 'rtuInterface',
+  })
   const {
     deviceAvailableOptions: { availableRTUInterfaces, availableRTUBaudRates },
     deviceDefinitions: {
@@ -35,17 +55,14 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
     },
     deviceActions: { setRTUConfig },
   } = useOpenPLCStore()
-  const [enableRS485Pin, setEnableRS485Pin] = useState(false)
-  const [rtuConfigFields, setRTUConfigFields] = useState({
-    rtuSlaveId: modbusRTU.rtuSlaveId,
-    rtuRS485ENPin: modbusRTU.rtuRS485ENPin,
-  })
+  const [enableRS485ENPin, setEnableRS485ENPin] = useState(false)
+
   const [rtuInterfaceIsOpen, setRTUInterfaceIsOpen] = useState(false)
   const rtuInterfaceRef = useRef<HTMLDivElement>(null)
 
   const [rtuBaudRateIsOpen, setRTUBaudRateIsOpen] = useState(false)
   const rtuBaudRateRef = useRef<HTMLDivElement>(null)
-  const toggleEnableRS485Pin = () => setEnableRS485Pin((prev) => !prev)
+
   const scrollToSelectedOption = (selectRef: React.RefObject<HTMLDivElement>, selectIsOpen: boolean) => {
     if (!selectIsOpen) return
 
@@ -54,6 +71,7 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
       checkedElement.scrollIntoView({ block: 'start' })
     }
   }
+
   useEffect(() => {
     scrollToSelectedOption(rtuBaudRateRef, rtuBaudRateIsOpen)
   }, [rtuBaudRateIsOpen])
@@ -61,22 +79,20 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
   useEffect(() => {
     scrollToSelectedOption(rtuInterfaceRef, rtuInterfaceIsOpen)
   }, [rtuInterfaceIsOpen])
-  const handleRTUInterfaceChange = (rtuInterface: string) =>
-    setRTUConfig({ rtuConfig: 'rtuInterface', value: rtuInterface as 'Serial' | 'Serial 1' | 'Serial 2' | 'Serial 3' })
 
-  const handleRTUBaudRateChange = (rtuBaudRate: string) =>
-    setRTUConfig({
-      rtuConfig: 'rtuBaudRate',
-      value: rtuBaudRate as '9600' | '14400' | '19200' | '38400' | '57600' | '115200',
-    })
+  const toggleEnableRS485ENPin = () => setEnableRS485ENPin((prev) => !prev)
 
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) =>
-    setRTUConfigFields({ ...rtuConfigFields, [event.target.id]: event.target.value })
+  useEffect(() => {
+    if (modbusRTU.rtuInterface !== rtuInterfaceWatched) {
+      setRTUConfig({
+        rtuConfig: 'rtuInterface',
+        value: rtuInterfaceWatched,
+      })
+      console.log('Triggered!!!!')
+    }
+  }, [rtuInterfaceWatched])
 
-  const writeSlaveIdInGlobalStore = () => setRTUConfig({ rtuConfig: 'rtuSlaveId', value: rtuConfigFields.rtuSlaveId })
-  const writeRS485ENPinInGlobalStore = () =>
-    setRTUConfig({ rtuConfig: 'rtuRS485ENPin', value: rtuConfigFields.rtuRS485ENPin })
-
+  console.log('RTU data ->', modbusRTU)
   return (
     <div id='modbus-rtu-form-config-container' className={cn('flex gap-6', !isModbusRTUEnabled && 'hidden')} {...props}>
       <div id='modbus-rtu-form-config-left-slot' className='flex flex-1 flex-col gap-4'>
@@ -87,41 +103,47 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
           >
             Interface
           </Label>
-          <Select
-            aria-label='modbus-rtu-interface-select'
-            value={modbusRTU.rtuInterface}
-            onValueChange={handleRTUInterfaceChange}
-            onOpenChange={setRTUInterfaceIsOpen}
-          >
-            <SelectTrigger
-              aria-label='modbus-rtu-interface-select-trigger'
-              placeholder='Select interface'
-              withIndicator
-              className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-            />
-            <SelectContent
-              aria-label='modbus-rtu-interface-select-content'
-              viewportRef={rtuInterfaceRef}
-              className='h-[100px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-            >
-              {availableRTUInterfaces.map((rtuInterface) => {
-                return (
-                  <SelectItem
-                    key={rtuInterface}
-                    value={rtuInterface}
-                    className={cn(
-                      'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                      'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
-                    )}
-                  >
-                    <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                      {rtuInterface}
-                    </span>
-                  </SelectItem>
-                )
-              })}
-            </SelectContent>
-          </Select>
+          <Controller
+            name='rtuInterface'
+            control={control}
+            render={({ field }) => (
+              <Select
+                aria-label='modbus-rtu-interface-select'
+                value={field.value}
+                onValueChange={field.onChange}
+                onOpenChange={setRTUInterfaceIsOpen}
+              >
+                <SelectTrigger
+                  aria-label='modbus-rtu-interface-select-trigger'
+                  placeholder='Select interface'
+                  withIndicator
+                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                />
+                <SelectContent
+                  aria-label='modbus-rtu-interface-select-content'
+                  viewportRef={rtuInterfaceRef}
+                  className='h-[100px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                >
+                  {availableRTUInterfaces.map((rtuInterface) => {
+                    return (
+                      <SelectItem
+                        key={rtuInterface}
+                        value={rtuInterface}
+                        className={cn(
+                          'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                          'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                        )}
+                      >
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {rtuInterface}
+                        </span>
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            )}
+          />
         </div>
         <div id='modbus-rtu-slave-id-container' className='flex w-full flex-1 items-center justify-start gap-1'>
           <Label
@@ -131,13 +153,22 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
           >
             Slave ID
           </Label>
-          <InputWithRef
-            id='rtuSlaveId'
-            placeholder='Slave ID'
-            value={rtuConfigFields.rtuSlaveId}
-            onChange={handleInputChange}
-            onBlur={writeSlaveIdInGlobalStore}
-            className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+          <Controller
+            name='rtuSlaveId'
+            control={control}
+            defaultValue={modbusRTU.rtuSlaveId}
+            render={({ field }) => (
+              <InputWithRef
+                id='rtuSlaveId'
+                placeholder='Slave ID'
+                {...field}
+                onBlur={(_ev) => {
+                  field.onBlur()
+                  setRTUConfig({ rtuConfig: field.name, value: field.value })
+                }}
+                className={errors.rtuSlaveId ? INPUT_STYLES.error : INPUT_STYLES.default}
+              />
+            )}
           />
         </div>
       </div>
@@ -149,65 +180,83 @@ const ModbusRTUComponent = ({ isModbusRTUEnabled = false, ...props }: ModbusRTUC
           >
             BaudRate
           </Label>
-          <Select
-            aria-label='modbus-rtu-baudrate-select'
-            value={modbusRTU.rtuBaudRate}
-            onValueChange={handleRTUBaudRateChange}
-            onOpenChange={setRTUBaudRateIsOpen}
-          >
-            <SelectTrigger
-              aria-label='modbus-rtu-baudrate-select-trigger'
-              placeholder='Select baudrate'
-              withIndicator
-              className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-            />
-            <SelectContent
-              aria-label='modbus-rtu-baudrate-select-content'
-              viewportRef={rtuBaudRateRef}
-              className='h-[100px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-            >
-              {availableRTUBaudRates.map((rtuBaudRate) => {
-                return (
-                  <SelectItem
-                    key={rtuBaudRate}
-                    value={rtuBaudRate}
-                    className={cn(
-                      'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                      'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
-                    )}
-                  >
-                    <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                      {rtuBaudRate}
-                    </span>
-                  </SelectItem>
-                )
-              })}
-            </SelectContent>
-          </Select>
+          <Controller
+            name='rtuBaudRate'
+            control={control}
+            render={({ field }) => (
+              <Select
+                aria-label='modbus-rtu-baudrate-select'
+                value={field.value}
+                onValueChange={(_ev) => {
+                  field.onChange()
+                  setRTUConfig({ rtuConfig: field.name, value: field.value })
+                }}
+                onOpenChange={setRTUBaudRateIsOpen}
+              >
+                <SelectTrigger
+                  aria-label='modbus-rtu-baudrate-select-trigger'
+                  placeholder='Select baudrate'
+                  withIndicator
+                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                />
+                <SelectContent
+                  aria-label='modbus-rtu-baudrate-select-content'
+                  viewportRef={rtuBaudRateRef}
+                  className='h-[100px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                >
+                  {availableRTUBaudRates.map((rtuBaudRate) => {
+                    return (
+                      <SelectItem
+                        key={rtuBaudRate}
+                        value={rtuBaudRate}
+                        className={cn(
+                          'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                          'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                        )}
+                      >
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {rtuBaudRate}
+                        </span>
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            )}
+          />
         </div>
         <div id='modbus-rtu-rs485en-pin-container' className='flex w-full flex-1 items-center justify-start gap-1'>
           <Checkbox
             id='enable-rtu-rs485en-pin-checkbox'
-            className={enableRS485Pin ? 'border-brand' : 'border-neutral-300'}
-            checked={enableRS485Pin}
-            onCheckedChange={toggleEnableRS485Pin}
+            className={enableRS485ENPin ? 'border-brand' : 'border-neutral-300'}
+            checked={enableRS485ENPin}
+            onCheckedChange={toggleEnableRS485ENPin}
           />
           <Label
             id='modbus-rtu-rs485en-pin-input-label'
             htmlFor='modbus-rtu-rs485en-pin-input'
-            className={cn('whitespace-pre text-xs text-neutral-950 dark:text-white', !enableRS485Pin && 'opacity-50')}
+            className={cn('whitespace-pre text-xs text-neutral-950 dark:text-white', !enableRS485ENPin && 'opacity-50')}
           >
             RS485 EN Pin
           </Label>
-          {enableRS485Pin && (
-            <InputWithRef
-              id='rtuRS485ENPin'
-              placeholder='RS485 EN Pin'
-              value={rtuConfigFields.rtuRS485ENPin}
-              onChange={handleInputChange}
-              onBlur={writeRS485ENPinInGlobalStore}
-              disabled={!enableRS485Pin}
-              className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+          {enableRS485ENPin && (
+            <Controller
+              name='rtuRS485ENPin'
+              control={control}
+              defaultValue={modbusRTU.rtuRS485ENPin}
+              render={({ field }) => (
+                <InputWithRef
+                  id='rtuRS485ENPin'
+                  placeholder='RS485 EN Pin'
+                  {...field}
+                  onBlur={(_ev) => {
+                    field.onBlur()
+                    setRTUConfig({ rtuConfig: field.name, value: field.value })
+                  }}
+                  disabled={!enableRS485ENPin}
+                  className={errors.rtuRS485ENPin ? INPUT_STYLES.error : INPUT_STYLES.default}
+                />
+              )}
             />
           )}
         </div>
@@ -250,13 +299,6 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
     resolver: zodResolver(staticHostSchema),
   })
 
-  const INPUT_STYLES = {
-    default:
-      'h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300',
-    error:
-      'h-7 min-w-0 flex-1 rounded-lg border border-red-500 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:outline-none dark:bg-neutral-950 dark:text-neutral-300',
-  }
-  console.log('Errors ->', errors)
   return (
     <form id='static-host-config-form-container' className='flex gap-6' {...props}>
       <section id='static-host-form-config-left-slot' className='flex flex-1 flex-col gap-4'>
@@ -271,7 +313,7 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
           <Controller
             name='ipAddress'
             control={control}
-            defaultValue={tcpStaticHostConfiguration.ipAddress !== '' ? tcpStaticHostConfiguration.ipAddress : ''}
+            defaultValue={tcpStaticHostConfiguration.ipAddress}
             render={({ field }) => (
               <InputWithRef
                 id='ipAddress'
@@ -297,7 +339,7 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
           <Controller
             name='gateway'
             control={control}
-            defaultValue={tcpStaticHostConfiguration.gateway !== '' ? tcpStaticHostConfiguration.gateway : ''}
+            defaultValue={tcpStaticHostConfiguration.gateway}
             render={({ field }) => (
               <InputWithRef
                 id='gateway'
@@ -325,7 +367,7 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
           <Controller
             name='dns'
             control={control}
-            defaultValue={tcpStaticHostConfiguration.dns !== '' ? tcpStaticHostConfiguration.dns : ''}
+            defaultValue={tcpStaticHostConfiguration.dns}
             render={({ field }) => (
               <InputWithRef
                 id='dns'
@@ -351,7 +393,7 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
           <Controller
             name='subnet'
             control={control}
-            defaultValue={tcpStaticHostConfiguration.subnet !== '' ? tcpStaticHostConfiguration.subnet : ''}
+            defaultValue={tcpStaticHostConfiguration.subnet}
             render={({ field }) => (
               <InputWithRef
                 id='subnet'
@@ -371,7 +413,25 @@ const StaticHostConfigurationComponent = (props: StaticHostConfigurationComponen
   )
 }
 
+const MAC_ADDRESS_REGEX = /^([0-9A-Fa-f]{2})([:\-,])(?:[0-9A-Fa-f]{2}\2){4}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{12}$/
+
+const tcpConfigSchema = z.object({
+  tcpInterface: z.enum(['wifi', 'ethernet']),
+  tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX),
+  tcpWifiSSID: z.string(),
+  tcpWifiPassword: z.string(),
+})
+
+type TCPConfigSchema = z.infer<typeof tcpConfigSchema>
+
 const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPComponentProps) => {
+  const {
+    control,
+    formState: { errors },
+  } = useForm<TCPConfigSchema>({
+    mode: 'onChange',
+    resolver: zodResolver(tcpConfigSchema),
+  })
   const {
     deviceDefinitions: {
       configuration: {
@@ -381,36 +441,12 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
     deviceAvailableOptions: { availableTCPInterfaces },
     deviceActions: { setTCPConfig, setWifiConfig },
   } = useOpenPLCStore()
-  const [tcpConfigFields, setTCPConfigFields] = useState({
-    tcpMACAddress: modbusTCP.tcpMacAddress,
-    tcpWifiSSID: '',
-    tcpWifiPassword: '',
-  })
 
   const [enableDHCPHost, setEnableDHCPHost] = useState(true)
 
   const handleEnableDHCPHost = useCallback(() => setEnableDHCPHost(!enableDHCPHost), [enableDHCPHost])
 
-  const handleTCPInterfaceChange = useCallback(
-    (value: 'ethernet' | 'wifi') => setTCPConfig({ tcpConfig: 'tcpInterface', value }),
-    [],
-  )
-
-  const writeMACAddressInGlobalStore = useCallback(
-    () => setTCPConfig({ tcpConfig: 'tcpMacAddress', value: tcpConfigFields.tcpMACAddress }),
-    [],
-  )
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
-  const writeWifiSSIDInGlobalStore = useCallback(() => setWifiConfig({ wifiSSID: tcpConfigFields.tcpWifiSSID }), [])
-  const writeWifiPasswordInGlobalStore = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
-    () => setWifiConfig({ wifiPassword: tcpConfigFields.tcpWifiPassword }),
-    [],
-  )
-
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) =>
-    setTCPConfigFields({ ...tcpConfigFields, [event.target.id]: event.target.value })
-
+  console.log('TCP data ->', modbusTCP)
   return (
     <>
       <div
@@ -426,39 +462,48 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
             >
               Interface
             </Label>
-            <Select
-              aria-label='modbus-tcp-interface-select'
-              value={modbusTCP.tcpInterface}
-              onValueChange={handleTCPInterfaceChange}
-            >
-              <SelectTrigger
-                aria-label='modbus-tcp-interface-select-trigger'
-                placeholder='Select interface'
-                withIndicator
-                className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-              />
-              <SelectContent
-                aria-label='modbus-tcp-interface-select-content'
-                className='h-fit w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-              >
-                {availableTCPInterfaces.map((tcpInterface) => {
-                  return (
-                    <SelectItem
-                      key={tcpInterface}
-                      value={tcpInterface}
-                      className={cn(
-                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                        'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
-                      )}
-                    >
-                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                        {tcpInterface}
-                      </span>
-                    </SelectItem>
-                  )
-                })}
-              </SelectContent>
-            </Select>
+            <Controller
+              name='tcpInterface'
+              control={control}
+              render={({ field }) => (
+                <Select
+                  aria-label='modbus-tcp-interface-select'
+                  value={field.value}
+                  onValueChange={(_ev) => {
+                    field.onChange()
+                    setTCPConfig({ tcpConfig: field.name, value: field.value })
+                  }}
+                >
+                  <SelectTrigger
+                    aria-label='modbus-tcp-interface-select-trigger'
+                    placeholder='Select interface'
+                    withIndicator
+                    className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                  />
+                  <SelectContent
+                    aria-label='modbus-tcp-interface-select-content'
+                    className='h-fit w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                  >
+                    {availableTCPInterfaces.map((tcpInterface) => {
+                      return (
+                        <SelectItem
+                          key={tcpInterface}
+                          value={tcpInterface}
+                          className={cn(
+                            'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                            'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                          )}
+                        >
+                          <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                            {tcpInterface}
+                          </span>
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
           <div id='modbus-tcp-mac-address-container' className='flex w-full flex-1 items-center justify-start gap-1'>
             <Label
@@ -468,13 +513,22 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
             >
               MAC Address
             </Label>
-            <InputWithRef
-              id='tcpMacAddress'
-              placeholder='MAC Address'
-              value={tcpConfigFields.tcpMACAddress}
-              onChange={handleInputChange}
-              onBlur={writeMACAddressInGlobalStore}
-              className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+            <Controller
+              name='tcpMacAddress'
+              control={control}
+              defaultValue={modbusTCP.tcpMacAddress}
+              render={({ field }) => (
+                <InputWithRef
+                  id='tcpMacAddress'
+                  placeholder='MAC Address'
+                  {...field}
+                  onBlur={(_ev) => {
+                    field.onBlur()
+                    setTCPConfig({ tcpConfig: field.name, value: field.value })
+                  }}
+                  className={errors.tcpMacAddress ? INPUT_STYLES.error : INPUT_STYLES.default}
+                />
+              )}
             />
           </div>
           {modbusTCP.tcpInterface === 'wifi' && (
@@ -486,13 +540,22 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
               >
                 Wifi SSID
               </Label>
-              <InputWithRef
-                id='tcpWifiSSID'
-                placeholder='WIFI SSID'
-                value={tcpConfigFields.tcpWifiSSID}
-                onChange={handleInputChange}
-                onBlur={writeWifiSSIDInGlobalStore}
-                className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              <Controller
+                name='tcpWifiSSID'
+                control={control}
+                defaultValue={modbusTCP.tcpWifiSSID}
+                render={({ field }) => (
+                  <InputWithRef
+                    id='tcpWifiSSID'
+                    placeholder='WIFI SSID'
+                    {...field}
+                    onBlur={(_ev) => {
+                      field.onBlur()
+                      setWifiConfig({ wifiSSID: field.value })
+                    }}
+                    className={errors.tcpWifiSSID ? INPUT_STYLES.error : INPUT_STYLES.default}
+                  />
+                )}
               />
               <Label
                 id='modbus-tcp-wifi-password-id-input-label'
@@ -501,14 +564,23 @@ const ModbusTCPComponent = ({ isModbusTCPEnabled = false, ...props }: ModbusTCPC
               >
                 Password
               </Label>
-              <InputWithRef
-                id='tcpWifiPassword'
-                placeholder='Password'
-                type='password'
-                value={tcpConfigFields.tcpWifiPassword}
-                onChange={handleInputChange}
-                onBlur={writeWifiPasswordInGlobalStore}
-                className='h-7 min-w-0 flex-1 rounded-lg border border-neutral-300 p-2 px-2 text-start font-caption text-cp-sm text-neutral-850 focus:border-brand-medium-dark focus:outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              <Controller
+                name='tcpWifiPassword'
+                control={control}
+                defaultValue={modbusTCP.tcpWifiPassword}
+                render={({ field }) => (
+                  <InputWithRef
+                    id='tcpWifiPassword'
+                    placeholder='Password'
+                    type='password'
+                    {...field}
+                    onBlur={(_ev) => {
+                      field.onBlur()
+                      setWifiConfig({ wifiPassword: field.value })
+                    }}
+                    className={errors.tcpWifiPassword ? INPUT_STYLES.error : INPUT_STYLES.default}
+                  />
+                )}
               />
             </div>
           )}
