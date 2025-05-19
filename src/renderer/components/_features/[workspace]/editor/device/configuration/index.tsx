@@ -12,4 +12,5 @@ const DeviceConfigurationEditor = () => {
     </DeviceEditorTemplate>
   )
 }
+
 export { DeviceConfigurationEditor }

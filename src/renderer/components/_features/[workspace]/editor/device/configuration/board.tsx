@@ -4,9 +4,9 @@ import { Label, Select, SelectContent, SelectItem, SelectTrigger } from '@root/r
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 
-const Board = () => {
+const Board = memo(function () {
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
   const [formattedBoardState, setFormattedBoardState] = useState('Select a device')
@@ -198,6 +198,6 @@ const Board = () => {
       </div>
     </DeviceEditorSlot>
   )
-}
+})
 
 export { Board }
