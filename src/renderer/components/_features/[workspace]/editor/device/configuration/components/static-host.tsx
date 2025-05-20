@@ -10,7 +10,7 @@ import { INPUT_STYLES } from '../constants'
 const staticHostSchema = z.object({
   ipAddress: z.string().ip(),
   gateway: z.string().ip(),
-  subnet: z.string().cidr(),
+  subnet: z.string().ip(),
   dns: z.string().ip(),
 })
 
@@ -20,6 +20,7 @@ type StaticHostConfigurationComponentProps = ComponentPropsWithoutRef<'div'>
 
 const StaticHostConfigurationComponent = memo(function (props: StaticHostConfigurationComponentProps) {
   const tcpStaticHostConfiguration = staticHostSelectors.useTcpStaticHostConfiguration()
+  console.log('🚀 ~ StaticHostConfigurationComponent ~ tcpStaticHostConfiguration:', tcpStaticHostConfiguration)
   const setStaticHostConfiguration = staticHostSelectors.useSetStaticHostConfiguration()
   const {
     control,

@@ -2,50 +2,76 @@ import { Checkbox, Label } from '@root/renderer/components/_atoms'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { memo, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
+import { communicationSelectors } from '../useStoreSelectors'
 import { ModbusRTUComponent } from './components/modbus-rtu'
 import { ModbusTCPComponent } from './components/modbus-tcp'
 
-const Communication = memo(function () {
+const Communication = () => {
   const onlyCompileBoards = ['OpenPLC Runtime', 'Raspberry Pi']
   const {
     deviceDefinitions: {
-      configuration: { deviceBoard },
+      configuration: {
+        deviceBoard,
+        communicationConfiguration: { communicationPreferences },
+      },
     },
   } = useOpenPLCStore()
-  const [enableRTU, setEnableRTU] = useState(false)
-  const [enableTCP, setEnableTCP] = useState(false)
+
+  const isRTUEnabled = communicationPreferences.enabledRTU
+  const isTCPEnabled = communicationPreferences.enabledTCP
+
+  const setCommunicationPreferences = communicationSelectors.useSetCommunicationPreferences()
+
+  const [isModbusRTUEnabled, setIsModbusRTUEnabled] = useState<boolean>()
+  console.log('🚀 ~ Communication ~ isModbusRTUEnabled:', isModbusRTUEnabled)
+  console.log('🚀 ~ Communication ~ isRTUEnabled:', isRTUEnabled)
+  const [isModbusTCPEnabled, setIsModbusTCPEnabled] = useState<boolean>()
+  console.log('🚀 ~ Communication ~ isModbusTCPEnabled:', isModbusTCPEnabled)
+  console.log('🚀 ~ Communication ~ isTCPEnabled:', isTCPEnabled)
+
+  useEffect(() => {
+    setIsModbusRTUEnabled(isRTUEnabled)
+
+    setIsModbusTCPEnabled(isTCPEnabled)
+  }, [])
 
   useEffect(() => {
     const updateModbusConfig = () => {
       if (onlyCompileBoards.includes(deviceBoard)) {
-        if (!enableRTU || !enableTCP) return
-        setEnableRTU(false)
-        setEnableTCP(false)
+        setIsModbusRTUEnabled(false)
+        setCommunicationPreferences({ enableRTU: false })
+        setIsModbusTCPEnabled(false)
+        setCommunicationPreferences({ enableTCP: false })
       }
     }
     updateModbusConfig()
   }, [deviceBoard])
 
-  const handleEnableModbusRTU = () => setEnableRTU(!enableRTU)
+  const handleEnableModbusRTU = () => {
+    setIsModbusRTUEnabled(!isModbusRTUEnabled)
+    setCommunicationPreferences({ enableRTU: !isModbusRTUEnabled })
+  }
+  const memoizedIsModbusRTUEnabled = useMemo(() => isModbusRTUEnabled ?? false, [isModbusRTUEnabled])
 
-  const handleEnableModbusTCP = () => setEnableTCP(!enableTCP)
-
-  const memoizedRTUState = useMemo(() => enableRTU, [enableRTU])
-  const memoizedTCPState = useMemo(() => enableTCP, [enableTCP])
+  const handleEnableModbusTCP = () => {
+    setIsModbusTCPEnabled(!isModbusTCPEnabled)
+    setCommunicationPreferences({ enableTCP: !isModbusTCPEnabled })
+  }
+  const memoizedIsModbusTCPEnabled = useMemo(() => isModbusTCPEnabled ?? false, [isModbusTCPEnabled])
 
   return (
     <DeviceEditorSlot heading='Communication'>
       <div id='modbus-rtu-container' className='flex h-fit w-full flex-col gap-4'>
         <div
           id='enable-modbus-rtu'
-          className={cn('flex select-none items-center gap-2', !memoizedRTUState && 'opacity-50')}
+          className={cn('flex select-none items-center gap-2', !isModbusRTUEnabled && 'opacity-50')}
         >
           <Checkbox
             id='enable-modbus-rtu-checkbox'
-            className={memoizedRTUState ? 'border-brand' : 'border-neutral-300'}
-            checked={memoizedRTUState}
+            className={isModbusRTUEnabled ? 'border-brand' : 'border-neutral-300'}
+            checked={isModbusRTUEnabled}
             disabled={onlyCompileBoards.includes(deviceBoard)}
             onCheckedChange={handleEnableModbusRTU}
           />
@@ -56,18 +82,18 @@ const Communication = memo(function () {
             Enable Modbus RTU
           </Label>
         </div>
-        <ModbusRTUComponent isModbusRTUEnabled={memoizedRTUState} />
+        <ModbusRTUComponent isModbusRTUEnabled={memoizedIsModbusRTUEnabled} />
       </div>
       <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
       <div id='modbus-tcp-container' className='flex h-full w-full flex-col gap-4'>
         <div
           id='enable-modbus-tcp'
-          className={cn('flex select-none items-center gap-2', !memoizedTCPState && 'opacity-50')}
+          className={cn('flex select-none items-center gap-2', !isModbusTCPEnabled && 'opacity-50')}
         >
           <Checkbox
             id='enable-modbus-tcp-checkbox'
-            className={memoizedTCPState ? 'border-brand' : 'border-neutral-300'}
-            checked={memoizedTCPState}
+            className={isModbusTCPEnabled ? 'border-brand' : 'border-neutral-300'}
+            checked={isModbusTCPEnabled}
             disabled={onlyCompileBoards.includes(deviceBoard)}
             onCheckedChange={handleEnableModbusTCP}
           />
@@ -78,10 +104,10 @@ const Communication = memo(function () {
             Enable Modbus TCP
           </Label>
         </div>
-        <ModbusTCPComponent isModbusTCPEnabled={memoizedTCPState} />
+        <ModbusTCPComponent isModbusTCPEnabled={memoizedIsModbusTCPEnabled} />
       </div>
     </DeviceEditorSlot>
   )
-})
+}
 
 export { Communication }

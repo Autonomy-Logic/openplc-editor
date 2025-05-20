@@ -2,21 +2,23 @@
 import { RefreshIcon } from '@root/renderer/assets'
 import { Label, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
-import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 
+import { boardSelectors } from '../useStoreSelectors'
+
 const Board = memo(function () {
+  const availableBoards = boardSelectors.useAvailableBoards()
+  const availableCommunicationPorts = boardSelectors.useAvailableCommunicationPorts()
+  const deviceBoard = boardSelectors.useDeviceBoard()
+  const communicationPort = boardSelectors.useCommunicationPort()
+  const setDeviceBoard = boardSelectors.useSetDeviceBoard()
+  const setCommunicationPort = boardSelectors.useSetCommunicationPort()
+  const setAvailableOptions = boardSelectors.useSetAvailableOptions()
+
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
-  const [formattedBoardState, setFormattedBoardState] = useState('Select a device')
-  const {
-    deviceAvailableOptions: { availableBoards, availableCommunicationPorts },
-    deviceDefinitions: {
-      configuration: { deviceBoard, communicationPort },
-    },
-    deviceActions: { setDeviceBoard, setCommunicationPort, setAvailableOptions },
-  } = useOpenPLCStore()
+  const [formattedBoardState, setFormattedBoardState] = useState('')
 
   const [deviceSelectIsOpen, setDeviceSelectIsOpen] = useState(false)
   const deviceSelectRef = useRef<HTMLDivElement>(null)
@@ -32,6 +34,19 @@ const Board = memo(function () {
       checkedElement.scrollIntoView({ block: 'start' })
     }
   }
+
+  useEffect(() => {
+    const handleDeviceValueAtFirstRender = () => {
+      const boardInfos = availableBoards.get(deviceBoard)
+      if (boardInfos) {
+        const coreVersionAsString = `${boardInfos.coreVersion ? ` [${boardInfos.coreVersion}]` : ''}`
+        const initialBoard = `${deviceBoard}${coreVersionAsString}`
+        if (initialBoard === formattedBoardState) return
+        setFormattedBoardState(initialBoard)
+      }
+    }
+    handleDeviceValueAtFirstRender()
+  }, [])
 
   useEffect(() => {
     scrollToSelectedOption(deviceSelectRef, deviceSelectIsOpen)

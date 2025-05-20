@@ -19,20 +19,25 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         modbusRTU: {
           rtuInterface: 'Serial',
           rtuBaudRate: '115200',
-          rtuSlaveId: '',
-          rtuRS485ENPin: '',
+          rtuSlaveId: null,
+          rtuRS485ENPin: null,
         },
         modbusTCP: {
           tcpInterface: 'ethernet',
-          tcpMacAddress: '',
-          tcpWifiSSID: '',
-          tcpWifiPassword: '',
+          tcpMacAddress: '0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD',
+          tcpWifiSSID: null,
+          tcpWifiPassword: null,
           tcpStaticHostConfiguration: {
             ipAddress: '',
             dns: '',
             gateway: '',
             subnet: '',
           },
+        },
+        communicationPreferences: {
+          enabledRTU: false,
+          enabledTCP: false,
+          enabledDHCP: true,
         },
       },
     },
@@ -71,6 +76,21 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
           deviceDefinitions.configuration.communicationPort = communicationPort
+        }),
+      )
+    },
+    setCommunicationPreferences: (preferences) => {
+      setState(
+        produce(({ deviceDefinitions: { configuration } }: DeviceSlice) => {
+          if (preferences.enableRTU) {
+            configuration.communicationConfiguration.communicationPreferences.enabledRTU = preferences.enableRTU
+          }
+          if (preferences.enableTCP) {
+            configuration.communicationConfiguration.communicationPreferences.enabledTCP = preferences.enableTCP
+          }
+          if (preferences.enableDHCP) {
+            configuration.communicationConfiguration.communicationPreferences.enabledDHCP = preferences.enableDHCP
+          }
         }),
       )
     },
@@ -118,11 +138,11 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
           if (deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface === 'wifi') {
-            if (wifiConfig.wifiSSID)
-              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID = wifiConfig.wifiSSID
-            if (wifiConfig.wifiPassword)
+            if (wifiConfig.tcpWifiSSID)
+              deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID = wifiConfig.tcpWifiSSID
+            if (wifiConfig.tcpWifiPassword)
               deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiPassword =
-                wifiConfig.wifiPassword
+                wifiConfig.tcpWifiPassword
           }
         }),
       )

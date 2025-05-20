@@ -11,6 +11,8 @@ const staticHostConfigurationSchema = z.object({
   subnet: z.string(), // This should have the format: XXX.XXX.XXX.XXX
 })
 
+const MAC_ADDRESS_REGEX = /^([0-9A-Fa-f]{2})([:\-,])(?:[0-9A-Fa-f]{2}\2){4}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{12}$/
+
 type StaticHostConfiguration = z.infer<typeof staticHostConfigurationSchema>
 
 const deviceConfigurationSchema = z.object({
@@ -20,23 +22,28 @@ const deviceConfigurationSchema = z.object({
     modbusRTU: z.object({
       rtuInterface: z.enum(interfaceOptions), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
       rtuBaudRate: z.enum(baudRateOptions), // This will be an enumerated that will be associated with the device board selected - Validation will be added further.
-      rtuSlaveId: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.
-      rtuRS485ENPin: z.string(), // Can be any integer number from 0 to 255 - Validation will be added further.Í
+      rtuSlaveId: z.number().int().positive().lte(255).nullable(), // Can be any integer number from 0 to 255 - Validation will be added further.
+      rtuRS485ENPin: z.string().nullable(), // Can be any integer number from 0 to 255 - Validation will be added further.Í
     }),
     modbusTCP: z.discriminatedUnion('tcpInterface', [
       z.object({
         tcpInterface: z.literal('wifi'),
-        tcpMacAddress: z.string(), // This should have the format: XX:XX:XX:XX:XX:XX
-        tcpWifiSSID: z.string(),
-        tcpWifiPassword: z.string(),
+        tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX).nullable(), // This should have the format: XX:XX:XX:XX:XX:XX
+        tcpWifiSSID: z.string().nullable(),
+        tcpWifiPassword: z.string().nullable(),
         tcpStaticHostConfiguration: staticHostConfigurationSchema, // When this is omitted the user has chosen DHCP.
       }),
       z.object({
         tcpInterface: z.literal('ethernet'),
-        tcpMacAddress: z.string(),
+        tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX).nullable(),
         tcpStaticHostConfiguration: staticHostConfigurationSchema, // When this is omitted the user has chosen DHCP.
       }),
     ]),
+    communicationPreferences: z.object({
+      enabledRTU: z.boolean(),
+      enabledTCP: z.boolean(),
+      enabledDHCP: z.boolean(),
+    }),
   }),
 })
 
@@ -97,7 +104,7 @@ type DeviceState = z.infer<typeof deviceStateSchema>
 const setRTUConfigParams = z.discriminatedUnion('rtuConfig', [
   z.object({ rtuConfig: z.literal('rtuInterface'), value: z.enum(interfaceOptions) }),
   z.object({ rtuConfig: z.literal('rtuBaudRate'), value: z.enum(baudRateOptions) }),
-  z.object({ rtuConfig: z.literal('rtuSlaveId'), value: z.string() }),
+  z.object({ rtuConfig: z.literal('rtuSlaveId'), value: z.number() }),
   z.object({ rtuConfig: z.literal('rtuRS485ENPin'), value: z.string() }),
 ])
 
@@ -119,11 +126,15 @@ const deviceActionSchema = z.object({
   addPin: z.function().args(z.string().optional()).returns(z.void()),
   setDeviceBoard: z.function().args(z.string()).returns(z.void()),
   setCommunicationPort: z.function().args(z.string()).returns(z.void()),
+  setCommunicationPreferences: z
+    .function()
+    .args(z.object({ enableRTU: z.boolean(), enableTCP: z.boolean(), enableDHCP: z.boolean() }).partial())
+    .returns(z.void()),
   setRTUConfig: z.function().args(setRTUConfigParams).returns(z.void()),
   setTCPConfig: z.function().args(setTCPConfigParams).returns(z.void()),
   setWifiConfig: z
     .function()
-    .args(z.object({ wifiSSID: z.string(), wifiPassword: z.string() }).partial())
+    .args(z.object({ tcpWifiSSID: z.string(), tcpWifiPassword: z.string() }).partial())
     .returns(z.void()),
   setStaticHostConfiguration: z.function().args(staticHostConfigurationSchema.partial()).returns(z.void()),
 })

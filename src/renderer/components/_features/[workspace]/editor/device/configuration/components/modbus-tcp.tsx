@@ -32,7 +32,7 @@ const tcpConfigSchema = z.object({
 
 type TCPConfigSchema = z.infer<typeof tcpConfigSchema>
 
-const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled = false, ...props }: ModbusTCPComponentProps) {
+const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled, ...props }: ModbusTCPComponentProps) {
   const {
     control,
     formState: { errors },
@@ -47,6 +47,7 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled = false,
   })
 
   const modbusTCP = tcpSelectors.useModbusTCP()
+  console.log('🚀 ~ ModbusTCPComponent ~ modbusTCP:', modbusTCP)
   const availableTCPInterfaces = tcpSelectors.useAvailableTCPInterfaces()
   const setTCPConfig = tcpSelectors.useSetTCPConfig()
   const setWifiConfig = tcpSelectors.useSetWifiConfig()
@@ -79,6 +80,7 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled = false,
             <Controller
               name='tcpInterface'
               control={control}
+              defaultValue={modbusTCP.tcpInterface}
               render={({ field: { value, onChange } }) => (
                 <Select aria-label='modbus-tcp-interface-select' value={value} onValueChange={onChange}>
                   <SelectTrigger
@@ -123,7 +125,7 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled = false,
             <Controller
               name='tcpMacAddress'
               control={control}
-              defaultValue={modbusTCP.tcpMacAddress}
+              defaultValue={modbusTCP.tcpMacAddress ?? ''}
               render={({ field }) => (
                 <InputWithRef
                   id='tcpMacAddress'
@@ -150,7 +152,7 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled = false,
               <Controller
                 name='tcpWifiSSID'
                 control={control}
-                defaultValue={modbusTCP.tcpWifiSSID}
+                defaultValue={modbusTCP.tcpWifiSSID ?? ''}
                 render={({ field }) => (
                   <InputWithRef
                     id='tcpWifiSSID'
@@ -158,7 +160,7 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled = false,
                     {...field}
                     onBlur={(_ev) => {
                       field.onBlur()
-                      setWifiConfig({ wifiSSID: field.value })
+                      setWifiConfig({ tcpWifiSSID: field.value })
                     }}
                     className={errors.tcpWifiSSID ? INPUT_STYLES.error : INPUT_STYLES.default}
                   />
@@ -174,7 +176,7 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled = false,
               <Controller
                 name='tcpWifiPassword'
                 control={control}
-                defaultValue={modbusTCP.tcpWifiPassword}
+                defaultValue={modbusTCP.tcpWifiPassword ?? ''}
                 render={({ field }) => (
                   <InputWithRef
                     id='tcpWifiPassword'
@@ -183,7 +185,7 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled = false,
                     {...field}
                     onBlur={(_ev) => {
                       field.onBlur()
-                      setWifiConfig({ wifiPassword: field.value })
+                      setWifiConfig({ tcpWifiPassword: field.value })
                     }}
                     className={errors.tcpWifiPassword ? INPUT_STYLES.error : INPUT_STYLES.default}
                   />

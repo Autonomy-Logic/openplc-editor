@@ -19,13 +19,13 @@ import { INPUT_STYLES } from '../constants'
 const rtuConfigSchema = z.object({
   rtuInterface: z.enum(['Serial', 'Serial 1', 'Serial 2', 'Serial 3']),
   rtuBaudRate: z.enum(['9600', '14400', '19200', '38400', '57600', '115200']),
-  rtuSlaveId: z.string(),
+  rtuSlaveId: z.number().int().positive().lte(255),
   rtuRS485ENPin: z.string(),
 })
 
 type RTUConfigSchema = z.infer<typeof rtuConfigSchema>
 
-const ModbusRTUComponent = memo(function ModbusRTU({ isModbusRTUEnabled = false }: { isModbusRTUEnabled: boolean }) {
+const ModbusRTUComponent = memo(function ({ isModbusRTUEnabled }: { isModbusRTUEnabled: boolean }) {
   const {
     control,
     formState: { errors },
@@ -116,7 +116,7 @@ const ModbusRTUComponent = memo(function ModbusRTU({ isModbusRTUEnabled = false 
                 <SelectContent
                   aria-label='modbus-rtu-interface-select-content'
                   viewportRef={rtuInterfaceRef}
-                  className='h-[100px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                  className='h-fit w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
                 >
                   {availableRTUInterfaces.map((rtuInterface) => {
                     return (
@@ -150,7 +150,7 @@ const ModbusRTUComponent = memo(function ModbusRTU({ isModbusRTUEnabled = false 
           <Controller
             name='rtuSlaveId'
             control={control}
-            defaultValue={modbusRTU.rtuSlaveId}
+            defaultValue={modbusRTU.rtuSlaveId ?? 0}
             render={({ field }) => (
               <InputWithRef
                 id='rtuSlaveId'
@@ -193,7 +193,7 @@ const ModbusRTUComponent = memo(function ModbusRTU({ isModbusRTUEnabled = false 
                 <SelectContent
                   aria-label='modbus-rtu-baudrate-select-content'
                   viewportRef={rtuBaudRateRef}
-                  className='h-[100px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                  className='h-fit w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
                 >
                   {availableRTUBaudRates.map((rtuBaudRate) => {
                     return (
@@ -234,7 +234,7 @@ const ModbusRTUComponent = memo(function ModbusRTU({ isModbusRTUEnabled = false 
             <Controller
               name='rtuRS485ENPin'
               control={control}
-              defaultValue={modbusRTU.rtuRS485ENPin}
+              defaultValue={modbusRTU.rtuRS485ENPin ?? ''}
               render={({ field }) => (
                 <InputWithRef
                   id='rtuRS485ENPin'
