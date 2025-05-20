@@ -2,9 +2,9 @@
 import { FBDRungState, RungLadderState } from '@root/renderer/store/slices'
 import { baseTypes } from '@root/shared/data'
 import { PLCPou } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data'
-import { InterfaceXML } from '@root/types/PLC/xml-data/pous/interface/interface-diagram'
-import { VariableXML } from '@root/types/PLC/xml-data/variable/variable-diagram'
+import { BaseXml } from '@root/types/PLC/xml-data/old-editor'
+import { InterfaceXML } from '@root/types/PLC/xml-data/old-editor/pous/interface/interface-diagram'
+import { VariableXML } from '@root/types/PLC/xml-data/old-editor/variable/variable-diagram'
 
 import { fbdToXml } from './language/fbd-xml'
 import { ilToXML } from './language/il-xml'
@@ -130,7 +130,7 @@ export const parseInterface = (pou: PLCPou) => {
   return xml
 }
 
-export const parsePousToXML = (xml: BaseXml, pous: PLCPou[], parseTo: 'open-plc' | 'codesys') => {
+export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
   pous.forEach((pou) => {
     const interfaceResult = parseInterface(pou)
 
@@ -167,7 +167,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[], parseTo: 'open-plc'
       }
       case 'ld': {
         const rungs = pou.data.body.value.rungs
-        const result = ladderToXml(rungs as RungLadderState[], parseTo)
+        const result = ladderToXml(rungs as RungLadderState[])
         xml.project.types.pous.pou.push({
           '@name': pou.data.name,
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
@@ -183,7 +183,7 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[], parseTo: 'open-plc'
       }
       case 'fbd': {
         const rung = pou.data.body.value.rung
-        const result = fbdToXml(rung as FBDRungState, parseTo)
+        const result = fbdToXml(rung as FBDRungState)
         xml.project.types.pous.pou.push({
           '@name': pou.data.name,
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,

@@ -15,7 +15,7 @@ import {
   LeftPowerRailLadderXML,
   OutVariableLadderXML,
   RightPowerRailLadderXML,
-} from '@root/types/PLC/xml-data/pous/languages/ladder-diagram'
+} from '@root/types/PLC/xml-data/old-editor/pous/languages/ladder-diagram'
 import { Node } from '@xyflow/react'
 
 /**
@@ -408,12 +408,7 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0): 
   }
 }
 
-const blockToXml = (
-  block: BlockNode<BlockVariant>,
-  rung: RungLadderState,
-  offsetY: number = 0,
-  parseTo: 'open-plc' | 'codesys',
-): BlockLadderXML => {
+const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offsetY: number = 0): BlockLadderXML => {
   const connections = findConnections(block, rung, offsetY)
 
   const inputVariables = block.data.inputHandles.map((handle) => {
@@ -512,7 +507,7 @@ const blockToXml = (
 
   const outputVariable = block.data.outputHandles.map((handle) => {
     return {
-      '@formalParameter': parseTo !== 'codesys' ? handle.id || '' : handle.id !== 'OUT' ? handle.id || '' : '   ',
+      '@formalParameter': handle.id || '',
       connectionPointOut: {
         relPosition: {
           '@x': handle.relPosition.x || 0,
@@ -583,7 +578,7 @@ const outVariableToXML = (variable: VariableNode, rung: RungLadderState, offsetY
       connection: [
         {
           '@refLocalId': connectedBlock.data.numericId,
-          '@formalParameter': variable.data.block.handleId !== 'OUT' ? variable.data.block.handleId : '   ',
+          '@formalParameter': variable.data.block.handleId,
           position: [
             // Final edge destination
             {
@@ -606,7 +601,7 @@ const outVariableToXML = (variable: VariableNode, rung: RungLadderState, offsetY
 /**
  * Entry point to parse nodes to XML
  */
-const ladderToXml = (rungs: RungLadderState[], parseTo: 'open-plc' | 'codesys') => {
+const ladderToXml = (rungs: RungLadderState[]) => {
   const ladderXML: {
     body: {
       LD: LadderXML
@@ -642,7 +637,7 @@ const ladderToXml = (rungs: RungLadderState[], parseTo: 'open-plc' | 'codesys') 
           ladderXML.body.LD.coil.push(coilToXml(node as CoilNode, rung, offsetY))
           break
         case 'block':
-          ladderXML.body.LD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung, offsetY, parseTo))
+          ladderXML.body.LD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung, offsetY))
           break
         case 'variable':
           if ((node as VariableNode).data.variable.name === '') return

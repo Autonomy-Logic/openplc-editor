@@ -14,7 +14,7 @@ import {
   FbdXML,
   InVariableFbdXML,
   OutVariableFbdXML,
-} from '@root/types/PLC/xml-data/pous/languages/fbd-diagram'
+} from '@root/types/PLC/xml-data/old-editor/pous/languages/fbd-diagram'
 import { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react'
 
 const getEdgePaths = (edge: FlowEdge, nodes: FlowNode[]) => {
@@ -65,11 +65,7 @@ const getEdgePaths = (edge: FlowEdge, nodes: FlowNode[]) => {
  * Translate react flow nodes to XML
  */
 
-const blockToXml = (
-  node: BlockNode<BlockVariant>,
-  rung: FBDRungState,
-  parseTo: 'open-plc' | 'codesys',
-): BlockFbdXML => {
+const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbdXML => {
   const inputVariables: BlockFbdXML['inputVariables']['variable'] = node.data.inputHandles
     .flatMap((handle) => {
       const edges = rung.edges.filter((edge) => edge.target === node.id && edge.targetHandle === handle.id)
@@ -108,7 +104,7 @@ const blockToXml = (
   const outputVariable: BlockFbdXML['outputVariables']['variable'] = node.data.outputHandles
     .map((handle) => {
       return {
-        '@formalParameter': parseTo !== 'codesys' ? handle.id || '' : handle.id !== 'OUT' ? handle.id || '' : '   ',
+        '@formalParameter': handle.id || '',
         connectionPointOut: {
           relPosition: {
             '@x': handle.relPosition.x || 0,
@@ -183,12 +179,7 @@ const outputVariableToXml = (node: VariableNode, rung: FBDRungState): OutVariabl
 
         return {
           '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-          '@formalParameter':
-            sourceNode.type === 'block'
-              ? (edge.sourceHandle as string) !== 'OUT'
-                ? (edge.sourceHandle as string)
-                : '   '
-              : undefined,
+          '@formalParameter': sourceNode.type === 'block' ? (edge.sourceHandle as string) : undefined,
           position: path.reverse().map((point) => ({
             '@x': point.x,
             '@y': point.y,
@@ -301,7 +292,7 @@ const commentToXml = (node: CommentNode): CommentFbdXML => {
 /**
  * Entry point to parse nodes to XML
  */
-const fbdToXml = (rung: FBDRungState, parseTo: 'open-plc' | 'codesys') => {
+const fbdToXml = (rung: FBDRungState) => {
   const fbdXML: {
     body: {
       FBD: FbdXML
@@ -324,7 +315,7 @@ const fbdToXml = (rung: FBDRungState, parseTo: 'open-plc' | 'codesys') => {
   nodes.forEach((node) => {
     switch (node.type as CustomFbdNodeTypes) {
       case 'block':
-        fbdXML.body.FBD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung, parseTo))
+        fbdXML.body.FBD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung))
         break
       case 'input-variable':
         fbdXML.body.FBD.inVariable.push(inputVariableToXml(node as VariableNode))

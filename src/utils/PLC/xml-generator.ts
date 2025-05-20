@@ -3,7 +3,7 @@ import { create } from 'xmlbuilder2'
 import type { ProjectState } from '../../renderer/store/slices'
 import { instanceToXml } from '../PLC/instances-xml'
 import { parsePousToXML } from '../PLC/pou-xml'
-import { getBaseXmlStructure } from './base-xml'
+import { getBaseXmlStructure } from './xml-generator/old-editor/base-xml'
 import { parseDataTypesToXML } from './data-type-xml'
 
 const XmlGenerator = (projectToGenerateXML: ProjectState['data'], parseTo: 'open-plc' | 'codesys' = 'open-plc') => {

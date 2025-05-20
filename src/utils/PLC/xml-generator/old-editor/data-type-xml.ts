@@ -1,5 +1,5 @@
 import { PLCDataType } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data'
+import { BaseXml } from '@root/types/PLC/xml-data/old-editor'
 
 export const parseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
   dataTypes.forEach((dataType) => {

@@ -1,8 +1,8 @@
 import { ProjectState } from '@root/renderer/store/slices'
-import { BaseXml } from '@root/types/PLC/xml-data/base-diagram'
+import { BaseXml } from '@root/types/PLC/xml-data/old-editor/base-diagram'
 import { create } from 'xmlbuilder2'
 
-import formatDate from '../formatDate'
+import formatDate from '../../../formatDate'
 import { instanceToXml } from './instances-xml'
 import { parsePousToXML } from './pou-xml'
 
@@ -70,14 +70,14 @@ const getBaseXmlStructure = (): BaseXml => ({
  * This is not being used anymore.
  * @deprecated
  */
-export const parseProjectToXML = (project: ProjectState, parseTo: 'open-plc' | 'codesys' = 'open-plc'): string => {
+export const parseProjectToXML = (project: ProjectState): string => {
   let xmlResult = getBaseXmlStructure()
 
   /**
    * Parse POUs
    */
   const pous = project.data.pous
-  xmlResult = parsePousToXML(xmlResult, pous, parseTo)
+  xmlResult = parsePousToXML(xmlResult, pous)
 
   /**
    * Parse instances
