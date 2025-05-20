@@ -1,13 +1,15 @@
 import { create } from 'xmlbuilder2'
 
 import type { ProjectState } from '../../renderer/store/slices'
-import { instanceToXml } from '../PLC/instances-xml'
-import { parsePousToXML } from '../PLC/pou-xml'
-import { getBaseXmlStructure } from './xml-generator/old-editor/base-xml'
-import { parseDataTypesToXML } from './data-type-xml'
+import {
+  getBaseOldEditorXmlStructure,
+  instanceToXml,
+  parseDataTypesToXML,
+  parsePousToXML,
+} from '../PLC/xml-generator/old-editor'
 
-const XmlGenerator = (projectToGenerateXML: ProjectState['data'], parseTo: 'open-plc' | 'codesys' = 'open-plc') => {
-  let xmlResult = getBaseXmlStructure()
+const XmlGenerator = (projectToGenerateXML: ProjectState['data'], parseTo: 'old-editor' | 'codesys' = 'old-editor') => {
+  let xmlResult = parseTo === 'old-editor' ? getBaseOldEditorXmlStructure() : getBaseOldEditorXmlStructure()
 
   /**
    * Parse POUs
@@ -17,19 +19,21 @@ const XmlGenerator = (projectToGenerateXML: ProjectState['data'], parseTo: 'open
   const mainPou = pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
   if (!mainPou) return { ok: false, message: 'Main POU not found.', data: undefined }
 
-  xmlResult = parsePousToXML(xmlResult, pous, parseTo)
+  if (parseTo === 'old-editor') {
+    xmlResult = parsePousToXML(xmlResult, pous)
 
-  /**
-   * Parse data types
-   */
-  const dataTypes = projectToGenerateXML.dataTypes
-  xmlResult = parseDataTypesToXML(xmlResult, dataTypes)
+    /**
+     * Parse data types
+     */
+    const dataTypes = projectToGenerateXML.dataTypes
+    xmlResult = parseDataTypesToXML(xmlResult, dataTypes)
 
-  /**
-   * Parse instances
-   */
-  const configuration = projectToGenerateXML.configuration
-  xmlResult = instanceToXml(xmlResult, configuration)
+    /**
+     * Parse instances
+     */
+    const configuration = projectToGenerateXML.configuration
+    xmlResult = instanceToXml(xmlResult, configuration)
+  }
 
   const doc = create(xmlResult)
   doc.dec({ version: '1.0', encoding: 'utf-8' })

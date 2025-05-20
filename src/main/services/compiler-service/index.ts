@@ -491,7 +491,7 @@ class CompilerService {
   async createXmlFile(
     pathToUserProject: string,
     dataToCreateXml: ProjectState['data'],
-    parseTo: 'open-plc' | 'codesys',
+    parseTo: 'old-editor' | 'codesys',
   ): Promise<{ success: boolean; message: string }> {
     const { filePath } = await dialog.showSaveDialog({
       title: 'Export Project',

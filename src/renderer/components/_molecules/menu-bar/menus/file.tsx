@@ -84,7 +84,7 @@ export const FileMenu = () => {
               <span>{i18n.t('menu:file.submenu.closeProject')}</span>
               <span className={ACCELERATOR}>{'Ctrl + Shift + W'}</span>
             </MenuPrimitive.Item>
-            <MenuPrimitive.Item className={ITEM} onClick={() => void handleExportProject('open-plc')}>
+            <MenuPrimitive.Item className={ITEM} onClick={() => void handleExportProject('old-editor')}>
               <span>{i18n.t('menu:file.submenu.exportToPLCOpenXml')}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} onClick={() => void handleExportProject('codesys')}>

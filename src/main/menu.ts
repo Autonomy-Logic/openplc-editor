@@ -58,7 +58,7 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-accelerator')
   }
 
-  handleExportProjectRequest(parseTo: 'open-plc' | 'codesys') {
+  handleExportProjectRequest(parseTo: 'old-editor' | 'codesys') {
     this.mainWindow.webContents.send('compiler:export-project-request', parseTo)
   }
 
@@ -187,7 +187,7 @@ export default class MenuBuilder {
         },
         {
           label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
-          click: () => this.handleExportProjectRequest('open-plc'),
+          click: () => this.handleExportProjectRequest('old-editor'),
         },
         {
           label: i18n.t('menu:file.submenu.exportToCodeSys'),
@@ -445,7 +445,7 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
-            click: () => this.handleExportProjectRequest('open-plc'),
+            click: () => this.handleExportProjectRequest('old-editor'),
           },
           {
             label: i18n.t('menu:file.submenu.exportToCodeSys'),

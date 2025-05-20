@@ -309,7 +309,7 @@ const rendererProcessBridge = {
   exportProjectXml: async (
     pathToUserProject: string,
     dataToCreateXml: ProjectState['data'],
-    parseTo: 'open-plc' | 'codesys',
+    parseTo: 'old-editor' | 'codesys',
   ): Promise<{ success: boolean; message: string }> =>
     ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml, parseTo),
 

@@ -6,7 +6,7 @@ import formatDate from '../../../formatDate'
 import { instanceToXml } from './instances-xml'
 import { parsePousToXML } from './pou-xml'
 
-const getBaseXmlStructure = (): BaseXml => ({
+const getBaseOldEditorXmlStructure = (): BaseXml => ({
   project: {
     '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
     '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema-instance',
@@ -71,7 +71,7 @@ const getBaseXmlStructure = (): BaseXml => ({
  * @deprecated
  */
 export const parseProjectToXML = (project: ProjectState): string => {
-  let xmlResult = getBaseXmlStructure()
+  let xmlResult = getBaseOldEditorXmlStructure()
 
   /**
    * Parse POUs
@@ -91,4 +91,4 @@ export const parseProjectToXML = (project: ProjectState): string => {
   return xml
 }
 
-export { getBaseXmlStructure }
+export { getBaseOldEditorXmlStructure }

@@ -69,7 +69,7 @@ export const saveProjectRequest = async (
 const AcceleratorHandler = () => {
   const { handleExportProject } = useCompiler()
   const [requestFlag, setRequestFlag] = useState(false)
-  const [parseTo, setParseTo] = useState<'open-plc' | 'codesys' | null>(null)
+  const [parseTo, setParseTo] = useState<'old-editor' | 'codesys' | null>(null)
 
   const {
     project,
@@ -85,7 +85,7 @@ const AcceleratorHandler = () => {
    * Compiler Related Accelerators
    */
   useEffect(() => {
-    window.bridge.exportProjectRequest((_event, value: 'open-plc' | 'codesys') => {
+    window.bridge.exportProjectRequest((_event, value: 'old-editor' | 'codesys') => {
       setRequestFlag(true)
       setParseTo(value)
     })

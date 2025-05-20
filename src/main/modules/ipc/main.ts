@@ -165,7 +165,7 @@ class MainProcessBridge implements MainIpcModule {
     )
     this.ipcMain.handle(
       'compiler:export-project-xml',
-      (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data'], parseTo: 'open-plc' | 'codesys') =>
+      (_ev, pathToUserProject: string, dataToCreateXml: ProjectState['data'], parseTo: 'old-editor' | 'codesys') =>
         this.compilerService.createXmlFile(pathToUserProject, dataToCreateXml, parseTo),
     )
     this.ipcMain.handle(
