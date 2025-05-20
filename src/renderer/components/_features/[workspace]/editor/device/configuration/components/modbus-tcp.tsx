@@ -47,7 +47,6 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled, ...prop
   })
 
   const modbusTCP = tcpSelectors.useModbusTCP()
-  console.log('🚀 ~ ModbusTCPComponent ~ modbusTCP:', modbusTCP)
   const availableTCPInterfaces = tcpSelectors.useAvailableTCPInterfaces()
   const setTCPConfig = tcpSelectors.useSetTCPConfig()
   const setWifiConfig = tcpSelectors.useSetWifiConfig()

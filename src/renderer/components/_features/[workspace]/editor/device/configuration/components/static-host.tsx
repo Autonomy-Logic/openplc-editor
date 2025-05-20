@@ -20,7 +20,6 @@ type StaticHostConfigurationComponentProps = ComponentPropsWithoutRef<'div'>
 
 const StaticHostConfigurationComponent = memo(function (props: StaticHostConfigurationComponentProps) {
   const tcpStaticHostConfiguration = staticHostSelectors.useTcpStaticHostConfiguration()
-  console.log('🚀 ~ StaticHostConfigurationComponent ~ tcpStaticHostConfiguration:', tcpStaticHostConfiguration)
   const setStaticHostConfiguration = staticHostSelectors.useSetStaticHostConfiguration()
   const {
     control,

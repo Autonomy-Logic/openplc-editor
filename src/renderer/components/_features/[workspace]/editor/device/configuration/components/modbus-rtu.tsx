@@ -19,7 +19,7 @@ import { INPUT_STYLES } from '../constants'
 const rtuConfigSchema = z.object({
   rtuInterface: z.enum(['Serial', 'Serial 1', 'Serial 2', 'Serial 3']),
   rtuBaudRate: z.enum(['9600', '14400', '19200', '38400', '57600', '115200']),
-  rtuSlaveId: z.number().int().positive().lte(255),
+  rtuSlaveId: z.number().int().positive().lt(255),
   rtuRS485ENPin: z.string(),
 })
 
@@ -87,6 +87,8 @@ const ModbusRTUComponent = memo(function ({ isModbusRTUEnabled }: { isModbusRTUE
     }
   }, [rtuBaudRate])
 
+  console.log(errors)
+
   return (
     <div id='modbus-rtu-form-config-container' className={cn('flex gap-6', !isModbusRTUEnabled && 'hidden')}>
       <div id='modbus-rtu-form-config-left-slot' className='flex flex-1 flex-col gap-4'>
@@ -151,18 +153,24 @@ const ModbusRTUComponent = memo(function ({ isModbusRTUEnabled }: { isModbusRTUE
             name='rtuSlaveId'
             control={control}
             defaultValue={modbusRTU.rtuSlaveId ?? 0}
-            render={({ field }) => (
-              <InputWithRef
-                id='rtuSlaveId'
-                placeholder='Slave ID'
-                {...field}
-                onBlur={(_ev) => {
-                  field.onBlur()
-                  setRTUConfig({ rtuConfig: field.name, value: field.value })
-                }}
-                className={errors.rtuSlaveId ? INPUT_STYLES.error : INPUT_STYLES.default}
-              />
-            )}
+            render={({ field }) => {
+              return (
+                <InputWithRef
+                  id='rtuSlaveId'
+                  placeholder='Slave ID'
+                  {...field}
+                  type='number'
+                  onChange={(e) =>
+                    e.target.value !== '' ? field.onChange(parseInt(e.target.value)) : field.onChange(e.target.value)
+                  }
+                  onBlur={(_ev) => {
+                    field.onBlur()
+                    setRTUConfig({ rtuConfig: field.name, value: field.value })
+                  }}
+                  className={errors.rtuSlaveId ? INPUT_STYLES.error : INPUT_STYLES.default}
+                />
+              )
+            }}
           />
         </div>
       </div>

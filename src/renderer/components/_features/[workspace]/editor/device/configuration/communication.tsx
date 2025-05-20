@@ -25,11 +25,8 @@ const Communication = () => {
   const setCommunicationPreferences = communicationSelectors.useSetCommunicationPreferences()
 
   const [isModbusRTUEnabled, setIsModbusRTUEnabled] = useState<boolean>()
-  console.log('🚀 ~ Communication ~ isModbusRTUEnabled:', isModbusRTUEnabled)
-  console.log('🚀 ~ Communication ~ isRTUEnabled:', isRTUEnabled)
+
   const [isModbusTCPEnabled, setIsModbusTCPEnabled] = useState<boolean>()
-  console.log('🚀 ~ Communication ~ isModbusTCPEnabled:', isModbusTCPEnabled)
-  console.log('🚀 ~ Communication ~ isTCPEnabled:', isTCPEnabled)
 
   useEffect(() => {
     setIsModbusRTUEnabled(isRTUEnabled)
