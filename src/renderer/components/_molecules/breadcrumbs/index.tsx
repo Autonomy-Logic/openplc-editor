@@ -5,7 +5,7 @@ import { ArrowIcon, ConfigIcon, PLCIcon } from '@process:renderer/assets'
 import { LanguageIcon, LanguageIconType, PouIcon, PouIconType } from '@process:renderer/data'
 import { ArrayIcon, EnumIcon, StructureIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
-import _ from 'lodash'
+import { startCase } from 'lodash'
 import { ComponentProps } from 'react'
 
 type INavigationPanelBreadcrumbsProps = ComponentProps<'ol'> & {
@@ -44,7 +44,7 @@ const Breadcrumbs = () => {
     if (dataTypes.find((datatype) => datatype.name === meta.name)) {
       return ['data-type']
     }
-    if (meta.name === 'Configuration' || meta.name === 'Pin Mapping') {
+    if (meta.name === 'Configuration') {
       return ['device']
     }
     return ['resource']
@@ -110,7 +110,7 @@ export const NavigationPanelBreadcrumbs = ({
         <BreadcrumbItem Icon={PLCIcon} text={project_name} isLast={false} />
       </li>
       <li>
-        <BreadcrumbItem Icon={PouIcon[type[0]]} text={_.startCase(type[0])} isLast={isResource} />
+        <BreadcrumbItem Icon={PouIcon[type[0]]} text={startCase(type[0])} isLast={isResource} />
       </li>
       {!isResource && (
         <li>

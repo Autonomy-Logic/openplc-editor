@@ -126,7 +126,7 @@ const ModbusRTUComponent = memo(function ({ isModbusRTUEnabled }: { isModbusRTUE
         <div id='modbus-rtu-slave-id-container' className='flex w-full flex-1 items-center justify-start gap-1'>
           <Label
             id='modbus-rtu-slave-id-input-label'
-            htmlFor='modbus-rtu-slave-id-input'
+            htmlFor='rtuSlaveId'
             className='whitespace-pre text-xs text-neutral-950 dark:text-white'
           >
             Slave ID

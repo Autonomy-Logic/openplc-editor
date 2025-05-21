@@ -64,19 +64,22 @@ const Board = memo(function () {
     void fetchPreviewImage()
   }, [deviceBoard])
 
-  const refreshCommunicationPorts = useCallback(async (e: React.MouseEvent) => {
-    e.preventDefault()
-    try {
-      setIsPressed(true)
-      const ports = await window.bridge.refreshCommunicationPorts()
-      setAvailableOptions({ availableCommunicationPorts: ports })
-    } catch (error) {
-      // TODO: Add a toast notification for error and for success
-      console.error(error)
-    } finally {
-      setTimeout(() => setIsPressed(false), 400)
-    }
-  }, [])
+  const refreshCommunicationPorts = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault()
+      try {
+        setIsPressed(true)
+        const ports = await window.bridge.refreshCommunicationPorts()
+        setAvailableOptions({ availableCommunicationPorts: ports })
+      } catch (error) {
+        // TODO: Add a toast notification for error and for success
+        console.error(error)
+      } finally {
+        setTimeout(() => setIsPressed(false), 400)
+      }
+    },
+    [setAvailableOptions],
+  )
 
   const handleSetDeviceBoard = useCallback(
     (board: string) => {
@@ -181,7 +184,13 @@ const Board = memo(function () {
                 ))}
               </SelectContent>
             </Select>
-            <button type='button' onClick={refreshCommunicationPorts} className='group' aria-pressed={isPressed}>
+            <button
+              type='button'
+              onClick={refreshCommunicationPorts}
+              className='group'
+              aria-pressed={isPressed}
+              aria-label='Refresh communication ports'
+            >
               <RefreshIcon size='sm' className={isPressed ? 'spin-refresh' : ''} />
             </button>
           </div>
@@ -208,6 +217,7 @@ const Board = memo(function () {
         </div>
       </div>
       <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
+      {/* TODO: Implement Pin Mapping UI in future PR */}
       <div id='pin-mapping-container' className=' h-3/5 w-full'>
         <p>Pin Mapping</p>
       </div>
