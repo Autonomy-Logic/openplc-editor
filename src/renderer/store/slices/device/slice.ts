@@ -82,13 +82,14 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setCommunicationPreferences: (preferences) => {
       setState(
         produce(({ deviceDefinitions: { configuration } }: DeviceSlice) => {
-          if (preferences.enableRTU) {
+          if (preferences.enableRTU !== undefined) {
             configuration.communicationConfiguration.communicationPreferences.enabledRTU = preferences.enableRTU
           }
-          if (preferences.enableTCP) {
+          if (preferences.enableTCP !== undefined) {
             configuration.communicationConfiguration.communicationPreferences.enabledTCP = preferences.enableTCP
           }
-          if (preferences.enableDHCP) {
+          if (preferences.enableDHCP !== undefined) {
+            console.log('🚀 ~ setCommunicationPreferences ~ preferences:', preferences)
             configuration.communicationConfiguration.communicationPreferences.enabledDHCP = preferences.enableDHCP
           }
         }),
@@ -150,16 +151,16 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setStaticHostConfiguration: (staticHostConfiguration): void => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
-          if (staticHostConfiguration.ipAddress)
+          if (staticHostConfiguration.ipAddress !== undefined)
             deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.ipAddress =
               staticHostConfiguration.ipAddress
-          if (staticHostConfiguration.dns)
+          if (staticHostConfiguration.dns !== undefined)
             deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.dns =
               staticHostConfiguration.dns
-          if (staticHostConfiguration.gateway)
+          if (staticHostConfiguration.gateway !== undefined)
             deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.gateway =
               staticHostConfiguration.gateway
-          if (staticHostConfiguration.subnet)
+          if (staticHostConfiguration.subnet !== undefined)
             deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.subnet =
               staticHostConfiguration.subnet
         }),

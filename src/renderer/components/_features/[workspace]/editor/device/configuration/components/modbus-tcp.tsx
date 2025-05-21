@@ -8,9 +8,10 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@root/renderer/components/_atoms'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
-import { ComponentPropsWithoutRef, memo, useCallback, useEffect, useState } from 'react'
-import { Controller, useForm, useWatch } from 'react-hook-form'
+import { ComponentPropsWithoutRef, memo } from 'react'
+import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 
 import { tcpSelectors } from '../../useStoreSelectors'
@@ -24,7 +25,6 @@ type ModbusTCPComponentProps = ComponentPropsWithoutRef<'div'> & {
 const MAC_ADDRESS_REGEX = /^([0-9A-Fa-f]{2})([:\-,])(?:[0-9A-Fa-f]{2}\2){4}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{12}$/
 
 const tcpConfigSchema = z.object({
-  tcpInterface: z.enum(['Wi-Fi', 'Ethernet']),
   tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX),
   tcpWifiSSID: z.string(),
   tcpWifiPassword: z.string(),
@@ -41,25 +41,28 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled, ...prop
     resolver: zodResolver(tcpConfigSchema),
   })
 
-  const tcpInterface = useWatch({
-    control,
-    name: 'tcpInterface',
-  })
-
+  const {
+    deviceDefinitions: {
+      configuration: {
+        communicationConfiguration: {
+          communicationPreferences: { enabledDHCP },
+        },
+      },
+    },
+    deviceActions: { setCommunicationPreferences },
+  } = useOpenPLCStore()
   const modbusTCP = tcpSelectors.useModbusTCP()
   const availableTCPInterfaces = tcpSelectors.useAvailableTCPInterfaces()
   const setTCPConfig = tcpSelectors.useSetTCPConfig()
   const setWifiConfig = tcpSelectors.useSetWifiConfig()
 
-  const [enableDHCPHost, setEnableDHCPHost] = useState(true)
+  const handleEnableDHCPHost = () => {
+    setCommunicationPreferences({ enableDHCP: !enabledDHCP })
+  }
 
-  const handleEnableDHCPHost = useCallback(() => setEnableDHCPHost(!enableDHCPHost), [enableDHCPHost])
-
-  useEffect(() => {
-    if (modbusTCP.tcpInterface !== tcpInterface) {
-      setTCPConfig({ tcpConfig: 'tcpInterface', value: tcpInterface })
-    }
-  }, [tcpInterface])
+  const handleTCPInterfaceChange = (value: string) => {
+    setTCPConfig({ tcpConfig: 'tcpInterface', value: value as 'Wi-Fi' | 'Ethernet' })
+  }
 
   return (
     <>
@@ -76,42 +79,40 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled, ...prop
             >
               Interface
             </Label>
-            <Controller
-              name='tcpInterface'
-              control={control}
-              defaultValue={modbusTCP.tcpInterface}
-              render={({ field: { value, onChange } }) => (
-                <Select aria-label='modbus-tcp-interface-select' value={value} onValueChange={onChange}>
-                  <SelectTrigger
-                    aria-label='modbus-tcp-interface-select-trigger'
-                    placeholder='Select interface'
-                    withIndicator
-                    className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                  />
-                  <SelectContent
-                    aria-label='modbus-tcp-interface-select-content'
-                    className='h-fit w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                  >
-                    {availableTCPInterfaces.map((tcpInterface) => {
-                      return (
-                        <SelectItem
-                          key={tcpInterface}
-                          value={tcpInterface}
-                          className={cn(
-                            'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                            'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
-                          )}
-                        >
-                          <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                            {tcpInterface}
-                          </span>
-                        </SelectItem>
-                      )
-                    })}
-                  </SelectContent>
-                </Select>
-              )}
-            />
+
+            <Select
+              aria-label='modbus-tcp-interface-select'
+              value={modbusTCP.tcpInterface}
+              onValueChange={handleTCPInterfaceChange}
+            >
+              <SelectTrigger
+                aria-label='modbus-tcp-interface-select-trigger'
+                placeholder='Select interface'
+                withIndicator
+                className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+              />
+              <SelectContent
+                aria-label='modbus-tcp-interface-select-content'
+                className='h-fit w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+              >
+                {availableTCPInterfaces.map((tcpInterface) => {
+                  return (
+                    <SelectItem
+                      key={tcpInterface}
+                      value={tcpInterface}
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        {tcpInterface}
+                      </span>
+                    </SelectItem>
+                  )
+                })}
+              </SelectContent>
+            </Select>
           </div>
           <div id='modbus-tcp-mac-address-container' className='flex w-full flex-1 items-center justify-start gap-1'>
             <Label
@@ -198,8 +199,8 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled, ...prop
         <div id='enable-dhcp-host-container' className='flex h-fit w-full items-center justify-start gap-1'>
           <Checkbox
             id='enable-dhcp-host-checkbox'
-            className={enableDHCPHost ? 'border-brand' : 'border-neutral-300'}
-            checked={enableDHCPHost}
+            className={enabledDHCP ? 'border-brand' : 'border-neutral-300'}
+            checked={enabledDHCP}
             onCheckedChange={handleEnableDHCPHost}
           />
           <Label
@@ -210,7 +211,7 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled, ...prop
           </Label>
         </div>
       )}
-      {!enableDHCPHost && isModbusTCPEnabled && <StaticHostConfigurationComponent />}
+      {!enabledDHCP && isModbusTCPEnabled && <StaticHostConfigurationComponent />}
     </>
   )
 })
