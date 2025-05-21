@@ -37,20 +37,9 @@ const blockSchema = z.object({
       z.object({
         '@formalParameter': z.string(),
         connectionPointIn: z.object({
-          relPosition: z.object({
-            '@x': z.number(),
-            '@y': z.number(),
-          }),
           connection: z.array(
             z.object({
               '@refLocalId': z.string(), // was just @localId, but it seems to be a reference to other element @localId.
-              '@formalParameter': z.string().optional(),
-              position: z.array(
-                z.object({
-                  '@x': z.number(),
-                  '@y': z.number(),
-                }),
-              ),
             }),
           ),
         }),
@@ -67,10 +56,7 @@ const blockSchema = z.object({
       z.object({
         '@formalParameter': z.string(),
         connectionPointOut: z.object({
-          relPosition: z.object({
-            '@x': z.number(),
-            '@y': z.number(),
-          }),
+          expression: z.string().optional(),
         }),
       }),
     ),
@@ -99,67 +85,10 @@ const inVariableSchema = z.object({
     '@x': z.number(),
     '@y': z.number(),
   }),
-  connectionPointOut: z.object({
-    relPosition: z.object({
-      '@x': z.number(),
-      '@y': z.number(),
-    }),
-  }),
+  connectionPointOut: z.string().optional(),
   expression: z.string(),
 })
 type InVariableFbdXML = z.infer<typeof inVariableSchema>
-
-/**
- * inOutSchema is a zod schema for the inOut variable element of the Fbd Diagram.
- * It includes the following properties:
- * - @localId: a string that represents the local identifier of the inOut variable.
- * - @width: a number that represents the width of the inOut variable.
- * - @height: a number that represents the height of the inOut variable.
- * - @negatedOut: a boolean that represents if the output of the inOut variable is negated.
- * - @negatedIn: a boolean that represents if the input of the inOut variable is negated.
- * - position: an object that represents the position of the inOut variable. It includes x and y coordinates.
- * - connectionPointIn': an object that represents the connection point in of the inOut variable. It includes a relPosition object with x and y coordinates and an array of connections.
- * Each connection is an object that includes a @refLocalId and an array of position. Each position is an object that includes x and y coordinates representing the path of the connection.
- * - connectionPointOut: an object that represents the connection point out of the inOut variable. It includes a relPosition object with x and y coordinates.
- * - expression: a string that represents the expression of the inOut variable.
- */
-const inOutVariableSchema = z.object({
-  '@localId': z.string(),
-  '@width': z.number(),
-  '@height': z.number(),
-  '@negatedOut': z.boolean(),
-  '@negatedIn': z.boolean(),
-  position: z.object({
-    '@x': z.number(),
-    '@y': z.number(),
-  }),
-  connectionPointIn: z.object({
-    relPosition: z.object({
-      '@x': z.number(),
-      '@y': z.number(),
-    }),
-    connection: z.array(
-      z.object({
-        '@refLocalId': z.string(),
-        '@formalParameter': z.string().optional(),
-        position: z.array(
-          z.object({
-            '@x': z.number(),
-            '@y': z.number(),
-          }),
-        ),
-      }),
-    ),
-  }),
-  connectionPointOut: z.object({
-    relPosition: z.object({
-      '@x': z.number(),
-      '@y': z.number(),
-    }),
-  }),
-  expression: z.string(),
-})
-type InOutVariableFbdXML = z.infer<typeof inOutVariableSchema>
 
 /**
  * outSchema is a zod schema for the output variable element of the Fbd Diagram.
@@ -184,20 +113,10 @@ const outVariableSchema = z.object({
     '@y': z.number(),
   }),
   connectionPointIn: z.object({
-    relPosition: z.object({
-      '@x': z.number(),
-      '@y': z.number(),
-    }),
     connection: z.array(
       z.object({
         '@refLocalId': z.string(),
         '@formalParameter': z.string().optional(),
-        position: z.array(
-          z.object({
-            '@x': z.number(),
-            '@y': z.number(),
-          }),
-        ),
       }),
     ),
   }),
@@ -297,7 +216,6 @@ type CommentFbdXML = z.infer<typeof commentSchema>
 const fbdXMLSchema = z.object({
   block: z.array(blockSchema),
   inVariable: z.array(inVariableSchema),
-  inOutVariable: z.array(inOutVariableSchema),
   outVariable: z.array(outVariableSchema),
   connector: z.array(connectorSchema),
   continuation: z.array(continuationSchema),
@@ -311,7 +229,6 @@ export {
   connectorSchema,
   continuationSchema,
   fbdXMLSchema,
-  inOutVariableSchema,
   inVariableSchema,
   outVariableSchema,
 }
@@ -321,7 +238,6 @@ export type {
   ConnectorFbdXML,
   ContinuationFbdXML,
   FbdXML,
-  InOutVariableFbdXML,
   InVariableFbdXML,
   OutVariableFbdXML,
 }
