@@ -27,14 +27,14 @@ const deviceConfigurationSchema = z.object({
     }),
     modbusTCP: z.discriminatedUnion('tcpInterface', [
       z.object({
-        tcpInterface: z.literal('wifi'),
+        tcpInterface: z.literal('Wi-Fi'),
         tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX).nullable(), // This should have the format: XX:XX:XX:XX:XX:XX
         tcpWifiSSID: z.string().nullable(),
         tcpWifiPassword: z.string().nullable(),
         tcpStaticHostConfiguration: staticHostConfigurationSchema, // When this is omitted the user has chosen DHCP.
       }),
       z.object({
-        tcpInterface: z.literal('ethernet'),
+        tcpInterface: z.literal('Ethernet'),
         tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX).nullable(),
         tcpStaticHostConfiguration: staticHostConfigurationSchema, // When this is omitted the user has chosen DHCP.
       }),
@@ -109,7 +109,7 @@ const setRTUConfigParams = z.discriminatedUnion('rtuConfig', [
 ])
 
 const setTCPConfigParams = z.discriminatedUnion('tcpConfig', [
-  z.object({ tcpConfig: z.literal('tcpInterface'), value: z.enum(['wifi', 'ethernet']) }),
+  z.object({ tcpConfig: z.literal('tcpInterface'), value: z.enum(['Wi-Fi', 'Ethernet']) }),
   z.object({ tcpConfig: z.literal('tcpMacAddress'), value: z.string() }),
 ])
 

@@ -127,7 +127,7 @@ const StaticHostConfigurationComponent = memo(function (props: StaticHostConfigu
             render={({ field }) => (
               <InputWithRef
                 id='subnet'
-                placeholder='xxx.xxx.xxx.xxx/xx'
+                placeholder='xxx.xxx.xxx.xxx'
                 {...field}
                 onBlur={(_event) => {
                   field.onBlur()

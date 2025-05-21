@@ -9,7 +9,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     availableCommunicationPorts: [],
     availableRTUInterfaces: ['Serial', 'Serial 1', 'Serial 2', 'Serial 3'],
     availableRTUBaudRates: ['9600', '14400', '19200', '38400', '57600', '115200'],
-    availableTCPInterfaces: ['ethernet', 'wifi'], // The available TCP interfaces is always ['ethernet', 'wifi'], so we can set it on the slice creation.
+    availableTCPInterfaces: ['Ethernet', 'Wi-Fi'], // The available TCP interfaces is always ['ethernet', 'wifi'], so we can set it on the slice creation.
   },
   deviceDefinitions: {
     configuration: {
@@ -23,7 +23,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           rtuRS485ENPin: null,
         },
         modbusTCP: {
-          tcpInterface: 'ethernet',
+          tcpInterface: 'Ethernet',
           tcpMacAddress: '0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD',
           tcpWifiSSID: null,
           tcpWifiPassword: null,
@@ -137,7 +137,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setWifiConfig: (wifiConfig): void => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
-          if (deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface === 'wifi') {
+          if (deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface === 'Wi-Fi') {
             if (wifiConfig.tcpWifiSSID)
               deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID = wifiConfig.tcpWifiSSID
             if (wifiConfig.tcpWifiPassword)

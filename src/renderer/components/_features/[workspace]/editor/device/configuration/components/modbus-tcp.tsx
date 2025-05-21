@@ -24,7 +24,7 @@ type ModbusTCPComponentProps = ComponentPropsWithoutRef<'div'> & {
 const MAC_ADDRESS_REGEX = /^([0-9A-Fa-f]{2})([:\-,])(?:[0-9A-Fa-f]{2}\2){4}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{12}$/
 
 const tcpConfigSchema = z.object({
-  tcpInterface: z.enum(['wifi', 'ethernet']),
+  tcpInterface: z.enum(['Wi-Fi', 'Ethernet']),
   tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX),
   tcpWifiSSID: z.string(),
   tcpWifiPassword: z.string(),
@@ -139,14 +139,14 @@ const ModbusTCPComponent = memo(function ModbusTCP({ isModbusTCPEnabled, ...prop
               )}
             />
           </div>
-          {modbusTCP.tcpInterface === 'wifi' && (
+          {modbusTCP.tcpInterface === 'Wi-Fi' && (
             <div id='modbus-tcp-wifi-config-container' className='flex w-full flex-1 items-center justify-start gap-1'>
               <Label
                 id='modbus-tcp-wifi-ssid-id-input-label'
                 htmlFor='modbus-tcp-wifi-ssid-id-input'
                 className='whitespace-pre text-xs text-neutral-950 dark:text-white'
               >
-                Wifi SSID
+                Wi-Fi SSID
               </Label>
               <Controller
                 name='tcpWifiSSID'
