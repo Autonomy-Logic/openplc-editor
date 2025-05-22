@@ -142,7 +142,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
 // 'ml-4',
 
 type IProjectTreeNestedBranchProps = ComponentPropsWithoutRef<'li'> & {
-  nestedBranchTarget: 'array' | 'enumerated' | 'structure' | 'configuration' | 'pin-mapping'
+  nestedBranchTarget: 'array' | 'enumerated' | 'structure' | 'configuration'
   children?: ReactNode
 }
 
@@ -151,7 +151,6 @@ const NestedBranchSources = {
   enumerated: { BranchIcon: EnumIcon, label: 'Enums' },
   structure: { BranchIcon: StructureIcon, label: 'Structures' },
   configuration: { BranchIcon: ConfigIcon, label: 'Configurations' },
-  'pin-mapping': { BranchIcon: DeviceTransferIcon, label: 'Pins' },
 }
 const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProjectTreeNestedBranchProps) => {
   const {

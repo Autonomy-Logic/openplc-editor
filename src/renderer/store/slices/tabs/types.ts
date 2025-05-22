@@ -26,7 +26,7 @@ const tabsPropsSchema = z.object({
     }),
     z.object({
       type: z.literal('device'),
-      derivation: z.enum(['pin-mapping', 'configuration']),
+      derivation: z.enum(['configuration']),
     }),
   ]),
   configuration: z.object({}).optional(),

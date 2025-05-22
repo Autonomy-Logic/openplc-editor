@@ -78,7 +78,7 @@
     "uuid": "^9.0.1",
     "xmlbuilder2": "^3.1.1",
     "yaml": "^2.7.0",
-    "zod": "^3.22.4",
+    "zod": "^3.24.4",
     "zustand": "^4.4.3"
   },
   "devDependencies": {

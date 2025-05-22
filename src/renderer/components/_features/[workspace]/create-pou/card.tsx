@@ -1,4 +1,3 @@
- 
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import { CreatePouSources, PouLanguageSources } from '@process:renderer/data'
 import * as Popover from '@radix-ui/react-popover'
@@ -47,7 +46,6 @@ const Card = (props: ICardProps): ReactNode => {
 
   const submitData: SubmitHandler<IPouFormProps> = (data) => {
     try {
-       
       const pouWasCreated = create(data)
       if (!pouWasCreated) throw new TypeError()
       toast({ title: 'Pou created successfully', description: 'The POU has been created', variant: 'default' })
