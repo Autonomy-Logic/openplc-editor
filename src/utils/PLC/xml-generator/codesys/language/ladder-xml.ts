@@ -511,9 +511,7 @@ const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offse
 
     return {
       '@formalParameter': handle.id === 'OUT' ? '   ' : handle.id || '',
-      connectionPointOut: {
-        expression: block.data.connectedVariables[handle.id || '']?.variable?.name || undefined,
-      },
+      connectionPointOut: {},
     }
   })
 

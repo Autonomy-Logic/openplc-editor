@@ -99,11 +99,7 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
         if (!targetNode) return undefined
         return {
           '@formalParameter': handle.id === 'OUT' ? '   ' : handle.id || '',
-          connectionPointOut: {
-            expression: targetNode.type?.includes('variable')
-              ? (targetNode.data as BasicNodeData).variable.name
-              : undefined,
-          },
+          connectionPointOut: {},
         }
       })
     })
