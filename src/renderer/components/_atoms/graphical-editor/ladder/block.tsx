@@ -5,12 +5,14 @@ import { checkVariableNameUnit } from '@root/renderer/store/slices/project/valid
 import type { PLCVariable } from '@root/types/PLC/units/variable'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
-import { useEffect, useRef, useState } from 'react'
+import { FocusEvent, useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
+import { BlockVariant as newBlockVariant } from '../types/block'
+import { getBlockDocumentation, validateVariableType } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
@@ -101,6 +103,7 @@ export const BlockNodeElement = <T extends object>({
     .map((variable) => variable.name)
 
   const [blockNameValue, setBlockNameValue] = useState<string>(blockType === 'generic' ? '' : blockName)
+  const [validBlockNameValue, setValidBlockNameValue] = useState<string>(blockNameValue)
   const [wrongName, setWrongName] = useState<boolean>(false)
 
   const inputNameRef = useRef<HTMLInputElement>(null)
@@ -136,7 +139,7 @@ export const BlockNodeElement = <T extends object>({
   const handleNameInputOnBlur = () => {
     setInputNameFocus(false)
 
-    if (blockNameValue === '' || blockNameValue === blockName) {
+    if (blockNameValue === blockName) {
       return
     }
 
@@ -147,7 +150,8 @@ export const BlockNodeElement = <T extends object>({
       .find((pou) => pou.name === blockNameValue)
 
     if (!libraryBlock) {
-      setWrongName(true)
+      setBlockNameValue(validBlockNameValue)
+      toast({ title: 'Invalid name', description: 'The name could not be changed', variant: 'fail' })
       return
     }
 
@@ -280,6 +284,12 @@ export const BlockNodeElement = <T extends object>({
     setWrongName(false)
   }
 
+  const handleFocusInput = (e: FocusEvent<HTMLInputElement, Element>) => {
+    e.target.select()
+    setValidBlockNameValue(blockNameValue)
+    setInputNameFocus(true)
+  }
+
   return (
     <div
       className={cn(
@@ -303,7 +313,7 @@ export const BlockNodeElement = <T extends object>({
         placeholder='???'
         className='w-full bg-transparent p-1 text-center text-xs outline-none'
         disabled={disabled}
-        onFocus={() => setInputNameFocus(true)}
+        onFocus={handleFocusInput}
         onBlur={() => inputNameFocus && handleNameInputOnBlur()}
         onKeyDown={(e) => e.key === 'Enter' && inputNameRef.current?.blur()}
         ref={inputNameRef}
@@ -342,42 +352,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     ladderFlows,
     ladderFlowActions: { updateNode },
   } = useOpenPLCStore()
-  const {
-    documentation: variantDocumentation,
-    type: blockType,
-    variables: blockVariables,
-  } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
-  const documentation = `${variantDocumentation}
-
-        -- INPUT --
-        ${blockVariables
-          .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-          .map(
-            (variable, index) =>
-              `${variable.name}: ${variable.type.value}${
-                index <
-                blockVariables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1
-                  ? '\n'
-                  : ''
-              }`,
-          )
-          .join('')}
-
-        -- OUTPUT --
-          ${blockVariables
-            .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-            .map(
-              (variable, index) =>
-                `${variable.name}: ${variable.type.value}${
-                  index <
-                  blockVariables.filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-                    .length -
-                    1
-                    ? '\n'
-                    : ''
-                }`,
-            )
-            .join('')}`.trim()
+  const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const documentation = getBlockDocumentation(data.variant as newBlockVariant)
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
@@ -601,7 +577,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             textAreaValue={blockVariableValue}
             setTextAreaValue={setBlockVariableValue}
             handleSubmit={handleSubmitBlockVariableOnTextareaBlur}
-            onFocus={() => {
+            onFocus={(e) => {
+              e.target.select()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
                 nodeId: id ?? '',
               })
@@ -808,9 +785,9 @@ const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionC
 
   const mustHaveExecutionControlEnabled =
     inputConnectors.length === 0 ||
-    inputConnectors[0].type.value !== 'BOOL' ||
+    !validateVariableType('BOOL', inputConnectors[0].type.value).isValid ||
     outputConnectors.length === 0 ||
-    outputConnectors[0].type.value !== 'BOOL'
+    !validateVariableType('BOOL', outputConnectors[0].type.value).isValid
 
   if (executionControl || mustHaveExecutionControlEnabled) {
     const executionControlVariable = variant.variables.some(

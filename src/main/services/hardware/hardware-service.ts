@@ -92,7 +92,7 @@ class HardwareService {
   }
 
   async getAvailableBoards() {
-    const arduinoCorePath = join(app.getPath('userData'), 'User', 'runtime', 'arduino-core-control.json')
+    const arduinoCorePath = join(app.getPath('userData'), 'User', 'Runtime', 'arduino-core-control.json')
     const halsPath = join(this.resourcesDirectory, 'runtime', 'hals.json')
 
     const readJSONFile = async (path: string) => {

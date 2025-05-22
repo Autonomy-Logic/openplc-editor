@@ -275,6 +275,22 @@ const continuationSchema = z.object({
 })
 type ContinuationFbdXML = z.infer<typeof continuationSchema>
 
+const commentSchema = z.object({
+  '@localId': z.string(),
+  '@width': z.number(),
+  '@height': z.number(),
+  position: z.object({
+    '@x': z.number(),
+    '@y': z.number(),
+  }),
+  content: z.object({
+    'xhtml:p': z.object({
+      $: z.string(),
+    }),
+  }),
+})
+type CommentFbdXML = z.infer<typeof commentSchema>
+
 /**
  * Fbd Diagram XML data types.
  */
@@ -285,11 +301,13 @@ const fbdXMLSchema = z.object({
   outVariable: z.array(outVariableSchema),
   connector: z.array(connectorSchema),
   continuation: z.array(continuationSchema),
+  comment: z.array(commentSchema),
 })
 type FbdXML = z.infer<typeof fbdXMLSchema>
 
 export {
   blockSchema,
+  commentSchema,
   connectorSchema,
   continuationSchema,
   fbdXMLSchema,
@@ -299,6 +317,7 @@ export {
 }
 export type {
   BlockFbdXML,
+  CommentFbdXML,
   ConnectorFbdXML,
   ContinuationFbdXML,
   FbdXML,

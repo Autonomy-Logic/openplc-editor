@@ -186,7 +186,7 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
           ...node,
           data: {
             ...node.data,
-            variable: variable ?? { name: '' },
+            variable: variable ?? { id: '', name: '' },
           },
         },
       })

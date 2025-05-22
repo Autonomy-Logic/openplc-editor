@@ -13,7 +13,7 @@ import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import { LadderFlowSlice,LadderFlowState } from './types'
+import { LadderFlowSlice, LadderFlowState } from './types'
 
 export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], LadderFlowSlice> = (setState) => ({
   ladderFlows: [],
@@ -91,7 +91,8 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
             id: rungId,
             comment: '',
             defaultBounds,
-            reactFlowViewport: reactFlowViewport && reactFlowViewport > defaultBounds ? reactFlowViewport : defaultBounds,
+            reactFlowViewport:
+              reactFlowViewport && reactFlowViewport > defaultBounds ? reactFlowViewport : defaultBounds,
             nodes: [...railNodes],
             edges: [
               {
@@ -225,7 +226,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
                   posY: node.position.y,
                   handleX: (node as CoilNode).data.inputConnector?.glbPosition.x ?? 0,
                   handleY: (node as CoilNode).data.inputConnector?.glbPosition.y ?? 0,
-                  variant: 'default',
+                  variant: (node as CoilNode).data.variant,
                 })
                 return {
                   ...newCoil,
@@ -242,7 +243,7 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
                   posY: node.position.y,
                   handleX: (node as ContactNode).data.inputConnector?.glbPosition.x ?? 0,
                   handleY: (node as ContactNode).data.inputConnector?.glbPosition.y ?? 0,
-                  variant: 'default',
+                  variant: (node as ContactNode).data.variant,
                 })
                 return {
                   ...newContact,
@@ -405,6 +406,19 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           if (!rung) return
 
           rung.nodes.push(node)
+          rung.nodes = rung.nodes.map((n) => {
+            if (n.id === node.id) {
+              return {
+                ...n,
+                selected: true,
+              }
+            }
+            return {
+              ...n,
+              selected: false,
+            }
+          })
+
           flow.updated = true
         }),
       )

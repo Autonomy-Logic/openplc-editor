@@ -10,8 +10,8 @@ const nodeSchema = z.object({
     x: z.number(),
     y: z.number(),
   }),
-  height: z.number(),
-  width: z.number(),
+  height: z.number().optional(),
+  width: z.number().optional(),
   measured: z
     .object({
       width: z.number(),
@@ -30,6 +30,7 @@ const edgeSchema = z.object({
   sourceHandle: z.string(),
   target: z.string(),
   targetHandle: z.string(),
+  type: z.string().optional(),
 })
 type EdgeType = z.infer<typeof edgeSchema>
 

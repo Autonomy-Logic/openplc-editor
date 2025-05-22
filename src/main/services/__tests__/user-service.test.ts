@@ -1,3 +1,5 @@
-it('mock test', () => {
-  expect(true).toBe(true)
+describe('UserService', () => {
+  it('should be defined', () => {
+    expect(true).toBe(true)
+  })
 })

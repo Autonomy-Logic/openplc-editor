@@ -60,6 +60,8 @@ const editorGraphicalSchema = z.discriminatedUnion('language', [
   z.object({
     language: z.literal('fbd'),
     hoveringElement: z.object({ elementId: z.string().nullable(), hovering: z.boolean() }),
+    canEditorZoom: z.boolean(),
+    canEditorPan: z.boolean(),
   }),
 ])
 
@@ -116,8 +118,8 @@ const editorModelSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('plc-device'),
     meta: z.object({
-      name: z.enum(['Pin Mapping', 'Configuration']),
-      derivation: z.enum(['pin-mapping', 'configuration']),
+      name: z.enum(['Configuration']),
+      derivation: z.enum(['configuration']),
     }),
   }),
 ])
@@ -174,7 +176,13 @@ const _editorActionsSchema = z.object({
     .returns(z.boolean()),
   updateModelFBD: z
     .function()
-    .args(z.object({ hoveringElement: z.object({ elementId: z.string().nullable(), hovering: z.boolean() }) }))
+    .args(
+      z.object({
+        hoveringElement: z.object({ elementId: z.string().nullable(), hovering: z.boolean() }).optional(),
+        canEditorZoom: z.boolean().optional(),
+        canEditorPan: z.boolean().optional(),
+      }),
+    )
     .returns(z.void()),
 
   setEditor: z.function().args(editorModelSchema).returns(z.void()),

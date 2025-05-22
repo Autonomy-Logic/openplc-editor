@@ -80,6 +80,7 @@ const ConnectionElement = (block: ConnectionProps) => {
 
     const connectionBlock = rung.nodes.find(
       (node) =>
+        (node.data as BasicNodeData).variable &&
         (node.data as BasicNodeData).variable.name === (connectionNode.data as BasicNodeData).variable.name &&
         (type === 'connector' ? node.type === 'continuation' : node.type === 'connector'),
     )
@@ -145,12 +146,14 @@ const ConnectionElement = (block: ConnectionProps) => {
 
   const onMouseEnter = () => {
     updateModelFBD({
+      canEditorZoom: false,
       hoveringElement: { elementId: id, hovering: true },
     })
   }
 
   const onMouseLeave = () => {
     updateModelFBD({
+      canEditorZoom: true,
       hoveringElement: { elementId: null, hovering: false },
     })
   }

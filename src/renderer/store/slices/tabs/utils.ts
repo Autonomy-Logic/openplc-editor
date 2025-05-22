@@ -48,7 +48,7 @@ const CreatePLCGraphicalObject = (
       language === 'ld'
         ? { language, openedRungs: [] }
         : language === 'fbd'
-          ? { language, hoveringElement: { elementId: null, hovering: false } }
+          ? { language, hoveringElement: { elementId: null, hovering: false }, canEditorZoom: true, canEditorPan: true }
           : { language },
   })
   return editor
@@ -110,8 +110,8 @@ const CreateResourceEditor = (name = 'resource'): EditorModel => {
   return editor
 }
 
-const CreateDeviceEditor = (name = 'device', derivation: 'configuration' | 'pin-mapping'): EditorModel => {
-  const errorHandler = name as 'Pin Mapping' | 'Configuration'
+const CreateDeviceEditor = (name = 'device', derivation: 'configuration'): EditorModel => {
+  const errorHandler = name as 'Configuration'
   if (derivation) {
     const editor = CreateEditorObject({
       type: 'plc-device',

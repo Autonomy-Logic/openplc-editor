@@ -1,5 +1,6 @@
 import type { CustomHandleProps } from '@root/renderer/components/_atoms/graphical-editor/ladder/handle'
 import type { ParallelNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/parallel'
+import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils'
 import type { RungLadderState } from '@root/renderer/store/slices'
 import type { Edge, Node } from '@xyflow/react'
 
@@ -361,7 +362,9 @@ export const getNodesInsideParallel = (
     while (nextEdge && nextEdge.target !== closeParallelNode.id) {
       const node = rung.nodes.find((n) => n.id === nextEdge.target)
       if (!node) continue
-      nextEdge = rung.edges.find((edge) => edge.source === nextEdge.target) as Edge
+      nextEdge = rung.edges.find(
+        (edge) => edge.source === nextEdge.target && edge.sourceHandle === (node.data as BasicNodeData).outputConnector?.id,
+      ) as Edge
       // Serial
       if (parallelEdge.sourceHandle === openParallelNode.data.outputConnector?.id) serial.push(node)
       // Parallel

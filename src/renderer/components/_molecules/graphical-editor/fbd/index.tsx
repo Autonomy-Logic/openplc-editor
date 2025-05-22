@@ -9,6 +9,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { FBDRungState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC/units/variable'
 import {
+  addEdge,
   applyEdgeChanges,
   applyNodeChanges,
   Connection,
@@ -49,9 +50,15 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const [dragging, setDragging] = useState(false)
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
-  const isElementBeingHovered = useMemo(() => {
+  const canZoom = useMemo(() => {
     if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
-      return editor.graphical.hoveringElement.hovering
+      return editor.graphical.canEditorZoom
+    }
+    return false
+  }, [editor])
+  const canPan = useMemo(() => {
+    if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
+      return editor.graphical.canEditorPan
     }
     return false
   }, [editor])
@@ -59,26 +66,63 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    setRungLocal(rung)
+  const updateRungLocalFromStore = () => {
+    // console.log('updateRungLocalFromStore --')
     // console.log('rung', rung)
-  }, [rung])
+    setRungLocal(rung)
+  }
 
-  /**
-   *  Update the local rung state when the rung state changes
-   */
-  useEffect(() => {
-    if (dragging) {
+  const updateRungState = () => {
+    // console.log('updateRungState --')
+    // console.log('rungLocal', rungLocal)
+    // console.log('dragging', dragging)
+    // console.log('isEqual', _.isEqual(rungLocal, rung))
+
+    if (dragging || _.isEqual(rungLocal, rung)) {
       return
     }
 
-    // Update the selected nodes in the rung state
-    fbdFlowActions.setSelectedNodes({
+    fbdFlowActions.setRung({
       editorName: editor.meta.name,
-      nodes: rungLocal.selectedNodes,
+      rung: rungLocal,
     })
-  }, [rungLocal.selectedNodes])
+  }
 
+  /**
+   *  * FYI: This implementation came from https://www.developerway.com/posts/debouncing-in-react
+   */
+  // creating ref and initializing it with the sendRequest function
+  const debounceUpdateRungRef = useRef(updateRungState)
+  useEffect(() => {
+    // updating ref when state changes
+    // now, ref.current will have the latest sendRequest with access to the latest state
+    debounceUpdateRungRef.current = updateRungState
+  }, [dragging, rungLocal, rung])
+  // creating debounced callback only once - on mount
+  const debouncedUpdateRungStateCallback = useMemo(() => {
+    // func will be created only once - on mount
+    const func = () => {
+      // ref is mutable! ref.current is a reference to the latest sendRequest
+      debounceUpdateRungRef.current?.()
+    }
+    // debounce the func that was created once, but has access to the latest sendRequest
+    return _.debounce(func, 100)
+    // no dependencies! never gets updated
+  }, [])
+
+  useEffect(() => {
+    updateRungLocalFromStore()
+  }, [rung])
+
+  useEffect(() => {
+
+    debouncedUpdateRungStateCallback()
+    return () => debouncedUpdateRungStateCallback.cancel()
+  }, [rungLocal])
+
+  /**
+   * Handle the addition of a new element by dropping it in the viewport
+   */
   const handleAddElementByDropping = (
     position: XYPosition,
     newNodeType: CustomFbdNodeTypes,
@@ -156,6 +200,11 @@ export const FBDBody = ({ rung }: FBDProps) => {
     })
   }
 
+  /**
+   * Handle the deletion of nodes and edges
+   * This function is called when the user presses the delete key
+   * It is used to remove the selected nodes and edges from the flow
+   */
   const handleOnDelete = (nodes: FlowNode[], edges: FlowEdge[]) => {
     if (nodes.length > 0) {
       fbdFlowActions.removeNodes({
@@ -211,7 +260,17 @@ export const FBDBody = ({ rung }: FBDProps) => {
     }
   }
 
+  /**
+   * Handle the connection of two nodes
+   * This function is called when the user connects two nodes
+   * It is used to update the local rung state
+   */
   const handleOnConnect = (connection: Connection) => {
+    setRungLocal((rung) => ({
+      ...rung,
+      edges: addEdge(connection, rung.edges),
+    }))
+
     fbdFlowActions.onConnect({
       changes: connection,
       editorName: editor.meta.name,
@@ -225,37 +284,51 @@ export const FBDBody = ({ rung }: FBDProps) => {
    */
   const onNodesChange: OnNodesChange<FlowNode> = useCallback(
     (changes) => {
-      let selectedNodes: FlowNode[] = rungLocal.nodes.filter((node) => node.selected)
-      changes.forEach((change) => {
-        switch (change.type) {
-          case 'select': {
-            const node = rungLocal.nodes.find((n) => n.id === change.id) as FlowNode
-            if (change.selected) {
-              selectedNodes.push(node)
+      setRungLocal((newRung) => {
+        let nodes = newRung.nodes
+        let selectedNodes: FlowNode[] = newRung.nodes.filter((node) => node.selected)
+
+        changes.forEach((change) => {
+          switch (change.type) {
+            case 'select': {
+              const node = newRung.nodes.find((n) => n.id === change.id) as FlowNode
+              if (change.selected) {
+                selectedNodes.push(node)
+                return
+              }
+              selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
               return
             }
 
-            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
-            return
+            case 'dimensions': {
+              if (change.resizing)
+                nodes = newRung.nodes.map((n) => {
+                  if (n.id === change.id) {
+                    return {
+                      ...n,
+                      width: change.dimensions?.width,
+                      height: change.dimensions?.height,
+                      measured: {
+                        width: change.dimensions?.width,
+                        height: change.dimensions?.height,
+                      },
+                    }
+                  }
+                  return n
+                })
+              return
+            }
           }
-          case 'add': {
-            selectedNodes = []
-            return
-          }
-          case 'remove': {
-            selectedNodes = selectedNodes.filter((n) => n.id !== change.id)
-            return
-          }
+        })
+
+        return {
+          ...newRung,
+          nodes: applyNodeChanges(changes, nodes),
+          selectedNodes: selectedNodes,
         }
       })
-
-      setRungLocal((rung) => ({
-        ...rung,
-        nodes: applyNodeChanges(changes, rungLocal.nodes),
-        selectedNodes: selectedNodes,
-      }))
     },
-    [rungLocal, rung, dragging],
+    [rungLocal, dragging],
   )
 
   const onEdgesChange: OnEdgesChange<FlowEdge> = useCallback(
@@ -265,7 +338,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
         edges: applyEdgeChanges(changes, rung.edges),
       }))
     },
-    [rungLocal, rung, dragging],
+    [rungLocal, dragging],
   )
 
   const onNodeDragStart = useCallback(() => {
@@ -349,6 +422,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
         event.dataTransfer.getData('application/reactflow/fbd-blocks') === ''
           ? undefined
           : event.dataTransfer.getData('application/reactflow/fbd-blocks')
+
       if (!blockType || !Object.keys(customNodeTypes).includes(blockType)) {
         return
       }
@@ -431,7 +505,8 @@ export const FBDBody = ({ rung }: FBDProps) => {
           onNodeDragStart: onNodeDragStart,
           onNodeDragStop: onNodeDragStop,
 
-          preventScrolling: !isElementBeingHovered,
+          preventScrolling: canZoom,
+          panOnDrag: canPan,
 
           snapGrid: [16, 16],
           snapToGrid: true,

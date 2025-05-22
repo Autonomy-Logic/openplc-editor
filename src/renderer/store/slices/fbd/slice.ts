@@ -171,6 +171,54 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
         }),
       )
     },
+
+    addSelectedNode({ editorName, node }) {
+      setState(
+        produce(({ fbdFlows }: FBDFlowState) => {
+          const flow = fbdFlows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const selectedNodes = flow.rung.selectedNodes
+          if (!selectedNodes) flow.rung.selectedNodes = []
+          if (!flow.rung.selectedNodes.find((n) => n.id === node.id)) {
+            flow.rung.selectedNodes.push(node)
+            flow.updated = true
+          }
+
+          flow.rung.nodes = flow.rung.nodes.map((n) => {
+            if (n.id === node.id) {
+              return {
+                ...n,
+                selected: true,
+                draggable: (node.data as BasicNodeData).draggable,
+              }
+            }
+            return n
+          })
+        }),
+      )
+    },
+    removeSelectedNode({ editorName, node }) {
+      setState(
+        produce(({ fbdFlows }: FBDFlowState) => {
+          const flow = fbdFlows.find((flow) => flow.name === editorName)
+          if (!flow) return
+
+          const selectedNodes = flow.rung.selectedNodes.filter((n) => n.id !== node.id)
+          flow.rung.selectedNodes = selectedNodes
+
+          flow.rung.nodes = flow.rung.nodes.map((n) => {
+            if (n.id === node.id) {
+              return {
+                ...n,
+                selected: false,
+              }
+            }
+            return n
+          })
+        }),
+      )
+    },
     setSelectedNodes({ nodes, editorName }) {
       setState(
         produce(({ fbdFlows }: FBDFlowState) => {
