@@ -1,7 +1,7 @@
 import { PLCDataType } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data/old-editor'
+import { BaseXml } from '@root/types/PLC/xml-data/codesys'
 
-export const oldEditorParseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
+export const codeSysParseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
   dataTypes.forEach((dataType) => {
     switch (dataType.derivation) {
       case 'array':

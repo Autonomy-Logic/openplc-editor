@@ -1,8 +1,8 @@
 import { PLCConfiguration } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data/old-editor'
-import { PouInstance, TaskXML } from '@root/types/PLC/xml-data/old-editor/task/task-diagram'
+import { BaseXml } from '@root/types/PLC/xml-data/codesys'
+import { PouInstance, TaskXML } from '@root/types/PLC/xml-data/codesys/task/task-diagram'
 
-export const oldEditorInstanceToXml = (xml: BaseXml, configuration: PLCConfiguration) => {
+export const codeSysInstanceToXml = (xml: BaseXml, configuration: PLCConfiguration) => {
   const { instances, tasks, globalVariables } = configuration.resource
 
   tasks.forEach((task) => {

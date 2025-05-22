@@ -2,16 +2,16 @@
 import { FBDRungState, RungLadderState } from '@root/renderer/store/slices'
 import { baseTypes } from '@root/shared/data'
 import { PLCPou } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data/old-editor'
-import { InterfaceXML } from '@root/types/PLC/xml-data/old-editor/pous/interface/interface-diagram'
-import { VariableXML } from '@root/types/PLC/xml-data/old-editor/variable/variable-diagram'
+import { BaseXml } from '@root/types/PLC/xml-data/codesys'
+import { InterfaceXML } from '@root/types/PLC/xml-data/codesys/pous/interface/interface-diagram'
+import { VariableXML } from '@root/types/PLC/xml-data/codesys/variable/variable-diagram'
 
 import { fbdToXml } from './language/fbd-xml'
 import { ilToXML } from './language/il-xml'
 import { ladderToXml } from './language/ladder-xml'
 import { stToXML } from './language/st-xml'
 
-export const oldEditorParseInterface = (pou: PLCPou) => {
+export const codeSysParseInterface = (pou: PLCPou) => {
   const variables = pou.data.variables
   const returnType = pou.type === 'function' ? pou.data.returnType : undefined
 
@@ -130,9 +130,9 @@ export const oldEditorParseInterface = (pou: PLCPou) => {
   return xml
 }
 
-export const oldEditorParsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
+export const codeSysParsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
   pous.forEach((pou) => {
-    const interfaceResult = oldEditorParseInterface(pou)
+    const interfaceResult = codeSysParseInterface(pou)
 
     switch (pou.data.body.language) {
       case 'il': {
