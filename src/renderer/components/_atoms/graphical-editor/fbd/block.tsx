@@ -10,6 +10,7 @@ import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
 import { BlockVariant } from '../types/block'
+import { getBlockDocumentation } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
 import { BasicNodeData, BuilderBasicProps } from './utils'
 import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
@@ -335,41 +336,9 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     fbdFlowActions: { updateNode },
   } = useOpenPLCStore()
   const {
-    documentation: variantDocumentation,
     type: blockType,
-    variables: blockVariables,
   } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
-  const documentation = `${variantDocumentation}
-
-        -- INPUT --
-        ${blockVariables
-          .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-          .map(
-            (variable, index) =>
-              `${variable.name}: ${variable.type.value}${
-                index <
-                blockVariables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1
-                  ? '\n'
-                  : ''
-              }`,
-          )
-          .join('')}
-
-        -- OUTPUT --
-          ${blockVariables
-            .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-            .map(
-              (variable, index) =>
-                `${variable.name}: ${variable.type.value}${
-                  index <
-                  blockVariables.filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-                    .length -
-                    1
-                    ? '\n'
-                    : ''
-                }`,
-            )
-            .join('')}`
+  const documentation = getBlockDocumentation(data.variant as BlockVariant)
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)

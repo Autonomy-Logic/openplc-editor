@@ -146,7 +146,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   return (
     <div aria-label='Array data type container' className='flex h-full w-full flex-col gap-4 bg-transparent' {...rest}>
-      <div aria-label='Data type content actions container' className='flex h-fit w-full gap-8'>
+      <div aria-label='Data type content actions container' className='flex h-fit w-full'>
         <div aria-label='Array base type container' className='flex w-1/2 flex-col gap-3'>
           <div aria-label='Array base type content' className='flex h-fit w-full items-center justify-between'>
             <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>

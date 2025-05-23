@@ -281,7 +281,8 @@ export const Contact = (block: ContactProps) => {
             ref={inputVariableRef}
             textAreaClassName='text-center text-xs leading-3'
             highlightClassName='text-center text-xs leading-3'
-            onFocus={() => {
+            onFocus={(e) => {
+              e.target.select()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
                 nodeId: id ?? '',
               })

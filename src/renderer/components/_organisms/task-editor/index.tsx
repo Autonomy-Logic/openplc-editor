@@ -79,7 +79,7 @@ const TaskEditor = () => {
         data: {
           name: 'Task',
           triggering: 'Cyclic',
-          interval: 'T#0d0h0min0s20ms0µs',
+          interval: 'T#20ms',
           priority: 0,
         },
       })
@@ -102,7 +102,7 @@ const TaskEditor = () => {
         data: {
           name: 'Task',
           triggering: 'Cyclic',
-          interval: 'T#0d0h0min0s20ms0µs',
+          interval: 'T#20ms',
           priority: 0,
         },
       })

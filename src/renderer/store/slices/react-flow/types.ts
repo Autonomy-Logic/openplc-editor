@@ -30,6 +30,7 @@ const edgeSchema = z.object({
   sourceHandle: z.string(),
   target: z.string(),
   targetHandle: z.string(),
+  type: z.string().optional(),
 })
 type EdgeType = z.infer<typeof edgeSchema>
 

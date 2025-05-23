@@ -1,5 +1,4 @@
-import { MinusIcon, PlusIcon } from '@radix-ui/react-icons'
-import { StickArrowIcon } from '@root/renderer/assets'
+import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { useOpenPLCStore } from '@root/renderer/store'
