@@ -1,4 +1,3 @@
- 
 import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
 import { i18n } from '../utils/i18n'
@@ -367,7 +366,7 @@ export default class MenuBuilder {
         const projectPath = projectEntry.path.startsWith(homeDir)
           ? projectEntry.path.replace(homeDir, '~')
           : projectEntry.path
-          const projectName = projectEntry.name
+        const projectName = projectEntry.name
 
         return {
           label: `${projectName} (${projectPath})`,
