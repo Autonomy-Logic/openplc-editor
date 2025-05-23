@@ -3,7 +3,10 @@ import type { BuilderBasicProps } from '@root/renderer/components/_atoms/graphic
 import { RungLadderState } from '@root/renderer/store/slices'
 import type { Node } from '@xyflow/react'
 
-export const findNode = (rung: RungLadderState, nodeId: string): { node: Node | undefined; position: number | undefined } => {
+export const findNode = (
+  rung: RungLadderState,
+  nodeId: string,
+): { node: Node | undefined; position: number | undefined } => {
   return {
     node: rung.nodes.find((node) => node.id === nodeId),
     position: rung.nodes.findIndex((node) => node.id === nodeId),
@@ -22,7 +25,7 @@ export const getDefaultNodeStyle = ({ node, nodeType }: { node?: Node; nodeType?
   return defaultCustomNodesStyles[node?.type ?? nodeType ?? 'mockNode']
 }
 
-export const buildGenericNode = <T> ({
+export const buildGenericNode = <T>({
   nodeType,
   blockType,
   id,

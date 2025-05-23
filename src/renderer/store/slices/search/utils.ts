@@ -1,5 +1,3 @@
- 
- 
 import DOMPurify from 'dompurify'
 
 const escapeRegExp = (string: string) => {

@@ -60,7 +60,6 @@ const Communication = () => {
           />
           <Label
             htmlFor='enable-modbus-rtu-checkbox'
-            
             className='text-sm font-medium text-neutral-950 hover:cursor-pointer dark:text-white'
           >
             Enable Modbus RTU

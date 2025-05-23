@@ -238,4 +238,3 @@ const StructureDataType = () => {
 }
 
 export { StructureDataType }
-

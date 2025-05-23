@@ -9,7 +9,7 @@ interface ProjectFilterBarProps {
   setSearchFilterValue: (searchNameFilterValue: string) => void
 }
 
-const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({setSearchFilterValue}): ReactNode => {
+const ProjectFilterBar: React.FC<ProjectFilterBarProps> = ({ setSearchFilterValue }): ReactNode => {
   const {
     workspace: { recent },
     workspaceActions: { setRecent },

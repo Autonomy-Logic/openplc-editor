@@ -1,7 +1,7 @@
-import { PLCLanguagesShortenedForm} from '@root/shared/data'
+import { PLCLanguagesShortenedForm } from '@root/shared/data'
 import { z } from 'zod'
 
-import { PLCVariableSchema } from "./variable";
+import { PLCVariableSchema } from './variable'
 
 const PLCProgramSchema = z.object({
   language: z.enum(PLCLanguagesShortenedForm),
@@ -13,4 +13,4 @@ const PLCProgramSchema = z.object({
 
 type PLCProgram = z.infer<typeof PLCProgramSchema>
 
-export { PLCProgram,PLCProgramSchema }
+export { PLCProgram, PLCProgramSchema }

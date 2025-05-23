@@ -1,9 +1,4 @@
-import {
-  BaseLibraryPouSchema,
-  BaseLibrarySchema,
-  BaseLibraryVariableSchema,
-  baseTypeSchema,
-} from '@root/types/PLC'
+import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema, baseTypeSchema } from '@root/types/PLC'
 import { z } from 'zod'
 
 const StandardFunctionBlocksVariablesSchema = BaseLibraryVariableSchema.extend({

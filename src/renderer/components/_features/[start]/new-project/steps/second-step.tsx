@@ -7,7 +7,6 @@ import { SubmitHandler, useForm } from 'react-hook-form'
 
 import { NewProjectStore } from '../store'
 
-
 const Step2 = ({ onNext, onPrev }: { onNext: () => void; onPrev: () => void }) => {
   const { register, handleSubmit, setValue, watch } = useForm<{ name: string; path: string }>()
   const handleUpdateForm = NewProjectStore((state) => state.setFormData)

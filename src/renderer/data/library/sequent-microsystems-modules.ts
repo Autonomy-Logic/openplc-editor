@@ -1,9 +1,4 @@
-import {
-  BaseLibraryPouSchema,
-  BaseLibrarySchema,
-  BaseLibraryVariableSchema,
-  baseTypeSchema,
-} from '@root/types/PLC'
+import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema, baseTypeSchema } from '@root/types/PLC'
 import { z } from 'zod'
 
 const SequentMicrosystemsModulesVariablesSchema = BaseLibraryVariableSchema.extend({
@@ -335,7 +330,6 @@ const SequentMicrosystemsModules: SequentMicrosystemsModulesLibrary = {
       body: 'DUMMY := STACK;',
       documentation: 'Update all outputs from 8-mosfets card',
     },
-
   ],
 }
 

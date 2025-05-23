@@ -335,9 +335,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     fbdFlows,
     fbdFlowActions: { updateNode },
   } = useOpenPLCStore()
-  const {
-    type: blockType,
-  } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
   const documentation = getBlockDocumentation(data.variant as BlockVariant)
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')

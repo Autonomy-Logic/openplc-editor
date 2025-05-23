@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod'
 
 const pouInstanceSchema = z.object({
   '@name': z.string(),
@@ -11,12 +11,14 @@ const taskXMLSchema = z.object({
   '@priority': z.string(),
   '@interval': z.string().nullable(),
   '@single': z.string().nullable(),
-  pouInstance: z.array(z.object({
-    '@name': z.string(),
-    '@typeName': z.string(),
-  })),
+  pouInstance: z.array(
+    z.object({
+      '@name': z.string(),
+      '@typeName': z.string(),
+    }),
+  ),
 })
 type TaskXML = z.infer<typeof taskXMLSchema>
 
-export { pouInstanceSchema,taskXMLSchema }
-export type { PouInstance,TaskXML }
+export { pouInstanceSchema, taskXMLSchema }
+export type { PouInstance, TaskXML }
