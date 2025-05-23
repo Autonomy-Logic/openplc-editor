@@ -1,4 +1,4 @@
-import * as monaco from 'monaco-editor';
+import * as monaco from 'monaco-editor'
 
 const lightThemeData: monaco.editor.IStandaloneThemeData = {
   base: 'vs',
@@ -8,7 +8,7 @@ const lightThemeData: monaco.editor.IStandaloneThemeData = {
     { token: 'keyword', foreground: '#0346A6' }, // Darker shade for keywords in light theme
     { token: 'typeKeyword', foreground: '#023C97' }, // Slightly darker shade for type keywords in light theme
     { token: 'label.il', foreground: '#0464FB' }, // Primary color for label (identifier) in light theme
-    { token: 'labelValue', foreground: '#023C97' } // Slightly darker shade for label (value) in light theme
+    { token: 'labelValue', foreground: '#023C97' }, // Slightly darker shade for label (value) in light theme
   ],
   colors: {
     'editor.background': '#FFFFFF', // Editor background color in light theme
@@ -20,7 +20,7 @@ const lightThemeData: monaco.editor.IStandaloneThemeData = {
     'editorGutter.background': '#FFFFFF', // Editor gutter background color in light theme
     'editorCursor.foreground': '#0464FB', // Primary color for cursor in light theme
   },
-};
+}
 
 const darkThemeData: monaco.editor.IStandaloneThemeData = {
   base: 'vs-dark',
@@ -30,7 +30,7 @@ const darkThemeData: monaco.editor.IStandaloneThemeData = {
     { token: 'keyword', foreground: '#0099FF' }, // Darker shade for keywords in dark theme
     { token: 'typeKeyword', foreground: '#023C97' }, // Slightly darker shade for type keywords in dark theme
     { token: 'label.il', foreground: '#0464FB' }, // Primary color for label (identifier) in dark theme
-    { token: 'labelValue', foreground: '#023C97' } // Slightly darker shade for label (value) in dark theme
+    { token: 'labelValue', foreground: '#023C97' }, // Slightly darker shade for label (value) in dark theme
   ],
   colors: {
     'editor.background': '#121316', // Darker background color in dark theme
@@ -42,6 +42,6 @@ const darkThemeData: monaco.editor.IStandaloneThemeData = {
     'editorGutter.background': '#121316', // Editor gutter background color in dark theme
     'editorCursor.foreground': '#0464FB', // Primary color for cursor in dark theme
   },
-};
+}
 
-export { darkThemeData, lightThemeData };
+export { darkThemeData, lightThemeData }

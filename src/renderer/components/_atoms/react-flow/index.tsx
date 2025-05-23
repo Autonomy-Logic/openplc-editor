@@ -30,10 +30,7 @@ export const ReactFlowPanel = ({
     <ReactFlow deleteKeyCode={getDeleteKeyCodes()} {...viewportConfig}>
       {background && <Background {...backgroundConfig} />}
       {controls && (
-        <Controls
-          {...controlsConfig}
-          className={cn(controlsConfig?.className)}
-        >
+        <Controls {...controlsConfig} className={cn(controlsConfig?.className)}>
           {controlsConfig?.children}
         </Controls>
       )}

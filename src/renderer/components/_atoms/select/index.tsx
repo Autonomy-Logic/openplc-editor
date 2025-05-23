@@ -57,7 +57,9 @@ const SelectContent = forwardRef<ElementRef<typeof PrimitiveSelect.Content>, ISe
           {/* <PrimitiveSelect.ScrollUpButton>
           <ArrowIcon direction='up' size='sm' className='stroke-brand' />
         </PrimitiveSelect.ScrollUpButton> */}
-          <PrimitiveSelect.Viewport ref={viewportRef} className=' h-full w-full overflow-auto'>{children}</PrimitiveSelect.Viewport>
+          <PrimitiveSelect.Viewport ref={viewportRef} className=' h-full w-full overflow-auto'>
+            {children}
+          </PrimitiveSelect.Viewport>
           {/* <PrimitiveSelect.ScrollDownButton>
           <ArrowIcon direction='down' size='sm' className='stroke-brand' />
         </PrimitiveSelect.ScrollDownButton> */}

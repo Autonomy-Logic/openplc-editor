@@ -37,16 +37,26 @@ const ArrayDimensionsInput = ({
       aria-label='Array dimension input'
       aria-selected={selectedInput === id ? 'true' : 'false'}
       onClick={() => handleInputClick(id)}
-      className='flex h-7 w-full flex-1 items-center justify-start text-neutral-800 hover:cursor-pointer hover:bg-neutral-50 aria-selected:bg-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-600 dark:aria-selected:bg-neutral-700'
+      className={cn(
+        'flex h-full w-full items-center justify-start text-neutral-800 dark:text-neutral-100',
+        'border-b border-b-neutral-300 dark:border-b-neutral-800',
+        'aria-selected:ring-1 aria-selected:ring-brand',
+        'dark:aria-selected:border-b-brand dark:aria-selected:border-l-brand dark:aria-selected:border-r-brand dark:aria-selected:border-t-brand',
+      )}
     >
       <input
         type='text'
-        className={cn('h-full w-full bg-transparent px-2 py-3 font-caption text-xs outline-none', {
-          'pointer-events-none': selectedInput !== id,
-        })}
+        className={cn(
+          'h-8 w-full bg-transparent px-2 text-center font-caption text-xs outline-none',
+          'aria-selected:bg-transparent aria-selected:focus:bg-neutral-50 dark:aria-selected:focus:bg-neutral-700',
+          {
+            'pointer-events-none': selectedInput !== id,
+          },
+        )}
         onChange={onChange}
-        onBlur={() => handleUpdate()}
+        onBlur={handleUpdate}
         value={inputValue}
+        aria-selected={selectedInput === id ? 'true' : 'false'}
       />
     </div>
   )

@@ -14,7 +14,7 @@
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.prod.ts",
     "lint": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx}",
     "lint:fix": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx} --debug --fix",
-    "format": "cross-env NODE_ENV=development prettier --write ./src/**/*.{js,ts,jsx,tsx}",
+    "format": "cross-env NODE_ENV=development prettier --write \"./src/**/*.{ts,tsx}\"",
     "postinstall": "ts-node scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
     "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
@@ -25,7 +25,8 @@
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
     "test:unit": "jest --watch --no-coverage",
     "test:e2e": "npm run build && npx playwright test",
-    "test": "jest --collectCoverage --"
+    "test": "jest --collectCoverage --",
+    "prepare": "husky"
   },
   "browserslist": [],
   "dependencies": {
@@ -127,7 +128,7 @@
     "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
-    "lint-staged": "^15.4.3",
+    "lint-staged": "^15.5.2",
     "mini-css-extract-plugin": "^2.7.6",
     "postcss": "^8.4.31",
     "postcss-loader": "^7.3.3",
@@ -167,5 +168,11 @@
       "src/**/*"
     ],
     "logLevel": "quiet"
+  },
+  "lint-staged": {
+    ".src/**/*": [
+      "npm run lint:fix",
+      "npm run format"
+    ]
   }
 }

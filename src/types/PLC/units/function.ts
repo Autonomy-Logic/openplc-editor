@@ -1,7 +1,7 @@
 import { baseTypes, PLCLanguagesShortenedForm } from '@root/shared/data'
 import { z } from 'zod'
 
-import { PLCVariableSchema } from "./variable";
+import { PLCVariableSchema } from './variable'
 
 const PLCFunctionSchema = z.object({
   language: z.enum(PLCLanguagesShortenedForm),

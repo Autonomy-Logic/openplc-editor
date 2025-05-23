@@ -1,4 +1,4 @@
-import { IlXML } from "@root/types/PLC/xml-data"
+import { IlXML } from '@root/types/PLC/xml-data'
 
 const ilToXML = (value: string) => {
   const ilXML: {

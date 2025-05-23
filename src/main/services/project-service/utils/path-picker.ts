@@ -1,10 +1,9 @@
 import { BrowserWindow, dialog } from 'electron'
-import {promises} from 'fs'
+import { promises } from 'fs'
 
 import { i18n } from '../../../../utils/i18n'
 
 type GetProjectPathProps = InstanceType<typeof BrowserWindow>
-
 
 const GetProjectPath = async (serviceManager: GetProjectPathProps) => {
   const { canceled, filePaths } = await dialog.showOpenDialog(serviceManager, {

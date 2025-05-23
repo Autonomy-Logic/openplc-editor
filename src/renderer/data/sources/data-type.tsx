@@ -2,15 +2,15 @@ import { ArrayIcon, EnumIcon, StructureIcon } from '@root/renderer/assets'
 
 const DatatypeDerivationSources = [
   {
-    icon: <ArrayIcon/>,
+    icon: <ArrayIcon />,
     value: 'Array',
   },
   {
-    icon: <EnumIcon/>,
+    icon: <EnumIcon />,
     value: 'Enumerated',
   },
   {
-    icon: <StructureIcon/>,
+    icon: <StructureIcon />,
     value: 'Structure',
   },
 ]

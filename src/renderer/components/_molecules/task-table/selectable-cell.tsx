@@ -106,7 +106,6 @@ const SelectableIntervalCell = ({
 
   const formattedInterval = useMemo(() => {
     const { day, hour, min, sec, ms, us } = values
-  
 
     return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}m` : ''}${sec > 0 ? `${sec}s` : ''}${ms > 0 ? `${ms}ms` : ''}${us > 0 ? `${us}us` : ''}`
   }, [values])

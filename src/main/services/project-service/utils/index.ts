@@ -1,2 +1,2 @@
 export * from './create-project-file'
-export * from './path-picker';
+export * from './path-picker'

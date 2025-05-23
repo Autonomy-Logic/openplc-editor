@@ -115,7 +115,6 @@ export const FBDBody = ({ rung }: FBDProps) => {
   }, [rung])
 
   useEffect(() => {
-
     debouncedUpdateRungStateCallback()
     return () => debouncedUpdateRungStateCallback.cancel()
   }, [rungLocal])

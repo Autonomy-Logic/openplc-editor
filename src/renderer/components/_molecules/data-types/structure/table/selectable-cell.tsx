@@ -44,7 +44,6 @@ const SelectableTypeCell = ({
   ) => {
     setCellValue(value)
     table.options.meta?.updateData(index, id, { definition, value })
-
   }
 
   useEffect(() => {

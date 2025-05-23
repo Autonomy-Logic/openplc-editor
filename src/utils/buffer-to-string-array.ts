@@ -4,8 +4,8 @@
  * @return string[]
  */
 const BufferToStringArray = (bufferToDecode: Buffer) => {
-    const text = new TextDecoder().decode(bufferToDecode)
-    return text.split(/\r?\n/)
+  const text = new TextDecoder().decode(bufferToDecode)
+  return text.split(/\r?\n/)
 }
 
-export {BufferToStringArray}
+export { BufferToStringArray }
