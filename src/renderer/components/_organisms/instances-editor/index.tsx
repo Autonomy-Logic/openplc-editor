@@ -7,7 +7,7 @@ import { PLCInstance } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 
-import { TableActionButton } from '../../_atoms/buttons/tables-actions'
+import TableActions from '../../_atoms/table-actions'
 import { InstancesTable } from '../../_molecules/instances-table'
 
 const InstancesEditor = () => {
@@ -152,39 +152,41 @@ const InstancesEditor = () => {
               aria-label='instances editor table actions container'
               className='  flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
             >
-              {/** This can be reviewed */}
-              <TableActionButton aria-label='Add instances table row button' onClick={handleCreateInstance}>
-                <PlusIcon className='!stroke-brand' />
-              </TableActionButton>
-              <TableActionButton
-                aria-label='Remove instances table row button'
-                disabled={parseInt(editorInstances.selectedRow) === ROWS_NOT_SELECTED}
-                onClick={() => {
-                  handleDeleteInstance()
-                }}
-              >
-                <MinusIcon />
-              </TableActionButton>
-              <TableActionButton
-                aria-label='Move instances table row up button'
-                disabled={
-                  parseInt(editorInstances.selectedRow) === ROWS_NOT_SELECTED ||
-                  parseInt(editorInstances.selectedRow) === 0
-                }
-                onClick={() => handleRearrangeInstances(-1)}
-              >
-                <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
-              </TableActionButton>
-              <TableActionButton
-                aria-label='Move instances table row down button'
-                disabled={
-                  parseInt(editorInstances.selectedRow) === ROWS_NOT_SELECTED ||
-                  parseInt(editorInstances.selectedRow) === instanceData.length - 1
-                }
-                onClick={() => handleRearrangeInstances(1)}
-              >
-                <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
-              </TableActionButton>
+              <TableActions
+                actions={[
+                  {
+                    ariaLabel: 'Add instances table row button',
+                    onClick: handleCreateInstance,
+                    icon: <PlusIcon className='!stroke-brand' />,
+                    id: 'add-instance-button',
+                  },
+                  {
+                    ariaLabel: 'Remove instances table row button',
+                    onClick: handleDeleteInstance,
+                    disabled: parseInt(editorInstances.selectedRow) === ROWS_NOT_SELECTED,
+                    icon: <MinusIcon />,
+                    id: 'remove-instance-button',
+                  },
+                  {
+                    ariaLabel: 'Move instances table row up button',
+                    onClick: () => handleRearrangeInstances(-1),
+                    disabled:
+                      parseInt(editorInstances.selectedRow) === ROWS_NOT_SELECTED ||
+                      parseInt(editorInstances.selectedRow) === 0,
+                    icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
+                    id: 'move-instance-up-button',
+                  },
+                  {
+                    ariaLabel: 'Move instances table row down button',
+                    onClick: () => handleRearrangeInstances(1),
+                    disabled:
+                      parseInt(editorInstances.selectedRow) === ROWS_NOT_SELECTED ||
+                      parseInt(editorInstances.selectedRow) === instanceData.length - 1,
+                    icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
+                    id: 'move-instance-down-button',
+                  },
+                ]}
+              />
             </div>
           </div>
         ) : (

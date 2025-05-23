@@ -1,10 +1,10 @@
-import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
+import { GenericDataTypeTable } from '@root/renderer/components/_atoms/generic-data-type-table'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { arrayValidation } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCArrayDatatype, PLCDataType } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils/cn'
-import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
+import { createColumnHelper, getCoreRowModel, useReactTable } from '@tanstack/react-table'
 import React, { useEffect, useRef } from 'react'
 
 import { DimensionCell } from './editable-cell'
@@ -139,35 +139,14 @@ const DimensionsTable = ({
   })
 
   return (
-    <>
-      <Table context='data-type-array' className='w-full'>
-        <TableBody ref={tableBodyRef}>
-          {table.getRowModel().rows.map((row, index) => (
-            <TableRow
-              id={`${index}`}
-              key={index}
-              className='h-8'
-              selected={selectedRow === index}
-              tableHasHeader={false}
-              ref={selectedRow === index ? tableBodyRowRef : null}
-              onClick={(e) => handleRowClick(e.currentTarget)}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <TableCell
-                  style={{ maxWidth: cell.column.columnDef.maxSize, minWidth: cell.column.columnDef.minSize }}
-                  key={cell.id}
-                >
-                  {flexRender(cell.column.columnDef.cell, {
-                    ...cell.getContext(),
-                    editable: selectedRow === index,
-                  })}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </>
+    <GenericDataTypeTable
+      context='data-type-array'
+      table={table}
+      selectedRow={selectedRow}
+      tableBodyRef={tableBodyRef}
+      tableBodyRowRef={tableBodyRowRef}
+      handleRowClick={handleRowClick}
+    />
   )
 }
 
