@@ -45,9 +45,21 @@ const EditableNameCell = ({
     if (id !== 'location' && id !== 'initialValue') return true
 
     if (variable?.type.definition === 'derived') return false
+
+    if (variable?.class === 'external') {
+      return false
+    }
+
+    const disallowedLocationClasses = ['input', 'output', 'inOut', 'external', 'temp']
+
+    if (id === 'location' && disallowedLocationClasses.includes(variable?.class || '')) {
+      return false
+    }
+
     return true
   }
-  const isEditable = useCallback(isCellEditable, [variable])
+
+  const isEditable = useCallback(isCellEditable, [id, variable])
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = () => {
@@ -78,7 +90,7 @@ const EditableNameCell = ({
         associatedPou: editor.meta.name,
       }),
     )
-  }, [table.options.data[index].id])
+  }, [editor.meta.name, index, table.options.data])
 
   return isEditing ? (
     <InputWithRef
@@ -92,7 +104,7 @@ const EditableNameCell = ({
       onClick={handleStartEditing}
       className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !selected,
-        'cursor-not-allowed': !isEditable,
+        'cursor-not-allowed': !isEditable(),
       })}
     >
       <p

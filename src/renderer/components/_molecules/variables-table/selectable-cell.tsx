@@ -270,6 +270,16 @@ const SelectableClassCell = ({
     // Todo: Must update the data in the store
     setCellValue(value)
     table.options.meta?.updateData(index, id, value)
+
+    if (value === 'external') {
+      table.options.meta?.updateData(index, 'initialValue', undefined)
+
+      table.options.meta?.updateData(index, 'location', undefined)
+    }
+
+    if (value !== 'external') {
+      table.options.meta?.updateData(index, 'location', undefined)
+    }
   }
 
   // If the initialValue is changed external, sync it up with our state
