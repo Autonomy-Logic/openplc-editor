@@ -56,6 +56,31 @@ const devicePinSchema = z.object({
   name: z.string().optional(),
 })
 
+const digitalInputPinSchema = z.object({
+  pin: z.string().max(6),
+  address: z.string(), // Shape will be prefixed with ```%IX```, followed by a floating number that goes from .0 to .7
+  tag: z.string().optional()
+})
+const _digitalInputPins =  z.set(digitalInputPinSchema)
+const digitalOutputPinSchema = z.object({
+  pin: z.string().max(6),
+  address: z.string(), // Shape will be prefixed with ```%QX```, followed by a floating number that goes from .0 to .7
+  tag: z.string().optional()
+})
+const _digitalOutputPins = z.set(digitalOutputPinSchema)
+const analogInputPinSchema = z.object({
+  pin: z.string().max(6),
+  address: z.string(), // Shape will be prefixed with ```%IW```, followed by a positive integer number.
+  tag: z.string().optional()
+})
+const _analogInputPins = z.set(analogInputPinSchema)
+const analogOutputPinSchema = z.object({
+  pin: z.string().max(6),
+  address: z.string(), // Shape will be prefixed with ```%QW```, followed by a positive integer number.
+  tag: z.string().optional()
+})
+const _analogOutputPins = z.set(analogOutputPinSchema)
+
 type DevicePin = z.infer<typeof devicePinSchema>
 
 const devicePinMappingSchema = z.array(devicePinSchema)
