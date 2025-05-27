@@ -90,7 +90,7 @@ const EditableNameCell = ({
         associatedPou: editor.meta.name,
       }),
     )
-  }, [editor.meta.name, index, table.options.data])
+  }, [editor.meta.name, index, table.options.data, scope, getVariable])
 
   return isEditing ? (
     <InputWithRef
