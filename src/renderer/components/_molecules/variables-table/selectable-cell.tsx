@@ -273,11 +273,9 @@ const SelectableClassCell = ({
 
     if (value === 'external') {
       table.options.meta?.updateData(index, 'initialValue', undefined)
-
-      table.options.meta?.updateData(index, 'location', undefined)
     }
 
-    if (value !== 'external') {
+    if (value !== 'local') {
       table.options.meta?.updateData(index, 'location', undefined)
     }
   }
