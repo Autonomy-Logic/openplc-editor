@@ -26,10 +26,6 @@ const leftPowerRailSchema = z.object({
   }),
   connectionPointOut: z.object({
     '@formalParameter': z.string(),
-    relPosition: z.object({
-      '@x': z.number(),
-      '@y': z.number(),
-    }),
   }),
 })
 type LeftPowerRailLadderXML = z.infer<typeof leftPowerRailSchema>
@@ -53,24 +49,7 @@ const rightPowerRailSchema = z.object({
     '@y': z.number(),
   }),
   // This is our handles.
-  connectionPointIn: z.object({
-    relPosition: z.object({
-      '@x': z.number(),
-      '@y': z.number(),
-    }),
-    connection: z.array(
-      z.object({
-        '@refLocalId': z.string(),
-        '@formalParameter': z.string().optional(),
-        position: z.array(
-          z.object({
-            '@x': z.number(),
-            '@y': z.number(),
-          }),
-        ),
-      }),
-    ),
-  }),
+  connectionPointIn: z.string(),
 })
 type RightPowerRailLadderXML = z.infer<typeof rightPowerRailSchema>
 
@@ -157,29 +136,14 @@ const contactSchema = z.object({
     '@y': z.number(),
   }),
   connectionPointIn: z.object({
-    relPosition: z.object({
-      '@x': z.number(),
-      '@y': z.number(),
-    }),
     connection: z.array(
       z.object({
         '@refLocalId': z.string(),
         '@formalParameter': z.string().optional(),
-        position: z.array(
-          z.object({
-            '@x': z.number(),
-            '@y': z.number(),
-          }),
-        ),
       }),
     ),
   }),
-  connectionPointOut: z.object({
-    relPosition: z.object({
-      '@x': z.number(),
-      '@y': z.number(),
-    }),
-  }),
+  connectionPointOut: z.string(),
   variable: z.string(),
 })
 type ContactLadderXML = z.infer<typeof contactSchema>
@@ -212,29 +176,14 @@ const coilSchema = z.object({
     '@y': z.number(),
   }),
   connectionPointIn: z.object({
-    relPosition: z.object({
-      '@x': z.number(),
-      '@y': z.number(),
-    }),
     connection: z.array(
       z.object({
         '@refLocalId': z.string(),
         '@formalParameter': z.string().optional(),
-        position: z.array(
-          z.object({
-            '@x': z.number(),
-            '@y': z.number(),
-          }),
-        ),
       }),
     ),
   }),
-  connectionPointOut: z.object({
-    relPosition: z.object({
-      '@x': z.number(),
-      '@y': z.number(),
-    }),
-  }),
+  connectionPointOut: z.string(),
   variable: z.string(),
 })
 type CoilLadderXML = z.infer<typeof coilSchema>
