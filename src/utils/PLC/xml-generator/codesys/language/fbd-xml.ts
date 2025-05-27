@@ -81,6 +81,12 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
             connection: [
               {
                 '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
+                '@formalParameter':
+                  sourceNode.type === 'block'
+                    ? (edge.sourceHandle as string) === 'OUT'
+                      ? '   '
+                      : (edge.sourceHandle as string)
+                    : undefined,
               },
             ],
           },
@@ -90,16 +96,22 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
     .filter((variable) => variable !== undefined)
 
   const outputVariable: BlockFbdXML['outputVariables']['variable'] = node.data.outputHandles
-    .flatMap((handle) => {
+    .flatMap((handle, handleIndex) => {
       const edges = rung.edges.filter((edge) => edge.source === node.id && edge.sourceHandle === handle.id)
       if (!edges) return undefined
 
       return edges.map((edge) => {
         const targetNode = rung.nodes.find((node) => node.id === edge.target)
         if (!targetNode) return undefined
+
         return {
           '@formalParameter': handle.id === 'OUT' ? '   ' : handle.id || '',
-          connectionPointOut: {},
+          connectionPointOut: {
+            expression:
+              handleIndex !== 0 && targetNode.type?.includes('variable')
+                ? (targetNode as VariableNode).data.variable.name
+                : undefined,
+          },
         }
       })
     })
@@ -146,24 +158,35 @@ const inputVariableToXml = (node: VariableNode): InVariableFbdXML => {
   return inputVariableXML
 }
 
-const outputVariableToXml = (node: VariableNode, rung: FBDRungState): OutVariableFbdXML => {
+const outputVariableToXml = (node: VariableNode, rung: FBDRungState): OutVariableFbdXML | undefined => {
   const inputEdges = rung.edges.filter((edge) => edge.target === node.id)
 
   const inputConnection: OutVariableFbdXML['connectionPointIn'] = {
     connection: inputEdges
       .map((edge) => {
         const sourceNode = rung.nodes.find((node) => node.id === edge.source)
-        if (!sourceNode) return undefined
-
-        const path = getEdgePaths(edge, rung.nodes)
-        if (!path) return undefined
+        const isConnectedToOutputConnector =
+          (sourceNode?.data as BasicNodeData).outputConnector?.id === edge.sourceHandle
 
         return {
-          '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-          '@formalParameter': sourceNode.type === 'block' ? (edge.sourceHandle as string) : undefined,
+          '@refLocalId': sourceNode
+            ? isConnectedToOutputConnector
+              ? (sourceNode?.data as BasicNodeData).numericId
+              : 'undefined'
+            : 'undefined',
+          '@formalParameter':
+            sourceNode?.type === 'block'
+              ? (edge.sourceHandle as string) === 'OUT'
+                ? '   '
+                : (edge.sourceHandle as string)
+              : undefined,
         }
       })
-      .filter((connection) => connection !== undefined),
+      .filter((connection) => connection['@refLocalId'] !== 'undefined'),
+  }
+
+  if (inputConnection.connection.length === 0) {
+    return undefined
   }
 
   const outputVariableXML: OutVariableFbdXML = {
@@ -201,7 +224,12 @@ const connectorToXml = (node: ConnectionNode, rung: FBDRungState): ConnectorFbdX
 
         return {
           '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-          '@formalParameter': sourceNode.type === 'block' ? (edge.sourceHandle as string) : undefined,
+          '@formalParameter':
+            sourceNode.type === 'block'
+              ? (edge.sourceHandle as string) === 'OUT'
+                ? '   '
+                : (edge.sourceHandle as string)
+              : undefined,
           position: path.reverse().map((point) => ({
             '@x': point.x,
             '@y': point.y,
@@ -296,9 +324,11 @@ const fbdToXml = (rung: FBDRungState) => {
       case 'input-variable':
         fbdXML.body.FBD.inVariable.push(inputVariableToXml(node as VariableNode))
         break
-      case 'output-variable':
-        fbdXML.body.FBD.outVariable.push(outputVariableToXml(node as VariableNode, rung))
+      case 'output-variable': {
+        const outputVarXml = outputVariableToXml(node as VariableNode, rung)
+        if (outputVarXml) fbdXML.body.FBD.outVariable.push(outputVarXml)
         break
+      }
       case 'connector':
         fbdXML.body.FBD.connector.push(connectorToXml(node as ConnectionNode, rung))
         break
