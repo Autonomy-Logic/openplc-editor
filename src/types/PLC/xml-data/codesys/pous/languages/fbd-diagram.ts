@@ -39,7 +39,8 @@ const blockSchema = z.object({
         connectionPointIn: z.object({
           connection: z.array(
             z.object({
-              '@refLocalId': z.string(), // was just @localId, but it seems to be a reference to other element @localId.
+              '@refLocalId': z.string().optional(), // was just @localId, but it seems to be a reference to other element @localId.
+              '@formalParameter': z.string().optional(),
             }),
           ),
         }),
