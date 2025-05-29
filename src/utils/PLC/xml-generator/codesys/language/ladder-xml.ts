@@ -342,17 +342,13 @@ const contactToXML = (
 ): ContactLadderXML => {
   const connections = findConnections(contact, rung, offsetY)
 
-  const railConnection = connections.find(
-    (connection) => rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])?.type === 'powerRail',
-  )
-  if (railConnection) {
-    // If the contact is connected to a power rail, replace the refLocalId with the left rail id at connections
-    connections.forEach((connection) => {
-      if (connection['@refLocalId'] === railConnection['@refLocalId']) {
-        connection['@refLocalId'] = leftRailId.toString()
-      }
-    })
-  }
+  const railConnection = connections.find((connection) => {
+    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node as PowerRailNode).data.variant === 'left')
+    if (rail?.data.numericId === connection['@refLocalId']) {
+      return true
+    }
+    return false
+  })
 
   return {
     '@localId': contact.data.numericId,
@@ -367,12 +363,11 @@ const contactToXML = (
     },
     connectionPointIn: {
       connection: connections.map((connection) => {
-        const connectionNode = rung.nodes.find(
-          (node) => node.data.numericId === connection['@refLocalId'],
-        ) as Node<BasicNodeData>
-        const formalParameter = connectionNode.type === 'block' ? connection['@formalParameter'] : undefined
+        const connectionNode = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
+        const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
+        const formalParameter = connectionNode?.type === 'block' ? connection['@formalParameter'] : undefined
         return {
-          '@refLocalId': connection['@refLocalId'],
+          '@refLocalId': refLocalId,
           '@formalParameter': formalParameter,
         }
       }),
@@ -385,17 +380,13 @@ const contactToXML = (
 const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0, leftRailId: string): CoilLadderXML => {
   const connections = findConnections(coil, rung, offsetY)
 
-  const railConnection = connections.find(
-    (connection) => rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])?.type === 'powerRail',
-  )
-  if (railConnection) {
-    // If the coil is connected to a power rail, replace the refLocalId with the left rail id at connections
-    connections.forEach((connection) => {
-      if (connection['@refLocalId'] === railConnection['@refLocalId']) {
-        connection['@refLocalId'] = leftRailId.toString()
-      }
-    })
-  }
+  const railConnection = connections.find((connection) => {
+    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node as PowerRailNode).data.variant === 'left')
+    if (rail?.data.numericId === connection['@refLocalId']) {
+      return true
+    }
+    return false
+  })
 
   return {
     '@localId': coil.data.numericId,
@@ -411,12 +402,11 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0, l
     },
     connectionPointIn: {
       connection: connections.map((connection) => {
-        const connectionNode = rung.nodes.find(
-          (node) => node.data.numericId === connection['@refLocalId'],
-        ) as Node<BasicNodeData>
-        const formalParameter = connectionNode.type === 'block' ? connection['@formalParameter'] : undefined
+        const connectionNode = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
+        const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
+        const formalParameter = connectionNode?.type === 'block' ? connection['@formalParameter'] : undefined
         return {
-          '@refLocalId': connection['@refLocalId'],
+          '@refLocalId': refLocalId,
           '@formalParameter': formalParameter,
         }
       }),
@@ -435,16 +425,13 @@ const blockToXml = (
   const connections = findConnections(block, rung, offsetY)
 
   // If the block is connected to a power rail, replace the refLocalId with the left rail id at connections
-  const railConnection = connections.find(
-    (connection) => rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])?.type === 'powerRail',
-  )
-  if (railConnection) {
-    connections.forEach((connection) => {
-      if (connection['@refLocalId'] === railConnection['@refLocalId']) {
-        connection['@refLocalId'] = leftRailId.toString()
-      }
-    })
-  }
+  const railConnection = connections.find((connection) => {
+    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node as PowerRailNode).data.variant === 'left')
+    if (rail?.data.numericId === connection['@refLocalId']) {
+      return true
+    }
+    return false
+  })
 
   const inputVariables = block.data.inputHandles.map((handle) => {
     // Only the input of the block contains connections from other blocks
@@ -454,12 +441,11 @@ const blockToXml = (
         '@formalParameter': handle.id || '',
         connectionPointIn: {
           connection: connections.map((connection) => {
-            const connectionNode = rung.nodes.find(
-              (node) => node.data.numericId === connection['@refLocalId'],
-            ) as Node<BasicNodeData>
-            const formalParameter = connectionNode.type === 'block' ? connection['@formalParameter'] : undefined
+            const connectionNode = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
+            const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
+            const formalParameter = connectionNode?.type === 'block' ? connection['@formalParameter'] : undefined
             return {
-              '@refLocalId': connection['@refLocalId'],
+              '@refLocalId': refLocalId,
               '@formalParameter': formalParameter,
             }
           }),
@@ -595,9 +581,9 @@ const ladderToXml = (rungs: RungLadderState[]) => {
     },
   }
   let offsetY = 0
+  let leftRailId = ''
   rungs.forEach((rung, _index) => {
     const { nodes } = rung
-    let leftRailId = ''
 
     nodes.forEach((node) => {
       switch (node.type) {
