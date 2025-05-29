@@ -14,7 +14,6 @@ export const ZoomInOut = (props: IIconProps) => {
       className={cn(`${sizeClasses}`, className)}
       {...res}
     >
-      <title>Zoom In/Out Icon</title>
       <path
         opacity='0.4'
         d='M4.99967 0.333374H18.9997C21.577 0.333374 23.6663 2.42271 23.6663 5.00004V19C23.6663 21.5774 21.577 23.6667 18.9997 23.6667H4.99967C2.42235 23.6667 0.333008 21.5774 0.333008 19V5.00004C0.333008 2.42271 2.42235 0.333374 4.99967 0.333374Z'
