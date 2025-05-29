@@ -410,35 +410,12 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0): 
 
 const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offsetY: number = 0): BlockLadderXML => {
   const connections = findConnections(block, rung, offsetY)
+  console.log('Translating block', block.data.numericId, 'with connections', connections)
 
   const inputVariables = block.data.inputHandles.map((handle) => {
-    let auxConnections = connections
-
-    const alreadyFoundConnection: {
-      node: Node | undefined
-      connection:
-        | {
-            '@refLocalId': string
-            '@formalParameter': string
-            position: {
-              '@x': number
-              '@y': number
-            }[]
-          }
-        | undefined
-    } = {
-      node: undefined,
-      connection: undefined,
-    }
-    auxConnections.forEach((connection, index) => {
-      alreadyFoundConnection.node = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
-      if (alreadyFoundConnection.node) {
-        alreadyFoundConnection.connection = connection
-        auxConnections = auxConnections.splice(index, 1)
-        return
-      }
-    })
-    if (alreadyFoundConnection.node)
+    // Only the input of the block contains connections from other blocks
+    // The other handles are connected to variables
+    if (handle.id === block.data.inputConnector?.id) {
       return {
         '@formalParameter': handle.id || '',
         connectionPointIn: {
@@ -446,27 +423,10 @@ const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offse
             '@x': handle.relPosition.x || 0,
             '@y': handle.relPosition.y || 0,
           },
-          connection: [
-            {
-              '@refLocalId': alreadyFoundConnection.connection?.['@refLocalId'] || '',
-              position: alreadyFoundConnection.connection?.position || [
-                // Connection at the block
-                {
-                  '@x': handle.glbPosition.x || 0,
-                  '@y': (handle.glbPosition.y || 0) + offsetY,
-                },
-                // Start the edge connecting the variable
-                {
-                  '@x': (alreadyFoundConnection.node?.data as BasicNodeData).outputConnector?.glbPosition.x || 0,
-                  '@y':
-                    ((alreadyFoundConnection.node?.data as BasicNodeData).outputConnector?.glbPosition.y || 0) +
-                    offsetY,
-                },
-              ],
-            },
-          ],
+          connection: connections,
         },
       }
+    }
 
     // Check if the handle is connected to an existing variable node
     const variableNode = rung.nodes.find(

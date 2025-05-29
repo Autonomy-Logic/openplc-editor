@@ -408,7 +408,12 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0, l
   }
 }
 
-const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offsetY: number = 0, leftRailId: string): BlockLadderXML => {
+const blockToXml = (
+  block: BlockNode<BlockVariant>,
+  rung: RungLadderState,
+  offsetY: number = 0,
+  leftRailId: string,
+): BlockLadderXML => {
   const connections = findConnections(block, rung, offsetY)
 
   // If the block is connected to a power rail, replace the refLocalId with the left rail id at connections
@@ -424,41 +429,20 @@ const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offse
   }
 
   const inputVariables = block.data.inputHandles.map((handle) => {
-    let auxConnections = connections
-
-    const alreadyFoundConnection: {
-      node: Node | undefined
-      connection:
-        | {
-            '@refLocalId': string
-            '@formalParameter': string
-          }
-        | undefined
-    } = {
-      node: undefined,
-      connection: undefined,
-    }
-
-    // Check if the handle is connected to an existing connection
-    auxConnections.forEach((connection, index) => {
-      alreadyFoundConnection.node = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
-      if (alreadyFoundConnection.node) {
-        alreadyFoundConnection.connection = connection
-        auxConnections = auxConnections.splice(index, 1)
-        return
-      }
-    })
-    if (alreadyFoundConnection.node)
+    // Only the input of the block contains connections from other blocks
+    // The other handles are connected to variables
+    if (handle.id === block.data.inputConnector?.id) {
       return {
         '@formalParameter': handle.id || '',
         connectionPointIn: {
-          connection: [
-            {
-              '@refLocalId': alreadyFoundConnection.connection?.['@refLocalId'] || '',
-            },
-          ],
+          relPosition: {
+            '@x': handle.relPosition.x || 0,
+            '@y': handle.relPosition.y || 0,
+          },
+          connection: connections,
         },
       }
+    }
 
     // Check if the handle is connected to an existing variable node
     const variableNode = rung.nodes.find(
