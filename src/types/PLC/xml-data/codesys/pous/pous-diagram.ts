@@ -19,13 +19,6 @@ const pousSchema = z.object({
         FBD: fbdXMLSchema.optional(),
         SFC: z.string().optional(),
       }),
-      documentation: z
-        .object({
-          'xhtml:p': z.object({
-            $: z.string(),
-          }),
-        })
-        .optional(),
     }),
   ),
 })

@@ -8,14 +8,7 @@ import { variableXMLSchema } from './variable/variable-diagram'
 
 const baseXmlSchema = z.object({
   project: z.object({
-    '@xmlns': z.string().default('http://www.plcopen.org/xml/tc6_0201'),
-    '@xmlns:xsd': z.string().default('http://www.w3.org/2001/XMLSchema-instance'),
-    '@xmlns:xhtml': z.string().default('http://www.w3.org/1999/xhtml'),
-    '@xmlns:ns1': z.string().default('http://www.plcopen.org/xml/tc6_0201'),
-    '@xsi:schemaLocation': z
-      .string()
-      .default('http://www.plcopen.org/xml/tc6_0200 http://www.plcopen.org/xml/tc6_0200')
-      .optional(),
+    '@xmlns': z.string().default('"http://www.plcopen.org/xml/tc6_0200"'),
 
     fileHeader: z.object({
       '@companyName': z.string().default('Unknown'),

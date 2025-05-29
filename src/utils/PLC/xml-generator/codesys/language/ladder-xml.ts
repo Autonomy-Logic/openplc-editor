@@ -366,7 +366,16 @@ const contactToXML = (
       '@y': (contact.position.y ?? 0) + offsetY,
     },
     connectionPointIn: {
-      connection: connections,
+      connection: connections.map((connection) => {
+        const connectionNode = rung.nodes.find(
+          (node) => node.data.numericId === connection['@refLocalId'],
+        ) as Node<BasicNodeData>
+        const formalParameter = connectionNode.type === 'block' ? connection['@formalParameter'] : undefined
+        return {
+          '@refLocalId': connection['@refLocalId'],
+          '@formalParameter': formalParameter,
+        }
+      }),
     },
     connectionPointOut: '',
     variable: contact.data.variable && contact.data.variable.name !== '' ? contact.data.variable.name : 'A',
@@ -401,7 +410,16 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0, l
       '@y': (coil.position.y ?? 0) + offsetY,
     },
     connectionPointIn: {
-      connection: connections,
+      connection: connections.map((connection) => {
+        const connectionNode = rung.nodes.find(
+          (node) => node.data.numericId === connection['@refLocalId'],
+        ) as Node<BasicNodeData>
+        const formalParameter = connectionNode.type === 'block' ? connection['@formalParameter'] : undefined
+        return {
+          '@refLocalId': connection['@refLocalId'],
+          '@formalParameter': formalParameter,
+        }
+      }),
     },
     connectionPointOut: '',
     variable: coil.data.variable && coil.data.variable.name !== '' ? coil.data.variable.name : 'A',
@@ -435,11 +453,16 @@ const blockToXml = (
       return {
         '@formalParameter': handle.id || '',
         connectionPointIn: {
-          relPosition: {
-            '@x': handle.relPosition.x || 0,
-            '@y': handle.relPosition.y || 0,
-          },
-          connection: connections,
+          connection: connections.map((connection) => {
+            const connectionNode = rung.nodes.find(
+              (node) => node.data.numericId === connection['@refLocalId'],
+            ) as Node<BasicNodeData>
+            const formalParameter = connectionNode.type === 'block' ? connection['@formalParameter'] : undefined
+            return {
+              '@refLocalId': connection['@refLocalId'],
+              '@formalParameter': formalParameter,
+            }
+          }),
         },
       }
     }
@@ -467,16 +490,16 @@ const blockToXml = (
 
   const outputVariable = block.data.outputHandles.map((handle, handleIndex) => {
     const edge = rung.edges.find((edge) => edge.source === block.id && edge.targetHandle === handle.id)
-    if (!edge) return undefined
-
-    const connectedNode = rung.nodes.find((node) => node.id === edge.target) as Node<BasicNodeData>
+    const connectedNode = rung.nodes.find((node) => node.id === edge?.target)
 
     return {
       '@formalParameter': handle.id === 'OUT' ? '   ' : handle.id || '',
       connectionPointOut: {
         expression:
-          handleIndex !== 0 && connectedNode && connectedNode.type === 'variable'
-            ? (connectedNode as VariableNode).data.variable.name
+          handleIndex !== 0
+            ? connectedNode && connectedNode.type === 'variable'
+              ? (connectedNode as VariableNode).data.variable.name
+              : '???'
             : undefined,
       },
     }
