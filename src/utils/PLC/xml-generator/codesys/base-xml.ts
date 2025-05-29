@@ -1,17 +1,14 @@
 import { ProjectState } from '@root/renderer/store/slices'
-import { BaseXml } from '@root/types/PLC/xml-data/base-diagram'
+import { BaseXml } from '@root/types/PLC/xml-data/codesys/base-diagram'
 import { create } from 'xmlbuilder2'
 
-import formatDate from '../formatDate'
-import { instanceToXml } from './instances-xml'
-import { parsePousToXML } from './pou-xml'
+import formatDate from '../../../formatDate'
+import { codeSysInstanceToXml } from './instances-xml'
+import { codeSysParsePousToXML } from './pou-xml'
 
-const getBaseXmlStructure = (): BaseXml => ({
+const getBaseCodeSysXmlStructure = (): BaseXml => ({
   project: {
-    '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
-    '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema-instance',
-    '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
-    '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6_0201',
+    '@xmlns': 'http://www.plcopen.org/xml/tc6_0200',
     fileHeader: {
       '@companyName': 'Unknown',
       '@productName': 'Unnamed',
@@ -71,19 +68,19 @@ const getBaseXmlStructure = (): BaseXml => ({
  * @deprecated
  */
 export const parseProjectToXML = (project: ProjectState): string => {
-  let xmlResult = getBaseXmlStructure()
+  let xmlResult = getBaseCodeSysXmlStructure()
 
   /**
    * Parse POUs
    */
   const pous = project.data.pous
-  xmlResult = parsePousToXML(xmlResult, pous)
+  xmlResult = codeSysParsePousToXML(xmlResult, pous)
 
   /**
    * Parse instances
    */
   const configuration = project.data.configuration
-  xmlResult = instanceToXml(xmlResult, configuration)
+  xmlResult = codeSysInstanceToXml(xmlResult, configuration)
 
   const doc = create(xmlResult)
   doc.dec({ version: '1.0', encoding: 'utf-8' })
@@ -91,4 +88,4 @@ export const parseProjectToXML = (project: ProjectState): string => {
   return xml
 }
 
-export { getBaseXmlStructure }
+export { getBaseCodeSysXmlStructure }

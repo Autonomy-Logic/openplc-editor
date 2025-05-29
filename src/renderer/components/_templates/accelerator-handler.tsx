@@ -69,6 +69,8 @@ export const saveProjectRequest = async (
 const AcceleratorHandler = () => {
   const { handleExportProject } = useCompiler()
   const [requestFlag, setRequestFlag] = useState(false)
+  const [parseTo, setParseTo] = useState<'old-editor' | 'codesys' | null>(null)
+
   const {
     project,
     workspace: { editingState, systemConfigs, close },
@@ -83,15 +85,24 @@ const AcceleratorHandler = () => {
    * Compiler Related Accelerators
    */
   useEffect(() => {
-    window.bridge.exportProjectRequest((_event) => setRequestFlag(true))
-    if (requestFlag)
-      handleExportProject()
-        .then(() => setRequestFlag(false))
-        .catch(() => setRequestFlag(false))
+    window.bridge.exportProjectRequest((_event, value: 'old-editor' | 'codesys') => {
+      setRequestFlag(true)
+      setParseTo(value)
+    })
+    if (requestFlag && parseTo)
+      handleExportProject(parseTo)
+        .then(() => {
+          setRequestFlag(false)
+          setParseTo(null)
+        })
+        .catch(() => {
+          setRequestFlag(false)
+          setParseTo(null)
+        })
     return () => {
       window.bridge.removeExportProjectListener()
     }
-  }, [requestFlag])
+  }, [requestFlag, parseTo])
 
   /**
    * ==== Project Related Accelerators ====
