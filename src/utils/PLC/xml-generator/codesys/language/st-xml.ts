@@ -1,4 +1,4 @@
-import { StXML } from "@root/types/PLC/xml-data/codesys/pous/languages/st-diagram";
+import { StXML } from '@root/types/PLC/xml-data/codesys/pous/languages/st-diagram'
 
 const stToXML = (value: string) => {
   const stXML: {
@@ -8,7 +8,8 @@ const stToXML = (value: string) => {
   } = {
     body: {
       ST: {
-        'xhtml:p': {
+        xhtml: {
+          '@xmlns': 'http://www.w3.org/1999/xhtml',
           $: value,
         },
       },

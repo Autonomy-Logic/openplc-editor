@@ -1,7 +1,8 @@
 import { z } from 'zod'
 
 const ilXMLSchema = z.object({
-  'xhtml:p': z.object({
+  'xhtml': z.object({
+    '@xmlns': z.string().default('http://www.w3.org/1999/xhtml'),
     $: z.string(),
   }),
 })

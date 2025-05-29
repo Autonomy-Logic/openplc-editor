@@ -8,7 +8,8 @@ const ilToXML = (value: string) => {
   } = {
     body: {
       IL: {
-        'xhtml:p': {
+        'xhtml': {
+          '@xmlns': 'http://www.w3.org/1999/xhtml',
           $: value,
         },
       },

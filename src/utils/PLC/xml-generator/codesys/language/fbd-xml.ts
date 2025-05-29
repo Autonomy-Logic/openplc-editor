@@ -302,7 +302,8 @@ const commentToXml = (node: CommentNode): CommentFbdXML => {
       '@y': node.position.y,
     },
     content: {
-      'xhtml:p': {
+      'xhtml': {
+        '@xmlns': 'http://www.w3.org/1999/xhtml',
         $: node.data.content,
       },
     },
