@@ -1,5 +1,5 @@
 import { cn } from '@root/utils'
-import {ComponentPropsWithoutRef} from 'react'
+import { ComponentPropsWithoutRef } from 'react'
 
 const msgClass = {
   default: 'text-[#011432] dark:text-white',

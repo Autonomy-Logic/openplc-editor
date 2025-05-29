@@ -43,7 +43,6 @@ export const appendSerialConnection = <T>(
   newNodes.splice(placeholder.index, 1, newElement)
   newNodes = removePlaceholderElements(newNodes)
 
-
   /**
    * Get the related element of the placeholder
    *   If there is no related element, return the new nodes and edges

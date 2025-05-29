@@ -27,7 +27,6 @@ export const HelpMenu = () => {
   const openAboutModal = () => {
     setModalOpen('aboutOpenPlc', true)
   }
-  
 
   return (
     <MenuPrimitive.Menu>

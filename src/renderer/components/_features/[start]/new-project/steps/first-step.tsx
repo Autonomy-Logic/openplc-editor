@@ -7,7 +7,6 @@ import { SubmitHandler, useForm } from 'react-hook-form'
 
 import { NewProjectStore } from '../store'
 
-
 const Step1 = ({ onNext, onClose }: { onNext: () => void; onClose: () => void }) => {
   const { handleSubmit, setValue } = useForm<{ type: string }>()
 

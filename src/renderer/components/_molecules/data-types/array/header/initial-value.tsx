@@ -1,7 +1,5 @@
 const ArrayDataTypeInitialValueContainer = () => {
-  return (
-   <></>
-  )
+  return <></>
 }
 
 export { ArrayDataTypeInitialValueContainer }

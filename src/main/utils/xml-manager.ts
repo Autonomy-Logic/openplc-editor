@@ -10,7 +10,7 @@ import { join } from 'path'
 const CreateXMLFile = (path: string, dataToWrite: string, fileName: string) => {
   const normalizedPath = join(path, `${fileName}.xml`)
   writeFile(normalizedPath, dataToWrite, (error) => {
-    if (error) return { success: false, error}
+    if (error) return { success: false, error }
   })
   return { success: true, message: 'Xml file created successfully' }
 }

@@ -1,4 +1,4 @@
-import { toNumber } from "lodash"
+import { toNumber } from 'lodash'
 
 export const generateNumericUUID = () => {
   const timestamp = Date.now() // Get current timestamp

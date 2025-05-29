@@ -20,7 +20,7 @@ const workspaceStateSchema = z.object({
       window: z.boolean(),
       app: z.boolean(),
       appDarwin: z.boolean(),
-    })
+    }),
   }),
 })
 type WorkspaceState = z.infer<typeof workspaceStateSchema>

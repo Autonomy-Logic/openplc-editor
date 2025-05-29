@@ -87,9 +87,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
             })
           }
 
-          const fdbPous = projectData.pous.filter(
-            (pou: { data: { language: string } }) => pou.data.language === 'fbd',
-          )
+          const fdbPous = projectData.pous.filter((pou: { data: { language: string } }) => pou.data.language === 'fbd')
           if (fdbPous.length) {
             fdbPous.forEach((pou) => {
               if (pou.data.body.language === 'fbd') {
@@ -146,7 +144,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
   return (
     <Modal open={isOpen} onOpenChange={(open) => onOpenChange('save-changes-project', open)} {...rest}>
       <ModalContent className='flex h-[420px] w-[340px] select-none flex-col items-center justify-evenly rounded-lg'>
-      <ModalTitle className='hidden'>Save changes</ModalTitle>
+        <ModalTitle className='hidden'>Save changes</ModalTitle>
         <div className='flex h-[350px] select-none flex-col items-center gap-6'>
           <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px]' />
           <div>

@@ -32,7 +32,7 @@ interface IProjectHistoryEntry {
 
 class ProjectService {
   constructor(private serviceManager: InstanceType<typeof BrowserWindow>) {}
-  public  getProjectsFilePath(): string {
+  public getProjectsFilePath(): string {
     const pathToUserDataFolder = join(app.getPath('userData'), 'User')
     const pathToUserHistoryFolder = join(pathToUserDataFolder, 'History')
 

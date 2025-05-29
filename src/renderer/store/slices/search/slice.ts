@@ -21,9 +21,7 @@ const createSearchSlice: StateCreator<SearchSlice, [], [], SearchSlice> = (setSt
     setSearchResults: (newSearchResult) => {
       setState(
         produce((state: SearchSlice) => {
-          const index = state.searchResults.findIndex(
-            (result) => result.searchQuery === newSearchResult.searchQuery
-          )
+          const index = state.searchResults.findIndex((result) => result.searchQuery === newSearchResult.searchQuery)
           if (index !== -1) {
             state.searchResults.splice(index, 1)
           }

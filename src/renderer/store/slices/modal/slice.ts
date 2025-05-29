@@ -37,8 +37,8 @@ const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState
     },
     'quit-application': {
       open: false,
-      data: null
-    }
+      data: null,
+    },
   },
 
   modalActions: {

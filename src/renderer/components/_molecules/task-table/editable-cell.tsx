@@ -24,9 +24,7 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table, edi
   const initialValue = getValue<string>()
   const { toast } = useToast()
 
-  const {
-    searchQuery,
-  } = useOpenPLCStore()
+  const { searchQuery } = useOpenPLCStore()
 
   const [cellValue, setCellValue] = useState(initialValue)
   const [isEditing, setIsEditing] = useState(false)

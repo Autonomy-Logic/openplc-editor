@@ -111,6 +111,6 @@ export const builderPlaceholderNode = ({
     },
     draggable: false,
     selectable: true,
-    selected: false
+    selected: false,
   }
 }

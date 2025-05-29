@@ -1,8 +1,4 @@
-import {
-  BaseLibraryPouSchema,
-  BaseLibrarySchema,
-  BaseLibraryVariableSchema,
-} from '@root/types/PLC'
+import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema } from '@root/types/PLC'
 import { z } from 'zod'
 
 const JaguarVariablesSchema = BaseLibraryVariableSchema
@@ -30,10 +26,30 @@ const Jaguar: JaguarLibrary = {
       language: 'st',
       variables: [
         { name: 'ADC_CH', class: 'input', type: { definition: 'base-type', value: 'INT' }, documentation: 'ADC_CH' },
-        { name: 'ADC_TYPE', class: 'input', type: { definition: 'base-type', value: 'INT' }, documentation: 'ADC_TYPE' },
-        { name: 'ADC_CH_LOCAL', class: 'local', type: { definition: 'base-type', value: 'SINT' }, documentation: 'ADC_CH_LOCAL' },
-        { name: 'ADC_TYPE_LOCAL', class: 'local', type: { definition: 'base-type', value: 'SINT' }, documentation: 'ADC_TYPE_LOCAL' },
-        { name: 'SUCCESS', class: 'output', type: { definition: 'base-type', value: 'BOOL' }, documentation: 'SUCCESS' },
+        {
+          name: 'ADC_TYPE',
+          class: 'input',
+          type: { definition: 'base-type', value: 'INT' },
+          documentation: 'ADC_TYPE',
+        },
+        {
+          name: 'ADC_CH_LOCAL',
+          class: 'local',
+          type: { definition: 'base-type', value: 'SINT' },
+          documentation: 'ADC_CH_LOCAL',
+        },
+        {
+          name: 'ADC_TYPE_LOCAL',
+          class: 'local',
+          type: { definition: 'base-type', value: 'SINT' },
+          documentation: 'ADC_TYPE_LOCAL',
+        },
+        {
+          name: 'SUCCESS',
+          class: 'output',
+          type: { definition: 'base-type', value: 'BOOL' },
+          documentation: 'SUCCESS',
+        },
       ],
       body: `IF ADC_CH <> ADC_CH_LOCAL OR ADC_TYPE <> ADC_TYPE_LOCAL THEN
     ADC_CH_LOCAL := ADC_CH;
@@ -42,7 +58,8 @@ const Jaguar: JaguarLibrary = {
   ELSE
     SUCCESS := FALSE;
   END_IF;`,
-      documentation: 'Configures the analog channel inputs on the Jaguar board. ADC_CH must be between 0 - 3. ADC_TYPE must be between 0 - 3, where 0 = unipolar 10V, 1 = bipolar 10V, 2 = unipolar 5V, and 3 = bipolar 5V. Upon successful configuration of the ADC, SUCCESS is set to TRUE.',
+      documentation:
+        'Configures the analog channel inputs on the Jaguar board. ADC_CH must be between 0 - 3. ADC_TYPE must be between 0 - 3, where 0 = unipolar 10V, 1 = bipolar 10V, 2 = unipolar 5V, and 3 = bipolar 5V. Upon successful configuration of the ADC, SUCCESS is set to TRUE.',
     },
   ],
 }
