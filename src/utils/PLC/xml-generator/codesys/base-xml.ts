@@ -8,10 +8,7 @@ import { codeSysParsePousToXML } from './pou-xml'
 
 const getBaseCodeSysXmlStructure = (): BaseXml => ({
   project: {
-    '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
-    '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema-instance',
-    '@xmlns:xhtml': 'http://www.w3.org/1999/xhtml',
-    '@xmlns:ns1': 'http://www.plcopen.org/xml/tc6_0201',
+    '@xmlns': 'http://www.plcopen.org/xml/tc6_0200',
     fileHeader: {
       '@companyName': 'Unknown',
       '@productName': 'Unnamed',

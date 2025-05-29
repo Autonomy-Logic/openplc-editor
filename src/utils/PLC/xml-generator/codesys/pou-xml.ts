@@ -142,11 +142,6 @@ export const codeSysParsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
           interface: interfaceResult,
           body: result.body,
-          documentation: {
-            'xhtml:p': {
-              $: pou.data.documentation === '' ? ' ' : pou.data.documentation,
-            },
-          },
         })
         return
       }
@@ -157,11 +152,6 @@ export const codeSysParsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
           interface: interfaceResult,
           body: result.body,
-          documentation: {
-            'xhtml:p': {
-              $: pou.data.documentation === '' ? ' ' : pou.data.documentation,
-            },
-          },
         })
         return
       }
@@ -173,11 +163,6 @@ export const codeSysParsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
           interface: interfaceResult,
           body: result.body,
-          documentation: {
-            'xhtml:p': {
-              $: pou.data.documentation === '' ? ' ' : pou.data.documentation,
-            },
-          },
         })
         return
       }
@@ -189,11 +174,6 @@ export const codeSysParsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
           interface: interfaceResult,
           body: result.body,
-          documentation: {
-            'xhtml:p': {
-              $: pou.data.documentation === '' ? ' ' : pou.data.documentation,
-            },
-          },
         })
         return
       }
