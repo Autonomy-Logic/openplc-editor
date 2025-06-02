@@ -281,7 +281,7 @@ const commentToXml = (node: CommentNode): CommentFbdXML => {
     },
     content: {
       'xhtml:p': {
-        $: node.data.content,
+        $: node.data.content.length > 0 ? node.data.content : 'No comment provided',
       },
     },
   }

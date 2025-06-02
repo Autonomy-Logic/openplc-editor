@@ -66,12 +66,9 @@ const getEdgePaths = (edge: FlowEdge, nodes: FlowNode[]) => {
  */
 
 const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbdXML => {
-  console.log('Translating block node to XML:', node.data.variant.name)
   const inputVariables: BlockFbdXML['inputVariables']['variable'] = node.data.inputHandles
     .flatMap((handle) => {
-      console.log('\t\tTranslating input handle:', handle.id)
       const edges = rung.edges.filter((edge) => edge.target === node.id && edge.targetHandle === handle.id)
-      console.log('\t\tFound edges:', edges.length, '| edges.length === 0:', edges.length === 0)
       if (edges.length === 0)
         return {
           '@formalParameter': handle.id || '',
@@ -106,9 +103,7 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
 
   const outputVariable: BlockFbdXML['outputVariables']['variable'] = node.data.outputHandles
     .flatMap((handle, handleIndex) => {
-      console.log('\t\tTranslating output handle:', handle.id)
       const edges = rung.edges.filter((edge) => edge.source === node.id && edge.sourceHandle === handle.id)
-      console.log('\t\tFound edges:', edges.length, '| edges.length === 0:', edges.length === 0)
       if (edges.length === 0)
         return {
           '@formalParameter': handle.id || '',
