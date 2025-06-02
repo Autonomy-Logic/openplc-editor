@@ -142,8 +142,12 @@ const VariablesTable = ({
       handleRowClick={handleRowClick}
       updateData={(rowIndex, columnId, value) => {
         if (columnId === 'class' && filterValue !== undefined && filterValue !== 'all' && filterValue !== value) {
-          return
+          return {
+            ok: false,
+            message: '',
+          }
         }
+
         return updateVariable({
           scope: 'local',
           associatedPou: name,

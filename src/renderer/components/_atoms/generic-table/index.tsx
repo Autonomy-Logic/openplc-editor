@@ -1,3 +1,4 @@
+import { ProjectResponse } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import {
   ColumnDef,
@@ -18,7 +19,7 @@ type GenericTableProps<T> = {
   tableData: T[]
   selectedRow: number
   handleRowClick: (row: HTMLTableRowElement) => void
-  updateData: (rowIndex: number, columnId: string, value: unknown) => void
+  updateData: (rowIndex: number, columnId: string, value: unknown) => ProjectResponse
   tableContext: string
   filterValue?: string
   columnFilters?: ColumnFiltersState
@@ -110,8 +111,7 @@ function GenericTable<T>({
     onColumnFiltersChange: setColumnFilters,
     meta: {
       updateData: (rowIndex, columnId, value) => {
-        updateData(rowIndex, columnId, value)
-        return { ok: true }
+        return updateData(rowIndex, columnId, value)
       },
     },
     debugTable: true,
