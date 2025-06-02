@@ -1,4 +1,4 @@
-import { languages } from 'monaco-editor';
+import { languages } from 'monaco-editor'
 
 export const conf: languages.LanguageConfiguration = {
   /**
@@ -9,7 +9,7 @@ export const conf: languages.LanguageConfiguration = {
     blockComment: ['(*', '*)'],
   },
   brackets: [], // Remove support for brackets
-};
+}
 
 export const language: languages.IMonarchLanguage = {
   ignoreCase: true, // Remove case sensitivity
@@ -57,10 +57,41 @@ export const language: languages.IMonarchLanguage = {
     ],
   },
   keywords: [
-    'LD', 'LDN', 'ST', 'STN', 'S', 'R', 'AND', 'ANDN', '&', '&N', 'OR', 'ORN',
-    'XOR', 'XORN', 'NOT', 'ADD', 'SUB', 'MUL', 'DIV', 'MOD', 'GT', 'GE', 'EQ',
-    'NE', 'LE', 'LT', 'JMP', 'JMPC', 'JMPN', 'CAL', 'CALC', 'CALN', 'RET',
-    'RETC', 'RETN',
+    'LD',
+    'LDN',
+    'ST',
+    'STN',
+    'S',
+    'R',
+    'AND',
+    'ANDN',
+    '&',
+    '&N',
+    'OR',
+    'ORN',
+    'XOR',
+    'XORN',
+    'NOT',
+    'ADD',
+    'SUB',
+    'MUL',
+    'DIV',
+    'MOD',
+    'GT',
+    'GE',
+    'EQ',
+    'NE',
+    'LE',
+    'LT',
+    'JMP',
+    'JMPC',
+    'JMPN',
+    'CAL',
+    'CALC',
+    'CALN',
+    'RET',
+    'RETC',
+    'RETN',
   ],
   brackets: [], // Ensure brackets are not recognized
-};
+}

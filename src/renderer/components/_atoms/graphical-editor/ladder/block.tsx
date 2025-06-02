@@ -13,7 +13,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
-import { getVariableRestrictionType, validateVariableType } from '../utils'
+import { BlockVariant as newBlockVariant } from '../types/block'
+import { getBlockDocumentation, getVariableRestrictionType, validateVariableType } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
@@ -393,42 +394,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     ladderFlows,
     ladderFlowActions: { updateNode },
   } = useOpenPLCStore()
-  const {
-    documentation: variantDocumentation,
-    type: blockType,
-    variables: blockVariables,
-  } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
-  const documentation = `${variantDocumentation}
-
-        -- INPUT --
-        ${blockVariables
-          .filter((variable) => variable.class === 'input' || variable.class === 'inOut')
-          .map(
-            (variable, index) =>
-              `${variable.name}: ${variable.type.value}${
-                index <
-                blockVariables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length - 1
-                  ? '\n'
-                  : ''
-              }`,
-          )
-          .join('')}
-
-        -- OUTPUT --
-          ${blockVariables
-            .filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-            .map(
-              (variable, index) =>
-                `${variable.name}: ${variable.type.value}${
-                  index <
-                  blockVariables.filter((variable) => variable.class === 'output' || variable.class === 'inOut')
-                    .length -
-                    1
-                    ? '\n'
-                    : ''
-                }`,
-            )
-            .join('')}`.trim()
+  const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
+  const documentation = getBlockDocumentation(data.variant as newBlockVariant)
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)

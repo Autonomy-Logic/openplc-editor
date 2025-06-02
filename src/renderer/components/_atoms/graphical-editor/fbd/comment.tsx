@@ -192,7 +192,16 @@ const CommentElement = (block: CommentProps) => {
           />
         </div>
       </div>
-      <NodeResizer isVisible={selected ?? false} minWidth={MINIMUM_ELEMENT_WIDTH} minHeight={MINIMUM_ELEMENT_HEIGHT} />
+      <NodeResizer
+        isVisible={selected ?? false}
+        minWidth={MINIMUM_ELEMENT_WIDTH}
+        minHeight={MINIMUM_ELEMENT_HEIGHT}
+        handleStyle={{
+          borderRadius: '0',
+          width: '8px',
+          height: '8px',
+        }}
+      />
     </>
   )
 }

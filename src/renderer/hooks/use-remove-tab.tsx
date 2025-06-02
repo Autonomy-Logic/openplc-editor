@@ -32,4 +32,4 @@ const useHandleRemoveTab = () => {
   return { handleRemoveTab, selectedTab, setSelectedTab }
 }
 
-export { useHandleRemoveTab}
+export { useHandleRemoveTab }

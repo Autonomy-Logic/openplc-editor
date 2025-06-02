@@ -33,7 +33,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       </TooltipSidebarWrapperButton>
       {/** TODO: Need to be implemented */}
       <TooltipSidebarWrapperButton tooltipContent='Not implemented yet'>
-        <DebuggerButton className={cn('disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent')} />
+        <DebuggerButton
+          className={cn('disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent')}
+        />
       </TooltipSidebarWrapperButton>
     </>
   )

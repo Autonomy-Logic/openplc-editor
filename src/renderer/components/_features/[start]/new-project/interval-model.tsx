@@ -18,25 +18,25 @@ const IntervalModal = ({ initialValue, onValueChange, onClose, open }: IntervalM
     min: 0,
     sec: 0,
     ms: 0,
-    µs: 0,
+    us: 0,
   })
   const [tempValues, setTempValues] = useState(values)
 
   useEffect(() => {
-    const regex = /T#(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)min)?(?:(\d+)s)?(?:(\d+)ms)?(?:(\d+)µs)?/
+    const regex = /T#(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)min)?(?:(\d+)s)?(?:(\d+)ms)?(?:(\d+)us)?/
     const match = initialValue?.match(regex)
 
     if (match) {
-      const [, day = 0, hour = 0, min = 0, sec = 0, ms = 0, µs = 0] = match.map((v) => (v ? Number(v) : 0))
-      const newValues = { day, hour, min, sec, ms, µs }
+      const [, day = 0, hour = 0, min = 0, sec = 0, ms = 0, us = 0] = match.map((v) => (v ? Number(v) : 0))
+      const newValues = { day, hour, min, sec, ms, us }
       setValues(newValues)
       setTempValues(newValues)
     }
   }, [initialValue])
 
   const formattedInterval = useMemo(() => {
-    const { day, hour, min, sec, ms, µs } = tempValues
-    return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}min` : ''}${sec > 0 ? `${sec}s` : ''}${ms > 0 ? `${ms}ms` : ''}${µs > 0 ? `${µs}µs` : ''}`
+    const { day, hour, min, sec, ms, us } = tempValues
+    return `T#${day > 0 ? `${day}d` : ''}${hour > 0 ? `${hour}h` : ''}${min > 0 ? `${min}min` : ''}${sec > 0 ? `${sec}s` : ''}${ms > 0 ? `${ms}ms` : ''}${us > 0 ? `${us}us` : ''}`
   }, [tempValues])
 
   const handleSave = () => {
@@ -71,7 +71,7 @@ const IntervalModal = ({ initialValue, onValueChange, onClose, open }: IntervalM
       >
         <ModalTitle className='text-xl font-medium text-neutral-950 dark:text-white'>Set interval</ModalTitle>
         <div className='flex h-24 w-full gap-2'>
-          {(['day', 'hour', 'min', 'sec', 'ms', 'µs'] as const).map((interval) => (
+          {(['day', 'hour', 'min', 'sec', 'ms', 'us'] as const).map((interval) => (
             <div key={interval} className='flex w-full flex-col justify-center gap-1 font-caption text-xs'>
               <label htmlFor={interval} className='w-full text-neutral-950 dark:text-white'>
                 {interval}

@@ -8,7 +8,7 @@ import { MenuClasses } from '../constants'
 export const DisplayMenu = () => {
   const {
     workspace: {
-      systemConfigs: { shouldUseDarkMode }
+      systemConfigs: { shouldUseDarkMode },
     },
     workspaceActions: { switchAppTheme, toggleCollapse },
   } = useOpenPLCStore()

@@ -1,4 +1,4 @@
-import { PLCVariable } from "@root/types/PLC/open-plc"
+import { PLCVariable } from '@root/types/PLC/open-plc'
 
 export const getVariableBasedOnRowIdOrVariableId = (
   variables: PLCVariable[] | Omit<PLCVariable, 'class'>[],

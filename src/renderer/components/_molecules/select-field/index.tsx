@@ -44,9 +44,9 @@ const SelectField = ({
           className='box max-h-52 w-[--radix-select-trigger-width] rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
           <div className='max-h-52 overflow-y-auto'>
-            {options.map((option, idx) => (
+            {options.map((option) => (
               <SelectItem
-                key={idx}
+                key={option}
                 className='flex w-full cursor-pointer items-center px-2 py-[9px] outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
                 value={option}
               >

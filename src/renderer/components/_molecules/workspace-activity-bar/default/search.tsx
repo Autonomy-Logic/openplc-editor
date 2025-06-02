@@ -14,7 +14,7 @@ export const SearchButton = () => {
   } = useOpenPLCStore()
 
   const handleModalClose = () => {
-    setModalOpen('findInProject',false)
+    setModalOpen('findInProject', false)
   }
   const handleOpenChange = (open: boolean) => {
     setSearchQuery('')
@@ -27,7 +27,7 @@ export const SearchButton = () => {
 
   useEffect(() => {
     window.bridge.findInProjectAccelerator((_event) => {
-    setModalOpen('findInProject', true)
+      setModalOpen('findInProject', true)
     })
   }, [])
 

@@ -1,17 +1,17 @@
-import { produce } from 'immer';
-import { create } from 'zustand';
+import { produce } from 'immer'
+import { create } from 'zustand'
 
 export type NewProjectStoreProps = {
   formData: {
-    type: string;
-    name: string;
-    path: string;
-    language: string;
-    time: string;
-  };
-  setFormData: (form: Partial<NewProjectStoreProps['formData']>) => void;
-  resetFormData: () => void;
-};
+    type: string
+    name: string
+    path: string
+    language: string
+    time: string
+  }
+  setFormData: (form: Partial<NewProjectStoreProps['formData']>) => void
+  resetFormData: () => void
+}
 
 export const NewProjectStore = create<NewProjectStoreProps>((set) => ({
   formData: {
@@ -24,9 +24,9 @@ export const NewProjectStore = create<NewProjectStoreProps>((set) => ({
   setFormData: (form: Partial<NewProjectStoreProps['formData']>) => {
     set(
       produce((state: NewProjectStoreProps) => {
-        Object.assign(state.formData, form);
-      })
-    );
+        Object.assign(state.formData, form)
+      }),
+    )
   },
   resetFormData: () => {
     set(
@@ -37,8 +37,8 @@ export const NewProjectStore = create<NewProjectStoreProps>((set) => ({
           path: '',
           language: '',
           time: '',
-        };
-      })
-    );
+        }
+      }),
+    )
   },
-}));
+}))

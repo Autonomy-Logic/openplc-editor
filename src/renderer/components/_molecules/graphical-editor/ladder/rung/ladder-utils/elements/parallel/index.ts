@@ -35,7 +35,6 @@ export const startParallelConnection = <T>(
   placeholder: { index: number; selected: PlaceholderNode },
   node: Node | { elementType: string; blockVariant?: T },
 ): { nodes: Node[]; edges: Edge[]; newNode?: Node } => {
-
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 

@@ -1,16 +1,8 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCTask } from '@root/types/PLC/open-plc'
-import { cn } from '@root/utils'
-import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  useReactTable,
-} from '@tanstack/react-table'
-import { useEffect, useRef } from 'react'
+import { createColumnHelper } from '@tanstack/react-table'
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../_atoms'
+import { GenericTable } from '../../_atoms/generic-table'
 import { EditableNameCell, EditablePriorityCell } from './editable-cell'
 import { SelectableIntervalCell, SelectableTriggerCell } from './selectable-cell'
 
@@ -65,141 +57,17 @@ const TaskTable = ({ tableData, selectedRow, handleRowClick }: PLCTaskTableProps
   const {
     projectActions: { updateTask },
   } = useOpenPLCStore()
-  const TaskBodyRef = useRef<HTMLTableSectionElement>(null)
-  const TaskTableRowRef = useRef<HTMLTableRowElement>(null)
-  const TaskTableHeaderRef = useRef<HTMLTableSectionElement>(null)
 
-  const resetBorders = () => {
-    const parent = TaskBodyRef.current
-    const header = TaskTableHeaderRef.current
-    if (!parent?.children || !header?.children) return
-
-    const rows = Array.from(parent.children)
-    const headers = Array.from(header.children)
-    rows.forEach((row) => {
-      row.className = cn(
-        row.className,
-        '[&:last-child>td]:border-b-neutral-500 [&>td:first-child]:border-l-neutral-500 [&>td:last-child]:border-r-neutral-500 [&>td]:border-b-neutral-300',
-        'dark:[&>td:first-child]:border-l-neutral-500 dark:[&>td:last-child]:border-r-neutral-500 dark:[&>td]:border-b-neutral-800',
-        'shadow-none dark:shadow-none',
-      )
-    })
-    headers.forEach((header) => {
-      header.className = cn(header.className, '[&>th]:border-neutral-300 dark:[&>th]:border-neutral-800')
-    })
-  }
-
-  const setBorders = () => {
-    const row = TaskTableRowRef.current
-    const parent = TaskBodyRef.current
-    const header = TaskTableHeaderRef.current
-    if (!row || !parent || !header) return
-
-    const headerRow = row === parent?.firstChild ? header?.lastElementChild : null
-    const element = headerRow ?? row?.previousElementSibling
-
-    if (element) {
-      element.className = cn(
-        element.className,
-        '[&>td]:border-b-brand dark:[&>td]:border-b-brand',
-        '[&>th]:border-b-brand dark:[&>th]:border-b-brand',
-      )
-    }
-    row.className = cn(
-      row.className,
-      '[&:last-child>td]:border-b-brand [&>td:first-child]:border-l-brand [&>td:last-child]:border-r-brand [&>td]:border-b-brand',
-      'dark:[&>td:first-child]:border-l-brand dark:[&>td:last-child]:border-r-brand dark:[&>td]:border-b-brand',
-    )
-  }
-
-  useEffect(() => {
-    resetBorders()
-    setBorders()
-  }, [selectedRow])
-
-  useEffect(() => {
-    resetBorders()
-    if (TaskTableRowRef.current) {
-      setBorders()
-    }
-  }, [])
-
-  const table = useReactTable({
-    columns: columns,
-    columnResizeMode: 'onChange',
-    data: tableData,
-    debugTable: true,
-    defaultColumn: {
-      size: 128,
-      minSize: 80,
-      maxSize: 128,
-    },
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    meta: {
-      updateData: (rowIndex, columnId, value) => {
-        return updateTask({
-          rowId: rowIndex,
-          // @ts-expect-error - The data value is a literal type that need to be parsed. This is being fixed.
-          data: {
-            [columnId]: value,
-          },
-        })
-      },
-    },
-  })
   return (
-    <Table context='Tasks' className='mr-1 w-full'>
-      <TableHeader ref={TaskTableHeaderRef}>
-        {table.getHeaderGroups().map((headerGroup) => (
-          <TableRow className='select-none' key={headerGroup.id}>
-            {headerGroup.headers.map((header) => (
-              <TableHead
-                resizable={header.column.columnDef.enableResizing}
-                isResizing={header.column.getIsResizing()}
-                resizeHandler={header.getResizeHandler()}
-                style={{
-                  width: header.getSize(),
-                  maxWidth: header.column.columnDef.maxSize,
-                  minWidth: header.column.columnDef.minSize,
-                }}
-                key={header.id}
-              >
-                {flexRender(header.column.columnDef.header, header.getContext())}
-              </TableHead>
-            ))}
-          </TableRow>
-        ))}
-      </TableHeader>
-      <TableBody ref={TaskBodyRef}>
-        {table.getRowModel().rows.map((row) => (
-          <TableRow
-            id={row.id}
-            key={row.id}
-            className='h-8 cursor-pointer'
-            onClick={(e) => handleRowClick(e.currentTarget)}
-            selected={selectedRow === parseInt(row.id)}
-            ref={selectedRow === parseInt(row.id) ? TaskTableRowRef : null}
-          >
-            {row.getVisibleCells().map((cell) => (
-              <TableCell
-                style={{
-                  width: cell.column.getSize(),
-                  maxWidth: cell.column.columnDef.maxSize,
-                  minWidth: cell.column.columnDef.minSize,
-                }}
-                key={cell.id}
-              >
-                {flexRender(cell.column.columnDef.cell, {
-                  ...cell.getContext(),
-                  editable: selectedRow === parseInt(row.id),
-                })}
-              </TableCell>
-            ))}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <GenericTable<PLCTask>
+      columns={columns}
+      tableData={tableData}
+      selectedRow={selectedRow}
+      handleRowClick={handleRowClick}
+      // @ts-expect-error - The data value is a literal type that need to be parsed
+      updateData={(rowIndex, columnId, value) => updateTask({ rowId: rowIndex, data: { [columnId]: value } })}
+      tableContext='Tasks'
+    />
   )
 }
 

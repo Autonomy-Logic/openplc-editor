@@ -2,7 +2,6 @@ import {
   ArrayIcon,
   CloseIcon,
   ConfigIcon,
-  DeviceTransferIcon,
   EnumIcon,
   FBDIcon,
   ILIcon,
@@ -35,7 +34,6 @@ const TabIcons = {
   array: <ArrayIcon className='h-4 w-4 flex-shrink-0' />,
   resource: <ResourceIcon className='h-4 w-4 flex-shrink-0' />,
   configuration: <ConfigIcon className='h-4 w-4 flex-shrink-0' />,
-  'pin-mapping': <DeviceTransferIcon className='h-4 w-4 flex-shrink-0' />,
 }
 
 const Tab = (props: ITabProps) => {
@@ -50,8 +48,7 @@ const Tab = (props: ITabProps) => {
     | 'array'
     | 'enumerated'
     | 'structure'
-    | 'configuration'
-    | 'pin-mapping' = 'il'
+    | 'configuration' = 'il'
 
   if (fileDerivation?.type === 'data-type' || fileDerivation?.type === 'device') {
     languageOrDerivation = fileDerivation?.derivation

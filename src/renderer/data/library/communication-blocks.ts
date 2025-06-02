@@ -1,8 +1,4 @@
-import {
-  BaseLibraryPouSchema,
-  BaseLibrarySchema,
-  BaseLibraryVariableSchema,
-} from '@root/types/PLC'
+import { BaseLibraryPouSchema, BaseLibrarySchema, BaseLibraryVariableSchema } from '@root/types/PLC'
 import { z } from 'zod'
 
 const CommunicationBlocksVariableSchema = BaseLibraryVariableSchema
@@ -35,7 +31,8 @@ const CommunicationBlocks: CommunicationBlocksLibrary = {
         { name: 'SOCKET_ID', class: 'output', type: { definition: 'base-type', value: 'INT' } },
       ],
       body: 'SOCKET_ID := 0;',
-      documentation: 'Connect to a remote TCP server when CONNECT is TRUE. Upon success, this block returns the connection ID on SOCKET_ID. If SOCKET_ID is less than zero, then the connection was not successfull',
+      documentation:
+        'Connect to a remote TCP server when CONNECT is TRUE. Upon success, this block returns the connection ID on SOCKET_ID. If SOCKET_ID is less than zero, then the connection was not successfull',
     },
     {
       name: 'TCP_SEND',
@@ -48,7 +45,8 @@ const CommunicationBlocks: CommunicationBlocksLibrary = {
         { name: 'BYTES_SENT', class: 'output', type: { definition: 'base-type', value: 'INT' } },
       ],
       body: 'BYTES_SENT := 0;',
-      documentation: 'Send a message to a remote device using TCP/IP when SEND is TRUE. SOCKET_ID must receive a connection ID from a successfull connection using the TCP_Connect block. BYTES_SENT returns the number of bytes sent to the remote device. If BYTES_SENT is less than zero then an error occurred while trying to send the message',
+      documentation:
+        'Send a message to a remote device using TCP/IP when SEND is TRUE. SOCKET_ID must receive a connection ID from a successfull connection using the TCP_Connect block. BYTES_SENT returns the number of bytes sent to the remote device. If BYTES_SENT is less than zero then an error occurred while trying to send the message',
     },
     {
       name: 'TCP_RECEIVE',
@@ -61,7 +59,8 @@ const CommunicationBlocks: CommunicationBlocksLibrary = {
         { name: 'MSG', class: 'output', type: { definition: 'base-type', value: 'STRING' } },
       ],
       body: 'BYTES_RECEIVED := 0;',
-      documentation: 'Send a message to a remote device using TCP/IP when SEND is TRUE. SOCKET_ID must receive a connection ID from a successfull connection using the TCP_Connect block. BYTES_RECEIVED returns the number of bytes received from the remote device. MSG is a String containing the message received',
+      documentation:
+        'Send a message to a remote device using TCP/IP when SEND is TRUE. SOCKET_ID must receive a connection ID from a successfull connection using the TCP_Connect block. BYTES_RECEIVED returns the number of bytes received from the remote device. MSG is a String containing the message received',
     },
     {
       name: 'TCP_CLOSE',
@@ -73,7 +72,8 @@ const CommunicationBlocks: CommunicationBlocksLibrary = {
         { name: 'SUCCESS', class: 'output', type: { definition: 'base-type', value: 'INT' } },
       ],
       body: 'SUCCESS := 0;',
-      documentation: 'Close the TCP connection with the remote server. If SUCCESS is less than zero, then the connection was not successfully closed, or the connection does not exist anymore.',
+      documentation:
+        'Close the TCP connection with the remote server. If SUCCESS is less than zero, then the connection was not successfully closed, or the connection does not exist anymore.',
     },
   ],
 }

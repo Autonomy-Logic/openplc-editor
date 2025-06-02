@@ -20,7 +20,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       window: false,
       app: false,
       appDarwin: false,
-    }
+    },
   },
 
   workspaceActions: {

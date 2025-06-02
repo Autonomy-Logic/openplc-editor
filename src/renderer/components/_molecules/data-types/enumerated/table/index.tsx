@@ -1,12 +1,11 @@
-import { Table, TableBody, TableCell, TableRow } from '@components/_atoms'
+import { GenericDataTypeTable } from '@root/renderer/components/_atoms/generic-data-type-table'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { enumeratedValidation } from '@root/renderer/store/slices/project/validation/variables'
 import { PLCDataType, PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils/cn'
-import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
-import { useEffect, useRef } from 'react'
-import React from 'react'
+import { createColumnHelper, getCoreRowModel, useReactTable } from '@tanstack/react-table'
+import React, { useEffect, useRef } from 'react'
 
 import { DescriptionCell } from './editable-cell'
 
@@ -19,7 +18,14 @@ type DataTypeEnumeratedTableProps = {
   setArrayTable: React.Dispatch<React.SetStateAction<{ selectedRow: number }>>
 }
 
-const EnumeratedTable = ({ name, values, initialValue, selectedRow, handleRowClick, setArrayTable }: DataTypeEnumeratedTableProps) => {
+const EnumeratedTable = ({
+  name,
+  values,
+  initialValue,
+  selectedRow,
+  handleRowClick,
+  setArrayTable,
+}: DataTypeEnumeratedTableProps) => {
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
@@ -181,37 +187,14 @@ const EnumeratedTable = ({ name, values, initialValue, selectedRow, handleRowCli
   })
 
   return (
-    <div className='flex w-full flex-auto flex-col gap-4 overflow-hidden'>
-      <div className='flex h-fit  w-[355px] scroll-ml-1 overflow-y-auto'>
-        <Table context='data-type-enumerated'>
-          <TableBody ref={tableBodyRef}>
-            {table.getRowModel().rows.map((row, index) => (
-              <TableRow
-                id={`${index}`}
-                key={index}
-                className='h-8'
-                selected={selectedRow === index}
-                ref={selectedRow === index ? tableBodyRowRef : null}
-                onClick={(e) => handleRowClick(e.currentTarget)}
-                tableHasHeader={false}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell
-                    style={{ maxWidth: cell.column.columnDef.maxSize, minWidth: cell.column.columnDef.minSize }}
-                    key={cell.id}
-                  >
-                    {flexRender(cell.column.columnDef.cell, {
-                      ...cell.getContext(),
-                      editable: selectedRow === index,
-                    })}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
+    <GenericDataTypeTable
+      context='data-type-enumerated'
+      table={table}
+      selectedRow={selectedRow}
+      tableBodyRef={tableBodyRef}
+      tableBodyRowRef={tableBodyRowRef}
+      handleRowClick={handleRowClick}
+    />
   )
 }
 

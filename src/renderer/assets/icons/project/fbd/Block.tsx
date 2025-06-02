@@ -39,24 +39,8 @@ export default function BlockIcon(props: IBlockIconProps) {
         fill='#B4D0FE'
         fill-opacity='0.5'
       />
-      <line
-        x1='5'
-        y1='13.2955'
-        x2='9.90909'
-        y2='13.2955'
-        stroke='#B4D0FE'
-        stroke-opacity='0.5'
-        strokeWidth='1.22727'
-      />
-      <line
-        x1='5'
-        y1='16.5682'
-        x2='9.90909'
-        y2='16.5682'
-        stroke='#B4D0FE'
-        stroke-opacity='0.5'
-        strokeWidth='1.22727'
-      />
+      <line x1='5' y1='13.2955' x2='9.90909' y2='13.2955' stroke='#B4D0FE' stroke-opacity='0.5' strokeWidth='1.22727' />
+      <line x1='5' y1='16.5682' x2='9.90909' y2='16.5682' stroke='#B4D0FE' stroke-opacity='0.5' strokeWidth='1.22727' />
       <line
         x1='18.9091'
         y1='14.9318'

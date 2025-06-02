@@ -7,7 +7,7 @@ import { PLCTask } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { useEffect, useState } from 'react'
 
-import { TableActionButton } from '../../_atoms/buttons/tables-actions'
+import TableActions from '../../_atoms/table-actions'
 import { TaskTable } from '../../_molecules/task-table'
 
 const TaskEditor = () => {
@@ -19,7 +19,7 @@ const TaskEditor = () => {
         configuration: {
           resource: { tasks },
         },
-      }
+      },
     },
     editorActions: { updateModelTasks },
     projectActions: { createTask, rearrangeTasks, deleteTask },
@@ -79,7 +79,7 @@ const TaskEditor = () => {
         data: {
           name: 'Task',
           triggering: 'Cyclic',
-          interval: 'T#0d0h0min0s20ms0µs',
+          interval: 'T#20ms',
           priority: 0,
         },
       })
@@ -102,7 +102,7 @@ const TaskEditor = () => {
         data: {
           name: 'Task',
           triggering: 'Cyclic',
-          interval: 'T#0d0h0min0s20ms0µs',
+          interval: 'T#20ms',
           priority: 0,
         },
       })
@@ -118,7 +118,6 @@ const TaskEditor = () => {
       display: 'table',
       selectedRow: selectedRow + 1,
     })
-
   }
   const handleDeleteTask = () => {
     if (editorTasks.display === 'code') return
@@ -154,40 +153,43 @@ const TaskEditor = () => {
             <span className='select-none'>Tasks</span>
             <div
               aria-label='Tasks editor table actions container'
-              className='  flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
+              className='  mr-2 flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
             >
-              {/** This can be reviewed */}
-              <TableActionButton aria-label='Add Tasks table row button' onClick={handleCreateTask}>
-                <PlusIcon className='!stroke-brand' />
-              </TableActionButton>
-              <TableActionButton
-                aria-label='Remove Tasks table row button'
-                disabled={parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED}
-                onClick={() => {
-                  handleDeleteTask()
-                }}
-              >
-                <MinusIcon />
-              </TableActionButton>
-              <TableActionButton
-                aria-label='Move Tasks table row up button'
-                disabled={
-                  parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED || parseInt(editorTasks.selectedRow) === 0
-                }
-                onClick={() => handleRearrangeTasks(-1)}
-              >
-                <StickArrowIcon direction='up' className='stroke-[#0464FB]' />
-              </TableActionButton>
-              <TableActionButton
-                aria-label='Move Tasks table row down button'
-                disabled={
-                  parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED ||
-                  parseInt(editorTasks.selectedRow) === taskData.length - 1
-                }
-                onClick={() => handleRearrangeTasks(1)}
-              >
-                <StickArrowIcon direction='down' className='stroke-[#0464FB]' />
-              </TableActionButton>
+              <TableActions
+                actions={[
+                  {
+                    ariaLabel: 'Add Tasks table row button',
+                    onClick: handleCreateTask,
+                    icon: <PlusIcon className='!stroke-brand' />,
+                    id: 'add-task-button',
+                  },
+                  {
+                    ariaLabel: 'Remove Tasks table row button',
+                    onClick: handleDeleteTask,
+                    disabled: parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED,
+                    icon: <MinusIcon />,
+                    id: 'remove-task-button',
+                  },
+                  {
+                    ariaLabel: 'Move Tasks table row up button',
+                    onClick: () => handleRearrangeTasks(-1),
+                    disabled:
+                      parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED ||
+                      parseInt(editorTasks.selectedRow) === 0,
+                    icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
+                    id: 'move-task-up-button',
+                  },
+                  {
+                    ariaLabel: 'Move Tasks table row down button',
+                    onClick: () => handleRearrangeTasks(1),
+                    disabled:
+                      parseInt(editorTasks.selectedRow) === ROWS_NOT_SELECTED ||
+                      parseInt(editorTasks.selectedRow) === taskData.length - 1,
+                    icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
+                    id: 'move-task-down-button',
+                  },
+                ]}
+              />
             </div>
           </div>
         ) : (
