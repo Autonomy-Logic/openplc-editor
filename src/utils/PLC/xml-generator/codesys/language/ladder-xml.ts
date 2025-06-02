@@ -475,7 +475,7 @@ const blockToXml = (
   })
 
   const outputVariable = block.data.outputHandles.map((handle, handleIndex) => {
-    const edge = rung.edges.find((edge) => edge.source === block.id && edge.targetHandle === handle.id)
+    const edge = rung.edges.find((edge) => edge.source === block.id && edge.sourceHandle === handle.id)
     const connectedNode = rung.nodes.find((node) => node.id === edge?.target)
 
     return {
@@ -485,7 +485,7 @@ const blockToXml = (
           handleIndex !== 0
             ? connectedNode && connectedNode.type === 'variable'
               ? (connectedNode as VariableNode).data.variable.name
-              : '???'
+              : ''
             : undefined,
       },
     }
@@ -535,7 +535,7 @@ const outVariableToXML = (
 ): OutVariableLadderXML | undefined => {
   const connectedBlock = rung.nodes.find((node) => node.id === variable.data.block.id) as BlockNode<BlockVariant>
 
-  if (variable.data.block.handleId === connectedBlock.data.outputConnector?.id) return undefined
+  if (variable.data.block.handleId !== connectedBlock.data.outputConnector?.id) return undefined
 
   return {
     '@localId': variable.data.numericId,
