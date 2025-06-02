@@ -1,7 +1,9 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { LibraryState } from '@root/renderer/store/slices'
 import { checkVariableNameUnit } from '@root/renderer/store/slices/project/validation/variables'
+import { PLCPou } from '@root/types/PLC/open-plc'
 import type { PLCVariable } from '@root/types/PLC/units/variable'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
@@ -11,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
-import { validateVariableType } from '../utils'
+import { getVariableRestrictionType, validateVariableType } from '../utils'
 import { buildHandle, CustomHandle } from './handle'
 import type { BasicNodeData, BuilderBasicProps } from './utils'
 import { getLadderPouVariablesRungNodeAndEdges } from './utils'
@@ -135,6 +137,50 @@ export const BlockNodeElement = <T extends object>({
     }
   }, [data])
 
+  const resolveLibraryBlock = (blockNameValue: string, libraries: LibraryState['libraries'], pous: PLCPou[]) => {
+    const userLibrary = libraries.user.find((lib) => lib.name.toLowerCase() === blockNameValue.toLowerCase())
+    const userPou = pous.find((pou) => pou.data.name.toLowerCase() === userLibrary?.name.toLowerCase())
+
+    if (!userPou) {
+      return (
+        libraries.system
+          // @ts-expect-error - type is dynamic
+          .flatMap((block) => block.pous)
+          // @ts-expect-error - type is dynamic
+          .find((pou) => pou.name.toLowerCase() === blockNameValue.toLowerCase())
+      )
+    }
+
+    const variables = userPou.data.variables.map((variable) => ({
+      name: variable.name,
+      class: variable.class,
+      type: {
+        definition: variable.type.definition,
+        value: variable.type.value.toUpperCase(),
+      },
+    }))
+
+    if (userPou.type === 'function') {
+      const variable = getVariableRestrictionType(userPou.data.returnType)
+      variables.push({
+        name: 'OUT',
+        class: 'output',
+        type: {
+          definition: (variable.definition as 'array' | 'base-type' | 'user-data-type' | 'derived') ?? 'derived',
+          value: userPou.data.returnType.toUpperCase(),
+        },
+      })
+    }
+
+    return {
+      name: userPou.data.name,
+      type: userPou.type,
+      variables,
+      documentation: userPou.data.documentation,
+      extensible: false,
+    }
+  }
+
   const handleNameInputOnBlur = () => {
     setInputNameFocus(false)
 
@@ -142,11 +188,7 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
-    const libraryBlock = libraries.system
-      // @ts-expect-error - type is dynamic
-      .flatMap((block) => block.pous)
-      // @ts-expect-error - type is dynamic
-      .find((pou) => pou.name === blockNameValue)
+    const libraryBlock = resolveLibraryBlock(blockNameValue, libraries, pous)
 
     if (!libraryBlock) {
       setBlockNameValue(validBlockNameValue)
@@ -307,7 +349,7 @@ export const BlockNodeElement = <T extends object>({
     >
       <InputWithRef
         value={blockNameValue}
-        onChange={(e) => setBlockNameValue(e.target.value.toUpperCase())}
+        onChange={(e) => setBlockNameValue(e.target.value)}
         maxLength={20}
         placeholder='???'
         className='w-full bg-transparent p-1 text-center text-xs outline-none'

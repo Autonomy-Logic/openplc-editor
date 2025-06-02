@@ -260,7 +260,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     const { id, value } = e.target
     let formValue = value
     if (id === 'name') {
-      formValue = value.toUpperCase()
+      formValue = value
     }
     setFormState((prevState) => ({ ...prevState, [id]: formValue }))
   }
@@ -315,7 +315,8 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
   const handleInputsDecrement = () => {
     const newInputsNumber = Math.max(
       Number(formState.inputs) - 1,
-      (selectedFile?.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length ?? 2),
+      selectedFile?.variables.filter((variable) => variable.class === 'input' || variable.class === 'inOut').length ??
+        2,
     )
 
     setFormState((prevState) => ({
