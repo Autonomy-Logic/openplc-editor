@@ -20,7 +20,6 @@ const CreatePLCElement = () => {
         aria-label='Create PLC element trigger component'
         type='button'
         className='flex h-8 w-10 items-center justify-center rounded-lg bg-brand'
-        onClick={() => setIsContainerOpen((prev) => !prev)}
       >
         <PlusIcon className='stroke-white' />
       </Popover.Trigger>

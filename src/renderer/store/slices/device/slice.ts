@@ -2,6 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { DeviceSlice } from './types'
+import { extractNumberAtEnd } from './validation/pins'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
   deviceAvailableOptions: {
@@ -41,32 +42,12 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         },
       },
     },
-    pinMapping: [
-      {
-        pin: '1',
-        type: 'digitalInput',
-        address: 'someRandomAddress',
-        name: 'pin1',
-      },
-      {
-        pin: '2',
-        type: 'digitalOutput',
-        address: 'someRandomAddress',
-        name: 'pin2',
-      },
-      {
-        pin: '3',
-        type: 'analogInput',
-        address: 'someRandomAddress',
-        name: 'pin3',
-      },
-      {
-        pin: '4',
-        type: 'analogOutput',
-        address: 'someRandomAddress',
-        name: 'pin4',
-      },
-    ],
+    pinMapping: {
+      'digitalInput': [],
+      'digitalOutput': [],
+      'analogInput': [],
+      'analogOutput': []
+    }
   },
 
   deviceActions: {
@@ -82,11 +63,17 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
-    addPin: (pinProp): void => {
+    /** The default action to add a pin is handled by the editor itself, so we don't need to check for if the pin is already declared */
+    addPin: ({ pinType, pinToAdd }): void => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
-          console.log('Pin parameter:', pinProp)
-          console.log('Device state:', deviceDefinitions)
+          const draft = deviceDefinitions.pinMapping[pinType]
+          console.log("🚀 ~ produce ~ draft:", draft)
+          // This should never return a falsy value, once all maps are initialized.
+          if (!draft) return
+          extractNumberAtEnd(pinToAdd.address)
+          draft.push(pinToAdd)
+          console.log("🚀 ~ produce ~ extractNumberAtEnd:", extractNumberAtEnd(pinToAdd.address))
         }),
       )
     },
@@ -114,7 +101,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             configuration.communicationConfiguration.communicationPreferences.enabledTCP = preferences.enableTCP
           }
           if (preferences.enableDHCP !== undefined) {
-            console.log('🚀 ~ setCommunicationPreferences ~ preferences:', preferences)
             configuration.communicationConfiguration.communicationPreferences.enabledDHCP = preferences.enableDHCP
           }
         }),

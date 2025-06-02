@@ -49,41 +49,43 @@ const deviceConfigurationSchema = z.object({
 
 type DeviceConfiguration = z.infer<typeof deviceConfigurationSchema>
 
+const pinTypes = ['digitalInput', 'digitalOutput', 'analogInput', 'analogOutput'] as const
+
+/**
+ * TODO: Must be filled with the infos that comes from the hals file
+ */
+const _defaultPins = []
+/**
+ * The pin address obey the following name rules and is populated automatically by the editor.
+ *
+ * 1. For digital types:
+ *    - The address must start with the prefix "%QX" or "%IX"
+ *    - Following the prefix, the address must have a integer number starting with 0
+ *    - Following the number, the address must have a dot "."
+ *    - Following the dot, the address must have a integer number starting with 0 and ending with 7
+ * 2. For analog types:
+ *    - The address must start with the prefix "%QW" or "%IW"
+ *    - Following the prefix, the address must have a integer number starting with 0
+ */
 const devicePinSchema = z.object({
   pin: z.string().max(6),
-  type: z.enum(['digitalInput', 'digitalOutput', 'analogInput', 'analogOutput']),
-  address: z.string(), // This will be populated automatically
+  address: z.string(),
   name: z.string().optional(),
 })
 
-const digitalInputPinSchema = z.object({
-  pin: z.string().max(6),
-  address: z.string(), // Shape will be prefixed with ```%IX```, followed by a floating number that goes from .0 to .7
-  tag: z.string().optional()
-})
-const _digitalInputPins =  z.set(digitalInputPinSchema)
-const digitalOutputPinSchema = z.object({
-  pin: z.string().max(6),
-  address: z.string(), // Shape will be prefixed with ```%QX```, followed by a floating number that goes from .0 to .7
-  tag: z.string().optional()
-})
-const _digitalOutputPins = z.set(digitalOutputPinSchema)
-const analogInputPinSchema = z.object({
-  pin: z.string().max(6),
-  address: z.string(), // Shape will be prefixed with ```%IW```, followed by a positive integer number.
-  tag: z.string().optional()
-})
-const _analogInputPins = z.set(analogInputPinSchema)
-const analogOutputPinSchema = z.object({
-  pin: z.string().max(6),
-  address: z.string(), // Shape will be prefixed with ```%QW```, followed by a positive integer number.
-  tag: z.string().optional()
-})
-const _analogOutputPins = z.set(analogOutputPinSchema)
-
 type DevicePin = z.infer<typeof devicePinSchema>
 
-const devicePinMappingSchema = z.array(devicePinSchema)
+/**
+ * The pin mapping is an unique structure that record the pins added by the user.
+ * Object is an instance of the following shape:
+ * devicePinMapping: {
+ *  digitalInput: [ ],
+ *  digitalOutput: [ ],
+ *  analogInput: [ ],
+ *  analogOutput: [ ]
+ * }
+ */
+const devicePinMappingSchema = z.record(z.enum(pinTypes), z.array(devicePinSchema))
 
 type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
 
@@ -148,7 +150,7 @@ const deviceActionSchema = z.object({
       }),
     )
     .returns(z.void()),
-  addPin: z.function().args(z.string().optional()).returns(z.void()),
+  addPin: z.function().args(z.object({pinType: z.enum(pinTypes), pinToAdd: devicePinSchema})).returns(z.void()),
   setDeviceBoard: z.function().args(z.string()).returns(z.void()),
   setCommunicationPort: z.function().args(z.string()).returns(z.void()),
   setCommunicationPreferences: z

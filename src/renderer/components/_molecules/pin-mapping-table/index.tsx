@@ -8,10 +8,6 @@ const _columns = [
     header: 'Pin',
     size: 64,
   }),
-  columnHelper.accessor('type', {
-    header: 'Type',
-    size: 64,
-  }),
   columnHelper.accessor('address', {
     header: 'Address',
     size: 64,
