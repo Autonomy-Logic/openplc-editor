@@ -108,7 +108,7 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
         return {
           '@formalParameter': handle.id || '',
           connectionPointOut: {
-            expression: handleIndex === 0 ? '???' : undefined,
+            expression: undefined,
           },
         }
 
