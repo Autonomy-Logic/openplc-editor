@@ -365,7 +365,12 @@ const contactToXML = (
       connection: connections.map((connection) => {
         const connectionNode = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
         const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
-        const formalParameter = connectionNode?.type === 'block' ? connection['@formalParameter'] : undefined
+        const formalParameter =
+          connectionNode?.type === 'block'
+            ? (connectionNode as BlockNode<BlockVariant>).data.variant.type === 'function'
+              ? (connectionNode as BlockNode<BlockVariant>).data.variant.name
+              : connection['@formalParameter']
+            : undefined
         return {
           '@refLocalId': refLocalId,
           '@formalParameter': formalParameter,
@@ -404,7 +409,12 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0, l
       connection: connections.map((connection) => {
         const connectionNode = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
         const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
-        const formalParameter = connectionNode?.type === 'block' ? connection['@formalParameter'] : undefined
+        const formalParameter =
+          connectionNode?.type === 'block'
+            ? (connectionNode as BlockNode<BlockVariant>).data.variant.type === 'function'
+              ? (connectionNode as BlockNode<BlockVariant>).data.variant.name
+              : connection['@formalParameter']
+            : undefined
         return {
           '@refLocalId': refLocalId,
           '@formalParameter': formalParameter,
@@ -479,7 +489,8 @@ const blockToXml = (
     const connectedNode = rung.nodes.find((node) => node.id === edge?.target)
 
     return {
-      '@formalParameter': handle.id === 'OUT' ? '' : handle.id || '',
+      '@formalParameter':
+        handle.id === 'OUT' ? (block.data.variant.type === 'function' ? block.data.variant.name : '') : handle.id || '',
       connectionPointOut: {
         expression:
           handleIndex !== 0
@@ -551,7 +562,12 @@ const outVariableToXML = (
       connection: [
         {
           '@refLocalId': connectedBlock.data.numericId,
-          '@formalParameter': variable.data.block.handleId === 'OUT' ? '' : variable.data.block.handleId || '',
+          '@formalParameter':
+            variable.data.block.handleId === 'OUT'
+              ? connectedBlock.data.variant.type === 'function'
+                ? connectedBlock.data.variant.name
+                : ''
+              : variable.data.block.handleId || '',
         },
       ],
     },
