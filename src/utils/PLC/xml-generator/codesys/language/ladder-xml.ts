@@ -96,7 +96,7 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
       return {
         '@refLocalId': sourceNode.data.numericId,
         '@formalParameter':
-          sourceNode.data.outputConnector?.id === 'OUT' ? '   ' : sourceNode.data.outputConnector?.id || '',
+          sourceNode.data.outputConnector?.id === 'OUT' ? '' : sourceNode.data.outputConnector?.id || '',
         position: [
           // Final edge destination
           {
@@ -139,7 +139,7 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
       if (lastParallelSerialEdge && lastParallelSerialEdge.target === node.id) {
         return nodes.map((node, index) => ({
           '@refLocalId': node.data.numericId,
-          '@formalParameter': node.data.outputConnector?.id === 'OUT' ? '   ' : node.data.outputConnector?.id || '',
+          '@formalParameter': node.data.outputConnector?.id === 'OUT' ? '' : node.data.outputConnector?.id || '',
           position:
             index === 0
               ? [
@@ -211,7 +211,7 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
       return nodes.map((node) => {
         return {
           '@refLocalId': node.data.numericId,
-          '@formalParameter': node.data.outputConnector?.id === 'OUT' ? '   ' : node.data.outputConnector?.id || '',
+          '@formalParameter': node.data.outputConnector?.id === 'OUT' ? '' : node.data.outputConnector?.id || '',
           position: [
             // Final edge destination
             {
@@ -246,7 +246,7 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
     const closeConnections = nodes.map((node, index) => {
       return {
         '@refLocalId': node.data.numericId,
-        '@formalParameter': node.data.outputConnector?.id === 'OUT' ? '   ' : node.data.outputConnector?.id || '',
+        '@formalParameter': node.data.outputConnector?.id === 'OUT' ? '' : node.data.outputConnector?.id || '',
         position:
           index === 0
             ? [
@@ -479,7 +479,7 @@ const blockToXml = (
     const connectedNode = rung.nodes.find((node) => node.id === edge?.target)
 
     return {
-      '@formalParameter': handle.id === 'OUT' ? '   ' : handle.id || '',
+      '@formalParameter': handle.id === 'OUT' ? '' : handle.id || '',
       connectionPointOut: {
         expression:
           handleIndex !== 0
@@ -551,7 +551,7 @@ const outVariableToXML = (
       connection: [
         {
           '@refLocalId': connectedBlock.data.numericId,
-          '@formalParameter': variable.data.block.handleId === 'OUT' ? '   ' : variable.data.block.handleId || '',
+          '@formalParameter': variable.data.block.handleId === 'OUT' ? '' : variable.data.block.handleId || '',
         },
       ],
     },
