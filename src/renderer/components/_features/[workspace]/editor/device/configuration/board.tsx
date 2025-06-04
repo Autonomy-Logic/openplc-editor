@@ -2,12 +2,25 @@
 import { RefreshIcon } from '@root/renderer/assets'
 import { Label, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
+import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
+import { produce } from 'immer'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 
 import { boardSelectors } from '../useStoreSelectors'
+import { PinMappingTable } from './components/pin-mapping-table'
 
+type devicePinToTable = {
+  pin: string
+  pinType?: 'digitalInput' | 'digitalOutput' | 'analogInput' | 'analogOutput'
+  address: string
+  name?: string
+}
 const Board = memo(function () {
+  const {
+    deviceDefinitions: { pinMapping },
+  } = useOpenPLCStore()
+  console.log('🚀 ~ Board ~ pinMapping:', pinMapping)
   const availableBoards = boardSelectors.useAvailableBoards()
   const availableCommunicationPorts = boardSelectors.useAvailableCommunicationPorts()
   const deviceBoard = boardSelectors.useDeviceBoard()
@@ -19,6 +32,8 @@ const Board = memo(function () {
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
   const [formattedBoardState, setFormattedBoardState] = useState('')
+  const [pinData, setPinData] = useState<devicePinToTable[]>([])
+  console.log('🚀 ~ Board ~ pinData:', pinData)
 
   const [deviceSelectIsOpen, setDeviceSelectIsOpen] = useState(false)
   const deviceSelectRef = useRef<HTMLDivElement>(null)
@@ -89,6 +104,23 @@ const Board = memo(function () {
     },
     [setDeviceBoard],
   )
+
+  const handleFetchPins = useCallback(() => {
+    for (const keyMap in pinMapping) {
+      console.log('🚀 ~ keyMap:', keyMap)
+      console.log('🚀 ~ pinMapping on iterator:', pinMapping[keyMap as keyof typeof pinMapping])
+      setPinData(
+        produce((draft) => {
+          const currentMap = pinMapping[keyMap as keyof typeof pinMapping]?.map((pin) => {
+            const newPin: devicePinToTable = { ...pin, pinType: keyMap as devicePinToTable['pinType'] }
+            return newPin
+          })
+          console.log('🚀 ~ currentMap ~ currentMap:', currentMap)
+          if (currentMap) draft.push(...currentMap)
+        }),
+      )
+    }
+  }, [])
 
   return (
     <DeviceEditorSlot heading='Board Settings'>
@@ -219,7 +251,14 @@ const Board = memo(function () {
       <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
       {/* TODO: Implement Pin Mapping UI in future PR */}
       <div id='pin-mapping-container' className=' h-3/5 w-full'>
-        <p>Pin Mapping</p>
+        <PinMappingTable pins={pinData} handleRowClick={() => {}} selectedRowId={0} />
+        <button
+          type='button'
+          className='p-2 text-sm text-brand-medium font-display font-normal rounded-md border border-brand-medium-dark bg-none'
+          onClick={handleFetchPins}
+        >
+          Fetch pins
+        </button>
       </div>
     </DeviceEditorSlot>
   )

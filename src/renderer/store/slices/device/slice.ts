@@ -2,7 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { DeviceSlice } from './types'
-import { extractNumberAtEnd } from './validation/pins'
+// import { extractNumberAtEnd } from './validation/pins'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
   deviceAvailableOptions: {
@@ -67,13 +67,10 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     addPin: ({ pinType, pinToAdd }): void => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
-          const draft = deviceDefinitions.pinMapping[pinType]
-          console.log("🚀 ~ produce ~ draft:", draft)
           // This should never return a falsy value, once all maps are initialized.
-          if (!draft) return
-          extractNumberAtEnd(pinToAdd.address)
-          draft.push(pinToAdd)
-          console.log("🚀 ~ produce ~ extractNumberAtEnd:", extractNumberAtEnd(pinToAdd.address))
+          const filteredPinMapping = deviceDefinitions.pinMapping[pinType]
+          if (!filteredPinMapping) return
+         filteredPinMapping.push(pinToAdd)
         }),
       )
     },
