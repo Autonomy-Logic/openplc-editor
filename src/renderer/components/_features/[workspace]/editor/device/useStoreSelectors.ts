@@ -1,4 +1,12 @@
 import { useOpenPLCStore } from '@root/renderer/store'
+import { produce } from 'immer'
+
+type devicePinToTable = {
+  pin: string
+  pinType?: 'digitalInput' | 'digitalOutput' | 'analogInput' | 'analogOutput'
+  address: string
+  name?: string
+}
 
 export const rtuSelectors = {
   useAvailableRTUInterfaces: () => useOpenPLCStore((state) => state.deviceAvailableOptions.availableRTUInterfaces),
@@ -33,6 +41,24 @@ export const boardSelectors = {
   useSetDeviceBoard: () => useOpenPLCStore((state) => state.deviceActions.setDeviceBoard),
   useSetCommunicationPort: () => useOpenPLCStore((state) => state.deviceActions.setCommunicationPort),
   useSetAvailableOptions: () => useOpenPLCStore((state) => state.deviceActions.setAvailableOptions),
+  usePinMappingData: () => {
+    const pinMappingDataBaseState: devicePinToTable[] = []
+    const nextPinMappingDataState: devicePinToTable[] = []
+    const pinMappingData = useOpenPLCStore((state) => state.deviceDefinitions.pinMapping)
+    for (const key in pinMappingData) {
+      produce(pinMappingDataBaseState, (draft) => {
+        const currentMap: devicePinToTable[] | undefined = pinMappingData[key as keyof typeof pinMappingData]?.map(
+          (pin): devicePinToTable => {
+            const newPin: devicePinToTable = { ...pin, pinType: key as keyof typeof pinMappingData }
+            return newPin
+          },
+        )
+        if (!currentMap) return draft
+        nextPinMappingDataState.push(...currentMap)
+      })
+    }
+    return nextPinMappingDataState
+  },
 }
 
 export const communicationSelectors = {

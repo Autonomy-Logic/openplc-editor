@@ -1,3 +1,4 @@
+import { cn } from '@root/utils'
 import React, { ButtonHTMLAttributes, ReactNode } from 'react'
 
 import { TableActionButton } from '../buttons/tables-actions'
@@ -13,11 +14,12 @@ type TableAction = {
 type TableActionsProps = {
   actions: TableAction[]
   buttonProps?: ButtonHTMLAttributes<HTMLButtonElement>
+  className?: string
 }
 
-const TableActions: React.FC<TableActionsProps> = ({ actions, buttonProps }) => {
+const TableActions: React.FC<TableActionsProps> = ({ actions, buttonProps, className }) => {
   return (
-    <div className='flex cursor-pointer gap-2'>
+    <div className={cn(className, 'flex cursor-pointer gap-2')}>
       {actions.map((action, index) => (
         <TableActionButton
           key={index}
