@@ -1,10 +1,6 @@
-import { ProjectState } from '@root/renderer/store/slices'
 import { BaseXml } from '@root/types/PLC/xml-data/codesys/base-diagram'
-import { create } from 'xmlbuilder2'
 
 import formatDate from '../../../formatDate'
-import { codeSysInstanceToXml } from './instances-xml'
-import { codeSysParsePousToXML } from './pou-xml'
 
 const getBaseCodeSysXmlStructure = (): BaseXml => ({
   project: {
@@ -62,30 +58,5 @@ const getBaseCodeSysXmlStructure = (): BaseXml => ({
     },
   },
 })
-
-/**
- * This is not being used anymore.
- * @deprecated
- */
-export const parseProjectToXML = (project: ProjectState): string => {
-  let xmlResult = getBaseCodeSysXmlStructure()
-
-  /**
-   * Parse POUs
-   */
-  const pous = project.data.pous
-  xmlResult = codeSysParsePousToXML(xmlResult, pous)
-
-  /**
-   * Parse instances
-   */
-  const configuration = project.data.configuration
-  xmlResult = codeSysInstanceToXml(xmlResult, configuration)
-
-  const doc = create(xmlResult)
-  doc.dec({ version: '1.0', encoding: 'utf-8' })
-  const xml = doc.end({ prettyPrint: true })
-  return xml
-}
 
 export { getBaseCodeSysXmlStructure }

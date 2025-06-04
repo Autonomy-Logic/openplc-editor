@@ -8,7 +8,7 @@ import { variableXMLSchema } from './variable/variable-diagram'
 
 const baseXmlSchema = z.object({
   project: z.object({
-    '@xmlns': z.string().default('"http://www.plcopen.org/xml/tc6_0200"'),
+    '@xmlns': z.string().default('http://www.plcopen.org/xml/tc6_0200'),
 
     fileHeader: z.object({
       '@companyName': z.string().default('Unknown'),
@@ -23,20 +23,20 @@ const baseXmlSchema = z.object({
       coordinateInfo: z.object({
         fbd: z.object({
           scaling: z.object({
-            '@x': z.string().default('10'),
-            '@y': z.string().default('10'),
+            '@x': z.string().default('16'),
+            '@y': z.string().default('16'),
           }),
         }),
         ld: z.object({
           scaling: z.object({
-            '@x': z.string().default('10'),
-            '@y': z.string().default('10'),
+            '@x': z.string().default('16'),
+            '@y': z.string().default('16'),
           }),
         }),
         sfc: z.object({
           scaling: z.object({
-            '@x': z.string().default('10'),
-            '@y': z.string().default('10'),
+            '@x': z.string().default('16'),
+            '@y': z.string().default('16'),
           }),
         }),
       }),
