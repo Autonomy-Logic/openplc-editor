@@ -196,7 +196,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
     const { id, value } = e.target
     let formValue = value
     if (id === 'name') {
-      formValue = value.toUpperCase()
+      formValue = value
     }
     setFormState((prevState) => ({ ...prevState, [id]: formValue }))
   }

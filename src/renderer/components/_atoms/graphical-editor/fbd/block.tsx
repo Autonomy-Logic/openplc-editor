@@ -145,7 +145,7 @@ export const BlockNodeElement = <T extends object>({
       setWrongName(true)
       toast({
         title: 'Can not add block',
-        description: `You can not add a ${(libraryBlock as BlockVariant).type} block to an function POU`,
+        description: 'You can not add a function block to a function POU',
         variant: 'fail',
       })
       return
