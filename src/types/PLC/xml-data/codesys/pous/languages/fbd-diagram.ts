@@ -155,12 +155,6 @@ const connectorSchema = z.object({
       z.object({
         '@refLocalId': z.string(),
         '@formalParameter': z.string().optional(),
-        position: z.array(
-          z.object({
-            '@x': z.number(),
-            '@y': z.number(),
-          }),
-        ),
       }),
     ),
   }),
@@ -204,7 +198,7 @@ const commentSchema = z.object({
     '@y': z.number(),
   }),
   content: z.object({
-    'xhtml': z.object({
+    xhtml: z.object({
       '@xmlns': z.string().default('http://www.w3.org/1999/xhtml'),
       $: z.string(),
     }),

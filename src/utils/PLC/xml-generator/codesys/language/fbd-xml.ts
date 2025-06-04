@@ -15,51 +15,6 @@ import {
   InVariableFbdXML,
   OutVariableFbdXML,
 } from '@root/types/PLC/xml-data/codesys/pous/languages/fbd-diagram'
-import { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react'
-
-const getEdgePaths = (edge: FlowEdge, nodes: FlowNode[]) => {
-  const sourceNodeHandle = (nodes.find((node) => node.id === edge.source)?.data as BasicNodeData).outputHandles?.find(
-    (handle) => handle.id === edge.sourceHandle,
-  )
-  const targetNodeHandle = (nodes.find((node) => node.id === edge.target)?.data as BasicNodeData).inputHandles?.find(
-    (handle) => handle.id === edge.targetHandle,
-  )
-
-  if (!sourceNodeHandle || !targetNodeHandle) {
-    console.log('Error: source or target handle not found')
-    console.log('Source:', sourceNodeHandle)
-    console.log('Target:', targetNodeHandle)
-    return
-  }
-
-  const xyPath: { x: number; y: number }[] = []
-
-  // First add the source handle position
-  xyPath.push({
-    x: sourceNodeHandle.glbPosition.x,
-    y: sourceNodeHandle.glbPosition.y,
-  })
-  // Then add the path between the source and target handles
-  if (sourceNodeHandle.glbPosition.y !== targetNodeHandle.glbPosition.y) {
-    // First add the horizontal path to the middle path
-    const middleX = (sourceNodeHandle.glbPosition.x + targetNodeHandle.glbPosition.x) / 2
-    xyPath.push({
-      x: middleX,
-      y: sourceNodeHandle.glbPosition.y,
-    })
-    xyPath.push({
-      x: middleX,
-      y: targetNodeHandle.glbPosition.y,
-    })
-  }
-  // Finally add the target handle position
-  xyPath.push({
-    x: targetNodeHandle.glbPosition.x,
-    y: targetNodeHandle.glbPosition.y,
-  })
-
-  return xyPath
-}
 
 /**
  * Translate react flow nodes to XML
@@ -231,9 +186,6 @@ const connectorToXml = (node: ConnectionNode, rung: FBDRungState): ConnectorFbdX
         const sourceNode = rung.nodes.find((node) => node.id === edge.source)
         if (!sourceNode) return undefined
 
-        const path = getEdgePaths(edge, rung.nodes)
-        if (!path) return undefined
-
         return {
           '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
           '@formalParameter':
@@ -242,10 +194,6 @@ const connectorToXml = (node: ConnectionNode, rung: FBDRungState): ConnectorFbdX
                 ? '   '
                 : (edge.sourceHandle as string)
               : undefined,
-          position: path.reverse().map((point) => ({
-            '@x': point.x,
-            '@y': point.y,
-          })),
         }
       })
       .filter((connection) => connection !== undefined),

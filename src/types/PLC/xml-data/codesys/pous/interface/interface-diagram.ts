@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { variableXMLSchema } from '../../variable/variable-diagram'
 
 const interfaceXMLSchema = z.object({
-  returnType: z.object(baseTypes.reduce((acc, type) => ({ ...acc, [type]: z.string().optional() }), {})).optional(),
+  returnType: z.object(Object.fromEntries(baseTypes.map(type => [type, z.string().optional()]))).optional(),
   inputVars: z
     .object({
       variable: z.array(variableXMLSchema).optional(),
