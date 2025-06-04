@@ -82,7 +82,7 @@ export const codeSysParseInterface = (pou: PLCPou) => {
       const isBaseType = baseTypes.includes(returnType as (typeof baseTypes)[number])
       xml.returnType = isBaseType
         ? { [returnType.trim().toUpperCase() === 'STRING' ? returnType.toLowerCase() : returnType.toUpperCase()]: '' }
-        : { derived: { '@name': returnType } }
+        : { ["derived"]: { '@name': returnType } }
     }
 
     switch (variable.class) {
