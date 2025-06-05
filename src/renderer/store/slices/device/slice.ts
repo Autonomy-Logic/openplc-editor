@@ -43,7 +43,12 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       },
     },
     pinMapping: {
-      maps: { digitalInput: [], digitalOutput: [], analogInput: [], analogOutput: [] },
+      maps: {
+        digitalInput: [{ pin: 'pin0', address: '%IX0.0', name: 'name0' }],
+        digitalOutput: [{ pin: 'pin1', address: '%QX0.0', name: 'name1' }],
+        analogInput: [{ pin: 'pin2', address: '%IW0', name: 'name2' }],
+        analogOutput: [{ pin: 'pin3', address: '%QW0', name: 'name3' }],
+      },
       currentSelectedPinTableRow: -1,
     },
   },
@@ -62,9 +67,11 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       )
     },
     selectPinTableRow: (selectedRow) => {
-      setState(produce(({ deviceDefinitions }: DeviceSlice) => {
-        deviceDefinitions.pinMapping.currentSelectedPinTableRow = selectedRow
-      }))
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          deviceDefinitions.pinMapping.currentSelectedPinTableRow = selectedRow
+        }),
+      )
     },
     /** The default action to add a pin is handled by the editor itself, so we don't need to check for if the pin is already declared */
     addPin: ({ pinType = 'digitalInput', pinToAdd }): void => {

@@ -59,6 +59,10 @@ export const boardSelectors = {
     }
     return nextPinMappingDataState
   },
+  useAddPin: () => useOpenPLCStore((state) => state.deviceActions.addPin),
+  useSelectPinTableRow: () => useOpenPLCStore((state) => state.deviceActions.selectPinTableRow),
+  useCurrentSelectedPinTableRow: () =>
+    useOpenPLCStore((state) => state.deviceDefinitions.pinMapping.currentSelectedPinTableRow),
 }
 
 export const communicationSelectors = {

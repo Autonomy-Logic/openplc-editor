@@ -18,6 +18,10 @@ const Board = memo(function () {
   const setCommunicationPort = boardSelectors.useSetCommunicationPort()
   const setAvailableOptions = boardSelectors.useSetAvailableOptions()
   const pinMappingData = boardSelectors.usePinMappingData()
+  const currentSelectedPinTableRow = boardSelectors.useCurrentSelectedPinTableRow()
+  const setCurrentSelectedPinTableRow = boardSelectors.useSelectPinTableRow()
+  const addPin = boardSelectors.useAddPin()
+  // const removePin = boardSelectors.useRemovePin()
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
@@ -92,6 +96,9 @@ const Board = memo(function () {
     },
     [setDeviceBoard],
   )
+  const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
+  // This is a mock implementation to test the increment address logic
+  const handleAddPin = () => addPin({ pinType: 'analogInput', pinToAdd: { name: 'newPinName' } })
 
   return (
     <DeviceEditorSlot heading='Board Settings'>
@@ -230,7 +237,7 @@ const Board = memo(function () {
             actions={[
               {
                 ariaLabel: 'Add table row button',
-                onClick: () => console.log('Add'),
+                onClick: handleAddPin,
                 icon: <PlusIcon className='!stroke-brand' />,
                 id: 'add-pin-button',
               },
@@ -243,7 +250,11 @@ const Board = memo(function () {
             ]}
           />
         </div>
-        <PinMappingTable pins={pinMappingData} handleRowClick={() => {}} selectedRowId={0} />
+        <PinMappingTable
+          pins={pinMappingData}
+          handleRowClick={handleRowClick}
+          selectedRowId={currentSelectedPinTableRow}
+        />
       </div>
     </DeviceEditorSlot>
   )

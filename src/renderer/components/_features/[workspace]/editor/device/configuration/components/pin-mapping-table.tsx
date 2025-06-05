@@ -1,6 +1,7 @@
 import { GenericTable } from '@root/renderer/components/_atoms/generic-table'
 import type { DevicePin } from '@root/renderer/store/slices/device'
 import { createColumnHelper } from '@tanstack/react-table'
+import { startCase } from 'lodash'
 
 type DevicePinColumns = DevicePin & {
   pinType?: 'digitalInput' | 'digitalOutput' | 'analogInput' | 'analogOutput'
@@ -15,7 +16,7 @@ const columns = [
   }),
   columnHelper.accessor('pinType', {
     header: 'Type',
-    cell: (props) => props.getValue(),
+    cell: (props) => startCase(props.getValue()),
   }),
   columnHelper.accessor('address', {
     header: 'Address',
