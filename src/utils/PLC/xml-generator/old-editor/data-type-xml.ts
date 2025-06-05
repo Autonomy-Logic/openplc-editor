@@ -1,7 +1,20 @@
 import { PLCDataType } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data'
+import { BaseXml } from '@root/types/PLC/xml-data/old-editor'
 
-export const parseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
+const parseDimensions = (dimensions: Array<{ dimension: string }>) => {
+  return dimensions?.map((dimension) => {
+    if (!dimension?.dimension || typeof dimension.dimension !== 'string') {
+      throw new Error(`Invalid dimension format: ${dimension.dimension}`)
+    }
+    const [lower, upper] = dimension.dimension.split('..')
+    if (!lower || !upper) {
+      throw new Error(`Invalid dimension range: ${dimension.dimension}`)
+    }
+    return { '@lower': lower, '@upper': upper }
+  }) || []
+}
+
+export const oldEditorParseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
   dataTypes.forEach((dataType) => {
     switch (dataType.derivation) {
       case 'array':
@@ -9,14 +22,7 @@ export const parseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
           '@name': dataType.name,
           baseType: {
             array: {
-              dimension: dataType.dimensions.map((dimension) => {
-                const lower = dimension.dimension.split('..')[0]
-                const upper = dimension.dimension.split('..')[1]
-                return {
-                  '@lower': lower,
-                  '@upper': upper,
-                }
-              }),
+              dimension: parseDimensions(dataType.dimensions),
               baseType: {
                 [dataType.baseType.definition === 'user-data-type'
                   ? 'derived'
@@ -101,14 +107,7 @@ export const parseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
                       '@name': variable.name,
                       type: {
                         array: {
-                          dimension: variable.type.data.dimensions.map((dimension) => {
-                            const lower = dimension.dimension.split('..')[0]
-                            const upper = dimension.dimension.split('..')[1]
-                            return {
-                              '@lower': lower,
-                              '@upper': upper,
-                            }
-                          }),
+                          dimension: parseDimensions(variable.type.data.dimensions),
                           baseType: {
                             [variable.type.data.baseType.definition === 'user-data-type'
                               ? 'derived'

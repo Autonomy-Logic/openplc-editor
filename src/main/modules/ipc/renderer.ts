@@ -309,8 +309,9 @@ const rendererProcessBridge = {
   exportProjectXml: async (
     pathToUserProject: string,
     dataToCreateXml: ProjectState['data'],
+    parseTo: 'old-editor' | 'codesys',
   ): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml),
+    ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml, parseTo),
 
   /**
    * Creates an XML file for the build.
@@ -327,9 +328,9 @@ const rendererProcessBridge = {
   /**
    * Registers a callback for the 'compiler:export-project-request' event.
    * @param callback - The callback to be invoked when the event is triggered.
-   */
-  exportProjectRequest: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('compiler:export-project-request', (_event) => callback(_event)),
+   */exportProjectRequest: (callback: IpcRendererCallbacks) =>
+
+    ipcRenderer.on('compiler:export-project-request', (_event, value) => callback(_event, value)),
 
   /**
    * Removes all listeners for the 'compiler:export-project-request' event.

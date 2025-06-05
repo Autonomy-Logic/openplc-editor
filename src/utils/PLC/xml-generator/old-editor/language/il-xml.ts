@@ -1,4 +1,4 @@
-import { IlXML } from '@root/types/PLC/xml-data'
+import { IlXML } from "@root/types/PLC/xml-data/old-editor"
 
 const ilToXML = (value: string) => {
   const ilXML: {

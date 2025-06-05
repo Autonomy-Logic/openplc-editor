@@ -14,52 +14,7 @@ import {
   FbdXML,
   InVariableFbdXML,
   OutVariableFbdXML,
-} from '@root/types/PLC/xml-data/pous/languages/fbd-diagram'
-import { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react'
-
-const getEdgePaths = (edge: FlowEdge, nodes: FlowNode[]) => {
-  const sourceNodeHandle = (nodes.find((node) => node.id === edge.source)?.data as BasicNodeData).outputHandles?.find(
-    (handle) => handle.id === edge.sourceHandle,
-  )
-  const targetNodeHandle = (nodes.find((node) => node.id === edge.target)?.data as BasicNodeData).inputHandles?.find(
-    (handle) => handle.id === edge.targetHandle,
-  )
-
-  if (!sourceNodeHandle || !targetNodeHandle) {
-    console.log('Error: source or target handle not found')
-    console.log('Source:', sourceNodeHandle)
-    console.log('Target:', targetNodeHandle)
-    return
-  }
-
-  const xyPath: { x: number; y: number }[] = []
-
-  // First add the source handle position
-  xyPath.push({
-    x: sourceNodeHandle.glbPosition.x,
-    y: sourceNodeHandle.glbPosition.y,
-  })
-  // Then add the path between the source and target handles
-  if (sourceNodeHandle.glbPosition.y !== targetNodeHandle.glbPosition.y) {
-    // First add the horizontal path to the middle path
-    const middleX = (sourceNodeHandle.glbPosition.x + targetNodeHandle.glbPosition.x) / 2
-    xyPath.push({
-      x: middleX,
-      y: sourceNodeHandle.glbPosition.y,
-    })
-    xyPath.push({
-      x: middleX,
-      y: targetNodeHandle.glbPosition.y,
-    })
-  }
-  // Finally add the target handle position
-  xyPath.push({
-    x: targetNodeHandle.glbPosition.x,
-    y: targetNodeHandle.glbPosition.y,
-  })
-
-  return xyPath
-}
+} from '@root/types/PLC/xml-data/codesys/pous/languages/fbd-diagram'
 
 /**
  * Translate react flow nodes to XML
@@ -69,30 +24,30 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
   const inputVariables: BlockFbdXML['inputVariables']['variable'] = node.data.inputHandles
     .flatMap((handle) => {
       const edges = rung.edges.filter((edge) => edge.target === node.id && edge.targetHandle === handle.id)
-      if (!edges) return undefined
+      if (edges.length === 0)
+        return {
+          '@formalParameter': handle.id || '',
+          connectionPointIn: {
+            connection: [],
+          },
+        }
 
       return edges.map((edge) => {
         const sourceNode = rung.nodes.find((node) => node.id === edge.source)
         if (!sourceNode) return undefined
 
-        const path = getEdgePaths(edge, rung.nodes)
-        if (!path) return undefined
-
         return {
           '@formalParameter': handle.id || '',
           connectionPointIn: {
-            relPosition: {
-              '@x': handle.relPosition.x || 0,
-              '@y': handle.relPosition.y || 0,
-            },
             connection: [
               {
                 '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-                '@formalParameter': sourceNode.type === 'block' ? (edge.sourceHandle as string) : undefined,
-                position: path.reverse().map((point) => ({
-                  '@x': point.x,
-                  '@y': point.y,
-                })),
+                '@formalParameter':
+                  sourceNode.type === 'block'
+                    ? (edge.sourceHandle as string) === 'OUT'
+                      ? '   '
+                      : (edge.sourceHandle as string)
+                    : undefined,
               },
             ],
           },
@@ -102,16 +57,30 @@ const blockToXml = (node: BlockNode<BlockVariant>, rung: FBDRungState): BlockFbd
     .filter((variable) => variable !== undefined)
 
   const outputVariable: BlockFbdXML['outputVariables']['variable'] = node.data.outputHandles
-    .map((handle) => {
-      return {
-        '@formalParameter': handle.id || '',
-        connectionPointOut: {
-          relPosition: {
-            '@x': handle.relPosition.x || 0,
-            '@y': handle.relPosition.y || 0,
+    .flatMap((handle, handleIndex) => {
+      const edges = rung.edges.filter((edge) => edge.source === node.id && edge.sourceHandle === handle.id)
+      if (edges.length === 0)
+        return {
+          '@formalParameter': handle.id || '',
+          connectionPointOut: {
+            expression: undefined,
           },
-        },
-      }
+        }
+
+      return edges.map((edge) => {
+        const targetNode = rung.nodes.find((node) => node.id === edge.target)
+        if (!targetNode) return undefined
+
+        return {
+          '@formalParameter': handle.id === 'OUT' ? '   ' : handle.id || '',
+          connectionPointOut: {
+            expression:
+              handleIndex !== 0 && targetNode.type?.includes('variable')
+                ? (targetNode as VariableNode).data.variable.name
+                : undefined,
+          },
+        }
+      })
     })
     .filter((variable) => variable !== undefined)
 
@@ -149,44 +118,42 @@ const inputVariableToXml = (node: VariableNode): InVariableFbdXML => {
       '@x': node.position.x,
       '@y': node.position.y,
     },
-    connectionPointOut: {
-      relPosition: {
-        '@x': node.data.outputConnector?.relPosition.x || 0,
-        '@y': node.data.outputConnector?.relPosition.y || 0,
-      },
-    },
+    connectionPointOut: '',
     expression: node.data.variable.name,
   }
 
   return inputVariableXML
 }
 
-const outputVariableToXml = (node: VariableNode, rung: FBDRungState): OutVariableFbdXML => {
+const outputVariableToXml = (node: VariableNode, rung: FBDRungState): OutVariableFbdXML | undefined => {
   const inputEdges = rung.edges.filter((edge) => edge.target === node.id)
 
   const inputConnection: OutVariableFbdXML['connectionPointIn'] = {
-    relPosition: {
-      '@x': node.data.inputConnector?.relPosition.x || 0,
-      '@y': node.data.inputConnector?.relPosition.y || 0,
-    },
     connection: inputEdges
       .map((edge) => {
         const sourceNode = rung.nodes.find((node) => node.id === edge.source)
-        if (!sourceNode) return undefined
-
-        const path = getEdgePaths(edge, rung.nodes)
-        if (!path) return undefined
+        const isConnectedToOutputConnector =
+          (sourceNode?.data as BasicNodeData).outputConnector?.id === edge.sourceHandle
 
         return {
-          '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-          '@formalParameter': sourceNode.type === 'block' ? (edge.sourceHandle as string) : undefined,
-          position: path.reverse().map((point) => ({
-            '@x': point.x,
-            '@y': point.y,
-          })),
+          '@refLocalId': sourceNode
+            ? isConnectedToOutputConnector
+              ? (sourceNode?.data as BasicNodeData).numericId
+              : 'undefined'
+            : 'undefined',
+          '@formalParameter':
+            sourceNode?.type === 'block'
+              ? (edge.sourceHandle as string) === 'OUT'
+                ? '   '
+                : (edge.sourceHandle as string)
+              : undefined,
         }
       })
-      .filter((connection) => connection !== undefined),
+      .filter((connection) => connection['@refLocalId'] !== 'undefined'),
+  }
+
+  if (inputConnection.connection.length === 0) {
+    return undefined
   }
 
   const outputVariableXML: OutVariableFbdXML = {
@@ -219,16 +186,14 @@ const connectorToXml = (node: ConnectionNode, rung: FBDRungState): ConnectorFbdX
         const sourceNode = rung.nodes.find((node) => node.id === edge.source)
         if (!sourceNode) return undefined
 
-        const path = getEdgePaths(edge, rung.nodes)
-        if (!path) return undefined
-
         return {
           '@refLocalId': (sourceNode.data as BasicNodeData).numericId,
-          '@formalParameter': sourceNode.type === 'block' ? (edge.sourceHandle as string) : undefined,
-          position: path.reverse().map((point) => ({
-            '@x': point.x,
-            '@y': point.y,
-          })),
+          '@formalParameter':
+            sourceNode.type === 'block'
+              ? (edge.sourceHandle as string) === 'OUT'
+                ? '   '
+                : (edge.sourceHandle as string)
+              : undefined,
         }
       })
       .filter((connection) => connection !== undefined),
@@ -280,7 +245,8 @@ const commentToXml = (node: CommentNode): CommentFbdXML => {
       '@y': node.position.y,
     },
     content: {
-      'xhtml:p': {
+      'xhtml': {
+        '@xmlns': 'http://www.w3.org/1999/xhtml',
         $: node.data.content,
       },
     },
@@ -302,7 +268,6 @@ const fbdToXml = (rung: FBDRungState) => {
       FBD: {
         block: [],
         inVariable: [],
-        inOutVariable: [],
         outVariable: [],
         connector: [],
         continuation: [],
@@ -320,9 +285,11 @@ const fbdToXml = (rung: FBDRungState) => {
       case 'input-variable':
         fbdXML.body.FBD.inVariable.push(inputVariableToXml(node as VariableNode))
         break
-      case 'output-variable':
-        fbdXML.body.FBD.outVariable.push(outputVariableToXml(node as VariableNode, rung))
+      case 'output-variable': {
+        const outputVarXml = outputVariableToXml(node as VariableNode, rung)
+        if (outputVarXml) fbdXML.body.FBD.outVariable.push(outputVarXml)
         break
+      }
       case 'connector':
         fbdXML.body.FBD.connector.push(connectorToXml(node as ConnectionNode, rung))
         break

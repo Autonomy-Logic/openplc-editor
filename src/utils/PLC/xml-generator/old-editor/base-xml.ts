@@ -1,12 +1,12 @@
 import { ProjectState } from '@root/renderer/store/slices'
-import { BaseXml } from '@root/types/PLC/xml-data/base-diagram'
+import { BaseXml } from '@root/types/PLC/xml-data/old-editor/base-diagram'
 import { create } from 'xmlbuilder2'
 
-import formatDate from '../formatDate'
-import { instanceToXml } from './instances-xml'
-import { parsePousToXML } from './pou-xml'
+import formatDate from '../../../formatDate'
+import { oldEditorInstanceToXml } from './instances-xml'
+import { oldEditorParsePousToXML } from './pou-xml'
 
-const getBaseXmlStructure = (): BaseXml => ({
+const getBaseOldEditorXmlStructure = (): BaseXml => ({
   project: {
     '@xmlns': 'http://www.plcopen.org/xml/tc6_0201',
     '@xmlns:xsd': 'http://www.w3.org/2001/XMLSchema-instance',
@@ -71,19 +71,19 @@ const getBaseXmlStructure = (): BaseXml => ({
  * @deprecated
  */
 export const parseProjectToXML = (project: ProjectState): string => {
-  let xmlResult = getBaseXmlStructure()
+  let xmlResult = getBaseOldEditorXmlStructure()
 
   /**
    * Parse POUs
    */
   const pous = project.data.pous
-  xmlResult = parsePousToXML(xmlResult, pous)
+  xmlResult = oldEditorParsePousToXML(xmlResult, pous)
 
   /**
    * Parse instances
    */
   const configuration = project.data.configuration
-  xmlResult = instanceToXml(xmlResult, configuration)
+  xmlResult = oldEditorInstanceToXml(xmlResult, configuration)
 
   const doc = create(xmlResult)
   doc.dec({ version: '1.0', encoding: 'utf-8' })
@@ -91,4 +91,4 @@ export const parseProjectToXML = (project: ProjectState): string => {
   return xml
 }
 
-export { getBaseXmlStructure }
+export { getBaseOldEditorXmlStructure }

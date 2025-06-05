@@ -58,8 +58,8 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-accelerator')
   }
 
-  handleExportProjectRequest() {
-    this.mainWindow.webContents.send('compiler:export-project-request')
+  handleExportProjectRequest(parseTo: 'old-editor' | 'codesys') {
+    this.mainWindow.webContents.send('compiler:export-project-request', parseTo)
   }
 
   async handleGetRecent() {
@@ -187,7 +187,11 @@ export default class MenuBuilder {
         },
         {
           label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
-          click: () => this.handleExportProjectRequest(),
+          click: () => this.handleExportProjectRequest('old-editor'),
+        },
+        {
+          label: i18n.t('menu:file.submenu.exportToCodeSys'),
+          click: () => this.handleExportProjectRequest('codesys'),
         },
         { type: 'separator' },
         {
@@ -441,7 +445,11 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
-            click: () => this.handleExportProjectRequest(),
+            click: () => this.handleExportProjectRequest('old-editor'),
+          },
+          {
+            label: i18n.t('menu:file.submenu.exportToCodeSys'),
+            click: () => this.handleExportProjectRequest('codesys'),
           },
           {
             type: 'separator',

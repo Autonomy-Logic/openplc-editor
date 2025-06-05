@@ -15,7 +15,7 @@ import {
   LeftPowerRailLadderXML,
   OutVariableLadderXML,
   RightPowerRailLadderXML,
-} from '@root/types/PLC/xml-data/pous/languages/ladder-diagram'
+} from '@root/types/PLC/xml-data/codesys/pous/languages/ladder-diagram'
 import { Node } from '@xyflow/react'
 
 /**
@@ -95,7 +95,8 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
     if (sourceNode.type !== 'parallel') {
       return {
         '@refLocalId': sourceNode.data.numericId,
-        '@formalParameter': sourceNode.data.outputConnector?.id,
+        '@formalParameter':
+          sourceNode.data.outputConnector?.id === 'OUT' ? '' : sourceNode.data.outputConnector?.id || '',
         position: [
           // Final edge destination
           {
@@ -138,7 +139,7 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
       if (lastParallelSerialEdge && lastParallelSerialEdge.target === node.id) {
         return nodes.map((node, index) => ({
           '@refLocalId': node.data.numericId,
-          '@formalParameter': node.data.outputConnector?.id,
+          '@formalParameter': node.data.outputConnector?.id === 'OUT' ? '' : node.data.outputConnector?.id || '',
           position:
             index === 0
               ? [
@@ -210,7 +211,7 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
       return nodes.map((node) => {
         return {
           '@refLocalId': node.data.numericId,
-          '@formalParameter': node.data.outputConnector?.id,
+          '@formalParameter': node.data.outputConnector?.id === 'OUT' ? '' : node.data.outputConnector?.id || '',
           position: [
             // Final edge destination
             {
@@ -245,7 +246,7 @@ const findConnections = (node: Node<BasicNodeData>, rung: RungLadderState, offse
     const closeConnections = nodes.map((node, index) => {
       return {
         '@refLocalId': node.data.numericId,
-        '@formalParameter': node.data.outputConnector?.id,
+        '@formalParameter': node.data.outputConnector?.id === 'OUT' ? '' : node.data.outputConnector?.id || '',
         position:
           index === 0
             ? [
@@ -311,22 +312,16 @@ const leftRailToXML = (leftRail: PowerRailNode, offsetY: number = 0): LeftPowerR
       '@y': (leftRail.position.y ?? 0) + offsetY,
     },
     connectionPointOut: {
-      '@formalParameter': '',
-      relPosition: {
-        '@x': leftRail.data.outputConnector?.relPosition.x || 0,
-        '@y': leftRail.data.outputConnector?.relPosition.y || 0,
-      },
+      '@formalParameter': 'none',
     },
   }
 }
 
 const rightRailToXML = (
   rightRail: PowerRailNode,
-  rung: RungLadderState,
+  _rung: RungLadderState,
   offsetY: number = 0,
 ): RightPowerRailLadderXML => {
-  const connections = findConnections(rightRail, rung, offsetY)
-
   return {
     '@localId': rightRail.data.numericId,
     '@width': rightRail.width as number,
@@ -335,18 +330,25 @@ const rightRailToXML = (
       '@x': rightRail.position.x,
       '@y': (rightRail.position.y ?? 0) + offsetY,
     },
-    connectionPointIn: {
-      relPosition: {
-        '@x': rightRail.data.inputConnector?.relPosition.x || 0,
-        '@y': rightRail.data.inputConnector?.relPosition.y || 0,
-      },
-      connection: connections,
-    },
+    connectionPointIn: '',
   }
 }
 
-const contactToXML = (contact: ContactNode, rung: RungLadderState, offsetY: number = 0): ContactLadderXML => {
+const contactToXML = (
+  contact: ContactNode,
+  rung: RungLadderState,
+  offsetY: number = 0,
+  leftRailId: string,
+): ContactLadderXML => {
   const connections = findConnections(contact, rung, offsetY)
+
+  const railConnection = connections.find((connection) => {
+    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node as PowerRailNode).data.variant === 'left')
+    if (rail?.data.numericId === connection['@refLocalId']) {
+      return true
+    }
+    return false
+  })
 
   return {
     '@localId': contact.data.numericId,
@@ -360,24 +362,36 @@ const contactToXML = (contact: ContactNode, rung: RungLadderState, offsetY: numb
       '@y': (contact.position.y ?? 0) + offsetY,
     },
     connectionPointIn: {
-      relPosition: {
-        '@x': contact.data.inputConnector?.relPosition.x || 0,
-        '@y': contact.data.inputConnector?.relPosition.y || 0,
-      },
-      connection: connections,
+      connection: connections.map((connection) => {
+        const connectionNode = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
+        const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
+        const formalParameter =
+          connectionNode?.type === 'block'
+            ? (connectionNode as BlockNode<BlockVariant>).data.variant.type === 'function'
+              ? (connectionNode as BlockNode<BlockVariant>).data.variant.name
+              : connection['@formalParameter']
+            : undefined
+        return {
+          '@refLocalId': refLocalId,
+          '@formalParameter': formalParameter,
+        }
+      }),
     },
-    connectionPointOut: {
-      relPosition: {
-        '@x': contact.data.outputConnector?.relPosition.x || 0,
-        '@y': contact.data.outputConnector?.relPosition.y || 0,
-      },
-    },
+    connectionPointOut: '',
     variable: contact.data.variable && contact.data.variable.name !== '' ? contact.data.variable.name : 'A',
   }
 }
 
-const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0): CoilLadderXML => {
+const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0, leftRailId: string): CoilLadderXML => {
   const connections = findConnections(coil, rung, offsetY)
+
+  const railConnection = connections.find((connection) => {
+    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node as PowerRailNode).data.variant === 'left')
+    if (rail?.data.numericId === connection['@refLocalId']) {
+      return true
+    }
+    return false
+  })
 
   return {
     '@localId': coil.data.numericId,
@@ -392,81 +406,62 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0): 
       '@y': (coil.position.y ?? 0) + offsetY,
     },
     connectionPointIn: {
-      relPosition: {
-        '@x': coil.data.inputConnector?.relPosition.x || 0,
-        '@y': coil.data.inputConnector?.relPosition.y || 0,
-      },
-      connection: connections,
+      connection: connections.map((connection) => {
+        const connectionNode = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
+        const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
+        const formalParameter =
+          connectionNode?.type === 'block'
+            ? (connectionNode as BlockNode<BlockVariant>).data.variant.type === 'function'
+              ? (connectionNode as BlockNode<BlockVariant>).data.variant.name
+              : connection['@formalParameter']
+            : undefined
+        return {
+          '@refLocalId': refLocalId,
+          '@formalParameter': formalParameter,
+        }
+      }),
     },
-    connectionPointOut: {
-      relPosition: {
-        '@x': coil.data.outputConnector?.relPosition.x || 0,
-        '@y': coil.data.outputConnector?.relPosition.y || 0,
-      },
-    },
+    connectionPointOut: '',
     variable: coil.data.variable && coil.data.variable.name !== '' ? coil.data.variable.name : 'A',
   }
 }
 
-const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offsetY: number = 0): BlockLadderXML => {
+const blockToXml = (
+  block: BlockNode<BlockVariant>,
+  rung: RungLadderState,
+  offsetY: number = 0,
+  leftRailId: string,
+): BlockLadderXML => {
   const connections = findConnections(block, rung, offsetY)
 
-  const inputVariables = block.data.inputHandles.map((handle) => {
-    let auxConnections = connections
-
-    const alreadyFoundConnection: {
-      node: Node | undefined
-      connection:
-        | {
-            '@refLocalId': string
-            '@formalParameter': string
-            position: {
-              '@x': number
-              '@y': number
-            }[]
-          }
-        | undefined
-    } = {
-      node: undefined,
-      connection: undefined,
+  // If the block is connected to a power rail, replace the refLocalId with the left rail id at connections
+  const railConnection = connections.find((connection) => {
+    const rail = rung.nodes.find((node) => node.type === 'powerRail' && (node as PowerRailNode).data.variant === 'left')
+    if (rail?.data.numericId === connection['@refLocalId']) {
+      return true
     }
-    auxConnections.forEach((connection, index) => {
-      alreadyFoundConnection.node = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
-      if (alreadyFoundConnection.node) {
-        alreadyFoundConnection.connection = connection
-        auxConnections = auxConnections.splice(index, 1)
-        return
-      }
-    })
-    if (alreadyFoundConnection.node)
+    return false
+  })
+
+  const inputVariables = block.data.inputHandles.map((handle) => {
+    // Only the input of the block contains connections from other blocks
+    // The other handles are connected to variables
+    if (handle.id === block.data.inputConnector?.id) {
       return {
         '@formalParameter': handle.id || '',
         connectionPointIn: {
-          relPosition: {
-            '@x': handle.relPosition.x || 0,
-            '@y': handle.relPosition.y || 0,
-          },
-          connection: [
-            {
-              '@refLocalId': alreadyFoundConnection.connection?.['@refLocalId'] || '',
-              position: alreadyFoundConnection.connection?.position || [
-                // Connection at the block
-                {
-                  '@x': handle.glbPosition.x || 0,
-                  '@y': (handle.glbPosition.y || 0) + offsetY,
-                },
-                // Start the edge connecting the variable
-                {
-                  '@x': (alreadyFoundConnection.node?.data as BasicNodeData).outputConnector?.glbPosition.x || 0,
-                  '@y':
-                    ((alreadyFoundConnection.node?.data as BasicNodeData).outputConnector?.glbPosition.y || 0) +
-                    offsetY,
-                },
-              ],
-            },
-          ],
+          connection: connections.map((connection) => {
+            const connectionNode = rung.nodes.find((node) => node.data.numericId === connection['@refLocalId'])
+            const refLocalId = railConnection ? leftRailId.toString() : connection['@refLocalId']
+            const formalParameter = connectionNode?.type === 'block' ? connection['@formalParameter'] : undefined
+            return {
+              '@refLocalId': refLocalId,
+              '@formalParameter': formalParameter,
+            }
+          }),
         },
       }
+    }
 
     // Check if the handle is connected to an existing variable node
     const variableNode = rung.nodes.find(
@@ -480,39 +475,29 @@ const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offse
     return {
       '@formalParameter': handle.id || '',
       connectionPointIn: {
-        relPosition: {
-          '@x': handle.relPosition.x || 0,
-          '@y': handle.relPosition.y || 0,
-        },
         connection: [
           {
             '@refLocalId': variableNode.data.numericId,
-            position: [
-              // Connection at the block
-              {
-                '@x': handle.glbPosition.x || 0,
-                '@y': (handle.glbPosition.y || 0) + offsetY,
-              },
-              // Start the edge connecting the variable
-              {
-                '@x': variableNode.data.outputConnector?.glbPosition.x || 0,
-                '@y': (variableNode.data.outputConnector?.glbPosition.y || 0) + offsetY,
-              },
-            ],
           },
         ],
       },
     }
   })
 
-  const outputVariable = block.data.outputHandles.map((handle) => {
+  const outputVariable = block.data.outputHandles.map((handle, handleIndex) => {
+    const edge = rung.edges.find((edge) => edge.source === block.id && edge.sourceHandle === handle.id)
+    const connectedNode = rung.nodes.find((node) => node.id === edge?.target)
+
     return {
-      '@formalParameter': handle.id || '',
+      '@formalParameter':
+        handle.id === 'OUT' ? (block.data.variant.type === 'function' ? block.data.variant.name : '') : handle.id || '',
       connectionPointOut: {
-        relPosition: {
-          '@x': handle.relPosition.x || 0,
-          '@y': handle.relPosition.y || 0,
-        },
+        expression:
+          handleIndex !== 0
+            ? connectedNode && connectedNode.type === 'variable'
+              ? (connectedNode as VariableNode).data.variable.name
+              : ''
+            : undefined,
       },
     }
   })
@@ -541,6 +526,7 @@ const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offse
 const inVariableToXML = (variable: VariableNode, offsetY: number = 0): InVariableLadderXML => {
   return {
     '@localId': variable.data.numericId,
+    '@executionOrderId': variable.data.executionOrder,
     '@width': variable.width as number,
     '@height': variable.height as number,
     '@negated': false,
@@ -548,21 +534,23 @@ const inVariableToXML = (variable: VariableNode, offsetY: number = 0): InVariabl
       '@x': variable.position.x,
       '@y': (variable.position.y ?? 0) + offsetY,
     },
-    connectionPointOut: {
-      relPosition: {
-        '@x': variable.data.outputConnector?.relPosition.x || 0,
-        '@y': variable.data.outputConnector?.relPosition.y || 0,
-      },
-    },
+    connectionPointOut: '',
     expression: variable.data.variable.name,
   }
 }
 
-const outVariableToXML = (variable: VariableNode, rung: RungLadderState, offsetY: number = 0): OutVariableLadderXML => {
+const outVariableToXML = (
+  variable: VariableNode,
+  rung: RungLadderState,
+  offsetY: number = 0,
+): OutVariableLadderXML | undefined => {
   const connectedBlock = rung.nodes.find((node) => node.id === variable.data.block.id) as BlockNode<BlockVariant>
+
+  if (variable.data.block.handleId !== connectedBlock.data.outputConnector?.id) return undefined
 
   return {
     '@localId': variable.data.numericId,
+    '@executionOrderId': variable.data.executionOrder,
     '@width': variable.width as number,
     '@height': variable.height as number,
     '@negated': false,
@@ -571,26 +559,15 @@ const outVariableToXML = (variable: VariableNode, rung: RungLadderState, offsetY
       '@y': (variable.position.y ?? 0) + offsetY,
     },
     connectionPointIn: {
-      relPosition: {
-        '@x': variable.data.inputConnector?.relPosition.x || 0,
-        '@y': variable.data.inputConnector?.relPosition.y || 0,
-      },
       connection: [
         {
           '@refLocalId': connectedBlock.data.numericId,
-          '@formalParameter': variable.data.block.handleId,
-          position: [
-            // Final edge destination
-            {
-              '@x': variable.data.inputConnector?.glbPosition.x || 0,
-              '@y': (variable.data.inputConnector?.glbPosition.y || 0) + offsetY,
-            },
-            // Initial edge source
-            {
-              '@x': connectedBlock.data.outputConnector?.glbPosition.x || 0,
-              '@y': (connectedBlock.data.outputConnector?.glbPosition.y || 0) + offsetY,
-            },
-          ],
+          '@formalParameter':
+            variable.data.block.handleId === 'OUT'
+              ? connectedBlock.data.variant.type === 'function'
+                ? connectedBlock.data.variant.name
+                : ''
+              : variable.data.block.handleId || '',
         },
       ],
     },
@@ -610,41 +587,49 @@ const ladderToXml = (rungs: RungLadderState[]) => {
     body: {
       LD: {
         leftPowerRail: [],
-        rightPowerRail: [],
         block: [],
         contact: [],
         coil: [],
         inVariable: [],
-        inOutVariable: [],
         outVariable: [],
+        rightPowerRail: [],
       },
     },
   }
   let offsetY = 0
+  let leftRailId = ''
   rungs.forEach((rung, _index) => {
     const { nodes } = rung
+
     nodes.forEach((node) => {
       switch (node.type) {
         case 'powerRail':
-          if ((node as PowerRailNode).data.variant === 'left')
+          if ((node as PowerRailNode).data.variant === 'left' && ladderXML.body.LD.leftPowerRail.length === 0) {
             ladderXML.body.LD.leftPowerRail.push(leftRailToXML(node as PowerRailNode, offsetY))
-          else ladderXML.body.LD.rightPowerRail.push(rightRailToXML(node as PowerRailNode, rung, offsetY))
+            leftRailId = (node as PowerRailNode).data.numericId
+          } else {
+            if (ladderXML.body.LD.rightPowerRail.length === 0) {
+              ladderXML.body.LD.rightPowerRail.push(rightRailToXML(node as PowerRailNode, rung, offsetY))
+            }
+          }
           break
         case 'contact':
-          ladderXML.body.LD.contact.push(contactToXML(node as ContactNode, rung, offsetY))
+          ladderXML.body.LD.contact.push(contactToXML(node as ContactNode, rung, offsetY, leftRailId))
           break
         case 'coil':
-          ladderXML.body.LD.coil.push(coilToXml(node as CoilNode, rung, offsetY))
+          ladderXML.body.LD.coil.push(coilToXml(node as CoilNode, rung, offsetY, leftRailId))
           break
         case 'block':
-          ladderXML.body.LD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung, offsetY))
+          ladderXML.body.LD.block.push(blockToXml(node as BlockNode<BlockVariant>, rung, offsetY, leftRailId))
           break
         case 'variable':
           if ((node as VariableNode).data.variable.name === '') return
           if ((node as VariableNode).data.variant === 'input')
             ladderXML.body.LD.inVariable.push(inVariableToXML(node as VariableNode, offsetY))
-          if ((node as VariableNode).data.variant === 'output')
-            ladderXML.body.LD.outVariable.push(outVariableToXML(node as VariableNode, rung, offsetY))
+          if ((node as VariableNode).data.variant === 'output') {
+            const outVarXML = outVariableToXML(node as VariableNode, rung, offsetY)
+            if (outVarXML) ladderXML.body.LD.outVariable.push(outVarXML)
+          }
           break
         default:
           break

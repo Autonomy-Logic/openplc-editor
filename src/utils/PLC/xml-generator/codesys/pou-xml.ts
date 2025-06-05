@@ -2,16 +2,16 @@
 import { FBDRungState, RungLadderState } from '@root/renderer/store/slices'
 import { baseTypes } from '@root/shared/data'
 import { PLCPou } from '@root/types/PLC/open-plc'
-import { BaseXml } from '@root/types/PLC/xml-data'
-import { InterfaceXML } from '@root/types/PLC/xml-data/pous/interface/interface-diagram'
-import { VariableXML } from '@root/types/PLC/xml-data/variable/variable-diagram'
+import { BaseXml } from '@root/types/PLC/xml-data/codesys'
+import { InterfaceXML } from '@root/types/PLC/xml-data/codesys/pous/interface/interface-diagram'
+import { VariableXML } from '@root/types/PLC/xml-data/codesys/variable/variable-diagram'
 
 import { fbdToXml } from './language/fbd-xml'
 import { ilToXML } from './language/il-xml'
 import { ladderToXml } from './language/ladder-xml'
 import { stToXML } from './language/st-xml'
 
-export const parseInterface = (pou: PLCPou) => {
+export const codeSysParseInterface = (pou: PLCPou) => {
   const variables = pou.data.variables
   const returnType = pou.type === 'function' ? pou.data.returnType : undefined
 
@@ -82,7 +82,7 @@ export const parseInterface = (pou: PLCPou) => {
       const isBaseType = baseTypes.includes(returnType as (typeof baseTypes)[number])
       xml.returnType = isBaseType
         ? { [returnType.trim().toUpperCase() === 'STRING' ? returnType.toLowerCase() : returnType.toUpperCase()]: '' }
-        : { derived: { '@name': returnType } }
+        : { ["derived"]: { '@name': returnType } }
     }
 
     switch (variable.class) {
@@ -130,9 +130,9 @@ export const parseInterface = (pou: PLCPou) => {
   return xml
 }
 
-export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
+export const codeSysParsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
   pous.forEach((pou) => {
-    const interfaceResult = parseInterface(pou)
+    const interfaceResult = codeSysParseInterface(pou)
 
     switch (pou.data.body.language) {
       case 'il': {
@@ -142,11 +142,6 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
           interface: interfaceResult,
           body: result.body,
-          documentation: {
-            'xhtml:p': {
-              $: pou.data.documentation === '' ? ' ' : pou.data.documentation,
-            },
-          },
         })
         return
       }
@@ -157,11 +152,6 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
           interface: interfaceResult,
           body: result.body,
-          documentation: {
-            'xhtml:p': {
-              $: pou.data.documentation === '' ? ' ' : pou.data.documentation,
-            },
-          },
         })
         return
       }
@@ -173,11 +163,6 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
           interface: interfaceResult,
           body: result.body,
-          documentation: {
-            'xhtml:p': {
-              $: pou.data.documentation === '' ? ' ' : pou.data.documentation,
-            },
-          },
         })
         return
       }
@@ -189,11 +174,6 @@ export const parsePousToXML = (xml: BaseXml, pous: PLCPou[]) => {
           '@pouType': pou.type === 'function-block' ? 'functionBlock' : pou.type,
           interface: interfaceResult,
           body: result.body,
-          documentation: {
-            'xhtml:p': {
-              $: pou.data.documentation === '' ? ' ' : pou.data.documentation,
-            },
-          },
         })
         return
       }
