@@ -410,8 +410,6 @@ const coilToXml = (coil: CoilNode, rung: RungLadderState, offsetY: number = 0): 
 
 const blockToXml = (block: BlockNode<BlockVariant>, rung: RungLadderState, offsetY: number = 0): BlockLadderXML => {
   const connections = findConnections(block, rung, offsetY)
-  console.log('Translating block', block.data.numericId, 'with connections', connections)
-
   const inputVariables = block.data.inputHandles.map((handle) => {
     // Only the input of the block contains connections from other blocks
     // The other handles are connected to variables
