@@ -2,7 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { DeviceSlice } from './types'
-// import { extractNumberAtEnd } from './validation/pins'
+import { extractPositionForAnalogAddress, extractPositionsForDigitalAddress } from './validation/pins'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
   deviceAvailableOptions: {
@@ -43,11 +43,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       },
     },
     pinMapping: {
-      'digitalInput': [],
-      'digitalOutput': [],
-      'analogInput': [],
-      'analogOutput': []
-    }
+      maps: { digitalInput: [], digitalOutput: [], analogInput: [], analogOutput: [] },
+      currentSelectedPinTableRow: -1,
+    },
   },
 
   deviceActions: {
@@ -63,14 +61,74 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
+    selectPinTableRow: (selectedRow) => {
+      setState(produce(({ deviceDefinitions }: DeviceSlice) => {
+        deviceDefinitions.pinMapping.currentSelectedPinTableRow = selectedRow
+      }))
+    },
     /** The default action to add a pin is handled by the editor itself, so we don't need to check for if the pin is already declared */
-    addPin: ({ pinType, pinToAdd }): void => {
+    addPin: ({ pinType = 'digitalInput', pinToAdd }): void => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
+          const newPin = {
+            pin: pinToAdd.name ?? '',
+            address: '',
+            name: pinToAdd.name ?? '',
+          }
           // This should never return a falsy value, once all maps are initialized.
-          const filteredPinMapping = deviceDefinitions.pinMapping[pinType]
+          const filteredPinMapping = deviceDefinitions.pinMapping.maps[pinType]
           if (!filteredPinMapping) return
-         filteredPinMapping.push(pinToAdd)
+          const lastAddedPin = filteredPinMapping[filteredPinMapping.length - 1]
+          // Verify the validation type that should be applied
+          switch (pinType) {
+            case 'digitalInput': {
+              if (lastAddedPin === undefined) {
+                filteredPinMapping.push({ ...newPin, address: '%IX0.0' })
+                break
+              }
+              const { position, dotPosition } = extractPositionsForDigitalAddress(lastAddedPin.address)
+              if (dotPosition === 7) {
+                filteredPinMapping.push({ ...newPin, address: `%IX${position + 1}.0` })
+              } else {
+                filteredPinMapping.push({ ...newPin, address: `%IX${position}.${dotPosition + 1}` })
+              }
+              break
+            }
+            case 'digitalOutput': {
+              if (lastAddedPin === undefined) {
+                filteredPinMapping.push({ ...newPin, address: '%QX0.0' })
+                break
+              }
+              const { position, dotPosition } = extractPositionsForDigitalAddress(lastAddedPin.address)
+              if (dotPosition === 7) {
+                filteredPinMapping.push({ ...newPin, address: `%QX${position + 1}.0` })
+              } else {
+                filteredPinMapping.push({ ...newPin, address: `%QX${position}.${dotPosition + 1}` })
+              }
+              break
+            }
+            case 'analogInput': {
+              if (lastAddedPin === undefined) {
+                filteredPinMapping.push({ ...newPin, address: '%IW0' })
+                break
+              }
+              const position = extractPositionForAnalogAddress(lastAddedPin.address)
+              filteredPinMapping.push({ ...newPin, address: `%IW${position + 1}` })
+              break
+            }
+            case 'analogOutput': {
+              if (lastAddedPin === undefined) {
+                filteredPinMapping.push({ ...newPin, address: '%QW0' })
+                break
+              }
+              const position = extractPositionForAnalogAddress(lastAddedPin.address)
+              filteredPinMapping.push({ ...newPin, address: `%QW${position + 1}` })
+              break
+            }
+            default:
+              console.log('Unsupported pin type')
+              break
+          }
         }),
       )
     },

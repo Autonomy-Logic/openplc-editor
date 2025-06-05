@@ -85,7 +85,10 @@ type DevicePin = z.infer<typeof devicePinSchema>
  *  analogOutput: [ ]
  * }
  */
-const devicePinMappingSchema = z.record(z.enum(pinTypes), z.array(devicePinSchema))
+const devicePinMappingSchema = z.object({
+  maps: z.record(z.enum(pinTypes), z.array(devicePinSchema)),
+  currentSelectedPinTableRow: z.number(),
+})
 
 type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
 
@@ -150,7 +153,11 @@ const deviceActionSchema = z.object({
       }),
     )
     .returns(z.void()),
-  addPin: z.function().args(z.object({pinType: z.enum(pinTypes), pinToAdd: devicePinSchema})).returns(z.void()),
+  selectPinTableRow: z.function().args(z.number()).returns(z.void()),
+  addPin: z
+    .function()
+    .args(z.object({ pinType: z.enum(pinTypes), pinToAdd: devicePinSchema.partial() }))
+    .returns(z.void()),
   setDeviceBoard: z.function().args(z.string()).returns(z.void()),
   setCommunicationPort: z.function().args(z.string()).returns(z.void()),
   setCommunicationPreferences: z

@@ -15,14 +15,16 @@ const checkIfAddressExists = (pinMap: DevicePin[], address: string) => {
 /**
  * This function extracts the number at the end of a string.
  */
-const extractNumberAtEnd = (str: string): { number: number; string: string; length: number } => {
-  const match = str.match(/(\d+)$/)
+const extractPositionForAnalogAddress = (address: string) => {
+  const match = address.match(/(\d+)$/)
   const number = match ? parseInt(match[0], 10) : -1
-  return {
-    number,
-    string: match ? match[0] : '',
-    length: match ? match[0].length : 0,
-  }
+  return number
+}
+const extractPositionsForDigitalAddress = (address: string) => {
+  const stringWithNoPrefix = address.replace('%IX', '').replace('%QX', '')
+  const position = parseInt(stringWithNoPrefix.split('.')[0])
+  const dotPosition = parseInt(stringWithNoPrefix.split('.')[1])
+  return { position, dotPosition }
 }
 
 /**
@@ -51,4 +53,4 @@ const pinAddressValidation = (pinAddress: string, pinType: string) => {
   }
 }
 
-export { checkIfAddressExists, extractNumberAtEnd, pinAddressValidation }
+export { checkIfAddressExists, extractPositionForAnalogAddress, extractPositionsForDigitalAddress, pinAddressValidation }

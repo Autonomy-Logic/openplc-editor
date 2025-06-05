@@ -33,17 +33,18 @@ type PinMappingTableProps = {
   handleRowClick: (row: HTMLTableRowElement) => void
 }
 
-const PinMappingTable = ({ pins, selectedRowId, handleRowClick}: PinMappingTableProps) => {
-    const handleUpdateDataRequest = (rowIndex: number, columnId: string, value: unknown) => console.log(rowIndex, columnId, value)
+const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTableProps) => {
+  const handleUpdateDataRequest = (rowIndex: number, columnId: string, value: unknown) =>
+    console.log(rowIndex, columnId, value)
   return (
-      <GenericTable<DevicePinColumns>
-        columns={columns}
-        tableData={pins}
-        selectedRow={selectedRowId}
-        handleRowClick={handleRowClick}
-        updateData={handleUpdateDataRequest}
-        tableContext='Pin mapping table'
-      />
+    <GenericTable<DevicePinColumns>
+      columns={columns}
+      tableData={pins}
+      selectedRow={selectedRowId}
+      handleRowClick={handleRowClick}
+      updateData={handleUpdateDataRequest}
+      tableContext='Pin mapping table'
+    />
   )
 }
 

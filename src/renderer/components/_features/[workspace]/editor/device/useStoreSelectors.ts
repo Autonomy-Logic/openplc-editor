@@ -44,7 +44,7 @@ export const boardSelectors = {
   usePinMappingData: () => {
     const pinMappingDataBaseState: devicePinToTable[] = []
     const nextPinMappingDataState: devicePinToTable[] = []
-    const pinMappingData = useOpenPLCStore((state) => state.deviceDefinitions.pinMapping)
+    const pinMappingData = useOpenPLCStore((state) => state.deviceDefinitions.pinMapping.maps)
     for (const key in pinMappingData) {
       produce(pinMappingDataBaseState, (draft) => {
         const currentMap: devicePinToTable[] | undefined = pinMappingData[key as keyof typeof pinMappingData]?.map(
