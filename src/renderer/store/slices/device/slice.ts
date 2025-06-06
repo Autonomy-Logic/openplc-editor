@@ -1,8 +1,9 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import type { DeviceSlice } from './types'
-import { extractPositionForAnalogAddress, extractPositionsForDigitalAddress } from './validation/pins'
+import type { DevicePin, DeviceSlice } from './types'
+import { createNewAddress, getHighestPinAddress } from './validation/pins'
+// import { extractPositionForAnalogAddress, extractPositionsForDigitalAddress } from './validation/pins'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
   deviceAvailableOptions: {
@@ -43,12 +44,12 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       },
     },
     pinMapping: {
-      maps: {
-        digitalInput: [{ pin: 'pin0', address: '%IX0.0', name: 'name0' }],
-        digitalOutput: [{ pin: 'pin1', address: '%QX0.0', name: 'name1' }],
-        analogInput: [{ pin: 'pin2', address: '%IW0', name: 'name2' }],
-        analogOutput: [{ pin: 'pin3', address: '%QW0', name: 'name3' }],
-      },
+      pins: [
+        { pin: 'pin0', pinType: 'digitalInput', address: '%IX0.0', name: 'name0' },
+        { pin: 'pin1', pinType: 'digitalOutput', address: '%QX0.0', name: 'name1' },
+        { pin: 'pin2', pinType: 'analogInput', address: '%IW0', name: 'name2' },
+        { pin: 'pin3', pinType: 'analogOutput', address: '%QW0', name: 'name3' },
+      ],
       currentSelectedPinTableRow: -1,
     },
   },
@@ -74,68 +75,43 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       )
     },
     /** The default action to add a pin is handled by the editor itself, so we don't need to check for if the pin is already declared */
-    addPin: ({ pinType = 'digitalInput', pinToAdd }): void => {
+    createNewPin: (): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
-          const newPin = {
-            pin: pinToAdd.name ?? '',
-            address: '',
-            name: pinToAdd.name ?? '',
+        produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
+          const basePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+          let newPin: DevicePin = {
+            pin: 'pin0',
+            pinType: 'digitalInput',
+            address: '%IX0.0',
+            name: '',
           }
-          // This should never return a falsy value, once all maps are initialized.
-          const filteredPinMapping = deviceDefinitions.pinMapping.maps[pinType]
-          if (!filteredPinMapping) return
-          const lastAddedPin = filteredPinMapping[filteredPinMapping.length - 1]
-          // Verify the validation type that should be applied
-          switch (pinType) {
-            case 'digitalInput': {
-              if (lastAddedPin === undefined) {
-                filteredPinMapping.push({ ...newPin, address: '%IX0.0' })
-                break
-              }
-              const { position, dotPosition } = extractPositionsForDigitalAddress(lastAddedPin.address)
-              if (dotPosition === 7) {
-                filteredPinMapping.push({ ...newPin, address: `%IX${position + 1}.0` })
-              } else {
-                filteredPinMapping.push({ ...newPin, address: `%IX${position}.${dotPosition + 1}` })
-              }
-              break
-            }
-            case 'digitalOutput': {
-              if (lastAddedPin === undefined) {
-                filteredPinMapping.push({ ...newPin, address: '%QX0.0' })
-                break
-              }
-              const { position, dotPosition } = extractPositionsForDigitalAddress(lastAddedPin.address)
-              if (dotPosition === 7) {
-                filteredPinMapping.push({ ...newPin, address: `%QX${position + 1}.0` })
-              } else {
-                filteredPinMapping.push({ ...newPin, address: `%QX${position}.${dotPosition + 1}` })
-              }
-              break
-            }
-            case 'analogInput': {
-              if (lastAddedPin === undefined) {
-                filteredPinMapping.push({ ...newPin, address: '%IW0' })
-                break
-              }
-              const position = extractPositionForAnalogAddress(lastAddedPin.address)
-              filteredPinMapping.push({ ...newPin, address: `%IW${position + 1}` })
-              break
-            }
-            case 'analogOutput': {
-              if (lastAddedPin === undefined) {
-                filteredPinMapping.push({ ...newPin, address: '%QW0' })
-                break
-              }
-              const position = extractPositionForAnalogAddress(lastAddedPin.address)
-              filteredPinMapping.push({ ...newPin, address: `%QW${position + 1}` })
-              break
-            }
-            default:
-              console.log('Unsupported pin type')
-              break
+          if (pinMapping.currentSelectedPinTableRow === -1 || !basePin) {
+            pinMapping.pins.push(newPin)
+            return
           }
+          let newAddress = createNewAddress('INCREMENT', basePin.address)
+          const pinExists = (JSON.parse(JSON.stringify([...pinMapping.pins])) as DevicePin[]).find(
+            (pin) => pin.address === newAddress,
+          )
+          if (!pinExists) {
+            newPin = { pin: '', pinType: basePin.pinType, address: newAddress }
+            pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow + 1, 0, newPin)
+            pinMapping.currentSelectedPinTableRow += 1
+            return
+          }
+          // TODO: We need to verify which is the pin of this type with the highest value to continue the sequence
+          // We can do it in possibly two ways.
+          // Creating and ordering a temporary array with a copy of every value in the state that satisfies the address prefix
+          // or executing a compare function on every entry in the main array.
+          const highestPinAddress = getHighestPinAddress(pinMapping.pins, pinExists.pinType)
+
+          console.log('🚀 ~ produce ~ highestPinAddress:', highestPinAddress)
+          const indexOfHighestPinAddress = pinMapping.pins.findIndex((pin) => pin.address === highestPinAddress)
+
+          newAddress = createNewAddress('INCREMENT', highestPinAddress)
+          newPin = { pin: '', pinType: pinExists.pinType, address: newAddress }
+          pinMapping.pins.splice(indexOfHighestPinAddress + 1, 0, newPin)
+          pinMapping.currentSelectedPinTableRow = indexOfHighestPinAddress + 1
         }),
       )
     },

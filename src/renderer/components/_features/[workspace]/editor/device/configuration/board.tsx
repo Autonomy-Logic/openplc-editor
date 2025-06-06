@@ -6,7 +6,7 @@ import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]
 import { cn } from '@root/utils'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 
-import { boardSelectors } from '../useStoreSelectors'
+import { boardSelectors, pinSelectors } from '../useStoreSelectors'
 import { PinMappingTable } from './components/pin-mapping-table'
 
 const Board = memo(function () {
@@ -17,11 +17,11 @@ const Board = memo(function () {
   const setDeviceBoard = boardSelectors.useSetDeviceBoard()
   const setCommunicationPort = boardSelectors.useSetCommunicationPort()
   const setAvailableOptions = boardSelectors.useSetAvailableOptions()
-  const pinMappingData = boardSelectors.usePinMappingData()
   const currentSelectedPinTableRow = boardSelectors.useCurrentSelectedPinTableRow()
   const setCurrentSelectedPinTableRow = boardSelectors.useSelectPinTableRow()
-  const addPin = boardSelectors.useAddPin()
-  // const removePin = boardSelectors.useRemovePin()
+
+  const createNewPin = boardSelectors.useCreateNewPin()
+  const pins = pinSelectors.usePins()
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
@@ -98,7 +98,7 @@ const Board = memo(function () {
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
   // This is a mock implementation to test the increment address logic
-  const handleAddPin = () => addPin({ pinType: 'analogInput', pinToAdd: { name: 'newPinName' } })
+  const handleCreateNewPin = () => createNewPin()
 
   return (
     <DeviceEditorSlot heading='Board Settings'>
@@ -237,7 +237,7 @@ const Board = memo(function () {
             actions={[
               {
                 ariaLabel: 'Add table row button',
-                onClick: handleAddPin,
+                onClick: handleCreateNewPin,
                 icon: <PlusIcon className='!stroke-brand' />,
                 id: 'add-pin-button',
               },
@@ -250,11 +250,7 @@ const Board = memo(function () {
             ]}
           />
         </div>
-        <PinMappingTable
-          pins={pinMappingData}
-          handleRowClick={handleRowClick}
-          selectedRowId={currentSelectedPinTableRow}
-        />
+        <PinMappingTable pins={pins} handleRowClick={handleRowClick} selectedRowId={currentSelectedPinTableRow} />
       </div>
     </DeviceEditorSlot>
   )

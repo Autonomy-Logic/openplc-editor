@@ -3,11 +3,7 @@ import type { DevicePin } from '@root/renderer/store/slices/device'
 import { createColumnHelper } from '@tanstack/react-table'
 import { startCase } from 'lodash'
 
-type DevicePinColumns = DevicePin & {
-  pinType?: 'digitalInput' | 'digitalOutput' | 'analogInput' | 'analogOutput'
-}
-
-const columnHelper = createColumnHelper<DevicePinColumns>()
+const columnHelper = createColumnHelper<DevicePin>()
 
 const columns = [
   columnHelper.accessor('pin', {
@@ -29,7 +25,7 @@ const columns = [
 ]
 
 type PinMappingTableProps = {
-  pins: DevicePinColumns[]
+  pins: DevicePin[]
   selectedRowId: number
   handleRowClick: (row: HTMLTableRowElement) => void
 }
@@ -38,7 +34,7 @@ const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTabl
   const handleUpdateDataRequest = (rowIndex: number, columnId: string, value: unknown) =>
     console.log(rowIndex, columnId, value)
   return (
-    <GenericTable<DevicePinColumns>
+    <GenericTable<DevicePin>
       columns={columns}
       tableData={pins}
       selectedRow={selectedRowId}

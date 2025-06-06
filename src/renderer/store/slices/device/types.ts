@@ -69,6 +69,7 @@ const _defaultPins = []
  */
 const devicePinSchema = z.object({
   pin: z.string().max(6),
+  pinType: z.enum(pinTypes),
   address: z.string(),
   name: z.string().optional(),
 })
@@ -86,7 +87,7 @@ type DevicePin = z.infer<typeof devicePinSchema>
  * }
  */
 const devicePinMappingSchema = z.object({
-  maps: z.record(z.enum(pinTypes), z.array(devicePinSchema)),
+  pins: z.array(devicePinSchema),
   currentSelectedPinTableRow: z.number(),
 })
 
@@ -154,10 +155,7 @@ const deviceActionSchema = z.object({
     )
     .returns(z.void()),
   selectPinTableRow: z.function().args(z.number()).returns(z.void()),
-  addPin: z
-    .function()
-    .args(z.object({ pinType: z.enum(pinTypes), pinToAdd: devicePinSchema.partial() }))
-    .returns(z.void()),
+  createNewPin: z.function().args().returns(z.void()),
   setDeviceBoard: z.function().args(z.string()).returns(z.void()),
   setCommunicationPort: z.function().args(z.string()).returns(z.void()),
   setCommunicationPreferences: z
