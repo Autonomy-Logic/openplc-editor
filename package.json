@@ -23,7 +23,8 @@
     "start:main": "concurrently -k \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./configs/webpack/webpack.config.main.dev.ts\" \"electronmon .\"",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./configs/webpack/webpack.config.renderer.dev.ts",
-    "test:unit": "jest --watch",
+    "test:unit": "jest --watch --no-coverage",
+    "test:e2e": "npm run build && npx playwright test",
     "test": "jest --collectCoverage --",
     "prepare": "husky"
   },
@@ -61,7 +62,7 @@
     "electron-updater": "^6.1.4",
     "embla-carousel-react": "^8.0.0-rc17",
     "i18next": "^23.5.1",
-    "immer": "^10.0.3",
+    "immer": "^10.1.1",
     "lodash": "^4.17.21",
     "monaco-editor": "^0.44.0",
     "monaco-editor-webpack-plugin": "^7.1.0",
@@ -80,12 +81,13 @@
     "xmlbuilder2": "^3.1.1",
     "yaml": "^2.7.0",
     "zod": "^3.24.4",
-    "zustand": "^4.4.3"
+    "zustand": "^5.0.5"
   },
   "devDependencies": {
     "@electron/notarize": "^2.1.0",
     "@electron/rebuild": "^3.3.0",
     "@eslint/js": "^9.20.0",
+    "@playwright/test": "^1.52.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.11",
     "@svgr/webpack": "^8.1.0",
     "@teamsupercell/typings-for-css-modules-loader": "^2.5.2",

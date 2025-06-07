@@ -48,3 +48,9 @@ C_runtime/**/*.d
 C_runtime/**/*.o
 
 resources/st-compiler/**.spec
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

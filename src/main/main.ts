@@ -23,7 +23,6 @@ import { HardwareService, ProjectService, UserService } from './services'
 import { CompilerService } from './services/compiler-service'
 import { resolveHtmlPath } from './utils'
 
-// Enable MapSet plugin for Immer
 enableMapSet()
 
 class AppUpdater {

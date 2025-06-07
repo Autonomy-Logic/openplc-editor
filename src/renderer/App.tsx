@@ -12,6 +12,7 @@ export default function App() {
       meta: { path },
     },
   } = useOpenPLCStore()
+
   {
     /** Manage routing and navigation within the app. */
   }

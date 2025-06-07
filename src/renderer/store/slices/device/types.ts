@@ -49,16 +49,43 @@ const deviceConfigurationSchema = z.object({
 
 type DeviceConfiguration = z.infer<typeof deviceConfigurationSchema>
 
+const pinTypes = ['digitalInput', 'digitalOutput', 'analogInput', 'analogOutput'] as const
+
+type PinTypes = (typeof pinTypes)[number]
+
+/**
+ * TODO: Must be filled with the infos that comes from the hals file
+ */
+const _defaultPins = []
+/**
+ * The pin address obey the following name rules and is populated automatically by the editor.
+ *
+ * 1. For digital types:
+ *    - The address must start with the prefix "%QX" or "%IX"
+ *    - Following the prefix, the address must have a integer number starting with 0
+ *    - Following the number, the address must have a dot "."
+ *    - Following the dot, the address must have a integer number starting with 0 and ending with 7
+ * 2. For analog types:
+ *    - The address must start with the prefix "%QW" or "%IW"
+ *    - Following the prefix, the address must have a integer number starting with 0
+ */
 const devicePinSchema = z.object({
   pin: z.string().max(6),
-  type: z.enum(['digitalInput', 'digitalOutput', 'analogInput', 'analogOutput']),
-  address: z.string(), // This will be populated automatically
+  pinType: z.enum(pinTypes),
+  address: z.string(),
   name: z.string().optional(),
 })
 
 type DevicePin = z.infer<typeof devicePinSchema>
 
-const devicePinMappingSchema = z.array(devicePinSchema)
+/**
+ * The pin mapping is an unique structure that record the pins added by the user.
+ * The structure contains an array of all pins and tracks the currently selected pin row.
+ */
+const devicePinMappingSchema = z.object({
+  pins: z.array(devicePinSchema),
+  currentSelectedPinTableRow: z.number(),
+})
 
 type DevicePinMapping = z.infer<typeof devicePinMappingSchema>
 
@@ -123,7 +150,8 @@ const deviceActionSchema = z.object({
       }),
     )
     .returns(z.void()),
-  addPin: z.function().args(z.string().optional()).returns(z.void()),
+  selectPinTableRow: z.function().args(z.number()).returns(z.void()),
+  createNewPin: z.function().args().returns(z.void()),
   setDeviceBoard: z.function().args(z.string()).returns(z.void()),
   setCommunicationPort: z.function().args(z.string()).returns(z.void()),
   setCommunicationPreferences: z
@@ -154,6 +182,7 @@ export type {
   DevicePinMapping,
   DeviceSlice,
   DeviceState,
+  PinTypes,
   StaticHostConfiguration,
 }
 export {

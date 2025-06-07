@@ -33,6 +33,14 @@ export const boardSelectors = {
   useSetDeviceBoard: () => useOpenPLCStore((state) => state.deviceActions.setDeviceBoard),
   useSetCommunicationPort: () => useOpenPLCStore((state) => state.deviceActions.setCommunicationPort),
   useSetAvailableOptions: () => useOpenPLCStore((state) => state.deviceActions.setAvailableOptions),
+  useCreateNewPin: () => useOpenPLCStore((state) => state.deviceActions.createNewPin),
+  useSelectPinTableRow: () => useOpenPLCStore((state) => state.deviceActions.selectPinTableRow),
+  useCurrentSelectedPinTableRow: () =>
+    useOpenPLCStore((state) => state.deviceDefinitions.pinMapping.currentSelectedPinTableRow),
+}
+
+export const pinSelectors = {
+  usePins: () => useOpenPLCStore((state) => state.deviceDefinitions.pinMapping.pins),
 }
 
 export const communicationSelectors = {

@@ -15,7 +15,7 @@
     "url": "http://localhost/"
   },
   "testMatch": ["**/?(*.)+(spec|test).(ts|tsx|js|jsx)", "**/__tests__/**/*.(ts|tsx|js|jsx)"],
-  "testPathIgnorePatterns": ["release/app/dist", "configs/dll"],
+  "testPathIgnorePatterns": ["release/app/dist", "configs/dll", "e2e"],
   "transform": {
     "\\.(ts|tsx|js|jsx)$": [
       "ts-jest",

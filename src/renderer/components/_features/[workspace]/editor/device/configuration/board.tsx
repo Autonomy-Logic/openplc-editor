@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { RefreshIcon } from '@root/renderer/assets'
+import { MinusIcon, PlusIcon, RefreshIcon } from '@root/renderer/assets'
 import { Label, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { cn } from '@root/utils'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 
-import { boardSelectors } from '../useStoreSelectors'
+import { boardSelectors, pinSelectors } from '../useStoreSelectors'
+import { PinMappingTable } from './components/pin-mapping-table'
 
 const Board = memo(function () {
   const availableBoards = boardSelectors.useAvailableBoards()
@@ -15,6 +17,11 @@ const Board = memo(function () {
   const setDeviceBoard = boardSelectors.useSetDeviceBoard()
   const setCommunicationPort = boardSelectors.useSetCommunicationPort()
   const setAvailableOptions = boardSelectors.useSetAvailableOptions()
+  const currentSelectedPinTableRow = boardSelectors.useCurrentSelectedPinTableRow()
+  const setCurrentSelectedPinTableRow = boardSelectors.useSelectPinTableRow()
+
+  const createNewPin = boardSelectors.useCreateNewPin()
+  const pins = pinSelectors.usePins()
 
   const [isPressed, setIsPressed] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
@@ -89,6 +96,9 @@ const Board = memo(function () {
     },
     [setDeviceBoard],
   )
+  const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
+  // This is a mock implementation to test the increment address logic
+  const handleCreateNewPin = () => createNewPin()
 
   return (
     <DeviceEditorSlot heading='Board Settings'>
@@ -217,9 +227,31 @@ const Board = memo(function () {
         </div>
       </div>
       <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' />
-      {/* TODO: Implement Pin Mapping UI in future PR */}
-      <div id='pin-mapping-container' className=' h-3/5 w-full'>
-        <p>Pin Mapping</p>
+      <div id='pin-mapping-container' className='flex h-3/5 w-full flex-col gap-4'>
+        <div id='pin-mapping-table-header-container' className='flex h-fit w-full justify-between'>
+          <h2 id='slot-title' className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
+            Pin Mapping
+          </h2>
+          <TableActions
+            className='w-fit *:rounded-md *:p-1'
+            actions={[
+              {
+                ariaLabel: 'Add table row button',
+                onClick: handleCreateNewPin,
+                icon: <PlusIcon className='!stroke-brand' />,
+                id: 'add-pin-button',
+              },
+              {
+                ariaLabel: 'Remove table row button',
+                onClick: () => console.log('Remove'),
+                disabled: true,
+                icon: <MinusIcon className='!stroke-brand' />,
+                id: 'remove-pin-button',
+              },
+            ]}
+          />
+        </div>
+        <PinMappingTable pins={pins} handleRowClick={handleRowClick} selectedRowId={currentSelectedPinTableRow} />
       </div>
     </DeviceEditorSlot>
   )
