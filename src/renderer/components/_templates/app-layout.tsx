@@ -39,7 +39,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     void getUserSystemProps()
   }, [setSystemConfigs])
 
-
   return (
     <>
       {!isLinux && <TitleBar />}

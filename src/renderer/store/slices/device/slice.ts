@@ -44,7 +44,12 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       },
     },
     pinMapping: {
-      pins: [],
+      pins: [
+        { pin: 'pin0', pinType: 'digitalInput', address: '%IX0.0', name: 'name0' },
+        { pin: 'pin1', pinType: 'digitalOutput', address: '%QX0.0', name: 'name1' },
+        { pin: 'pin2', pinType: 'analogInput', address: '%IW0', name: 'name2' },
+        { pin: 'pin3', pinType: 'analogOutput', address: '%QW0', name: 'name3' },
+      ],
       currentSelectedPinTableRow: -1,
     },
   },
@@ -98,6 +103,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pinMapping.currentSelectedPinTableRow += 1
             return
           }
+
           // TODO: We need to verify which is the pin of this type with the highest value to continue the sequence
           // We can do it in possibly two ways.
           // Creating and ordering a temporary array with a copy of every value in the state that satisfies the address prefix

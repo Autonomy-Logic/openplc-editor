@@ -25,7 +25,6 @@ import { resolveHtmlPath } from './utils'
 
 enableMapSet()
 
-
 class AppUpdater {
   constructor() {
     log.transports.file.level = 'info'
