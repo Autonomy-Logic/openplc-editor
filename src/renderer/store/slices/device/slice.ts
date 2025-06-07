@@ -44,12 +44,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       },
     },
     pinMapping: {
-      pins: [
-        { pin: 'pin0', pinType: 'digitalInput', address: '%IX0.0', name: 'name0' },
-        { pin: 'pin1', pinType: 'digitalOutput', address: '%QX0.0', name: 'name1' },
-        { pin: 'pin2', pinType: 'analogInput', address: '%IW0', name: 'name2' },
-        { pin: 'pin3', pinType: 'analogOutput', address: '%QW0', name: 'name3' },
-      ],
+      pins: [],
       currentSelectedPinTableRow: -1,
     },
   },
@@ -85,14 +80,18 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             address: '%IX0.0',
             name: '',
           }
+
           if (pinMapping.currentSelectedPinTableRow === -1 || !basePin) {
             pinMapping.pins.push(newPin)
+            pinMapping.currentSelectedPinTableRow = pinMapping.pins.length - 1
             return
           }
-          let newAddress = createNewAddress('INCREMENT', basePin.address)
+
+          const newAddress = createNewAddress('INCREMENT', basePin.address)
           const pinExists = (JSON.parse(JSON.stringify([...pinMapping.pins])) as DevicePin[]).find(
             (pin) => pin.address === newAddress,
           )
+
           if (!pinExists) {
             newPin = { pin: '', pinType: basePin.pinType, address: newAddress }
             pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow + 1, 0, newPin)
@@ -104,13 +103,15 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           // Creating and ordering a temporary array with a copy of every value in the state that satisfies the address prefix
           // or executing a compare function on every entry in the main array.
           const highestPinAddress = getHighestPinAddress(pinMapping.pins, pinExists.pinType)
-
-          console.log('🚀 ~ produce ~ highestPinAddress:', highestPinAddress)
           const indexOfHighestPinAddress = pinMapping.pins.findIndex((pin) => pin.address === highestPinAddress)
+          const newAddressForHighestPinAddress = createNewAddress('INCREMENT', highestPinAddress)
+          const newPinForHighestPinAddress = {
+            pin: '',
+            pinType: pinExists.pinType,
+            address: newAddressForHighestPinAddress,
+          }
 
-          newAddress = createNewAddress('INCREMENT', highestPinAddress)
-          newPin = { pin: '', pinType: pinExists.pinType, address: newAddress }
-          pinMapping.pins.splice(indexOfHighestPinAddress + 1, 0, newPin)
+          pinMapping.pins.splice(indexOfHighestPinAddress + 1, 0, newPinForHighestPinAddress)
           pinMapping.currentSelectedPinTableRow = indexOfHighestPinAddress + 1
         }),
       )

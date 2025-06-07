@@ -106,81 +106,45 @@ const createNewAddress = (action: (typeof ADDRESS_ACTIONS)[number], address: str
 
 // FIX: The code is being catch in the correct case, but only the compare logic for digitalInput address is being run.
 const getHighestPinAddress = (pinMap: DevicePin[], pinType: PinTypes) => {
-  let pinWithHighestAddress: DevicePin = { pin: '', pinType: 'digitalInput', address: '' }
+  let pinWithHighestAddress: Partial<DevicePin> = {}
+  const compareAddressPosition = (firstPin: DevicePin, secondPin: DevicePin) => {
+    const firstAddressPosition = Number(removeAddressPrefix(firstPin.address))
+    const secondAddressPosition = Number(removeAddressPrefix(secondPin.address))
+    if (firstAddressPosition > secondAddressPosition) {
+      return 1
+    }
+    if (firstAddressPosition < secondAddressPosition) {
+      return -1
+    }
+    return 0
+  }
+
   switch (pinType) {
     case 'digitalInput': {
-      pinWithHighestAddress = pinMap.reduce((accumulator, currentValue) => {
-        let result = accumulator
-        if (accumulator.pinType === 'digitalInput' && currentValue.pinType === 'digitalInput') {
-          const accumulatorPosition = Number(removeAddressPrefix(accumulator.address))
-          console.log('🚀 ~ digitalInput - pinMap.reduce ~ accumulatorPosition:', accumulatorPosition)
-          const currentValuePosition = Number(removeAddressPrefix(currentValue.address))
-          console.log('🚀 ~ digitalInput - pinMap.reduce ~ currentValuePosition:', currentValuePosition)
-          if (accumulatorPosition > currentValuePosition) {
-            return result
-          } else {
-            result = currentValue
-          }
-        }
-        return result
-      })
-      return pinWithHighestAddress.address
+      const orderDigitalInputPins = pinMap.filter((pin) => pin.pinType === 'digitalInput').sort(compareAddressPosition)
+      pinWithHighestAddress = orderDigitalInputPins[orderDigitalInputPins.length - 1]
+      break
     }
     case 'digitalOutput': {
-      pinWithHighestAddress = pinMap.reduce((accumulator, currentValue) => {
-        let result = accumulator
-        if (accumulator.pinType === 'digitalOutput' && currentValue.pinType === 'digitalOutput') {
-          const accumulatorPosition = Number(removeAddressPrefix(accumulator.address))
-          console.log('🚀 ~ digitalOutput - pinMap.reduce ~ accumulatorPosition:', accumulatorPosition)
-          const currentValuePosition = Number(removeAddressPrefix(currentValue.address))
-          console.log('🚀 ~ digitalOutput - pinMap.reduce ~ currentValuePosition:', currentValuePosition)
-          if (accumulatorPosition > currentValuePosition) {
-            return result
-          } else {
-            result = currentValue
-          }
-        }
-        return result
-      })
-      return pinWithHighestAddress.address
+      const orderDigitalOutputPins = pinMap
+        .filter((pin) => pin.pinType === 'digitalOutput')
+        .sort(compareAddressPosition)
+      pinWithHighestAddress = orderDigitalOutputPins[orderDigitalOutputPins.length - 1]
+      break
     }
     case 'analogInput': {
-      pinWithHighestAddress = pinMap.reduce((accumulator, currentValue) => {
-        let result = accumulator
-        if (accumulator.pinType === 'analogInput' && currentValue.pinType === 'analogInput') {
-          const accumulatorPosition = Number(removeAddressPrefix(accumulator.address))
-          console.log('🚀 ~ analogInput - pinMap.reduce ~ accumulatorPosition:', accumulatorPosition)
-          const currentValuePosition = Number(removeAddressPrefix(currentValue.address))
-          console.log('🚀 ~ analogInput - pinMap.reduce ~ currentValuePosition:', currentValuePosition)
-          if (accumulatorPosition > currentValuePosition) {
-            return result
-          } else {
-            result = currentValue
-          }
-        }
-        return result
-      })
-      return pinWithHighestAddress.address
+      const orderAnalogInputPins = pinMap.filter((pin) => pin.pinType === 'analogInput').sort(compareAddressPosition)
+      pinWithHighestAddress = orderAnalogInputPins[orderAnalogInputPins.length - 1]
+      break
     }
     case 'analogOutput': {
-      pinWithHighestAddress = pinMap.reduce((accumulator, currentValue) => {
-        let result = accumulator
-        if (accumulator.pinType === 'analogOutput' && currentValue.pinType === 'analogOutput') {
-          const accumulatorPosition = Number(removeAddressPrefix(accumulator.address))
-          console.log('🚀 ~ analogOutput - pinMap.reduce ~ accumulatorPosition:', accumulatorPosition)
-          const currentValuePosition = Number(removeAddressPrefix(currentValue.address))
-          console.log('🚀 ~ analogOutput - pinMap.reduce ~ currentValuePosition:', currentValuePosition)
-          if (accumulatorPosition > currentValuePosition) {
-            return result
-          } else {
-            result = currentValue
-          }
-        }
-        return result
-      })
-      return pinWithHighestAddress.address
+      const orderAnalogOutputPins = pinMap.filter((pin) => pin.pinType === 'analogOutput').sort(compareAddressPosition)
+      pinWithHighestAddress = orderAnalogOutputPins[orderAnalogOutputPins.length - 1]
+      break
     }
   }
+
+  return pinWithHighestAddress.address ?? ''
 }
 /**
  * This is a validation to check if the value of the pin address is valid.

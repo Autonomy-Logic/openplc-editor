@@ -244,6 +244,7 @@ const Board = memo(function () {
               {
                 ariaLabel: 'Remove table row button',
                 onClick: () => console.log('Remove'),
+                disabled: true,
                 icon: <MinusIcon className='!stroke-brand' />,
                 id: 'remove-pin-button',
               },
