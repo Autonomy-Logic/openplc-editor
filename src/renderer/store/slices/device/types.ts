@@ -51,6 +51,8 @@ type DeviceConfiguration = z.infer<typeof deviceConfigurationSchema>
 
 const pinTypes = ['digitalInput', 'digitalOutput', 'analogInput', 'analogOutput'] as const
 
+type PinTypes = (typeof pinTypes)[number]
+
 /**
  * TODO: Must be filled with the infos that comes from the hals file
  */
@@ -78,13 +80,7 @@ type DevicePin = z.infer<typeof devicePinSchema>
 
 /**
  * The pin mapping is an unique structure that record the pins added by the user.
- * Object is an instance of the following shape:
- * devicePinMapping: {
- *  digitalInput: [ ],
- *  digitalOutput: [ ],
- *  analogInput: [ ],
- *  analogOutput: [ ]
- * }
+ * The structure contains an array of all pins and tracks the currently selected pin row.
  */
 const devicePinMappingSchema = z.object({
   pins: z.array(devicePinSchema),
@@ -186,6 +182,7 @@ export type {
   DevicePinMapping,
   DeviceSlice,
   DeviceState,
+  PinTypes,
   StaticHostConfiguration,
 }
 export {

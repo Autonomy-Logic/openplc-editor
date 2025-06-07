@@ -79,10 +79,15 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       setState(
         produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
           const basePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+          // Find the next available address for default pin type
+          const defaultPinType = 'digitalInput'
+          const nextHighestPinAddress = getHighestPinAddress(pinMapping.pins, defaultPinType)
+          const nextAddress = createNewAddress('INCREMENT', nextHighestPinAddress)
+
           let newPin: DevicePin = {
-            pin: 'pin0',
-            pinType: 'digitalInput',
-            address: '%IX0.0',
+            pin: '',
+            pinType: defaultPinType,
+            address: nextAddress,
             name: '',
           }
 
@@ -93,9 +98,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           }
 
           const newAddress = createNewAddress('INCREMENT', basePin.address)
-          const pinExists = (JSON.parse(JSON.stringify([...pinMapping.pins])) as DevicePin[]).find(
-            (pin) => pin.address === newAddress,
-          )
+          const pinExists = pinMapping.pins.find((pin) => pin.address === newAddress)
 
           if (!pinExists) {
             newPin = { pin: '', pinType: basePin.pinType, address: newAddress }
