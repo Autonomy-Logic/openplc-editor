@@ -31,8 +31,10 @@ type PinMappingTableProps = {
 }
 
 const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTableProps) => {
-  const handleUpdateDataRequest = (rowIndex: number, columnId: string, value: unknown) =>
+  const handleUpdateDataRequest = (rowIndex: number, columnId: string, value: unknown) => {
     console.log(rowIndex, columnId, value)
+    return { ok: false }
+  }
   return (
     <GenericTable<DevicePin>
       columns={columns}
