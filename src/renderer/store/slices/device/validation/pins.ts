@@ -97,7 +97,6 @@ const createNewAddress = (action: (typeof ADDRESS_ACTIONS)[number], address: str
   return handleAnalogAddress('%QW', action, address)
 }
 
-// FIX: The code is being catch in the correct case, but only the compare logic for digitalInput address is being run.
 const getHighestPinAddress = (pinMap: DevicePin[], pinType: PinTypes) => {
   let pinWithHighestAddress: Partial<DevicePin> = {}
   const compareAddressPosition = (firstPin: DevicePin, secondPin: DevicePin) => {
@@ -139,6 +138,17 @@ const getHighestPinAddress = (pinMap: DevicePin[], pinType: PinTypes) => {
 
   return pinWithHighestAddress.address ?? ''
 }
+/**
+ * This function is used to verify if the pin that will be manipulated is the lowest in its type.
+ * If it is the lowest we don't need to perform any other operation to reassign new addresses.
+ * @param address
+ * @returns boolean
+ */
+const isAddressTheLowestInItsType = (address: string) => {
+  const pinAddressPosition = Number(removeAddressPrefix(address))
+  if (pinAddressPosition === 0) return true
+  return false
+}
 
 export {
   ADDRESS_ACTIONS,
@@ -147,4 +157,5 @@ export {
   extractPositionForAnalogAddress,
   extractPositionsForDigitalAddress,
   getHighestPinAddress,
+  isAddressTheLowestInItsType,
 }

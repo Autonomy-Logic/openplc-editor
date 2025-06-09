@@ -2,7 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { DevicePin, DeviceSlice } from './types'
-import { createNewAddress, getHighestPinAddress } from './validation/pins'
+import { createNewAddress, getHighestPinAddress, isAddressTheLowestInItsType } from './validation/pins'
 // import { extractPositionForAnalogAddress, extractPositionsForDigitalAddress } from './validation/pins'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
@@ -74,11 +74,10 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
-    /** The default action to add a pin is handled by the editor itself, so we don't need to check for if the pin is already declared */
     createNewPin: (): void => {
       setState(
         produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
-          const basePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+          const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
           // Find the next available address for default pin type
           const defaultPinType = 'digitalInput'
           const nextHighestPinAddress = getHighestPinAddress(pinMapping.pins, defaultPinType)
@@ -91,17 +90,17 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             name: '',
           }
 
-          if (pinMapping.currentSelectedPinTableRow === -1 || !basePin) {
+          if (pinMapping.currentSelectedPinTableRow === -1 || !referencePin) {
             pinMapping.pins.push(newPin)
             pinMapping.currentSelectedPinTableRow = pinMapping.pins.length - 1
             return
           }
 
-          const newAddress = createNewAddress('INCREMENT', basePin.address)
+          const newAddress = createNewAddress('INCREMENT', referencePin.address)
           const pinExists = pinMapping.pins.find((pin) => pin.address === newAddress)
 
           if (!pinExists) {
-            newPin = { pin: '', pinType: basePin.pinType, address: newAddress }
+            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress }
             pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow + 1, 0, newPin)
             pinMapping.currentSelectedPinTableRow += 1
             return
@@ -122,6 +121,21 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
 
           pinMapping.pins.splice(indexOfHighestPinAddress + 1, 0, newPinForHighestPinAddress)
           pinMapping.currentSelectedPinTableRow = indexOfHighestPinAddress + 1
+        }),
+      )
+    },
+    removePin: (): void => {
+      setState(
+        produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
+          // First we found the reference pin based on the current selected pin table row
+          const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+          if (pinMapping.currentSelectedPinTableRow === -1 || !referencePin) return
+
+          // Now we need to verify if this is the last pin with this address type
+          if (isAddressTheLowestInItsType(referencePin.address)) {
+            pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow, 1)
+            pinMapping.currentSelectedPinTableRow = -1
+          }
         }),
       )
     },
