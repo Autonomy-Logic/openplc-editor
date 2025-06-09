@@ -1,3 +1,4 @@
+export * from './constants/device-styles'
 export * from './constants/icon-styles'
 export * from './constants/language-icons'
 export * from './constants/pou-icons'

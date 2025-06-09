@@ -152,6 +152,7 @@ const deviceActionSchema = z.object({
     .returns(z.void()),
   selectPinTableRow: z.function().args(z.number()).returns(z.void()),
   createNewPin: z.function().args().returns(z.void()),
+  removePin: z.function().args().returns(z.void()),
   setDeviceBoard: z.function().args(z.string()).returns(z.void()),
   setCommunicationPort: z.function().args(z.string()).returns(z.void()),
   setCommunicationPreferences: z

@@ -1,11 +1,10 @@
+import { INPUT_STYLES } from '@data/constants/device-styles'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { staticHostSelectors } from '@hooks/use-store-selectors'
 import { InputWithRef, Label } from '@root/renderer/components/_atoms'
 import { ComponentPropsWithoutRef, memo } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
-
-import { staticHostSelectors } from '../../useStoreSelectors'
-import { INPUT_STYLES } from '../constants'
 
 const staticHostSchema = z.object({
   ipAddress: z.string().ip(),

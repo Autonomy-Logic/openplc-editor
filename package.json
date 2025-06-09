@@ -87,6 +87,7 @@
     "@electron/notarize": "^2.1.0",
     "@electron/rebuild": "^3.3.0",
     "@eslint/js": "^9.20.0",
+    "@faker-js/faker": "^9.8.0",
     "@playwright/test": "^1.52.0",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.11",
     "@svgr/webpack": "^8.1.0",
