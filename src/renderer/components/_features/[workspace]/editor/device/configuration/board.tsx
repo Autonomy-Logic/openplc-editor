@@ -21,7 +21,7 @@ const Board = memo(function () {
   const setCurrentSelectedPinTableRow = pinSelectors.useSelectPinTableRow()
 
   const pins = pinSelectors.usePins()
-  console.log("🚀 ~ Board ~ pins:", pins)
+  console.log('🚀 ~ Board ~ pins:', pins)
   const createNewPin = pinSelectors.useCreateNewPin()
   const removePin = pinSelectors.useRemovePin()
 
@@ -244,6 +244,7 @@ const Board = memo(function () {
               {
                 ariaLabel: 'Remove table row button',
                 onClick: removePin,
+                disabled: currentSelectedPinTableRow === -1,
                 icon: <MinusIcon className='!stroke-brand' />,
                 id: 'remove-pin-button',
               },
