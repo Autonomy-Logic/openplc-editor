@@ -21,6 +21,7 @@ const Board = memo(function () {
   const setCurrentSelectedPinTableRow = pinSelectors.useSelectPinTableRow()
 
   const pins = pinSelectors.usePins()
+  console.log("🚀 ~ Board ~ pins:", pins)
   const createNewPin = pinSelectors.useCreateNewPin()
   const removePin = pinSelectors.useRemovePin()
 

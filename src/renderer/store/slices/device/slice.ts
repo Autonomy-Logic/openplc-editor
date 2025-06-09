@@ -1,9 +1,9 @@
+import { faker } from '@faker-js/faker'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { DevicePin, DeviceSlice } from './types'
-import { createNewAddress, getHighestPinAddress, isAddressTheLowestInItsType } from './validation/pins'
-// import { extractPositionForAnalogAddress, extractPositionsForDigitalAddress } from './validation/pins'
+import { createNewAddress, getHighestPinAddress, removeAddressPrefix } from './validation/pins'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
   deviceAvailableOptions: {
@@ -74,6 +74,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
+    // MOCK: We added a library to generate random names for new pins to be more explicit what object we're manipulating, this need to be removed further.
     createNewPin: (): void => {
       setState(
         produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
@@ -87,7 +88,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pin: '',
             pinType: defaultPinType,
             address: nextAddress,
-            name: '',
+            name: faker.food.vegetable(),
           }
 
           if (pinMapping.currentSelectedPinTableRow === -1 || !referencePin) {
@@ -100,16 +101,12 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           const pinExists = pinMapping.pins.find((pin) => pin.address === newAddress)
 
           if (!pinExists) {
-            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress }
+            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress, name: faker.food.vegetable() }
             pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow + 1, 0, newPin)
             pinMapping.currentSelectedPinTableRow += 1
             return
           }
 
-          // TODO: We need to verify which is the pin of this type with the highest value to continue the sequence
-          // We can do it in possibly two ways.
-          // Creating and ordering a temporary array with a copy of every value in the state that satisfies the address prefix
-          // or executing a compare function on every entry in the main array.
           const highestPinAddress = getHighestPinAddress(pinMapping.pins, pinExists.pinType)
           const indexOfHighestPinAddress = pinMapping.pins.findIndex((pin) => pin.address === highestPinAddress)
           const newAddressForHighestPinAddress = createNewAddress('INCREMENT', highestPinAddress)
@@ -117,6 +114,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pin: '',
             pinType: pinExists.pinType,
             address: newAddressForHighestPinAddress,
+            name: faker.food.vegetable(),
           }
 
           pinMapping.pins.splice(indexOfHighestPinAddress + 1, 0, newPinForHighestPinAddress)
@@ -127,15 +125,28 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     removePin: (): void => {
       setState(
         produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
-          // First we found the reference pin based on the current selected pin table row
+          // Found the reference pin based on the current selected pin table row
           const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+
+          const referencePinType = referencePin.pinType
+          const referencePinAddressPosition = Number(removeAddressPrefix(referencePin.address))
+
+          // Early return if there is no selected row in the pin table or pin to reference
           if (pinMapping.currentSelectedPinTableRow === -1 || !referencePin) return
 
-          // Now we need to verify if this is the last pin with this address type
-          if (isAddressTheLowestInItsType(referencePin.address)) {
-            pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow, 1)
-            pinMapping.currentSelectedPinTableRow = -1
-          }
+          pinMapping.pins.forEach((pin) => {
+            if (
+              pin.pinType === referencePinType &&
+              Number(removeAddressPrefix(pin.address)) > referencePinAddressPosition
+            ) {
+              pin.address = createNewAddress('DECREMENT', pin.address)
+            }
+          })
+          // Verify if this is the last pin with this address type
+          // if (isAddressTheLowestInItsType(referencePin.address)) {
+          pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow, 1)
+          pinMapping.currentSelectedPinTableRow = -1
+          // }
         }),
       )
     },
