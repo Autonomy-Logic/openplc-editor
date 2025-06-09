@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
+import { boardSelectors, pinSelectors } from '@hooks/use-store-selectors'
 import { MinusIcon, PlusIcon, RefreshIcon } from '@root/renderer/assets'
 import { Label, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
@@ -6,7 +7,6 @@ import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]
 import { cn } from '@root/utils'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 
-import { boardSelectors, pinSelectors } from '../useStoreSelectors'
 import { PinMappingTable } from './components/pin-mapping-table'
 
 const Board = memo(function () {

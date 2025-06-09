@@ -23,7 +23,9 @@
       "@contracts/*": ["./src/renderer/contracts/*"],
       "@utils/*": ["./src/utils/*"],
       "@shared/*": ["./src/shared/*"],
-      "@oplc-icons/*": ["./src/renderer/assets/icons/*"]
+      "@oplc-icons/*": ["./src/renderer/assets/icons/*"],
+      "@hooks/*": ["./src/renderer/hooks/*"],
+      "@data/*": ["./src/renderer/data/*"]
     }
   },
   "exclude": ["test", "release/build", "release/app/dist", "configs/dll"]

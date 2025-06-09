@@ -1,10 +1,10 @@
+import { communicationSelectors } from '@hooks/use-store-selectors'
 import { Checkbox, Label } from '@root/renderer/components/_atoms'
 import { DeviceEditorSlot } from '@root/renderer/components/_templates/[editors]'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
 import { useEffect, useMemo } from 'react'
 
-import { communicationSelectors } from '../useStoreSelectors'
 import { ModbusRTUComponent } from './components/modbus-rtu'
 import { ModbusTCPComponent } from './components/modbus-tcp'
 

@@ -1,4 +1,6 @@
+import { INPUT_STYLES } from '@data/constants/device-styles'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { rtuSelectors } from '@hooks/use-store-selectors'
 import {
   Checkbox,
   InputWithRef,
@@ -12,9 +14,6 @@ import { cn } from '@root/utils'
 import { memo, useEffect, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
-
-import { rtuSelectors } from '../../useStoreSelectors'
-import { INPUT_STYLES } from '../constants'
 
 const rtuConfigSchema = z.object({
   rtuSlaveId: z.number().int().positive().lt(255),

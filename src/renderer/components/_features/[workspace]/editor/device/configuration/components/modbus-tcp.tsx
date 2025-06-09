@@ -1,4 +1,6 @@
+import { INPUT_STYLES } from '@data/constants/device-styles'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { tcpSelectors } from '@hooks/use-store-selectors'
 import {
   Checkbox,
   InputWithRef,
@@ -14,8 +16,6 @@ import { ComponentPropsWithoutRef, memo } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 
-import { tcpSelectors } from '../../useStoreSelectors'
-import { INPUT_STYLES } from '../constants'
 import { StaticHostConfigurationComponent } from './static-host'
 
 type ModbusTCPComponentProps = ComponentPropsWithoutRef<'div'> & {
