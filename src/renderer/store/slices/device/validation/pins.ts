@@ -158,5 +158,5 @@ export {
   extractPositionsForDigitalAddress,
   getHighestPinAddress,
   isAddressTheLowestInItsType,
-  removeAddressPrefix
+  removeAddressPrefix,
 }
