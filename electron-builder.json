@@ -16,6 +16,10 @@
     {
       "from": "./resources/compilers",
       "to": "./compilers"
+    },
+    {
+      "from": "./resources/runtime",
+      "to": "./runtime"
     }
   ],
   "mac": {

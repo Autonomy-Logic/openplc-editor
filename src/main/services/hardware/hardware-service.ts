@@ -5,6 +5,8 @@ import { produce } from 'immer'
 import { join } from 'path'
 import { promisify } from 'util'
 
+import { logger } from '../logger-service'
+
 type BoardInfo = {
   board_manager_url?: string
   compiler: string
@@ -82,8 +84,10 @@ class HardwareService {
     const { stderr, stdout } = await serialCommunication(`"${serialCommunicationBinary}" list_ports`)
 
     if (stderr) {
+      logger.error(JSON.parse(stderr))
       throw new Error(stderr)
     }
+    logger.info(`Serial communication stdout: ${stdout}`)
     const primitiveResponse = JSON.parse(stdout) as { port: string }[]
 
     const availablePorts = primitiveResponse.map(({ port }) => port)
@@ -93,6 +97,7 @@ class HardwareService {
 
   async getAvailableBoards() {
     const arduinoCorePath = join(app.getPath('userData'), 'User', 'Runtime', 'arduino-core-control.json')
+    // TODO: Add log here!!!
     const halsPath = join(this.resourcesDirectory, 'runtime', 'hals.json')
 
     const readJSONFile = async (path: string) => {
@@ -100,6 +105,7 @@ class HardwareService {
       return JSON.parse(file) as unknown
     }
 
+    // TODO: Add log here!!!
     const halsContent = (await readJSONFile(halsPath)) as HalsFile
     const arduinoCoreContent = (await readJSONFile(arduinoCorePath)) as { [core: string]: string }[]
 

@@ -15,6 +15,7 @@ const StartScreen = () => {
     workspaceActions: { setRecent },
     modalActions: { openModal },
     sharedWorkspaceActions: { openProject },
+    deviceActions: { setAvailableOptions },
   } = useOpenPLCStore()
 
   const handleCreateProject = async () => {
@@ -39,6 +40,16 @@ const StartScreen = () => {
       setRecent(recentProjects)
     }
     void getUserRecentProjects()
+  }, [])
+
+  useEffect(() => {
+    const getAvailableDeviceOptions = async () => {
+      const { ports, boards } = await window.bridge.getDeviceConfigurationOptions()
+      window.bridge.log('info', `Available ports: ${JSON.stringify(ports)}`)
+      window.bridge.log('info', `Available boards: ${JSON.stringify(boards)}`)
+      setAvailableOptions({ availableBoards: boards, availableCommunicationPorts: ports })
+    }
+    void getAvailableDeviceOptions()
   }, [])
 
   return (

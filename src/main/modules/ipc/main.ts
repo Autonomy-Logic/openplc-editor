@@ -6,6 +6,7 @@ import { platform } from 'process'
 import { ProjectState } from '../../../renderer/store/slices'
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
+import { logger } from '../../services'
 import { CreateProjectFile, GetProjectPath } from '../../services/project-service/utils'
 
 type IDataToWrite = {
@@ -208,9 +209,7 @@ class MainProcessBridge implements MainIpcModule {
     /**
      * Hardware
      */
-    this.ipcMain.handle('hardware:device-configuration-options', async () =>
-      this.hardwareService.getDeviceConfigurationOptions(),
-    )
+    this.ipcMain.handle('hardware:device-configuration-options', this.hardwareService.getDeviceConfigurationOptions.bind(this.hardwareService))
     this.ipcMain.handle('hardware:refresh-communication-ports', async () =>
       this.hardwareService.getAvailableSerialPorts(),
     )
@@ -238,6 +237,9 @@ class MainProcessBridge implements MainIpcModule {
       const base64 = imageBuffer.toString('base64')
 
       return `data:${mimeType};base64,${base64}`
+    })
+    this.ipcMain.on('util:log', (_, { level, message }: { level: 'info' | 'error'; message: string }) => {
+      logger[level](message)
     })
   }
 
