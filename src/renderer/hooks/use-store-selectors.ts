@@ -1,5 +1,8 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 
+/**
+ * Device screen selectors.
+ */
 export const rtuSelectors = {
   useAvailableRTUInterfaces: () => useOpenPLCStore((state) => state.deviceAvailableOptions.availableRTUInterfaces),
   useAvailableRTUBaudRates: () => useOpenPLCStore((state) => state.deviceAvailableOptions.availableRTUBaudRates),
@@ -59,4 +62,26 @@ export const communicationSelectors = {
     ),
   useDeviceBoard: () => useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard),
   useSetCommunicationPreferences: () => useOpenPLCStore((state) => state.deviceActions.setCommunicationPreferences),
+}
+
+/**
+ * Project search selectors.
+ */
+export const searchSelectors = {
+  useSearchQuery: () => useOpenPLCStore((state) => state.searchQuery),
+  useSearchResults: () => useOpenPLCStore((state) => state.searchResults),
+}
+
+/**
+ * Variables table selectors.
+ */
+export const variablesSelectors = {
+  useGetVariable: () => useOpenPLCStore((state) => state.projectActions.getVariable),
+}
+
+/**
+ * Editor selectors.
+ */
+export const editorSelectors = {
+  useEditorState: () => useOpenPLCStore((state) => state.editor),
 }
