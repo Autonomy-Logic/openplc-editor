@@ -209,7 +209,16 @@ class MainProcessBridge implements MainIpcModule {
     /**
      * Hardware
      */
-    this.ipcMain.handle('hardware:device-configuration-options', this.hardwareService.getDeviceConfigurationOptions.bind(this.hardwareService))
+    this.ipcMain.handle('hardware:get-available-communication-ports', async () => {
+      const response = await this.hardwareService.getAvailableSerialPorts()
+      logger.debug(`Available communication ports[main-process]: ${JSON.stringify(response)}`)
+      return response
+    })
+    this.ipcMain.handle('hardware:get-available-boards', async () => {
+      const response = await this.hardwareService.getAvailableBoards()
+      logger.debug(`Available boards[main-process]: ${JSON.stringify(response)}`)
+      return response
+    })
     this.ipcMain.handle('hardware:refresh-communication-ports', async () =>
       this.hardwareService.getAvailableSerialPorts(),
     )

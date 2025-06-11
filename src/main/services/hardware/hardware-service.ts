@@ -84,10 +84,10 @@ class HardwareService {
     const { stderr, stdout } = await serialCommunication(`"${serialCommunicationBinary}" list_ports`)
 
     if (stderr) {
-      logger.error(JSON.parse(stderr))
+      logger.error(`Serial communication stderr[main-process]: ${JSON.parse(stderr)}`)
       throw new Error(stderr)
     }
-    logger.info(`Serial communication stdout: ${stdout}`)
+    logger.debug(`Serial communication stdout[main-process]: ${stdout}`)
     const primitiveResponse = JSON.parse(stdout) as { port: string }[]
 
     const availablePorts = primitiveResponse.map(({ port }) => port)
@@ -132,7 +132,7 @@ class HardwareService {
     /**
      * TODO: Implement the function that will be executed in the program startup and will send the device option to the renderer process!!!!
      */
-    const [communicationPorts, availableBoards] = await Promise.all([
+    const [communicationPorts, availableBoards] = await Promise.allSettled([
       this.getAvailableSerialPorts(),
       this.getAvailableBoards(),
     ])

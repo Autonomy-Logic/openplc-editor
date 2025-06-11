@@ -385,9 +385,10 @@ const rendererProcessBridge = {
   /**
    * Requests the device configuration options from the main process.
    */
-  getDeviceConfigurationOptions: (): Promise<{
-    ports: string[]
-    boards: Map<
+  getAvailableCommunicationPorts: (): Promise<string[]> =>
+    ipcRenderer.invoke('hardware:get-available-communication-ports'),
+  getAvailableBoards: (): Promise<
+    Map<
       string,
       {
         core: string
@@ -406,7 +407,7 @@ const rendererProcessBridge = {
         isCoreInstalled: boolean
       }
     >
-  }> => ipcRenderer.invoke('hardware:device-configuration-options'),
+  > => ipcRenderer.invoke('hardware:get-available-boards'),
   /**
    * Requests the refresh of the communication ports from the main process.
    */
@@ -423,6 +424,6 @@ const rendererProcessBridge = {
   /**
    * Sends a log message to the main process.
    */
-  log: (level: 'info' | 'error', message: string) => ipcRenderer.send('util:log', { level, message }),
+  log: (level: 'info' | 'error' | 'debug', message: string) => ipcRenderer.send('util:log', { level, message }),
 }
 export default rendererProcessBridge

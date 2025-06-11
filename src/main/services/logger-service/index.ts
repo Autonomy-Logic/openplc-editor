@@ -18,6 +18,11 @@ const logger = createLogger({
   transports: [
     new transports.File({ filename: join(logPath, 'error.log'), level: 'error' }),
     new transports.File({ filename: join(logPath, 'combined.log') }),
+    new transports.File({
+      filename: join(logPath, 'debug.log'),
+      format: combine(label({ label: 'app-debug' }), timestamp({ format: timestampFormat }), autonomyLoggerFormat),
+      level: 'debug',
+    }),
   ],
 })
 

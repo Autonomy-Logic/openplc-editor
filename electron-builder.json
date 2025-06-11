@@ -20,6 +20,10 @@
     {
       "from": "./resources/runtime",
       "to": "./runtime"
+    },
+    {
+      "from": "./resources/serial-communication",
+      "to": "./serial-communication"
     }
   ],
   "mac": {

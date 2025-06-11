@@ -44,9 +44,10 @@ const StartScreen = () => {
 
   useEffect(() => {
     const getAvailableDeviceOptions = async () => {
-      const { ports, boards } = await window.bridge.getDeviceConfigurationOptions()
-      window.bridge.log('info', `Available ports: ${JSON.stringify(ports)}`)
-      window.bridge.log('info', `Available boards: ${JSON.stringify(boards)}`)
+      const ports = await window.bridge.getAvailableCommunicationPorts()
+      const boards = await window.bridge.getAvailableBoards()
+      window.bridge.log('debug', `Available ports[renderer-process]: ${JSON.stringify(ports)}`)
+      window.bridge.log('debug', `Available boards[renderer-process]: ${JSON.stringify(boards)}`)
       setAvailableOptions({ availableBoards: boards, availableCommunicationPorts: ports })
     }
     void getAvailableDeviceOptions()
