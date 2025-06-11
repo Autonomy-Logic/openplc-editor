@@ -4,13 +4,15 @@ import { createLogger, format, transports } from 'winston'
 
 const { combine, colorize, timestamp, label, printf } = format
 
-const timestampFormat = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+const timestampFormat = new Date().toLocaleString('en-US', { timeZone: timezone })
 
 const autonomyLoggerFormat = printf(({ level, message, label, timestamp }) => {
   return `${timestamp as string} [${label as string}] ${level}: ${message as string}`
 })
 
-const logPath = app.getPath('userData')
+const logPath = join(app.getPath('userData'), 'logs')
 
 const logger = createLogger({
   level: 'info',

@@ -87,7 +87,6 @@ class HardwareService {
       logger.error(`Serial communication stderr[main-process]: ${JSON.parse(stderr)}`)
       throw new Error(stderr)
     }
-    logger.debug(`Serial communication stdout[main-process]: ${stdout}`)
     const primitiveResponse = JSON.parse(stdout) as { port: string }[]
 
     const availablePorts = primitiveResponse.map(({ port }) => port)

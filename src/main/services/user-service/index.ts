@@ -93,6 +93,11 @@ class UserService {
     await UserService.createJSONFileIfNotExists(pathToUserDataFile, UserService.DEFAULT_SETTINGS)
   }
 
+  async #checkIfLogFolderExists(): Promise<void> {
+    const pathToLogFolder = join(app.getPath('userData'), 'logs')
+    await UserService.createDirectoryIfNotExists(pathToLogFolder)
+  }
+
   /**
    * Checks if the user history folder exists and creates it if it doesn't.
    * Also creates a user history file with default values if it doesn't exist.
@@ -184,6 +189,7 @@ class UserService {
    */
   async #initializeUserSettingsAndHistory(): Promise<void> {
     await this.#checkIfUserBaseSettingsExists()
+    await this.#checkIfLogFolderExists()
     await this.#checkIfUserHistoryFolderExists()
     await this.#checkIfArduinoCliConfigExists()
     await this.#checkIfArduinoCoreControlFileExists()

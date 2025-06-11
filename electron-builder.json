@@ -31,6 +31,10 @@
       "target": "default",
       "arch": ["arm64", "x64"]
     },
+    "extendInfo": {
+      "CFBundleDisplayName": "OpenPLC Editor",
+      "CFBundleName": "OpenPLC Editor"
+    },
     "type": "distribution",
     "hardenedRuntime": true,
     "entitlements": "assets/entitlements.mac.plist",
