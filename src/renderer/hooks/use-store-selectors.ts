@@ -42,6 +42,7 @@ export const pinSelectors = {
   usePins: () => useOpenPLCStore((state) => state.deviceDefinitions.pinMapping.pins),
   useCreateNewPin: () => useOpenPLCStore((state) => state.deviceActions.createNewPin),
   useRemovePin: () => useOpenPLCStore((state) => state.deviceActions.removePin),
+  useUpdatePin: () => useOpenPLCStore((state) => state.deviceActions.updatePin),
   useSelectPinTableRow: () => useOpenPLCStore((state) => state.deviceActions.selectPinTableRow),
   useCurrentSelectedPinTableRow: () =>
     useOpenPLCStore((state) => state.deviceDefinitions.pinMapping.currentSelectedPinTableRow),

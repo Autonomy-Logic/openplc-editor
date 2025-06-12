@@ -1,9 +1,8 @@
-import { faker } from '@faker-js/faker'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { DevicePin, DeviceSlice } from './types'
-import { createNewAddress, getHighestPinAddress, removeAddressPrefix } from './validation/pins'
+import { checkIfPinNameIsValid, createNewAddress, getHighestPinAddress, removeAddressPrefix } from './validation/pins'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
   deviceAvailableOptions: {
@@ -44,12 +43,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       },
     },
     pinMapping: {
-      pins: [
-        { pin: 'pin0', pinType: 'digitalInput', address: '%IX0.0', name: 'name0' },
-        { pin: 'pin1', pinType: 'digitalOutput', address: '%QX0.0', name: 'name1' },
-        { pin: 'pin2', pinType: 'analogInput', address: '%IW0', name: 'name2' },
-        { pin: 'pin3', pinType: 'analogOutput', address: '%QW0', name: 'name3' },
-      ],
+      pins: [],
       currentSelectedPinTableRow: -1,
     },
   },
@@ -88,7 +82,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pin: '',
             pinType: defaultPinType,
             address: nextAddress,
-            name: faker.food.vegetable(),
+            name: '',
           }
 
           if (pinMapping.currentSelectedPinTableRow === -1 || !referencePin) {
@@ -101,7 +95,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           const pinExists = pinMapping.pins.find((pin) => pin.address === newAddress)
 
           if (!pinExists) {
-            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress, name: faker.food.vegetable() }
+            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress, name: '' }
             pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow + 1, 0, newPin)
             pinMapping.currentSelectedPinTableRow += 1
             return
@@ -114,7 +108,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pin: '',
             pinType: pinExists.pinType,
             address: newAddressForHighestPinAddress,
-            name: faker.food.vegetable(),
+            name: '',
           }
 
           pinMapping.pins.splice(indexOfHighestPinAddress + 1, 0, newPinForHighestPinAddress)
@@ -149,6 +143,76 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           // }
         }),
       )
+    },
+    updatePin: (updatedData): { ok: boolean; title: string; message: string } => {
+      const returnMessage = {
+        ok: true,
+        title: '',
+        message: '',
+      }
+
+      setState(
+        produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
+          const currentPin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+
+          if (!currentPin) {
+            returnMessage.ok = false
+            returnMessage.title = 'No Pin Selected'
+            returnMessage.message = 'Please select a pin to update.'
+            return
+          }
+
+          const validations = {
+            pin: {
+              ok: true,
+              title: '',
+              message: '',
+            },
+            pinType: {
+              ok: true,
+              title: '',
+              message: '',
+            },
+            address: {
+              ok: true,
+              title: '',
+              message: '',
+            },
+            name: {
+              ok: true,
+              title: '',
+              message: '',
+            },
+          }
+
+          // Validate the entries of updatedData
+          for (const key in updatedData) {
+            switch (key) {
+              case 'name':
+                validations.name = checkIfPinNameIsValid(pinMapping.pins, updatedData.name)
+                break
+              default:
+                break
+            }
+          }
+
+          currentPin.pin = validations.pin.ok && updatedData.pin ? updatedData.pin : currentPin.pin
+          currentPin.pinType = validations.pinType.ok && updatedData.pinType ? updatedData.pinType : currentPin.pinType
+          currentPin.address = validations.address.ok && updatedData.address ? updatedData.address : currentPin.address
+          currentPin.name = validations.name.ok && updatedData.name ? updatedData.name : currentPin.name
+
+          for (const validation of Object.values(validations)) {
+            if (!validation.ok) {
+              returnMessage.ok = false
+              returnMessage.title = validation.title
+              returnMessage.message = validation.message
+              break
+            }
+          }
+        }),
+      )
+
+      return returnMessage
     },
     setDeviceBoard: (deviceBoard): void => {
       setState(
