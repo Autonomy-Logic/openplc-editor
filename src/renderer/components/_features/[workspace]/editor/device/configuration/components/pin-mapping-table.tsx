@@ -1,4 +1,5 @@
 import { GenericTable } from '@root/renderer/components/_atoms/generic-table'
+import { PinTextInputCell } from '@root/renderer/components/_molecules/pin-mapping-table'
 import type { DevicePin } from '@root/renderer/store/slices/device'
 import { createColumnHelper } from '@tanstack/react-table'
 import { startCase } from 'lodash'
@@ -20,7 +21,7 @@ const columns = [
   }),
   columnHelper.accessor('name', {
     header: 'Name',
-    cell: (props) => props.getValue(),
+    cell: PinTextInputCell,
   }),
 ]
 

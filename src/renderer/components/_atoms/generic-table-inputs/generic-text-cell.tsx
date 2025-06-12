@@ -1,7 +1,7 @@
 import { searchSelectors } from '@root/renderer/hooks'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import { cn } from '@root/utils'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../input'
 
@@ -18,6 +18,8 @@ export const GenericTextCell = ({
   editable?: boolean
   selected?: boolean
 }) => {
+  const inputRef = useRef<HTMLInputElement>(null)
+
   const searchQuery = searchSelectors.useSearchQuery()
   const formattedCellValue = searchQuery && value ? extractSearchQuery(value, searchQuery) : value
 
@@ -31,21 +33,30 @@ export const GenericTextCell = ({
     setIsEditing(false)
   }, [])
 
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [isEditing])
 
   return isEditing ? (
     <InputWithRef
+      ref={inputRef}
       value={value}
       onChange={(e) => {
-        handleStopEditing()
         onChange(e.target.value)
       }}
-      onBlur={onBlur}
+      onBlur={() => {
+        handleStopEditing()
+        onBlur()
+      }}
       className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
     />
   ) : (
     <div
       onClick={handleStartEditing}
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+      className={cn('flex w-full flex-1 cursor-text bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !selected,
         'cursor-not-allowed': !editable,
       })}
