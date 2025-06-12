@@ -424,6 +424,6 @@ const rendererProcessBridge = {
   /**
    * Sends a log message to the main process.
    */
-  log: (level: 'info' | 'error' | 'debug', message: string) => ipcRenderer.send('util:log', { level, message }),
+  log: (level: 'info' | 'error', message: string) => ipcRenderer.send('util:log', { level, message }),
 }
 export default rendererProcessBridge

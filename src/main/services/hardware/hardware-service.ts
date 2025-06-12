@@ -84,7 +84,13 @@ class HardwareService {
     const { stderr, stdout } = await serialCommunication(`"${serialCommunicationBinary}" list_ports`)
 
     if (stderr) {
-      logger.error(`Serial communication stderr[main-process]: ${JSON.parse(stderr)}`)
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const parsed = JSON.parse(stderr)
+        logger.error(`Serial communication stderr[main-process]: ${JSON.stringify(parsed)}`)
+      } catch {
+        logger.error(`Serial communication stderr[main-process]: ${stderr}`)
+      }
       throw new Error(stderr)
     }
     const primitiveResponse = JSON.parse(stdout) as { port: string }[]

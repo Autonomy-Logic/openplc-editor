@@ -46,8 +46,6 @@ const StartScreen = () => {
     const getAvailableDeviceOptions = async () => {
       const ports = await window.bridge.getAvailableCommunicationPorts()
       const boards = await window.bridge.getAvailableBoards()
-      window.bridge.log('debug', `Available ports[renderer-process]: ${JSON.stringify(ports)}`)
-      window.bridge.log('debug', `Available boards[renderer-process]: ${JSON.stringify(boards)}`)
       setAvailableOptions({ availableBoards: boards, availableCommunicationPorts: ports })
     }
     void getAvailableDeviceOptions()

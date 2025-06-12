@@ -46,7 +46,6 @@ const Board = memo(function () {
   useEffect(() => {
     const handleDeviceValueAtFirstRender = () => {
       const boardInfos = availableBoards.get(deviceBoard)
-      window.bridge.log('info', `Board infos: ${JSON.stringify(boardInfos)}`)
       if (boardInfos) {
         const coreVersionAsString = `${boardInfos.coreVersion ? ` [${boardInfos.coreVersion}]` : ''}`
         const initialBoard = `${deviceBoard}${coreVersionAsString}`
@@ -68,9 +67,7 @@ const Board = memo(function () {
   useEffect(() => {
     const fetchPreviewImage = async () => {
       const boardInfos = availableBoards.get(deviceBoard)
-      window.bridge.log('info', `Board infos: ${JSON.stringify(boardInfos)}`)
       const imagePath = await window.bridge.getPreviewImage(boardInfos?.preview || '')
-      window.bridge.log('info', `Preview image path: ${imagePath}`)
       setPreviewImage(imagePath)
     }
     void fetchPreviewImage()
