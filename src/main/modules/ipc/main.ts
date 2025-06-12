@@ -6,6 +6,7 @@ import { platform } from 'process'
 import { ProjectState } from '../../../renderer/store/slices'
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
+import { logger } from '../../services'
 import { CreateProjectFile, GetProjectPath } from '../../services/project-service/utils'
 
 type IDataToWrite = {
@@ -208,9 +209,24 @@ class MainProcessBridge implements MainIpcModule {
     /**
      * Hardware
      */
-    this.ipcMain.handle('hardware:device-configuration-options', async () =>
-      this.hardwareService.getDeviceConfigurationOptions(),
-    )
+    this.ipcMain.handle('hardware:get-available-communication-ports', async () => {
+      try {
+        const response = await this.hardwareService.getAvailableSerialPorts()
+        return response
+      } catch (error) {
+        logger.error('Error getting available communication ports:', error)
+        return []
+      }
+    })
+    this.ipcMain.handle('hardware:get-available-boards', async () => {
+      try {
+        const response = await this.hardwareService.getAvailableBoards()
+        return response
+      } catch (error) {
+        logger.error('Error getting available boards:', error)
+        return []
+      }
+    })
     this.ipcMain.handle('hardware:refresh-communication-ports', async () =>
       this.hardwareService.getAvailableSerialPorts(),
     )
@@ -238,6 +254,9 @@ class MainProcessBridge implements MainIpcModule {
       const base64 = imageBuffer.toString('base64')
 
       return `data:${mimeType};base64,${base64}`
+    })
+    this.ipcMain.on('util:log', (_, { level, message }: { level: 'info' | 'error'; message: string }) => {
+      logger[level](message)
     })
   }
 

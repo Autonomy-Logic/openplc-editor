@@ -30,7 +30,6 @@ const WorkspaceScreen = () => {
     editor,
     workspaceActions: { toggleCollapse },
     searchResults,
-    deviceActions: { setAvailableOptions },
   } = useOpenPLCStore()
 
   const variables = [
@@ -90,14 +89,6 @@ const WorkspaceScreen = () => {
     window.bridge.switchPerspective((_event) => {
       handleSwitchPerspective()
     })
-  }, [])
-
-  useEffect(() => {
-    const getAvailableDeviceOptions = async () => {
-      const { ports, boards } = await window.bridge.getDeviceConfigurationOptions()
-      setAvailableOptions({ availableBoards: boards, availableCommunicationPorts: ports })
-    }
-    void getAvailableDeviceOptions()
   }, [])
 
   return (

@@ -328,8 +328,7 @@ const rendererProcessBridge = {
   /**
    * Registers a callback for the 'compiler:export-project-request' event.
    * @param callback - The callback to be invoked when the event is triggered.
-   */exportProjectRequest: (callback: IpcRendererCallbacks) =>
-
+   */ exportProjectRequest: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('compiler:export-project-request', (_event, value) => callback(_event, value)),
 
   /**
@@ -386,9 +385,10 @@ const rendererProcessBridge = {
   /**
    * Requests the device configuration options from the main process.
    */
-  getDeviceConfigurationOptions: (): Promise<{
-    ports: string[]
-    boards: Map<
+  getAvailableCommunicationPorts: (): Promise<string[]> =>
+    ipcRenderer.invoke('hardware:get-available-communication-ports'),
+  getAvailableBoards: (): Promise<
+    Map<
       string,
       {
         core: string
@@ -407,7 +407,7 @@ const rendererProcessBridge = {
         isCoreInstalled: boolean
       }
     >
-  }> => ipcRenderer.invoke('hardware:device-configuration-options'),
+  > => ipcRenderer.invoke('hardware:get-available-boards'),
   /**
    * Requests the refresh of the communication ports from the main process.
    */
@@ -421,5 +421,9 @@ const rendererProcessBridge = {
    * Request the preview images folder from the main process.
    */
   getPreviewImage: (image: string): Promise<string> => ipcRenderer.invoke('util:get-preview-image', image),
+  /**
+   * Sends a log message to the main process.
+   */
+  log: (level: 'info' | 'error', message: string) => ipcRenderer.send('util:log', { level, message }),
 }
 export default rendererProcessBridge

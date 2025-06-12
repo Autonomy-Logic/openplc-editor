@@ -21,7 +21,6 @@ const Board = memo(function () {
   const setCurrentSelectedPinTableRow = pinSelectors.useSelectPinTableRow()
 
   const pins = pinSelectors.usePins()
-  console.log('🚀 ~ Board ~ pins:', pins)
   const createNewPin = pinSelectors.useCreateNewPin()
   const removePin = pinSelectors.useRemovePin()
 
@@ -67,7 +66,8 @@ const Board = memo(function () {
 
   useEffect(() => {
     const fetchPreviewImage = async () => {
-      const imagePath = await window.bridge.getPreviewImage(availableBoards.get(deviceBoard)?.preview || '')
+      const boardInfos = availableBoards.get(deviceBoard)
+      const imagePath = await window.bridge.getPreviewImage(boardInfos?.preview || '')
       setPreviewImage(imagePath)
     }
     void fetchPreviewImage()

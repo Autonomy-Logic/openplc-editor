@@ -5,6 +5,8 @@ import { produce } from 'immer'
 import { join } from 'path'
 import { promisify } from 'util'
 
+import { logger } from '../logger-service'
+
 type BoardInfo = {
   board_manager_url?: string
   compiler: string
@@ -82,6 +84,13 @@ class HardwareService {
     const { stderr, stdout } = await serialCommunication(`"${serialCommunicationBinary}" list_ports`)
 
     if (stderr) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const parsed = JSON.parse(stderr)
+        logger.error(`Serial communication stderr[main-process]: ${JSON.stringify(parsed)}`)
+      } catch {
+        logger.error(`Serial communication stderr[main-process]: ${stderr}`)
+      }
       throw new Error(stderr)
     }
     const primitiveResponse = JSON.parse(stdout) as { port: string }[]
@@ -93,6 +102,7 @@ class HardwareService {
 
   async getAvailableBoards() {
     const arduinoCorePath = join(app.getPath('userData'), 'User', 'Runtime', 'arduino-core-control.json')
+    // TODO: Add log here!!!
     const halsPath = join(this.resourcesDirectory, 'runtime', 'hals.json')
 
     const readJSONFile = async (path: string) => {
@@ -100,6 +110,7 @@ class HardwareService {
       return JSON.parse(file) as unknown
     }
 
+    // TODO: Add log here!!!
     const halsContent = (await readJSONFile(halsPath)) as HalsFile
     const arduinoCoreContent = (await readJSONFile(arduinoCorePath)) as { [core: string]: string }[]
 
@@ -126,7 +137,7 @@ class HardwareService {
     /**
      * TODO: Implement the function that will be executed in the program startup and will send the device option to the renderer process!!!!
      */
-    const [communicationPorts, availableBoards] = await Promise.all([
+    const [communicationPorts, availableBoards] = await Promise.allSettled([
       this.getAvailableSerialPorts(),
       this.getAvailableBoards(),
     ])
