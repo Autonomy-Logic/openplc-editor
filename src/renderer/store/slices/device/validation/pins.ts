@@ -1,4 +1,15 @@
+/**
+ * ============================================================
+ * This file contains functions to validate and manipulate device pin addresses.
+ * ============================================================
+ */
 import type { DevicePin, PinTypes } from '../types'
+
+/**
+ * ============================================================
+ * Functions to validate and manipulate device pin addresses
+ * ============================================================
+ */
 
 /**
  * This is a validation to check if the value of the address is unique.
@@ -98,6 +109,10 @@ const createNewAddress = (action: (typeof ADDRESS_ACTIONS)[number], address: str
 }
 
 const getHighestPinAddress = (pinMap: DevicePin[], pinType: PinTypes) => {
+  if (pinMap.length === 0) {
+    return ''
+  }
+
   let pinWithHighestAddress: Partial<DevicePin> = {}
   const compareAddressPosition = (firstPin: DevicePin, secondPin: DevicePin) => {
     const firstAddressPosition = Number(removeAddressPrefix(firstPin.address))
@@ -150,13 +165,67 @@ const isAddressTheLowestInItsType = (address: string) => {
   return false
 }
 
+/**
+ * ============================================================
+ * Name validation functions
+ * ============================================================
+ */
+const checkIfPinNameExists = (pinMap: DevicePin[], name: string) => {
+  return pinMap.some((pin) => pin.name?.toLowerCase() === name?.toLowerCase())
+}
+
+const pinNameValidation = (name: string) => {
+  const regex =
+    /^([a-zA-Z0-9]+(?:[A-Z][a-z0-9]*)*)|([A-Z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)|([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*)$/
+  return regex.test(name)
+}
+
+const checkIfPinNameIsValid = (pinMap: DevicePin[], name: string | undefined) => {
+  if (!name) {
+    return {
+      ok: false,
+      title: 'Invalid Pin Name',
+      message: 'Pin name cannot be empty.',
+    }
+  }
+  if (!pinNameValidation(name)) {
+    return {
+      ok: false,
+      title: 'Invalid Pin Name',
+      message: 'Pin name must be alphanumeric or use underscores.',
+    }
+  }
+  if (checkIfPinNameExists(pinMap, name)) {
+    return {
+      ok: false,
+      title: 'Pin Name Already Exists',
+      message: 'Pin name must be unique.',
+    }
+  }
+
+  return {
+    ok: true,
+    title: 'Valid Pin Name',
+    message: 'Pin name is valid.',
+  }
+}
+
+/**
+ * ============================================================
+ * Exported functions
+ * ============================================================
+ */
+
 export {
   ADDRESS_ACTIONS,
   checkIfAddressExists,
+  checkIfPinNameExists,
+  checkIfPinNameIsValid,
   createNewAddress,
   extractPositionForAnalogAddress,
   extractPositionsForDigitalAddress,
   getHighestPinAddress,
   isAddressTheLowestInItsType,
+  pinNameValidation,
   removeAddressPrefix,
 }
