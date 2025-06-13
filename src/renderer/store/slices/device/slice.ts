@@ -136,11 +136,17 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
               pin.address = createNewAddress('DECREMENT', pin.address)
             }
           })
-          // Verify if this is the last pin with this address type
-          // if (isAddressTheLowestInItsType(referencePin.address)) {
+
+          // Check if the pins array is empty after removing the pin, if so, reset the current selected pin table row
+          const selectedRow =
+            pinMapping.pins.length - 1 > 0
+              ? pinMapping.pins.length - 1 === pinMapping.currentSelectedPinTableRow
+                ? Math.max(pinMapping.currentSelectedPinTableRow - 1, 0)
+                : pinMapping.currentSelectedPinTableRow
+              : -1
+
           pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow, 1)
-          pinMapping.currentSelectedPinTableRow = -1
-          // }
+          pinMapping.currentSelectedPinTableRow = selectedRow
         }),
       )
     },

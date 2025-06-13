@@ -29,7 +29,6 @@ export const PinTextInputCell = ({
 
   // If the initialValue is changed external, sync it up with our state
   useEffect(() => {
-    console.log('PinTextInputCell useEffect', { initialValue, cellValue })
     setCellValue(initialValue)
   }, [initialValue])
 
