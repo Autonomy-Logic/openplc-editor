@@ -528,6 +528,7 @@ class CompilerService {
    */
   compileSTProgram(pathToProjectFile: string, mainProcessPort: MessagePortMain) {
     const isDevelopment = process.env.NODE_ENV === 'development'
+    const isArm = process.arch === 'arm' || process.arch === 'arm64'
     const isWindows = process.platform === 'win32'
     const isMac = process.platform === 'darwin'
     const isLinux = process.platform === 'linux'
@@ -548,6 +549,7 @@ class CompilerService {
       'compilers',
       'MacOS',
       'xml2st',
+      isArm ? 'arm64' : 'x64',
       'xml2st',
     )
     const linuxCompilerPath = join(
