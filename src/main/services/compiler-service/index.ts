@@ -541,6 +541,7 @@ class CompilerService {
       'compilers',
       'Windows',
       'xml2st',
+      isArm ? 'arm64' : 'x64',
       'xml2st.exe',
     )
     const darwinCompilerPath = join(
@@ -558,6 +559,7 @@ class CompilerService {
       'compilers',
       'Linux',
       'xml2st',
+      isArm ? 'arm64' : 'x64',
       'xml2st',
     )
 
