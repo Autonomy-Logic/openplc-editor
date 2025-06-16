@@ -238,9 +238,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
 
                   // 3. Determine the new address for currentPin in its new type group.
                   // This calculation is based on newPinsArray (which doesn't contain currentPin yet).
-                  console.log('newPinsArray before adding currentPin:', newPinsArray)
                   const highestAddressInNewTypeOfNewArray = getHighestPinAddress(newPinsArray, newPinType)
-                  console.log('Highest address in new type:', highestAddressInNewTypeOfNewArray)
                   currentPin.address = createNewAddress('INCREMENT', highestAddressInNewTypeOfNewArray)
 
                   // Ensure this auto-calculated address is used by the final assignment logic.
