@@ -148,6 +148,7 @@ export const BlockNodeElement = <T extends object>({
           // @ts-expect-error - type is dynamic
           .flatMap((block) => block.pous)
           // @ts-expect-error - type is dynamic
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
           .find((pou) => pou.name.toLowerCase() === blockNameValue.toLowerCase())
       )
     }
