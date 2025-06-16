@@ -92,7 +92,13 @@ class CompilerService {
         arduinoCliBinary = join(this.compilerDirectory, 'MacOS', 'arduino-cli', 'bin', 'arduino-cli')
         break
       case 'linux':
-        arduinoCliBinary = join(this.compilerDirectory, 'Linux', 'arduino-cli', 'bin', 'arduino-cli')
+        arduinoCliBinary = join(
+          this.compilerDirectory,
+          'Linux',
+          'arduino-cli',
+          'bin',
+          `${process.arch === 'arm64' || process.arch === 'arm' ? 'arduino-cli-arm' : 'arduino-cli'}`,
+        )
         break
       default:
         throw new Error(`Unsupported platform: ${process.platform}`)
