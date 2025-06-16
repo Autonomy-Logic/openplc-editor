@@ -32,10 +32,12 @@ export const GenericAreaTextCell = ({
           onInteractOutside={onBlur}
         >
           <textarea
+            aria-label='Edit value'
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onBlur={onBlur}
             rows={5}
-            className='w-full max-w-[375px] flex-1 resize-none  bg-transparent text-start text-neutral-900 outline-none  dark:text-neutral-100'
+            className='w-full max-w-[375px] flex-1 resize-none bg-transparent text-start text-neutral-900 outline-none dark:text-neutral-100'
           />
         </PrimitivePopover.Content>
       </PrimitivePopover.Portal>

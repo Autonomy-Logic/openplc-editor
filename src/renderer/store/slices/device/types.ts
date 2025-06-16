@@ -155,12 +155,17 @@ const deviceActionSchema = z.object({
   removePin: z.function().args().returns(z.void()),
   updatePin: z
     .function()
-    .args(devicePinSchema.partial())
+    .args(
+      devicePinSchema.partial().refine((obj) => Object.keys(obj).length > 0, {
+        message: 'At least one pin property must be provided',
+      }),
+    )
     .returns(
       z.object({
         ok: z.boolean(),
         title: z.string(),
         message: z.string(),
+        data: z.unknown().optional(),
       }),
     ),
   setDeviceBoard: z.function().args(z.string()).returns(z.void()),

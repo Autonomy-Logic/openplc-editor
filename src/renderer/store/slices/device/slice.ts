@@ -155,6 +155,12 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         ok: true,
         title: '',
         message: '',
+        data: {
+          pin: '',
+          pinType: '',
+          address: '',
+          name: '',
+        },
       }
 
       setState(
@@ -218,6 +224,12 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
 
+      returnMessage.data = {
+        pin: updatedData.pin || '',
+        pinType: updatedData.pinType || '',
+        address: updatedData.address || '',
+        name: updatedData.name || '',
+      }
       return returnMessage
     },
     setDeviceBoard: (deviceBoard): void => {

@@ -21,7 +21,9 @@ export const PinTextInputCell = ({
     if (cellValue === initialValue) return
 
     const res = table.options.meta?.updateData(index, id, cellValue)
-    if (res?.ok) return
+
+    // Assume success when no structured response is returned
+    if (res === undefined || res?.ok) return
 
     setCellValue(initialValue)
     toast({ title: res?.title, description: res?.message, variant: 'fail' })
