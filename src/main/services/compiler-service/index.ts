@@ -535,13 +535,15 @@ class CompilerService {
 
     const workingDirectory = process.cwd()
 
+    // Warning: The compiler path is locked in x64 version for now, but it should be changed to use the correct architecture version of the compiler.
+    // This is a temporary solution to avoid the compilation process to fail, where we are getting an error about the Windows C compiler.
     const windowsCompilerPath = join(
       isDevelopment ? workingDirectory : process.resourcesPath,
       isDevelopment ? 'resources' : '',
       'compilers',
       'Windows',
       'xml2st',
-      isArm ? 'arm64' : 'x64',
+      'x64',
       'xml2st.exe',
     )
     const darwinCompilerPath = join(
