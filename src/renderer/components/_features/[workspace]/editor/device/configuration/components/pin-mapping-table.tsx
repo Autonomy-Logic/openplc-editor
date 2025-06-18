@@ -1,7 +1,9 @@
 import { GenericTable } from '@root/renderer/components/_atoms/generic-table'
+import { PinTextInputCell } from '@root/renderer/components/_molecules/pin-mapping-table'
+import { PinSelectInputCell } from '@root/renderer/components/_molecules/pin-mapping-table/select-input'
+import { pinSelectors } from '@root/renderer/hooks'
 import type { DevicePin } from '@root/renderer/store/slices/device'
 import { createColumnHelper } from '@tanstack/react-table'
-import { startCase } from 'lodash'
 
 const columnHelper = createColumnHelper<DevicePin>()
 
@@ -12,7 +14,7 @@ const columns = [
   }),
   columnHelper.accessor('pinType', {
     header: 'Type',
-    cell: (props) => startCase(props.getValue()),
+    cell: PinSelectInputCell  ,
   }),
   columnHelper.accessor('address', {
     header: 'Address',
@@ -20,7 +22,7 @@ const columns = [
   }),
   columnHelper.accessor('name', {
     header: 'Name',
-    cell: (props) => props.getValue(),
+    cell: PinTextInputCell,
   }),
 ]
 
@@ -31,10 +33,15 @@ type PinMappingTableProps = {
 }
 
 const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTableProps) => {
-  const handleUpdateDataRequest = (rowIndex: number, columnId: string, value: unknown) => {
-    console.log(rowIndex, columnId, value)
-    return { ok: false }
+  const updatePin = pinSelectors.useUpdatePin()
+
+  const handleUpdateDataRequest = (_rowIndex: number, columnId: string, value: unknown) => {
+    const res = updatePin({
+      [columnId as keyof DevicePin]: value,
+    })
+    return res
   }
+
   return (
     <GenericTable<DevicePin>
       columns={columns}

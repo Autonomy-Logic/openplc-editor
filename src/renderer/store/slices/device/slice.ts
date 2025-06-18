@@ -1,9 +1,8 @@
-import { faker } from '@faker-js/faker'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { DevicePin, DeviceSlice } from './types'
-import { createNewAddress, getHighestPinAddress, removeAddressPrefix } from './validation/pins'
+import { checkIfPinNameIsValid, createNewAddress, getHighestPinAddress, removeAddressPrefix } from './validation/pins'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
   deviceAvailableOptions: {
@@ -44,12 +43,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       },
     },
     pinMapping: {
-      pins: [
-        { pin: 'pin0', pinType: 'digitalInput', address: '%IX0.0', name: 'name0' },
-        { pin: 'pin1', pinType: 'digitalOutput', address: '%QX0.0', name: 'name1' },
-        { pin: 'pin2', pinType: 'analogInput', address: '%IW0', name: 'name2' },
-        { pin: 'pin3', pinType: 'analogOutput', address: '%QW0', name: 'name3' },
-      ],
+      pins: [],
       currentSelectedPinTableRow: -1,
     },
   },
@@ -88,7 +82,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pin: '',
             pinType: defaultPinType,
             address: nextAddress,
-            name: faker.food.vegetable(),
+            name: '',
           }
 
           if (pinMapping.currentSelectedPinTableRow === -1 || !referencePin) {
@@ -101,7 +95,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           const pinExists = pinMapping.pins.find((pin) => pin.address === newAddress)
 
           if (!pinExists) {
-            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress, name: faker.food.vegetable() }
+            newPin = { pin: '', pinType: referencePin.pinType, address: newAddress, name: '' }
             pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow + 1, 0, newPin)
             pinMapping.currentSelectedPinTableRow += 1
             return
@@ -114,7 +108,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             pin: '',
             pinType: pinExists.pinType,
             address: newAddressForHighestPinAddress,
-            name: faker.food.vegetable(),
+            name: '',
           }
 
           pinMapping.pins.splice(indexOfHighestPinAddress + 1, 0, newPinForHighestPinAddress)
@@ -142,13 +136,182 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
               pin.address = createNewAddress('DECREMENT', pin.address)
             }
           })
-          // Verify if this is the last pin with this address type
-          // if (isAddressTheLowestInItsType(referencePin.address)) {
+
+          // Check if the pins array is empty after removing the pin, if so, reset the current selected pin table row
+          const selectedRow =
+            pinMapping.pins.length - 1 > 0
+              ? pinMapping.pins.length - 1 === pinMapping.currentSelectedPinTableRow
+                ? Math.max(pinMapping.currentSelectedPinTableRow - 1, 0)
+                : pinMapping.currentSelectedPinTableRow
+              : -1
+
           pinMapping.pins.splice(pinMapping.currentSelectedPinTableRow, 1)
-          pinMapping.currentSelectedPinTableRow = -1
-          // }
+          pinMapping.currentSelectedPinTableRow = selectedRow
         }),
       )
+    },
+    updatePin: (updatedData): { ok: boolean; title: string; message: string } => {
+      const returnMessage = {
+        ok: true,
+        title: '',
+        message: '',
+        data: {
+          pin: '',
+          pinType: '',
+          address: '',
+          name: '',
+        },
+      }
+      setState(
+        produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
+          const currentPin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
+
+          if (!currentPin) {
+            returnMessage.ok = false
+            returnMessage.title = 'No Pin Selected'
+            returnMessage.message = 'Please select a pin to update.'
+            return
+          }
+
+          const validations = {
+            pin: {
+              ok: true,
+              title: '',
+              message: '',
+            },
+            pinType: {
+              ok: true,
+              title: '',
+              message: '',
+            },
+            address: {
+              ok: true,
+              title: '',
+              message: '',
+            },
+            name: {
+              ok: true,
+              title: '',
+              message: '',
+            },
+          }
+
+          // Validate the entries of updatedData
+          for (const key in updatedData) {
+            switch (key) {
+              case 'name':
+                validations.name = checkIfPinNameIsValid(pinMapping.pins, updatedData.name)
+                if (!validations.name.ok) {
+                  returnMessage.ok = false
+                  returnMessage.title = validations.name.title
+                  returnMessage.message = validations.name.message
+                  return
+                }
+                currentPin.name = updatedData.name
+                returnMessage.data.name = updatedData.name || ''
+                return
+
+              case 'pinType':
+                // Ensure updatedData.pinType is provided and different from the current one
+                if (updatedData.pinType && updatedData.pinType !== currentPin.pinType) {
+                  const oldPinType = currentPin.pinType
+                  const oldAddress = currentPin.address // Address before any potential change by 'address' case
+                  const oldAddressPosition = Number(removeAddressPrefix(oldAddress))
+                  const newPinType = updatedData.pinType
+
+                  const originalIndex = pinMapping.currentSelectedPinTableRow
+
+                  // 1. Create a new array of pins, excluding the current one for now.
+                  // Adjust addresses for pins in the old type group that were after the current pin.
+                  const newPinsArray = pinMapping.pins
+                    .filter((_, index) => index !== originalIndex) // Exclude current pin
+                    .map((p) => {
+                      if (p.pinType === oldPinType && Number(removeAddressPrefix(p.address)) > oldAddressPosition) {
+                        // Return a new object if 'p' is not a draft or to be safe
+                        return { ...p, address: createNewAddress('DECREMENT', p.address) }
+                      }
+                      return p // 'p' is an Immer draft proxy if it was part of the original array
+                    })
+
+                  // 2. Update the currentPin's type (currentPin is an Immer draft object)
+                  currentPin.pinType = newPinType
+
+                  // 3. Determine the new address for currentPin in its new type group.
+                  // This calculation is based on newPinsArray (which doesn't contain currentPin yet).
+                  const highestAddressInNewTypeOfNewArray = getHighestPinAddress(newPinsArray, newPinType)
+                  currentPin.address = createNewAddress('INCREMENT', highestAddressInNewTypeOfNewArray)
+
+                  // Ensure this auto-calculated address is used by the final assignment logic.
+                  // Also, update validations.address to reflect this automatic change.
+                  const finalAddress = currentPin.address // This makes the later generic assignment use this new address.
+                  validations.address = {
+                    ok: true,
+                    title: 'Address Auto-Updated',
+                    message: 'Address was automatically updated due to pin type change.',
+                  }
+
+                  // 4. Add the modified currentPin (which is a draft proxy) back to the new array.
+                  newPinsArray.push(currentPin)
+
+                  // 5. Sort the new array of pins.
+                  const typeOrder: Array<DevicePin['pinType']> = [
+                    'digitalInput',
+                    'digitalOutput',
+                    'analogInput',
+                    'analogOutput',
+                  ]
+                  newPinsArray.sort((a, b) => {
+                    const typeAIndex = typeOrder.indexOf(a.pinType)
+                    const typeBIndex = typeOrder.indexOf(b.pinType)
+                    if (typeAIndex !== typeBIndex) {
+                      return typeAIndex - typeBIndex
+                    }
+                    return Number(removeAddressPrefix(a.address)) - Number(removeAddressPrefix(b.address))
+                  })
+
+                  // 6. Replace the old pins array with the new sorted one in the draft state.
+                  pinMapping.pins = newPinsArray
+
+                  // 7. Find the new index of currentPin in the sorted array and update currentSelectedPinTableRow.
+                  // currentPin is the draft object, so identity check (p === currentPin) is correct.
+                  pinMapping.currentSelectedPinTableRow = pinMapping.pins.findIndex((p) => p === currentPin)
+
+                  // Validation message for the pinType change itself
+                  validations.pinType.ok = true
+                  validations.pinType.title = 'Pin Type Changed'
+                  validations.pinType.message = `Pin type successfully changed to ${newPinType}. Address automatically adjusted.`
+
+                  returnMessage.data.pinType = newPinType
+                  returnMessage.data.address = finalAddress
+                  returnMessage.ok = true
+                  returnMessage.title = 'Pin Updated'
+                  returnMessage.message = `Pin type changed from ${oldPinType} to ${newPinType}. Address updated to ${finalAddress}.`
+                  return
+                }
+
+                if (updatedData.pinType === currentPin.pinType) {
+                  // Pin type is being "updated" to the same value, no structural change needed.
+                  validations.pinType.ok = true
+
+                  returnMessage.data.pinType = currentPin.pinType
+                  returnMessage.data.address = currentPin.address // Keep the current address as is
+                  returnMessage.ok = true
+                  returnMessage.title = 'Pin Type Unchanged'
+                  returnMessage.message = `Pin type remains as ${currentPin.pinType}. Address remains as ${currentPin.address}.`
+                  return
+                }
+
+                // If updatedData.pinType is not provided, this case is skipped,
+                // and pinType remains unchanged. validations.pinType retains its default.
+                break
+
+              default:
+                break
+            }
+          }
+        }),
+      )
+      return returnMessage
     },
     setDeviceBoard: (deviceBoard): void => {
       setState(

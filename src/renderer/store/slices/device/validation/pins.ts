@@ -1,4 +1,15 @@
+/**
+ * ============================================================
+ * This file contains functions to validate and manipulate device pin addresses.
+ * ============================================================
+ */
 import type { DevicePin, PinTypes } from '../types'
+
+/**
+ * ============================================================
+ * Functions to validate and manipulate device pin addresses
+ * ============================================================
+ */
 
 /**
  * This is a validation to check if the value of the address is unique.
@@ -114,6 +125,9 @@ const getHighestPinAddress = (pinMap: DevicePin[], pinType: PinTypes) => {
   switch (pinType) {
     case 'digitalInput': {
       const orderDigitalInputPins = pinMap.filter((pin) => pin.pinType === 'digitalInput').sort(compareAddressPosition)
+      if (orderDigitalInputPins.length === 0) {
+        return '%IX'
+      }
       pinWithHighestAddress = orderDigitalInputPins[orderDigitalInputPins.length - 1]
       break
     }
@@ -121,16 +135,25 @@ const getHighestPinAddress = (pinMap: DevicePin[], pinType: PinTypes) => {
       const orderDigitalOutputPins = pinMap
         .filter((pin) => pin.pinType === 'digitalOutput')
         .sort(compareAddressPosition)
+      if (orderDigitalOutputPins.length === 0) {
+        return '%QX'
+      }
       pinWithHighestAddress = orderDigitalOutputPins[orderDigitalOutputPins.length - 1]
       break
     }
     case 'analogInput': {
       const orderAnalogInputPins = pinMap.filter((pin) => pin.pinType === 'analogInput').sort(compareAddressPosition)
+      if (orderAnalogInputPins.length === 0) {
+        return '%IW'
+      }
       pinWithHighestAddress = orderAnalogInputPins[orderAnalogInputPins.length - 1]
       break
     }
     case 'analogOutput': {
       const orderAnalogOutputPins = pinMap.filter((pin) => pin.pinType === 'analogOutput').sort(compareAddressPosition)
+      if (orderAnalogOutputPins.length === 0) {
+        return '%QW'
+      }
       pinWithHighestAddress = orderAnalogOutputPins[orderAnalogOutputPins.length - 1]
       break
     }
@@ -150,13 +173,67 @@ const isAddressTheLowestInItsType = (address: string) => {
   return false
 }
 
+/**
+ * ============================================================
+ * Name validation functions
+ * ============================================================
+ */
+const checkIfPinNameExists = (pinMap: DevicePin[], name: string) => {
+  return pinMap.some((pin) => pin.name?.toLowerCase() === name?.toLowerCase())
+}
+
+const pinNameValidation = (name: string) => {
+  const regex =
+    /^([a-zA-Z0-9]+(?:[A-Z][a-z0-9]*)*)|([A-Z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)|([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*)$/
+  return regex.test(name)
+}
+
+const checkIfPinNameIsValid = (pinMap: DevicePin[], name: string | undefined) => {
+  if (!name) {
+    return {
+      ok: false,
+      title: 'Invalid Pin Name',
+      message: 'Pin name cannot be empty.',
+    }
+  }
+  if (!pinNameValidation(name)) {
+    return {
+      ok: false,
+      title: 'Invalid Pin Name',
+      message: 'Pin name must be alphanumeric or use underscores.',
+    }
+  }
+  if (checkIfPinNameExists(pinMap, name)) {
+    return {
+      ok: false,
+      title: 'Pin Name Already Exists',
+      message: 'Pin name must be unique.',
+    }
+  }
+
+  return {
+    ok: true,
+    title: 'Valid Pin Name',
+    message: 'Pin name is valid.',
+  }
+}
+
+/**
+ * ============================================================
+ * Exported functions
+ * ============================================================
+ */
+
 export {
   ADDRESS_ACTIONS,
   checkIfAddressExists,
+  checkIfPinNameExists,
+  checkIfPinNameIsValid,
   createNewAddress,
   extractPositionForAnalogAddress,
   extractPositionsForDigitalAddress,
   getHighestPinAddress,
   isAddressTheLowestInItsType,
+  pinNameValidation,
   removeAddressPrefix,
 }
