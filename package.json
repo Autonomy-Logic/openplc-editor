@@ -1,7 +1,7 @@
 {
   "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
-  "version": "4.0.3-beta",
+  "version": "4.0.4-beta",
   "license": "MIT",
   "author": {
     "name": "Autonomy Logic"
