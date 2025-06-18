@@ -1,5 +1,5 @@
 import { cn } from '@root/utils'
-import _ from 'lodash'
+import { startCase } from 'lodash'
 import { useEffect, useRef, useState } from 'react'
 
 import { ScrollAreaComponent } from '../../ui'
@@ -68,7 +68,7 @@ export const GenericSelectCell = ({
                 )}
               >
                 <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                  {_.startCase(sv.label) || sv.value}
+                  {sv.label ? startCase(sv.label) : sv.value}
                 </span>
               </SelectItem>
             ))}
