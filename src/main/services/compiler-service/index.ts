@@ -92,7 +92,13 @@ class CompilerService {
         arduinoCliBinary = join(this.compilerDirectory, 'MacOS', 'arduino-cli', 'bin', 'arduino-cli')
         break
       case 'linux':
-        arduinoCliBinary = join(this.compilerDirectory, 'Linux', 'arduino-cli', 'bin', 'arduino-cli')
+        arduinoCliBinary = join(
+          this.compilerDirectory,
+          'Linux',
+          'arduino-cli',
+          'bin',
+          `${process.arch === 'arm64' || process.arch === 'arm' ? 'arduino-cli-arm' : 'arduino-cli'}`,
+        )
         break
       default:
         throw new Error(`Unsupported platform: ${process.platform}`)
@@ -528,18 +534,22 @@ class CompilerService {
    */
   compileSTProgram(pathToProjectFile: string, mainProcessPort: MessagePortMain) {
     const isDevelopment = process.env.NODE_ENV === 'development'
+    const isArm = process.arch === 'arm' || process.arch === 'arm64'
     const isWindows = process.platform === 'win32'
     const isMac = process.platform === 'darwin'
     const isLinux = process.platform === 'linux'
 
     const workingDirectory = process.cwd()
 
+    // Warning: The compiler path is locked in x64 version for now, but it should be changed to use the correct architecture version of the compiler.
+    // This is a temporary solution to avoid the compilation process to fail, where we are getting an error about the Windows C compiler.
     const windowsCompilerPath = join(
       isDevelopment ? workingDirectory : process.resourcesPath,
       isDevelopment ? 'resources' : '',
       'compilers',
       'Windows',
       'xml2st',
+      'x64',
       'xml2st.exe',
     )
     const darwinCompilerPath = join(
@@ -548,6 +558,7 @@ class CompilerService {
       'compilers',
       'MacOS',
       'xml2st',
+      isArm ? 'arm64' : 'x64',
       'xml2st',
     )
     const linuxCompilerPath = join(
@@ -556,6 +567,7 @@ class CompilerService {
       'compilers',
       'Linux',
       'xml2st',
+      isArm ? 'arm64' : 'x64',
       'xml2st',
     )
 
