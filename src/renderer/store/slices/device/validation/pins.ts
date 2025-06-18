@@ -109,10 +109,6 @@ const createNewAddress = (action: (typeof ADDRESS_ACTIONS)[number], address: str
 }
 
 const getHighestPinAddress = (pinMap: DevicePin[], pinType: PinTypes) => {
-  if (pinMap.length === 0) {
-    return ''
-  }
-
   let pinWithHighestAddress: Partial<DevicePin> = {}
   const compareAddressPosition = (firstPin: DevicePin, secondPin: DevicePin) => {
     const firstAddressPosition = Number(removeAddressPrefix(firstPin.address))
@@ -129,6 +125,9 @@ const getHighestPinAddress = (pinMap: DevicePin[], pinType: PinTypes) => {
   switch (pinType) {
     case 'digitalInput': {
       const orderDigitalInputPins = pinMap.filter((pin) => pin.pinType === 'digitalInput').sort(compareAddressPosition)
+      if (orderDigitalInputPins.length === 0) {
+        return '%IX'
+      }
       pinWithHighestAddress = orderDigitalInputPins[orderDigitalInputPins.length - 1]
       break
     }
@@ -136,16 +135,25 @@ const getHighestPinAddress = (pinMap: DevicePin[], pinType: PinTypes) => {
       const orderDigitalOutputPins = pinMap
         .filter((pin) => pin.pinType === 'digitalOutput')
         .sort(compareAddressPosition)
+      if (orderDigitalOutputPins.length === 0) {
+        return '%QX'
+      }
       pinWithHighestAddress = orderDigitalOutputPins[orderDigitalOutputPins.length - 1]
       break
     }
     case 'analogInput': {
       const orderAnalogInputPins = pinMap.filter((pin) => pin.pinType === 'analogInput').sort(compareAddressPosition)
+      if (orderAnalogInputPins.length === 0) {
+        return '%IW'
+      }
       pinWithHighestAddress = orderAnalogInputPins[orderAnalogInputPins.length - 1]
       break
     }
     case 'analogOutput': {
       const orderAnalogOutputPins = pinMap.filter((pin) => pin.pinType === 'analogOutput').sort(compareAddressPosition)
+      if (orderAnalogOutputPins.length === 0) {
+        return '%QW'
+      }
       pinWithHighestAddress = orderAnalogOutputPins[orderAnalogOutputPins.length - 1]
       break
     }

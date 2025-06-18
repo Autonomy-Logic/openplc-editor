@@ -210,4 +210,5 @@ export {
   devicePinSchema,
   deviceStateSchema,
   interfaceOptions,
+  pinTypes,
 }

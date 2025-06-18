@@ -162,7 +162,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           name: '',
         },
       }
-
       setState(
         produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
           const currentPin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
@@ -202,34 +201,116 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             switch (key) {
               case 'name':
                 validations.name = checkIfPinNameIsValid(pinMapping.pins, updatedData.name)
+                if (!validations.name.ok) {
+                  returnMessage.ok = false
+                  returnMessage.title = validations.name.title
+                  returnMessage.message = validations.name.message
+                  return
+                }
+                currentPin.name = updatedData.name
+                returnMessage.data.name = updatedData.name || ''
+                return
+
+              case 'pinType':
+                // Ensure updatedData.pinType is provided and different from the current one
+                if (updatedData.pinType && updatedData.pinType !== currentPin.pinType) {
+                  const oldPinType = currentPin.pinType
+                  const oldAddress = currentPin.address // Address before any potential change by 'address' case
+                  const oldAddressPosition = Number(removeAddressPrefix(oldAddress))
+                  const newPinType = updatedData.pinType
+
+                  const originalIndex = pinMapping.currentSelectedPinTableRow
+
+                  // 1. Create a new array of pins, excluding the current one for now.
+                  // Adjust addresses for pins in the old type group that were after the current pin.
+                  const newPinsArray = pinMapping.pins
+                    .filter((_, index) => index !== originalIndex) // Exclude current pin
+                    .map((p) => {
+                      if (p.pinType === oldPinType && Number(removeAddressPrefix(p.address)) > oldAddressPosition) {
+                        // Return a new object if 'p' is not a draft or to be safe
+                        return { ...p, address: createNewAddress('DECREMENT', p.address) }
+                      }
+                      return p // 'p' is an Immer draft proxy if it was part of the original array
+                    })
+
+                  // 2. Update the currentPin's type (currentPin is an Immer draft object)
+                  currentPin.pinType = newPinType
+
+                  // 3. Determine the new address for currentPin in its new type group.
+                  // This calculation is based on newPinsArray (which doesn't contain currentPin yet).
+                  const highestAddressInNewTypeOfNewArray = getHighestPinAddress(newPinsArray, newPinType)
+                  currentPin.address = createNewAddress('INCREMENT', highestAddressInNewTypeOfNewArray)
+
+                  // Ensure this auto-calculated address is used by the final assignment logic.
+                  // Also, update validations.address to reflect this automatic change.
+                  const finalAddress = currentPin.address // This makes the later generic assignment use this new address.
+                  validations.address = {
+                    ok: true,
+                    title: 'Address Auto-Updated',
+                    message: 'Address was automatically updated due to pin type change.',
+                  }
+
+                  // 4. Add the modified currentPin (which is a draft proxy) back to the new array.
+                  newPinsArray.push(currentPin)
+
+                  // 5. Sort the new array of pins.
+                  const typeOrder: Array<DevicePin['pinType']> = [
+                    'digitalInput',
+                    'digitalOutput',
+                    'analogInput',
+                    'analogOutput',
+                  ]
+                  newPinsArray.sort((a, b) => {
+                    const typeAIndex = typeOrder.indexOf(a.pinType)
+                    const typeBIndex = typeOrder.indexOf(b.pinType)
+                    if (typeAIndex !== typeBIndex) {
+                      return typeAIndex - typeBIndex
+                    }
+                    return Number(removeAddressPrefix(a.address)) - Number(removeAddressPrefix(b.address))
+                  })
+
+                  // 6. Replace the old pins array with the new sorted one in the draft state.
+                  pinMapping.pins = newPinsArray
+
+                  // 7. Find the new index of currentPin in the sorted array and update currentSelectedPinTableRow.
+                  // currentPin is the draft object, so identity check (p === currentPin) is correct.
+                  pinMapping.currentSelectedPinTableRow = pinMapping.pins.findIndex((p) => p === currentPin)
+
+                  // Validation message for the pinType change itself
+                  validations.pinType.ok = true
+                  validations.pinType.title = 'Pin Type Changed'
+                  validations.pinType.message = `Pin type successfully changed to ${newPinType}. Address automatically adjusted.`
+
+                  returnMessage.data.pinType = newPinType
+                  returnMessage.data.address = finalAddress
+                  returnMessage.ok = true
+                  returnMessage.title = 'Pin Updated'
+                  returnMessage.message = `Pin type changed from ${oldPinType} to ${newPinType}. Address updated to ${finalAddress}.`
+                  return
+                }
+
+                if (updatedData.pinType === currentPin.pinType) {
+                  // Pin type is being "updated" to the same value, no structural change needed.
+                  validations.pinType.ok = true
+
+                  returnMessage.data.pinType = currentPin.pinType
+                  returnMessage.data.address = currentPin.address // Keep the current address as is
+                  returnMessage.ok = true
+                  returnMessage.title = 'Pin Type Unchanged'
+                  returnMessage.message = `Pin type remains as ${currentPin.pinType}. Address remains as ${currentPin.address}.`
+                  return
+                }
+
+                // If updatedData.pinType is not provided, this case is skipped,
+                // and pinType remains unchanged. validations.pinType retains its default.
                 break
+
               default:
                 break
             }
           }
-
-          currentPin.pin = validations.pin.ok && updatedData.pin ? updatedData.pin : currentPin.pin
-          currentPin.pinType = validations.pinType.ok && updatedData.pinType ? updatedData.pinType : currentPin.pinType
-          currentPin.address = validations.address.ok && updatedData.address ? updatedData.address : currentPin.address
-          currentPin.name = validations.name.ok && updatedData.name ? updatedData.name : currentPin.name
-
-          for (const validation of Object.values(validations)) {
-            if (!validation.ok) {
-              returnMessage.ok = false
-              returnMessage.title = validation.title
-              returnMessage.message = validation.message
-              break
-            }
-          }
         }),
       )
-
-      returnMessage.data = {
-        pin: updatedData.pin || '',
-        pinType: updatedData.pinType || '',
-        address: updatedData.address || '',
-        name: updatedData.name || '',
-      }
       return returnMessage
     },
     setDeviceBoard: (deviceBoard): void => {
