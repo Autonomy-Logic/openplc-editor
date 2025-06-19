@@ -58,7 +58,7 @@ export const GenericComboboxCell = ({
           { 'pointer-events-none': !selected },
         )}
       >
-        {startCase(value) || 'Select an option'}
+        {startCase(value) || ''}
       </PrimitiveDropdown.Trigger>
       <PrimitiveDropdown.Content
         sideOffset={5}
