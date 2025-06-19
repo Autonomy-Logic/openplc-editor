@@ -93,7 +93,7 @@ export const GenericComboboxCell = ({
                 onSelect={() => {
                   handleOnValueChange(sv.value)
                 }}
-                data-checked={value === sv.value ? true : false}
+                data-checked={value === sv.value ? 'checked' : 'false'}
               >
                 <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
                   {sv.label ? startCase(sv.label) : sv.value}
