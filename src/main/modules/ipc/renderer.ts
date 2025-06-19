@@ -405,6 +405,12 @@ const rendererProcessBridge = {
           Ethernet: string
         }
         isCoreInstalled: boolean
+        pins: {
+          defaultAin?: string[] // Default analog input pins
+          defaultAout?: string[] // Default analog output pins
+          defaultDin?: string[] // Default digital input pins
+          defaultDout?: string[] // Default digital output pins
+        }
       }
     >
   > => ipcRenderer.invoke('hardware:get-available-boards'),
