@@ -138,10 +138,26 @@ class HardwareService {
               arduinoCoreContent.find((core) => Object.keys(core)[0] === halsContent[board].core) ?? {},
             )[0] ?? undefined,
           pins: {
-            defaultAin: halsContent[board].default_ain ? halsContent[board].default_ain.split(',') : [],
-            defaultAout: halsContent[board].default_aout ? halsContent[board].default_aout.split(',') : [],
-            defaultDin: halsContent[board].default_din ? halsContent[board].default_din.split(',') : [],
-            defaultDout: halsContent[board].default_dout ? halsContent[board].default_dout.split(',') : [],
+            defaultAin:
+              halsContent[board].default_ain
+                ?.split(',')
+                .map((pin) => pin.trim())
+                .filter((pin) => pin !== '') ?? [],
+            defaultAout:
+              halsContent[board].default_aout
+                ?.split(',')
+                .map((pin) => pin.trim())
+                .filter((pin) => pin !== '') ?? [],
+            defaultDin:
+              halsContent[board].default_din
+                ?.split(',')
+                .map((pin) => pin.trim())
+                .filter((pin) => pin !== '') ?? [],
+            defaultDout:
+              halsContent[board].default_dout
+                ?.split(',')
+                .map((pin) => pin.trim())
+                .filter((pin) => pin !== '') ?? [],
           },
         })
       })
