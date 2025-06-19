@@ -1,4 +1,4 @@
-import { IlXML } from "@root/types/PLC/xml-data/codesys"
+import { IlXML } from '@root/types/PLC/xml-data/codesys'
 
 const ilToXML = (value: string) => {
   const ilXML: {
@@ -8,7 +8,7 @@ const ilToXML = (value: string) => {
   } = {
     body: {
       IL: {
-        'xhtml': {
+        xhtml: {
           '@xmlns': 'http://www.w3.org/1999/xhtml',
           $: value,
         },

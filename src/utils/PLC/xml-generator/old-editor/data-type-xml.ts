@@ -2,16 +2,18 @@ import { PLCDataType } from '@root/types/PLC/open-plc'
 import { BaseXml } from '@root/types/PLC/xml-data/old-editor'
 
 const parseDimensions = (dimensions: Array<{ dimension: string }>) => {
-  return dimensions?.map((dimension) => {
-    if (!dimension?.dimension || typeof dimension.dimension !== 'string') {
-      throw new Error(`Invalid dimension format: ${dimension.dimension}`)
-    }
-    const [lower, upper] = dimension.dimension.split('..')
-    if (!lower || !upper) {
-      throw new Error(`Invalid dimension range: ${dimension.dimension}`)
-    }
-    return { '@lower': lower, '@upper': upper }
-  }) || []
+  return (
+    dimensions?.map((dimension) => {
+      if (!dimension?.dimension || typeof dimension.dimension !== 'string') {
+        throw new Error(`Invalid dimension format: ${dimension.dimension}`)
+      }
+      const [lower, upper] = dimension.dimension.split('..')
+      if (!lower || !upper) {
+        throw new Error(`Invalid dimension range: ${dimension.dimension}`)
+      }
+      return { '@lower': lower, '@upper': upper }
+    }) || []
+  )
 }
 
 export const oldEditorParseDataTypesToXML = (xml: BaseXml, dataTypes: PLCDataType[]) => {
