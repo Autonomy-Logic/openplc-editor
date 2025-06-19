@@ -1,6 +1,5 @@
 import { GenericTable } from '@root/renderer/components/_atoms/generic-table'
-import { PinTextInputCell } from '@root/renderer/components/_molecules/pin-mapping-table'
-import { PinSelectInputCell } from '@root/renderer/components/_molecules/pin-mapping-table/select-input'
+import { PinComboboxInputCell, PinSelectInputCell,PinTextInputCell } from '@root/renderer/components/_molecules/pin-mapping-table'
 import { pinSelectors } from '@root/renderer/hooks'
 import type { DevicePin } from '@root/renderer/store/slices/device'
 import { createColumnHelper } from '@tanstack/react-table'
@@ -10,7 +9,7 @@ const columnHelper = createColumnHelper<DevicePin>()
 const columns = [
   columnHelper.accessor('pin', {
     header: 'Pin',
-    cell: (props) => props.getValue(),
+    cell: PinComboboxInputCell,
   }),
   columnHelper.accessor('pinType', {
     header: 'Type',

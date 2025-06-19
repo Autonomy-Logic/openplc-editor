@@ -57,7 +57,7 @@ export const GenericSelectCell = ({
         className='w-[--radix-select-trigger-width] rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
       >
         <ScrollAreaComponent.Root type='always'>
-          <ScrollAreaComponent.Viewport className='max-h-[250px]' ref={selectRef}>
+          <ScrollAreaComponent.Viewport className='max-h-[250px] border border-transparent rounded-lg' ref={selectRef}>
             {selectValues.map((sv) => (
               <SelectItem
                 key={sv.id}
