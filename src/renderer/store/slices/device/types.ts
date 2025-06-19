@@ -104,6 +104,12 @@ const availableBoardInfo = z.object({
     Ethernet: z.string(),
   }),
   coreVersion: z.string().optional(),
+  pins: z.object({
+    defaultAin: z.array(z.string()).optional(), // Default analog input pins
+    defaultAout: z.array(z.string()).optional(), // Default analog output pins
+    defaultDin: z.array(z.string()).optional(), // Default digital input pins
+    defaultDout: z.array(z.string()).optional(), // Default digital output pins
+  })
 })
 
 type AvailableBoardInfo = z.infer<typeof availableBoardInfo>

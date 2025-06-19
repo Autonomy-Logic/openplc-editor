@@ -114,8 +114,18 @@ class HardwareService {
     const halsContent = (await readJSONFile(halsPath)) as HalsFile
     const arduinoCoreContent = (await readJSONFile(arduinoCorePath)) as { [core: string]: string }[]
 
-    let availableBoards: Map<string, Pick<BoardInfo, 'core' | 'preview' | 'specs'> & { coreVersion?: string }> =
-      new Map()
+    let availableBoards: Map<
+      string,
+      Pick<BoardInfo, 'core' | 'preview' | 'specs'> & {
+        coreVersion?: string
+        pins: {
+          defaultAin?: string[]
+          defaultAout?: string[]
+          defaultDin?: string[]
+          defaultDout?: string[]
+        }
+      }
+    > = new Map()
 
     for (const board in halsContent) {
       availableBoards = produce(availableBoards, (draft) => {
@@ -127,6 +137,28 @@ class HardwareService {
             Object.values(
               arduinoCoreContent.find((core) => Object.keys(core)[0] === halsContent[board].core) ?? {},
             )[0] ?? undefined,
+          pins: {
+            defaultAin:
+              halsContent[board].default_ain
+                ?.split(',')
+                .map((pin) => pin.trim())
+                .filter((pin) => pin !== '') ?? [],
+            defaultAout:
+              halsContent[board].default_aout
+                ?.split(',')
+                .map((pin) => pin.trim())
+                .filter((pin) => pin !== '') ?? [],
+            defaultDin:
+              halsContent[board].default_din
+                ?.split(',')
+                .map((pin) => pin.trim())
+                .filter((pin) => pin !== '') ?? [],
+            defaultDout:
+              halsContent[board].default_dout
+                ?.split(',')
+                .map((pin) => pin.trim())
+                .filter((pin) => pin !== '') ?? [],
+          },
         })
       })
     }
