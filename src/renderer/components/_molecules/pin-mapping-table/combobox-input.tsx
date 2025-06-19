@@ -33,16 +33,16 @@ export const PinComboboxInputCell = ({
 
   const selectableValues = useCallback(() => {
     return [
-      { id: "1", label: 'Digital Input', value: 'digital_input' },
-      { id: "2", label: 'Digital Output', value: 'digital_output' },
-      { id: "3", label: 'Analog Input', value: 'analog_input' },
-      { id: "4", label: 'Analog Output', value: 'analog_output' },
-      { id: "5", label: 'PWM', value: 'pwm' },
-      { id: "6", label: 'I2C', value: 'i2c' },
-      { id: "7", label: 'SPI', value: 'spi' },
-      { id: "8", label: 'UART', value: 'uart' },
-      { id: "9", label: 'CAN', value: 'can' },
-      { id: "10", label: 'Other', value: 'other' },
+      { id: '1', label: 'Digital Input', value: 'digital_input' },
+      { id: '2', label: 'Digital Output', value: 'digital_output' },
+      { id: '3', label: 'Analog Input', value: 'analog_input' },
+      { id: '4', label: 'Analog Output', value: 'analog_output' },
+      { id: '5', label: 'PWM', value: 'pwm' },
+      { id: '6', label: 'I2C', value: 'i2c' },
+      { id: '7', label: 'SPI', value: 'spi' },
+      { id: '8', label: 'UART', value: 'uart' },
+      { id: '9', label: 'CAN', value: 'can' },
+      { id: '10', label: 'Other', value: 'other' },
     ]
   }, [id])
 

@@ -5,9 +5,9 @@ const dataTypeEnumSchema = z.object({
     value: z.array(
       z.object({
         '@name': z.string(),
-      })
-    )
-  })
+      }),
+    ),
+  }),
 })
 
 export { dataTypeEnumSchema }

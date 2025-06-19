@@ -1,4 +1,4 @@
-import { StXML } from "@root/types/PLC/xml-data/old-editor/pous/languages/st-diagram";
+import { StXML } from '@root/types/PLC/xml-data/old-editor/pous/languages/st-diagram'
 
 const stToXML = (value: string) => {
   const stXML: {
