@@ -61,11 +61,11 @@ export const GenericComboboxCell = ({
         {startCase(value) || ''}
       </PrimitiveDropdown.Trigger>
       <PrimitiveDropdown.Content
-        sideOffset={5}
+        sideOffset={12}
         alignOffset={5}
         align='center'
         side='bottom'
-        className='w-[--radix-select-trigger-width] rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+        className='z-10 w-[--radix-dropdown-menu-trigger-width] rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
       >
         <div className='p-2'>
           <InputWithRef
