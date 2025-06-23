@@ -1,7 +1,7 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { PlusIcon } from '@root/renderer/assets'
 import { cn } from '@root/utils'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { ScrollAreaComponent } from '../../ui'
 import { InputWithRef } from '..'
@@ -35,8 +35,11 @@ export const GenericComboboxCell = ({
   const [selectIsOpen, setSelectIsOpen] = useState(false)
   const selectRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const customButtonRef = useRef<HTMLDivElement>(null)
 
   const [inputValue, setInputValue] = useState('')
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
+  const optionRefs = useRef<Array<HTMLDivElement | null>>([])
 
   // Recursively find the first element with [data-state="checked"] in all children
   const findFirstCheckedElement = (element: HTMLElement | null): HTMLElement | null => {
@@ -86,6 +89,99 @@ export const GenericComboboxCell = ({
     setInputValue('') // Clear input value when a selection is made
   }
 
+  // Helper to flatten options for keyboard navigation
+  const flattenOptions = useCallback((options: Array<SelectOption | SelectGroup>): SelectOption[] => {
+    let result: SelectOption[] = []
+    for (const item of options) {
+      if ('options' in item) {
+        result = result.concat(flattenOptions(item.options))
+      } else {
+        result.push(item)
+      }
+    }
+    return result
+  }, [])
+
+  // Helper to filter options/groups recursively (moved out for reuse)
+  const filterOptions = (
+    options: Array<SelectOption | SelectGroup>,
+    input: string,
+  ): Array<SelectOption | SelectGroup> => {
+    return options
+      .map((item) => {
+        if ('options' in item) {
+          const filteredGroupOptions = filterOptions(item.options, input)
+          if (filteredGroupOptions.length > 0) {
+            return { ...item, options: filteredGroupOptions }
+          }
+          return null
+        } else {
+          const label = item.label || item.value
+          if (label.includes(input)) {
+            return item
+          }
+          return null
+        }
+      })
+      .filter(Boolean) as Array<SelectOption | SelectGroup>
+  }
+
+  // Flatten filtered options for navigation
+  const filtered = filterOptions(selectValues, inputValue)
+  const flatFilteredOptions = flattenOptions(filtered)
+
+  // Reset highlight only when dropdown is first opened
+  useEffect(() => {
+    if (selectIsOpen) {
+      setHighlightedIndex(flatFilteredOptions.findIndex((opt) => opt.value === value))
+    }
+  }, [selectIsOpen])
+
+  // Scroll highlighted option into view
+  useEffect(() => {
+    const showButton = canAddACustomOption && !isButtonDisabled
+    if (
+      highlightedIndex >= 0 &&
+      highlightedIndex < flatFilteredOptions.length &&
+      optionRefs.current[highlightedIndex]
+    ) {
+      optionRefs.current[highlightedIndex]?.scrollIntoView({ block: 'nearest' })
+    } else if (showButton && highlightedIndex === flatFilteredOptions.length && customButtonRef.current) {
+      customButtonRef.current.scrollIntoView({ block: 'nearest' })
+    }
+  }, [highlightedIndex, selectIsOpen, flatFilteredOptions.length, canAddACustomOption, isButtonDisabled])
+
+  // Keyboard navigation handler
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const showButton = canAddACustomOption && !isButtonDisabled
+    const totalOptions = flatFilteredOptions.length + (showButton ? 1 : 0)
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlightedIndex((prev) => {
+        const next = prev < totalOptions - 1 ? prev + 1 : 0
+        return next
+      })
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlightedIndex((prev) => {
+        const next = prev > 0 ? prev - 1 : totalOptions - 1
+        return next
+      })
+    } else if (e.key === 'Enter') {
+      if (
+        highlightedIndex >= 0 &&
+        highlightedIndex < flatFilteredOptions.length &&
+        flatFilteredOptions[highlightedIndex]
+      ) {
+        handleOnValueChange(flatFilteredOptions[highlightedIndex].value)
+        setSelectIsOpen(false)
+      } else if (showButton && highlightedIndex === flatFilteredOptions.length) {
+        handleOnValueChange(inputValue.trim())
+        handleOnOpenChange(false)
+      }
+    }
+  }
+
   return (
     <PrimitiveDropdown.Root open={selectIsOpen} onOpenChange={handleOnOpenChange}>
       <PrimitiveDropdown.Trigger
@@ -108,7 +204,10 @@ export const GenericComboboxCell = ({
             ref={inputRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.stopPropagation()}
+            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+              e.stopPropagation()
+              handleInputKeyDown(e)
+            }}
             placeholder='Enter a value...'
             className='w-full rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-700 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-500'
           />
@@ -121,33 +220,7 @@ export const GenericComboboxCell = ({
             ref={selectRef}
           >
             {(() => {
-              // Helper to filter options/groups recursively
-              const filterOptions = (
-                options: Array<SelectOption | SelectGroup>,
-                input: string,
-              ): Array<SelectOption | SelectGroup> => {
-                return options
-                  .map((item) => {
-                    if ('options' in item) {
-                      // It's a group
-                      const filteredGroupOptions = filterOptions(item.options, input)
-                      if (filteredGroupOptions.length > 0) {
-                        return { ...item, options: filteredGroupOptions }
-                      }
-                      return null
-                    } else {
-                      // It's an option
-                      const label = item.label || item.value
-                      if (label.includes(input)) {
-                        return item
-                      }
-                      return null
-                    }
-                  })
-                  .filter(Boolean) as Array<SelectOption | SelectGroup>
-              }
-
-              const renderOptions = (options: Array<SelectOption | SelectGroup>) => {
+              const renderOptions = (options: Array<SelectOption | SelectGroup>, flatIdx = { i: 0 }) => {
                 return options.map((item, idx) => {
                   if ('options' in item) {
                     // It's a group
@@ -158,36 +231,42 @@ export const GenericComboboxCell = ({
                           <PrimitiveDropdown.Label className='px-2 py-1 text-xs font-medium text-neutral-950 dark:text-neutral-200'>
                             {item.label}
                           </PrimitiveDropdown.Label>
-                          {renderOptions(item.options)}
+                          {renderOptions(item.options, flatIdx)}
                         </PrimitiveDropdown.Group>
                       </div>
                     )
                   } else {
-                    // It's an option
+                    const currentFlatIdx = flatIdx.i
+                    flatIdx.i++
                     return (
-                      <PrimitiveDropdown.Item
+                      <div
                         key={item.id}
+                        ref={(el) => (optionRefs.current[currentFlatIdx] = el)}
                         className={cn(
                           'flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900',
                           {
-                            'bg-neutral-100 dark:bg-neutral-900': value === item.value,
+                            'bg-neutral-100 dark:bg-neutral-900':
+                              value === item.value || highlightedIndex === currentFlatIdx,
                           },
                         )}
-                        onSelect={() => {
+                        onMouseEnter={() => setHighlightedIndex(currentFlatIdx)}
+                        onClick={() => {
                           handleOnValueChange(item.value)
+                          setSelectIsOpen(false)
                         }}
+                        tabIndex={-1}
+                        role='option'
+                        aria-selected={highlightedIndex === currentFlatIdx}
                         data-checked={value === item.value ? 'checked' : 'false'}
                       >
                         <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
                           {item.label ? item.label : item.value}
                         </span>
-                      </PrimitiveDropdown.Item>
+                      </div>
                     )
                   }
                 })
               }
-
-              const filtered = filterOptions(selectValues, inputValue)
 
               return filtered.length > 0 ? (
                 renderOptions(filtered)
@@ -202,19 +281,26 @@ export const GenericComboboxCell = ({
         </ScrollAreaComponent.Root>
         {canAddACustomOption && (
           <div
+            ref={customButtonRef}
             className={cn(
               'flex h-fit min-h-8 w-full cursor-pointer flex-row items-center justify-center border-t border-neutral-200 p-1 dark:border-neutral-800',
               'hover:bg-neutral-600 dark:hover:bg-neutral-900',
               'bg-white dark:bg-neutral-950',
               'rounded-b-lg',
               isButtonDisabled ? 'pointer-events-none cursor-not-allowed opacity-50' : '',
+              !isButtonDisabled && highlightedIndex === flatFilteredOptions.length
+                ? 'bg-neutral-100 dark:bg-neutral-900'
+                : '',
             )}
             tabIndex={0}
             role='button'
             aria-disabled={isButtonDisabled}
+            onMouseEnter={() => !isButtonDisabled && setHighlightedIndex(flatFilteredOptions.length)}
             onClick={() => {
-              handleOnValueChange(inputValue.trim())
-              handleOnOpenChange(false)
+              if (!isButtonDisabled) {
+                handleOnValueChange(inputValue.trim())
+                handleOnOpenChange(false)
+              }
             }}
           >
             <PlusIcon className='h-3 w-3 stroke-brand' />
