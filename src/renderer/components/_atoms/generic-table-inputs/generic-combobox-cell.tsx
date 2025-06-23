@@ -35,22 +35,37 @@ export const GenericComboboxCell = ({
 
   const [inputValue, setInputValue] = useState('')
 
-  const scrollToSelectedOption = (selectRef: React.RefObject<HTMLDivElement>, selectIsOpen: boolean) => {
+  // Recursively find the first element with [data-state="checked"] in all children
+  const findFirstCheckedElement = (element: HTMLElement | null): HTMLElement | null => {
+    if (!element) return null
+    if (element.getAttribute('data-checked') === 'checked') return element
+    for (const child of Array.from(element.children)) {
+      const found = findFirstCheckedElement(child as HTMLElement)
+      if (found) return found
+    }
+    return null
+  }
+
+  const scrollToSelectedOption = (selectIsOpen: boolean) => {
     if (!openOnSelectedOption || !selectIsOpen) return
-    const checkedElement = selectRef.current?.querySelector('[data-state="checked"]')
+    const checkedElement = findFirstCheckedElement(selectRef.current)
     if (checkedElement) {
       checkedElement.scrollIntoView({ block: 'start' })
     }
   }
   useEffect(() => {
-    scrollToSelectedOption(selectRef, selectIsOpen)
+    scrollToSelectedOption(selectIsOpen)
   }, [selectIsOpen])
 
-  // const filteredSelectValues = selectValues.filter((sv) =>
-  //   sv.label
-  //     ? sv.label.toLowerCase().includes(inputValue.toLowerCase())
-  //     : sv.value.toLowerCase().includes(inputValue.toLowerCase()),
-  // )
+  // Scroll to selected option when dropdown opens or inputValue changes (options re-render)
+  useEffect(() => {
+    if (selectIsOpen) {
+      // Use setTimeout to ensure DOM is updated before scrolling
+      setTimeout(() => {
+        scrollToSelectedOption(true)
+      }, 0)
+    }
+  }, [selectIsOpen, inputValue])
 
   const handleOnValueChange = (value: string) => {
     onValueChange(value)

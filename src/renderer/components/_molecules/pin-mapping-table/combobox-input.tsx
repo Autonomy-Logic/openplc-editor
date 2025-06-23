@@ -69,6 +69,7 @@ export const PinComboboxInputCell = ({
       onValueChange={onValueChange}
       selectValues={selectableValues()}
       selected={selected}
+      openOnSelectedOption
     />
   )
 }
