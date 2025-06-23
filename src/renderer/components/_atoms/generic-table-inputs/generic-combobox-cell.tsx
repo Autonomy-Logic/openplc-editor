@@ -99,7 +99,7 @@ export const GenericComboboxCell = ({
         alignOffset={5}
         align='center'
         side='bottom'
-        className='z-10 w-[--radix-dropdown-menu-trigger-width] rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+        className='z-10 w-[--radix-dropdown-menu-trigger-width] min-w-36 rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
       >
         <div className='p-2'>
           <InputWithRef
@@ -135,7 +135,7 @@ export const GenericComboboxCell = ({
                     } else {
                       // It's an option
                       const label = item.label || item.value
-                      if (label.toLowerCase().includes(input.toLowerCase())) {
+                      if (label.includes(input)) {
                         return item
                       }
                       return null
