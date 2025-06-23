@@ -6,6 +6,17 @@ import { useEffect, useRef, useState } from 'react'
 import { ScrollAreaComponent } from '../../ui'
 import { InputWithRef } from '..'
 
+type SelectOption = {
+  id: string
+  value: string
+  label?: string
+}
+
+type SelectGroup = {
+  label: string
+  options: Array<SelectOption>
+}
+
 export const GenericComboboxCell = ({
   value,
   onValueChange,
@@ -15,11 +26,7 @@ export const GenericComboboxCell = ({
 }: {
   value: string
   onValueChange: (value: string) => void
-  selectValues: {
-    id: string
-    value: string
-    label?: string
-  }[]
+  selectValues: Array<SelectOption | SelectGroup>
   selected?: boolean
   openOnSelectedOption?: boolean
 }) => {
@@ -39,11 +46,11 @@ export const GenericComboboxCell = ({
     scrollToSelectedOption(selectRef, selectIsOpen)
   }, [selectIsOpen])
 
-  const filteredSelectValues = selectValues.filter((sv) =>
-    sv.label
-      ? sv.label.toLowerCase().includes(inputValue.toLowerCase())
-      : sv.value.toLowerCase().includes(inputValue.toLowerCase()),
-  )
+  // const filteredSelectValues = selectValues.filter((sv) =>
+  //   sv.label
+  //     ? sv.label.toLowerCase().includes(inputValue.toLowerCase())
+  //     : sv.value.toLowerCase().includes(inputValue.toLowerCase()),
+  // )
 
   const handleOnValueChange = (value: string) => {
     onValueChange(value)
@@ -81,25 +88,83 @@ export const GenericComboboxCell = ({
             className='max-h-[200px] rounded-b-lg border border-transparent'
             ref={selectRef}
           >
-            {filteredSelectValues.map((sv) => (
-              <PrimitiveDropdown.Item
-                key={sv.id}
-                className={cn(
-                  'flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900',
-                  {
-                    'bg-neutral-100 dark:bg-neutral-900': value === sv.value,
-                  },
-                )}
-                onSelect={() => {
-                  handleOnValueChange(sv.value)
-                }}
-                data-checked={value === sv.value ? 'checked' : 'false'}
-              >
-                <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                  {sv.label ? startCase(sv.label) : sv.value}
-                </span>
-              </PrimitiveDropdown.Item>
-            ))}
+            {(() => {
+              // Helper to filter options/groups recursively
+              const filterOptions = (
+                options: Array<SelectOption | SelectGroup>,
+                input: string,
+              ): Array<SelectOption | SelectGroup> => {
+                return options
+                  .map((item) => {
+                    if ('options' in item) {
+                      // It's a group
+                      const filteredGroupOptions = filterOptions(item.options, input)
+                      if (filteredGroupOptions.length > 0) {
+                        return { ...item, options: filteredGroupOptions }
+                      }
+                      return null
+                    } else {
+                      // It's an option
+                      const label = item.label || item.value
+                      if (label.toLowerCase().includes(input.toLowerCase())) {
+                        return item
+                      }
+                      return null
+                    }
+                  })
+                  .filter(Boolean) as Array<SelectOption | SelectGroup>
+              }
+
+              const renderOptions = (options: Array<SelectOption | SelectGroup>) => {
+                return options.map((item, idx) => {
+                  if ('options' in item) {
+                    // It's a group
+                    return (
+                      <div key={item.label} className='cursor-default'>
+                        {idx !== 0 && <div className='mx-3 my-2 border-t border-neutral-200 dark:border-neutral-800' />}
+                        <PrimitiveDropdown.Group>
+                          <PrimitiveDropdown.Label className='px-2 py-1 text-xs font-medium text-neutral-700 dark:text-neutral-200'>
+                            {item.label}
+                          </PrimitiveDropdown.Label>
+                          {renderOptions(item.options)}
+                        </PrimitiveDropdown.Group>
+                      </div>
+                    )
+                  } else {
+                    // It's an option
+                    return (
+                      <PrimitiveDropdown.Item
+                        key={item.id}
+                        className={cn(
+                          'flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900',
+                          {
+                            'bg-neutral-100 dark:bg-neutral-900': value === item.value,
+                          },
+                        )}
+                        onSelect={() => {
+                          handleOnValueChange(item.value)
+                        }}
+                        data-checked={value === item.value ? 'checked' : 'false'}
+                      >
+                        <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                          {item.label ? startCase(item.label) : item.value}
+                        </span>
+                      </PrimitiveDropdown.Item>
+                    )
+                  }
+                })
+              }
+
+              const filtered = filterOptions(selectValues, inputValue)
+
+              return filtered.length > 0 ? (
+                renderOptions(filtered)
+              ) : (
+                <div className='flex h-full w-full items-center justify-center py-2'>
+                  <span className='text-neutral-500'>No options available</span>
+                </div>
+              )
+            })()}
           </ScrollAreaComponent.Viewport>
           <ScrollAreaComponent.ScrollBar />
         </ScrollAreaComponent.Root>

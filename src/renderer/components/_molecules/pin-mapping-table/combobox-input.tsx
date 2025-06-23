@@ -1,3 +1,4 @@
+import { boardSelectors } from '@root/renderer/hooks'
 import { DevicePin } from '@root/renderer/store/slices'
 import { CellContext } from '@tanstack/react-table'
 import { useCallback, useEffect, useState } from 'react'
@@ -19,6 +20,9 @@ export const PinComboboxInputCell = ({
   const initialValue = getValue<string>()
   const [cellValue, setCellValue] = useState(initialValue)
 
+  const selectedDeviceBoard = boardSelectors.useDeviceBoard()
+  const availableBoards = boardSelectors.useAvailableBoards()
+
   const onValueChange = (value: string) => {
     if (value === initialValue) return
 
@@ -32,19 +36,27 @@ export const PinComboboxInputCell = ({
   }
 
   const selectableValues = useCallback(() => {
+    const transformPins = (pins: string[], group: string) => ({
+      label: group,
+      options: pins.map((pin) => ({
+        id: `${id}-${pin}`,
+        value: pin,
+        label: pin,
+      })),
+    })
+
+    const defaultAinPins = availableBoards.get(selectedDeviceBoard)?.pins?.defaultAin || []
+    const defaultAoutPins = availableBoards.get(selectedDeviceBoard)?.pins?.defaultAout || []
+    const defaultDinPins = availableBoards.get(selectedDeviceBoard)?.pins?.defaultDin || []
+    const defaultDoutPins = availableBoards.get(selectedDeviceBoard)?.pins?.defaultDout || []
+
     return [
-      { id: '1', label: 'Digital Input', value: 'digital_input' },
-      { id: '2', label: 'Digital Output', value: 'digital_output' },
-      { id: '3', label: 'Analog Input', value: 'analog_input' },
-      { id: '4', label: 'Analog Output', value: 'analog_output' },
-      { id: '5', label: 'PWM', value: 'pwm' },
-      { id: '6', label: 'I2C', value: 'i2c' },
-      { id: '7', label: 'SPI', value: 'spi' },
-      { id: '8', label: 'UART', value: 'uart' },
-      { id: '9', label: 'CAN', value: 'can' },
-      { id: '10', label: 'Other', value: 'other' },
-    ]
-  }, [id])
+      transformPins(defaultAinPins, 'Analog In'),
+      transformPins(defaultAoutPins, 'Analog Out'),
+      transformPins(defaultDinPins, 'Digital In'),
+      transformPins(defaultDoutPins, 'Digital Out'),
+    ].filter((group) => group.options.length > 0)
+  }, [id, selectedDeviceBoard, availableBoards])
 
   // If the initialValue is changed external, sync it up with our state
   useEffect(() => {
