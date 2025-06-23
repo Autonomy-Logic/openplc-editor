@@ -34,6 +34,7 @@ export const GenericComboboxCell = ({
 }) => {
   const [selectIsOpen, setSelectIsOpen] = useState(false)
   const selectRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const [inputValue, setInputValue] = useState('')
 
@@ -62,6 +63,7 @@ export const GenericComboboxCell = ({
       // Use setTimeout to ensure DOM is updated before scrolling
       setTimeout(() => {
         scrollToSelectedOption(true)
+        inputRef.current?.focus()
       }, 0)
     }
   }, [selectIsOpen, inputValue])
@@ -88,7 +90,7 @@ export const GenericComboboxCell = ({
     <PrimitiveDropdown.Root open={selectIsOpen} onOpenChange={handleOnOpenChange}>
       <PrimitiveDropdown.Trigger
         className={cn(
-          'flex h-full w-full items-center justify-center p-2 font-caption text-cp-sm font-medium text-neutral-700 outline-none dark:text-neutral-500',
+          'w-full flex-1 items-center justify-center p-2 font-caption text-cp-sm font-medium text-neutral-700 outline-none dark:text-neutral-500',
           { 'pointer-events-none': !selected },
         )}
       >
@@ -103,6 +105,7 @@ export const GenericComboboxCell = ({
       >
         <div className='p-2'>
           <InputWithRef
+            ref={inputRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => e.stopPropagation()}
@@ -204,7 +207,7 @@ export const GenericComboboxCell = ({
               'hover:bg-neutral-600 dark:hover:bg-neutral-900',
               'bg-white dark:bg-neutral-950',
               'rounded-b-lg',
-              isButtonDisabled ? 'pointer-events-none opacity-50' : '',
+              isButtonDisabled ? 'pointer-events-none cursor-not-allowed opacity-50' : '',
             )}
             tabIndex={0}
             role='button'

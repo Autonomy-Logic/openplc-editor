@@ -183,8 +183,7 @@ const checkIfPinNameExists = (pinMap: DevicePin[], name: string) => {
 }
 
 const pinNameValidation = (name: string) => {
-  const regex =
-    /^([a-zA-Z0-9]+(?:[A-Z][a-z0-9]*)*)|([A-Z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)|([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*)$/
+  const regex = /^(?:\d+|[A-Za-z]+(?:_\d+|_[A-Za-z]+)*|[A-ZaZ]+\d*(?:_[A-Za-z]+\d*)*)$/
   return regex.test(name)
 }
 
@@ -229,8 +228,7 @@ const checkIfPinExists = (pinMap: DevicePin[], name: string) => {
 }
 
 const pinValidation = (name: string) => {
-  const regex =
-    /^([a-zA-Z0-9]+(?:[A-Z][a-z0-9]*)*)|([A-Z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)|([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*)$/
+  const regex = /^(?:\d+|[A-Za-z]+(?:_\d+|_[A-Za-z]+)*|[A-ZaZ]+\d*(?:_[A-Za-z]+\d*)*)$/
   return regex.test(name)
 }
 

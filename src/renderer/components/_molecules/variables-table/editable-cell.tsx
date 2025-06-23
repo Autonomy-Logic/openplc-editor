@@ -131,7 +131,7 @@ const EditableLocationCell = ({
 
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
-  const [isEditing, setIsEditing] = useState(false)
+  // const [isEditing, setIsEditing] = useState(false)
   const [variable, setVariable] = useState<PLCVariable | undefined>(undefined)
 
   const isCellEditable = () => {
@@ -147,19 +147,14 @@ const EditableLocationCell = ({
 
   // When the input is blurred, we'll call our table meta's updateData function
   const onBlur = (value: string) => {
-    if (value === initialValue) return setIsEditing(false)
+    if (value === initialValue) return
     const res = table.options.meta?.updateData(index, id, value)
     if (res?.ok) {
       setCellValue(value)
-      return setIsEditing(false)
+      return
     }
     setCellValue(initialValue)
     toast({ title: res?.title, description: res?.message, variant: 'fail' })
-  }
-
-  const handleStartEditing = () => {
-    if (!isEditable()) return
-    setIsEditing(true)
   }
 
   const formattedCellValue = searchQuery && cellValue ? extractSearchQuery(cellValue, searchQuery) : cellValue
@@ -219,7 +214,7 @@ const EditableLocationCell = ({
     ]
   }, [id, variable, existingPins])
 
-  return isEditing ? (
+  return selected ? (
     <GenericComboboxCell
       value={cellValue}
       onValueChange={(value) => {
@@ -227,12 +222,11 @@ const EditableLocationCell = ({
       }}
       selectValues={selectableValues()}
       selected={selected}
-      openOnSelectedOption={true}
-      canAddACustomOption={true}
+      openOnSelectedOption
+      canAddACustomOption
     />
   ) : (
     <div
-      onClick={handleStartEditing}
       className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
         'pointer-events-none': !selected,
         'cursor-not-allowed': !isEditable(),
