@@ -1,7 +1,7 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { PlusIcon } from '@root/renderer/assets'
 import { cn } from '@root/utils'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { ScrollAreaComponent } from '../../ui'
 import { InputWithRef } from '..'
@@ -90,17 +90,21 @@ export const GenericComboboxCell = ({
   }
 
   // Helper to flatten options for keyboard navigation
-  const flattenOptions = useCallback((options: Array<SelectOption | SelectGroup>): SelectOption[] => {
-    let result: SelectOption[] = []
-    for (const item of options) {
-      if ('options' in item) {
-        result = result.concat(flattenOptions(item.options))
-      } else {
-        result.push(item)
-      }
-    }
-    return result
-  }, [])
+  const flattenOptions = useMemo(
+    () =>
+      (options: Array<SelectOption | SelectGroup>): SelectOption[] => {
+        let result: SelectOption[] = []
+        for (const item of options) {
+          if ('options' in item) {
+            result = result.concat(flattenOptions(item.options))
+          } else {
+            result.push(item)
+          }
+        }
+        return result
+      },
+    [selectValues],
+  )
 
   // Helper to filter options/groups recursively (moved out for reuse)
   const filterOptions = (
@@ -127,8 +131,8 @@ export const GenericComboboxCell = ({
   }
 
   // Flatten filtered options for navigation
-  const filtered = filterOptions(selectValues, inputValue)
-  const flatFilteredOptions = flattenOptions(filtered)
+  const filteredOptions = useMemo(() => filterOptions(selectValues, inputValue), [selectValues, inputValue])
+  const flatFilteredOptions = useMemo(() => flattenOptions(filteredOptions), [filteredOptions])
 
   // Reset highlight only when dropdown is first opened
   useEffect(() => {
@@ -220,7 +224,8 @@ export const GenericComboboxCell = ({
             ref={selectRef}
           >
             {(() => {
-              const renderOptions = (options: Array<SelectOption | SelectGroup>, flatIdx = { i: 0 }) => {
+              const renderOptions = (options: Array<SelectOption | SelectGroup>, startIdx: number) => {
+                let currentIdx = startIdx
                 return options.map((item, idx) => {
                   if ('options' in item) {
                     // It's a group
@@ -231,13 +236,16 @@ export const GenericComboboxCell = ({
                           <PrimitiveDropdown.Label className='px-2 py-1 text-xs font-medium text-neutral-950 dark:text-neutral-200'>
                             {item.label}
                           </PrimitiveDropdown.Label>
-                          {renderOptions(item.options, flatIdx)}
+                          {(() => {
+                            const result = renderOptions(item.options, currentIdx)
+                            currentIdx += item.options.length
+                            return result
+                          })()}
                         </PrimitiveDropdown.Group>
                       </div>
                     )
                   } else {
-                    const currentFlatIdx = flatIdx.i
-                    flatIdx.i++
+                    const currentFlatIdx = currentIdx++
                     return (
                       <div
                         key={item.id}
@@ -268,8 +276,8 @@ export const GenericComboboxCell = ({
                 })
               }
 
-              return filtered.length > 0 ? (
-                renderOptions(filtered)
+              return filteredOptions.length > 0 ? (
+                renderOptions(filteredOptions, 0)
               ) : (
                 <div className='flex h-full w-full items-center justify-center py-2 opacity-60'>
                   <span className='text-neutral-500'>No options available</span>
