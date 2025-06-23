@@ -1,4 +1,4 @@
-import { boardSelectors } from '@root/renderer/hooks'
+import { boardSelectors, pinSelectors } from '@root/renderer/hooks'
 import { DevicePin } from '@root/renderer/store/slices'
 import { CellContext } from '@tanstack/react-table'
 import { useCallback, useEffect, useState } from 'react'
@@ -22,6 +22,7 @@ export const PinComboboxInputCell = ({
 
   const selectedDeviceBoard = boardSelectors.useDeviceBoard()
   const availableBoards = boardSelectors.useAvailableBoards()
+  const existingPins = pinSelectors.usePins()
 
   const onValueChange = (value: string) => {
     if (value === initialValue) return
@@ -36,14 +37,12 @@ export const PinComboboxInputCell = ({
   }
 
   const selectableValues = useCallback(() => {
-    const transformPins = (pins: string[], group: string) => ({
-      label: group,
-      options: pins.map((pin) => ({
+    const transformPins = (pins: string[]) =>
+      pins.map((pin) => ({
         id: `${id}-${pin}`,
         value: pin,
         label: pin,
-      })),
-    })
+      }))
 
     const defaultAinPins = availableBoards.get(selectedDeviceBoard)?.pins?.defaultAin || []
     const defaultAoutPins = availableBoards.get(selectedDeviceBoard)?.pins?.defaultAout || []
@@ -51,12 +50,25 @@ export const PinComboboxInputCell = ({
     const defaultDoutPins = availableBoards.get(selectedDeviceBoard)?.pins?.defaultDout || []
 
     return [
-      transformPins(defaultAinPins, 'Analog In'),
-      transformPins(defaultAoutPins, 'Analog Out'),
-      transformPins(defaultDinPins, 'Digital In'),
-      transformPins(defaultDoutPins, 'Digital Out'),
-    ].filter((group) => group.options.length > 0)
-  }, [id, selectedDeviceBoard, availableBoards])
+      ...transformPins(defaultAinPins),
+      ...transformPins(defaultAoutPins),
+      ...transformPins(defaultDinPins),
+      ...transformPins(defaultDoutPins),
+    ]
+      .filter((pin) => !existingPins.some((existingPin) => existingPin.pin === pin.value))
+      .sort((a, b) => {
+        const isALetter = /^[A-Za-z]/.test(a.value)
+        const isBLetter = /^[A-Za-z]/.test(b.value)
+        if (isALetter && !isBLetter) return -1
+        if (!isALetter && isBLetter) return 1
+        if (!isALetter && !isBLetter) {
+          // Both are numbers, sort numerically
+          return parseInt(a.value, 10) - parseInt(b.value, 10)
+        }
+        // Both are letter-prefixed, sort alphabetically
+        return a.value.localeCompare(b.value)
+      })
+  }, [id, selectedDeviceBoard, availableBoards, existingPins])
 
   // If the initialValue is changed external, sync it up with our state
   useEffect(() => {
@@ -70,6 +82,7 @@ export const PinComboboxInputCell = ({
       selectValues={selectableValues()}
       selected={selected}
       openOnSelectedOption
+      canAddACustomOption
     />
   )
 }
