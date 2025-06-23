@@ -204,10 +204,11 @@ const checkIfPinNameIsValid = (pinMap: DevicePin[], name: string | undefined) =>
     }
   }
   if (checkIfPinNameExists(pinMap, name)) {
+    const existingPin = pinMap.findIndex((pin) => pin.name?.toLowerCase() === name.toLowerCase())
     return {
       ok: false,
       title: 'Pin Name Already Exists',
-      message: 'Pin name must be unique.',
+      message: 'Pin name must be unique. Check the table row: ' + (existingPin !== -1 ? existingPin + 1 : 'Unknown'),
     }
   }
 
@@ -220,6 +221,54 @@ const checkIfPinNameIsValid = (pinMap: DevicePin[], name: string | undefined) =>
 
 /**
  * ============================================================
+ * Pin validation functions
+ * ============================================================
+ */
+const checkIfPinExists = (pinMap: DevicePin[], name: string) => {
+  return pinMap.some((pin) => pin.pin === name)
+}
+
+const pinValidation = (name: string) => {
+  const regex =
+    /^([a-zA-Z0-9]+(?:[A-Z][a-z0-9]*)*)|([A-Z][a-z0-9]*(?:[A-Z][a-z0-9]*)*)|([a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*)$/
+  return regex.test(name)
+}
+
+const checkIfPinIsValid = (pinMap: DevicePin[], name: string | undefined) => {
+  if (!name) {
+    return {
+      ok: false,
+      title: 'Invalid Pin',
+      message: 'Pin cannot be empty.',
+    }
+  }
+
+  if (!pinValidation(name)) {
+    return {
+      ok: false,
+      title: 'Invalid Pin',
+      message: 'Pin must be alphanumeric or use underscores.',
+    }
+  }
+
+  if (checkIfPinExists(pinMap, name)) {
+    const existingPin = pinMap.findIndex((pin) => pin.pin === name)
+    return {
+      ok: false,
+      title: 'Pin Already Exists',
+      message: 'Pin must be unique. Check the table row: ' + (existingPin !== -1 ? existingPin + 1 : 'Unknown'),
+    }
+  }
+
+  return {
+    ok: true,
+    title: 'Valid Pin',
+    message: 'Pin is valid.',
+  }
+}
+
+/**
+ * ============================================================
  * Exported functions
  * ============================================================
  */
@@ -227,6 +276,8 @@ const checkIfPinNameIsValid = (pinMap: DevicePin[], name: string | undefined) =>
 export {
   ADDRESS_ACTIONS,
   checkIfAddressExists,
+  checkIfPinExists,
+  checkIfPinIsValid,
   checkIfPinNameExists,
   checkIfPinNameIsValid,
   createNewAddress,
@@ -235,5 +286,6 @@ export {
   getHighestPinAddress,
   isAddressTheLowestInItsType,
   pinNameValidation,
+  pinValidation,
   removeAddressPrefix,
 }

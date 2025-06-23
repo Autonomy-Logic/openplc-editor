@@ -2,7 +2,13 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { DevicePin, DeviceSlice } from './types'
-import { checkIfPinNameIsValid, createNewAddress, getHighestPinAddress, removeAddressPrefix } from './validation/pins'
+import {
+  checkIfPinIsValid,
+  checkIfPinNameIsValid,
+  createNewAddress,
+  getHighestPinAddress,
+  removeAddressPrefix,
+} from './validation/pins'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
   deviceAvailableOptions: {
@@ -176,10 +182,18 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           // Validate the entries of updatedData
           for (const key in updatedData) {
             switch (key) {
-              case 'pin':
+              case 'pin': {
+                const validation = checkIfPinIsValid(pinMapping.pins, updatedData.pin)
+                if (!validation.ok) {
+                  returnMessage.ok = false
+                  returnMessage.title = validation.title
+                  returnMessage.message = validation.message
+                  return
+                }
                 currentPin.pin = updatedData.pin || ''
                 returnMessage.data.pin = updatedData.pin || ''
-                break
+                return
+              }
 
               case 'pinType':
                 // Ensure updatedData.pinType is provided and different from the current one
