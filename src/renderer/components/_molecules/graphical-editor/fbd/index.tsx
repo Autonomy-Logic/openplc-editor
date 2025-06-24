@@ -5,7 +5,7 @@ import { getVariableRestrictionType } from '@root/renderer/components/_atoms/gra
 import { ReactFlowPanel } from '@root/renderer/components/_atoms/react-flow'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import BlockElement from '@root/renderer/components/_features/[workspace]/editor/graphical/elements/fbd/block'
-import { useOpenPLCStore } from '@root/renderer/store'
+import { openPLCStoreBase, useOpenPLCStore } from '@root/renderer/store'
 import { FBDRungState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC/units/variable'
 import {
@@ -34,7 +34,7 @@ interface FBDProps {
 export const FBDBody = ({ rung }: FBDProps) => {
   const {
     editor,
-    editorActions: { updateModelVariables },
+    editorActions: { updateModelVariables, saveEditorViewState },
     fbdFlowActions,
     libraries,
     project: {
@@ -461,6 +461,33 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const handleModalClose = () => {
     closeModal()
   }
+
+  useEffect(() => {
+    const unsub = openPLCStoreBase.subscribe(
+      (state) => state.editor.meta.name,
+      (newName, prevEditorName) => {
+        if (newName === prevEditorName || !reactFlowInstance) return
+
+        const { x, y, zoom } = reactFlowInstance.getViewport()
+
+        saveEditorViewState({
+          prevEditorName,
+          fbdPosition: { x, y, zoom },
+        })
+      },
+    )
+
+    return () => unsub()
+  }, [reactFlowInstance])
+
+  useEffect(() => {
+    const viewport = editor.fbdPosition
+    if (!reactFlowInstance || !viewport) return
+
+    setTimeout(() => {
+      void reactFlowInstance.setViewport(viewport, { duration: 0 })
+    }, 0)
+  }, [reactFlowInstance, editor.meta.name])
 
   return (
     <div className='h-full w-full rounded-lg border p-1 dark:border-neutral-800' ref={reactFlowViewportRef}>

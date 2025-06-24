@@ -21,7 +21,7 @@ import { ContactNode } from '@root/renderer/components/_atoms/graphical-editor/l
 import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/types/block'
 import { CreateRung } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/create-rung'
 import { Rung } from '@root/renderer/components/_organisms/graphical-editor/ladder/rung'
-import { useOpenPLCStore } from '@root/renderer/store'
+import { openPLCStoreBase, useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState, zodLadderFlowSchema } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
 import { useEffect, useRef, useState } from 'react'
@@ -40,7 +40,7 @@ export default function LadderEditor() {
     searchNodePosition,
     projectActions: { updatePou },
     workspaceActions: { setEditingState },
-
+    editorActions: { saveEditorViewState },
     modals,
     modalActions: { closeModal },
   } = useOpenPLCStore()
@@ -158,6 +158,33 @@ export default function LadderEditor() {
   const handleModalClose = () => {
     closeModal()
   }
+
+  useEffect(() => {
+    const unsub = openPLCStoreBase.subscribe(
+      (state) => state.editor.meta.name,
+      (newName, prevEditorName) => {
+        if (newName === prevEditorName || !scrollableRef.current) return
+
+        const scrollTop = scrollableRef.current.scrollTop
+
+        saveEditorViewState({
+          prevEditorName,
+          scrollPosition: { top: scrollTop, left: 0 },
+        })
+      },
+    )
+
+    return () => unsub()
+  }, [])
+
+  useEffect(() => {
+    const scrollable = scrollableRef.current
+    const scrollData = openPLCStoreBase.getState().editor.scrollPosition
+
+    if (scrollable && scrollData) {
+      scrollable.scrollTop = scrollData.top
+    }
+  }, [scrollableRef.current, editor.meta.name])
 
   return (
     <div className='h-full w-full overflow-y-auto' ref={scrollableRef} style={{ scrollbarGutter: 'stable' }}>

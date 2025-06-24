@@ -65,63 +65,121 @@ const editorGraphicalSchema = z.discriminatedUnion('language', [
   }),
 ])
 
+const cursorPositionSchema = z.object({
+  lineNumber: z.number(),
+  column: z.number(),
+  offset: z.number(),
+})
+
+const scrollPositionSchema = z.object({
+  top: z.number(),
+  left: z.number(),
+})
+
+const fbdPositionSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  zoom: z.number(),
+})
+
 /** This is a zod schema for the model.
  * It is used to validate the model if needed,
  * in most cases you can use the type inferred from it.
  */
 const editorModelSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('available'),
-    meta: z.object({
-      name: z.string(),
+  z
+    .object({
+      type: z.literal('available'),
+      meta: z.object({
+        name: z.string(),
+      }),
+    })
+    .extend({
+      cursorPosition: cursorPositionSchema.optional(),
+      scrollPosition: scrollPositionSchema.optional(),
+      fbdPosition: fbdPositionSchema.optional(),
     }),
-  }),
-  z.object({
-    type: z.literal('plc-textual'),
-    meta: z.object({
-      name: z.string(),
-      path: z.string(),
-      language: z.enum(['il', 'st']),
-      pouType: z.enum(['program', 'function', 'function-block']),
+
+  z
+    .object({
+      type: z.literal('plc-textual'),
+      meta: z.object({
+        name: z.string(),
+        path: z.string(),
+        language: z.enum(['il', 'st']),
+        pouType: z.enum(['program', 'function', 'function-block']),
+      }),
+      variable: editorVariablesSchema,
+    })
+    .extend({
+      cursorPosition: cursorPositionSchema.optional(),
+      scrollPosition: scrollPositionSchema.optional(),
+      fbdPosition: fbdPositionSchema.optional(),
     }),
-    variable: editorVariablesSchema,
-  }),
-  z.object({
-    type: z.literal('plc-graphical'),
-    meta: z.object({
-      name: z.string(),
-      path: z.string(),
-      language: z.enum(['ld', 'sfc', 'fbd']),
-      pouType: z.enum(['program', 'function', 'function-block']),
+
+  z
+    .object({
+      type: z.literal('plc-graphical'),
+      meta: z.object({
+        name: z.string(),
+        path: z.string(),
+        language: z.enum(['ld', 'sfc', 'fbd']),
+        pouType: z.enum(['program', 'function', 'function-block']),
+      }),
+      variable: editorVariablesSchema,
+      graphical: editorGraphicalSchema,
+    })
+    .extend({
+      cursorPosition: cursorPositionSchema.optional(),
+      scrollPosition: scrollPositionSchema.optional(),
+      fbdPosition: fbdPositionSchema.optional(),
     }),
-    variable: editorVariablesSchema,
-    graphical: editorGraphicalSchema,
-  }),
-  z.object({
-    type: z.literal('plc-datatype'),
-    meta: z.object({
-      name: z.string(),
-      derivation: z.enum(['enumerated', 'structure', 'array']),
+
+  z
+    .object({
+      type: z.literal('plc-datatype'),
+      meta: z.object({
+        name: z.string(),
+        derivation: z.enum(['enumerated', 'structure', 'array']),
+      }),
+      structure: editorStructureSchema,
+    })
+    .extend({
+      cursorPosition: cursorPositionSchema.optional(),
+      scrollPosition: scrollPositionSchema.optional(),
+      fbdPosition: fbdPositionSchema.optional(),
     }),
-    structure: editorStructureSchema,
-  }),
-  z.object({
-    type: z.literal('plc-resource'),
-    meta: z.object({
-      name: z.string(),
-      path: z.string(),
+
+  z
+    .object({
+      type: z.literal('plc-resource'),
+      meta: z.object({
+        name: z.string(),
+        path: z.string(),
+      }),
+      variable: editorGlobalVariablesSchema,
+      task: taskSchema,
+      instance: instanceSchema,
+    })
+    .extend({
+      cursorPosition: cursorPositionSchema.optional(),
+      scrollPosition: scrollPositionSchema.optional(),
+      fbdPosition: fbdPositionSchema.optional(),
     }),
-    variable: editorGlobalVariablesSchema,
-    task: taskSchema,
-    instance: instanceSchema,
-  }),
-  z.object({
-    type: z.literal('plc-device'),
-    meta: z.object({
-      name: z.enum(['Configuration']),
-      derivation: z.enum(['configuration']),
+
+  z
+    .object({
+      type: z.literal('plc-device'),
+      meta: z.object({
+        name: z.enum(['Pin Mapping', 'Configuration']),
+        derivation: z.enum(['pin-mapping', 'configuration']),
+      }),
+    })
+    .extend({
+      cursorPosition: cursorPositionSchema.optional(),
+      scrollPosition: scrollPositionSchema.optional(),
+      fbdPosition: fbdPositionSchema.optional(),
     }),
-  }),
 ])
 
 /** This is a zod schema for the editor slice state.
@@ -187,6 +245,17 @@ const _editorActionsSchema = z.object({
 
   setEditor: z.function().args(editorModelSchema).returns(z.void()),
   clearEditor: z.function().returns(z.void()),
+  saveEditorViewState: z
+    .function()
+    .args(
+      z.object({
+        prevEditorName: z.string(),
+        cursorPosition: cursorPositionSchema.optional(),
+        scrollPosition: scrollPositionSchema.optional(),
+        fbdPosition: fbdPositionSchema.optional(),
+      }),
+    )
+    .returns(z.void()),
   getEditorFromEditors: z.function().args(z.string()).returns(editorModelSchema.or(z.null())),
 })
 
