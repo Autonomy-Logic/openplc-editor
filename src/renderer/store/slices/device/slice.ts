@@ -2,7 +2,13 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { DevicePin, DeviceSlice } from './types'
-import { checkIfPinNameIsValid, createNewAddress, getHighestPinAddress, removeAddressPrefix } from './validation/pins'
+import {
+  checkIfPinIsValid,
+  checkIfPinNameIsValid,
+  createNewAddress,
+  getHighestPinAddress,
+  removeAddressPrefix,
+} from './validation/pins'
 
 const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setState) => ({
   deviceAvailableOptions: {
@@ -173,43 +179,21 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
             return
           }
 
-          const validations = {
-            pin: {
-              ok: true,
-              title: '',
-              message: '',
-            },
-            pinType: {
-              ok: true,
-              title: '',
-              message: '',
-            },
-            address: {
-              ok: true,
-              title: '',
-              message: '',
-            },
-            name: {
-              ok: true,
-              title: '',
-              message: '',
-            },
-          }
-
           // Validate the entries of updatedData
           for (const key in updatedData) {
             switch (key) {
-              case 'name':
-                validations.name = checkIfPinNameIsValid(pinMapping.pins, updatedData.name)
-                if (!validations.name.ok) {
+              case 'pin': {
+                const validation = checkIfPinIsValid(pinMapping.pins, updatedData.pin)
+                if (!validation.ok) {
                   returnMessage.ok = false
-                  returnMessage.title = validations.name.title
-                  returnMessage.message = validations.name.message
+                  returnMessage.title = validation.title
+                  returnMessage.message = validation.message
                   return
                 }
-                currentPin.name = updatedData.name
-                returnMessage.data.name = updatedData.name || ''
+                currentPin.pin = updatedData.pin || ''
+                returnMessage.data.pin = updatedData.pin || ''
                 return
+              }
 
               case 'pinType':
                 // Ensure updatedData.pinType is provided and different from the current one
@@ -244,11 +228,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
                   // Ensure this auto-calculated address is used by the final assignment logic.
                   // Also, update validations.address to reflect this automatic change.
                   const finalAddress = currentPin.address // This makes the later generic assignment use this new address.
-                  validations.address = {
-                    ok: true,
-                    title: 'Address Auto-Updated',
-                    message: 'Address was automatically updated due to pin type change.',
-                  }
 
                   // 4. Add the modified currentPin (which is a draft proxy) back to the new array.
                   newPinsArray.push(currentPin)
@@ -276,11 +255,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
                   // currentPin is the draft object, so identity check (p === currentPin) is correct.
                   pinMapping.currentSelectedPinTableRow = pinMapping.pins.findIndex((p) => p === currentPin)
 
-                  // Validation message for the pinType change itself
-                  validations.pinType.ok = true
-                  validations.pinType.title = 'Pin Type Changed'
-                  validations.pinType.message = `Pin type successfully changed to ${newPinType}. Address automatically adjusted.`
-
                   returnMessage.data.pinType = newPinType
                   returnMessage.data.address = finalAddress
                   returnMessage.ok = true
@@ -291,8 +265,6 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
 
                 if (updatedData.pinType === currentPin.pinType) {
                   // Pin type is being "updated" to the same value, no structural change needed.
-                  validations.pinType.ok = true
-
                   returnMessage.data.pinType = currentPin.pinType
                   returnMessage.data.address = currentPin.address // Keep the current address as is
                   returnMessage.ok = true
@@ -304,6 +276,19 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
                 // If updatedData.pinType is not provided, this case is skipped,
                 // and pinType remains unchanged. validations.pinType retains its default.
                 break
+
+              case 'name': {
+                const validation = checkIfPinNameIsValid(pinMapping.pins, updatedData.name)
+                if (!validation.ok) {
+                  returnMessage.ok = false
+                  returnMessage.title = validation.title
+                  returnMessage.message = validation.message
+                  return
+                }
+                currentPin.name = updatedData.name
+                returnMessage.data.name = updatedData.name || ''
+                return
+              }
 
               default:
                 break

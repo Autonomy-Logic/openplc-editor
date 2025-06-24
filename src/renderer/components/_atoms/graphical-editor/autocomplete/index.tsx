@@ -244,7 +244,7 @@ export const GraphicalEditorAutocomplete = forwardRef<HTMLDivElement, GraphicalE
               {newBlock.canCreate && (
                 <div
                   className={cn(
-                    'flex h-fit w-full cursor-pointer flex-row items-center justify-center  border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
+                    'flex h-fit w-full cursor-pointer flex-row items-center justify-center border-0 p-1 hover:bg-neutral-600 dark:hover:bg-neutral-900',
                     {
                       'bg-neutral-400 dark:bg-neutral-800':
                         selectedVariable.positionInArray === selectableValues.length - 1,
