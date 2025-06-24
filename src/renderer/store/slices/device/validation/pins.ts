@@ -3,7 +3,8 @@
  * This file contains functions to validate and manipulate device pin addresses.
  * ============================================================
  */
-import type { DevicePin, PinTypes } from '../types'
+
+import { DevicePin, PinTypes } from '@root/types/PLC/devices'
 
 /**
  * ============================================================

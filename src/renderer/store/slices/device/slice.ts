@@ -1,7 +1,8 @@
+import { DevicePin } from '@root/types/PLC/devices'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import type { DevicePin, DeviceSlice } from './types'
+import type { DeviceSlice } from './types'
 import {
   checkIfPinIsValid,
   checkIfPinNameIsValid,

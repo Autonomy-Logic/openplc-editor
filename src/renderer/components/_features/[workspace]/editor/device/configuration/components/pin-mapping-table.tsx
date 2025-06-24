@@ -5,7 +5,7 @@ import {
   PinTextInputCell,
 } from '@root/renderer/components/_molecules/pin-mapping-table'
 import { pinSelectors } from '@root/renderer/hooks'
-import type { DevicePin } from '@root/renderer/store/slices/device'
+import type { DevicePin } from '@root/types/PLC/devices'
 import { createColumnHelper } from '@tanstack/react-table'
 
 const columnHelper = createColumnHelper<DevicePin>()

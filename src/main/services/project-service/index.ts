@@ -1,11 +1,13 @@
 import { app, BrowserWindow, dialog } from 'electron'
-import { promises, readFile, writeFile } from 'fs'
+import { promises, writeFile } from 'fs'
 import { join } from 'path'
 
 import { PLCProject, PLCProjectSchema } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { CreateJSONFile } from '../../utils'
 import { baseJsonStructure } from './data'
+import { IProjectHistoryEntry } from './types'
+import { readProjectFiles } from './utils/read-project'
 
 export type IProjectServiceResponse = {
   success: boolean
@@ -21,13 +23,6 @@ export type IProjectServiceResponse = {
     }
     content: PLCProject
   }
-}
-
-interface IProjectHistoryEntry {
-  name: string
-  path: string
-  createdAt: string
-  lastOpenedAt: string
 }
 
 class ProjectService {
@@ -175,11 +170,77 @@ class ProjectService {
     }
   }
 
-  async openProject(): Promise<IProjectServiceResponse> {
+  // async openProject(): Promise<IProjectServiceResponse> {
+  //   const { canceled, filePaths } = await dialog.showOpenDialog(this.serviceManager, {
+  //     title: i18n.t('openProject:dialog.title'),
+  //     properties: ['openFile'],
+  //     filters: [{ name: 'JSON', extensions: ['json'] }],
+  //   })
+
+  //   if (canceled) {
+  //     return {
+  //       success: false,
+  //       error: {
+  //         title: i18n.t('projectServiceResponses:openProject.errors.canceled.title'),
+  //         description: i18n.t('projectServiceResponses:openProject.errors.canceled.description'),
+  //         error: null,
+  //       },
+  //     }
+  //   }
+
+  //   const filePath = filePaths[0]
+
+  //   const file = await new Promise<string>((resolve, reject) => {
+  //     readFile(filePath, 'utf-8', (error, data) => {
+  //       if (error) return reject(error)
+  //       return resolve(data)
+  //     })
+  //   })
+
+  //   if (!file) {
+  //     return {
+  //       success: false,
+  //       error: {
+  //         title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
+  //         description: i18n.t('projectServiceResponses:openProject.errors.readFile.description', {
+  //           filePath,
+  //         }),
+  //         error: null,
+  //       },
+  //     }
+  //   }
+  //   const parsedFile = PLCProjectSchema.safeParse(JSON.parse(file))
+  //   if (!parsedFile.success) {
+  //     return {
+  //       success: false,
+  //       error: {
+  //         title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
+  //         description: i18n.t('projectServiceResponses:openProject.errors.readFile.description'),
+  //         error: null,
+  //       },
+  //     }
+  //   }
+
+  //   const projectPath = filePath
+  //   await this.updateProjectHistory(projectPath)
+
+  //   return {
+  //     success: true,
+  //     data: {
+  //       meta: {
+  //         path: projectPath,
+  //       },
+  //       content: parsedFile.data,
+  //     },
+  //   }
+  // }
+  async openProject(): Promise<{
+    success: boolean
+    error?: { title: string; description: string; error: string | null }
+  }> {
     const { canceled, filePaths } = await dialog.showOpenDialog(this.serviceManager, {
       title: i18n.t('openProject:dialog.title'),
-      properties: ['openFile'],
-      filters: [{ name: 'JSON', extensions: ['json'] }],
+      properties: ['openDirectory'],
     })
 
     if (canceled) {
@@ -193,50 +254,12 @@ class ProjectService {
       }
     }
 
-    const filePath = filePaths[0]
-
-    const file = await new Promise<string>((resolve, reject) => {
-      readFile(filePath, 'utf-8', (error, data) => {
-        if (error) return reject(error)
-        return resolve(data)
-      })
-    })
-
-    if (!file) {
-      return {
-        success: false,
-        error: {
-          title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
-          description: i18n.t('projectServiceResponses:openProject.errors.readFile.description', {
-            filePath,
-          }),
-          error: null,
-        },
-      }
-    }
-    const parsedFile = PLCProjectSchema.safeParse(JSON.parse(file))
-    if (!parsedFile.success) {
-      return {
-        success: false,
-        error: {
-          title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
-          description: i18n.t('projectServiceResponses:openProject.errors.readFile.description'),
-          error: null,
-        },
-      }
-    }
-
-    const projectPath = filePath
-    await this.updateProjectHistory(projectPath)
+    const directoryPath = filePaths[0]
+    const projectFiles = await readProjectFiles(directoryPath)
+    console.log('Project files:', projectFiles)
 
     return {
       success: true,
-      data: {
-        meta: {
-          path: projectPath,
-        },
-        content: parsedFile.data,
-      },
     }
   }
   saveProject(data: { projectPath: string; projectData: PLCProject }): IProjectServiceResponse {
