@@ -147,7 +147,7 @@ class ProjectService {
     const historyData = await this.readProjectHistory(historyProjectsFilePath)
     const lastOpenedAt = new Date().toISOString()
 
-    const existingProjectIndex = historyData.findIndex((proj) => proj.path === projectPath)
+    const existingProjectIndex = historyData.findIndex((proj) => proj.path === directoryPath)
     if (existingProjectIndex > -1) {
       historyData[existingProjectIndex].name = projectName
       historyData[existingProjectIndex].path = directoryPath
