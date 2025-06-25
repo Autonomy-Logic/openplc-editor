@@ -1,7 +1,8 @@
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
-import { readFile } from 'fs'
+import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
+import { existsSync, readFile, writeFileSync } from 'fs'
 import { join } from 'path'
 
 import { projectFileMapSchema } from '../types'
@@ -41,19 +42,30 @@ function safeParseProjectFile<K extends keyof typeof projectFileMapSchema>(fileN
 export async function readProjectFiles(basePath: string): Promise<IProjectServiceReadFilesResponse> {
   const projectFiles: Record<string, unknown> = {}
 
-  for (const [fileName, _schema] of Object.entries(projectFileMapSchema)) {
+  for (const [fileName, schema] of Object.entries(projectFileMapSchema)) {
     const filePath = join(basePath, fileName)
-    console.log(`Reading file: ${filePath}`)
     try {
-      const file = await new Promise<string>((resolve, reject) => {
-        readFile(filePath, 'utf-8', (error, data) => {
-          if (error) return reject(error)
-          return resolve(data)
-        })
-      })
+      let file: string | undefined
 
-      if (!file) {
-        throw new Error(`File ${fileName} is empty or does not exist at path: ${filePath}`)
+      if (!existsSync(filePath)) {
+        // File does not exist, create with default value from schema
+        const defaultValue = getDefaultSchemaValues(schema)
+        writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf-8')
+        file = JSON.stringify(defaultValue)
+      } else {
+        // File exists, read its content
+        file = await new Promise<string>((resolve, reject) => {
+          readFile(filePath, 'utf-8', (error, data) => {
+            if (error) return reject(error)
+            return resolve(data)
+          })
+        })
+        if (!file) {
+          // File is empty, create with default value from schema
+          const defaultValue = getDefaultSchemaValues(schema)
+          writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf-8')
+          file = JSON.stringify(defaultValue)
+        }
       }
 
       projectFiles[fileName] = safeParseProjectFile(fileName as keyof typeof projectFileMapSchema, JSON.parse(file))
