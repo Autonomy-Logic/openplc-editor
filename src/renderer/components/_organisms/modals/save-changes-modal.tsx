@@ -25,6 +25,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     ladderFlowActions: { addLadderFlow, clearLadderFlows },
     libraryActions: { addLibrary, clearUserLibraries },
     editorActions: { clearEditor },
+    deviceActions: { clearDeviceDefinitions, setDeviceDefinitions },
   } = useOpenPLCStore()
 
   const { handleQuitApp, handleCancelQuitApp } = useQuitApp()
@@ -36,6 +37,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     clearFBDFlows()
     clearLadderFlows()
     clearProjects()
+    clearDeviceDefinitions()
   }
 
   const handleAcceptCloseModal = async (operation: 'save' | 'not-saving') => {
@@ -62,13 +64,15 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
           onClose()
           setEditingState('unsaved')
 
+          const { project, deviceConfiguration, devicePinMapping } = data.content
+
           const projectMeta = {
-            name: data.content.meta.name,
-            type: data.content.meta.type,
+            name: project.meta.name,
+            type: project.meta.type,
             path: data.meta.path,
           }
 
-          const projectData = data.content.data
+          const projectData = project.data
 
           setProject({
             meta: projectMeta,
@@ -96,11 +100,17 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
             })
           }
 
-          data.content.data.pous.forEach((pou) => {
+          projectData.pous.forEach((pou) => {
             if (pou.type !== 'program') {
               addLibrary(pou.data.name, pou.type)
             }
           })
+
+          setDeviceDefinitions({
+            configuration: deviceConfiguration,
+            pinMapping: devicePinMapping,
+          })
+
           toast({
             title: 'Project opened!',
             description: 'Your project was opened and loaded successfully.',

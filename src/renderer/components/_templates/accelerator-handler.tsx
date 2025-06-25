@@ -1,5 +1,5 @@
 import type { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
-import type { IProjectServiceResponse } from '@root/main/services'
+import type { INewProjectServiceResponse } from '@root/main/services'
 import { useCompiler } from '@root/renderer/hooks'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -149,7 +149,7 @@ const AcceleratorHandler = () => {
    * -- Open project by path project
    */
   useEffect(() => {
-    window.bridge.openRecentAccelerator((_event, response: IProjectServiceResponse) => {
+    window.bridge.openRecentAccelerator((_event, response: INewProjectServiceResponse) => {
       openRecentProject(response)
     })
 

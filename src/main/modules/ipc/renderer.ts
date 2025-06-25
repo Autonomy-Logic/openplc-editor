@@ -3,7 +3,7 @@ import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { ProjectState } from '../../../renderer/store/slices'
 import { PLCProject } from '../../../types/PLC/open-plc'
-import { IProjectServiceResponse } from '../../services/project-service'
+import { INewProjectServiceResponse, IProjectServiceResponse } from '../../services/project-service'
 import { CreateProjectFile } from '../../services/project-service/utils'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
@@ -84,14 +84,17 @@ const rendererProcessBridge = {
    * Invokes the 'project:open' event and returns a promise with the response.
    * @returns A promise that resolves with the project service response.
    */
-  openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
+  // openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
+  openProject: (): Promise<INewProjectServiceResponse> => ipcRenderer.invoke('project:open'),
 
   /**
    * Invokes the 'project:open-by-path' event with the provided project path and returns a promise with the response.
    * @param projectPath - The path of the project to open.
    * @returns A promise that resolves with the project service response.
    */
-  openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
+  // openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
+  //   ipcRenderer.invoke('project:open-by-path', projectPath),
+  openProjectByPath: (projectPath: string): Promise<INewProjectServiceResponse> =>
     ipcRenderer.invoke('project:open-by-path', projectPath),
 
   /**

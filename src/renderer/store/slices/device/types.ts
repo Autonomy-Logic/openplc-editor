@@ -85,6 +85,16 @@ const deviceActionSchema = z.object({
       }),
     )
     .returns(z.void()),
+  setDeviceDefinitions: z
+    .function()
+    .args(
+      z.object({
+        configuration: deviceConfigurationSchema.optional(),
+        pinMapping: devicePinSchema.array().optional(),
+      }),
+    )
+    .returns(z.void()),
+  clearDeviceDefinitions: z.function().args().returns(z.void()),
   selectPinTableRow: z.function().args(z.number()).returns(z.void()),
   createNewPin: z.function().args().returns(z.void()),
   removePin: z.function().args().returns(z.void()),

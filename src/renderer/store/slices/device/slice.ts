@@ -68,6 +68,56 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
+    setDeviceDefinitions: ({ configuration, pinMapping }): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          if (configuration) {
+            deviceDefinitions.configuration = configuration
+          }
+          if (pinMapping) {
+            deviceDefinitions.pinMapping.pins = pinMapping || []
+            deviceDefinitions.pinMapping.currentSelectedPinTableRow = -1
+          }
+        }),
+      )
+    },
+    clearDeviceDefinitions: (): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          deviceDefinitions.configuration = {
+            deviceBoard: 'OpenPLC Runtime',
+            communicationPort: '',
+            communicationConfiguration: {
+              modbusRTU: {
+                rtuInterface: 'Serial',
+                rtuBaudRate: '115200',
+                rtuSlaveId: null,
+                rtuRS485ENPin: null,
+              },
+              modbusTCP: {
+                tcpInterface: 'Ethernet',
+                tcpMacAddress: '0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD',
+                tcpStaticHostConfiguration: {
+                  ipAddress: '',
+                  dns: '',
+                  gateway: '',
+                  subnet: '',
+                },
+              },
+              communicationPreferences: {
+                enabledRTU: false,
+                enabledTCP: false,
+                enabledDHCP: true,
+              },
+            },
+          }
+          deviceDefinitions.pinMapping = {
+            pins: [],
+            currentSelectedPinTableRow: -1,
+          }
+        }),
+      )
+    },
     selectPinTableRow: (selectedRow) => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {

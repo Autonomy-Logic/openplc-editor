@@ -1,9 +1,13 @@
 import { CreateProjectFileProps } from '@root/main/modules/ipc/renderer'
-import { IProjectServiceResponse } from '@root/main/services'
+import {
+  INewProjectServiceResponse,
+  // IProjectServiceResponse
+} from '@root/main/services'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
+import { DeviceSlice } from '../device'
 import { EditorSlice } from '../editor'
 import { FBDFlowSlice, FBDFlowType } from '../fbd'
 import { LadderFlowSlice, LadderFlowType } from '../ladder'
@@ -35,7 +39,7 @@ export type SharedSlice = {
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => void
     closeProject: () => void
-    handleOpenProjectRequest: (data: IProjectServiceResponse['data']) => void
+    handleOpenProjectRequest: (data: INewProjectServiceResponse['data']) => void
     openProject: () => Promise<{
       success: boolean
       error?: { title: string; description: string }
@@ -44,7 +48,7 @@ export type SharedSlice = {
       success: boolean
       error?: { title: string; description: string }
     }>
-    openRecentProject: (response: IProjectServiceResponse) => {
+    openRecentProject: (response: INewProjectServiceResponse) => {
       success: boolean
       error?: { title: string; description: string }
     }
@@ -64,6 +68,7 @@ export const createSharedSlice: StateCreator<
     FBDFlowSlice &
     LadderFlowSlice &
     WorkspaceSlice &
+    DeviceSlice &
     SharedSlice,
   [],
   [],
@@ -227,16 +232,75 @@ export const createSharedSlice: StateCreator<
       getState().workspaceActions.setEditingState('initial-state')
     },
 
+    // handleOpenProjectRequest(data) {
+    //   if (data) {
+    //     getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    //     getState().workspaceActions.setEditingState('unsaved')
+    //     const projectMeta = {
+    //       name: data.content.meta.name,
+    //       type: data.content.meta.type,
+    //       path: data.meta.path,
+    //     }
+    //     const projectData = data.content.data
+
+    //     getState().projectActions.setProject({
+    //       data: projectData,
+    //       meta: projectMeta,
+    //     })
+
+    //     const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
+    //     if (ladderPous.length)
+    //       ladderPous.forEach((pou) => {
+    //         if (pou.data.body.language === 'ld')
+    //           getState().ladderFlowActions.addLadderFlow(pou.data.body.value as LadderFlowType)
+    //       })
+
+    //     const fbdPous = projectData.pous.filter((pou) => pou.data.language === 'fbd')
+    //     if (fbdPous.length)
+    //       fbdPous.forEach((pou) => {
+    //         if (pou.data.body.language === 'fbd')
+    //           getState().fbdFlowActions.addFBDFlow(pou.data.body.value as FBDFlowType)
+    //       })
+
+    //     projectData.pous.map(
+    //       (pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type),
+    //     )
+
+    //     if (projectData.pous.length !== 0) {
+    //       const mainPou = projectData.pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
+    //       if (mainPou) {
+    //         const tabToBeCreated: TabsProps = {
+    //           name: mainPou.data.name,
+    //           path: '/data/pous/program/main',
+    //           elementType: { type: 'program', language: mainPou.data.language },
+    //         }
+    //         getState().tabsActions.updateTabs(tabToBeCreated)
+    //         const model = CreateEditorObjectFromTab(tabToBeCreated)
+    //         getState().editorActions.addModel(model)
+    //         getState().editorActions.setEditor(model)
+    //       }
+    //     }
+
+    //     toast({
+    //       title: 'Project opened!',
+    //       description: 'Your project was opened, and loaded.',
+    //       variant: 'default',
+    //     })
+    //   }
+    // },
     handleOpenProjectRequest(data) {
       if (data) {
         getState().sharedWorkspaceActions.clearStatesOnCloseProject()
         getState().workspaceActions.setEditingState('unsaved')
+
+        const { project, deviceConfiguration, devicePinMapping } = data.content
+
         const projectMeta = {
-          name: data.content.meta.name,
-          type: data.content.meta.type,
+          name: project.meta.name,
+          type: project.meta.type,
           path: data.meta.path,
         }
-        const projectData = data.content.data
+        const projectData = project.data
 
         getState().projectActions.setProject({
           data: projectData,
@@ -269,12 +333,17 @@ export const createSharedSlice: StateCreator<
               path: '/data/pous/program/main',
               elementType: { type: 'program', language: mainPou.data.language },
             }
-            getState().tabsActions.updateTabs(tabToBeCreated)
             const model = CreateEditorObjectFromTab(tabToBeCreated)
+            getState().tabsActions.updateTabs(tabToBeCreated)
             getState().editorActions.addModel(model)
             getState().editorActions.setEditor(model)
           }
         }
+
+        getState().deviceActions.setDeviceDefinitions({
+          configuration: deviceConfiguration,
+          pinMapping: devicePinMapping,
+        })
 
         toast({
           title: 'Project opened!',
@@ -283,6 +352,7 @@ export const createSharedSlice: StateCreator<
         })
       }
     },
+
     openProject: async () => {
       const { success, data, error } = await window.bridge.openProject()
       if (success) {
@@ -302,6 +372,7 @@ export const createSharedSlice: StateCreator<
         error,
       }
     },
+
     openProjectByPath: async (projectPath: string) => {
       const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
       if (success) {

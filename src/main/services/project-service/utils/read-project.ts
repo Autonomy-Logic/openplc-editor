@@ -2,7 +2,7 @@ import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
-import { existsSync, readFile, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFile, writeFileSync } from 'fs'
 import { join } from 'path'
 
 import { projectFileMapSchema } from '../types'
@@ -41,14 +41,19 @@ function safeParseProjectFile<K extends keyof typeof projectFileMapSchema>(fileN
 
 export async function readProjectFiles(basePath: string): Promise<IProjectServiceReadFilesResponse> {
   const projectFiles: Record<string, unknown> = {}
-
   for (const [fileName, schema] of Object.entries(projectFileMapSchema)) {
     const filePath = join(basePath, fileName)
+    console.log(`Reading project file: ${filePath}`)
     try {
       let file: string | undefined
 
       if (!existsSync(filePath)) {
         // File does not exist, create with default value from schema
+        const dir = filePath.substring(0, filePath.lastIndexOf('/'))
+        if (!existsSync(dir)) {
+          // Create the directory recursively
+          mkdirSync(dir, { recursive: true })
+        }
         const defaultValue = getDefaultSchemaValues(schema)
         writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf-8')
         file = JSON.stringify(defaultValue)

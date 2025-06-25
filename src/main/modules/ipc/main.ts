@@ -7,7 +7,7 @@ import { ProjectState } from '../../../renderer/store/slices'
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 import { logger } from '../../services'
-import { CreateProjectFile, GetProjectPath } from '../../services/project-service/utils'
+import { CreateProjectFile, getProjectPath } from '../../services/project-service/utils'
 
 type IDataToWrite = {
   projectPath: string
@@ -79,7 +79,7 @@ class MainProcessBridge implements MainIpcModule {
       const windowManager = this.mainWindow
       try {
         if (windowManager) {
-          const res = await GetProjectPath(windowManager)
+          const res = await getProjectPath(windowManager)
           return res
         }
         console.log('Window object not defined')
