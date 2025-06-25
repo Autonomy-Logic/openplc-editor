@@ -2,8 +2,9 @@ import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
-import { existsSync, mkdirSync, readFile, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { ZodTypeAny } from 'zod'
 
 import { projectFileMapSchema } from '../types'
 
@@ -39,41 +40,58 @@ function safeParseProjectFile<K extends keyof typeof projectFileMapSchema>(fileN
   return result.data
 }
 
-export async function readProjectFiles(basePath: string): Promise<IProjectServiceReadFilesResponse> {
+function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: string) {
+  let file: string | undefined
+  if (!existsSync(filePath)) {
+    // File does not exist, create with default value from schema
+    const dir = filePath.substring(0, filePath.lastIndexOf('/'))
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+    const defaultValue = getDefaultSchemaValues(schema)
+    writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf-8')
+    file = JSON.stringify(defaultValue)
+  } else {
+    file = readFileSync(filePath, 'utf-8')
+    if (!file) {
+      const defaultValue = getDefaultSchemaValues(schema)
+      writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf-8')
+      file = JSON.stringify(defaultValue)
+    }
+  }
+  return safeParseProjectFile(fileName as keyof typeof projectFileMapSchema, JSON.parse(file))
+}
+
+function readDirectoryRecursive(
+  baseDir: string,
+  schema: ZodTypeAny,
+  baseFileName: string,
+  projectFiles: Record<string, unknown>,
+) {
+  const entries = readdirSync(baseDir, { withFileTypes: true })
+  for (const entry of entries) {
+    const entryPath = join(baseDir, entry.name)
+    const entryKey = join(baseFileName, entry.name)
+    if (entry.isFile()) {
+      projectFiles[entryKey] = readAndParseFile(entryPath, schema, entryKey)
+    } else if (entry.isDirectory()) {
+      readDirectoryRecursive(entryPath, schema, entryKey, projectFiles)
+    }
+  }
+}
+
+export function readProjectFiles(basePath: string): IProjectServiceReadFilesResponse {
   const projectFiles: Record<string, unknown> = {}
   for (const [fileName, schema] of Object.entries(projectFileMapSchema)) {
     const filePath = join(basePath, fileName)
-    console.log(`Reading project file: ${filePath}`)
     try {
-      let file: string | undefined
-
-      if (!existsSync(filePath)) {
-        // File does not exist, create with default value from schema
-        const dir = filePath.substring(0, filePath.lastIndexOf('/'))
-        if (!existsSync(dir)) {
-          // Create the directory recursively
-          mkdirSync(dir, { recursive: true })
-        }
-        const defaultValue = getDefaultSchemaValues(schema)
-        writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf-8')
-        file = JSON.stringify(defaultValue)
+      // TODO: this needs to be tested, it is still a work in progress
+      if (existsSync(filePath) && statSync(filePath).isDirectory()) {
+        // Recursively read all files and directories inside filePath
+        readDirectoryRecursive(filePath, schema, fileName, projectFiles)
       } else {
-        // File exists, read its content
-        file = await new Promise<string>((resolve, reject) => {
-          readFile(filePath, 'utf-8', (error, data) => {
-            if (error) return reject(error)
-            return resolve(data)
-          })
-        })
-        if (!file) {
-          // File is empty, create with default value from schema
-          const defaultValue = getDefaultSchemaValues(schema)
-          writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf-8')
-          file = JSON.stringify(defaultValue)
-        }
+        projectFiles[fileName] = readAndParseFile(filePath, schema, fileName)
       }
-
-      projectFiles[fileName] = safeParseProjectFile(fileName as keyof typeof projectFileMapSchema, JSON.parse(file))
     } catch (error) {
       return {
         success: false,

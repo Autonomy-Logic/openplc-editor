@@ -1,6 +1,6 @@
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { app, BrowserWindow, dialog } from 'electron'
-import { promises, writeFile } from 'fs'
+import { promises } from 'fs'
 import { join } from 'path'
 
 import { PLCProject } from '../../../types/PLC/open-plc'
@@ -177,7 +177,7 @@ class ProjectService {
   async openProjectByPath(projectPath: string): Promise<INewProjectServiceResponse> {
     try {
       await promises.access(projectPath)
-      const projectFiles = await readProjectFiles(projectPath)
+      const projectFiles = readProjectFiles(projectPath)
 
       if (!projectFiles.success || !projectFiles.data) {
         return {
@@ -236,7 +236,7 @@ class ProjectService {
     }
 
     const directoryPath = filePaths[0]
-    const projectFiles = await readProjectFiles(directoryPath)
+    const projectFiles = readProjectFiles(directoryPath)
 
     if (!projectFiles.success || !projectFiles.data) {
       return {
@@ -258,8 +258,18 @@ class ProjectService {
     }
   }
 
-  saveProject(data: { projectPath: string; projectData: PLCProject }): IProjectServiceResponse {
-    const { projectPath, projectData } = data
+  async saveProject(data: {
+    projectPath: string
+    content: {
+      projectData: PLCProject
+      deviceConfiguration: DeviceConfiguration
+      devicePinMapping: DevicePin[]
+    }
+  }): Promise<IProjectServiceResponse> {
+    const {
+      projectPath,
+      content: { deviceConfiguration, devicePinMapping, projectData },
+    } = data
     if (!projectPath || !projectData) {
       return {
         success: false,
@@ -271,14 +281,38 @@ class ProjectService {
       }
     }
 
-    const normalizedDataToWrite = JSON.stringify(projectData, null, 2)
+    const directoryPath = projectPath.endsWith('/project.json')
+      ? projectPath.slice(0, -'/project.json'.length)
+      : projectPath
 
-    writeFile(projectPath, normalizedDataToWrite, (error) => {
-      if (error) {
-        console.error(error)
-        throw error
+    console.log('Saving project to:', directoryPath)
+    console.log('Project data:', projectData)
+    console.log('Device configuration:', deviceConfiguration)
+    console.log('Device pin mapping:', devicePinMapping)
+
+    try {
+      // Write each part to its correct file based on projectFileMapSchema
+      await Promise.all([
+        promises.writeFile(join(directoryPath, 'project.json'), JSON.stringify(projectData, null, 2)),
+        promises.writeFile(
+          join(directoryPath, 'devices/configuration.json'),
+          JSON.stringify(deviceConfiguration, null, 2),
+        ),
+        promises.writeFile(join(directoryPath, 'devices/pin-mapping.json'), JSON.stringify(devicePinMapping, null, 2)),
+      ])
+    } catch (error) {
+      console.error(error)
+      return {
+        success: false,
+        error: {
+          title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
+          description: i18n.t('projectServiceResponses:openProject.errors.readFile.description', {
+            filePath: projectPath,
+          }),
+          error,
+        },
       }
-    })
+    }
 
     return {
       success: true,

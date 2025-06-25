@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
+import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { ProjectState } from '../../../renderer/store/slices'
@@ -10,7 +11,11 @@ type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
 type IDataToWrite = {
   projectPath: string
-  projectData: PLCProject
+  content: {
+    projectData: PLCProject
+    deviceConfiguration: DeviceConfiguration
+    devicePinMapping: DevicePin[]
+  }
 }
 
 export type ISaveDataResponse = {

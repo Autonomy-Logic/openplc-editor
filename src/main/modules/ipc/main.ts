@@ -1,3 +1,4 @@
+import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { app, nativeTheme, shell } from 'electron'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
@@ -11,7 +12,11 @@ import { CreateProjectFile, getProjectPath } from '../../services/project-servic
 
 type IDataToWrite = {
   projectPath: string
-  projectData: PLCProject
+  content: {
+    projectData: PLCProject
+    deviceConfiguration: DeviceConfiguration
+    devicePinMapping: DevicePin[]
+  }
 }
 type CreateProjectFileProps = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
@@ -97,8 +102,17 @@ class MainProcessBridge implements MainIpcModule {
       return res
     })
 
-    this.ipcMain.handle('project:save', (_event, { projectPath, projectData }: IDataToWrite) =>
-      this.projectService.saveProject({ projectPath, projectData }),
+    this.ipcMain.handle(
+      'project:save',
+      (_event, { projectPath, content: { projectData, deviceConfiguration, devicePinMapping } }: IDataToWrite) =>
+        this.projectService.saveProject({
+          projectPath,
+          content: {
+            projectData,
+            deviceConfiguration,
+            devicePinMapping,
+          },
+        }),
     )
 
     this.ipcMain.handle('system:get-system-info', () => {

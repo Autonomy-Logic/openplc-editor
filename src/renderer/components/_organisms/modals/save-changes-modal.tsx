@@ -17,6 +17,7 @@ type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
 const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModalProps) => {
   const {
     project,
+    deviceDefinitions,
     workspaceActions: { setEditingState },
     modalActions: { closeModal, onOpenChange, openModal },
     tabsActions: { clearTabs },
@@ -44,7 +45,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     closeModal()
 
     if (operation === 'save') {
-      const { success } = await saveProjectRequest(project, setEditingState)
+      const { success } = await saveProjectRequest(project, deviceDefinitions, setEditingState)
       if (!success) {
         return
       }
