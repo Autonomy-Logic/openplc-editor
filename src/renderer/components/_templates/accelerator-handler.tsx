@@ -116,10 +116,6 @@ const AcceleratorHandler = () => {
 
   const { handleWindowClose, handleAppIsClosingDarwin } = useQuitApp()
 
-  useEffect(() => {
-    console.log('deviceDefinitions', deviceDefinitions)
-  }, [deviceDefinitions])
-
   /**
    * Compiler Related Accelerators
    */

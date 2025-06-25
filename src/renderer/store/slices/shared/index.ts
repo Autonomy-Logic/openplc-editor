@@ -220,6 +220,7 @@ export const createSharedSlice: StateCreator<
       getState().fbdFlowActions.clearFBDFlows()
       getState().ladderFlowActions.clearLadderFlows()
       getState().projectActions.clearProjects()
+      getState().deviceActions.clearDeviceDefinitions()
       window.bridge.rebuildMenu()
     },
     closeProject: () => {
