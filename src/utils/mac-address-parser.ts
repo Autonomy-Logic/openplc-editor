@@ -1,3 +1,5 @@
+import { BYTE_MAC_ADDRESS_REGEX, MAC_ADDRESS_REGEX } from '@root/types/PLC/devices'
+
 export function macToByteMac(mac: string): string | null {
   // Remove separators and keep only hex digits
   const clean = mac.replace(/[:\-,]/g, '').toUpperCase()
@@ -14,7 +16,7 @@ export function macToByteMac(mac: string): string | null {
   }
 
   // If it's a format with separators
-  const match = mac.match(/^([0-9A-Fa-f]{2})([:\-,])(?:[0-9A-Fa-f]{2}\2){4}[0-9A-Fa-f]{2}$/)
+  const match = mac.match(MAC_ADDRESS_REGEX)
   if (match) {
     const parts = mac.split(match[2]).map((p) => p.toUpperCase())
     if (parts.length === 6 && parts.every((p) => /^[0-9A-F]{2}$/.test(p))) {
@@ -28,7 +30,7 @@ export function macToByteMac(mac: string): string | null {
 
 export function byteMacToMac(byteMac: string): string | null {
   // Regex to validate the byte MAC format
-  const match = byteMac.match(/^(0x[0-9A-Fa-f]{2},){5}0x[0-9A-Fa-f]{2}$/)
+  const match = byteMac.match(BYTE_MAC_ADDRESS_REGEX)
   if (!match) return null
 
   // Remove '0x' and split the bytes

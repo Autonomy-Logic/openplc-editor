@@ -28,24 +28,14 @@ const deviceConfigurationSchema = z.object({
     modbusTCP: z.discriminatedUnion('tcpInterface', [
       z.object({
         tcpInterface: z.literal('Wi-Fi'),
-        tcpMacAddress: z
-          .string()
-          .refine((mac) => {
-            return BYTE_MAC_ADDRESS_REGEX.test(mac) || MAC_ADDRESS_REGEX.test(mac)
-          })
-          .nullable(), // This should have the format: XX:XX:XX:XX:XX:XX
+        tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX, 'Invalid MAC address format').nullable(), // This should have the format: XX:XX:XX:XX:XX:XX
         tcpWifiSSID: z.string().nullable(),
         tcpWifiPassword: z.string().nullable(),
         tcpStaticHostConfiguration: staticHostConfigurationSchema, // When this is omitted the user has chosen DHCP.
       }),
       z.object({
         tcpInterface: z.literal('Ethernet'),
-        tcpMacAddress: z
-          .string()
-          .refine((mac) => {
-            return BYTE_MAC_ADDRESS_REGEX.test(mac) || MAC_ADDRESS_REGEX.test(mac)
-          })
-          .nullable(),
+        tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX, 'Invalid MAC address format').nullable(),
         tcpStaticHostConfiguration: staticHostConfigurationSchema, // When this is omitted the user has chosen DHCP.
       }),
     ]),
