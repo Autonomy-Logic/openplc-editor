@@ -233,62 +233,6 @@ export const createSharedSlice: StateCreator<
       getState().workspaceActions.setEditingState('initial-state')
     },
 
-    // handleOpenProjectRequest(data) {
-    //   if (data) {
-    //     getState().sharedWorkspaceActions.clearStatesOnCloseProject()
-    //     getState().workspaceActions.setEditingState('unsaved')
-    //     const projectMeta = {
-    //       name: data.content.meta.name,
-    //       type: data.content.meta.type,
-    //       path: data.meta.path,
-    //     }
-    //     const projectData = data.content.data
-
-    //     getState().projectActions.setProject({
-    //       data: projectData,
-    //       meta: projectMeta,
-    //     })
-
-    //     const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
-    //     if (ladderPous.length)
-    //       ladderPous.forEach((pou) => {
-    //         if (pou.data.body.language === 'ld')
-    //           getState().ladderFlowActions.addLadderFlow(pou.data.body.value as LadderFlowType)
-    //       })
-
-    //     const fbdPous = projectData.pous.filter((pou) => pou.data.language === 'fbd')
-    //     if (fbdPous.length)
-    //       fbdPous.forEach((pou) => {
-    //         if (pou.data.body.language === 'fbd')
-    //           getState().fbdFlowActions.addFBDFlow(pou.data.body.value as FBDFlowType)
-    //       })
-
-    //     projectData.pous.map(
-    //       (pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type),
-    //     )
-
-    //     if (projectData.pous.length !== 0) {
-    //       const mainPou = projectData.pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
-    //       if (mainPou) {
-    //         const tabToBeCreated: TabsProps = {
-    //           name: mainPou.data.name,
-    //           path: '/data/pous/program/main',
-    //           elementType: { type: 'program', language: mainPou.data.language },
-    //         }
-    //         getState().tabsActions.updateTabs(tabToBeCreated)
-    //         const model = CreateEditorObjectFromTab(tabToBeCreated)
-    //         getState().editorActions.addModel(model)
-    //         getState().editorActions.setEditor(model)
-    //       }
-    //     }
-
-    //     toast({
-    //       title: 'Project opened!',
-    //       description: 'Your project was opened, and loaded.',
-    //       variant: 'default',
-    //     })
-    //   }
-    // },
     handleOpenProjectRequest(data) {
       if (data) {
         getState().sharedWorkspaceActions.clearStatesOnCloseProject()
