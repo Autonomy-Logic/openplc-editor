@@ -481,6 +481,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
   }, [reactFlowInstance])
 
   useEffect(() => {
+    if (editor.type !== 'plc-graphical') return
     const viewport = editor.fbdPosition
     if (!reactFlowInstance || !viewport) return
 

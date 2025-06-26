@@ -97,7 +97,6 @@ const editorModelSchema = z.discriminatedUnion('type', [
     .extend({
       cursorPosition: cursorPositionSchema.optional(),
       scrollPosition: scrollPositionSchema.optional(),
-      fbdPosition: fbdPositionSchema.optional(),
     }),
 
   z
@@ -114,7 +113,6 @@ const editorModelSchema = z.discriminatedUnion('type', [
     .extend({
       cursorPosition: cursorPositionSchema.optional(),
       scrollPosition: scrollPositionSchema.optional(),
-      fbdPosition: fbdPositionSchema.optional(),
     }),
 
   z
@@ -147,7 +145,6 @@ const editorModelSchema = z.discriminatedUnion('type', [
     .extend({
       cursorPosition: cursorPositionSchema.optional(),
       scrollPosition: scrollPositionSchema.optional(),
-      fbdPosition: fbdPositionSchema.optional(),
     }),
 
   z
@@ -164,7 +161,6 @@ const editorModelSchema = z.discriminatedUnion('type', [
     .extend({
       cursorPosition: cursorPositionSchema.optional(),
       scrollPosition: scrollPositionSchema.optional(),
-      fbdPosition: fbdPositionSchema.optional(),
     }),
 
   z
@@ -178,7 +174,6 @@ const editorModelSchema = z.discriminatedUnion('type', [
     .extend({
       cursorPosition: cursorPositionSchema.optional(),
       scrollPosition: scrollPositionSchema.optional(),
-      fbdPosition: fbdPositionSchema.optional(),
     }),
 ])
 

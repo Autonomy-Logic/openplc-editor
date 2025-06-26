@@ -247,7 +247,9 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
 
           state.editors[index].cursorPosition = cursorPosition
           state.editors[index].scrollPosition = scrollPosition
-          state.editors[index].fbdPosition = fbdPosition
+          if (state.editors[index].type === 'plc-graphical') {
+            state.editors[index].fbdPosition = fbdPosition
+          }
         }),
       ),
 

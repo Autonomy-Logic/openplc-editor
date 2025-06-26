@@ -183,6 +183,9 @@ export default function LadderEditor() {
 
     if (scrollable && scrollData) {
       scrollable.scrollTop = scrollData.top
+      requestAnimationFrame(() => {
+        scrollable.scrollTop = scrollData.top
+      })
     }
   }, [scrollableRef.current, editor.meta.name])
 
