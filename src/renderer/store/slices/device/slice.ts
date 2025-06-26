@@ -24,7 +24,8 @@ const defaultDeviceConfiguration: DeviceConfiguration = {
     },
     modbusTCP: {
       tcpInterface: 'Ethernet',
-      tcpMacAddress: '0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD',
+      // tcpMacAddress: '0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD',
+      tcpMacAddress: 'DE:AD:BE:EF:DE:AD',
       tcpStaticHostConfiguration: {
         ipAddress: '',
         dns: '',
