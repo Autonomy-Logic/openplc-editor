@@ -285,11 +285,6 @@ class ProjectService {
       ? projectPath.slice(0, -'/project.json'.length)
       : projectPath
 
-    console.log('Saving project to:', directoryPath)
-    console.log('Project data:', projectData)
-    console.log('Device configuration:', deviceConfiguration)
-    console.log('Device pin mapping:', devicePinMapping)
-
     try {
       // Write each part to its correct file based on projectFileMapSchema
       await Promise.all([

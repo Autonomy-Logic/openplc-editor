@@ -13,6 +13,7 @@ const staticHostConfigurationSchema = z.object({
 type StaticHostConfiguration = z.infer<typeof staticHostConfigurationSchema>
 
 const MAC_ADDRESS_REGEX = /^([0-9A-Fa-f]{2})([:\-,])(?:[0-9A-Fa-f]{2}\2){4}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{12}$/
+const BYTE_MAC_ADDRESS_REGEX = /^(?:0x[0-9a-f]{2}\s*,\s*){5}0x[0-9a-f]{2}$/i
 
 const deviceConfigurationSchema = z.object({
   deviceBoard: z.string(), // Can be one from the list of boards in the hals file.
@@ -27,14 +28,24 @@ const deviceConfigurationSchema = z.object({
     modbusTCP: z.discriminatedUnion('tcpInterface', [
       z.object({
         tcpInterface: z.literal('Wi-Fi'),
-        tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX).nullable(), // This should have the format: XX:XX:XX:XX:XX:XX
+        tcpMacAddress: z
+          .string()
+          .refine((mac) => {
+            return BYTE_MAC_ADDRESS_REGEX.test(mac) || MAC_ADDRESS_REGEX.test(mac)
+          })
+          .nullable(), // This should have the format: XX:XX:XX:XX:XX:XX
         tcpWifiSSID: z.string().nullable(),
         tcpWifiPassword: z.string().nullable(),
         tcpStaticHostConfiguration: staticHostConfigurationSchema, // When this is omitted the user has chosen DHCP.
       }),
       z.object({
         tcpInterface: z.literal('Ethernet'),
-        tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX).nullable(),
+        tcpMacAddress: z
+          .string()
+          .refine((mac) => {
+            return BYTE_MAC_ADDRESS_REGEX.test(mac) || MAC_ADDRESS_REGEX.test(mac)
+          })
+          .nullable(),
         tcpStaticHostConfiguration: staticHostConfigurationSchema, // When this is omitted the user has chosen DHCP.
       }),
     ]),
@@ -50,6 +61,7 @@ type DeviceConfiguration = z.infer<typeof deviceConfigurationSchema>
 
 export {
   baudRateOptions,
+  BYTE_MAC_ADDRESS_REGEX,
   DeviceConfiguration,
   deviceConfigurationSchema,
   interfaceOptions,
