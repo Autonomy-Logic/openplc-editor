@@ -9,6 +9,7 @@ const lightThemeData: monaco.editor.IStandaloneThemeData = {
     { token: 'typeKeyword', foreground: '#023C97' }, // Slightly darker shade for type keywords in light theme
     { token: 'label.il', foreground: '#0464FB' }, // Primary color for label (identifier) in light theme
     { token: 'labelValue', foreground: '#023C97' }, // Slightly darker shade for label (value) in light theme
+    { token: 'st.keyword', foreground: '#C586C0' }, // Pink for keywords in ST language in light theme
   ],
   colors: {
     'editor.background': '#FFFFFF', // Editor background color in light theme
@@ -31,6 +32,7 @@ const darkThemeData: monaco.editor.IStandaloneThemeData = {
     { token: 'typeKeyword', foreground: '#023C97' }, // Slightly darker shade for type keywords in dark theme
     { token: 'label.il', foreground: '#0464FB' }, // Primary color for label (identifier) in dark theme
     { token: 'labelValue', foreground: '#023C97' }, // Slightly darker shade for label (value) in dark theme
+    { token: 'st.keyword', foreground: '#C586C0' }, // Pink for keywords in ST language in dark theme
   ],
   colors: {
     'editor.background': '#121316', // Darker background color in dark theme
