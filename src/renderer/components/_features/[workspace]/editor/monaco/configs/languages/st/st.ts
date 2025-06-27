@@ -440,7 +440,7 @@ export const language: languages.IMonarchLanguage = {
         /[a-zA-Z_][a-zA-Z0-9_]*/,
         {
           cases: {
-            '@keywords': 'keyword',
+            '@keywords': 'st.keyword',
             '@builtinFunctions': 'keyword',
             '@operators': 'operator',
             'TRUE|FALSE': 'constant.language',

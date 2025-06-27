@@ -3,6 +3,7 @@ import { PLCVariable } from '@root/types/PLC'
 import { PLCProject } from '@root/types/PLC/open-plc'
 import * as monaco from 'monaco-editor'
 
+import { stSnippets } from '../configs/languages/st/st.snippets'
 import { parsePouToStText } from '../drag-and-drop/st'
 
 export const languageKeywords = {
@@ -317,4 +318,21 @@ export const libraryCompletion = ({
   return {
     suggestions: [...systemSuggestions, ...userSuggestions],
   }
+}
+
+export const snippetsCompletion = ({ language, range }: { language: 'st' | 'il'; range: monaco.IRange }) => {
+  if (language !== 'st') {
+    return { suggestions: [] }
+  }
+
+  const suggestions = stSnippets.map((snippet) => ({
+    label: snippet.label,
+    insertText: snippet.insertText,
+    documentation: snippet.documentation,
+    kind: snippet.kind,
+    insertTextRules: snippet.insertTextRules,
+    range,
+  }))
+
+  return { suggestions }
 }

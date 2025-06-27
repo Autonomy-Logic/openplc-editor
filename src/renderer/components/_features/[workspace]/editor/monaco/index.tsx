@@ -12,6 +12,7 @@ import { toast } from '../../../[app]/toast/use-toast'
 import {
   keywordsCompletion,
   libraryCompletion,
+  snippetsCompletion,
   tableGlobalVariablesCompletion,
   tableVariablesCompletion,
 } from './completion'
@@ -138,6 +139,21 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     [language],
   )
 
+  const snippetsSuggestions = useCallback(
+    (range: monaco.IRange) => {
+      const suggestions = snippetsCompletion({
+        range,
+        language,
+      }).suggestions
+      const labels = suggestions.map((suggestion) => suggestion.label)
+      return {
+        suggestions,
+        labels,
+      }
+    },
+    [language],
+  )
+
   /**
    * Update the auto-completion feature of the monaco editor.
    */
@@ -169,7 +185,8 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
                   variablesSuggestions(range).labels.includes(token) ||
                   globalVariablesSuggestions(range).labels.includes(token) ||
                   librarySuggestions(range).labels.includes(token) ||
-                  keywordsSuggestions(range).labels.includes(token)
+                  keywordsSuggestions(range).labels.includes(token) ||
+                  snippetsSuggestions(range).labels.includes(token)
                 ) {
                   return null
                 }
@@ -187,6 +204,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
         return {
           suggestions: [
+            ...snippetsSuggestions(range).suggestions,
             ...variablesSuggestions(range).suggestions,
             ...globalVariablesSuggestions(range).suggestions,
             ...librarySuggestions(range).suggestions,
@@ -197,7 +215,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       },
     })
     return () => disposable.dispose()
-  }, [pou?.data.variables, globalVariables, sliceLibraries, language])
+  }, [pou?.data.variables, globalVariables, sliceLibraries, language, snippetsSuggestions])
 
   function handleEditorDidMount(
     editor: null | monaco.editor.IStandaloneCodeEditor,
