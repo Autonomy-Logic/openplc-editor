@@ -2,7 +2,7 @@ import './configs'
 
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_molecules/modal'
-import { useOpenPLCStore } from '@process:renderer/store'
+import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -60,6 +60,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       },
     },
     libraries: sliceLibraries,
+    editorActions: { saveEditorViewState },
     projectActions: { updatePou, createVariable },
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()
@@ -200,20 +201,34 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   }, [pou?.data.variables, globalVariables, sliceLibraries, language])
 
   function handleEditorDidMount(
-    editor: null | monaco.editor.IStandaloneCodeEditor,
+    editorInstance: null | monaco.editor.IStandaloneCodeEditor,
     monacoInstance: null | typeof monaco,
   ) {
     // here is the editor instance
     // you can store it in `useRef` for further usage
-    editorRef.current = editor
+    editorRef.current = editorInstance
 
     // here is another way to get monaco instance
     // you can also store it in `useRef` for further usage
     monacoRef.current = monacoInstance
 
     if (searchQuery) {
-      moveToMatch(editor, searchQuery, sensitiveCase, regularExpression)
+      moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
+
+    if (!editorInstance) return
+
+    if (editor.cursorPosition) {
+      editorInstance.setPosition(editor.cursorPosition)
+      editorInstance.revealPositionInCenter(editor.cursorPosition)
+    }
+
+    if (editor.scrollPosition) {
+      editorInstance.setScrollTop(editor.scrollPosition.top)
+      editorInstance.setScrollLeft(editor.scrollPosition.left)
+    }
+
+    editorInstance.focus()
   }
 
   function moveToMatch(
@@ -396,6 +411,31 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     setIsOpen(false)
     setNewName('')
   }
+
+  useEffect(() => {
+    const unsub = openPLCStoreBase.subscribe(
+      (state) => state.editor.meta.name,
+      (newName, prevEditorName) => {
+        if (newName === prevEditorName || !editorRef.current) return
+
+        const editor = editorRef.current
+        const model = editor.getModel()
+        const pos = editor.getPosition()
+        const offset = pos && model?.getOffsetAt(pos)
+
+        const cursorPosition = pos && offset ? { lineNumber: pos.lineNumber, column: pos.column, offset } : undefined
+
+        const scrollPosition = {
+          top: editor.getScrollTop(),
+          left: editor.getScrollLeft(),
+        }
+
+        saveEditorViewState({ prevEditorName, cursorPosition, scrollPosition })
+      },
+    )
+
+    return () => unsub()
+  }, [])
 
   return (
     <>
