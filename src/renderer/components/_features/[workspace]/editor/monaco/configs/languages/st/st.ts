@@ -1,10 +1,14 @@
+/* eslint-disable no-useless-escape */
 import { languages } from 'monaco-editor'
 
-const symbols = /[=><~?:+\-*^%&|.;]+/
-const escapes = /\$[$'"NLRT]|\$[0-9]{2,4}/
+// Optimized regex based on tmlanguage rules
+const symbols = /[=><~?:+\-*^%&|.;/]+/
+const escapes = /\$[$'"NLRT]|\$[0-9A-Fa-f]{2}/
 const timeLiterals = /[TDTODD]#[0-9:\-_shmydSMHDY]+/
+const dateLiterals = /D#[0-9\-]+|DT#[0-9\-_:]+|TOD#[0-9:]+/
 const bitLiterals = /[XBWDL]#[0-9A-Fa-f_]+|%[IQM][XBWDL]?[0-9.]+/
 const gxwDevices = /\b[MTCRSDXYZ][0-9]{1,5}(?:[ZV][0-9])?\b/
+const identifiers = /[a-zA-Z_][a-zA-Z0-9_]*/
 
 export const conf: languages.LanguageConfiguration = {
   comments: {
@@ -33,6 +37,12 @@ export const conf: languages.LanguageConfiguration = {
     { open: '"', close: '"' },
     { open: "'", close: "'" },
   ],
+  wordPattern: /(-?\d*\.\d\w*)|([^\`\~\!\@\#\%\^\&\*\(\)\-\=\+\[\{\]\}\\\|\;\:\'\"\,\.\<\>\/\?\s]+)/,
+  indentationRules: {
+    increaseIndentPattern: /^\s*(IF|FOR|WHILE|REPEAT|CASE|FUNCTION|FUNCTION_BLOCK|PROGRAM|VAR|STRUCT|CLASS|METHOD)\b/i,
+    decreaseIndentPattern:
+      /^\s*(END_IF|END_FOR|END_WHILE|END_REPEAT|END_CASE|END_FUNCTION|END_FUNCTION_BLOCK|END_PROGRAM|END_VAR|END_STRUCT|END_CLASS|END_METHOD)\b/i,
+  },
 }
 
 export const language: languages.IMonarchLanguage = {
@@ -41,7 +51,61 @@ export const language: languages.IMonarchLanguage = {
   tokenPostfix: '.st',
 
   keywords: [
-    // Controle de fluxo
+    // Structural declarations
+    'PROGRAM',
+    'BEGIN',
+    'END',
+    'END_PROGRAM',
+    'FUNCTION',
+    'END_FUNCTION',
+    'FUNCTION_BLOCK',
+    'END_FUNCTION_BLOCK',
+    'METHOD',
+    'END_METHOD',
+    'CLASS',
+    'END_CLASS',
+    'INTERFACE',
+    'END_INTERFACE',
+    'NAMESPACE',
+    'END_NAMESPACE',
+    'CONFIGURATION',
+    'END_CONFIGURATION',
+    'RESOURCE',
+    'END_RESOURCE',
+    'TASK',
+    'TYPE',
+    'END_TYPE',
+
+    // Variable declarations
+    'VAR',
+    'VAR_INPUT',
+    'VAR_OUTPUT',
+    'VAR_IN_OUT',
+    'VAR_TEMP',
+    'VAR_GLOBAL',
+    'VAR_ACCESS',
+    'VAR_EXTERNAL',
+    'VAR_INST',
+    'VAR_STAT',
+    'VAR_CONFIG',
+    'END_VAR',
+
+    // Data structures
+    'STRUCT',
+    'END_STRUCT',
+    'UNION',
+    'END_UNION',
+    'ARRAY',
+    'ENUM',
+    'END_ENUM',
+    'PROPERTY',
+    'END_PROPERTY',
+    'CONST',
+    'RETAIN',
+    'PERSISTENT',
+    'NON_RETAIN',
+
+    // Control flow
     'IF',
     'THEN',
     'ELSE',
@@ -64,73 +128,36 @@ export const language: languages.IMonarchLanguage = {
     'RETURN',
     'CONTINUE',
     'GOTO',
-    'BEGIN',
-
-    // Declarações
-    'VAR',
-    'VAR_INPUT',
-    'VAR_OUTPUT',
-    'VAR_IN_OUT',
-    'VAR_TEMP',
-    'VAR_GLOBAL',
-    'VAR_ACCESS',
-    'VAR_EXTERNAL',
-    'VAR_INST',
-    'VAR_STAT',
-    'END_VAR',
-    'STRUCT',
-    'END_STRUCT',
-    'UNION',
-    'END_UNION',
-    'PROPERTY',
-    'END_PROPERTY',
-    'PROGRAM',
-    'FUNCTION_BLOCK',
-    'FUNCTION',
-    'TYPE',
-    'END_TYPE',
-    'END_FUNCTION_BLOCK',
-    'END_FUNCTION',
-    'END_PROGRAM',
-    'CLASS',
-    'CONFIGURATION',
-    'RESOURCE',
-    'ACTION',
-    'STEP',
-    'INITIAL_STEP',
-    'TRANSITION',
-    'NAMESPACE',
-    'METHOD',
-    'CONST',
-    'DATA_BLOCK',
     'LABEL',
 
-    // Tipos primitivos
-    'AT',
+    // Primitive types
     'BOOL',
+    'SINT',
+    'INT',
+    'DINT',
+    'LINT',
+    'USINT',
+    'UINT',
+    'UDINT',
+    'ULINT',
     'BYTE',
     'WORD',
     'DWORD',
     'LWORD',
-    'SINT',
-    'USINT',
-    'INT',
-    'UINT',
-    'DINT',
-    'UDINT',
-    'LINT',
-    'ULINT',
     'REAL',
     'LREAL',
     'TIME',
     'DATE',
     'TIME_OF_DAY',
     'TOD',
-    'DT',
     'DATE_AND_TIME',
+    'DT',
     'STRING',
     'WSTRING',
-    'ARRAY',
+    'CHAR',
+    'WCHAR',
+
+    // Special types
     'ANY',
     'ANY_DERIVED',
     'ANY_ELEMENTARY',
@@ -141,38 +168,61 @@ export const language: languages.IMonarchLanguage = {
     'ANY_BIT',
     'ANY_STRING',
     'ANY_DATE',
+    'POINTER',
+    'REF',
+    'REF_TO',
 
-    // Constantes
-    'TRUE',
-    'FALSE',
-    'NULL',
-    'NIL',
-    'VOID',
-
-    // Operadores lógicos
-    'AND',
-    'OR',
-    'NOT',
-    'XOR',
-    'NOR',
-    'OR_ELSE',
-    'AND_THEN',
-
-    // OOP
-    'EXTENDS',
-    'IMPLEMENTS',
-    'THIS',
-    'SUPER',
-    'GET',
-    'SET',
-    'ABSTRACT',
-    'FINAL',
+    // Access modifiers
     'PUBLIC',
     'PRIVATE',
     'PROTECTED',
     'INTERNAL',
+    'ABSTRACT',
+    'FINAL',
+    'OVERRIDE',
+    'VIRTUAL',
+    'STATIC',
+    'EXTENDS',
+    'IMPLEMENTS',
+    'THIS',
+    'SUPER',
 
-    // Temporizadores/Contadores
+    // Constants and literals
+    'TRUE',
+    'FALSE',
+    'NULL',
+    'VOID',
+
+    // Logical operators as words
+    'AND',
+    'OR',
+    'NOT',
+    'XOR',
+    'MOD',
+    'AND_THEN',
+    'OR_ELSE',
+
+    // Actions and steps (SFC)
+    'ACTION',
+    'END_ACTION',
+    'STEP',
+    'END_STEP',
+    'INITIAL_STEP',
+    'TRANSITION',
+    'END_TRANSITION',
+    'FROM',
+    'TO',
+    'WITH',
+    'USING',
+
+    // Attributes and directives
+    'AT',
+    'CONSTANT',
+    'OVERLAP',
+    'GET',
+    'SET',
+
+    // Standard function blocks
     'TON',
     'TOF',
     'TP',
@@ -183,24 +233,10 @@ export const language: languages.IMonarchLanguage = {
     'F_TRIG',
     'RS',
     'SR',
-
-    // Modificadores
-    'CONSTANT',
-    'RETAIN',
-    'PERSISTENT',
-    'REF',
-    'POINTER',
-    'REF_TO',
-
-    // Outros
-    'WITH',
-    'USING',
-    'FROM',
-    'OF',
-    'OVERLAP',
   ],
 
   operators: [
+    // Assignment and comparison
     ':=',
     '=',
     '<>',
@@ -209,213 +245,260 @@ export const language: languages.IMonarchLanguage = {
     '<',
     '>',
     '=>',
-    '..',
+    // Arithmetic
     '+',
     '-',
     '*',
     '/',
     '**',
     'MOD',
-    '^',
+    // Logical
     '&',
+    'AND',
     '|',
-    'S=',
-    'R=',
-    'GE',
-    'LE',
-    'EQ',
-    'NE',
-    'GT',
-    'LT',
+    'OR',
+    'XOR',
+    'NOT',
+    // Bit shift
+    'SHL',
+    'SHR',
+    'ROL',
+    'ROR',
+    // Range
+    '..',
+    // Others
+    '^',
+    '?',
+    ':',
+    '.',
   ],
 
   builtinFunctions: [
+    // Mathematical
     'ABS',
-    'ACOS',
-    'ASIN',
-    'ATAN',
-    'COS',
-    'SIN',
-    'TAN',
+    'SQRT',
     'EXP',
     'EXPT',
     'LN',
     'LOG',
-    'SQRT',
-    'TRUNC',
-    'ROUND',
-    'FLOOR',
+    'SIN',
+    'COS',
+    'TAN',
+    'ASIN',
+    'ACOS',
+    'ATAN',
     'CEIL',
-    'MOVE',
+    'FLOOR',
+    'ROUND',
+    'TRUNC',
+    'FRAC',
+    'MAX',
+    'MIN',
+    'LIMIT',
+    'MUX',
+    'SEL',
+
+    // Type conversion
+    'BOOL_TO_BYTE',
+    'BOOL_TO_WORD',
+    'BOOL_TO_DWORD',
+    'BOOL_TO_LWORD',
+    'BYTE_TO_BOOL',
+    'BYTE_TO_WORD',
+    'BYTE_TO_DWORD',
+    'BYTE_TO_LWORD',
+    'WORD_TO_BOOL',
+    'WORD_TO_BYTE',
+    'WORD_TO_DWORD',
+    'WORD_TO_LWORD',
+    'DWORD_TO_BOOL',
+    'DWORD_TO_BYTE',
+    'DWORD_TO_WORD',
+    'DWORD_TO_LWORD',
+    'LWORD_TO_BOOL',
+    'LWORD_TO_BYTE',
+    'LWORD_TO_WORD',
+    'LWORD_TO_DWORD',
+    'INT_TO_REAL',
+    'REAL_TO_INT',
+    'DINT_TO_REAL',
+    'REAL_TO_DINT',
+    'STRING_TO_INT',
+    'INT_TO_STRING',
+    'REAL_TO_STRING',
+    'STRING_TO_REAL',
+    'TIME_TO_DINT',
+    'DINT_TO_TIME',
+    'DATE_TO_DINT',
+    'DINT_TO_DATE',
+
+    // String functions
     'CONCAT',
     'DELETE',
     'FIND',
     'INSERT',
     'LEFT',
     'LEN',
+    'MID',
     'REPLACE',
     'RIGHT',
-    'MID',
-    'SEL',
-    'MUX',
+    'UPPER_CASE',
+    'LOWER_CASE',
+    'TRIM',
+
+    // Bit manipulation
     'SHL',
     'SHR',
     'ROL',
     'ROR',
-    'ADD',
-    'DIV',
-    'MUL',
-    'SUB',
-    'MAX',
-    'MIN',
-    'LIMIT',
+    'AND',
+    'OR',
+    'XOR',
+    'NOT',
+
+    // Memory and pointers
     'ADR',
-    'SIZE',
-    'BIT_ADR',
+    'SIZEOF',
     'REF',
-    'UNPACK',
-    'SEMA',
+    'DREF',
+    'MOVE',
+    'FILL',
+
+    // System functions
+    'NOW',
+    'TIME',
     'RTC',
+    'SEMA',
     '__NEW',
     '__DELETE',
   ],
 
+  // Regex definitions
   symbols,
   escapes,
   timeLiterals,
+  dateLiterals,
   bitLiterals,
   gxwDevices,
-  variables: /[a-zA-Z_][\w]*/,
+  identifiers,
 
   tokenizer: {
     root: [
-      // Comentários com tags especiais
-      [/\/\/\s*(TODO|FIX):?/, 'comment.todo'],
-      [/\(\*\s*(TODO|FIX):?/, { token: 'comment.todo', next: '@commentBlock' }],
-      [/\/\*\s*(TODO|FIX):?/, { token: 'comment.todo', next: '@commentBlockC' }],
+      // Special comments with tags (must come first)
+      [/\/\/\s*(TODO|FIXME|HACK|NOTE|BUG):?.*$/, 'comment.doc'],
+      [/\(\*\s*(TODO|FIXME|HACK|NOTE|BUG):?/, { token: 'comment.doc', next: '@commentBlockDoc' }],
+      [/\/\*\s*(TODO|FIXME|HACK|NOTE|BUG):?/, { token: 'comment.doc', next: '@commentBlockCDoc' }],
 
-      // Comentários
+      // Normal comments
       [/\/\/.*$/, 'comment'],
       [/\(\*/, { token: 'comment', next: '@commentBlock' }],
       [/\/\*/, { token: 'comment', next: '@commentBlockC' }],
 
-      // Atributos em comentários
-      [/\{/, { token: 'attribute', next: '@attributeBlock' }],
+      // Preprocessor directives
+      [/^\s*#\s*\w+/, 'keyword.directive'],
 
-      // Strings
-      [/(W?STRING)#"/, { token: 'type', next: '@stringPrefixed' }],
-      [/(W?STRING)#'/, { token: 'type', next: '@stringPrefixedSingle' }],
+      // Attributes
+      [/\{/, { token: 'delimiter.curly', next: '@attribute' }],
+
+      // Typed string literals
+      [/(W?STRING|W?CHAR)#"/, { token: 'type', next: '@stringDouble' }],
+      [/(W?STRING|W?CHAR)#'/, { token: 'type', next: '@stringSingle' }],
+
+      // Normal strings
       [/"/, { token: 'string.quote', next: '@stringDouble' }],
       [/'/, { token: 'string.quote', next: '@stringSingle' }],
 
-      // Números - Todas as bases
-      [/\b(2#[01_]+)\b/, 'number.binary'],
-      [/\b(8#[0-7_]+)\b/, 'number.octal'],
-      [/\b(16#[0-9A-Fa-f_]+)\b/, 'number.hex'],
-      [/\b(H[0-9A-Fa-f]+)\b/, 'number.hex'],
-      [/\b(K[0-9]+)\b/, 'number'],
+      // Typed number literals
       [
-        /\b(BYTE|WORD|DWORD|LWORD|SINT|USINT|INT|UINT|DINT|UDINT|LINT|ULINT)#(2#[01_]+|8#[0-7_]+|16#[0-9A-Fa-f_]+)\b/,
-        ['type', 'number'],
+        /\b(BYTE|WORD|DWORD|LWORD|SINT|USINT|INT|UINT|DINT|UDINT|LINT|ULINT|REAL|LREAL)#/,
+        { token: 'type', next: '@typedNumber' },
       ],
-      [/\b(BYTE|WORD|DWORD|LWORD|SINT|USINT|INT|UINT|DINT|UDINT|LINT|ULINT)#-?[0-9_]+\b/, ['type', 'number']],
-      [/\b(REAL|LREAL)#-?[0-9_]+\.[0-9_]+([eE][-+]?[0-9]+)?\b/, ['type', 'number.float']],
-      [/\b[0-9]+\.[0-9]+([eE][-+]?[0-9]+)?\b/, 'number.float'],
-      [/\b[0-9]+\b/, 'number'],
 
-      // Constantes de tempo
+      // Number literals
+      [/\b2#[01_]+\b/, 'number.binary'],
+      [/\b8#[0-7_]+\b/, 'number.octal'],
+      [/\b16#[0-9A-Fa-f_]+\b/, 'number.hex'],
+      [/\b[0-9_]+\.[0-9_]+([eE][-+]?[0-9_]+)?\b/, 'number.float'],
+      [/\b[0-9_]+([eE][-+]?[0-9_]+)?\b/, 'number'],
+
+      // Time literals
       [timeLiterals, 'number.time'],
+      [dateLiterals, 'number.date'],
 
-      // Variáveis especiais (IEC 61131-3)
+      // Special hardware variables
       [bitLiterals, 'variable.predefined'],
       [gxwDevices, 'variable.predefined'],
-      [/\b[ZV][0-9]\b/, 'variable.predefined'],
 
-      // Tipos com prefixo
-      [/\b(?:POINTER TO|REF_TO|REF|AT)\b/, 'keyword'],
+      // Labels
+      [/^[a-zA-Z_][a-zA-Z0-9_]*:/, 'type.identifier'],
 
-      // Funções built-in
+      // Function calls
+      [/([a-zA-Z_][a-zA-Z0-9_]*)(\s*)(\()/, ['keyword', 'white', 'delimiter.parenthesis']],
+
+      // Keywords and identifiers
       [
-        /(\b(?:ABS|SIN|COS|TAN|EXP|LN|LOG|SQRT|ROUND|TRUNC|MUX|SEL|SHL|SHR|ROL|ROR|CTU|CTD|TON|TOF|RS|SR|R_TRIG|F_TRIG)\b)(\()/,
-        ['function.builtin', { token: 'delimiter.parenthesis', next: '@functionCall' }],
-      ],
-
-      // Chamadas de função
-      [/([a-zA-Z_]\w*)(\()/, ['identifier', { token: 'delimiter.parenthesis', next: '@functionCall' }]],
-
-      // Palavras-chave
-      [/VAR_[A-Z_]+|END_[A-Z_]+|__[A-Z_]+/, 'keyword'], // Palavras compostas
-      [
-        /[a-zA-Z_]\w*/,
+        /[a-zA-Z_][a-zA-Z0-9_]*/,
         {
           cases: {
             '@keywords': 'keyword',
-            '@builtinFunctions': 'function.builtin',
+            '@builtinFunctions': 'keyword',
             '@operators': 'operator',
-            '@default': 'identifier',
+            'TRUE|FALSE': 'constant.language',
+            '@default': 'variable',
           },
         },
       ],
 
-      // Operadores
-      [
-        /:?=/,
-        {
-          cases: {
-            ':=': 'operator.assignment',
-            '=>': 'operator.arrow',
-            '@default': 'operator',
-          },
-        },
-      ],
+      // Special assignment operators
+      [/:=/, 'operator.assignment'],
+      [/=>/, 'operator.arrow'],
+      [/\.\./, 'operator.range'],
+
+      // Member access
+      [/\./, 'delimiter.accessor'],
+
+      // Other operators
       [
         symbols,
         {
           cases: {
             '@operators': 'operator',
-            '@default': '',
+            '@default': 'delimiter',
           },
         },
       ],
 
-      // Delimitadores
+      // Delimiters
       [/[;,]/, 'delimiter'],
-      [/\.\./, 'operator.range'],
-      [/(\.)([a-zA-Z_]\w*)/, ['delimiter', 'property']], // Acesso a membros
+      [/[{}()\[\]]/, '@brackets'],
 
       // Whitespace
       { include: '@whitespace' },
-
-      // Brackets
-      [/[{}()[\]]/, '@brackets'],
     ],
 
-    functionCall: [
-      [/(\))/, { token: 'delimiter.parenthesis', next: '@pop' }],
-      [/(,)/, 'delimiter'],
-      [/([a-zA-Z_]\w*)(\s*:)?/, ['identifier', { token: 'delimiter', next: '@parameter' }]],
-      { include: '@root' },
+    typedNumber: [
+      [/2#[01_]+/, { token: 'number.binary', next: '@pop' }],
+      [/8#[0-7_]+/, { token: 'number.octal', next: '@pop' }],
+      [/16#[0-9A-Fa-f_]+/, { token: 'number.hex', next: '@pop' }],
+      [/-?[0-9_]+\.[0-9_]+([eE][-+]?[0-9_]+)?/, { token: 'number.float', next: '@pop' }],
+      [/-?[0-9_]+/, { token: 'number', next: '@pop' }],
+      ['', '', '@pop'], // fallback
     ],
 
-    parameter: [
-      [/=>/, 'operator.arrow'],
-      [/[a-zA-Z_]\w*/, 'variable.parameter'],
-      [/\)/, { token: 'delimiter.parenthesis', next: '@pop' }],
-      { include: '@root' },
-    ],
-
-    attributeBlock: [
-      [/\}/, { token: 'attribute', next: '@pop' }],
-      [/(attribute|text|info|warning)\b/, 'keyword.attribute'],
-      [/'[^']*'/, 'string.attribute'],
+    attribute: [
+      [/\}/, { token: 'delimiter.curly', next: '@pop' }],
+      [/[a-zA-Z_][a-zA-Z0-9_]*/, 'keyword.attribute'],
       [/:=/, 'operator.assignment'],
-      { include: '@root' },
+      [/"([^"\\]|\\.)*"/, 'string'],
+      [/'([^'\\]|\\.)*'/, 'string'],
+      [/[0-9]+/, 'number'],
+      [/[,;]/, 'delimiter'],
+      { include: '@whitespace' },
     ],
 
     commentBlock: [
       [/\(\*/, 'comment', '@push'],
       [/\*\)/, 'comment', '@pop'],
-      [/(@[a-zA-Z_]*)\s*(:=)\s+('[^']*')/, ['variable.parameter', 'operator.assignment', 'string']],
       [/./, 'comment'],
     ],
 
@@ -425,37 +508,37 @@ export const language: languages.IMonarchLanguage = {
       [/./, 'comment'],
     ],
 
+    commentBlockDoc: [
+      [/\(\*/, 'comment.doc', '@push'],
+      [/\*\)/, 'comment.doc', '@pop'],
+      [/@\w+/, 'comment.doc.tag'],
+      [/./, 'comment.doc'],
+    ],
+
+    commentBlockCDoc: [
+      [/\/\*/, 'comment.doc', '@push'],
+      [/\*\//, 'comment.doc', '@pop'],
+      [/@\w+/, 'comment.doc.tag'],
+      [/./, 'comment.doc'],
+    ],
+
     stringDouble: [
       [/[^\\"$]+/, 'string'],
       [escapes, 'string.escape'],
       [/\\./, 'string.escape.invalid'],
-      [/"/, 'string', '@pop'],
+      [/"/, { token: 'string.quote', next: '@pop' }],
     ],
 
     stringSingle: [
       [/[^\\'$]+/, 'string'],
       [escapes, 'string.escape'],
       [/\\./, 'string.escape.invalid'],
-      [/'/, 'string', '@pop'],
-    ],
-
-    stringPrefixed: [
-      [/[^\\"$]+/, 'string'],
-      [escapes, 'string.escape'],
-      [/\\./, 'string.escape.invalid'],
-      [/"/, { token: 'string', next: '@pop' }],
-    ],
-
-    stringPrefixedSingle: [
-      [/[^\\'$]+/, 'string'],
-      [escapes, 'string.escape'],
-      [/\\./, 'string.escape.invalid'],
-      [/'/, { token: 'string', next: '@pop' }],
+      [/'/, { token: 'string.quote', next: '@pop' }],
     ],
 
     whitespace: [
       [/[ \t\r\n]+/, 'white'],
-      [/^\s*/, 'white'],
+      [/^\s*$/, 'white'],
     ],
   },
 }
