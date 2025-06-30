@@ -49,6 +49,7 @@ export const language: languages.IMonarchLanguage = {
   ignoreCase: true,
   defaultToken: 'invalid',
   tokenPostfix: '.st',
+  localVariables: [],
 
   keywords: [
     // Structural declarations
@@ -440,6 +441,7 @@ export const language: languages.IMonarchLanguage = {
         /[a-zA-Z_][a-zA-Z0-9_]*/,
         {
           cases: {
+            '@localVariables': 'keyword',
             '@keywords': 'st.keyword',
             '@builtinFunctions': 'keyword',
             '@operators': 'operator',
@@ -541,4 +543,13 @@ export const language: languages.IMonarchLanguage = {
       [/^\s*$/, 'white'],
     ],
   },
+}
+
+// Adicionar no final do arquivo st.ts
+export const updateLocalVariablesInTokenizer = (localVariables: string[]) => {
+  language.localVariables = localVariables
+
+  void import('monaco-editor').then((monaco) => {
+    monaco.languages.setMonarchTokensProvider('st', language)
+  })
 }

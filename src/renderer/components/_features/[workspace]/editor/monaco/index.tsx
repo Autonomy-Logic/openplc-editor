@@ -16,6 +16,7 @@ import {
   tableGlobalVariablesCompletion,
   tableVariablesCompletion,
 } from './completion'
+import { updateLocalVariablesInTokenizer } from './configs/languages/st/st'
 import { parsePouToStText } from './drag-and-drop/st'
 
 type monacoEditorProps = {
@@ -76,6 +77,16 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       moveToMatch(editorRef.current, searchQuery, sensitiveCase, regularExpression)
     }
   }, [searchQuery, sensitiveCase, regularExpression])
+
+  useEffect(() => {
+    if (language === 'st' && pou?.data.variables) {
+      const variableNames = pou.data.variables
+        .filter((variable) => variable.name && variable.name.trim() !== '')
+        .map((variable) => variable.name)
+
+      updateLocalVariablesInTokenizer(variableNames)
+    }
+  }, [pou?.data.variables, language])
 
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {
