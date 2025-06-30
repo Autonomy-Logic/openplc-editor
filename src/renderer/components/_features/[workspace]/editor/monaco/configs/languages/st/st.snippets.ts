@@ -131,25 +131,6 @@ export const stSnippets: STSnippet[] = [
     kind: monaco.languages.CompletionItemKind.Snippet,
     insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
   },
-  {
-    label: 'method',
-    insertText: [
-      'METHOD ${1:MethodName} : ${2:BOOL}',
-      'VAR_INPUT',
-      '\t${3:// input variables}',
-      'END_VAR',
-      'VAR',
-      '\t${4:// local variables}',
-      'END_VAR',
-      '',
-      '\t${5:// code}',
-      '\t${1:MethodName} := ${6:result};',
-      'END_METHOD',
-    ].join('\n'),
-    documentation: 'Complete METHOD structure',
-    kind: monaco.languages.CompletionItemKind.Snippet,
-    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-  },
 
   // Variable Declarations
   {
@@ -170,35 +151,6 @@ export const stSnippets: STSnippet[] = [
     label: 'var_output',
     insertText: ['VAR_OUTPUT', '\t${1:outputName} : ${2:BOOL};', 'END_VAR'].join('\n'),
     documentation: 'Output variable declaration block',
-    kind: monaco.languages.CompletionItemKind.Snippet,
-    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-  },
-
-  // Function Block Calls
-  {
-    label: 'ton',
-    insertText: ['${1:timerName}(', '\tIN := ${2:condition},', '\tPT := ${3:T#1s}', ');'].join('\n'),
-    documentation: 'TON Timer call',
-    kind: monaco.languages.CompletionItemKind.Snippet,
-    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-  },
-  {
-    label: 'tof',
-    insertText: ['${1:timerName}(', '\tIN := ${2:condition},', '\tPT := ${3:T#1s}', ');'].join('\n'),
-    documentation: 'TOF Timer call',
-    kind: monaco.languages.CompletionItemKind.Snippet,
-    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-  },
-  {
-    label: 'ctu',
-    insertText: [
-      '${1:counterName}(',
-      '\tCU := ${2:condition},',
-      '\tRESET := ${3:reset},',
-      '\tPV := ${4:10}',
-      ');',
-    ].join('\n'),
-    documentation: 'CTU Counter call',
     kind: monaco.languages.CompletionItemKind.Snippet,
     insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
   },
