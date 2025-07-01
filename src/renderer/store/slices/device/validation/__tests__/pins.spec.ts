@@ -1,4 +1,4 @@
-import { DevicePin } from '@root/types/PLC/devices'
+import type { DevicePin } from '@root/types/PLC/devices'
 
 import {
   checkIfAddressExists,

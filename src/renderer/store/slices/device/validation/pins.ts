@@ -4,7 +4,7 @@
  * ============================================================
  */
 
-import { DevicePin, PinTypes } from '@root/types/PLC/devices'
+import type { DevicePin, PinTypes } from '@root/types/PLC/devices'
 
 /**
  * ============================================================
