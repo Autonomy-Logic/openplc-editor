@@ -5,6 +5,7 @@ import { ModalSlice, ModalTypes } from './types'
 
 const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState, getState) => ({
   modals: {
+    // Ladder Modals
     'block-ladder-element': {
       open: false,
       data: null,
@@ -18,11 +19,13 @@ const createModalSlice: StateCreator<ModalSlice, [], [], ModalSlice> = (setState
       data: null,
     },
 
+    // FBD Modals
     'block-fbd-element': {
       open: false,
       data: null,
     },
 
+    // Editor related modals
     'create-project': {
       open: false,
       data: null,

@@ -214,6 +214,7 @@ export const createSharedSlice: StateCreator<
 
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => {
+      getState().workspaceActions.setEditingState('initial-state')
       getState().editorActions.clearEditor()
       getState().tabsActions.clearTabs()
       getState().libraryActions.clearUserLibraries()
@@ -223,6 +224,7 @@ export const createSharedSlice: StateCreator<
       getState().deviceActions.clearDeviceDefinitions()
       window.bridge.rebuildMenu()
     },
+
     closeProject: () => {
       const editingState = getState().workspace.editingState
       if (editingState === 'unsaved') {
@@ -230,7 +232,6 @@ export const createSharedSlice: StateCreator<
         return
       }
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
-      getState().workspaceActions.setEditingState('initial-state')
     },
 
     handleOpenProjectRequest(data) {
@@ -297,13 +298,24 @@ export const createSharedSlice: StateCreator<
         })
       }
     },
-
     openProject: async () => {
       const { success, data, error } = await window.bridge.openProject()
+
       if (success) {
         getState().sharedWorkspaceActions.handleOpenProjectRequest(data)
         return {
           success: success,
+        }
+      }
+
+      if (error?.title === 'Operation canceled') {
+        toast({
+          title: 'Operation canceled',
+          description: 'You have canceled the project opening operation.',
+          variant: 'default',
+        })
+        return {
+          success: true,
         }
       }
 
@@ -317,7 +329,6 @@ export const createSharedSlice: StateCreator<
         error,
       }
     },
-
     openProjectByPath: async (projectPath: string) => {
       const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
       if (success) {

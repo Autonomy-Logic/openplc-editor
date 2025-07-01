@@ -2,8 +2,6 @@ import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { FBDFlowType, LadderFlowType } from '@root/renderer/store/slices'
-import _ from 'lodash'
 import { ComponentPropsWithoutRef } from 'react'
 
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
@@ -20,25 +18,13 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     deviceDefinitions,
     workspaceActions: { setEditingState },
     modalActions: { closeModal, onOpenChange, openModal },
-    tabsActions: { clearTabs },
-    projectActions: { setProject, clearProjects },
-    fbdFlowActions: { addFBDFlow, clearFBDFlows },
-    ladderFlowActions: { addLadderFlow, clearLadderFlows },
-    libraryActions: { addLibrary, clearUserLibraries },
-    editorActions: { clearEditor },
-    deviceActions: { clearDeviceDefinitions, setDeviceDefinitions },
+    sharedWorkspaceActions: { clearStatesOnCloseProject, openProject },
   } = useOpenPLCStore()
 
   const { handleQuitApp, handleCancelQuitApp } = useQuitApp()
 
   const onClose = () => {
-    clearEditor()
-    clearTabs()
-    clearUserLibraries()
-    clearFBDFlows()
-    clearLadderFlows()
-    clearProjects()
-    clearDeviceDefinitions()
+    clearStatesOnCloseProject()
   }
 
   const handleAcceptCloseModal = async (operation: 'save' | 'not-saving') => {
@@ -60,70 +46,7 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
     // Validate
     if (validationContext === 'open-project') {
       try {
-        const { success, data, error } = await window.bridge.openProject()
-        if (success && data) {
-          onClose()
-          setEditingState('unsaved')
-
-          const { project, deviceConfiguration, devicePinMapping } = data.content
-
-          const projectMeta = {
-            name: project.meta.name,
-            type: project.meta.type,
-            path: data.meta.path,
-          }
-
-          const projectData = project.data
-
-          setProject({
-            meta: projectMeta,
-            data: projectData,
-          })
-
-          const ladderPous = projectData.pous.filter(
-            (pou: { data: { language: string } }) => pou.data.language === 'ld',
-          )
-
-          if (ladderPous.length) {
-            ladderPous.forEach((pou) => {
-              if (pou.data.body.language === 'ld') {
-                addLadderFlow(pou.data.body.value as LadderFlowType)
-              }
-            })
-          }
-
-          const fdbPous = projectData.pous.filter((pou: { data: { language: string } }) => pou.data.language === 'fbd')
-          if (fdbPous.length) {
-            fdbPous.forEach((pou) => {
-              if (pou.data.body.language === 'fbd') {
-                addFBDFlow(pou.data.body.value as FBDFlowType)
-              }
-            })
-          }
-
-          projectData.pous.forEach((pou) => {
-            if (pou.type !== 'program') {
-              addLibrary(pou.data.name, pou.type)
-            }
-          })
-
-          setDeviceDefinitions({
-            configuration: deviceConfiguration,
-            pinMapping: devicePinMapping,
-          })
-
-          toast({
-            title: 'Project opened!',
-            description: 'Your project was opened and loaded successfully.',
-            variant: 'default',
-          })
-        } else {
-          toast({
-            title: 'Cannot open the project.',
-            description: error?.description || 'Failed to open the project.',
-            variant: 'fail',
-          })
-        }
+        await openProject()
       } catch (_error) {
         toast({
           title: 'An error occurred.',
