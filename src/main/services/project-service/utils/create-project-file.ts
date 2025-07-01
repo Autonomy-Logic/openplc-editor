@@ -8,6 +8,7 @@ type CreateProjectFileProps = {
   name: string
   path: string
 }
+
 const CreateProjectFile = (dataToCreateProjectFile: CreateProjectFileProps) => {
   const bodyData =
     dataToCreateProjectFile.language === 'ld'

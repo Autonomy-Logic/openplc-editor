@@ -1,3 +1,4 @@
+import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { app, nativeTheme, shell } from 'electron'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
@@ -7,11 +8,15 @@ import { ProjectState } from '../../../renderer/store/slices'
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 import { logger } from '../../services'
-import { CreateProjectFile, GetProjectPath } from '../../services/project-service/utils'
+import { CreateProjectFile, getProjectPath } from '../../services/project-service/utils'
 
 type IDataToWrite = {
   projectPath: string
-  projectData: PLCProject
+  content: {
+    projectData: PLCProject
+    deviceConfiguration: DeviceConfiguration
+    devicePinMapping: DevicePin[]
+  }
 }
 type CreateProjectFileProps = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
@@ -79,7 +84,7 @@ class MainProcessBridge implements MainIpcModule {
       const windowManager = this.mainWindow
       try {
         if (windowManager) {
-          const res = await GetProjectPath(windowManager)
+          const res = await getProjectPath(windowManager)
           return res
         }
         console.log('Window object not defined')
@@ -97,8 +102,17 @@ class MainProcessBridge implements MainIpcModule {
       return res
     })
 
-    this.ipcMain.handle('project:save', (_event, { projectPath, projectData }: IDataToWrite) =>
-      this.projectService.saveProject({ projectPath, projectData }),
+    this.ipcMain.handle(
+      'project:save',
+      (_event, { projectPath, content: { projectData, deviceConfiguration, devicePinMapping } }: IDataToWrite) =>
+        this.projectService.saveProject({
+          projectPath,
+          content: {
+            projectData,
+            deviceConfiguration,
+            devicePinMapping,
+          },
+        }),
     )
 
     this.ipcMain.handle('system:get-system-info', () => {

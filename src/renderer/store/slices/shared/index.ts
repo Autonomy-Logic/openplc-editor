@@ -1,9 +1,13 @@
 import { CreateProjectFileProps } from '@root/main/modules/ipc/renderer'
-import { IProjectServiceResponse } from '@root/main/services'
+import {
+  INewProjectServiceResponse,
+  // IProjectServiceResponse
+} from '@root/main/services'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
+import { DeviceSlice } from '../device'
 import { EditorSlice } from '../editor'
 import { FBDFlowSlice, FBDFlowType } from '../fbd'
 import { LadderFlowSlice, LadderFlowType } from '../ladder'
@@ -35,7 +39,7 @@ export type SharedSlice = {
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => void
     closeProject: () => void
-    handleOpenProjectRequest: (data: IProjectServiceResponse['data']) => void
+    handleOpenProjectRequest: (data: INewProjectServiceResponse['data']) => void
     openProject: () => Promise<{
       success: boolean
       error?: { title: string; description: string }
@@ -44,7 +48,7 @@ export type SharedSlice = {
       success: boolean
       error?: { title: string; description: string }
     }>
-    openRecentProject: (response: IProjectServiceResponse) => {
+    openRecentProject: (response: INewProjectServiceResponse) => {
       success: boolean
       error?: { title: string; description: string }
     }
@@ -64,6 +68,7 @@ export const createSharedSlice: StateCreator<
     FBDFlowSlice &
     LadderFlowSlice &
     WorkspaceSlice &
+    DeviceSlice &
     SharedSlice,
   [],
   [],
@@ -215,6 +220,7 @@ export const createSharedSlice: StateCreator<
       getState().fbdFlowActions.clearFBDFlows()
       getState().ladderFlowActions.clearLadderFlows()
       getState().projectActions.clearProjects()
+      getState().deviceActions.clearDeviceDefinitions()
       window.bridge.rebuildMenu()
     },
     closeProject: () => {
@@ -231,12 +237,15 @@ export const createSharedSlice: StateCreator<
       if (data) {
         getState().sharedWorkspaceActions.clearStatesOnCloseProject()
         getState().workspaceActions.setEditingState('unsaved')
+
+        const { project, deviceConfiguration, devicePinMapping } = data.content
+
         const projectMeta = {
-          name: data.content.meta.name,
-          type: data.content.meta.type,
+          name: project.meta.name,
+          type: project.meta.type,
           path: data.meta.path,
         }
-        const projectData = data.content.data
+        const projectData = project.data
 
         getState().projectActions.setProject({
           data: projectData,
@@ -269,12 +278,17 @@ export const createSharedSlice: StateCreator<
               path: '/data/pous/program/main',
               elementType: { type: 'program', language: mainPou.data.language },
             }
-            getState().tabsActions.updateTabs(tabToBeCreated)
             const model = CreateEditorObjectFromTab(tabToBeCreated)
+            getState().tabsActions.updateTabs(tabToBeCreated)
             getState().editorActions.addModel(model)
             getState().editorActions.setEditor(model)
           }
         }
+
+        getState().deviceActions.setDeviceDefinitions({
+          configuration: deviceConfiguration,
+          pinMapping: devicePinMapping,
+        })
 
         toast({
           title: 'Project opened!',
@@ -283,6 +297,7 @@ export const createSharedSlice: StateCreator<
         })
       }
     },
+
     openProject: async () => {
       const { success, data, error } = await window.bridge.openProject()
       if (success) {
@@ -302,6 +317,7 @@ export const createSharedSlice: StateCreator<
         error,
       }
     },
+
     openProjectByPath: async (projectPath: string) => {
       const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
       if (success) {

@@ -1,11 +1,11 @@
 import { BrowserWindow, dialog } from 'electron'
-import { promises } from 'fs'
 
 import { i18n } from '../../../../utils/i18n'
+import { isEmptyDir } from './is-empty-dir'
 
 type GetProjectPathProps = InstanceType<typeof BrowserWindow>
 
-const GetProjectPath = async (serviceManager: GetProjectPathProps) => {
+const getProjectPath = async (serviceManager: GetProjectPathProps) => {
   const { canceled, filePaths } = await dialog.showOpenDialog(serviceManager, {
     title: i18n.t('createProject:dialog.title'),
     properties: ['openDirectory', 'createDirectory'],
@@ -22,18 +22,7 @@ const GetProjectPath = async (serviceManager: GetProjectPathProps) => {
 
   const [filePath] = filePaths
 
-  const isEmptyDir = async () => {
-    try {
-      const directory = await promises.opendir(filePath)
-      const entry = await directory.read()
-      await directory.close()
-      return entry === null
-    } catch (_error) {
-      return false
-    }
-  }
-
-  if (!(await isEmptyDir())) {
+  if (!(await isEmptyDir(filePath))) {
     return {
       success: false,
       error: {
@@ -49,4 +38,4 @@ const GetProjectPath = async (serviceManager: GetProjectPathProps) => {
   }
 }
 
-export { GetProjectPath }
+export { getProjectPath }

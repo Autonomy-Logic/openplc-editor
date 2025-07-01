@@ -63,7 +63,7 @@ export default class MenuBuilder {
   }
 
   async handleGetRecent() {
-    const response = await this.projectService.readProjectHistory(this.projectService.getProjectsFilePath())
+    const response = await this.projectService.readProjectHistory(this.projectService.getHistoryProjectsFilePath())
     return response
   }
 

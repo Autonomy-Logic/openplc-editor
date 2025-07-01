@@ -1,7 +1,9 @@
+import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import type { DevicePin, DeviceSlice } from './types'
+import { defaultDeviceConfiguration } from './data'
+import type { DeviceSlice } from './types'
 import {
   checkIfPinIsValid,
   checkIfPinNameIsValid,
@@ -19,35 +21,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     availableTCPInterfaces: ['Ethernet', 'Wi-Fi'], // The available TCP interfaces is always ['ethernet', 'wifi'], so we can set it on the slice creation.
   },
   deviceDefinitions: {
-    configuration: {
-      deviceBoard: 'OpenPLC Runtime',
-      communicationPort: '',
-      communicationConfiguration: {
-        modbusRTU: {
-          rtuInterface: 'Serial',
-          rtuBaudRate: '115200',
-          rtuSlaveId: null,
-          rtuRS485ENPin: null,
-        },
-        modbusTCP: {
-          tcpInterface: 'Ethernet',
-          tcpMacAddress: '0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD',
-          tcpWifiSSID: null,
-          tcpWifiPassword: null,
-          tcpStaticHostConfiguration: {
-            ipAddress: '',
-            dns: '',
-            gateway: '',
-            subnet: '',
-          },
-        },
-        communicationPreferences: {
-          enabledRTU: false,
-          enabledTCP: false,
-          enabledDHCP: true,
-        },
-      },
-    },
+    configuration: defaultDeviceConfiguration,
     pinMapping: {
       pins: [],
       currentSelectedPinTableRow: -1,
@@ -63,6 +37,30 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
           }
           if (availableCommunicationPorts) {
             deviceAvailableOptions.availableCommunicationPorts = availableCommunicationPorts
+          }
+        }),
+      )
+    },
+    setDeviceDefinitions: ({ configuration, pinMapping }): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          if (configuration) {
+            deviceDefinitions.configuration = mergeDeviceConfigWithDefaults(configuration, defaultDeviceConfiguration)
+          }
+          if (pinMapping) {
+            deviceDefinitions.pinMapping.pins = pinMapping || []
+            deviceDefinitions.pinMapping.currentSelectedPinTableRow = -1
+          }
+        }),
+      )
+    },
+    clearDeviceDefinitions: (): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          deviceDefinitions.configuration = defaultDeviceConfiguration
+          deviceDefinitions.pinMapping = {
+            pins: [],
+            currentSelectedPinTableRow: -1,
           }
         }),
       )
@@ -400,5 +398,16 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
   },
 })
+
+function mergeDeviceConfigWithDefaults(
+  provided: Partial<DeviceConfiguration>,
+  defaults: DeviceConfiguration,
+): DeviceConfiguration {
+  return {
+    ...defaults,
+    ...provided,
+    deviceBoard: provided.deviceBoard || defaults.deviceBoard,
+  }
+}
 
 export { createDeviceSlice }
