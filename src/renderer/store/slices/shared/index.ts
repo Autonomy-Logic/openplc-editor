@@ -312,7 +312,7 @@ export const createSharedSlice: StateCreator<
         toast({
           title: 'Operation canceled',
           description: 'You have canceled the project opening operation.',
-          variant: 'default',
+          variant: 'warn',
         })
         return {
           success: true,
