@@ -228,6 +228,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     return () => disposable.dispose()
   }, [pou?.data.variables, globalVariables, sliceLibraries, language, snippetsSuggestions])
 
+  /**
+   * Handles the initialization of the Monaco editor by storing editor and Monaco instances in refs and moving the cursor to the first search match if a search query exists.
+   */
   function handleEditorDidMount(
     editor: null | monaco.editor.IStandaloneCodeEditor,
     monacoInstance: null | typeof monaco,

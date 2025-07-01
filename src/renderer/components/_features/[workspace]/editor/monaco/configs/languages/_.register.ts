@@ -17,10 +17,9 @@ interface ILangImp extends TLang {
   language: monaco.languages.IMonarchLanguage
 }
 /**
- * Registers a new language with Monaco editor.
+ * Registers or updates a language in the Monaco editor with the provided configuration and Monarch tokenizer.
  *
- * @param {ILangImp} options - The language definition, configuration, and Monarch providers.
- * @return {void} This function does not return anything.
+ * If the language is not already registered, it is added to Monaco. The language configuration and Monarch tokens provider are always set or updated for the given language ID.
  */
 export function registerLanguage({ def, conf, language }: ILangImp): void {
   const languageId = def.id
