@@ -137,14 +137,44 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   const keywordsSuggestions = useCallback(
     (range: monaco.IRange) => {
-      const suggestions = keywordsCompletion({
+      const allSuggestions = keywordsCompletion({
         range,
         language,
       }).suggestions
-      const labels = suggestions.map((suggestion) => suggestion.label)
+
+      let filteredSuggestions = allSuggestions
+      let filteredLabels = allSuggestions.map((suggestion) => suggestion.label)
+
+      if (language === 'st') {
+        const stSnippetLabels = [
+          'if',
+          'ifelse',
+          'ifelseif',
+          'for',
+          'while',
+          'repeat',
+          'case',
+          'program',
+          'function',
+          'function_block',
+          'var',
+          'var_input',
+          'var_output',
+          'array',
+          'struct',
+          'comment_block',
+        ]
+
+        filteredSuggestions = allSuggestions.filter(
+          (suggestion) => !stSnippetLabels.includes(suggestion.label.toLowerCase()),
+        )
+
+        filteredLabels = filteredSuggestions.map((suggestion) => suggestion.label)
+      }
+
       return {
-        suggestions,
-        labels,
+        suggestions: filteredSuggestions,
+        labels: filteredLabels,
       }
     },
     [language],
@@ -193,11 +223,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
             identifierTokens
               .map((token) => {
                 if (
+                  snippetsSuggestions(range).labels.includes(token) ||
                   variablesSuggestions(range).labels.includes(token) ||
                   globalVariablesSuggestions(range).labels.includes(token) ||
                   librarySuggestions(range).labels.includes(token) ||
-                  keywordsSuggestions(range).labels.includes(token) ||
-                  snippetsSuggestions(range).labels.includes(token)
+                  keywordsSuggestions(range).labels.includes(token)
                 ) {
                   return null
                 }
