@@ -160,7 +160,9 @@ const WorkspaceScreen = () => {
                   {tabs.length > 0 ? (
                     <>
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
-                      {editor['type'] === 'plc-device' && <DeviceEditor editorDerivation={editor.meta.name} />}
+                      {editor['type'] === 'plc-device' && (
+                        <DeviceEditor editorDerivation={editor.meta.name as 'Configuration'} />
+                      )}
                       {editor['type'] === 'plc-datatype' && (
                         <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1 gap-2'>
                           <DataTypeEditor dataTypeName={editor.meta.name} />{' '}
