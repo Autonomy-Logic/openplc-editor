@@ -1,5 +1,4 @@
 import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
-import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { ComponentPropsWithoutRef } from 'react'
@@ -37,36 +36,23 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
       }
     }
 
-    if (validationContext === 'create-project') {
-      onClose()
-      openModal('create-project', null)
-      return
-    }
-
-    // Validate
-    if (validationContext === 'open-project') {
-      try {
+    switch (validationContext) {
+      case 'create-project':
+        onClose()
+        openModal('create-project', null)
+        return
+      case 'open-project':
         await openProject()
-      } catch (_error) {
-        toast({
-          title: 'An error occurred.',
-          description: 'There was a problem opening the project.',
-          variant: 'fail',
-        })
-      }
-
-      return
-    }
-
-    if (validationContext === 'close-app') {
-      handleQuitApp()
-      return
-    }
-
-    if (validationContext === 'close-project') {
-      setEditingState('initial-state')
-      onClose()
-      return
+        return
+      case 'close-project':
+        setEditingState('initial-state')
+        onClose()
+        return
+      case 'close-app':
+        handleQuitApp()
+        return
+      default:
+        break
     }
   }
 

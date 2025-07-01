@@ -166,12 +166,16 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     window.bridge.handleOpenProjectRequest(async (_event) => {
-      if (editingState === 'initial-state') {
-        await openProject()
-        return
-      }
-      if (editingState === 'unsaved') {
-        openModal('save-changes-project', 'open-project')
+      switch (editingState) {
+        case 'saved':
+        case 'initial-state':
+          await openProject()
+          break
+        case 'unsaved':
+          openModal('save-changes-project', 'open-project')
+          break
+        default:
+          return
       }
     })
 
