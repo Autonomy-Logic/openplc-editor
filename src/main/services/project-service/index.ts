@@ -10,7 +10,7 @@ import { join } from 'path'
 
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
-import { createProjectDefaultDirectories, createProjectFile, readProjectFiles } from './utils'
+import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
 class ProjectService {
   constructor(private serviceManager: InstanceType<typeof BrowserWindow>) {}
@@ -33,37 +33,21 @@ class ProjectService {
   }
 
   async createProject(data: CreateProjectFileProps): Promise<IProjectServiceResponse> {
-    // Create the project directory if it doesn't exist
-    const projectCreateResponse = createProjectFile(data)
-    if (!projectCreateResponse.success || !projectCreateResponse.data) {
+    const projectDefaultDirectoriesResponse = createProjectDefaultStructure(data.path, data)
+    if (!projectDefaultDirectoriesResponse.success || !projectDefaultDirectoriesResponse.data) {
       return {
         success: false,
-        error: projectCreateResponse.error,
+        error: projectDefaultDirectoriesResponse.error,
       }
     }
     await this.updateProjectHistory(data.path)
-
-    // Create default directories and files for the project
-    const projectDirectoriesResponse = createProjectDefaultDirectories(data.path)
-    if (!projectDirectoriesResponse.success || !projectDirectoriesResponse.data) {
-      return {
-        success: false,
-        error: projectDirectoriesResponse.error,
-      }
-    }
-    const { deviceConfiguration, devicePinMapping } = projectDirectoriesResponse.data.content
-
     return {
       success: true,
       data: {
         meta: {
           path: data.path, // Use the directory path instead of projectPath
         },
-        content: {
-          project: projectCreateResponse.data.content.project,
-          deviceConfiguration: deviceConfiguration,
-          devicePinMapping: devicePinMapping,
-        },
+        content: projectDefaultDirectoriesResponse.data.content,
       },
     }
   }
@@ -194,26 +178,43 @@ class ProjectService {
       }
     }
 
-    const directoryPath = filePaths[0]
-    const projectFiles = readProjectFiles(directoryPath)
+    const [directoryPath] = filePaths
 
-    if (!projectFiles.success || !projectFiles.data) {
+    try {
+      await promises.access(directoryPath)
+      const projectFiles = readProjectFiles(directoryPath)
+
+      if (!projectFiles.success || !projectFiles.data) {
+        return {
+          success: false,
+          error: projectFiles.error,
+        }
+      }
+
+      await this.updateProjectHistory(directoryPath)
+
+      return {
+        success: true,
+        data: {
+          meta: {
+            path: directoryPath,
+          },
+          content: projectFiles.data,
+        },
+      }
+    } catch (error) {
+      console.error(`Error accessing project directory: ${filePaths[0]}`, error)
+      await this.removeProjectFromHistory(directoryPath)
       return {
         success: false,
-        error: projectFiles.error,
-      }
-    }
-
-    await this.updateProjectHistory(directoryPath)
-
-    return {
-      success: true,
-      data: {
-        meta: {
-          path: directoryPath,
+        error: {
+          title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
+          description: i18n.t('projectServiceResponses:openProject.errors.readFile.description', {
+            filePath: directoryPath,
+          }),
+          error: error,
         },
-        content: projectFiles.data,
-      },
+      }
     }
   }
 
@@ -245,7 +246,7 @@ class ProjectService {
       : projectPath
 
     try {
-      // Write each part to its correct file based on projectFileMapSchema
+      // Write each part to its correct file based on projectDefaultFilesMapSchema
       await Promise.all([
         promises.writeFile(join(directoryPath, 'project.json'), JSON.stringify(projectData, null, 2)),
         promises.writeFile(

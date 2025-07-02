@@ -13,24 +13,6 @@ export type CreateProjectFileProps = {
   path: string
 }
 
-export type CreateProjectFileResponse = {
-  success: boolean
-  error?: {
-    title: string
-    description: string
-    error: unknown
-  }
-  message?: string
-  data?: {
-    meta: {
-      path: string
-    }
-    content: {
-      project: PLCProject
-    }
-  }
-}
-
 /**
  * devices/configuration.json file structure
  * devices/pin-mapping.json file structure
@@ -49,6 +31,7 @@ export type CreateProjectDefaultDirectoriesResponse = {
       path: string
     }
     content: {
+      project: PLCProject
       deviceConfiguration: DeviceConfiguration
       devicePinMapping: DevicePin[]
     }

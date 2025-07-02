@@ -1,3 +1,4 @@
+import { getProjectPath } from '@root/main/utils'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { app, nativeTheme, shell } from 'electron'
 import { readFile } from 'fs/promises'
@@ -8,7 +9,6 @@ import { ProjectState } from '../../../renderer/store/slices'
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 import { logger } from '../../services'
-import { getProjectPath } from '../../services/project-service/utils'
 
 type IDataToWrite = {
   projectPath: string

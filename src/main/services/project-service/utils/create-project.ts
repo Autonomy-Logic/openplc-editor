@@ -1,8 +1,9 @@
+import { createDirectory, fileOrDirectoryExists } from '@root/main/utils'
 import {
   CreateProjectDefaultDirectoriesResponse,
   CreateProjectFileProps,
-  CreateProjectFileResponse,
-  projectFileMapSchema,
+  projectDefaultDirectories,
+  projectDefaultFilesMapSchema,
 } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
@@ -31,8 +32,8 @@ const definePouBodyData = (language: CreateProjectFileProps['language']) => {
   }
 }
 
-const createProjectFile = (dataToCreateProjectFile: CreateProjectFileProps): CreateProjectFileResponse => {
-  const projectJSONStructure: PLCProject = {
+const createProjectFile = (dataToCreateProjectFile: CreateProjectFileProps): PLCProject => {
+  return {
     meta: {
       name: dataToCreateProjectFile.name,
       type: dataToCreateProjectFile.type as 'plc-project',
@@ -75,62 +76,85 @@ const createProjectFile = (dataToCreateProjectFile: CreateProjectFileProps): Cre
       },
     },
   }
-
-  try {
-    const success = CreateJSONFile(
-      dataToCreateProjectFile.path,
-      JSON.stringify(projectJSONStructure, null, 2),
-      'project',
-    )
-
-    return {
-      success: success.ok,
-      data: {
-        meta: {
-          path: dataToCreateProjectFile.path,
-        },
-        content: {
-          project: projectJSONStructure,
-        },
-      },
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: {
-        title: 'Error creating project file',
-        description: `Failed to create project file at ${dataToCreateProjectFile.path}`,
-        error: error,
-      },
-    }
-  }
 }
 
-const createProjectDefaultDirectories = (basePath: string): CreateProjectDefaultDirectoriesResponse => {
+const createProjectDefaultStructure = (
+  basePath: string,
+  dataToCreateProjectFile: CreateProjectFileProps,
+): CreateProjectDefaultDirectoriesResponse => {
   const content: {
+    project?: PLCProject
     deviceConfiguration?: DeviceConfiguration
     devicePinMapping?: DevicePin[]
   } = {}
 
-  const directories = Object.entries(projectFileMapSchema).filter(([file]) => file.includes('/'))
-  for (const [file, schema] of directories) {
+  /**
+   * Create the default directories in the project structure
+   */
+
+  // Create all the default directories if they do not exist
+  const directories = projectDefaultDirectories
+  for (const directory of directories) {
+    const dirPath = `${basePath}/${directory}`
+    try {
+      if (!fileOrDirectoryExists(dirPath)) createDirectory(dirPath)
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          title: 'Error creating project directories',
+          description: `Failed to create directory at ${dirPath}`,
+          error: error,
+        },
+      }
+    }
+  }
+
+  /**
+   * Create the default files in the project structure
+   */
+
+  // Create the root files
+  // These are files that are not in a subdirectory, but directly in the project root
+  // For example: project.json
+  const rootFiles = Object.entries(projectDefaultFilesMapSchema).filter(
+    ([file]) => !file.includes('/') && file.includes('.'),
+  )
+  for (const [file, _schema] of rootFiles) {
+    const filePath = basePath
+
+    switch (file) {
+      case 'project.json':
+        content.project = createProjectFile(dataToCreateProjectFile)
+        CreateJSONFile(filePath, JSON.stringify(content.project, null, 2), file.split('.')[0])
+        break
+      default:
+        break
+    }
+  }
+
+  // Create the directories and files that are in subdirectories
+  // For example: devices/configuration.json
+  const fileDirectories = Object.entries(projectDefaultFilesMapSchema).filter(
+    ([file]) => file.includes('/') && file.includes('.'),
+  )
+  for (const [file, schema] of fileDirectories) {
     const [directory, fileName] = file.split('/')
     const filePath = `${basePath}/${directory}`
     const defaultValue = getDefaultSchemaValues(schema)
 
     try {
-      const success = CreateJSONFile(filePath, JSON.stringify(defaultValue, null, 2), fileName)
-      if (success) {
-        switch (file) {
-          case 'devices/configuration.json':
-            content.deviceConfiguration = defaultValue as DeviceConfiguration
-            break
-          case 'devices/pin-mapping.json':
-            content.devicePinMapping = defaultValue as DevicePin[]
-            break
-          default:
-            break
-        }
+      switch (file) {
+        case 'devices/configuration.json':
+          content.deviceConfiguration = defaultValue as DeviceConfiguration
+          CreateJSONFile(filePath, JSON.stringify(content.deviceConfiguration, null, 2), fileName.split('.')[0])
+          break
+        case 'devices/pin-mapping.json':
+          content.devicePinMapping = defaultValue as DevicePin[]
+          CreateJSONFile(filePath, JSON.stringify(content.devicePinMapping, null, 2), fileName.split('.')[0])
+          break
+        default:
+          break
       }
     } catch (error) {
       return {
@@ -144,11 +168,16 @@ const createProjectDefaultDirectories = (basePath: string): CreateProjectDefault
     }
   }
 
+  /**
+   * TODO: Create the default pou separated from other files at pous directory
+   */
+
   return {
     success: true,
     data: {
       meta: { path: basePath },
       content: content as {
+        project: PLCProject
         deviceConfiguration: DeviceConfiguration
         devicePinMapping: DevicePin[]
       },
@@ -156,4 +185,4 @@ const createProjectDefaultDirectories = (basePath: string): CreateProjectDefault
   }
 }
 
-export { createProjectDefaultDirectories, createProjectFile }
+export { createProjectDefaultStructure, createProjectFile }

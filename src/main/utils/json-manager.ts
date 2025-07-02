@@ -1,4 +1,4 @@
-import { mkdirSync, writeFile } from 'fs'
+import { writeFile } from 'fs'
 import { join } from 'path'
 
 /**
@@ -12,13 +12,10 @@ import { join } from 'path'
  */
 const CreateJSONFile = (path: string, data: string | NodeJS.ArrayBufferView, fileName: string) => {
   const normalizedPath = join(path, `${fileName}.json`)
-  const dir = path
-  if (dir) {
-    mkdirSync(dir, { recursive: true })
-  }
   writeFile(normalizedPath, data, (error) => {
     if (error) throw error
   })
+
   return { ok: true }
 }
 
