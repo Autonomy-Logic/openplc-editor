@@ -545,7 +545,7 @@ export const language: languages.IMonarchLanguage = {
   },
 }
 
-// Adicionar no final do arquivo st.ts
+// Update local variables in the tokenizer
 export const updateLocalVariablesInTokenizer = (localVariables: string[]) => {
   language.localVariables = localVariables
 
