@@ -1,23 +1,25 @@
 import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ComponentPropsWithoutRef } from 'react'
 
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 import { saveProjectRequest } from '../../_templates'
 
-type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
+export type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
-  validationContext: string
+  validationContext: 'create-project' | 'open-project' | 'open-recent-project' | 'close-project' | 'close-app'
+  recentResponse?: IProjectServiceResponse
 }
 
-const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModalProps) => {
+const SaveChangesModal = ({ isOpen, validationContext, recentResponse, ...rest }: SaveChangeModalProps) => {
   const {
     project,
     deviceDefinitions,
     workspaceActions: { setEditingState },
     modalActions: { closeModal, onOpenChange, openModal },
-    sharedWorkspaceActions: { clearStatesOnCloseProject, openProject },
+    sharedWorkspaceActions: { clearStatesOnCloseProject, openProject, openRecentProject },
   } = useOpenPLCStore()
 
   const { handleQuitApp, handleCancelQuitApp } = useQuitApp()
@@ -44,6 +46,14 @@ const SaveChangesModal = ({ isOpen, validationContext, ...rest }: SaveChangeModa
       case 'open-project':
         await openProject()
         return
+      case 'open-recent-project': {
+        if (!recentResponse) {
+          console.error('No recent response provided for opening recent project.')
+          return
+        }
+        openRecentProject(recentResponse)
+        return
+      }
       case 'close-project':
         setEditingState('initial-state')
         onClose()

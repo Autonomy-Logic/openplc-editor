@@ -232,7 +232,6 @@ export const createSharedSlice: StateCreator<
 
     handleOpenProjectRequest(data) {
       if (data) {
-        getState().sharedWorkspaceActions.clearStatesOnCloseProject()
         getState().workspaceActions.setEditingState('unsaved')
 
         const { project, deviceConfiguration, devicePinMapping } = data.content
@@ -295,6 +294,7 @@ export const createSharedSlice: StateCreator<
       }
     },
     openProject: async () => {
+      getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       const { success, data, error } = await window.bridge.openProject()
 
       if (success) {
@@ -326,7 +326,9 @@ export const createSharedSlice: StateCreator<
       }
     },
     openProjectByPath: async (projectPath: string) => {
+      getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
+
       if (success) {
         getState().sharedWorkspaceActions.handleOpenProjectRequest(data)
         return {
@@ -345,7 +347,9 @@ export const createSharedSlice: StateCreator<
       }
     },
     openRecentProject: (response) => {
+      getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       const { data, error } = response
+
       if (data) {
         getState().sharedWorkspaceActions.handleOpenProjectRequest(data)
         return {

@@ -12,7 +12,9 @@ import { toast } from '../_features/[app]/toast/use-toast'
 
 const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?: unknown) => void) => {
   if (isUnsaved) {
-    openModal('save-changes-project', 'close-app')
+    openModal('save-changes-project', {
+      validationContext: 'close-app',
+    })
     return
   }
   openModal('quit-application', null)
@@ -151,7 +153,9 @@ const AcceleratorHandler = () => {
       if (editingState !== 'unsaved') {
         openModal('create-project', null)
       } else {
-        openModal('save-changes-project', 'create-project')
+        openModal('save-changes-project', {
+          validationContext: 'create-project',
+        })
       }
     })
 
@@ -172,7 +176,9 @@ const AcceleratorHandler = () => {
           await openProject()
           break
         case 'unsaved':
-          openModal('save-changes-project', 'open-project')
+          openModal('save-changes-project', {
+            validationContext: 'open-project',
+          })
           break
         default:
           return
@@ -189,13 +195,26 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     window.bridge.openRecentAccelerator((_event, response: IProjectServiceResponse) => {
-      openRecentProject(response)
+      switch (editingState) {
+        case 'saved':
+        case 'initial-state':
+          openRecentProject(response)
+          break
+        case 'unsaved':
+          openModal('save-changes-project', {
+            validationContext: 'open-recent-project',
+            recentResponse: response,
+          })
+          break
+        default:
+          return
+      }
     })
 
     return () => {
       window.bridge.removeOpenRecentListener()
     }
-  }, [])
+  }, [editingState])
 
   /**
    * -- Close project
