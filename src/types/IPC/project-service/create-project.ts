@@ -2,8 +2,7 @@ import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCProject } from '@root/types/PLC/open-plc'
 
 /**
- * Project.json file structure
- * This file is used to create a new project in OpenPLC Editor.
+ * Type designed to create a new project file in OpenPLC Editor.
  */
 export type CreateProjectFileProps = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
@@ -14,9 +13,7 @@ export type CreateProjectFileProps = {
 }
 
 /**
- * devices/configuration.json file structure
- * devices/pin-mapping.json file structure
- * This file is used to create a new device configuration in OpenPLC Editor.
+ * Type designed to create default directories for a new project in OpenPLC Editor.
  */
 export type CreateProjectDefaultDirectoriesResponse = {
   success: boolean
