@@ -320,7 +320,7 @@ export const libraryCompletion = ({
   }
 }
 
-export const snippetsCompletion = ({ language, range }: { language: 'st' | 'il'; range: monaco.IRange }) => {
+export const snippetsSTCompletion = ({ language, range }: { language: 'st' | 'il'; range: monaco.IRange }) => {
   if (language !== 'st') {
     return { suggestions: [] }
   }

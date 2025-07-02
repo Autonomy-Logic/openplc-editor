@@ -12,7 +12,7 @@ import { toast } from '../../../[app]/toast/use-toast'
 import {
   keywordsCompletion,
   libraryCompletion,
-  snippetsCompletion,
+  snippetsSTCompletion,
   tableGlobalVariablesCompletion,
   tableVariablesCompletion,
 } from './completion'
@@ -181,9 +181,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     [language],
   )
 
-  const snippetsSuggestions = useCallback(
+  const snippetsSTSuggestions = useCallback(
     (range: monaco.IRange) => {
-      const suggestions = snippetsCompletion({
+      const suggestions = snippetsSTCompletion({
         range,
         language,
       }).suggestions
@@ -224,7 +224,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
             identifierTokens
               .map((token) => {
                 if (
-                  snippetsSuggestions(range).labels.includes(token) ||
+                  snippetsSTSuggestions(range).labels.includes(token) ||
                   variablesSuggestions(range).labels.includes(token) ||
                   globalVariablesSuggestions(range).labels.includes(token) ||
                   librarySuggestions(range).labels.includes(token) ||
@@ -246,7 +246,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
         return {
           suggestions: [
-            ...snippetsSuggestions(range).suggestions,
+            ...snippetsSTSuggestions(range).suggestions,
             ...variablesSuggestions(range).suggestions,
             ...globalVariablesSuggestions(range).suggestions,
             ...librarySuggestions(range).suggestions,
@@ -257,7 +257,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       },
     })
     return () => disposable.dispose()
-  }, [pou?.data.variables, globalVariables, sliceLibraries, language, snippetsSuggestions])
+  }, [pou?.data.variables, globalVariables, sliceLibraries, language, snippetsSTSuggestions])
 
   function handleEditorDidMount(
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
