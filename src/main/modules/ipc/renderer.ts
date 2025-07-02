@@ -1,11 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
+import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { ProjectState } from '../../../renderer/store/slices'
 import { PLCProject } from '../../../types/PLC/open-plc'
-import { INewProjectServiceResponse, IProjectServiceResponse } from '../../services/project-service'
-import { CreateProjectFile } from '../../services/project-service/utils'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
@@ -25,15 +24,6 @@ export type ISaveDataResponse = {
     description: string
   }
 }
-
-export type CreateProjectFileProps = {
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
-  time: string
-  type: 'plc-project' | 'plc-library'
-  name: string
-  path: string
-}
-export type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
 
 /**
  * A bridge for communication between the renderer process and the main process in an Electron application.
@@ -56,15 +46,8 @@ const rendererProcessBridge = {
    * Invokes the 'project:create' event and returns a promise with the response.
    * @returns A promise that resolves with the project service response.
    */
-  createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
-
-  /**
-   * Invokes the 'project:create-project-file' event with the provided data and returns a promise with the response.
-   * @param dataToCreateProjectFile - The data required to create the project file.
-   * @returns A promise that resolves with the create project file response.
-   */
-  createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> =>
-    ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
+  createProject: (data: CreateProjectFileProps): Promise<IProjectServiceResponse> =>
+    ipcRenderer.invoke('project:create', data),
 
   /**
    * Invokes the 'project:path-picker' event and returns a promise with the response.
@@ -90,16 +73,14 @@ const rendererProcessBridge = {
    * @returns A promise that resolves with the project service response.
    */
   // openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
-  openProject: (): Promise<INewProjectServiceResponse> => ipcRenderer.invoke('project:open'),
+  openProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:open'),
 
   /**
    * Invokes the 'project:open-by-path' event with the provided project path and returns a promise with the response.
    * @param projectPath - The path of the project to open.
    * @returns A promise that resolves with the project service response.
    */
-  // openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
-  //   ipcRenderer.invoke('project:open-by-path', projectPath),
-  openProjectByPath: (projectPath: string): Promise<INewProjectServiceResponse> =>
+  openProjectByPath: (projectPath: string): Promise<IProjectServiceResponse> =>
     ipcRenderer.invoke('project:open-by-path', projectPath),
 
   /**

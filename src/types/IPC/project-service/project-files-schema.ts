@@ -8,11 +8,3 @@ export const projectFileMapSchema = {
 } as const
 export type ProjectFileMapKeys = keyof typeof projectFileMapSchema
 export type ProjectFileMapValues = (typeof projectFileMapSchema)[ProjectFileMapKeys]
-
-export interface IProjectHistoryEntry {
-  name: string
-  path: string
-  projectFilePath: string
-  createdAt: string
-  lastOpenedAt: string
-}

@@ -1,9 +1,9 @@
 import type { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
-import type { INewProjectServiceResponse } from '@root/main/services'
 import { useCompiler } from '@root/renderer/hooks'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { DeviceState, ModalTypes, ProjectState } from '@root/renderer/store/slices'
+import { IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { deviceConfigurationSchema, devicePinSchema } from '@root/types/PLC/devices'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { useEffect, useState } from 'react'
@@ -188,7 +188,7 @@ const AcceleratorHandler = () => {
    * -- Open project by path project
    */
   useEffect(() => {
-    window.bridge.openRecentAccelerator((_event, response: INewProjectServiceResponse) => {
+    window.bridge.openRecentAccelerator((_event, response: IProjectServiceResponse) => {
       openRecentProject(response)
     })
 

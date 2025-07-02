@@ -1,3 +1,8 @@
+import {
+  CreateProjectFileProps,
+  IProjectRecentHistoryEntry,
+  IProjectServiceResponse,
+} from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
@@ -5,46 +10,7 @@ import { join } from 'path'
 
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
-import { CreateJSONFile } from '../../utils'
-import { baseJsonStructure } from './data'
-import { IProjectHistoryEntry } from './types'
-import { isEmptyDir, readProjectFiles } from './utils'
-
-export type IProjectServiceResponse = {
-  success: boolean
-  error?: {
-    title: string
-    description: string
-    error: unknown
-  }
-  message?: string
-  data?: {
-    meta: {
-      path: string
-    }
-    content: PLCProject
-  }
-}
-
-export type INewProjectServiceResponse = {
-  success: boolean
-  error?: {
-    title: string
-    description: string
-    error: unknown
-  }
-  message?: string
-  data?: {
-    meta: {
-      path: string
-    }
-    content: {
-      project: PLCProject
-      deviceConfiguration: DeviceConfiguration
-      devicePinMapping: DevicePin[]
-    }
-  }
-}
+import { createProjectDefaultDirectories, createProjectFile, readProjectFiles } from './utils'
 
 class ProjectService {
   constructor(private serviceManager: InstanceType<typeof BrowserWindow>) {}
@@ -66,56 +32,46 @@ class ProjectService {
     }
   }
 
-  async createProject(): Promise<IProjectServiceResponse> {
-    const { canceled, filePaths } = await dialog.showOpenDialog(this.serviceManager, {
-      title: i18n.t('createProject:dialog.title'),
-      properties: ['openDirectory', 'createDirectory'],
-    })
-
-    if (canceled) {
+  async createProject(data: CreateProjectFileProps): Promise<IProjectServiceResponse> {
+    // Create the project directory if it doesn't exist
+    const projectCreateResponse = createProjectFile(data)
+    if (!projectCreateResponse.success || !projectCreateResponse.data) {
       return {
         success: false,
-        error: {
-          title: i18n.t('projectServiceResponses:createProject.errors.canceled.title'),
-          description: i18n.t('projectServiceResponses:createProject.errors.canceled.description'),
-          error: null,
-        },
+        error: projectCreateResponse.error,
       }
     }
+    await this.updateProjectHistory(data.path)
 
-    const [filePath] = filePaths
-
-    if (!(await isEmptyDir(filePath))) {
+    // Create default directories and files for the project
+    const projectDirectoriesResponse = createProjectDefaultDirectories(data.path)
+    if (!projectDirectoriesResponse.success || !projectDirectoriesResponse.data) {
       return {
         success: false,
-        error: {
-          title: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.title'),
-          description: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.description'),
-          error: null,
-        },
+        error: projectDirectoriesResponse.error,
       }
     }
-
-    CreateJSONFile(filePath, JSON.stringify(baseJsonStructure, null, 2), 'data')
-
-    const projectPath = join(filePath, 'data.json')
-    await this.updateProjectHistory(projectPath)
+    const { deviceConfiguration, devicePinMapping } = projectDirectoriesResponse.data.content
 
     return {
       success: true,
       data: {
         meta: {
-          path: projectPath,
+          path: data.path, // Use the directory path instead of projectPath
         },
-        content: baseJsonStructure,
+        content: {
+          project: projectCreateResponse.data.content.project,
+          deviceConfiguration: deviceConfiguration,
+          devicePinMapping: devicePinMapping,
+        },
       },
     }
   }
 
-  async readProjectHistory(historyProjectsFilePath: string): Promise<IProjectHistoryEntry[]> {
+  async readProjectHistory(historyProjectsFilePath: string): Promise<IProjectRecentHistoryEntry[]> {
     try {
       const historyContent = await promises.readFile(historyProjectsFilePath, 'utf-8')
-      const content = (JSON.parse(historyContent) as IProjectHistoryEntry[]) || []
+      const content = (JSON.parse(historyContent) as IProjectRecentHistoryEntry[]) || []
       return content.map((entry) => ({
         ...entry,
         path: entry.path.endsWith('/project.json') ? entry.path.slice(0, -'/project.json'.length) : entry.path,
@@ -131,7 +87,10 @@ class ProjectService {
     }
   }
 
-  private async writeProjectHistory(projectsFilePath: string, historyData: IProjectHistoryEntry[]): Promise<void> {
+  private async writeProjectHistory(
+    projectsFilePath: string,
+    historyData: IProjectRecentHistoryEntry[],
+  ): Promise<void> {
     await promises.writeFile(projectsFilePath, JSON.stringify(historyData, null, 2))
   }
 
@@ -174,7 +133,7 @@ class ProjectService {
     await this.writeProjectHistory(historyProjectsFilePath, updatedHistory)
   }
 
-  async openProjectByPath(projectPath: string): Promise<INewProjectServiceResponse> {
+  async openProjectByPath(projectPath: string): Promise<IProjectServiceResponse> {
     try {
       await promises.access(projectPath)
       const projectFiles = readProjectFiles(projectPath)
@@ -218,7 +177,7 @@ class ProjectService {
     }
   }
 
-  async openProject(): Promise<INewProjectServiceResponse> {
+  async openProject(): Promise<IProjectServiceResponse> {
     const { canceled, filePaths } = await dialog.showOpenDialog(this.serviceManager, {
       title: i18n.t('openProject:dialog.title'),
       properties: ['openDirectory'],

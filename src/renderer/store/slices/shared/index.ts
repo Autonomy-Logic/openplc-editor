@@ -1,9 +1,5 @@
-import { CreateProjectFileProps } from '@root/main/modules/ipc/renderer'
-import {
-  INewProjectServiceResponse,
-  // IProjectServiceResponse
-} from '@root/main/services'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
@@ -39,7 +35,7 @@ export type SharedSlice = {
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => void
     closeProject: () => void
-    handleOpenProjectRequest: (data: INewProjectServiceResponse['data']) => void
+    handleOpenProjectRequest: (data: IProjectServiceResponse['data']) => void
     openProject: () => Promise<{
       success: boolean
       error?: { title: string; description: string }
@@ -48,7 +44,7 @@ export type SharedSlice = {
       success: boolean
       error?: { title: string; description: string }
     }>
-    openRecentProject: (response: INewProjectServiceResponse) => {
+    openRecentProject: (response: IProjectServiceResponse) => {
       success: boolean
       error?: { title: string; description: string }
     }
@@ -369,9 +365,7 @@ export const createSharedSlice: StateCreator<
     },
 
     createProject: async (dataToCreateProjectFile) => {
-      const result = await window.bridge.createProjectFile({
-        ...dataToCreateProjectFile,
-      } as CreateProjectFileProps)
+      const result = await window.bridge.createProject(dataToCreateProjectFile)
 
       if (!result.data) {
         toast({
@@ -397,10 +391,10 @@ export const createSharedSlice: StateCreator<
           type: dataToCreateProjectFile.type,
           path: dataToCreateProjectFile.path + '/project.json',
         },
-        data: result.data.content.data,
+        data: result.data.content.project.data,
       })
 
-      result.data.content.data.pous.forEach((pou) => {
+      result.data.content.project.data.pous.forEach((pou) => {
         if (pou.data.language === 'fbd') {
           getState().fbdFlowActions.addFBDFlow({
             name: pou.data.name,

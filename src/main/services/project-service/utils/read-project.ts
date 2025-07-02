@@ -1,3 +1,4 @@
+import { projectFileMapSchema } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
@@ -5,8 +6,6 @@ import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { ZodTypeAny } from 'zod'
-
-import { projectFileMapSchema } from '../types'
 
 export type IProjectServiceReadFilesResponse = {
   success: boolean
