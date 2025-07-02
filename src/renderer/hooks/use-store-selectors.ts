@@ -80,7 +80,6 @@ const editorSelectors = {
 }
 
 // ===================== Console selectors. =====================
-
 const consoleSelectors = {
   useLogs: () => useOpenPLCStore((state) => state.logs),
   useAddLog: () => useOpenPLCStore((state) => state.consoleActions.addLog),
