@@ -5,7 +5,7 @@ import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
-import { readdirSync, readFileSync, writeFileSync } from 'fs'
+import { promises, readdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { ZodTypeAny } from 'zod'
 
@@ -26,7 +26,7 @@ function safeParseProjectFile<K extends keyof typeof projectDefaultFilesMapSchem
   return result.data
 }
 
-function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: string) {
+async function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: string) {
   let file: string | undefined
   // File does not exist, create with default value from schema
   if (!fileOrDirectoryExists(filePath)) {
@@ -45,7 +45,7 @@ function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: string
 
   // File exists, read and parse
   else {
-    file = readFileSync(filePath, 'utf-8')
+    file = await promises.readFile(filePath, 'utf-8')
 
     // If the file is empty, create it with default values
     if (!file) {
@@ -58,7 +58,7 @@ function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: string
 }
 
 /**
- * WORK IN PROGRESS (WIP):
+ * @todo WORK IN PROGRESS (WIP):
  * This function reads a directory recursively and parses files according to the provided schema.
  * It is not currently used in the codebase, but it can be useful for future enhancements
  * where we might want to read all files in a directory structure and validate them against schemas.

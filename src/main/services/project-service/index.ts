@@ -58,10 +58,12 @@ class ProjectService {
       const content = (JSON.parse(historyContent) as IProjectRecentHistoryEntry[]) || []
       return content.map((entry) => ({
         ...entry,
-        path: entry.path.endsWith('/project.json') ? entry.path.slice(0, -'/project.json'.length) : entry.path,
+        path: entry.path.normalize().endsWith('/project.json')
+          ? entry.path.normalize().slice(0, -'/project.json'.length)
+          : entry.path,
         projectFilePath: entry.projectFilePath
-          ? entry.projectFilePath.endsWith('/project.json')
-            ? entry.projectFilePath.slice(0, -'/project.json'.length)
+          ? entry.projectFilePath.normalize().endsWith('/project.json')
+            ? entry.projectFilePath.normalize().slice(0, -'/project.json'.length)
             : entry.projectFilePath
           : '',
       }))
