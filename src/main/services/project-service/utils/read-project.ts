@@ -5,7 +5,7 @@ import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
-import { promises, readdirSync, writeFileSync } from 'fs'
+import { readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { ZodTypeAny } from 'zod'
 
@@ -26,7 +26,7 @@ function safeParseProjectFile<K extends keyof typeof projectDefaultFilesMapSchem
   return result.data
 }
 
-async function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: string) {
+function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: string) {
   let file: string | undefined
   // File does not exist, create with default value from schema
   if (!fileOrDirectoryExists(filePath)) {
@@ -45,7 +45,7 @@ async function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: 
 
   // File exists, read and parse
   else {
-    file = await promises.readFile(filePath, 'utf-8')
+    file = readFileSync(filePath, 'utf-8')
 
     // If the file is empty, create it with default values
     if (!file) {

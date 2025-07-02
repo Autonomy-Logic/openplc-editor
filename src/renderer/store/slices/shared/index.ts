@@ -224,7 +224,9 @@ export const createSharedSlice: StateCreator<
     closeProject: () => {
       const editingState = getState().workspace.editingState
       if (editingState === 'unsaved') {
-        getState().modalActions.openModal('save-changes-project', 'close-project')
+        getState().modalActions.openModal('save-changes-project', {
+          validationContext: 'close-project',
+        })
         return
       }
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
