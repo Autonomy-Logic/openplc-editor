@@ -204,12 +204,18 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
       }
     }
 
-    const { nodes, edges } = addNewElement(rungLocal, {
+    const { nodes, edges, newNode } = addNewElement(rungLocal, {
       elementType: newNodeType,
       blockVariant: pouLibrary,
     })
     ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes })
     ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges })
+    if (newNode)
+      ladderFlowActions.setSelectedNodes({
+        editorName: editor.meta.name,
+        rungId: rungLocal.id,
+        nodes: [newNode],
+      })
   }
 
   /**
@@ -514,7 +520,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
               onNodeDragStart: (_event, node) => {
                 handleNodeStartDrag(node)
               },
-              onNodeDrag: (event, _node) => {
+              onNodeDrag: (event) => {
                 handleNodeDrag(event)
               },
               onNodeDragStop: (_event, node) => {
