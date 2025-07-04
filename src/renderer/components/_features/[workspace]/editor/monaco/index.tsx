@@ -12,9 +12,11 @@ import { toast } from '../../../[app]/toast/use-toast'
 import {
   keywordsCompletion,
   libraryCompletion,
+  snippetsSTCompletion,
   tableGlobalVariablesCompletion,
   tableVariablesCompletion,
 } from './completion'
+import { updateLocalVariablesInTokenizer } from './configs/languages/st/st'
 import { parsePouToStText } from './drag-and-drop/st'
 
 type monacoEditorProps = {
@@ -77,6 +79,16 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     }
   }, [searchQuery, sensitiveCase, regularExpression])
 
+  useEffect(() => {
+    if (language === 'st' && pou?.data.variables) {
+      const variableNames = pou.data.variables
+        .filter((variable) => variable.name && variable.name.trim() !== '')
+        .map((variable) => variable.name)
+
+      updateLocalVariablesInTokenizer(variableNames)
+    }
+  }, [pou?.data.variables, language])
+
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {
       const suggestions = tableVariablesCompletion({
@@ -126,7 +138,52 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   const keywordsSuggestions = useCallback(
     (range: monaco.IRange) => {
-      const suggestions = keywordsCompletion({
+      const allSuggestions = keywordsCompletion({
+        range,
+        language,
+      }).suggestions
+
+      let filteredSuggestions = allSuggestions
+      let filteredLabels = allSuggestions.map((suggestion) => suggestion.label)
+
+      if (language === 'st') {
+        const stSnippetLabels = [
+          'if',
+          'ifelse',
+          'ifelseif',
+          'for',
+          'while',
+          'repeat',
+          'case',
+          'program',
+          'function',
+          'function_block',
+          'var',
+          'var_input',
+          'var_output',
+          'array',
+          'struct',
+          'comment_block',
+        ]
+
+        filteredSuggestions = allSuggestions.filter(
+          (suggestion) => !stSnippetLabels.includes(suggestion.label.toLowerCase()),
+        )
+
+        filteredLabels = filteredSuggestions.map((suggestion) => suggestion.label)
+      }
+
+      return {
+        suggestions: filteredSuggestions,
+        labels: filteredLabels,
+      }
+    },
+    [language],
+  )
+
+  const snippetsSTSuggestions = useCallback(
+    (range: monaco.IRange) => {
+      const suggestions = snippetsSTCompletion({
         range,
         language,
       }).suggestions
@@ -167,6 +224,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
             identifierTokens
               .map((token) => {
                 if (
+                  snippetsSTSuggestions(range).labels.includes(token) ||
                   variablesSuggestions(range).labels.includes(token) ||
                   globalVariablesSuggestions(range).labels.includes(token) ||
                   librarySuggestions(range).labels.includes(token) ||
@@ -188,6 +246,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
         return {
           suggestions: [
+            ...snippetsSTSuggestions(range).suggestions,
             ...variablesSuggestions(range).suggestions,
             ...globalVariablesSuggestions(range).suggestions,
             ...librarySuggestions(range).suggestions,
@@ -198,7 +257,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       },
     })
     return () => disposable.dispose()
-  }, [pou?.data.variables, globalVariables, sliceLibraries, language])
+  }, [pou?.data.variables, globalVariables, sliceLibraries, language, snippetsSTSuggestions])
 
   function handleEditorDidMount(
     editorInstance: null | monaco.editor.IStandaloneCodeEditor,
