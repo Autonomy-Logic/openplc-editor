@@ -1,13 +1,9 @@
 import { deviceSelectors, workspaceSelectors } from '@root/renderer/hooks'
-import { ComponentPropsWithoutRef, useEffect } from 'react'
+import { useEffect } from 'react'
 
 import { DeviceConfigurationEditor } from './configuration'
 
-type DeviceEditorProps = ComponentPropsWithoutRef<'div'> & {
-  editorDerivation: 'Configuration'
-}
-
-const DeviceEditor = ({ editorDerivation }: DeviceEditorProps) => {
+const DeviceEditor = () => {
   const deviceUpdated = deviceSelectors.useDeviceUpdated()
   const resetDeviceUpdated = deviceSelectors.useResetDeviceUpdated()
   const editingState = workspaceSelectors.useEditingState()
@@ -23,7 +19,7 @@ const DeviceEditor = ({ editorDerivation }: DeviceEditorProps) => {
     }
   }, [editingState, deviceUpdated, setEditingState])
 
-  return <>{editorDerivation === 'Configuration' && <DeviceConfigurationEditor />}</>
+  return <DeviceConfigurationEditor />
 }
 
 export { DeviceEditor }
