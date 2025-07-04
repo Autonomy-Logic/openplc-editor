@@ -9,6 +9,9 @@ type CompileResponseObject = {
   message?: string
 }
 
+// TODO: Refactor this component to use the new compiler service and handle the build process correctly.
+// This component should handle the build process and call the compiler service to generate the program object.
+// The build process should be handled by the compiler service and the function call should be handled by the bridge.
 const DownloadButton = () => {
   const {
     project,
@@ -74,6 +77,11 @@ const DownloadButton = () => {
     } else {
       addLog({ id: uuidv4(), type: 'error', message: logMessage })
     }
+  }
+
+  // TODO: Implement this method!!!!
+  const _handleBuildProgram = () => {
+    // This function should handle the build process and call the compiler service to generate the program object
   }
 
   return (
