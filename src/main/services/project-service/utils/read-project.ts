@@ -6,7 +6,7 @@ import { PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 import { readdirSync, readFileSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { ZodTypeAny } from 'zod'
 
 /**
@@ -44,7 +44,7 @@ function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
 
   const entries = readdirSync(basePath, { withFileTypes: true })
   let isValidProject = true
-  let hasProjectFile = true
+  let hasProjectFile = false
   for (const entry of entries) {
     // If any entry is a file, it should be one of the expected project files
     if (entry.isFile()) {
@@ -110,7 +110,7 @@ function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: string
   let file: string | undefined
   // File does not exist, create with default value from schema
   if (!fileOrDirectoryExists(filePath)) {
-    const dir = filePath.substring(0, filePath.lastIndexOf('/'))
+    const dir = dirname(filePath)
 
     // Ensure the directory exists
     if (!fileOrDirectoryExists(dir)) {

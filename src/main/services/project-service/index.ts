@@ -6,7 +6,7 @@ import {
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
-import { join } from 'path'
+import { join, normalize } from 'path'
 
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
@@ -58,13 +58,13 @@ class ProjectService {
       const content = (JSON.parse(historyContent) as IProjectRecentHistoryEntry[]) || []
       return content.map((entry) => ({
         ...entry,
-        path: entry.path.normalize().endsWith('/project.json')
-          ? entry.path.normalize().slice(0, -'/project.json'.length)
-          : entry.path,
+        path: normalize(entry.path).endsWith('/project.json')
+          ? normalize(entry.path).slice(0, -'/project.json'.length)
+          : normalize(entry.path),
         projectFilePath: entry.projectFilePath
-          ? entry.projectFilePath.normalize().endsWith('/project.json')
-            ? entry.projectFilePath.normalize().slice(0, -'/project.json'.length)
-            : entry.projectFilePath
+          ? normalize(entry.projectFilePath).endsWith('/project.json')
+            ? normalize(entry.projectFilePath).slice(0, -'/project.json'.length)
+            : normalize(entry.projectFilePath)
           : '',
       }))
     } catch (error) {
@@ -277,8 +277,8 @@ class ProjectService {
       return {
         success: false,
         error: {
-          title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
-          description: i18n.t('projectServiceResponses:openProject.errors.readFile.description', {
+          title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
+          description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
             filePath: projectPath,
           }),
           error,

@@ -36,7 +36,7 @@ const createProjectFile = (dataToCreateProjectFile: CreateProjectFileProps): PLC
   return {
     meta: {
       name: dataToCreateProjectFile.name,
-      type: dataToCreateProjectFile.type as 'plc-project',
+      type: dataToCreateProjectFile.type,
     },
     data: {
       pous: [

@@ -86,7 +86,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     createNewPin: (): void => {
       setState(
         produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+          deviceUpdated.updated = true // Mark device as updated when creating a new pin
 
           const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
           // Find the next available address for default pin type
@@ -135,7 +135,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     removePin: (): void => {
       setState(
         produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+          deviceUpdated.updated = true // Mark device as updated when removing a pin
 
           // Found the reference pin based on the current selected pin table row
           const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
@@ -182,7 +182,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       }
       setState(
         produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+          deviceUpdated.updated = true // Mark device as updated when updating a pin
 
           const currentPin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
 
@@ -315,7 +315,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setDeviceBoard: (deviceBoard): void => {
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+          deviceUpdated.updated = true // Mark device as updated when setting device board
 
           deviceDefinitions.configuration.deviceBoard = deviceBoard
         }),
@@ -324,7 +324,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setCommunicationPort: (communicationPort): void => {
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+          deviceUpdated.updated = true // Mark device as updated when setting communication port
 
           deviceDefinitions.configuration.communicationPort = communicationPort
         }),
@@ -333,7 +333,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setCommunicationPreferences: (preferences) => {
       setState(
         produce(({ deviceDefinitions: { configuration }, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+          deviceUpdated.updated = true // Mark device as updated when setting communication preferences
 
           if (preferences.enableRTU !== undefined) {
             configuration.communicationConfiguration.communicationPreferences.enabledRTU = preferences.enableRTU
@@ -350,7 +350,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setRTUConfig: (rtuConfigOption): void => {
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+          deviceUpdated.updated = true // Mark device as updated when setting RTU configuration
 
           const { rtuConfig, value } = rtuConfigOption
           switch (rtuConfig) {
@@ -375,7 +375,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setTCPConfig: (tcpConfigOption): void => {
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+          deviceUpdated.updated = true // Mark device as updated when setting TCP configuration
 
           const { tcpConfig, value } = tcpConfigOption
           switch (tcpConfig) {
@@ -394,7 +394,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setWifiConfig: (wifiConfig): void => {
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+          deviceUpdated.updated = true // Mark device as updated when setting Wi-Fi configuration
 
           if (deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface === 'Wi-Fi') {
             if (wifiConfig.tcpWifiSSID)
@@ -409,7 +409,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     setStaticHostConfiguration: (staticHostConfiguration): void => {
       setState(
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
-          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+          deviceUpdated.updated = true // Mark device as updated when setting static host configuration
 
           if (staticHostConfiguration.ipAddress !== undefined)
             deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.ipAddress =
@@ -434,9 +434,21 @@ function mergeDeviceConfigWithDefaults(
   defaults: DeviceConfiguration,
 ): DeviceConfiguration {
   return {
-    ...defaults,
-    ...provided,
     deviceBoard: provided.deviceBoard || defaults.deviceBoard,
+    communicationPort: provided.communicationPort ?? defaults.communicationPort,
+    communicationConfiguration: {
+      modbusRTU: {
+        ...defaults.communicationConfiguration.modbusRTU,
+        ...(provided.communicationConfiguration?.modbusRTU || {}),
+      },
+      modbusTCP: provided.communicationConfiguration?.modbusTCP?.tcpInterface
+        ? provided.communicationConfiguration.modbusTCP
+        : defaults.communicationConfiguration.modbusTCP,
+      communicationPreferences: {
+        ...defaults.communicationConfiguration.communicationPreferences,
+        ...(provided.communicationConfiguration?.communicationPreferences || {}),
+      },
+    },
   }
 }
 

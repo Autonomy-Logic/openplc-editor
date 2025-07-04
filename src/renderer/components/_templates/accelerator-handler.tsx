@@ -180,6 +180,13 @@ const AcceleratorHandler = () => {
             validationContext: 'open-project',
           })
           break
+        case 'save-request':
+          toast({
+            title: 'Save in progress',
+            description: 'Please wait for the current save operation to complete.',
+            variant: 'warn',
+          })
+          break
         default:
           return
       }
@@ -204,6 +211,13 @@ const AcceleratorHandler = () => {
           openModal('save-changes-project', {
             validationContext: 'open-recent-project',
             recentResponse: response,
+          })
+          break
+        case 'save-request':
+          toast({
+            title: 'Save in progress',
+            description: 'Please wait for the current save operation to complete.',
+            variant: 'warn',
           })
           break
         default:
