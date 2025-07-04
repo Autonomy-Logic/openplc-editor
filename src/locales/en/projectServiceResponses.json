@@ -42,6 +42,11 @@
         "title": "Failed to read file!",
         "description": "Could not read the file."
       },
+      "readProject": {
+        "status": 500,
+        "title": "Failed to read project",
+        "description": "Could not read the project. Please check the project directory."
+      },
       "directoryNotFound": {
         "status": 404,
         "title": "Directory not found",

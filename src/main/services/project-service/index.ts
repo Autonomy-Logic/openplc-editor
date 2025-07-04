@@ -125,11 +125,14 @@ class ProjectService {
       const projectFiles = readProjectFiles(projectPath)
 
       if (!projectFiles.success || !projectFiles.data) {
+        console.log(`Error opening project at path: ${projectPath}`, projectFiles.error)
+        await this.removeProjectFromHistory(projectPath)
+
         return {
           success: false,
           error: {
-            title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
-            description: i18n.t('projectServiceResponses:openProject.errors.readFile.description', {
+            title: i18n.t('projectServiceResponses:openProject.errors.readProject.title'),
+            description: i18n.t('projectServiceResponses:openProject.errors.readProject.description', {
               filePath: projectPath,
             }),
             error: projectFiles.error,
@@ -138,6 +141,7 @@ class ProjectService {
       }
 
       await this.updateProjectHistory(projectPath)
+
       return {
         success: true,
         data: {
@@ -150,11 +154,12 @@ class ProjectService {
     } catch (error) {
       console.log(`Error opening project at path: ${projectPath}`, error)
       await this.removeProjectFromHistory(projectPath)
+
       return {
         success: false,
         error: {
-          title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
-          description: i18n.t('projectServiceResponses:openProject.errors.readFile.description', {
+          title: i18n.t('projectServiceResponses:openProject.errors.readProject.title'),
+          description: i18n.t('projectServiceResponses:openProject.errors.readProject.description', {
             filePath: projectPath,
           }),
           error: error,
@@ -187,9 +192,18 @@ class ProjectService {
       const projectFiles = readProjectFiles(directoryPath)
 
       if (!projectFiles.success || !projectFiles.data) {
+        console.log(`Error opening project at path: ${directoryPath}`, projectFiles.error)
+        await this.removeProjectFromHistory(directoryPath)
+
         return {
           success: false,
-          error: projectFiles.error,
+          error: {
+            title: i18n.t('projectServiceResponses:openProject.errors.readProject.title'),
+            description: i18n.t('projectServiceResponses:openProject.errors.readProject.description', {
+              filePath: directoryPath,
+            }),
+            error: projectFiles.error,
+          },
         }
       }
 
@@ -207,11 +221,12 @@ class ProjectService {
     } catch (error) {
       console.error(`Error accessing project directory: ${filePaths[0]}`, error)
       await this.removeProjectFromHistory(directoryPath)
+
       return {
         success: false,
         error: {
-          title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
-          description: i18n.t('projectServiceResponses:openProject.errors.readFile.description', {
+          title: i18n.t('projectServiceResponses:openProject.errors.readProject.title'),
+          description: i18n.t('projectServiceResponses:openProject.errors.readProject.description', {
             filePath: directoryPath,
           }),
           error: error,
