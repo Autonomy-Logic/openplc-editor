@@ -1,5 +1,5 @@
 import { createDirectory, fileOrDirectoryExists } from '@root/main/utils'
-import { projectDefaultFilesMapSchema } from '@root/types/IPC/project-service'
+import { projectDefaultDirectoriesValidation, projectDefaultFilesMapSchema } from '@root/types/IPC/project-service'
 import { IProjectServiceReadFilesResponse } from '@root/types/IPC/project-service/read-project'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCProject } from '@root/types/PLC/open-plc'
@@ -8,6 +8,86 @@ import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 import { readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { ZodTypeAny } from 'zod'
+
+/**
+ * Checks if the given directory is a valid project directory according to the expected structure.
+ *
+ * This function verifies that the directory exists, contains only allowed files and directories,
+ * and includes a required project file (`project.json`). It returns an object indicating whether
+ * the directory is valid, and provides error details if not.
+ *
+ * @param basePath - The absolute path to the directory to check.
+ * @returns An object with a `success` boolean and, if unsuccessful, an `error` object containing
+ *          a title, description, and the underlying error.
+ *
+ * @remarks
+ * The validation logic in the for loop is a work in progress (WIP). In the future, only
+ * `projectDefaultFilesMapSchema` will be used for validation.
+ */
+function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
+  success: boolean
+  error?: { title: string; description: string; error: Error }
+} {
+  // Check if the base path exists and is a directory
+  if (!fileOrDirectoryExists(basePath)) {
+    return {
+      success: false,
+      error: {
+        title: i18n.t('projectServiceResponses:openProject.errors.directoryNotFound.title'),
+        description: i18n.t('projectServiceResponses:openProject.errors.directoryNotFound.description', {
+          basePath,
+        }),
+        error: new Error('Directory does not exist'),
+      },
+    }
+  }
+
+  const entries = readdirSync(basePath, { withFileTypes: true })
+  let isValidProject = true
+  let hasProjectFile = true
+  for (const entry of entries) {
+    // If any entry is a file, it should be one of the expected project files
+    if (entry.isFile()) {
+      if (entry.name === 'project.json') {
+        hasProjectFile = true
+      }
+
+      if (!Object.keys(projectDefaultFilesMapSchema).includes(entry.name)) {
+        isValidProject = false
+      }
+    }
+
+    // If any entry is a directory, it should be one of the expected directories
+    if (entry.isDirectory()) {
+      if (!projectDefaultDirectoriesValidation.includes(entry.name)) {
+        return {
+          success: false,
+          error: {
+            title: i18n.t('projectServiceResponses:openProject.errors.invalidProjectDirectory.title'),
+            description: i18n.t('projectServiceResponses:openProject.errors.invalidProjectDirectory.description', {
+              basePath,
+            }),
+            error: new Error('Invalid project directory structure'),
+          },
+        }
+      }
+    }
+  }
+
+  return {
+    success: isValidProject || hasProjectFile,
+    error:
+      isValidProject || hasProjectFile
+        ? undefined
+        : {
+            title: i18n.t('projectServiceResponses:openProject.errors.invalidProject.title'),
+            description: i18n.t('projectServiceResponses:openProject.errors.invalidProject.description', {
+              basePath,
+            }),
+            error: new Error('Invalid project files structure'),
+          },
+  }
+}
 
 function safeParseProjectFile<K extends keyof typeof projectDefaultFilesMapSchema>(fileName: K, data: unknown) {
   const result = projectDefaultFilesMapSchema[fileName].safeParse(data)
@@ -88,6 +168,11 @@ function _readDirectoryRecursive(
 }
 
 export function readProjectFiles(basePath: string): IProjectServiceReadFilesResponse {
+  const isValidProjectDirectory = checkIfDirectoryIsAValidProjectDirectory(basePath)
+  if (!isValidProjectDirectory.success) {
+    return isValidProjectDirectory
+  }
+
   const projectFiles: Record<string, unknown> = {}
 
   /**

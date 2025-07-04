@@ -41,6 +41,21 @@
         "status": 500,
         "title": "Failed to read file!",
         "description": "Could not read the file."
+      },
+      "directoryNotFound": {
+        "status": 404,
+        "title": "Directory not found",
+        "description": "The selected directory does not exist."
+      },
+      "invalidProjectDirectory": {
+        "status": 500,
+        "title": "Invalid project directory",
+        "description": "The selected directory is not a valid OpenPLC project directory."
+      },
+      "invalidProject": {
+        "status": 500,
+        "title": "Invalid project",
+        "description": "The selected project is not a valid OpenPLC project."
       }
     }
   },

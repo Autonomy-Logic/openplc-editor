@@ -82,7 +82,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
-    // MOCK: We added a library to generate random names for new pins to be more explicit what object we're manipulating, this need to be removed further.
+
     createNewPin: (): void => {
       setState(
         produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
