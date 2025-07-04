@@ -77,7 +77,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
-    updateModelTasks: (tasks: { selectedRow: number; display: 'code' | 'table' }) =>
+    updateModelTasks: (tasks: { selectedRow?: number; display: 'code' | 'table' }) =>
       setState(
         produce((state: EditorState) => {
           const { editor } = state
@@ -86,10 +86,10 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
               editor.task = {
                 ...editor.task,
                 display: 'table',
-                selectedRow: tasks.selectedRow.toString(),
+                selectedRow: tasks.selectedRow !== undefined ? tasks.selectedRow.toString() : '-1',
               }
             } else {
-              editor.variable = {
+              editor.task = {
                 display: 'code',
               }
             }
@@ -97,7 +97,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
-    updateModelInstances: (instances: { selectedRow: number; display: 'code' | 'table' }) =>
+    updateModelInstances: (instances: { selectedRow?: number; display: 'code' | 'table' }) =>
       setState(
         produce((state: EditorState) => {
           const { editor } = state
@@ -106,10 +106,10 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
               editor.instance = {
                 ...editor.instance,
                 display: 'table',
-                selectedRow: instances.selectedRow.toString(),
+                selectedRow: instances.selectedRow !== undefined ? instances.selectedRow.toString() : '-1',
               }
             } else {
-              editor.variable = {
+              editor.instance = {
                 display: 'code',
               }
             }

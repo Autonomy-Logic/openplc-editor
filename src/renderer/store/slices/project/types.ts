@@ -158,6 +158,23 @@ const _projectActionsSchema = z.object({
     .function()
     .args(variableDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
     .returns(projectResponseSchema),
+  setPouVariables: z
+    .function()
+    .args(
+      z.object({
+        pouName: z.string(),
+        variables: z.array(PLCVariableSchema),
+      }),
+    )
+    .returns(projectResponseSchema),
+  setGlobalVariables: z
+    .function()
+    .args(
+      z.object({
+        variables: z.array(PLCVariableSchema),
+      }),
+    )
+    .returns(projectResponseSchema),
   updateVariable: z
     .function()
     .args(
@@ -215,6 +232,14 @@ const _projectActionsSchema = z.object({
     .function()
     .args(taskDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
     .returns(projectResponseSchema),
+  setTasks: z
+    .function()
+    .args(
+      z.object({
+        tasks: z.array(PLCTaskSchema),
+      }),
+    )
+    .returns(projectResponseSchema),
   updateTask: z
     .function()
     .args(taskDTOSchema.merge(z.object({ rowId: z.number() })))
@@ -234,6 +259,14 @@ const _projectActionsSchema = z.object({
   createInstance: z
     .function()
     .args(instanceDTOSchema.merge(z.object({ rowToInsert: z.number().optional() })))
+    .returns(projectResponseSchema),
+  setInstances: z
+    .function()
+    .args(
+      z.object({
+        instances: z.array(PLCInstanceSchema),
+      }),
+    )
     .returns(projectResponseSchema),
   updateInstance: z
     .function()

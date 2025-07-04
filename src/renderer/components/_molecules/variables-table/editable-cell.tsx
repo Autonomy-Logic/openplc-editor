@@ -1,16 +1,19 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { pinSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { LadderFlowState } from '@root/renderer/store/slices'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import type { CellContext, RowData } from '@tanstack/react-table'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { InputWithRef } from '../../_atoms'
 import { GenericComboboxCell } from '../../_atoms/generic-table-inputs'
+import { getLadderPouVariablesRungNodeAndEdges } from '../../_atoms/graphical-editor/ladder/utils'
 import { useToast } from '../../_features/[app]/toast/use-toast'
+import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../modal'
 
 declare module '@tanstack/react-table' {
   // This is a helper interface that adds the `updateData` property to the table meta.
@@ -34,19 +37,26 @@ const EditableNameCell = ({
 
   const {
     editor,
+    ladderFlows,
+    ladderFlowActions: { updateNode },
     searchQuery,
     projectActions: { getVariable },
+    project: {
+      data: { pous },
+    },
   } = useOpenPLCStore()
 
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
   const [isEditing, setIsEditing] = useState(false)
   const [variable, setVariable] = useState<PLCVariable | undefined>(undefined)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const confirmResolveRef = useRef<(v: boolean) => void>()
 
   const isCellEditable = () => {
     if (id !== 'location' && id !== 'initialValue') return true
 
-    if (variable?.type.definition === 'derived') return false
+    // if (variable?.type.definition === 'derived') return false
 
     if (variable?.class === 'external') {
       return false
@@ -57,13 +67,105 @@ const EditableNameCell = ({
 
   const isEditable = useCallback(isCellEditable, [id, variable])
 
+  const askRenameBlocks = () =>
+    new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve
+      setConfirmOpen(true)
+    })
+
+  // Find all nodes in the ladder flows that use this variable
+  const findNodesUsingVariable = (ladderFlows: LadderFlowState['ladderFlows'], varName: string) => {
+    const lower = varName.toLowerCase()
+    const matches: { rungId: string; nodeId: string }[] = []
+
+    ladderFlows.forEach((flow) =>
+      flow.rungs.forEach((rung) =>
+        rung.nodes.forEach((node) => {
+          const data = (node.data as { variable?: PLCVariable | { name?: string } }).variable
+          if (data?.name?.toLowerCase() === lower) {
+            matches.push({ rungId: rung.id, nodeId: node.id })
+          }
+        }),
+      ),
+    )
+
+    return matches
+  }
+
   // When the input is blurred, we'll call our table meta's updateData function
-  const onBlur = () => {
+  const onBlur = async () => {
     if (cellValue === initialValue) return setIsEditing(false)
-    const res = table.options.meta?.updateData(index, id, cellValue)
-    if (res?.ok) return setIsEditing(false)
-    setCellValue(initialValue)
-    toast({ title: res?.title, description: res?.message, variant: 'fail' })
+
+    const oldName = initialValue
+    const newName = cellValue
+
+    /* 1 ▸ which blocks use the variable? */
+    const nodesUsingVar = findNodesUsingVariable(ladderFlows, oldName)
+
+    let shouldPropagate = true
+    if (nodesUsingVar.length) {
+      shouldPropagate = await askRenameBlocks()
+    }
+
+    /* 2 ▸ IF NOT propagating, break the link before renaming */
+    if (nodesUsingVar.length && !shouldPropagate) {
+      nodesUsingVar.forEach(({ rungId, nodeId }) => {
+        const { rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId })
+        if (!rung || !node) return
+
+        const variableClone = {
+          ...(node.data as { variable: PLCVariable }).variable,
+          id: `broken-${nodeId}`,
+          name: oldName,
+        }
+
+        updateNode({
+          editorName: editor.meta.name,
+          rungId,
+          nodeId,
+          node: {
+            ...node,
+            data: {
+              ...node.data,
+              variable: variableClone,
+              wrongVariable: true,
+            },
+          },
+        })
+      })
+    }
+
+    /* 3 ▸ Now rename it in the table */
+    const res = table.options.meta?.updateData(index, id, newName)
+    if (!res?.ok) {
+      setCellValue(initialValue)
+      toast({ title: res?.title, description: res?.message, variant: 'fail' })
+      return
+    }
+
+    /* 4 ▸ If the user said YES, propagate the change to the blocks */
+    if (nodesUsingVar.length && shouldPropagate) {
+      nodesUsingVar.forEach(({ rungId, nodeId }) => {
+        const { rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId })
+        if (!rung || !node) return
+
+        updateNode({
+          editorName: editor.meta.name,
+          rungId,
+          nodeId,
+          node: {
+            ...node,
+            data: {
+              ...node.data,
+              variable: { ...(node.data as { variable: PLCVariable }).variable, name: newName },
+              wrongVariable: false,
+            },
+          },
+        })
+      })
+    }
+
+    setIsEditing(false)
   }
 
   const handleStartEditing = () => {
@@ -88,26 +190,76 @@ const EditableNameCell = ({
     )
   }, [editor.meta.name, index, table.options.data, scope, getVariable])
 
-  return isEditing ? (
-    <InputWithRef
-      value={cellValue}
-      onChange={(e) => setCellValue(e.target.value)}
-      onBlur={onBlur}
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
-    />
-  ) : (
-    <div
-      onClick={handleStartEditing}
-      className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
-        'pointer-events-none': !selected,
-        'cursor-not-allowed': !isEditable(),
-      })}
-    >
-      <p
-        className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
-        dangerouslySetInnerHTML={{ __html: formattedCellValue }}
-      />
-    </div>
+  return (
+    <>
+      {confirmOpen && (
+        <Modal open>
+          <ModalContent
+            className='flex h-48 w-[496px] select-none flex-col justify-between gap-2 rounded-lg p-8'
+            onClose={() => {
+              confirmResolveRef.current?.(false)
+              setConfirmOpen(false)
+            }}
+          >
+            <ModalHeader>
+              <ModalTitle className='text-sm font-medium text-neutral-950 dark:text-white'>
+                Rename references
+              </ModalTitle>
+            </ModalHeader>
+
+            <p className='text-xs text-neutral-600 dark:text-neutral-50'>
+              You renamed one or more variables. Do you want to propagate those new names to all elements that reference
+              the old names?
+            </p>
+
+            <ModalFooter className='mt-auto flex justify-end gap-2'>
+              <button
+                onClick={() => {
+                  confirmResolveRef.current?.(false)
+                  setConfirmOpen(false)
+                }}
+                className='h-8 w-full rounded bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+              >
+                No, keep references unchanged
+              </button>
+              <button
+                onClick={() => {
+                  confirmResolveRef.current?.(true)
+                  setConfirmOpen(false)
+                }}
+                className='h-8 w-full rounded bg-brand px-3 py-1 text-xs text-white'
+              >
+                Yes, rename references
+              </button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      )}
+
+      {isEditing ? (
+        <InputWithRef
+          value={cellValue}
+          onChange={(e) => setCellValue(e.target.value)}
+          onBlur={() => {
+            void onBlur()
+          }}
+          className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
+        />
+      ) : (
+        <div
+          onClick={handleStartEditing}
+          className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none', {
+            'pointer-events-none': !selected,
+            'cursor-not-allowed': !isEditable(),
+          })}
+        >
+          <p
+            className={cn('h-4 w-full max-w-[400px] overflow-hidden text-ellipsis break-all', {})}
+            dangerouslySetInnerHTML={{ __html: formattedCellValue }}
+          />
+        </div>
+      )}
+    </>
   )
 }
 

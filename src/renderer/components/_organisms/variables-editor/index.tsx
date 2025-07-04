@@ -3,29 +3,46 @@ import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { VariablesTable as VariablesTableType } from '@root/renderer/store/slices'
+import { LadderFlowActions, LadderFlowState, VariablesTable as VariablesTableType } from '@root/renderer/store/slices'
 import { baseTypes } from '@root/shared/data'
+import { PLCVariable as VariblePLC } from '@root/types/PLC'
 import { BaseType, PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
+import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
+import { generateIecVariablesToString } from '@root/utils/generate-iec-variables-to-string'
 import { ColumnFiltersState } from '@tanstack/react-table'
-import { useEffect, useState } from 'react'
+import { Node } from '@xyflow/react'
+import { useEffect, useRef, useState } from 'react'
 
 import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '../../_atoms'
 import TableActions from '../../_atoms/table-actions'
-import { VariablesTable } from '../../_molecules'
+import { toast } from '../../_features/[app]/toast/use-toast'
+import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle, VariablesTable } from '../../_molecules'
+import { VariablesCodeEditor } from '../variables-code-editor'
 
 const VariablesEditor = () => {
   const ROWS_NOT_SELECTED = -1
   const {
     editor,
+    ladderFlows,
+    ladderFlowActions: { updateNode },
+    workspace: {
+      systemConfigs: { shouldUseDarkMode },
+    },
     project: {
       data: { pous, dataTypes },
     },
     editorActions: { updateModelVariables },
-    projectActions: { createVariable, deleteVariable, rearrangeVariables, updatePouDocumentation, updatePouReturnType },
-  } = useOpenPLCStore()
 
-  const [pouDescription, setPouDescription] = useState<string>('')
+    projectActions: {
+      createVariable,
+      deleteVariable,
+      rearrangeVariables,
+      updatePouDocumentation,
+      updatePouReturnType,
+      setPouVariables,
+    },
+  } = useOpenPLCStore()
 
   /**
    * Table data and column filters states to keep track of the table data and column filters
@@ -34,6 +51,11 @@ const VariablesEditor = () => {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [returnType, setReturnType] = useState('BOOL')
   const [returnTypeOptions, setReturnTypeOptions] = useState<string[]>([])
+  const [editorCode, setEditorCode] = useState(() => generateIecVariablesToString(tableData as VariblePLC[]))
+  const [parseError, setParseError] = useState<string | null>(null)
+  const [pouDescription, setPouDescription] = useState<string>('')
+  const [confirmRenameBlocksOpen, setConfirmRenameBlocksOpen] = useState(false)
+  const confirmRenameBlocksResolveRef = useRef<(v: boolean) => void>()
 
   /**
    * Editor name state to keep track of the editor name
@@ -79,6 +101,10 @@ const VariablesEditor = () => {
     setReturnTypeOptions(combinedReturnTypeOptions)
   }, [dataTypes])
 
+  useEffect(() => {
+    setEditorCode(generateIecVariablesToString(tableData as VariblePLC[]))
+  }, [tableData])
+
   /**
    * If the editor name is not the same as the current editor name
    * set the editor name and the editor's variables to the states
@@ -104,7 +130,12 @@ const VariablesEditor = () => {
         })
   }, [editor])
 
-  const handleVisualizationTypeChange = (value: 'code' | 'table') => {
+  const handleVisualizationTypeChange = async (value: 'code' | 'table') => {
+    if (editorVariables.display === 'code' && value === 'table') {
+      const success = await commitCode()
+      if (!success) return
+    }
+
     updateModelVariables({
       display: value,
     })
@@ -225,10 +256,10 @@ const VariablesEditor = () => {
     updatePouReturnType(editor.meta.name, value)
   }
 
-  const forbiddenVariableToBeRemoved =
-    editorVariables.display === 'table' &&
-    tableData[parseInt(editorVariables.selectedRow)]?.type.definition === 'derived' &&
-    editor?.type !== 'plc-textual'
+  // const forbiddenVariableToBeRemoved =
+  //   editorVariables.display === 'table' &&
+  //   tableData[parseInt(editorVariables.selectedRow)]?.type.definition === 'derived' &&
+  //   editor?.type !== 'plc-textual'
 
   const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     event.preventDefault()
@@ -242,23 +273,350 @@ const VariablesEditor = () => {
     setPouDescription(event.target.value)
   }
 
+  const askRenameBlocks = () =>
+    new Promise<boolean>((resolve) => {
+      confirmRenameBlocksResolveRef.current = resolve
+      setConfirmRenameBlocksOpen(true)
+    })
+
+  const unlinkRenamedVariablesByName = (
+    renamedPairs: { oldName: string; type: string }[],
+    ladderFlows: LadderFlowState['ladderFlows'],
+    updateNode: LadderFlowActions['updateNode'],
+  ) => {
+    ladderFlows.forEach((flow) =>
+      flow.rungs.forEach((rung) =>
+        rung.nodes.forEach((node) => {
+          const data = (node.data as { variable?: PLCVariable }).variable
+          if (!data) return
+
+          const renamed = renamedPairs.find(
+            (p) => p.oldName.toLowerCase() === data.name.toLowerCase() && p.type === data.type.value.toLowerCase(),
+          )
+          if (!renamed) return
+
+          updateNode({
+            editorName: flow.name,
+            rungId: rung.id,
+            nodeId: node.id,
+            node: {
+              ...node,
+              data: {
+                ...node.data,
+                variable: { ...data, id: `broken-${node.id}` },
+                wrongVariable: true,
+              },
+            },
+          })
+        }),
+      ),
+    )
+  }
+
+  const relinkVariablesByName = (
+    renamedPairs: { oldName: string; newName: string; type: string }[],
+    newVariables: PLCVariable[],
+    ladderFlows: LadderFlowState['ladderFlows'],
+    updateNode: LadderFlowActions['updateNode'],
+    propagateRenamed: boolean,
+  ): void => {
+    ladderFlows.forEach((flow) =>
+      flow.rungs.forEach((rung) =>
+        rung.nodes.forEach((node) => {
+          const nodeVar = (node.data as { variable?: PLCVariable }).variable
+
+          if (!nodeVar?.name) {
+            return
+          }
+
+          const pair = renamedPairs.find((p) => p.oldName.toLowerCase() === nodeVar.name.toLowerCase())
+
+          if (pair && !propagateRenamed) {
+            return
+          }
+
+          const targetName = pair ? pair.newName : nodeVar.name
+
+          const target = newVariables.find((v) => v.name.toLowerCase() === targetName.toLowerCase())
+
+          if (!target || target === nodeVar) {
+            return
+          }
+
+          const expectedType = getBlockExpectedType(node)
+
+          if (!sameType(target.type.value, expectedType)) {
+            return
+          }
+
+          updateNode({
+            editorName: flow.name,
+            rungId: rung.id,
+            nodeId: node.id,
+            node: {
+              ...node,
+              data: { ...node.data, variable: target, wrongVariable: false },
+            },
+          })
+        }),
+      ),
+    )
+  }
+
+  const getBlockExpectedType = (node: Node): string => {
+    const variant = (node.data as { variant?: { name?: string } }).variant
+
+    if (variant && typeof variant.name === 'string') {
+      return variant.name.trim().toUpperCase()
+    }
+
+    return ''
+  }
+
+  const sameType = (firstType: string, secondType: string) =>
+    firstType.toString().trim().toLowerCase() === secondType.toString().trim().toLowerCase()
+
+  const syncNodesWithVariables = (
+    newVars: PLCVariable[],
+    ladderFlows: LadderFlowState['ladderFlows'],
+    updateNode: LadderFlowActions['updateNode'],
+  ) => {
+    ladderFlows.forEach((flow) =>
+      flow.rungs.forEach((rung) =>
+        rung.nodes.forEach((node) => {
+          const nodeVar = (node.data as { variable?: PLCVariable }).variable
+
+          if (!nodeVar) return
+
+          const target = newVars.find((v) => v.name.toLowerCase() === nodeVar.name.toLowerCase())
+
+          if (!target) return
+
+          const expectedType = getBlockExpectedType(node)
+
+          const isTheSameType = sameType(target.type.value, expectedType)
+
+          if (!isTheSameType) {
+            updateNode({
+              editorName: flow.name,
+              rungId: rung.id,
+              nodeId: node.id,
+              node: {
+                ...node,
+                data: {
+                  ...node.data,
+                  variable: { ...target, id: `broken-${node.id}` },
+                  wrongVariable: true,
+                },
+              },
+            })
+
+            return
+          }
+
+          if ((node.data as { wrongVariable?: PLCVariable }).wrongVariable) {
+            updateNode({
+              editorName: flow.name,
+              rungId: rung.id,
+              nodeId: node.id,
+              node: {
+                ...node,
+                data: {
+                  ...node.data,
+                  variable: target,
+                  wrongVariable: false,
+                },
+              },
+            })
+          }
+        }),
+      ),
+    )
+  }
+
+  const commitCode = async (): Promise<boolean> => {
+    try {
+      const newVariables = parseIecStringToVariables(editorCode)
+
+      const renamedPairs = tableData.flatMap((oldVar) => {
+        const candidate = newVariables.find(
+          (nv) =>
+            nv.name !== oldVar.name &&
+            nv.type.value.toLowerCase() === oldVar.type.value.toLowerCase() &&
+            !tableData.some((tv) => tv.name.toLowerCase() === nv.name.toLowerCase()),
+        )
+        return candidate
+          ? [
+              {
+                oldName: oldVar.name,
+                newName: candidate.name,
+                type: oldVar.type.value.toLowerCase(),
+              },
+            ]
+          : []
+      })
+
+      let shouldPropagate = true
+
+      if (renamedPairs.length) {
+        const blockUsesOldName = ladderFlows.some((flow) =>
+          flow.rungs.some((rung) =>
+            rung.nodes.some((node) => {
+              const varName = (node.data as { variable?: PLCVariable }).variable?.name || ''
+              return renamedPairs.some((p) => p.oldName.toLowerCase() === varName.toLowerCase())
+            }),
+          ),
+        )
+        if (blockUsesOldName) shouldPropagate = await askRenameBlocks()
+      }
+
+      const response = setPouVariables({
+        pouName: pou?.data?.name ?? '',
+        variables: newVariables as PLCVariable[],
+      })
+      if (!response.ok) throw new Error(response.title + (response.message ? `: ${response.message}` : ''))
+
+      syncNodesWithVariables(newVariables as PLCVariable[], ladderFlows, updateNode)
+
+      if (shouldPropagate) {
+        relinkVariablesByName(renamedPairs, newVariables as PLCVariable[], ladderFlows, updateNode, true)
+      } else {
+        relinkVariablesByName(renamedPairs, newVariables as PLCVariable[], ladderFlows, updateNode, false)
+        unlinkRenamedVariablesByName(renamedPairs, ladderFlows, updateNode)
+      }
+
+      toast({ title: 'Variables updated', description: 'Changes applied successfully.' })
+      setParseError(null)
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unexpected syntax error.'
+      setParseError(message)
+      toast({ title: 'Syntax error', description: message, variant: 'fail' })
+      return false
+    }
+  }
+
   return (
-    <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
-      <div aria-label='Variables editor actions' className='relative flex h-8 w-full gap-4'>
-        {editorVariables.display === 'table' && (
-          <div aria-label='Variables editor table actions container' className='flex h-full w-full select-none gap-4'>
-            {editor.type === 'plc-textual' && editor.meta.pouType === 'function' && (
-              <div className='flex h-full max-w-lg flex-1 items-center gap-2'>
+    <>
+      {confirmRenameBlocksOpen && (
+        <Modal open>
+          <ModalContent
+            className='flex h-48 w-[496px] select-none flex-col justify-between gap-2 rounded-lg p-8'
+            onClose={() => {
+              confirmRenameBlocksResolveRef.current?.(false)
+              setConfirmRenameBlocksOpen(false)
+            }}
+          >
+            <ModalHeader>
+              <ModalTitle className='text-sm font-medium text-neutral-950 dark:text-white'>
+                Rename references
+              </ModalTitle>
+            </ModalHeader>
+
+            <p className='text-xs text-neutral-600 dark:text-neutral-50'>
+              You renamed one or more variables. Do you want to propagate those new names to all elements that reference
+              the old names?
+            </p>
+
+            <ModalFooter className='mt-auto flex justify-end gap-2'>
+              <button
+                onClick={() => {
+                  confirmRenameBlocksResolveRef.current?.(false)
+                  setConfirmRenameBlocksOpen(false)
+                }}
+                className='h-8 w-full rounded bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
+              >
+                No, keep references unchanged
+              </button>
+              <button
+                onClick={() => {
+                  confirmRenameBlocksResolveRef.current?.(true)
+                  setConfirmRenameBlocksOpen(false)
+                }}
+                className='h-8 w-full rounded bg-brand px-3 py-1 text-xs text-white'
+              >
+                Yes, rename references
+              </button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      )}
+
+      <div aria-label='Variables editor container' className='flex h-full w-full flex-1 flex-col gap-4 overflow-auto'>
+        <div aria-label='Variables editor actions' className='relative flex h-8 w-full gap-4'>
+          {editorVariables.display === 'table' && (
+            <div aria-label='Variables editor table actions container' className='flex h-full w-full select-none gap-4'>
+              {editor.type === 'plc-textual' && editor.meta.pouType === 'function' && (
+                <div className='flex h-full max-w-lg flex-1 items-center gap-2'>
+                  <label
+                    htmlFor='return type'
+                    className='w-fit text-nowrap text-xs font-medium text-neutral-1000 dark:text-neutral-300'
+                  >
+                    Return type :
+                  </label>
+                  <Select value={returnType} onValueChange={handleReturnTypeChange}>
+                    <SelectTrigger
+                      id='class-filter'
+                      placeholder={returnType}
+                      withIndicator
+                      className='group flex h-full w-full items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
+                    />
+                    <SelectContent
+                      position='popper'
+                      sideOffset={3}
+                      align='center'
+                      className='box h-fit min-w-44 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                    >
+                      {returnTypeOptions.map((filter) => (
+                        <SelectItem
+                          key={filter}
+                          value={filter}
+                          className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                        >
+                          <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
+                            {filter}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div
+                id='Pou documentation'
+                aria-label='Variables editor table description container'
+                className='flex h-full max-w-lg flex-1 items-center  gap-2'
+              >
                 <label
-                  htmlFor='return type'
+                  htmlFor='description'
                   className='w-fit text-nowrap text-xs font-medium text-neutral-1000 dark:text-neutral-300'
                 >
-                  Return type :
+                  Description :
                 </label>
-                <Select value={returnType} onValueChange={handleReturnTypeChange}>
+                <InputWithRef
+                  id='description'
+                  onBlur={handleDescriptionChange}
+                  value={pouDescription}
+                  onChange={handleDescriptionValueChange}
+                  className='h-full w-full rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
+                />
+              </div>
+
+              <div
+                aria-label='Variables editor table class filter container'
+                className='flex h-full max-w-lg flex-1 items-center  gap-2'
+              >
+                <label
+                  htmlFor='class-filter'
+                  className='w-fit text-nowrap text-xs font-medium text-neutral-1000 dark:text-neutral-300'
+                >
+                  Class Filter :
+                </label>
+                <Select value={editorVariables.classFilter} onValueChange={handleFilterChange}>
                   <SelectTrigger
                     id='class-filter'
-                    placeholder={returnType}
+                    placeholder={editorVariables.classFilter}
                     withIndicator
                     className='group flex h-full w-full items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
                   />
@@ -266,9 +624,9 @@ const VariablesEditor = () => {
                     position='popper'
                     sideOffset={3}
                     align='center'
-                    className='box h-fit overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                    className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
                   >
-                    {returnTypeOptions.map((filter) => (
+                    {FilterOptions.map((filter) => (
                       <SelectItem
                         key={filter}
                         value={filter}
@@ -282,69 +640,88 @@ const VariablesEditor = () => {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+          )}
+
+          <div className='hidden justify-end xl:flex'>
+            {editorVariables.display === 'table' && (
+              <div
+                aria-label='Variables editor table actions container'
+                className='mr-2 flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
+              >
+                <TableActions
+                  actions={[
+                    {
+                      ariaLabel: 'Add table row button',
+                      onClick: handleCreateVariable,
+                      icon: <PlusIcon className='!stroke-brand' />,
+                      id: 'add-variable-button',
+                    },
+                    {
+                      ariaLabel: 'Remove table row button',
+                      onClick: handleRemoveVariable,
+                      disabled: parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED,
+                      icon: <MinusIcon />,
+                      id: 'remove-variable-button',
+                    },
+                    {
+                      ariaLabel: 'Move table row up button',
+                      onClick: () => handleRearrangeVariables(-1),
+                      disabled:
+                        parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
+                        parseInt(editorVariables.selectedRow) === 0,
+                      icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
+                      id: 'move-variable-up-button',
+                    },
+                    {
+                      ariaLabel: 'Move table row down button',
+                      onClick: () => handleRearrangeVariables(1),
+                      disabled:
+                        parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
+                        parseInt(editorVariables.selectedRow) === tableData.length - 1,
+                      icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
+                      id: 'move-variable-down-button',
+                    },
+                  ]}
+                />
+              </div>
             )}
 
             <div
-              id='Pou documentation'
-              aria-label='Variables editor table description container'
-              className='flex h-full max-w-lg flex-1 items-center  gap-2'
+              aria-label='Variables visualization switch container'
+              className={cn('flex h-fit w-fit items-center justify-center rounded-md', {
+                'absolute right-0': editorVariables.display === 'code',
+              })}
             >
-              <label
-                htmlFor='description'
-                className='w-fit text-nowrap text-xs font-medium text-neutral-1000 dark:text-neutral-300'
-              >
-                Description :
-              </label>
-              <InputWithRef
-                id='description'
-                onBlur={handleDescriptionChange}
-                value={pouDescription}
-                onChange={handleDescriptionValueChange}
-                className='h-full w-full rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
+              <TableIcon
+                aria-label='Variables table visualization'
+                onClick={() => {
+                  void handleVisualizationTypeChange('table')
+                }}
+                size='md'
+                currentVisible={editorVariables.display === 'table'}
+                className={cn(
+                  editorVariables.display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
+                  'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
+                )}
+              />
+              <CodeIcon
+                aria-label='Variables code visualization'
+                onClick={() => {
+                  void handleVisualizationTypeChange('code')
+                }}
+                size='md'
+                currentVisible={editorVariables.display === 'code'}
+                className={cn(
+                  editorVariables.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
+                  'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
+                )}
               />
             </div>
-
-            <div
-              aria-label='Variables editor table class filter container'
-              className='flex h-full max-w-lg flex-1 items-center  gap-2'
-            >
-              <label
-                htmlFor='class-filter'
-                className='w-fit text-nowrap text-xs font-medium text-neutral-1000 dark:text-neutral-300'
-              >
-                Class Filter :
-              </label>
-              <Select value={editorVariables.classFilter} onValueChange={handleFilterChange}>
-                <SelectTrigger
-                  id='class-filter'
-                  placeholder={editorVariables.classFilter}
-                  withIndicator
-                  className='group flex h-full w-full items-center justify-between rounded-lg border border-neutral-500 px-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:border-neutral-850 dark:text-neutral-300'
-                />
-                <SelectContent
-                  position='popper'
-                  sideOffset={3}
-                  align='center'
-                  className='box h-fit w-40 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
-                >
-                  {FilterOptions.map((filter) => (
-                    <SelectItem
-                      key={filter}
-                      value={filter}
-                      className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                    >
-                      <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-500'>
-                        {filter}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
-        )}
+        </div>
 
-        <div className='hidden justify-end xl:flex'>
+        <div className='flex w-full justify-end gap-4 xl:hidden'>
           {editorVariables.display === 'table' && (
             <div
               aria-label='Variables editor table actions container'
@@ -361,8 +738,7 @@ const VariablesEditor = () => {
                   {
                     ariaLabel: 'Remove table row button',
                     onClick: handleRemoveVariable,
-                    disabled:
-                      parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED || forbiddenVariableToBeRemoved,
+                    disabled: parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED,
                     icon: <MinusIcon />,
                     id: 'remove-variable-button',
                   },
@@ -397,7 +773,9 @@ const VariablesEditor = () => {
           >
             <TableIcon
               aria-label='Variables table visualization'
-              onClick={() => handleVisualizationTypeChange('table')}
+              onClick={() => {
+                void handleVisualizationTypeChange('table')
+              }}
               size='md'
               currentVisible={editorVariables.display === 'table'}
               className={cn(
@@ -408,109 +786,49 @@ const VariablesEditor = () => {
             {/** TODO: Need to be implemented */}
             <CodeIcon
               aria-label='Variables code visualization'
-              onClick={() => handleVisualizationTypeChange('code')}
+              onClick={() => {
+                void handleVisualizationTypeChange('code')
+              }}
               size='md'
               currentVisible={editorVariables.display === 'code'}
               className={cn(
                 editorVariables.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-                'disabled pointer-events-none rounded-r-md opacity-30 transition-colors ease-in-out hover:cursor-not-allowed',
+                'disabled pointer-events-none rounded-r-md bg-red-50 opacity-30 transition-colors ease-in-out hover:cursor-not-allowed',
               )}
             />
           </div>
         </div>
-      </div>
 
-      <div className='flex w-full justify-end gap-4 xl:hidden'>
         {editorVariables.display === 'table' && (
           <div
-            aria-label='Variables editor table actions container'
-            className='mr-2 flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
+            aria-label='Variables editor table container'
+            className='h-full overflow-y-auto'
+            style={{ scrollbarGutter: 'stable' }}
           >
-            <TableActions
-              actions={[
-                {
-                  ariaLabel: 'Add table row button',
-                  onClick: handleCreateVariable,
-                  icon: <PlusIcon className='!stroke-brand' />,
-                  id: 'add-variable-button',
-                },
-                {
-                  ariaLabel: 'Remove table row button',
-                  onClick: handleRemoveVariable,
-                  disabled: parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED || forbiddenVariableToBeRemoved,
-                  icon: <MinusIcon />,
-                  id: 'remove-variable-button',
-                },
-                {
-                  ariaLabel: 'Move table row up button',
-                  onClick: () => handleRearrangeVariables(-1),
-                  disabled:
-                    parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                    parseInt(editorVariables.selectedRow) === 0,
-                  icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
-                  id: 'move-variable-up-button',
-                },
-                {
-                  ariaLabel: 'Move table row down button',
-                  onClick: () => handleRearrangeVariables(1),
-                  disabled:
-                    parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
-                    parseInt(editorVariables.selectedRow) === tableData.length - 1,
-                  icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
-                  id: 'move-variable-down-button',
-                },
-              ]}
+            <VariablesTable
+              tableData={tableData}
+              filterValue={editorVariables.classFilter.toLowerCase()}
+              columnFilters={columnFilters}
+              setColumnFilters={setColumnFilters}
+              selectedRow={parseInt(editorVariables.selectedRow)}
+              handleRowClick={handleRowClick}
             />
           </div>
         )}
 
-        <div
-          aria-label='Variables visualization switch container'
-          className={cn('flex h-fit w-fit items-center justify-center rounded-md', {
-            'absolute right-0': editorVariables.display === 'code',
-          })}
-        >
-          <TableIcon
-            aria-label='Variables table visualization'
-            onClick={() => handleVisualizationTypeChange('table')}
-            size='md'
-            currentVisible={editorVariables.display === 'table'}
-            className={cn(
-              editorVariables.display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-              'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
-            )}
-          />
-          {/** TODO: Need to be implemented */}
-          <CodeIcon
-            aria-label='Variables code visualization'
-            onClick={() => handleVisualizationTypeChange('code')}
-            size='md'
-            currentVisible={editorVariables.display === 'code'}
-            className={cn(
-              editorVariables.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-              'disabled pointer-events-none rounded-r-md opacity-30 transition-colors ease-in-out hover:cursor-not-allowed',
-            )}
-          />
-        </div>
-      </div>
+        {editorVariables.display === 'code' && (
+          <div
+            aria-label='Variables editor code container'
+            className='mb-1 h-80 overflow-y-auto'
+            style={{ scrollbarGutter: 'stable' }}
+          >
+            <VariablesCodeEditor code={editorCode} onCodeChange={setEditorCode} shouldUseDarkMode={shouldUseDarkMode} />
 
-      {editorVariables.display === 'table' && (
-        <div
-          aria-label='Variables editor table container'
-          className='h-full overflow-y-auto'
-          style={{ scrollbarGutter: 'stable' }}
-        >
-          <VariablesTable
-            tableData={tableData}
-            filterValue={editorVariables.classFilter.toLowerCase()}
-            columnFilters={columnFilters}
-            setColumnFilters={setColumnFilters}
-            selectedRow={parseInt(editorVariables.selectedRow)}
-            handleRowClick={handleRowClick}
-          />
-        </div>
-      )}
-    </div>
+            {parseError && <p className='mt-2 text-xs text-red-500'>Erro: {parseError}</p>}
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 

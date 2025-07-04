@@ -213,11 +213,11 @@ const _editorActionsSchema = z.object({
   ),
   updateModelTasks: z
     .function()
-    .args(z.object({ selectedRow: z.number(), display: z.enum(['code', 'table']) }))
+    .args(z.object({ selectedRow: z.number().optional(), display: z.enum(['code', 'table']) }))
     .returns(z.void()),
   updateModelInstances: z
     .function()
-    .args(z.object({ selectedRow: z.number(), display: z.enum(['code', 'table']) }))
+    .args(z.object({ selectedRow: z.number().optional(), display: z.enum(['code', 'table']) }))
     .returns(z.void()),
   updateModelLadder: z
     .function()
