@@ -26,13 +26,12 @@ const ProjectModal = ({ isOpen }: { isOpen: boolean }) => {
   }
 
   const handleClose = () => {
-    onOpenChange('create-project', false)
     closeModal()
   }
 
   const handleFinishForm = () => {
     try {
-      onOpenChange('create-project', false)
+      handleClose()
     } catch (error) {
       console.error('Navigation failed:', error)
     }
@@ -44,6 +43,7 @@ const ProjectModal = ({ isOpen }: { isOpen: boolean }) => {
     setEditingState('unsaved')
     clearTabs()
   }, [])
+
   const renderStep = () => {
     switch (currentStep) {
       case 1:

@@ -59,6 +59,9 @@ const deviceStateSchema = z.object({
     configuration: deviceConfigurationSchema,
     pinMapping: devicePinMappingSchema,
   }),
+  deviceUpdated: z.object({
+    updated: z.boolean(),
+  }),
 })
 
 type DeviceState = z.infer<typeof deviceStateSchema>
@@ -95,6 +98,7 @@ const deviceActionSchema = z.object({
     )
     .returns(z.void()),
   clearDeviceDefinitions: z.function().args().returns(z.void()),
+  resetDeviceUpdated: z.function().args().returns(z.void()),
   selectPinTableRow: z.function().args(z.number()).returns(z.void()),
   createNewPin: z.function().args().returns(z.void()),
   removePin: z.function().args().returns(z.void()),

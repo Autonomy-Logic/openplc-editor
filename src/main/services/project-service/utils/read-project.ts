@@ -1,30 +1,96 @@
+import { createDirectory, fileOrDirectoryExists } from '@root/main/utils'
+import { projectDefaultDirectoriesValidation, projectDefaultFilesMapSchema } from '@root/types/IPC/project-service'
+import { IProjectServiceReadFilesResponse } from '@root/types/IPC/project-service/read-project'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs'
+import { readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { ZodTypeAny } from 'zod'
 
-import { projectFileMapSchema } from '../types'
-
-export type IProjectServiceReadFilesResponse = {
+/**
+ * Checks if the given directory is a valid project directory according to the expected structure.
+ *
+ * This function verifies that the directory exists, contains only allowed files and directories,
+ * and includes a required project file (`project.json`). It returns an object indicating whether
+ * the directory is valid, and provides error details if not.
+ *
+ * @param basePath - The absolute path to the directory to check.
+ * @returns An object with a `success` boolean and, if unsuccessful, an `error` object containing
+ *          a title, description, and the underlying error.
+ *
+ * @remarks
+ * The validation logic in the for loop is a work in progress (WIP). In the future, only
+ * `projectDefaultFilesMapSchema` will be used for validation.
+ */
+function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
   success: boolean
-  error?: {
-    title: string
-    description: string
-    error: unknown
+  error?: { title: string; description: string; error: Error }
+} {
+  // Check if the base path exists and is a directory
+  if (!fileOrDirectoryExists(basePath)) {
+    return {
+      success: false,
+      error: {
+        title: i18n.t('projectServiceResponses:openProject.errors.directoryNotFound.title'),
+        description: i18n.t('projectServiceResponses:openProject.errors.directoryNotFound.description', {
+          basePath,
+        }),
+        error: new Error('Directory does not exist'),
+      },
+    }
   }
-  message?: string
-  data?: {
-    project: PLCProject
-    deviceConfiguration: DeviceConfiguration
-    devicePinMapping: DevicePin[]
+
+  const entries = readdirSync(basePath, { withFileTypes: true })
+  let isValidProject = true
+  let hasProjectFile = true
+  for (const entry of entries) {
+    // If any entry is a file, it should be one of the expected project files
+    if (entry.isFile()) {
+      if (entry.name === 'project.json') {
+        hasProjectFile = true
+      }
+
+      if (!Object.keys(projectDefaultFilesMapSchema).includes(entry.name)) {
+        isValidProject = false
+      }
+    }
+
+    // If any entry is a directory, it should be one of the expected directories
+    if (entry.isDirectory()) {
+      if (!projectDefaultDirectoriesValidation.includes(entry.name)) {
+        return {
+          success: false,
+          error: {
+            title: i18n.t('projectServiceResponses:openProject.errors.invalidProjectDirectory.title'),
+            description: i18n.t('projectServiceResponses:openProject.errors.invalidProjectDirectory.description', {
+              basePath,
+            }),
+            error: new Error('Invalid project directory structure'),
+          },
+        }
+      }
+    }
+  }
+
+  return {
+    success: isValidProject || hasProjectFile,
+    error:
+      isValidProject || hasProjectFile
+        ? undefined
+        : {
+            title: i18n.t('projectServiceResponses:openProject.errors.invalidProject.title'),
+            description: i18n.t('projectServiceResponses:openProject.errors.invalidProject.description', {
+              basePath,
+            }),
+            error: new Error('Invalid project files structure'),
+          },
   }
 }
 
-function safeParseProjectFile<K extends keyof typeof projectFileMapSchema>(fileName: K, data: unknown) {
-  const result = projectFileMapSchema[fileName].safeParse(data)
+function safeParseProjectFile<K extends keyof typeof projectDefaultFilesMapSchema>(fileName: K, data: unknown) {
+  const result = projectDefaultFilesMapSchema[fileName].safeParse(data)
 
   /**
    * TODO: Handle the case where the file does not match the expected schema
@@ -42,27 +108,43 @@ function safeParseProjectFile<K extends keyof typeof projectFileMapSchema>(fileN
 
 function readAndParseFile(filePath: string, schema: ZodTypeAny, fileName: string) {
   let file: string | undefined
-  if (!existsSync(filePath)) {
-    // File does not exist, create with default value from schema
+  // File does not exist, create with default value from schema
+  if (!fileOrDirectoryExists(filePath)) {
     const dir = filePath.substring(0, filePath.lastIndexOf('/'))
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
+
+    // Ensure the directory exists
+    if (!fileOrDirectoryExists(dir)) {
+      createDirectory(dir)
     }
+
+    // Create the file with default values from the schema
     const defaultValue = getDefaultSchemaValues(schema)
     writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf-8')
     file = JSON.stringify(defaultValue)
-  } else {
+  }
+
+  // File exists, read and parse
+  else {
     file = readFileSync(filePath, 'utf-8')
+
+    // If the file is empty, create it with default values
     if (!file) {
       const defaultValue = getDefaultSchemaValues(schema)
       writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf-8')
       file = JSON.stringify(defaultValue)
     }
   }
-  return safeParseProjectFile(fileName as keyof typeof projectFileMapSchema, JSON.parse(file))
+  return safeParseProjectFile(fileName as keyof typeof projectDefaultFilesMapSchema, JSON.parse(file))
 }
 
-function readDirectoryRecursive(
+/**
+ * @todo WORK IN PROGRESS (WIP):
+ * This function reads a directory recursively and parses files according to the provided schema.
+ * It is not currently used in the codebase, but it can be useful for future enhancements
+ * where we might want to read all files in a directory structure and validate them against schemas.
+ * For example: this might be used to read all the pous in a project directory
+ */
+function _readDirectoryRecursive(
   baseDir: string,
   schema: ZodTypeAny,
   baseFileName: string,
@@ -72,26 +154,37 @@ function readDirectoryRecursive(
   for (const entry of entries) {
     const entryPath = join(baseDir, entry.name)
     const entryKey = join(baseFileName, entry.name)
+
+    // If the entry is a file, read and parse it
     if (entry.isFile()) {
       projectFiles[entryKey] = readAndParseFile(entryPath, schema, entryKey)
-    } else if (entry.isDirectory()) {
-      readDirectoryRecursive(entryPath, schema, entryKey, projectFiles)
+    }
+
+    // If the entry is a directory, recursively read its contents
+    else if (entry.isDirectory()) {
+      _readDirectoryRecursive(entryPath, schema, entryKey, projectFiles)
     }
   }
 }
 
 export function readProjectFiles(basePath: string): IProjectServiceReadFilesResponse {
+  const isValidProjectDirectory = checkIfDirectoryIsAValidProjectDirectory(basePath)
+  if (!isValidProjectDirectory.success) {
+    return isValidProjectDirectory
+  }
+
   const projectFiles: Record<string, unknown> = {}
-  for (const [fileName, schema] of Object.entries(projectFileMapSchema)) {
+
+  /**
+   * Read the default project files from the project directory.
+   * This includes the project.json, devices/configuration.json, and devices/pin-mapping.json files.
+   * If any of these files do not exist, they will be created with default values from the schema.
+   * If any of the files cannot be read or parsed, an error will be returned.
+   */
+  for (const [fileName, schema] of Object.entries(projectDefaultFilesMapSchema)) {
     const filePath = join(basePath, fileName)
     try {
-      // TODO: this needs to be tested, it is still a work in progress
-      if (existsSync(filePath) && statSync(filePath).isDirectory()) {
-        // Recursively read all files and directories inside filePath
-        readDirectoryRecursive(filePath, schema, fileName, projectFiles)
-      } else {
-        projectFiles[fileName] = readAndParseFile(filePath, schema, fileName)
-      }
+      projectFiles[fileName] = readAndParseFile(filePath, schema, fileName)
     } catch (error) {
       return {
         success: false,
@@ -105,6 +198,10 @@ export function readProjectFiles(basePath: string): IProjectServiceReadFilesResp
       }
     }
   }
+
+  /**
+   * TODO: Read the POU files at pou directory from the project directory.
+   */
 
   const returnData: IProjectServiceReadFilesResponse['data'] = {
     project: projectFiles['project.json'] as PLCProject,

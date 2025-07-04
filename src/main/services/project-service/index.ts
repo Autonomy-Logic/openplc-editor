@@ -1,3 +1,8 @@
+import {
+  CreateProjectFileProps,
+  IProjectRecentHistoryEntry,
+  IProjectServiceResponse,
+} from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
@@ -5,46 +10,7 @@ import { join } from 'path'
 
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
-import { CreateJSONFile } from '../../utils'
-import { baseJsonStructure } from './data'
-import { IProjectHistoryEntry } from './types'
-import { isEmptyDir, readProjectFiles } from './utils'
-
-export type IProjectServiceResponse = {
-  success: boolean
-  error?: {
-    title: string
-    description: string
-    error: unknown
-  }
-  message?: string
-  data?: {
-    meta: {
-      path: string
-    }
-    content: PLCProject
-  }
-}
-
-export type INewProjectServiceResponse = {
-  success: boolean
-  error?: {
-    title: string
-    description: string
-    error: unknown
-  }
-  message?: string
-  data?: {
-    meta: {
-      path: string
-    }
-    content: {
-      project: PLCProject
-      deviceConfiguration: DeviceConfiguration
-      devicePinMapping: DevicePin[]
-    }
-  }
-}
+import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
 class ProjectService {
   constructor(private serviceManager: InstanceType<typeof BrowserWindow>) {}
@@ -66,62 +32,38 @@ class ProjectService {
     }
   }
 
-  async createProject(): Promise<IProjectServiceResponse> {
-    const { canceled, filePaths } = await dialog.showOpenDialog(this.serviceManager, {
-      title: i18n.t('createProject:dialog.title'),
-      properties: ['openDirectory', 'createDirectory'],
-    })
-
-    if (canceled) {
+  async createProject(data: CreateProjectFileProps): Promise<IProjectServiceResponse> {
+    const projectDefaultDirectoriesResponse = createProjectDefaultStructure(data.path, data)
+    if (!projectDefaultDirectoriesResponse.success || !projectDefaultDirectoriesResponse.data) {
       return {
         success: false,
-        error: {
-          title: i18n.t('projectServiceResponses:createProject.errors.canceled.title'),
-          description: i18n.t('projectServiceResponses:createProject.errors.canceled.description'),
-          error: null,
-        },
+        error: projectDefaultDirectoriesResponse.error,
       }
     }
-
-    const [filePath] = filePaths
-
-    if (!(await isEmptyDir(filePath))) {
-      return {
-        success: false,
-        error: {
-          title: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.title'),
-          description: i18n.t('projectServiceResponses:createProject.errors.directoryNotEmpty.description'),
-          error: null,
-        },
-      }
-    }
-
-    CreateJSONFile(filePath, JSON.stringify(baseJsonStructure, null, 2), 'data')
-
-    const projectPath = join(filePath, 'data.json')
-    await this.updateProjectHistory(projectPath)
-
+    await this.updateProjectHistory(data.path)
     return {
       success: true,
       data: {
         meta: {
-          path: projectPath,
+          path: data.path, // Use the directory path instead of projectPath
         },
-        content: baseJsonStructure,
+        content: projectDefaultDirectoriesResponse.data.content,
       },
     }
   }
 
-  async readProjectHistory(historyProjectsFilePath: string): Promise<IProjectHistoryEntry[]> {
+  async readProjectHistory(historyProjectsFilePath: string): Promise<IProjectRecentHistoryEntry[]> {
     try {
       const historyContent = await promises.readFile(historyProjectsFilePath, 'utf-8')
-      const content = (JSON.parse(historyContent) as IProjectHistoryEntry[]) || []
+      const content = (JSON.parse(historyContent) as IProjectRecentHistoryEntry[]) || []
       return content.map((entry) => ({
         ...entry,
-        path: entry.path.endsWith('/project.json') ? entry.path.slice(0, -'/project.json'.length) : entry.path,
+        path: entry.path.normalize().endsWith('/project.json')
+          ? entry.path.normalize().slice(0, -'/project.json'.length)
+          : entry.path,
         projectFilePath: entry.projectFilePath
-          ? entry.projectFilePath.endsWith('/project.json')
-            ? entry.projectFilePath.slice(0, -'/project.json'.length)
+          ? entry.projectFilePath.normalize().endsWith('/project.json')
+            ? entry.projectFilePath.normalize().slice(0, -'/project.json'.length)
             : entry.projectFilePath
           : '',
       }))
@@ -131,7 +73,10 @@ class ProjectService {
     }
   }
 
-  private async writeProjectHistory(projectsFilePath: string, historyData: IProjectHistoryEntry[]): Promise<void> {
+  private async writeProjectHistory(
+    projectsFilePath: string,
+    historyData: IProjectRecentHistoryEntry[],
+  ): Promise<void> {
     await promises.writeFile(projectsFilePath, JSON.stringify(historyData, null, 2))
   }
 
@@ -174,17 +119,20 @@ class ProjectService {
     await this.writeProjectHistory(historyProjectsFilePath, updatedHistory)
   }
 
-  async openProjectByPath(projectPath: string): Promise<INewProjectServiceResponse> {
+  async openProjectByPath(projectPath: string): Promise<IProjectServiceResponse> {
     try {
       await promises.access(projectPath)
       const projectFiles = readProjectFiles(projectPath)
 
       if (!projectFiles.success || !projectFiles.data) {
+        console.log(`Error opening project at path: ${projectPath}`, projectFiles.error)
+        await this.removeProjectFromHistory(projectPath)
+
         return {
           success: false,
           error: {
-            title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
-            description: i18n.t('projectServiceResponses:openProject.errors.readFile.description', {
+            title: i18n.t('projectServiceResponses:openProject.errors.readProject.title'),
+            description: i18n.t('projectServiceResponses:openProject.errors.readProject.description', {
               filePath: projectPath,
             }),
             error: projectFiles.error,
@@ -193,6 +141,7 @@ class ProjectService {
       }
 
       await this.updateProjectHistory(projectPath)
+
       return {
         success: true,
         data: {
@@ -205,11 +154,12 @@ class ProjectService {
     } catch (error) {
       console.log(`Error opening project at path: ${projectPath}`, error)
       await this.removeProjectFromHistory(projectPath)
+
       return {
         success: false,
         error: {
-          title: i18n.t('projectServiceResponses:openProject.errors.readFile.title'),
-          description: i18n.t('projectServiceResponses:openProject.errors.readFile.description', {
+          title: i18n.t('projectServiceResponses:openProject.errors.readProject.title'),
+          description: i18n.t('projectServiceResponses:openProject.errors.readProject.description', {
             filePath: projectPath,
           }),
           error: error,
@@ -218,7 +168,7 @@ class ProjectService {
     }
   }
 
-  async openProject(): Promise<INewProjectServiceResponse> {
+  async openProject(): Promise<IProjectServiceResponse> {
     const { canceled, filePaths } = await dialog.showOpenDialog(this.serviceManager, {
       title: i18n.t('openProject:dialog.title'),
       properties: ['openDirectory'],
@@ -235,26 +185,53 @@ class ProjectService {
       }
     }
 
-    const directoryPath = filePaths[0]
-    const projectFiles = readProjectFiles(directoryPath)
+    const [directoryPath] = filePaths
 
-    if (!projectFiles.success || !projectFiles.data) {
+    try {
+      await promises.access(directoryPath)
+      const projectFiles = readProjectFiles(directoryPath)
+
+      if (!projectFiles.success || !projectFiles.data) {
+        console.log(`Error opening project at path: ${directoryPath}`, projectFiles.error)
+        await this.removeProjectFromHistory(directoryPath)
+
+        return {
+          success: false,
+          error: {
+            title: i18n.t('projectServiceResponses:openProject.errors.readProject.title'),
+            description: i18n.t('projectServiceResponses:openProject.errors.readProject.description', {
+              filePath: directoryPath,
+            }),
+            error: projectFiles.error,
+          },
+        }
+      }
+
+      await this.updateProjectHistory(directoryPath)
+
+      return {
+        success: true,
+        data: {
+          meta: {
+            path: directoryPath,
+          },
+          content: projectFiles.data,
+        },
+      }
+    } catch (error) {
+      console.error(`Error accessing project directory: ${filePaths[0]}`, error)
+      await this.removeProjectFromHistory(directoryPath)
+
       return {
         success: false,
-        error: projectFiles.error,
-      }
-    }
-
-    await this.updateProjectHistory(directoryPath)
-
-    return {
-      success: true,
-      data: {
-        meta: {
-          path: directoryPath,
+        error: {
+          title: i18n.t('projectServiceResponses:openProject.errors.readProject.title'),
+          description: i18n.t('projectServiceResponses:openProject.errors.readProject.description', {
+            filePath: directoryPath,
+          }),
+          error: error,
         },
-        content: projectFiles.data,
-      },
+      }
     }
   }
 
@@ -286,7 +263,7 @@ class ProjectService {
       : projectPath
 
     try {
-      // Write each part to its correct file based on projectFileMapSchema
+      // Write each part to its correct file based on projectDefaultFilesMapSchema
       await Promise.all([
         promises.writeFile(join(directoryPath, 'project.json'), JSON.stringify(projectData, null, 2)),
         promises.writeFile(

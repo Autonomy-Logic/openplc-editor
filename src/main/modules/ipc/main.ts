@@ -1,3 +1,4 @@
+import { getProjectPath } from '@root/main/utils'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { app, nativeTheme, shell } from 'electron'
 import { readFile } from 'fs/promises'
@@ -8,7 +9,6 @@ import { ProjectState } from '../../../renderer/store/slices'
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 import { logger } from '../../services'
-import { CreateProjectFile, getProjectPath } from '../../services/project-service/utils'
 
 type IDataToWrite = {
   projectPath: string
@@ -66,8 +66,8 @@ class MainProcessBridge implements MainIpcModule {
         return { success: false, error }
       }
     })
-    this.ipcMain.handle('project:create', async () => {
-      const response = await this.projectService.createProject()
+    this.ipcMain.handle('project:create', async (_event, data: CreateProjectFileProps) => {
+      const response = await this.projectService.createProject(data)
       return response
     })
     this.ipcMain.handle('project:open', async () => {
@@ -91,15 +91,6 @@ class MainProcessBridge implements MainIpcModule {
       } catch (error) {
         console.error('Error getting project path:', error)
       }
-    })
-    this.ipcMain.handle('project:create-project-file', (_event, dataToCreateProjectFile: CreateProjectFileProps) => {
-      const res = CreateProjectFile(dataToCreateProjectFile)
-      if (res.success) {
-        void this.projectService.updateProjectHistory(
-          dataToCreateProjectFile.path + `${platform === 'win32' ? '\\' : '/'}project.json`,
-        )
-      }
-      return res
     })
 
     this.ipcMain.handle(

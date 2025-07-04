@@ -1,9 +1,5 @@
-import { CreateProjectFileProps } from '@root/main/modules/ipc/renderer'
-import {
-  INewProjectServiceResponse,
-  // IProjectServiceResponse
-} from '@root/main/services'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
@@ -39,7 +35,7 @@ export type SharedSlice = {
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => void
     closeProject: () => void
-    handleOpenProjectRequest: (data: INewProjectServiceResponse['data']) => void
+    handleOpenProjectRequest: (data: IProjectServiceResponse['data']) => void
     openProject: () => Promise<{
       success: boolean
       error?: { title: string; description: string }
@@ -48,7 +44,7 @@ export type SharedSlice = {
       success: boolean
       error?: { title: string; description: string }
     }>
-    openRecentProject: (response: INewProjectServiceResponse) => {
+    openRecentProject: (response: IProjectServiceResponse) => {
       success: boolean
       error?: { title: string; description: string }
     }
@@ -214,6 +210,7 @@ export const createSharedSlice: StateCreator<
 
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => {
+      getState().workspaceActions.setEditingState('initial-state')
       getState().editorActions.clearEditor()
       getState().tabsActions.clearTabs()
       getState().libraryActions.clearUserLibraries()
@@ -223,19 +220,20 @@ export const createSharedSlice: StateCreator<
       getState().deviceActions.clearDeviceDefinitions()
       window.bridge.rebuildMenu()
     },
+
     closeProject: () => {
       const editingState = getState().workspace.editingState
       if (editingState === 'unsaved') {
-        getState().modalActions.openModal('save-changes-project', 'close-project')
+        getState().modalActions.openModal('save-changes-project', {
+          validationContext: 'close-project',
+        })
         return
       }
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
-      getState().workspaceActions.setEditingState('initial-state')
     },
 
     handleOpenProjectRequest(data) {
       if (data) {
-        getState().sharedWorkspaceActions.clearStatesOnCloseProject()
         getState().workspaceActions.setEditingState('unsaved')
 
         const { project, deviceConfiguration, devicePinMapping } = data.content
@@ -297,13 +295,25 @@ export const createSharedSlice: StateCreator<
         })
       }
     },
-
     openProject: async () => {
+      getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       const { success, data, error } = await window.bridge.openProject()
+
       if (success) {
         getState().sharedWorkspaceActions.handleOpenProjectRequest(data)
         return {
           success: success,
+        }
+      }
+
+      if (error?.title === 'Operation canceled') {
+        toast({
+          title: 'Operation canceled',
+          description: 'You have canceled the project opening operation.',
+          variant: 'warn',
+        })
+        return {
+          success: true,
         }
       }
 
@@ -317,9 +327,10 @@ export const createSharedSlice: StateCreator<
         error,
       }
     },
-
     openProjectByPath: async (projectPath: string) => {
+      getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       const { success, data, error } = await window.bridge.openProjectByPath(projectPath)
+
       if (success) {
         getState().sharedWorkspaceActions.handleOpenProjectRequest(data)
         return {
@@ -338,7 +349,9 @@ export const createSharedSlice: StateCreator<
       }
     },
     openRecentProject: (response) => {
+      getState().sharedWorkspaceActions.clearStatesOnCloseProject()
       const { data, error } = response
+
       if (data) {
         getState().sharedWorkspaceActions.handleOpenProjectRequest(data)
         return {
@@ -358,9 +371,7 @@ export const createSharedSlice: StateCreator<
     },
 
     createProject: async (dataToCreateProjectFile) => {
-      const result = await window.bridge.createProjectFile({
-        ...dataToCreateProjectFile,
-      } as CreateProjectFileProps)
+      const result = await window.bridge.createProject(dataToCreateProjectFile)
 
       if (!result.data) {
         toast({
@@ -386,10 +397,10 @@ export const createSharedSlice: StateCreator<
           type: dataToCreateProjectFile.type,
           path: dataToCreateProjectFile.path + '/project.json',
         },
-        data: result.data.content.data,
+        data: result.data.content.project.data,
       })
 
-      result.data.content.data.pous.forEach((pou) => {
+      result.data.content.project.data.pous.forEach((pou) => {
         if (pou.data.language === 'fbd') {
           getState().fbdFlowActions.addFBDFlow({
             name: pou.data.name,

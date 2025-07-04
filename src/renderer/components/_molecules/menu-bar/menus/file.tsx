@@ -26,7 +26,9 @@ export const FileMenu = () => {
 
   const handleUnsavedChanges = (action: 'create-project' | 'open-project') => {
     if (editingState === 'unsaved') {
-      openModal('save-changes-project', action)
+      openModal('save-changes-project', {
+        validationContext: action,
+      })
       return true
     }
     return false

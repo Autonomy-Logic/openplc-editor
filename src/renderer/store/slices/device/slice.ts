@@ -27,6 +27,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
       currentSelectedPinTableRow: -1,
     },
   },
+  deviceUpdated: {
+    updated: false, // This flag is used to track if the device has been updated
+  },
 
   deviceActions: {
     setAvailableOptions: ({ availableBoards, availableCommunicationPorts }): void => {
@@ -65,6 +68,13 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
+    resetDeviceUpdated: (): void => {
+      setState(
+        produce(({ deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = false // Reset the updated flag to false
+        }),
+      )
+    },
     selectPinTableRow: (selectedRow) => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
@@ -72,10 +82,12 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
-    // MOCK: We added a library to generate random names for new pins to be more explicit what object we're manipulating, this need to be removed further.
+
     createNewPin: (): void => {
       setState(
-        produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
+        produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+
           const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
           // Find the next available address for default pin type
           const defaultPinType = 'digitalInput'
@@ -122,7 +134,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     removePin: (): void => {
       setState(
-        produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
+        produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+
           // Found the reference pin based on the current selected pin table row
           const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
 
@@ -167,7 +181,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         },
       }
       setState(
-        produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
+        produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+
           const currentPin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
 
           if (!currentPin) {
@@ -298,21 +314,27 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setDeviceBoard: (deviceBoard): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+
           deviceDefinitions.configuration.deviceBoard = deviceBoard
         }),
       )
     },
     setCommunicationPort: (communicationPort): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+
           deviceDefinitions.configuration.communicationPort = communicationPort
         }),
       )
     },
     setCommunicationPreferences: (preferences) => {
       setState(
-        produce(({ deviceDefinitions: { configuration } }: DeviceSlice) => {
+        produce(({ deviceDefinitions: { configuration }, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+
           if (preferences.enableRTU !== undefined) {
             configuration.communicationConfiguration.communicationPreferences.enabledRTU = preferences.enableRTU
           }
@@ -327,7 +349,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setRTUConfig: (rtuConfigOption): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+
           const { rtuConfig, value } = rtuConfigOption
           switch (rtuConfig) {
             case 'rtuBaudRate':
@@ -350,7 +374,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setTCPConfig: (tcpConfigOption): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+
           const { tcpConfig, value } = tcpConfigOption
           switch (tcpConfig) {
             case 'tcpInterface':
@@ -367,7 +393,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setWifiConfig: (wifiConfig): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+
           if (deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface === 'Wi-Fi') {
             if (wifiConfig.tcpWifiSSID)
               deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID = wifiConfig.tcpWifiSSID
@@ -380,7 +408,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setStaticHostConfiguration: (staticHostConfiguration): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Set the updated flag to true when a new pin is created
+
           if (staticHostConfiguration.ipAddress !== undefined)
             deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.ipAddress =
               staticHostConfiguration.ipAddress

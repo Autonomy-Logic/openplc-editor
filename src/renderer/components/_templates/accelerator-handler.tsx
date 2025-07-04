@@ -1,9 +1,9 @@
 import type { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
-import type { INewProjectServiceResponse } from '@root/main/services'
 import { useCompiler } from '@root/renderer/hooks'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { DeviceState, ModalTypes, ProjectState } from '@root/renderer/store/slices'
+import { IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { deviceConfigurationSchema, devicePinSchema } from '@root/types/PLC/devices'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { useEffect, useState } from 'react'
@@ -12,7 +12,9 @@ import { toast } from '../_features/[app]/toast/use-toast'
 
 const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?: unknown) => void) => {
   if (isUnsaved) {
-    openModal('save-changes-project', 'close-app')
+    openModal('save-changes-project', {
+      validationContext: 'close-app',
+    })
     return
   }
   openModal('quit-application', null)
@@ -151,7 +153,9 @@ const AcceleratorHandler = () => {
       if (editingState !== 'unsaved') {
         openModal('create-project', null)
       } else {
-        openModal('save-changes-project', 'create-project')
+        openModal('save-changes-project', {
+          validationContext: 'create-project',
+        })
       }
     })
 
@@ -166,12 +170,18 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     window.bridge.handleOpenProjectRequest(async (_event) => {
-      if (editingState === 'initial-state') {
-        await openProject()
-        return
-      }
-      if (editingState === 'unsaved') {
-        openModal('save-changes-project', 'open-project')
+      switch (editingState) {
+        case 'saved':
+        case 'initial-state':
+          await openProject()
+          break
+        case 'unsaved':
+          openModal('save-changes-project', {
+            validationContext: 'open-project',
+          })
+          break
+        default:
+          return
       }
     })
 
@@ -184,14 +194,27 @@ const AcceleratorHandler = () => {
    * -- Open project by path project
    */
   useEffect(() => {
-    window.bridge.openRecentAccelerator((_event, response: INewProjectServiceResponse) => {
-      openRecentProject(response)
+    window.bridge.openRecentAccelerator((_event, response: IProjectServiceResponse) => {
+      switch (editingState) {
+        case 'saved':
+        case 'initial-state':
+          openRecentProject(response)
+          break
+        case 'unsaved':
+          openModal('save-changes-project', {
+            validationContext: 'open-recent-project',
+            recentResponse: response,
+          })
+          break
+        default:
+          return
+      }
     })
 
     return () => {
       window.bridge.removeOpenRecentListener()
     }
-  }, [])
+  }, [editingState])
 
   /**
    * -- Close project

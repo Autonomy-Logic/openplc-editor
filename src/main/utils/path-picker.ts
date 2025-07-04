@@ -1,6 +1,6 @@
 import { BrowserWindow, dialog } from 'electron'
 
-import { i18n } from '../../../../utils/i18n'
+import { i18n } from '../../utils/i18n'
 import { isEmptyDir } from './is-empty-dir'
 
 type GetProjectPathProps = InstanceType<typeof BrowserWindow>
