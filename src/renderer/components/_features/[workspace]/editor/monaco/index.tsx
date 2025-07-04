@@ -2,7 +2,7 @@ import './configs'
 
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_molecules/modal'
-import { useOpenPLCStore } from '@process:renderer/store'
+import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -12,9 +12,11 @@ import { toast } from '../../../[app]/toast/use-toast'
 import {
   keywordsCompletion,
   libraryCompletion,
+  snippetsSTCompletion,
   tableGlobalVariablesCompletion,
   tableVariablesCompletion,
 } from './completion'
+import { updateLocalVariablesInTokenizer } from './configs/languages/st/st'
 import { parsePouToStText } from './drag-and-drop/st'
 
 type monacoEditorProps = {
@@ -60,6 +62,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       },
     },
     libraries: sliceLibraries,
+    editorActions: { saveEditorViewState },
     projectActions: { updatePou, createVariable },
     workspaceActions: { setEditingState },
   } = useOpenPLCStore()
@@ -75,6 +78,16 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       moveToMatch(editorRef.current, searchQuery, sensitiveCase, regularExpression)
     }
   }, [searchQuery, sensitiveCase, regularExpression])
+
+  useEffect(() => {
+    if (language === 'st' && pou?.data.variables) {
+      const variableNames = pou.data.variables
+        .filter((variable) => variable.name && variable.name.trim() !== '')
+        .map((variable) => variable.name)
+
+      updateLocalVariablesInTokenizer(variableNames)
+    }
+  }, [pou?.data.variables, language])
 
   const variablesSuggestions = useCallback(
     (range: monaco.IRange) => {
@@ -125,7 +138,52 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   const keywordsSuggestions = useCallback(
     (range: monaco.IRange) => {
-      const suggestions = keywordsCompletion({
+      const allSuggestions = keywordsCompletion({
+        range,
+        language,
+      }).suggestions
+
+      let filteredSuggestions = allSuggestions
+      let filteredLabels = allSuggestions.map((suggestion) => suggestion.label)
+
+      if (language === 'st') {
+        const stSnippetLabels = [
+          'if',
+          'ifelse',
+          'ifelseif',
+          'for',
+          'while',
+          'repeat',
+          'case',
+          'program',
+          'function',
+          'function_block',
+          'var',
+          'var_input',
+          'var_output',
+          'array',
+          'struct',
+          'comment_block',
+        ]
+
+        filteredSuggestions = allSuggestions.filter(
+          (suggestion) => !stSnippetLabels.includes(suggestion.label.toLowerCase()),
+        )
+
+        filteredLabels = filteredSuggestions.map((suggestion) => suggestion.label)
+      }
+
+      return {
+        suggestions: filteredSuggestions,
+        labels: filteredLabels,
+      }
+    },
+    [language],
+  )
+
+  const snippetsSTSuggestions = useCallback(
+    (range: monaco.IRange) => {
+      const suggestions = snippetsSTCompletion({
         range,
         language,
       }).suggestions
@@ -166,6 +224,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
             identifierTokens
               .map((token) => {
                 if (
+                  snippetsSTSuggestions(range).labels.includes(token) ||
                   variablesSuggestions(range).labels.includes(token) ||
                   globalVariablesSuggestions(range).labels.includes(token) ||
                   librarySuggestions(range).labels.includes(token) ||
@@ -187,6 +246,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
         return {
           suggestions: [
+            ...snippetsSTSuggestions(range).suggestions,
             ...variablesSuggestions(range).suggestions,
             ...globalVariablesSuggestions(range).suggestions,
             ...librarySuggestions(range).suggestions,
@@ -197,23 +257,37 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
       },
     })
     return () => disposable.dispose()
-  }, [pou?.data.variables, globalVariables, sliceLibraries, language])
+  }, [pou?.data.variables, globalVariables, sliceLibraries, language, snippetsSTSuggestions])
 
   function handleEditorDidMount(
-    editor: null | monaco.editor.IStandaloneCodeEditor,
+    editorInstance: null | monaco.editor.IStandaloneCodeEditor,
     monacoInstance: null | typeof monaco,
   ) {
     // here is the editor instance
     // you can store it in `useRef` for further usage
-    editorRef.current = editor
+    editorRef.current = editorInstance
 
     // here is another way to get monaco instance
     // you can also store it in `useRef` for further usage
     monacoRef.current = monacoInstance
 
     if (searchQuery) {
-      moveToMatch(editor, searchQuery, sensitiveCase, regularExpression)
+      moveToMatch(editorInstance, searchQuery, sensitiveCase, regularExpression)
     }
+
+    if (!editorInstance) return
+
+    if (editor.cursorPosition) {
+      editorInstance.setPosition(editor.cursorPosition)
+      editorInstance.revealPositionInCenter(editor.cursorPosition)
+    }
+
+    if (editor.scrollPosition) {
+      editorInstance.setScrollTop(editor.scrollPosition.top)
+      editorInstance.setScrollLeft(editor.scrollPosition.left)
+    }
+
+    editorInstance.focus()
   }
 
   function moveToMatch(
@@ -396,6 +470,31 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     setIsOpen(false)
     setNewName('')
   }
+
+  useEffect(() => {
+    const unsub = openPLCStoreBase.subscribe(
+      (state) => state.editor.meta.name,
+      (newName, prevEditorName) => {
+        if (newName === prevEditorName || !editorRef.current) return
+
+        const editor = editorRef.current
+        const model = editor.getModel()
+        const pos = editor.getPosition()
+        const offset = pos && model?.getOffsetAt(pos)
+
+        const cursorPosition = pos && offset ? { lineNumber: pos.lineNumber, column: pos.column, offset } : undefined
+
+        const scrollPosition = {
+          top: editor.getScrollTop(),
+          left: editor.getScrollLeft(),
+        }
+
+        saveEditorViewState({ prevEditorName, cursorPosition, scrollPosition })
+      },
+    )
+
+    return () => unsub()
+  }, [])
 
   return (
     <>

@@ -1,5 +1,4 @@
-import { deviceSelectors, workspaceSelectors } from '@root/renderer/hooks'
-import { ComponentPropsWithoutRef, useEffect } from 'react'
+import { ComponentPropsWithoutRef } from 'react'
 
 import { DeviceConfigurationEditor } from './configuration'
 
