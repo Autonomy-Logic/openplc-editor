@@ -467,23 +467,42 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
                 draggable: false,
               }
             })
-            return
-          }
-
-          rung.nodes = rung.nodes.map((node) => {
-            if (selectedNodes.find((n) => n.id === node.id)) {
+          } else {
+            rung.nodes = rung.nodes.map((node) => {
+              if (selectedNodes.find((n) => n.id === node.id)) {
+                return {
+                  ...node,
+                  selected: true,
+                  draggable: (node.data as BasicNodeData).draggable,
+                }
+              }
               return {
                 ...node,
-                selected: true,
+                selected: false,
                 draggable: (node.data as BasicNodeData).draggable,
               }
-            }
-            return {
-              ...node,
-              selected: false,
-              draggable: (node.data as BasicNodeData).draggable,
-            }
-          })
+            })
+          }
+
+          if (selectedNodes.length > 0) {
+            flow.rungs = flow.rungs.map((r) => {
+              const changedRung = r.id === rungId
+
+              if (changedRung) {
+                return { ...rung }
+              } else {
+                return {
+                  ...r,
+                  selectedNodes: [],
+                  nodes: r.nodes.map((node) => ({
+                    ...node,
+                    selected: false,
+                    draggable: false,
+                  })),
+                }
+              }
+            })
+          }
         }),
       )
     },
