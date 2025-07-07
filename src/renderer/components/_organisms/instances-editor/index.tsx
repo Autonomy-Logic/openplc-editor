@@ -87,6 +87,7 @@ const InstancesEditor = () => {
         selectedRow: editorInstances.display === 'table' ? parseInt(editorInstances.selectedRow) : ROWS_NOT_SELECTED,
       })
     } else {
+      // @ts-expect-error: 'selectedRow' is not required when display is 'code'
       updateModelInstances({
         display: 'code',
       })

@@ -83,6 +83,7 @@ const TaskEditor = () => {
         selectedRow: editorTasks.display === 'table' ? parseInt(editorTasks.selectedRow) : ROWS_NOT_SELECTED,
       })
     } else {
+      // @ts-expect-error: 'selectedRow' is not required when display is 'code'
       updateModelTasks({
         display: 'code',
       })
