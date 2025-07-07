@@ -276,7 +276,7 @@ const SelectableClassCell = ({
     }
 
     if (value !== 'local') {
-      table.options.meta?.updateData(index, 'location', undefined)
+      table.options.meta?.updateData(index, 'location', '')
     }
   }
 
