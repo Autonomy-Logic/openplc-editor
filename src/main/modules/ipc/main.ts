@@ -1,3 +1,6 @@
+import { getProjectPath } from '@root/main/utils'
+import { CreateProjectFileProps } from '@root/types/IPC/project-service'
+import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
 import { readFile } from 'fs/promises'
@@ -8,18 +11,14 @@ import { ProjectState } from '../../../renderer/store/slices'
 import { PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 import { logger } from '../../services'
-import { CreateProjectFile, GetProjectPath } from '../../services/project-service/utils'
 
 type IDataToWrite = {
   projectPath: string
-  projectData: PLCProject
-}
-type CreateProjectFileProps = {
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
-  time: string
-  type: 'plc-project' | 'plc-library'
-  name: string
-  path: string
+  content: {
+    projectData: PLCProject
+    deviceConfiguration: DeviceConfiguration
+    devicePinMapping: DevicePin[]
+  }
 }
 
 class MainProcessBridge implements MainIpcModule {
@@ -55,7 +54,6 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('project:create', this.handleProjectCreate)
     this.ipcMain.handle('project:open', this.handleProjectOpen)
     this.ipcMain.handle('project:path-picker', this.handleProjectPathPicker)
-    this.ipcMain.handle('project:create-project-file', this.handleProjectCreateProjectFile)
     this.ipcMain.handle('project:save', this.handleProjectSave)
     this.ipcMain.handle('project:open-by-path', this.handleProjectOpenByPath)
 
@@ -100,8 +98,8 @@ class MainProcessBridge implements MainIpcModule {
 
   // ===================== HANDLER METHODS =====================
   // Project-related handlers
-  handleProjectCreate = async () => {
-    const response = await this.projectService.createProject()
+  handleProjectCreate = async (_event: IpcMainInvokeEvent, data: CreateProjectFileProps) => {
+    const response = await this.projectService.createProject(data)
     return response
   }
   handleProjectOpen = async () => {
@@ -112,7 +110,7 @@ class MainProcessBridge implements MainIpcModule {
     const windowManager = this.mainWindow
     try {
       if (windowManager) {
-        const res = await GetProjectPath(windowManager)
+        const res = await getProjectPath(windowManager)
         return res
       }
       console.log('Window object not defined')
@@ -120,17 +118,8 @@ class MainProcessBridge implements MainIpcModule {
       console.error('Error getting project path:', error)
     }
   }
-  handleProjectCreateProjectFile = (_event: IpcMainInvokeEvent, dataToCreateProjectFile: CreateProjectFileProps) => {
-    const res = CreateProjectFile(dataToCreateProjectFile)
-    if (res.success) {
-      void this.projectService.updateProjectHistory(
-        dataToCreateProjectFile.path + `${platform === 'win32' ? '\\' : '/'}project.json`,
-      )
-    }
-    return res
-  }
-  handleProjectSave = (_event: IpcMainInvokeEvent, { projectPath, projectData }: IDataToWrite) =>
-    this.projectService.saveProject({ projectPath, projectData })
+  handleProjectSave = (_event: IpcMainInvokeEvent, { projectPath, content }: IDataToWrite) =>
+    this.projectService.saveProject({ projectPath, content })
   handleProjectOpenByPath = async (_event: IpcMainInvokeEvent, projectPath: string) => {
     try {
       const response = await this.projectService.openProjectByPath(projectPath)

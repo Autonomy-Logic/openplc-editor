@@ -1,4 +1,4 @@
-import { DevicePin } from '@root/renderer/store/slices'
+import { DevicePin } from '@root/types/PLC/devices'
 import { CellContext } from '@tanstack/react-table'
 import { useEffect, useState } from 'react'
 

@@ -1,16 +1,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
+import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
+import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
 import { ProjectState } from '../../../renderer/store/slices'
 import { PLCProject } from '../../../types/PLC/open-plc'
-import { IProjectServiceResponse } from '../../services/project-service'
-import { CreateProjectFile } from '../../services/project-service/utils'
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: any) => void
 
 type IDataToWrite = {
   projectPath: string
-  projectData: PLCProject
+  content: {
+    projectData: PLCProject
+    deviceConfiguration: DeviceConfiguration
+    devicePinMapping: DevicePin[]
+  }
 }
 
 export type ISaveDataResponse = {
@@ -20,15 +24,6 @@ export type ISaveDataResponse = {
     description: string
   }
 }
-
-export type CreateProjectFileProps = {
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
-  time: string
-  type: 'plc-project' | 'plc-library'
-  name: string
-  path: string
-}
-export type CreateProjectFileResponse = ReturnType<typeof CreateProjectFile>
 
 /**
  * A bridge for communication between the renderer process and the main process in an Electron application.
@@ -41,11 +36,10 @@ const rendererProcessBridge = {
   closeProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:close-project-accelerator', callback),
   closeTabAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('workspace:close-tab-accelerator', callback),
-  createProject: (): Promise<IProjectServiceResponse> => ipcRenderer.invoke('project:create'),
+  createProject: (data: CreateProjectFileProps): Promise<IProjectServiceResponse> =>
+    ipcRenderer.invoke('project:create', data),
   createProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
-  createProjectFile: (dataToCreateProjectFile: CreateProjectFileProps): Promise<CreateProjectFileResponse> =>
-    ipcRenderer.invoke('project:create-project-file', dataToCreateProjectFile),
   deletePouAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:delete-pou-accelerator', callback),
   findInProjectAccelerator: (callback: IpcRendererCallbacks) =>

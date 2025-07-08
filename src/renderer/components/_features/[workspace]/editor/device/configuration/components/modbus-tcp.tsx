@@ -11,6 +11,7 @@ import {
   SelectTrigger,
 } from '@root/renderer/components/_atoms'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { MAC_ADDRESS_REGEX } from '@root/types/PLC/devices'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, memo } from 'react'
 import { Controller, useForm } from 'react-hook-form'
@@ -22,10 +23,8 @@ type ModbusTCPComponentProps = ComponentPropsWithoutRef<'div'> & {
   isModbusTCPEnabled: boolean
 }
 
-const MAC_ADDRESS_REGEX = /^([0-9A-Fa-f]{2})([:\-,])(?:[0-9A-Fa-f]{2}\2){4}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{12}$/
-
 const tcpConfigSchema = z.object({
-  tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX),
+  tcpMacAddress: z.string().regex(MAC_ADDRESS_REGEX, 'Invalid MAC address format'),
   tcpWifiSSID: z.string(),
   tcpWifiPassword: z.string(),
 })

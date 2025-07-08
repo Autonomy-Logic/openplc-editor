@@ -1,5 +1,5 @@
 import { boardSelectors, pinSelectors } from '@root/renderer/hooks'
-import { DevicePin } from '@root/renderer/store/slices'
+import { DevicePin } from '@root/types/PLC/devices'
 import { CellContext } from '@tanstack/react-table'
 import { useCallback, useEffect, useState } from 'react'
 

@@ -46,6 +46,11 @@ const pinSelectors = {
     useOpenPLCStore((state) => state.deviceDefinitions.pinMapping.currentSelectedPinTableRow),
 }
 
+export const deviceSelectors = {
+  useDeviceUpdated: () => useOpenPLCStore((state) => state.deviceUpdated.updated),
+  useResetDeviceUpdated: () => useOpenPLCStore((state) => state.deviceActions.resetDeviceUpdated),
+}
+
 const communicationSelectors = {
   useEnabledRTU: () =>
     useOpenPLCStore(
@@ -79,6 +84,15 @@ const editorSelectors = {
   useEditorState: () => useOpenPLCStore((state) => state.editor),
 }
 
+/**
+ * Workspace selectors.
+ */
+const workspaceSelectors = {
+  useWorkspace: () => useOpenPLCStore((state) => state.workspace),
+  useEditingState: () => useOpenPLCStore((state) => state.workspace.editingState),
+  useSetEditingState: () => useOpenPLCStore((state) => state.workspaceActions.setEditingState),
+}
+
 // ===================== Console selectors. =====================
 const consoleSelectors = {
   useLogs: () => useOpenPLCStore((state) => state.logs),
@@ -98,4 +112,5 @@ export {
   staticHostSelectors,
   tcpSelectors,
   variablesSelectors,
+  workspaceSelectors,
 }

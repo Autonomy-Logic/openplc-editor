@@ -1,3 +1,4 @@
+import { SaveChangeModalProps } from '@root/renderer/components/_organisms/modals'
 import { TitleBar } from '@root/renderer/components/_organisms/title-bar'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
@@ -55,7 +56,8 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
         {modals?.['save-changes-project']?.open === true && (
           <SaveChangesModal
             isOpen={modals['save-changes-project'].open}
-            validationContext={modals['save-changes-project'].data as string}
+            validationContext={(modals['save-changes-project'].data as SaveChangeModalProps).validationContext}
+            recentResponse={(modals['save-changes-project'].data as SaveChangeModalProps).recentResponse}
           />
         )}
         {modals?.['quit-application']?.open === true && (

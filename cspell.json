@@ -9,6 +9,7 @@
         "lreal",
         "lword",
         "modbus",
+        "prefault",
         "sublabel",
         "tailwindcss",
         "udint",

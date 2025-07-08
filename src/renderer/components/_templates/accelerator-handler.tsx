@@ -1,9 +1,10 @@
 import type { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
-import type { IProjectServiceResponse } from '@root/main/services'
 import { useCompiler } from '@root/renderer/hooks'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
-import type { ModalTypes, ProjectState } from '@root/renderer/store/slices'
+import type { DeviceState, ModalTypes, ProjectState } from '@root/renderer/store/slices'
+import { IProjectServiceResponse } from '@root/types/IPC/project-service'
+import { deviceConfigurationSchema, devicePinSchema } from '@root/types/PLC/devices'
 import { PLCProjectSchema } from '@root/types/PLC/open-plc'
 import { useEffect, useState } from 'react'
 
@@ -11,7 +12,9 @@ import { toast } from '../_features/[app]/toast/use-toast'
 
 const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?: unknown) => void) => {
   if (isUnsaved) {
-    openModal('save-changes-project', 'close-app')
+    openModal('save-changes-project', {
+      validationContext: 'close-app',
+    })
     return
   }
   openModal('quit-application', null)
@@ -19,6 +22,7 @@ const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?
 
 export const saveProjectRequest = async (
   project: ProjectState,
+  device: DeviceState['deviceDefinitions'],
   setEditingState: (state: 'saved' | 'unsaved' | 'save-request' | 'initial-state') => void,
 ): Promise<ISaveDataResponse> => {
   setEditingState('save-request')
@@ -42,9 +46,41 @@ export const saveProjectRequest = async (
     }
   }
 
+  const deviceConfiguration = deviceConfigurationSchema.safeParse(device.configuration)
+  if (!deviceConfiguration.success) {
+    setEditingState('unsaved')
+    toast({
+      title: 'Error in the save request!',
+      description: 'The device configuration data is not valid.',
+      variant: 'fail',
+    })
+    return {
+      success: false,
+      reason: { title: 'Error in the save request!', description: 'The device configuration data is not valid.' },
+    }
+  }
+
+  const devicePinMapping = devicePinSchema.array().safeParse(device.pinMapping.pins)
+  if (!devicePinMapping.success) {
+    setEditingState('unsaved')
+    toast({
+      title: 'Error in the save request!',
+      description: 'The device pin mapping data is not valid.',
+      variant: 'fail',
+    })
+    return {
+      success: false,
+      reason: { title: 'Error in the save request!', description: 'The device pin mapping data is not valid.' },
+    }
+  }
+
   const { success, reason } = await window.bridge.saveProject({
     projectPath: project.meta.path,
-    projectData: projectData.data,
+    content: {
+      projectData: projectData.data,
+      deviceConfiguration: deviceConfiguration.data,
+      devicePinMapping: devicePinMapping.data,
+    },
   })
 
   if (success) {
@@ -73,6 +109,7 @@ const AcceleratorHandler = () => {
 
   const {
     project,
+    deviceDefinitions,
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, openProject, openRecentProject },
@@ -116,7 +153,9 @@ const AcceleratorHandler = () => {
       if (editingState !== 'unsaved') {
         openModal('create-project', null)
       } else {
-        openModal('save-changes-project', 'create-project')
+        openModal('save-changes-project', {
+          validationContext: 'create-project',
+        })
       }
     })
 
@@ -131,12 +170,25 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     window.bridge.handleOpenProjectRequest(async (_event) => {
-      if (editingState === 'initial-state') {
-        await openProject()
-        return
-      }
-      if (editingState === 'unsaved') {
-        openModal('save-changes-project', 'open-project')
+      switch (editingState) {
+        case 'saved':
+        case 'initial-state':
+          await openProject()
+          break
+        case 'unsaved':
+          openModal('save-changes-project', {
+            validationContext: 'open-project',
+          })
+          break
+        case 'save-request':
+          toast({
+            title: 'Save in progress',
+            description: 'Please wait for the current save operation to complete.',
+            variant: 'warn',
+          })
+          break
+        default:
+          return
       }
     })
 
@@ -150,13 +202,33 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     window.bridge.openRecentAccelerator((_event, response: IProjectServiceResponse) => {
-      openRecentProject(response)
+      switch (editingState) {
+        case 'saved':
+        case 'initial-state':
+          openRecentProject(response)
+          break
+        case 'unsaved':
+          openModal('save-changes-project', {
+            validationContext: 'open-recent-project',
+            recentResponse: response,
+          })
+          break
+        case 'save-request':
+          toast({
+            title: 'Save in progress',
+            description: 'Please wait for the current save operation to complete.',
+            variant: 'warn',
+          })
+          break
+        default:
+          return
+      }
     })
 
     return () => {
       window.bridge.removeOpenRecentListener()
     }
-  }, [])
+  }, [editingState])
 
   /**
    * -- Close project
@@ -176,13 +248,13 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     window.bridge.saveProjectAccelerator((_event) => {
-      void saveProjectRequest(project, setEditingState)
+      void saveProjectRequest(project, deviceDefinitions, setEditingState)
     })
 
     return () => {
       window.bridge.removeSaveProjectAccelerator()
     }
-  }, [project])
+  }, [project, deviceDefinitions])
 
   /**
    * ==== Window Related Accelerators ====
