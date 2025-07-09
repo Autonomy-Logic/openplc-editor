@@ -309,7 +309,7 @@ const InstancesEditor = () => {
           style={{ scrollbarGutter: 'stable' }}
         >
           <VariablesCodeEditor code={editorCode} onCodeChange={setEditorCode} shouldUseDarkMode={shouldUseDarkMode} />
-          {parseError && <p className='mt-2 text-xs text-red-500'>Erro: {parseError}</p>}
+          {parseError && <p className='mt-2 text-xs text-red-500'>Error: {parseError}</p>}
         </div>
       )}
     </div>

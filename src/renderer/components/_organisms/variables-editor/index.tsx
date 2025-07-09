@@ -5,7 +5,7 @@ import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { LadderFlowActions, LadderFlowState, VariablesTable as VariablesTableType } from '@root/renderer/store/slices'
 import { baseTypes } from '@root/shared/data'
-import { PLCVariable as VariblePLC } from '@root/types/PLC'
+import { PLCVariable as VariablePLC } from '@root/types/PLC'
 import { BaseType, PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
@@ -51,7 +51,7 @@ const VariablesEditor = () => {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [returnType, setReturnType] = useState('BOOL')
   const [returnTypeOptions, setReturnTypeOptions] = useState<string[]>([])
-  const [editorCode, setEditorCode] = useState(() => generateIecVariablesToString(tableData as VariblePLC[]))
+  const [editorCode, setEditorCode] = useState(() => generateIecVariablesToString(tableData as VariablePLC[]))
   const [parseError, setParseError] = useState<string | null>(null)
   const [pouDescription, setPouDescription] = useState<string>('')
   const [confirmRenameBlocksOpen, setConfirmRenameBlocksOpen] = useState(false)
@@ -102,7 +102,7 @@ const VariablesEditor = () => {
   }, [dataTypes])
 
   useEffect(() => {
-    setEditorCode(generateIecVariablesToString(tableData as VariblePLC[]))
+    setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
   }, [tableData])
 
   /**
@@ -824,7 +824,7 @@ const VariablesEditor = () => {
           >
             <VariablesCodeEditor code={editorCode} onCodeChange={setEditorCode} shouldUseDarkMode={shouldUseDarkMode} />
 
-            {parseError && <p className='mt-2 text-xs text-red-500'>Erro: {parseError}</p>}
+            {parseError && <p className='mt-2 text-xs text-red-500'>Error: {parseError}</p>}
           </div>
         )}
       </div>

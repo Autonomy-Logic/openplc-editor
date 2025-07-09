@@ -4,7 +4,7 @@ import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { GlobalVariablesTableType } from '@root/renderer/store/slices'
-import { PLCVariable as VariblePLC } from '@root/types/PLC'
+import { PLCVariable as VariablePLC } from '@root/types/PLC'
 import { PLCGlobalVariable, PLCVariable } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
 import { parseIecStringToVariables } from '@root/utils/generate-iec-string-to-variables'
@@ -38,7 +38,7 @@ const GlobalVariablesEditor = () => {
    * Table data and column filters states to keep track of the table data and column filters
    */
   const [tableData, setTableData] = useState<PLCGlobalVariable[]>([])
-  const [editorCode, setEditorCode] = useState(() => generateIecVariablesToString(tableData as VariblePLC[]))
+  const [editorCode, setEditorCode] = useState(() => generateIecVariablesToString(tableData as VariablePLC[]))
   const [parseError, setParseError] = useState<string | null>(null)
 
   const [editorVariables, setEditorVariables] = useState<GlobalVariablesTableType>({
@@ -56,7 +56,7 @@ const GlobalVariablesEditor = () => {
   }, [editor, globalVariables])
 
   useEffect(() => {
-    setEditorCode(generateIecVariablesToString(tableData as VariblePLC[]))
+    setEditorCode(generateIecVariablesToString(tableData as VariablePLC[]))
   }, [tableData])
 
   /**
@@ -291,7 +291,7 @@ const GlobalVariablesEditor = () => {
         >
           <VariablesCodeEditor code={editorCode} onCodeChange={setEditorCode} shouldUseDarkMode={shouldUseDarkMode} />
 
-          {parseError && <p className='mt-2 text-xs text-red-500'>Erro: {parseError}</p>}
+          {parseError && <p className='mt-2 text-xs text-red-500'>Error: {parseError}</p>}
         </div>
       )}
     </div>
