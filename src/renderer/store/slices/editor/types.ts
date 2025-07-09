@@ -167,8 +167,8 @@ const editorModelSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('plc-device'),
       meta: z.object({
-        name: z.enum(['Pin Mapping', 'Configuration']),
-        derivation: z.enum(['pin-mapping', 'configuration']),
+        name: z.literal('Configuration'),
+        derivation: z.literal('configuration'),
       }),
     })
     .extend({

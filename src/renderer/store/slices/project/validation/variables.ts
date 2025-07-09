@@ -377,6 +377,8 @@ const updateVariableValidation = (
 ) => {
   let response: ProjectResponse = { ok: true }
 
+  if (dataToBeUpdated.class) response.data = { class: dataToBeUpdated.class }
+
   if (dataToBeUpdated.name || dataToBeUpdated.name === '') {
     const { name } = dataToBeUpdated
     if (name === '') {

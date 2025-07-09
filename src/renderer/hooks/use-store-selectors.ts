@@ -1,9 +1,7 @@
 import { useOpenPLCStore } from '@root/renderer/store'
 
-/**
- * Device screen selectors.
- */
-export const rtuSelectors = {
+// ===================== Device screen selectors. =====================
+const rtuSelectors = {
   useAvailableRTUInterfaces: () => useOpenPLCStore((state) => state.deviceAvailableOptions.availableRTUInterfaces),
   useAvailableRTUBaudRates: () => useOpenPLCStore((state) => state.deviceAvailableOptions.availableRTUBaudRates),
   useModbusRTU: () =>
@@ -11,7 +9,7 @@ export const rtuSelectors = {
   useSetRTUConfig: () => useOpenPLCStore((state) => state.deviceActions.setRTUConfig),
 }
 
-export const tcpSelectors = {
+const tcpSelectors = {
   useAvailableTCPInterfaces: () => useOpenPLCStore((state) => state.deviceAvailableOptions.availableTCPInterfaces),
   useModbusTCP: () =>
     useOpenPLCStore((state) => state.deviceDefinitions.configuration.communicationConfiguration.modbusTCP),
@@ -19,7 +17,7 @@ export const tcpSelectors = {
   useSetWifiConfig: () => useOpenPLCStore((state) => state.deviceActions.setWifiConfig),
 }
 
-export const staticHostSelectors = {
+const staticHostSelectors = {
   useTcpStaticHostConfiguration: () =>
     useOpenPLCStore(
       (state) => state.deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration,
@@ -27,7 +25,7 @@ export const staticHostSelectors = {
   useSetStaticHostConfiguration: () => useOpenPLCStore((state) => state.deviceActions.setStaticHostConfiguration),
 }
 
-export const boardSelectors = {
+const boardSelectors = {
   useAvailableBoards: () => useOpenPLCStore((state) => state.deviceAvailableOptions.availableBoards),
   useAvailableCommunicationPorts: () =>
     useOpenPLCStore((state) => state.deviceAvailableOptions.availableCommunicationPorts),
@@ -38,7 +36,7 @@ export const boardSelectors = {
   useSetAvailableOptions: () => useOpenPLCStore((state) => state.deviceActions.setAvailableOptions),
 }
 
-export const pinSelectors = {
+const pinSelectors = {
   usePins: () => useOpenPLCStore((state) => state.deviceDefinitions.pinMapping.pins),
   useCreateNewPin: () => useOpenPLCStore((state) => state.deviceActions.createNewPin),
   useRemovePin: () => useOpenPLCStore((state) => state.deviceActions.removePin),
@@ -48,7 +46,12 @@ export const pinSelectors = {
     useOpenPLCStore((state) => state.deviceDefinitions.pinMapping.currentSelectedPinTableRow),
 }
 
-export const communicationSelectors = {
+export const deviceSelectors = {
+  useDeviceUpdated: () => useOpenPLCStore((state) => state.deviceUpdated.updated),
+  useResetDeviceUpdated: () => useOpenPLCStore((state) => state.deviceActions.resetDeviceUpdated),
+}
+
+const communicationSelectors = {
   useEnabledRTU: () =>
     useOpenPLCStore(
       (state) => state.deviceDefinitions.configuration.communicationConfiguration.communicationPreferences.enabledRTU,
@@ -65,24 +68,49 @@ export const communicationSelectors = {
   useSetCommunicationPreferences: () => useOpenPLCStore((state) => state.deviceActions.setCommunicationPreferences),
 }
 
-/**
- * Project search selectors.
- */
-export const searchSelectors = {
+// ===================== Project search selectors. =====================
+const searchSelectors = {
   useSearchQuery: () => useOpenPLCStore((state) => state.searchQuery),
   useSearchResults: () => useOpenPLCStore((state) => state.searchResults),
 }
 
-/**
- * Variables table selectors.
- */
-export const variablesSelectors = {
+// ===================== Variables table selectors. =====================
+const variablesSelectors = {
   useGetVariable: () => useOpenPLCStore((state) => state.projectActions.getVariable),
 }
 
-/**
- * Editor selectors.
- */
-export const editorSelectors = {
+// ===================== Editor selectors. ====================
+const editorSelectors = {
   useEditorState: () => useOpenPLCStore((state) => state.editor),
+}
+
+/**
+ * Workspace selectors.
+ */
+const workspaceSelectors = {
+  useWorkspace: () => useOpenPLCStore((state) => state.workspace),
+  useEditingState: () => useOpenPLCStore((state) => state.workspace.editingState),
+  useSetEditingState: () => useOpenPLCStore((state) => state.workspaceActions.setEditingState),
+}
+
+// ===================== Console selectors. =====================
+const consoleSelectors = {
+  useLogs: () => useOpenPLCStore((state) => state.logs),
+  useAddLog: () => useOpenPLCStore((state) => state.consoleActions.addLog),
+  useRemoveLog: () => useOpenPLCStore((state) => state.consoleActions.removeLog),
+  useClearLogs: () => useOpenPLCStore((state) => state.consoleActions.clearLogs),
+}
+
+export {
+  boardSelectors,
+  communicationSelectors,
+  consoleSelectors,
+  editorSelectors,
+  pinSelectors,
+  rtuSelectors,
+  searchSelectors,
+  staticHostSelectors,
+  tcpSelectors,
+  variablesSelectors,
+  workspaceSelectors,
 }

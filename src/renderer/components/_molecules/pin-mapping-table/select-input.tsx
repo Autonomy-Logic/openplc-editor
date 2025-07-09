@@ -1,4 +1,4 @@
-import { DevicePin, pinTypes } from '@root/renderer/store/slices'
+import { DevicePin, pinTypes } from '@root/types/PLC/devices'
 import { CellContext } from '@tanstack/react-table'
 import { startCase } from 'lodash'
 import { useCallback, useEffect, useState } from 'react'

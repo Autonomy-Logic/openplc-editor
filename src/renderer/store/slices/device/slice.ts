@@ -1,7 +1,9 @@
+import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import type { DevicePin, DeviceSlice } from './types'
+import { defaultDeviceConfiguration } from './data'
+import type { DeviceSlice } from './types'
 import {
   checkIfPinIsValid,
   checkIfPinNameIsValid,
@@ -19,39 +21,14 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     availableTCPInterfaces: ['Ethernet', 'Wi-Fi'], // The available TCP interfaces is always ['ethernet', 'wifi'], so we can set it on the slice creation.
   },
   deviceDefinitions: {
-    configuration: {
-      deviceBoard: 'OpenPLC Runtime',
-      communicationPort: '',
-      communicationConfiguration: {
-        modbusRTU: {
-          rtuInterface: 'Serial',
-          rtuBaudRate: '115200',
-          rtuSlaveId: null,
-          rtuRS485ENPin: null,
-        },
-        modbusTCP: {
-          tcpInterface: 'Ethernet',
-          tcpMacAddress: '0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD',
-          tcpWifiSSID: null,
-          tcpWifiPassword: null,
-          tcpStaticHostConfiguration: {
-            ipAddress: '',
-            dns: '',
-            gateway: '',
-            subnet: '',
-          },
-        },
-        communicationPreferences: {
-          enabledRTU: false,
-          enabledTCP: false,
-          enabledDHCP: true,
-        },
-      },
-    },
+    configuration: defaultDeviceConfiguration,
     pinMapping: {
       pins: [],
       currentSelectedPinTableRow: -1,
     },
+  },
+  deviceUpdated: {
+    updated: false, // This flag is used to track if the device has been updated
   },
 
   deviceActions: {
@@ -67,6 +44,37 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
+    setDeviceDefinitions: ({ configuration, pinMapping }): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          if (configuration) {
+            deviceDefinitions.configuration = mergeDeviceConfigWithDefaults(configuration, defaultDeviceConfiguration)
+          }
+          if (pinMapping) {
+            deviceDefinitions.pinMapping.pins = pinMapping || []
+            deviceDefinitions.pinMapping.currentSelectedPinTableRow = -1
+          }
+        }),
+      )
+    },
+    clearDeviceDefinitions: (): void => {
+      setState(
+        produce(({ deviceDefinitions }: DeviceSlice) => {
+          deviceDefinitions.configuration = defaultDeviceConfiguration
+          deviceDefinitions.pinMapping = {
+            pins: [],
+            currentSelectedPinTableRow: -1,
+          }
+        }),
+      )
+    },
+    resetDeviceUpdated: (): void => {
+      setState(
+        produce(({ deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = false // Reset the updated flag to false
+        }),
+      )
+    },
     selectPinTableRow: (selectedRow) => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
@@ -74,10 +82,12 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         }),
       )
     },
-    // MOCK: We added a library to generate random names for new pins to be more explicit what object we're manipulating, this need to be removed further.
+
     createNewPin: (): void => {
       setState(
-        produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
+        produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Mark device as updated when creating a new pin
+
           const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
           // Find the next available address for default pin type
           const defaultPinType = 'digitalInput'
@@ -124,7 +134,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     removePin: (): void => {
       setState(
-        produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
+        produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Mark device as updated when removing a pin
+
           // Found the reference pin based on the current selected pin table row
           const referencePin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
 
@@ -169,7 +181,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
         },
       }
       setState(
-        produce(({ deviceDefinitions: { pinMapping } }: DeviceSlice) => {
+        produce(({ deviceDefinitions: { pinMapping }, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Mark device as updated when updating a pin
+
           const currentPin = pinMapping.pins[pinMapping.currentSelectedPinTableRow]
 
           if (!currentPin) {
@@ -300,21 +314,27 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setDeviceBoard: (deviceBoard): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Mark device as updated when setting device board
+
           deviceDefinitions.configuration.deviceBoard = deviceBoard
         }),
       )
     },
     setCommunicationPort: (communicationPort): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Mark device as updated when setting communication port
+
           deviceDefinitions.configuration.communicationPort = communicationPort
         }),
       )
     },
     setCommunicationPreferences: (preferences) => {
       setState(
-        produce(({ deviceDefinitions: { configuration } }: DeviceSlice) => {
+        produce(({ deviceDefinitions: { configuration }, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Mark device as updated when setting communication preferences
+
           if (preferences.enableRTU !== undefined) {
             configuration.communicationConfiguration.communicationPreferences.enabledRTU = preferences.enableRTU
           }
@@ -329,7 +349,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setRTUConfig: (rtuConfigOption): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Mark device as updated when setting RTU configuration
+
           const { rtuConfig, value } = rtuConfigOption
           switch (rtuConfig) {
             case 'rtuBaudRate':
@@ -352,7 +374,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setTCPConfig: (tcpConfigOption): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Mark device as updated when setting TCP configuration
+
           const { tcpConfig, value } = tcpConfigOption
           switch (tcpConfig) {
             case 'tcpInterface':
@@ -369,7 +393,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setWifiConfig: (wifiConfig): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Mark device as updated when setting Wi-Fi configuration
+
           if (deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpInterface === 'Wi-Fi') {
             if (wifiConfig.tcpWifiSSID)
               deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpWifiSSID = wifiConfig.tcpWifiSSID
@@ -382,7 +408,9 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
     setStaticHostConfiguration: (staticHostConfiguration): void => {
       setState(
-        produce(({ deviceDefinitions }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true // Mark device as updated when setting static host configuration
+
           if (staticHostConfiguration.ipAddress !== undefined)
             deviceDefinitions.configuration.communicationConfiguration.modbusTCP.tcpStaticHostConfiguration.ipAddress =
               staticHostConfiguration.ipAddress
@@ -400,5 +428,28 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
     },
   },
 })
+
+function mergeDeviceConfigWithDefaults(
+  provided: Partial<DeviceConfiguration>,
+  defaults: DeviceConfiguration,
+): DeviceConfiguration {
+  return {
+    deviceBoard: provided.deviceBoard || defaults.deviceBoard,
+    communicationPort: provided.communicationPort ?? defaults.communicationPort,
+    communicationConfiguration: {
+      modbusRTU: {
+        ...defaults.communicationConfiguration.modbusRTU,
+        ...(provided.communicationConfiguration?.modbusRTU || {}),
+      },
+      modbusTCP: provided.communicationConfiguration?.modbusTCP?.tcpInterface
+        ? provided.communicationConfiguration.modbusTCP
+        : defaults.communicationConfiguration.modbusTCP,
+      communicationPreferences: {
+        ...defaults.communicationConfiguration.communicationPreferences,
+        ...(provided.communicationConfiguration?.communicationPreferences || {}),
+      },
+    },
+  }
+}
 
 export { createDeviceSlice }

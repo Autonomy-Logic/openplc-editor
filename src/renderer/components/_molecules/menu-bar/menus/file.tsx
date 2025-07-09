@@ -13,6 +13,7 @@ export const FileMenu = () => {
     editor,
     project,
     workspace,
+    deviceDefinitions,
 
     workspaceActions: { setEditingState },
     modalActions: { openModal },
@@ -25,7 +26,9 @@ export const FileMenu = () => {
 
   const handleUnsavedChanges = (action: 'create-project' | 'open-project') => {
     if (editingState === 'unsaved') {
-      openModal('save-changes-project', action)
+      openModal('save-changes-project', {
+        validationContext: action,
+      })
       return true
     }
     return false
@@ -68,7 +71,10 @@ export const FileMenu = () => {
               <span className={ACCELERATOR}>{'Ctrl + O'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
-            <MenuPrimitive.Item className={ITEM} onClick={() => void saveProjectRequest(project, setEditingState)}>
+            <MenuPrimitive.Item
+              className={ITEM}
+              onClick={() => void saveProjectRequest(project, deviceDefinitions, setEditingState)}
+            >
               <span>{i18n.t('menu:file.submenu.save')}</span>
               <span className={ACCELERATOR}>{'Ctrl + S'}</span>
             </MenuPrimitive.Item>

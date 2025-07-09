@@ -17,7 +17,8 @@ export const addNewElement = <T>(
     elementType: string
     blockVariant?: T
   },
-): { nodes: Node[]; edges: Edge[] } => {
+): { nodes: Node[]; edges: Edge[]; newNode?: Node } => {
+  let newNodeData: Node | undefined
   let newNodes = [...rung.nodes]
   let newEdges = [...rung.edges]
 
@@ -37,7 +38,11 @@ export const addNewElement = <T>(
    * If it is not, add the new element to the selected placeholder
    */
   if (isNodeOfType(selectedPlaceholder, 'parallelPlaceholder')) {
-    const { nodes: parallelNodes, edges: parallelEdges } = startParallelConnection(
+    const {
+      nodes: parallelNodes,
+      edges: parallelEdges,
+      newNode: parellelNewNode,
+    } = startParallelConnection(
       rung,
       {
         index: parseInt(selectedPlaceholderIndex),
@@ -47,11 +52,12 @@ export const addNewElement = <T>(
     )
     newNodes = parallelNodes
     newEdges = parallelEdges
+    newNodeData = parellelNewNode
   } else {
     const {
       nodes: serialNodes,
       edges: serialEdges,
-      // newNode: newAuxNode,
+      newNode: serialNewNode,
     } = appendSerialConnection(
       rung,
       {
@@ -62,6 +68,7 @@ export const addNewElement = <T>(
     )
     newNodes = serialNodes
     newEdges = serialEdges
+    newNodeData = serialNewNode
   }
 
   /**
@@ -82,7 +89,7 @@ export const addNewElement = <T>(
   /**
    * Return the updated rung
    */
-  return { nodes: newNodes, edges: newEdges }
+  return { nodes: newNodes, edges: newEdges, newNode: newNodeData }
 }
 
 export const removeElement = (rung: RungLadderState, element: Node): { nodes: Node[]; edges: Edge[] } => {
