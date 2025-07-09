@@ -11,8 +11,6 @@ const classToVarBlock: Record<string, string> = {
 }
 
 export const generateIecVariablesToString = (variables: PLCVariable[]): string => {
-  console.log()
-
   if (!variables || variables.length === 0) {
     return '(* No variables declared. *)'
   }

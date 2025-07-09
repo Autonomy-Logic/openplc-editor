@@ -56,8 +56,6 @@ const GlobalVariablesEditor = () => {
   }, [editor, globalVariables])
 
   useEffect(() => {
-    console.log(tableData)
-
     setEditorCode(generateIecVariablesToString(tableData as VariblePLC[]))
   }, [tableData])
 
