@@ -57,6 +57,8 @@ class CompilerService {
   // ###########################################################################
   // Properties for the CompilerService class
   // ###########################################################################
+  binPath: string
+  sourcesPath: string
   compilerDirectory: string
   runtimeResourcesPath: string
   arduinoCliBinaryPath: string
@@ -68,6 +70,8 @@ class CompilerService {
   // Constructor for the CompilerService class
   // ###########################################################################
   constructor() {
+    this.binPath = this.constructBinPath()
+    this.sourcesPath = this.constructSourcesPath()
     this.compilerDirectory = this.constructCompilerDirectoryPath()
     this.runtimeResourcesPath = this.constructRuntimeResourcesPath()
     this.arduinoCliBinaryPath = this.constructArduinoCliBinaryPath()
@@ -79,6 +83,14 @@ class CompilerService {
   /**
    * Utilities functions to construct the necessary paths and folders --------------------------------------------------------------
    */
+  constructBinPath() {
+    const isDevelopment = process.env.NODE_ENV === 'development'
+    return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'bin')
+  }
+  constructSourcesPath() {
+    const isDevelopment = process.env.NODE_ENV === 'development'
+    return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'sources')
+  }
   constructCompilerDirectoryPath() {
     const isDevelopment = process.env.NODE_ENV === 'development'
     return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'compilers')

@@ -6,46 +6,26 @@ import { join } from 'path'
 import { promisify } from 'util'
 
 import { logger } from '../logger-service'
+import type { BoardInfo, HalsFile } from './types'
 
-type BoardInfo = {
-  board_manager_url?: string
-  compiler: string
-  core: string
-  c_flags?: string[]
-  cxx_flags?: string[]
-  default_ain: string
-  default_aout: string
-  default_din: string
-  default_dout: string
-  define?: string | string[]
-  extra_libraries?: string[]
-  platform: string
-  preview: string
-  source: string
-  specs: {
-    CPU: string
-    RAM: string
-    Flash: string
-    DigitalPins: string
-    AnalogPins: string
-    PWMPins: string
-    WiFi: string
-    Bluetooth: string
-    Ethernet: string
-  }
-  user_ain?: string
-  user_aout?: string
-  user_din?: string
-  user_dout?: string
-}
-
-type HalsFile = {
-  [boardName: string]: BoardInfo
-}
 class HardwareService {
+  binPath: string
+  sourcesPath: string
   resourcesDirectory: string
   constructor() {
+    this.binPath = this.#constructBinPath()
+    this.sourcesPath = this.#constructSourcesPath()
     this.resourcesDirectory = this.#constructResourcesDirectory()
+  }
+
+  #constructBinPath(): string {
+    const isDevelopment = process.env.NODE_ENV === 'development'
+    return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'bin')
+  }
+
+  #constructSourcesPath(): string {
+    const isDevelopment = process.env.NODE_ENV === 'development'
+    return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'sources')
   }
 
   #constructResourcesDirectory(): string {
@@ -55,26 +35,39 @@ class HardwareService {
 
   async getAvailableSerialPorts(): Promise<string[]> {
     const serialCommunication = promisify(exec)
-    const isDevelopment = process.env.NODE_ENV === 'development'
-
-    const scriptDirectory = join(
-      isDevelopment ? process.cwd() : process.resourcesPath,
-      isDevelopment ? 'resources' : '',
-      'serial-communication',
-    )
-
     let serialCommunicationBinary: string
 
     // Construct the path to the serial binary
     switch (process.platform) {
       case 'win32':
-        serialCommunicationBinary = join(scriptDirectory, 'Windows', 'serial-communication.exe')
+        serialCommunicationBinary = join(
+          this.binPath,
+          'windows',
+          'x64',
+          'bin',
+          'serial-communication',
+          'serial-communication.exe',
+        )
         break
       case 'darwin':
-        serialCommunicationBinary = join(scriptDirectory, 'MacOS', 'serial-communication')
+        serialCommunicationBinary = join(
+          this.binPath,
+          'darwin',
+          'x64',
+          'bin',
+          'serial-communication',
+          'serial-communication',
+        )
         break
       case 'linux':
-        serialCommunicationBinary = join(scriptDirectory, 'Linux', 'serial-communication')
+        serialCommunicationBinary = join(
+          this.binPath,
+          'linux',
+          'x64',
+          'bin',
+          'serial-communication',
+          'serial-communication',
+        )
         break
       default:
         throw new Error(`Unsupported platform: ${process.platform}`)
@@ -103,7 +96,7 @@ class HardwareService {
   async getAvailableBoards() {
     const arduinoCorePath = join(app.getPath('userData'), 'User', 'Runtime', 'arduino-core-control.json')
     // TODO: Add log here!!!
-    const halsPath = join(this.resourcesDirectory, 'runtime', 'hals.json')
+    const halsPath = join(this.sourcesPath, 'boards', 'hals.json')
 
     const readJSONFile = async (path: string) => {
       const file = await readFile(path, 'utf8')
