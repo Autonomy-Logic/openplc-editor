@@ -54,12 +54,19 @@ type HalsFile = {
 }
 
 class CompilerService {
+  // ###########################################################################
+  // Properties for the CompilerService class
+  // ###########################################################################
   compilerDirectory: string
   runtimeResourcesPath: string
   arduinoCliBinaryPath: string
   arduinoConfigPath: string
   arduinoCliBaseParameters: string[]
   iec2cBinaryPath: string
+
+  // ###########################################################################
+  // Constructor for the CompilerService class
+  // ###########################################################################
   constructor() {
     this.compilerDirectory = this.constructCompilerDirectoryPath()
     this.runtimeResourcesPath = this.constructRuntimeResourcesPath()
