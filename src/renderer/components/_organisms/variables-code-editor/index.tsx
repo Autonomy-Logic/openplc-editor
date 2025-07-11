@@ -1,6 +1,6 @@
 import Editor, { OnMount } from '@monaco-editor/react'
-import type { editor as MonacoEditor } from 'monaco-editor'
-import { useRef } from 'react'
+import { type editor as MonacoEditor } from 'monaco-editor'
+import { useEffect, useRef, useState } from 'react'
 
 interface VariablesCodeEditorProps {
   code: string
@@ -10,16 +10,46 @@ interface VariablesCodeEditorProps {
 
 const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode }: VariablesCodeEditorProps) => {
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [height, setHeight] = useState(1000)
+  const [width, setWidth] = useState(1000)
 
   const handleEditorDidMount: OnMount = (editor) => {
     editorRef.current = editor
+    editor.layout()
   }
 
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect
+        setWidth(width)
+        setHeight(height)
+        editorRef.current?.layout({ width, height })
+      }
+    })
+
+    resizeObserver.observe(containerRef.current)
+
+    return () => resizeObserver.disconnect()
+  }, [])
+
+  useEffect(() => {
+    console.log(width, height)
+  }, [width, height])
+
   return (
-    <div aria-label='Variable Code Editor Container' className='h-full w-full'>
+    <div
+      ref={containerRef}
+      aria-label='Variable Code Editor Container'
+      className='h-full w-full'
+      style={{ overflow: 'hidden' }}
+    >
       <Editor
-        height='100%'
-        width='100%'
+        height={height}
+        width={width}
         language='st'
         defaultValue={''}
         value={code}
