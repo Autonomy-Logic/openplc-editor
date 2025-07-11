@@ -36,10 +36,6 @@ const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode }: Variable
     return () => resizeObserver.disconnect()
   }, [])
 
-  useEffect(() => {
-    console.log(width, height)
-  }, [width, height])
-
   return (
     <div
       ref={containerRef}
