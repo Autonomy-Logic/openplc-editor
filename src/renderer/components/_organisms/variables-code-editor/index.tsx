@@ -19,6 +19,12 @@ const VariablesCodeEditor = ({ code, onCodeChange, shouldUseDarkMode }: Variable
     editor.layout()
   }
 
+  // Workaround to dynamically adjust the editor layout on container resize.
+  // This issue occurs in older Electron/Chromium versions that don't properly handle layout updates.
+  // Updating Electron may fix the issue by including a newer Chromium with improved resize handling.
+
+  // https://issues.chromium.org/issues/391393420
+
   useEffect(() => {
     if (!containerRef.current) return
 

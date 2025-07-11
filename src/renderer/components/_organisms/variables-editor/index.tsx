@@ -768,7 +768,7 @@ const VariablesEditor = () => {
           <div
             aria-label='Variables visualization switch container'
             className={cn('flex h-fit w-fit items-center justify-center rounded-md', {
-              'absolute right-0': editorVariables.display === 'code',
+              'absolute right-0 top-0': editorVariables.display === 'code',
             })}
           >
             <TableIcon
@@ -793,7 +793,7 @@ const VariablesEditor = () => {
               currentVisible={editorVariables.display === 'code'}
               className={cn(
                 editorVariables.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-                'disabled pointer-events-none rounded-r-md bg-red-50 opacity-30 transition-colors ease-in-out hover:cursor-not-allowed',
+                'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
               )}
             />
           </div>
