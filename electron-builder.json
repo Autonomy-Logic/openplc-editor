@@ -11,22 +11,18 @@
     "buildResources": "assets",
     "output": "release/build"
   },
-  "extraResources": [
-    "./assets/**",
-    {
-      "from": "./resources/compilers",
-      "to": "./compilers"
-    },
-    {
-      "from": "./resources/runtime",
-      "to": "./runtime"
-    },
-    {
-      "from": "./resources/serial-communication",
-      "to": "./serial-communication"
-    }
-  ],
+  "extraResources": ["./assets/**"],
   "mac": {
+    "extraResources": [
+      {
+        "from": "./resources/bin",
+        "to": "./bin"
+      },
+      {
+        "from": "./resources/sources",
+        "to": "./sources"
+      }
+    ],
     "target": {
       "target": "default",
       "arch": ["arm64", "x64"]
@@ -60,6 +56,16 @@
     ]
   },
   "win": {
+    "extraResources": [
+      {
+        "from": "./resources/bin",
+        "to": "./bin"
+      },
+      {
+        "from": "./resources/sources",
+        "to": "./sources"
+      }
+    ],
     "target": {
       "target": "default",
       "arch": ["x64"]
@@ -67,6 +73,16 @@
     "artifactName": "${productName}_${version}.${ext}"
   },
   "linux": {
+    "extraResources": [
+      {
+        "from": "./resources/bin",
+        "to": "./bin"
+      },
+      {
+        "from": "./resources/sources",
+        "to": "./sources"
+      }
+    ],
     "target": ["AppImage"],
     "category": "Development"
   }
