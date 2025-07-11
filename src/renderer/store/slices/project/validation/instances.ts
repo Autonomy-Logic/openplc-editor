@@ -12,33 +12,37 @@ const instanceNameValidation = (instanceName: string) => {
 }
 
 const createInstanceValidation = (instances: PLCInstance[], name: string) => {
+  const regex = /\d+$/
+
   if (checkIfInstanceExists(instances, name)) {
-    const regex = /_\d+$/
-    const filteredInstances = instances.filter((instance: PLCInstance) =>
-      instance.name.includes(name.replace(regex, '')),
-    )
+    const baseName = name.replace(regex, '')
+
+    const filteredInstances = instances.filter((instance) => instance.name.startsWith(baseName))
+
     const sortedInstances = filteredInstances.sort((a, b) => {
       const matchA = a.name.match(regex)
       const matchB = b.name.match(regex)
-      if (matchA && matchB) {
-        return parseInt(matchA[0].slice(1)) - parseInt(matchB[0].slice(1))
-      }
-      return 0
+      const numA = matchA ? parseInt(matchA[0]) : -1
+      const numB = matchB ? parseInt(matchB[0]) : -1
+      return numA - numB
     })
-    const biggestInstance = sortedInstances[sortedInstances.length - 1].name.match(regex)
-    let number = biggestInstance ? parseInt(biggestInstance[0].slice(1)) : 0
+
+    const biggestMatch = sortedInstances[sortedInstances.length - 1].name.match(regex)
+    let number = biggestMatch ? parseInt(biggestMatch[0]) : -1
+
     for (let i = sortedInstances.length - 1; i >= 1; i--) {
       const previousInstance = sortedInstances[i].name.match(regex)
-      const previousNumber = previousInstance ? parseInt(previousInstance[0].slice(1)) : 0
       const currentInstance = sortedInstances[i - 1].name.match(regex)
-      const currentNumber = currentInstance ? parseInt(currentInstance[0].slice(1)) : 0
+      const previousNumber = previousInstance ? parseInt(previousInstance[0]) : -1
+      const currentNumber = currentInstance ? parseInt(currentInstance[0]) : -1
       if (currentNumber !== previousNumber - 1) {
         number = currentNumber
       }
     }
-    const newInstanceName = `${name.replace(regex, '')}_${number + 1}`
-    return newInstanceName
+
+    return `${baseName}${number + 1}`
   }
+
   return name
 }
 

@@ -40,6 +40,7 @@ export type BlockNodeData<T> = BasicNodeData & {
   connectedVariables: Variables
   variable: { id: string; name: string } | PLCVariable
 }
+
 export type BlockNode<T> = Node<BlockNodeData<T>>
 type BlockProps<T> = NodeProps<BlockNode<T>>
 type BlockBuilderProps<T> = BuilderBasicProps & { variant: T; executionControl?: boolean }
@@ -391,7 +392,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     project: {
       data: { pous },
     },
-    projectActions: { createVariable, updateVariable },
+    projectActions: { createVariable },
     ladderFlows,
     ladderFlowActions: { updateNode },
   } = useOpenPLCStore()
@@ -428,7 +429,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
               variables.all,
               (data.variant as BlockVariant).name.toUpperCase(),
             )
-            handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`)
+            handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`, true)
             return
           }
           inputVariableRef.current.focus()
@@ -488,99 +489,88 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string) => {
-    const variableNameToSubmit = variableName || blockVariableValue
+  const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string, createIfNotFound?: boolean) => {
+    const variableNameToSubmit = variableName ?? blockVariableValue
 
-    if (variableNameToSubmit === '') {
+    if (variableNameToSubmit.trim() === '') {
       setWrongVariable(true)
       return
     }
 
-    const { rung, node, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
-      nodeId: id,
-    })
+    const { rung, node, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId: id })
+
     if (!rung || !node) {
-      toast({
-        title: 'Error',
-        description: 'Could not find the related rung or node',
-        variant: 'fail',
-      })
+      toast({ title: 'Error', description: 'Could not find the related rung or node', variant: 'fail' })
       return
     }
 
-    /**
-     * Check if the variable exists in the table of variables
-     * If exists, update the node variable
-     */
-    let variable: PLCVariable | undefined = variables.selected
-    if (variable) {
-      if (variable.name === variableNameToSubmit) return
-      const res = updateVariable({
-        data: {
-          ...variable,
-          name: variableNameToSubmit,
-          type: {
-            definition: 'derived',
-            value: (node.data as BlockNodeData<BlockVariant>).variant.name,
-          },
+    const blockType = (node.data as BlockNodeData<BlockVariant>).variant.name
+
+    const findMatchingVariable = () =>
+      variables.all.find(
+        (variable) =>
+          variable.name === variableNameToSubmit &&
+          variable.type.definition === 'derived' &&
+          variable.type.value === blockType,
+      )
+
+    const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) =>
+      updateNode({
+        editorName: editor.meta.name,
+        rungId: rung.id,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: { ...node.data, variable },
         },
-        rowId: variables.all.indexOf(variable),
-        scope: 'local',
-        associatedPou: editor.meta.name,
       })
-      if (!res.ok) {
-        toast({
-          title: res.title,
-          description: res.message,
-          variant: 'fail',
-        })
-        setBlockVariableValue(variable.name)
+
+    let variableToLink = variables.selected
+
+    const matchingVariable = findMatchingVariable()
+
+    if (variableToLink) {
+      if (variableToLink.name === variableNameToSubmit) return
+
+      if (matchingVariable && matchingVariable.id !== variableToLink.id) {
+        variableToLink = matchingVariable
+      } else {
+        updateNodeVariable({ name: variableNameToSubmit })
+        setWrongVariable(true)
         return
       }
-      variable = res.data as PLCVariable | undefined
     } else {
-      const res = createVariable({
-        data: {
-          id: uuidv4(),
-          name: variableNameToSubmit,
-          type: {
-            definition: 'derived',
-            value: (node.data as BlockNodeData<BlockVariant>).variant.name,
+      if (matchingVariable) {
+        variableToLink = matchingVariable
+      } else if (createIfNotFound) {
+        const creationResult = createVariable({
+          data: {
+            id: uuidv4(),
+            name: variableNameToSubmit,
+            type: { definition: 'derived', value: blockType },
+            class: 'local',
+            location: '',
+            documentation: '',
+            debug: false,
           },
-          class: 'local',
-          location: '',
-          documentation: '',
-          debug: false,
-        },
-        scope: 'local',
-        associatedPou: editor.meta.name,
-      })
-      if (!res.ok) {
-        toast({
-          title: res.title,
-          description: res.message,
-          variant: 'fail',
+          scope: 'local',
+          associatedPou: editor.meta.name,
         })
+
+        if (!creationResult.ok) {
+          toast({ title: creationResult.title, description: creationResult.message, variant: 'fail' })
+          return
+        }
+        variableToLink = creationResult.data as PLCVariable
+      } else {
+        updateNodeVariable({ name: variableNameToSubmit })
+        setWrongVariable(true)
         return
-      }
-      variable = res.data as PLCVariable | undefined
-      if (variable?.name !== variableNameToSubmit) {
-        setBlockVariableValue(variable?.name ?? '')
       }
     }
 
-    updateNode({
-      editorName: editor.meta.name,
-      rungId: rung.id,
-      nodeId: node.id,
-      node: {
-        ...node,
-        data: {
-          ...node.data,
-          variable: variable ?? { name: '' },
-        },
-      },
-    })
+    updateNodeVariable(variableToLink)
+    setBlockVariableValue(variableToLink.name)
     setWrongVariable(false)
   }
 
@@ -619,7 +609,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           <HighlightedTextArea
             textAreaValue={blockVariableValue}
             setTextAreaValue={setBlockVariableValue}
-            handleSubmit={handleSubmitBlockVariableOnTextareaBlur}
+            handleSubmit={() => handleSubmitBlockVariableOnTextareaBlur(blockVariableValue, false)}
             onFocus={(e) => {
               e.target.select()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {

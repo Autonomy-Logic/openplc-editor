@@ -5,7 +5,7 @@ import { PLCBaseTypesSchema } from './base-types'
 const PLCVariableSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
-  class: z.enum(['input', 'output', 'inOut', 'external', 'local', 'temp']),
+  class: z.enum(['input', 'output', 'inOut', 'external', 'local', 'temp', 'global']).optional(),
   type: z.discriminatedUnion('definition', [
     z.object({
       definition: z.literal('base-type'),
@@ -38,7 +38,7 @@ const PLCVariableSchema = z.object({
     }),
   ]),
   location: z.string(),
-  initialValue: z.string().optional(),
+  initialValue: z.string().or(z.null()).optional(),
   documentation: z.string(),
   debug: z.boolean(),
 })
@@ -50,5 +50,6 @@ const PLCGlobalVariableSchema = PLCVariableSchema.extend({
 })
 
 type PLCGlobalVariable = z.infer<typeof PLCGlobalVariableSchema>
+type PLCVariableType = z.infer<typeof PLCVariableSchema>['type']
 
-export { PLCGlobalVariable, PLCGlobalVariableSchema, PLCVariable, PLCVariableSchema }
+export { PLCGlobalVariable, PLCGlobalVariableSchema, PLCVariable, PLCVariableSchema, PLCVariableType }

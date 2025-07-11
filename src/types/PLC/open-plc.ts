@@ -26,6 +26,7 @@ const baseTypeSchema = z.enum([
   'lword',
   'loglevel',
 ])
+
 type BaseType = z.infer<typeof baseTypeSchema>
 
 const PLCArrayDatatypeSchema = z.object({

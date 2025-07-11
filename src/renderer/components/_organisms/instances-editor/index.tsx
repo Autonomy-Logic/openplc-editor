@@ -5,27 +5,36 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { InstanceType } from '@root/renderer/store/slices'
 import { PLCInstance } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
+import { parseResourceConfigurationToString } from '@root/utils/parse-resource-configuration-to-string'
+import { parseResourceStringToConfiguration } from '@root/utils/parse-resource-string-to-configuration'
 import { useEffect, useState } from 'react'
 
 import TableActions from '../../_atoms/table-actions'
+import { toast } from '../../_features/[app]/toast/use-toast'
 import { InstancesTable } from '../../_molecules/instances-table'
+import { VariablesCodeEditor } from '../variables-code-editor'
 
 const InstancesEditor = () => {
   const ROWS_NOT_SELECTED = -1
   const {
     editor,
+    workspace: {
+      systemConfigs: { shouldUseDarkMode },
+    },
     project: {
       data: {
         configuration: {
-          resource: { instances },
+          resource: { instances, tasks },
         },
       },
     },
     editorActions: { updateModelInstances },
-    projectActions: { createInstance, rearrangeInstances, deleteInstance },
+    projectActions: { createInstance, rearrangeInstances, deleteInstance, setInstances, setTasks },
   } = useOpenPLCStore()
 
   const [instanceData, setInstanceData] = useState<PLCInstance[]>([])
+  const [editorCode, setEditorCode] = useState(() => parseResourceConfigurationToString(tasks, instanceData))
+  const [parseError, setParseError] = useState<string | null>(null)
 
   const [editorInstances, setEditorInstances] = useState<InstanceType>({
     selectedRow: ROWS_NOT_SELECTED.toString(),
@@ -36,6 +45,14 @@ const InstancesEditor = () => {
     const instancesToTable = instances.filter((instance) => instance.name)
     setInstanceData(instancesToTable)
   }, [editor, instances])
+
+  useEffect(() => {
+    setEditorCode(parseResourceConfigurationToString(tasks, instanceData))
+  }, [instanceData, tasks])
+
+  const otherIsCode = 'task' in editor && editor.task?.display === 'code'
+  const showTable = editorInstances.display === 'table' && !otherIsCode
+  const showCode = editorInstances.display === 'code'
 
   useEffect(() => {
     if (editor.type === 'plc-resource') {
@@ -52,11 +69,30 @@ const InstancesEditor = () => {
         })
       } else {
         setEditorInstances({
-          display: editor.instance.display,
+          display: 'code',
         })
       }
     }
-  }, [editor])
+  }, [ROWS_NOT_SELECTED, editor])
+
+  const handleVisualizationTypeChange = (value: 'code' | 'table') => {
+    if (editorInstances.display === 'code' && value === 'table') {
+      const success = commitCode()
+      if (!success) return
+    }
+
+    if (value === 'table') {
+      updateModelInstances({
+        display: 'table',
+        selectedRow: editorInstances.display === 'table' ? parseInt(editorInstances.selectedRow) : ROWS_NOT_SELECTED,
+      })
+    } else {
+      // @ts-expect-error: 'selectedRow' is not required when display is 'code'
+      updateModelInstances({
+        display: 'code',
+      })
+    }
+  }
 
   const handleRearrangeInstances = (index: number, row?: number) => {
     if (editorInstances.display === 'code') return
@@ -78,7 +114,7 @@ const InstancesEditor = () => {
     if (instances.length === 0) {
       createInstance({
         data: {
-          name: 'instance',
+          name: 'instance0',
           program: '',
           task: '',
         },
@@ -139,18 +175,54 @@ const InstancesEditor = () => {
     })
   }
 
+  const commitCode = (): boolean => {
+    try {
+      const { instances, tasks } = parseResourceStringToConfiguration(editorCode)
+
+      const response = setInstances({
+        instances,
+      })
+
+      const tasksResponse = setTasks({
+        tasks,
+      })
+
+      if (!tasksResponse.ok) {
+        throw new Error(tasksResponse.title + (tasksResponse.message ? `: ${tasksResponse.message}` : ''))
+      }
+
+      if (!response.ok) {
+        throw new Error(response.title + (response.message ? `: ${response.message}` : ''))
+      }
+
+      toast({ title: 'Update tables', description: 'Changes applied successfully.' })
+      setParseError(null)
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unexpected syntax error.'
+      setParseError(message)
+      toast({ title: 'Syntax error', description: message, variant: 'fail' })
+      return false
+    }
+  }
+
+  const isTaskInCode = 'task' in editor && editor.task?.display === 'code'
+
+  if (isTaskInCode) return null
+
   return (
     <div aria-label='instances editor container' className='flex w-full  flex-col gap-4 '>
       <div aria-label='instances editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
-        {editorInstances.display === 'table' ? (
-          <div
-            aria-label='instances editor table actions container'
-            className='relative flex h-full w-full items-center justify-between'
-          >
-            <span className='select-none'>Instances</span>
+        <div
+          aria-label='instances editor table actions container'
+          className='relative flex h-full w-full items-center justify-between'
+        >
+          {editorInstances.display === 'code' ? 'Text editor' : 'Instances'}
+
+          {editorInstances.display === 'table' && (
             <div
               aria-label='instances editor table actions container'
-              className='  flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
+              className='  mr-2 flex h-full w-28 items-center justify-evenly *:rounded-md *:p-1'
             >
               <TableActions
                 actions={[
@@ -188,10 +260,9 @@ const InstancesEditor = () => {
                 ]}
               />
             </div>
-          </div>
-        ) : (
-          <></>
-        )}
+          )}
+        </div>
+
         <div
           aria-label='instances visualization switch container'
           className={cn('flex h-fit w-fit flex-1 items-center justify-center rounded-md', {
@@ -201,6 +272,7 @@ const InstancesEditor = () => {
           <TableIcon
             aria-label='instances table visualization'
             size='md'
+            onClick={() => handleVisualizationTypeChange('table')}
             currentVisible={editorInstances.display === 'table'}
             className={cn(
               editorInstances.display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
@@ -210,7 +282,7 @@ const InstancesEditor = () => {
 
           <CodeIcon
             aria-label='instances code visualization'
-            onClick={() => {}}
+            onClick={() => handleVisualizationTypeChange('code')}
             size='md'
             currentVisible={editorInstances.display === 'code'}
             className={cn(
@@ -220,16 +292,25 @@ const InstancesEditor = () => {
           />
         </div>
       </div>
-      {editorInstances.display === 'table' ? (
-        <div aria-label='instances editor table container' className='' style={{ scrollbarGutter: 'stable' }}>
+      {showTable && (
+        <div aria-label='instances editor table container' style={{ scrollbarGutter: 'stable' }}>
           <InstancesTable
             tableData={instanceData}
             handleRowClick={handleRowClick}
             selectedRow={parseInt(editorInstances.selectedRow)}
           />
         </div>
-      ) : (
-        <></>
+      )}
+
+      {showCode && (
+        <div
+          aria-label='Instance editor code container'
+          className='min-h-96 flex-1 overflow-y-auto'
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          <VariablesCodeEditor code={editorCode} onCodeChange={setEditorCode} shouldUseDarkMode={shouldUseDarkMode} />
+          {parseError && <p className='mt-2 text-xs text-red-500'>Error: {parseError}</p>}
+        </div>
       )}
     </div>
   )

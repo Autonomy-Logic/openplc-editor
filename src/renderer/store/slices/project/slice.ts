@@ -1,5 +1,5 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { PLCArrayDatatype, PLCVariable } from '@root/types/PLC/open-plc'
+import { PLCArrayDatatype, PLCGlobalVariable, PLCInstance, PLCTask, PLCVariable } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
 import { v4 as uuidv4 } from 'uuid'
 import { StateCreator } from 'zustand'
@@ -304,6 +304,38 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
       )
       return response
     },
+    setPouVariables: (payload) => {
+      let response: ProjectResponse = { ok: true }
+
+      setState(
+        produce((state: ProjectSlice) => {
+          const { pouName, variables } = payload
+
+          const pou = state.project.data.pous.find((p) => p.data.name === pouName)
+
+          if (!pou) {
+            response = { ok: false, title: 'POU not Found', message: `The POU named ${pouName} could not be found.` }
+
+            return
+          }
+
+          pou.data.variables = variables
+        }),
+      )
+
+      return response
+    },
+    setGlobalVariables: (payload: { variables: PLCGlobalVariable[] }): ProjectResponse => {
+      const response: ProjectResponse = { ok: true }
+
+      setState(
+        produce((state: ProjectSlice) => {
+          state.project.data.configuration.resource.globalVariables = payload.variables
+        }),
+      )
+
+      return response
+    },
     getVariable: (variableToGet): PLCVariable | Omit<PLCVariable, 'class'> | undefined => {
       switch (variableToGet.scope) {
         case 'global': {
@@ -583,6 +615,19 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
 
       return response
     },
+    setTasks: (payload: { tasks: PLCTask[] }): ProjectResponse => {
+      const response: ProjectResponse = { ok: true }
+
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const { tasks } = payload
+
+          project.data.configuration.resource.tasks = tasks
+        }),
+      )
+
+      return response
+    },
     deleteTask: (taskToBeDeleted: { rowId: number }): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
@@ -670,6 +715,19 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           } else {
             project.data.configuration.resource.instances.push(data)
           }
+        }),
+      )
+
+      return response
+    },
+    setInstances: (payload: { instances: PLCInstance[] }): ProjectResponse => {
+      const response: ProjectResponse = { ok: true }
+
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const { instances } = payload
+
+          project.data.configuration.resource.instances = instances
         }),
       )
 
