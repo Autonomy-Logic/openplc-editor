@@ -1,0 +1,2 @@
+const CompilerDumpClass = {}
+export { CompilerDumpClass }
