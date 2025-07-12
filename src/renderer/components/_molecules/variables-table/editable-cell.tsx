@@ -1,7 +1,7 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { pinSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { LadderFlowState } from '@root/renderer/store/slices'
+import { FBDFlowState, LadderFlowState } from '@root/renderer/store/slices'
 import { ProjectResponse } from '@root/renderer/store/slices/project'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
 import type { PLCVariable } from '@root/types/PLC/open-plc'
@@ -39,13 +39,14 @@ const EditableNameCell = ({
     editor,
     ladderFlows,
     ladderFlowActions: { updateNode },
+    fbdFlows,
+    fbdFlowActions: { updateNode: updateFBDNode },
     searchQuery,
     projectActions: { getVariable },
     project: {
       data: { pous },
     },
   } = useOpenPLCStore()
-
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
   const [isEditing, setIsEditing] = useState(false)
@@ -59,6 +60,12 @@ const EditableNameCell = ({
     // if (variable?.type.definition === 'derived') return false
 
     if (variable?.class === 'external') {
+      return false
+    }
+
+    const disallowedLocationClasses = ['input', 'output', 'inOut', 'external', 'temp']
+
+    if (id === 'location' && disallowedLocationClasses.includes(variable?.class || '')) {
       return false
     }
 
@@ -92,24 +99,42 @@ const EditableNameCell = ({
     return matches
   }
 
-  // When the input is blurred, we'll call our table meta's updateData function
+  const findNodesUsingVariableFbd = (fbdFlows: FBDFlowState['fbdFlows'], varName: string) => {
+    const lower = varName.toLowerCase()
+    const matches: { flowName: string; nodeId: string }[] = []
+
+    fbdFlows.forEach((flow) => {
+      flow.rung.nodes.forEach((node) => {
+        const data = (node.data as { variable?: PLCVariable | { name?: string } }).variable
+        if (data?.name?.toLowerCase() === lower) {
+          matches.push({ flowName: flow.name, nodeId: node.id })
+        }
+      })
+    })
+
+    return matches
+  }
+
   const onBlur = async () => {
+    const language = 'language' in editor.meta ? editor.meta.language : undefined
+
     if (cellValue === initialValue) return setIsEditing(false)
 
     const oldName = initialValue
     const newName = cellValue
 
     /* 1 ▸ which blocks use the variable? */
-    const nodesUsingVar = findNodesUsingVariable(ladderFlows, oldName)
+    const nodesUsingVarLadder = findNodesUsingVariable(ladderFlows, oldName)
+    const nodesUsingVarFbd = findNodesUsingVariableFbd(fbdFlows, oldName)
 
     let shouldPropagate = true
-    if (nodesUsingVar.length) {
+    if (nodesUsingVarLadder.length || nodesUsingVarFbd.length) {
       shouldPropagate = await askRenameBlocks()
     }
 
     /* 2 ▸ IF NOT propagating, break the link before renaming */
-    if (nodesUsingVar.length && !shouldPropagate) {
-      nodesUsingVar.forEach(({ rungId, nodeId }) => {
+    if (nodesUsingVarLadder.length && !shouldPropagate && language === 'ld') {
+      nodesUsingVarLadder.forEach(({ rungId, nodeId }) => {
         const { rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId })
         if (!rung || !node) return
 
@@ -135,8 +160,38 @@ const EditableNameCell = ({
       })
     }
 
+    if (nodesUsingVarFbd.length && !shouldPropagate && language === 'fbd') {
+      nodesUsingVarFbd.forEach(({ flowName, nodeId }) => {
+        const flow = fbdFlows.find((f) => f.name === flowName)
+        if (!flow) return
+
+        const node = flow.rung.nodes.find((n) => n.id === nodeId)
+        if (!node) return
+
+        const variableClone = {
+          ...(node.data as { variable: PLCVariable }).variable,
+          id: `broken-${nodeId}`,
+          name: oldName,
+        }
+
+        updateFBDNode({
+          editorName: editor.meta.name,
+          nodeId,
+          node: {
+            ...node,
+            data: {
+              ...node.data,
+              variable: variableClone,
+              wrongVariable: true,
+            },
+          },
+        })
+      })
+    }
+
     /* 3 ▸ Now rename it in the table */
     const res = table.options.meta?.updateData(index, id, newName)
+
     if (!res?.ok) {
       setCellValue(initialValue)
       toast({ title: res?.title, description: res?.message, variant: 'fail' })
@@ -144,14 +199,37 @@ const EditableNameCell = ({
     }
 
     /* 4 ▸ If the user said YES, propagate the change to the blocks */
-    if (nodesUsingVar.length && shouldPropagate) {
-      nodesUsingVar.forEach(({ rungId, nodeId }) => {
+    if (nodesUsingVarLadder.length && shouldPropagate && language === 'ld') {
+      nodesUsingVarLadder.forEach(({ rungId, nodeId }) => {
         const { rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId })
         if (!rung || !node) return
 
         updateNode({
           editorName: editor.meta.name,
           rungId,
+          nodeId,
+          node: {
+            ...node,
+            data: {
+              ...node.data,
+              variable: { ...(node.data as { variable: PLCVariable }).variable, name: newName },
+              wrongVariable: false,
+            },
+          },
+        })
+      })
+    }
+
+    if (nodesUsingVarFbd.length && shouldPropagate && language === 'fbd') {
+      nodesUsingVarFbd.forEach(({ flowName, nodeId }) => {
+        const flow = fbdFlows.find((f) => f.name === flowName)
+        if (!flow) return
+
+        const node = flow.rung.nodes.find((node) => node.id === nodeId)
+        if (!node) return
+
+        updateFBDNode({
+          editorName: editor.meta.name,
           nodeId,
           node: {
             ...node,
@@ -240,9 +318,7 @@ const EditableNameCell = ({
         <InputWithRef
           value={cellValue}
           onChange={(e) => setCellValue(e.target.value)}
-          onBlur={() => {
-            void onBlur()
-          }}
+          onBlur={onBlur}
           className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
         />
       ) : (
