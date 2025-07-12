@@ -1,2 +1,2 @@
-export * from './compiler-service'
+export * from './compiler-module'
 export * from './compiler-types'

@@ -1,2 +1,0 @@
-const CompilerDumpClass = {}
-export { CompilerDumpClass }
