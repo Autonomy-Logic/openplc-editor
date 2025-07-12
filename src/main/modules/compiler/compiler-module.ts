@@ -3,6 +3,11 @@ import { join } from 'node:path'
 
 // import type { ArduinoCliConfig, BoardInfo, HalsFile } from './compiler-types'
 
+interface BuildStepResult {
+  success: boolean
+  data?: unknown
+}
+
 class CompilerModule {
   binaryDirectoryPath: string
   sourceDirectoryPath: string
@@ -13,7 +18,7 @@ class CompilerModule {
   }
 
   // ############################################################################
-  // =========================== Static methods =================================
+  // =========================== Static methods ================================
   // ############################################################################
 
   // ############################################################################
@@ -37,12 +42,14 @@ class CompilerModule {
   // =========================== Public methods =================================
   // ############################################################################
 
-  // ============================== Initialization Methods ==============================
-  async createDirectories(
-    projectFolderPath: string,
-    boardTarget: string,
-  ): Promise<{ success: boolean; data?: unknown }> {
-    let res: { success: boolean; data?: unknown } = { success: false }
+  // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  // ++ ========================= Build Steps ================================= ++
+  // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+  // ========================= Initialization Methods =========================
+  async createDirectories(projectFolderPath: string, boardTarget: string): Promise<BuildStepResult> {
+    console.log('Creating directories for project:', projectFolderPath, 'and board target:', boardTarget)
+    let res: BuildStepResult = { success: false }
     const buildDirectory = join(projectFolderPath, 'build')
     const boardDirectory = join(buildDirectory, boardTarget)
     const sourceDirectory = join(boardDirectory, 'src')
@@ -59,11 +66,11 @@ class CompilerModule {
     return res
   }
 
-  async copyStaticBuildFiles(compilationPath: string): Promise<void> {
+  async copyStaticBuildFiles(compilationPath: string): Promise<BuildStepResult> {
+    console.log('Copying static build files...')
+    let res: BuildStepResult = { success: false }
     const staticArduinoFilesPath = join(this.sourceDirectoryPath, 'arduino')
     const staticBaremetalFilesPath = join(this.sourceDirectoryPath, 'baremetal')
-    // Placeholder for copying static build files logic
-    console.log('Copying static build files...')
     try {
       // Implement the logic to copy static build files
       const results = await Promise.all([
@@ -71,11 +78,21 @@ class CompilerModule {
         cp(staticBaremetalFilesPath, join(compilationPath, 'baremetal'), { recursive: true }),
       ])
       console.log('Static build files copied successfully:', results)
+      res = { success: true, data: results }
     } catch (error) {
       console.error(`Error copying static build files: ${String(error)}`)
+      res.data = error
     }
+    return res
   }
+
   async createFiles(): Promise<void> {}
+
+  // ========================= Compilation Methods ============================
+
+  // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  // ++ ========================= Compiler builder ============================ ++
+  // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   /**
    * This will be the main entry point for the compiler module.
    * It will handle all the compilation process, will orchestrate the various steps involved in compiling a program.
