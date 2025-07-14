@@ -25,7 +25,7 @@ const SelectableTypeCell = ({
   const {
     editor,
     project: {
-      data: { dataTypes, pous },
+      data: { dataTypes },
     },
     ladderFlowActions: { updateNode },
     libraries: sliceLibraries,
@@ -42,38 +42,23 @@ const SelectableTypeCell = ({
   const LibraryTypes = [
     {
       definition: 'system',
-      values: sliceLibraries.system
-        .filter((library) =>
-          pous.find((pou) => pou.data.name === editor.meta.name)?.type === 'function'
-            ? library.pous.some((pou) => pou.type === 'function')
-            : library.pous.some((pou) => pou),
-        )
-        .flatMap((library) => library.pous.map((pou) => pou.name.toUpperCase())),
+      values: sliceLibraries.system.flatMap((library) =>
+        library.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
+      ),
     },
     {
       definition: 'user',
       values: sliceLibraries.user
-        .filter((userLibrary) => {
-          if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
-            if (editor.meta.pouType === 'program') {
-              return (
-                (userLibrary.type === 'function' || userLibrary.type === 'function-block') &&
-                userLibrary.name !== editor.meta.name
-              )
-            } else if (editor.meta.pouType === 'function') {
-              return userLibrary.type === 'function' && userLibrary.name !== editor.meta.name
-            } else if (editor.meta.pouType === 'function-block') {
-              return (
-                (userLibrary.type === 'function' || userLibrary.type === 'function-block') &&
-                userLibrary.name !== editor.meta.name
-              )
-            }
-          }
-
-          // Remove userLibrary if its name matches editor.meta.name (fallback case)
-          return userLibrary.name !== editor.meta.name
-        })
-        .map((library) => library.name.toUpperCase()),
+        .filter((userLibrary) => userLibrary.name !== editor.meta.name)
+        .flatMap((userLibrary) =>
+          'pous' in userLibrary && Array.isArray((userLibrary as { pous: { type: string; name: string }[] }).pous)
+            ? (userLibrary as { pous: { type: string; name: string }[] }).pous
+                .filter((pou) => pou.type === 'function-block')
+                .map((pou) => pou.name.toUpperCase())
+            : userLibrary.type === 'function-block'
+              ? [userLibrary.name.toUpperCase()]
+              : [],
+        ),
     },
   ]
 
