@@ -1,10 +1,14 @@
-import { exec } from 'node:child_process'
+import { exec, spawn } from 'node:child_process'
 import { cp, mkdir } from 'node:fs/promises'
 import os from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
+import { CreateXMLFile } from '@root/main/utils'
+import { ProjectState } from '@root/renderer/store/slices'
+import { XmlGenerator } from '@root/utils'
 import { app as electronApp } from 'electron'
+import type { MessagePortMain } from 'electron/main'
 
 // import type { ArduinoCliConfig, BoardInfo, HalsFile } from './compiler-types'
 
@@ -21,6 +25,8 @@ class CompilerModule {
   arduinoCliConfigurationFilePath: string
   arduinoCliBaseParameters: string[]
 
+  xml2stBinaryPath: string
+
   iec2cBinaryPath: string
 
   // ############################################################################
@@ -36,8 +42,10 @@ class CompilerModule {
 
     this.arduinoCliBinaryPath = this.#constructArduinoCliBinaryPath()
     this.arduinoCliConfigurationFilePath = join(electronApp.getPath('userData'), 'User', 'arduino-cli.yaml')
-    // INFO: We use this approach because some commands can receive additional parameters as a string arrayÍ.
+    // INFO: We use this approach because some commands can receive additional parameters as a string array.
     this.arduinoCliBaseParameters = ['--config-file', this.arduinoCliConfigurationFilePath]
+
+    this.xml2stBinaryPath = this.#constructXml2stBinaryPath()
 
     this.iec2cBinaryPath = this.#constructIec2cBinaryPath()
   }
@@ -66,6 +74,11 @@ class CompilerModule {
   // TODO: Validate the path.
   #constructArduinoCliBinaryPath(): string {
     return join(this.binaryDirectoryPath, 'arduino-cli', 'arduino-cli')
+  }
+
+  // TODO: Validate the path.
+  #constructXml2stBinaryPath(): string {
+    return join(this.binaryDirectoryPath, 'xml2st', 'xml2st')
   }
 
   // TODO: Validate the path.
@@ -169,6 +182,54 @@ class CompilerModule {
   }
 
   // +++++++++++++++++++++++++++ Compilation Methods +++++++++++++++++++++++++++++
+
+  async handleGenerateXMLfromJSON(
+    sourceTargetFolderPath: string,
+    jsonData: ProjectState['data'],
+  ): Promise<MethodsResult> {
+    return new Promise<MethodsResult>((resolve) => {
+      const { data: xmlData } = XmlGenerator(jsonData, 'old-editor')
+      if (typeof xmlData !== 'string') {
+        resolve({ success: false, data: new Error('XML data is not a string') })
+        return
+      }
+
+      const xmlCreationResult = CreateXMLFile(sourceTargetFolderPath, xmlData, 'plc')
+
+      if (xmlCreationResult.success) {
+        resolve({ success: true })
+      } else {
+        resolve({ success: false, data: new Error('Failed to create XML file') })
+      }
+    })
+  }
+
+  // TODO: Validate execution.
+  async handleTranspileXMLtoST(generatedXMLFilePath: string, mainProcessPort: MessagePortMain) {
+    return new Promise<MethodsResult>((resolve) => {
+      const executeCommand = spawn(this.xml2stBinaryPath, ['--generate-st', generatedXMLFilePath])
+
+      // INFO: We use the xml2st command to transpile the XML file to ST.
+      executeCommand.stdout.on('data', (data: Buffer) => {
+        mainProcessPort.postMessage({ type: 'compiler-success', data: data.toString() })
+      })
+
+      executeCommand.stderr.on('data', (data: Buffer) => {
+        console.error('Error transpiling XML to ST:', data.toString())
+        mainProcessPort.postMessage({ type: 'compiler-error', data: data.toString() })
+        resolve({ success: false, data: new Error(data.toString()) })
+      })
+
+      executeCommand.on('close', (code) => {
+        if (code === 0) {
+          console.log('Transpiled XML to ST successfully:', generatedXMLFilePath)
+          resolve({ success: true })
+        } else {
+          resolve({ success: false, data: new Error(`xml2st process exited with code ${code}`) })
+        }
+      })
+    })
+  }
 
   // ++ ========================= Compiler builder ============================ ++
 
