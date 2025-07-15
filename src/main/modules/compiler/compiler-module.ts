@@ -56,10 +56,13 @@ class CompilerModule {
 
   // Initialize paths based on the environment
   #constructBinaryDirectoryPath(): string {
+    if (CompilerModule.HOST_ARCHITECTURE !== 'x64' && CompilerModule.HOST_ARCHITECTURE !== 'arm64') return ''
+    const platformSpecificPath = join(CompilerModule.HOST_PLATFORM, CompilerModule.HOST_ARCHITECTURE)
     return join(
       CompilerModule.DEVELOPMENT_MODE ? process.cwd() : process.resourcesPath,
       CompilerModule.DEVELOPMENT_MODE ? 'resources' : '',
       'bin',
+      CompilerModule.DEVELOPMENT_MODE ? platformSpecificPath : '',
     )
   }
 
@@ -73,7 +76,7 @@ class CompilerModule {
 
   // TODO: Validate the path.
   #constructArduinoCliBinaryPath(): string {
-    return join(this.binaryDirectoryPath, 'arduino-cli', 'arduino-cli')
+    return join(this.binaryDirectoryPath, 'arduino-cli')
   }
 
   // TODO: Validate the path.
@@ -83,7 +86,7 @@ class CompilerModule {
 
   // TODO: Validate the path.
   #constructIec2cBinaryPath(): string {
-    return join(this.binaryDirectoryPath, 'iec2c', 'iec2c')
+    return join(this.binaryDirectoryPath, 'iec2c')
   }
 
   // ############################################################################
@@ -104,14 +107,17 @@ class CompilerModule {
   }
 
   async checkArduinoCliAvailability(): Promise<MethodsResult<string>> {
+    let binaryPath = this.arduinoCliBinaryPath
     const [flag, configFilePath] = this.arduinoCliBaseParameters
-
     const executeCommand = promisify(exec)
+
+    if (CompilerModule.HOST_PLATFORM === 'win32') {
+      // INFO: On Windows, we need to add the .exe extension to the binary path.
+      binaryPath += '.exe'
+    }
     // INFO: We use the version command to check if the arduino-cli is available.
     // INFO: If the command is not available, it will throw an error.
-    const { stdout, stderr } = await executeCommand(
-      `"${this.arduinoCliBinaryPath}" version ${flag} "${configFilePath}"`,
-    )
+    const { stdout, stderr } = await executeCommand(`"${binaryPath}" version ${flag} "${configFilePath}"`)
     if (stderr) {
       return { success: false, data: stderr }
     }
@@ -120,10 +126,16 @@ class CompilerModule {
   }
 
   async checkIec2cAvailability(): Promise<MethodsResult<string>> {
+    let binaryPath = this.iec2cBinaryPath
     const executeCommand = promisify(exec)
+
+    if (CompilerModule.HOST_PLATFORM === 'win32') {
+      // INFO: On Windows, we need to add the .exe extension to the binary path.
+      binaryPath += '.exe'
+    }
     // INFO: We use the version command to check if the iec2c is available.
     // INFO: If the command is not available, it will throw an error.
-    const { stdout, stderr } = await executeCommand(`"${this.iec2cBinaryPath}" -v`)
+    const { stdout, stderr } = await executeCommand(`"${binaryPath}" -v`)
     if (stderr) {
       return { success: false, data: stderr }
     }
@@ -208,8 +220,13 @@ class CompilerModule {
 
   // TODO: Validate execution.
   async handleTranspileXMLtoST(generatedXMLFilePath: string, mainProcessPort: MessagePortMain) {
+    let binaryPath = this.xml2stBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') {
+      // INFO: On Windows, we need to add the .exe extension to the binary path.
+      binaryPath += '.exe'
+    }
     return new Promise<MethodsResult<string | Buffer>>((resolve) => {
-      const executeCommand = spawn(this.xml2stBinaryPath, ['--generate-st', generatedXMLFilePath])
+      const executeCommand = spawn(binaryPath, ['--generate-st', generatedXMLFilePath])
 
       // INFO: We use the xml2st command to transpile the XML file to ST.
       executeCommand.stdout.on('data', (data: Buffer) => {

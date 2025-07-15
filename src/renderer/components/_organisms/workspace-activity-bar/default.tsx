@@ -16,6 +16,12 @@ type DefaultWorkspaceActivityBarProps = {
 }
 
 export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBarProps) => {
+  const handleRequest = () => {
+    // This function is a placeholder for the zoom functionality
+    // Todo: Test receive a callback
+    window.bridge.runCompileProgram()
+    // rendererProcessPort.postMessage('Ping from renderer process')
+  }
   return (
     <>
       <TooltipSidebarWrapperButton tooltipContent='Search'>
@@ -25,7 +31,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         <ZoomButton {...zoom} />
       </TooltipSidebarWrapperButton>
       <TooltipSidebarWrapperButton tooltipContent='Compile'>
-        <DownloadButton />
+        <DownloadButton onClick={handleRequest} />
       </TooltipSidebarWrapperButton>
       {/** TODO: Need to be implemented */}
       <TooltipSidebarWrapperButton tooltipContent='Not implemented yet'>
