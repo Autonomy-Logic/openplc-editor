@@ -49,7 +49,7 @@ const DownloadButton = () => {
     })
   }
 
-  const requestBuildProgram = async () => {
+  const _requestBuildProgram = async () => {
     addLog({ id: uuidv4(), type: 'info', message: 'Build process started' })
     addLog({ id: uuidv4(), type: 'warning', message: 'Verifying if build directory exist' })
     const { success, message: logMessage } = await window.bridge.createBuildDirectory(project.meta.path)
@@ -82,11 +82,15 @@ const DownloadButton = () => {
   // TODO: Implement this method!!!!
   const _handleBuildProgram = () => {
     // This function should handle the build process and call the compiler service to generate the program object
+    const rendererProcessPort = window.bridge.runCompileProgram([project.meta.path, 'arduino uno', project.data])
+    rendererProcessPort.onmessage = (event: MessageEvent<{ logLevel: string; message: string }>) => {
+      const { logLevel, message } = event.data
+      addLog({ id: uuidv4(), type: logLevel as 'info' | 'warning' | 'error', message })
+    }
   }
 
   return (
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    <ActivityBarButton aria-label='Download' onClick={requestBuildProgram}>
+    <ActivityBarButton aria-label='Download' onClick={_handleBuildProgram}>
       <DownloadIcon />
     </ActivityBarButton>
   )

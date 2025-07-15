@@ -29,6 +29,7 @@ class MainProcessBridge implements MainIpcModule {
   compilerService
   menuBuilder
   hardwareService
+  compilerModule
 
   constructor({
     ipcMain,
@@ -38,6 +39,7 @@ class MainProcessBridge implements MainIpcModule {
     compilerService,
     menuBuilder,
     hardwareService,
+    compilerModule,
   }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
@@ -46,6 +48,7 @@ class MainProcessBridge implements MainIpcModule {
     this.store = store
     this.menuBuilder = menuBuilder
     this.hardwareService = hardwareService
+    this.compilerModule = compilerModule
   }
 
   // ===================== IPC HANDLER REGISTRATION =====================
@@ -75,6 +78,9 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('compiler:build-xml-file', this.handleCompilerBuildXmlFile)
     this.ipcMain.on('compiler:build-st-program', this.handleCompilerBuildStProgram)
     this.ipcMain.on('compiler:generate-c-files', this.handleCompilerGenerateCFiles)
+
+    // Work in progress
+    this.ipcMain.on('compiler:run-compile-program', this.handleRunCompileProgram)
 
     // ===================== WINDOW CONTROLS =====================
     this.ipcMain.on('window-controls:close', this.handleWindowControlsClose)
@@ -204,6 +210,12 @@ class MainProcessBridge implements MainIpcModule {
     if (replyPort) {
       this.compilerService.generateCFiles(pathToStProgram, replyPort)
     }
+  }
+
+  // Work in progress
+  handleRunCompileProgram = (event: IpcMainEvent, args: string[]) => {
+    const [mainProcessPort] = event.ports
+    void this.compilerModule.compileProgram(args, mainProcessPort)
   }
 
   // Window controls handlers

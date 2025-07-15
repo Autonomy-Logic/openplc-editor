@@ -140,6 +140,19 @@ const rendererProcessBridge = {
     rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
   },
 
+  // =================== Work in Progress ===================
+  // This method is a placeholder for running the compile program.
+  // TODO: Update the arguments to match the expected types
+  runCompileProgram: (args: any[]) => {
+    // Create a MessageChannel to communicate between the renderer and main process
+    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
+    // Send to the main process a message to run the compile program
+    // The main process will handle the compilation and send the result back through the port
+    ipcRenderer.postMessage('compiler:run-compile-program', args, [mainProcessPort])
+    // Set up the renderer process port to listen for messages from the main process
+    return rendererProcessPort
+  },
+
   // ===================== HARDWARE METHODS =====================
   getAvailableBoards: (): Promise<
     Map<

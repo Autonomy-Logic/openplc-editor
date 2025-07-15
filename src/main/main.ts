@@ -17,6 +17,7 @@ import { join, resolve } from 'path'
 // TODO: Refactor this type declaration
 import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
+import { CompilerModule } from './modules/compiler'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
 import { HardwareService, ProjectService, UserService } from './services'
@@ -284,6 +285,8 @@ const createMainWindow = async () => {
 
   const hardwareService = new HardwareService()
 
+  const compilerModule = new CompilerModule()
+
   const mainIpcModule = new MainProcessBridge({
     mainWindow,
     ipcMain,
@@ -292,6 +295,7 @@ const createMainWindow = async () => {
     store,
     menuBuilder,
     hardwareService,
+    compilerModule,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
 

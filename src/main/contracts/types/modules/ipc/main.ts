@@ -1,4 +1,5 @@
 import MenuBuilder from '@root/main/menu'
+import { CompilerModule } from '@root/main/modules/compiler'
 import { CompilerService } from '@root/main/services/compiler-service'
 import { BrowserWindow, IpcMain } from 'electron/main'
 
@@ -27,4 +28,5 @@ export type MainIpcModuleConstructor = {
   store: TStoreType
   menuBuilder: InstanceType<typeof MenuBuilder>
   hardwareService: InstanceType<typeof HardwareService>
+  compilerModule: InstanceType<typeof CompilerModule>
 }
