@@ -81,7 +81,7 @@ class CompilerModule {
 
   // TODO: Validate the path.
   #constructXml2stBinaryPath(): string {
-    return join(this.binaryDirectoryPath, 'xml2st', 'xml2st')
+    return join(this.binaryDirectoryPath, 'xml2st', CompilerModule.HOST_PLATFORM === 'darwin' ? 'xml2st' : '')
   }
 
   // TODO: Validate the path.

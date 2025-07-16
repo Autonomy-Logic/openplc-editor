@@ -88,7 +88,11 @@ class HardwareModule {
 
   // ++ ============================= Getters ================================ ++
   async getAvailableSerialPorts(): Promise<string[]> {
-    let binaryPath = join(this.binaryDirectoryPath, 'serial-communication', 'serial-communication')
+    let binaryPath = join(
+      this.binaryDirectoryPath,
+      'serial-communication',
+      HardwareModule.HOST_PLATFORM === 'darwin' ? 'serial-communication' : '',
+    )
 
     const executeCommand = promisify(exec)
     if (HardwareModule.HOST_PLATFORM === 'win32') {
