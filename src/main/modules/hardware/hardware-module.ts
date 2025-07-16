@@ -8,10 +8,10 @@ import { produce } from 'immer'
 
 import type { AvailableBoards, HalsFile } from './hardware-types'
 
-interface MethodsResult<T> {
-  success: boolean
-  data?: T
-}
+// interface MethodsResult<T> {
+//   success: boolean
+//   data?: T
+// }
 
 class HardwareModule {
   binaryDirectoryPath: string
@@ -87,7 +87,7 @@ class HardwareModule {
   // ############################################################################
 
   // ++ ============================= Getters ================================ ++
-  async getAvailableSerialPorts(): Promise<MethodsResult<string[]>> {
+  async getAvailableSerialPorts(): Promise<string[]> {
     let binaryPath = join(this.binaryDirectoryPath, 'serial-communication', 'serial-communication')
 
     const executeCommand = promisify(exec)
@@ -96,24 +96,26 @@ class HardwareModule {
       binaryPath += '.exe'
     }
 
-    const { stdout, stderr } = await executeCommand(`${binaryPath} --list-serial-ports`)
+    const { stdout, stderr } = await executeCommand(`${binaryPath} list_ports`)
 
     if (stderr) {
-      return { success: false, data: undefined }
+      console.error('Error while getting available serial ports:', stderr)
+      return []
     }
 
     const normalizedOutput = JSON.parse(stdout) as { port: string }[]
 
     const ports = normalizedOutput.map(({ port }) => port)
 
-    if (ports.length === 0) {
-      return { success: false, data: undefined }
-    }
+    // TODO: Improve error handling and return type
+    // if (ports.length === 0) {
+    //   return { success: false, data: undefined }
+    // }
 
-    return { success: true, data: ports }
+    return ports
   }
 
-  async getAvailableBoards(): Promise<MethodsResult<AvailableBoards>> {
+  async getAvailableBoards(): Promise<AvailableBoards> {
     // Construct the path to the hals.json file
     const halsFilePath = join(this.sourcesDirectoryPath, 'boards', 'hals.json')
 
@@ -162,10 +164,21 @@ class HardwareModule {
         })
       })
     }
-    if (availableBoards.size === 0) {
-      return { success: false, data: undefined }
-    }
-    return { success: true, data: availableBoards }
+    // TODO: Improve error handling and return type
+    // if (availableBoards.size === 0) {
+    //   return { success: false, data: undefined }
+    // }
+    return availableBoards
+  }
+
+  async getBoardImagePreview(image: string) {
+    const imagePath = join(this.sourcesDirectoryPath, 'boards', 'previews', image)
+
+    const imageBuffer = await readFile(imagePath)
+
+    const base64Image = imageBuffer.toString('base64')
+
+    return `data:image/png;base64,${base64Image}`
   }
 
   async getDeviceConfigurationOptions() {

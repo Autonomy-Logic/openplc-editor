@@ -3,7 +3,6 @@ import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { app, nativeTheme, shell } from 'electron'
-import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { platform } from 'process'
 
@@ -30,6 +29,7 @@ class MainProcessBridge implements MainIpcModule {
   menuBuilder
   hardwareService
   compilerModule
+  hardwareModule
 
   constructor({
     ipcMain,
@@ -40,6 +40,7 @@ class MainProcessBridge implements MainIpcModule {
     menuBuilder,
     hardwareService,
     compilerModule,
+    hardwareModule,
   }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
@@ -49,6 +50,7 @@ class MainProcessBridge implements MainIpcModule {
     this.menuBuilder = menuBuilder
     this.hardwareService = hardwareService
     this.compilerModule = compilerModule
+    this.hardwareModule = hardwareModule
   }
 
   // ===================== IPC HANDLER REGISTRATION =====================
@@ -80,11 +82,13 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on('compiler:generate-c-files', this.handleCompilerGenerateCFiles)
 
     // Work in progress
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.ipcMain.on('compiler:run-compile-program', (event: IpcMainEvent, args: any[]) => {
-      const mainProcessPort = event.ports[0]
-      void this.compilerModule.compileProgram(args, mainProcessPort)
-    })
+    this.ipcMain.on(
+      'compiler:run-compile-program',
+      (event: IpcMainEvent, args: Array<string | ProjectState['data']>) => {
+        const mainProcessPort = event.ports[0]
+        void this.compilerModule.compileProgram(args, mainProcessPort)
+      },
+    )
 
     // ===================== WINDOW CONTROLS =====================
     this.ipcMain.on('window-controls:close', this.handleWindowControlsClose)
@@ -232,43 +236,14 @@ class MainProcessBridge implements MainIpcModule {
   handleWindowRebuildMenu = () => void this.menuBuilder.buildMenu()
 
   // Hardware handlers
-  handleHardwareGetAvailableCommunicationPorts = async () => {
-    try {
-      const response = await this.hardwareService.getAvailableSerialPorts()
-      return response
-    } catch (error) {
-      logger.error('Error getting available communication ports:', error)
-      return []
-    }
-  }
-  handleHardwareGetAvailableBoards = async () => {
-    try {
-      const response = await this.hardwareService.getAvailableBoards()
-      return response
-    } catch (error) {
-      logger.error('Error getting available boards:', error)
-      return []
-    }
-  }
-  handleHardwareRefreshCommunicationPorts = async () => this.hardwareService.getAvailableSerialPorts()
-  handleHardwareRefreshAvailableBoards = async () => this.hardwareService.getAvailableBoards()
+  handleHardwareGetAvailableCommunicationPorts = async () => this.hardwareModule.getAvailableSerialPorts()
+  handleHardwareGetAvailableBoards = async () => this.hardwareModule.getAvailableBoards()
+  handleHardwareRefreshCommunicationPorts = async () => this.hardwareModule.getAvailableSerialPorts()
+  handleHardwareRefreshAvailableBoards = async () => this.hardwareModule.getAvailableBoards()
 
   // Utility handlers
-  handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string) => {
-    if (image === '') return
-    const isDevelopment = process.env.NODE_ENV === 'development'
-    const previewImage = join(
-      isDevelopment ? process.cwd() : process.resourcesPath,
-      isDevelopment ? 'resources' : '',
-      'runtime',
-      'previews',
-      image,
-    )
-    const imageBuffer = await readFile(previewImage)
-    const mimeType = 'image/png'
-    const base64 = imageBuffer.toString('base64')
-    return `data:${mimeType};base64,${base64}`
-  }
+  handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string) =>
+    this.hardwareModule.getBoardImagePreview(image)
   handleUtilLog = (_: IpcMainEvent, { level, message }: { level: 'info' | 'error'; message: string }) => {
     logger[level](message)
   }

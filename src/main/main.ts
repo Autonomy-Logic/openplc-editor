@@ -18,6 +18,7 @@ import { join, resolve } from 'path'
 import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
 import { CompilerModule } from './modules/compiler'
+import { HardwareModule } from './modules/hardware'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
 import { HardwareService, ProjectService, UserService } from './services'
@@ -287,6 +288,8 @@ const createMainWindow = async () => {
 
   const compilerModule = new CompilerModule()
 
+  const hardwareModule = new HardwareModule()
+
   const mainIpcModule = new MainProcessBridge({
     mainWindow,
     ipcMain,
@@ -296,6 +299,7 @@ const createMainWindow = async () => {
     menuBuilder,
     hardwareService,
     compilerModule,
+    hardwareModule,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
 

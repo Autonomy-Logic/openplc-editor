@@ -176,6 +176,7 @@ class CompilerModule {
     return result
   }
 
+  // INFO: This method is a placeholder for copying static files.
   // async copyStaticFiles(compilationPath: string): Promise<MethodsResult> {
   //   console.log('Copying static build files...')
   //   let result: MethodsResult = { success: false }
@@ -218,7 +219,10 @@ class CompilerModule {
     })
   }
 
-  // TODO: Validate execution.
+  // TODO: We need to change the binary for xml2st.
+  // INFO: This method will transpile the XML file to ST using the xml2st binary.
+  // INFO: The xml2st binary will be used to transpile the XML file
+  // INFO: to ST (Structured Text) code.
   async handleTranspileXMLtoST(generatedXMLFilePath: string, mainProcessPort: MessagePortMain) {
     let binaryPath = this.xml2stBinaryPath
     if (CompilerModule.HOST_PLATFORM === 'win32') {
@@ -259,18 +263,19 @@ class CompilerModule {
    * It will handle all the compilation process, will orchestrate the various steps involved in compiling a program.
    */
   // Work in progress - we should specify the arguments and the return type correctly.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async compileProgram(_args: any[], _mainProcessPort: MessagePortMain): Promise<void> {
+  async compileProgram(args: Array<string | ProjectState['data']>, _mainProcessPort: MessagePortMain): Promise<void> {
     // Start the main process port to communicate with the renderer process.
     // INFO: This is necessary to send messages back to the renderer process.
     _mainProcessPort.start()
 
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Starting compilation process...' })
-    const projectPath = _args[0] as string // Assuming the first argument is the project path
-    const boardTarget = _args[1] as string // Assuming the second argument is the board target
-    const projectData = _args[2] as ProjectState['data'] // Assuming the third argument is the project data
+    // INFO: We assume the first argument is the project path,
+    // INFO: the second argument is the board target, and the third argument is the project data.
+    const [projectPath, boardTarget, projectData] = args as [string, string, ProjectState['data']]
 
-    const sourceTargetFolderPath = join(projectPath, 'build', boardTarget, 'src') // Assuming the source folder is named 'src'
+    const normalizedProjectPath = projectPath.replace('project.json', '')
+
+    const sourceTargetFolderPath = join(normalizedProjectPath, 'build', boardTarget, 'src') // Assuming the source folder is named 'src'
 
     // --- Print basic information ---
     _mainProcessPort.postMessage({
@@ -318,15 +323,15 @@ class CompilerModule {
     }
 
     // Step 3: Transpile XML to ST
-    // const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml') // Assuming the XML file is named 'plc.xml'
-    // const transpileXMLResult = await this.handleTranspileXMLtoST(generatedXMLFilePath, _mainProcessPort)
-    // if (!transpileXMLResult.success) {
-    //   _mainProcessPort.postMessage({
-    //     logLevel: 'error',
-    //     message: `Failed to transpile XML to ST: ${transpileXMLResult.data as string}`,
-    //   })
-    //   return
-    // }
+    const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml') // Assuming the XML file is named 'plc.xml'
+    const transpileXMLResult = await this.handleTranspileXMLtoST(generatedXMLFilePath, _mainProcessPort)
+    if (!transpileXMLResult.success) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Failed to transpile XML to ST: ${transpileXMLResult.data as string}`,
+      })
+      return
+    }
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'XML transpiled to ST successfully.' })
     _mainProcessPort.close()
   }
