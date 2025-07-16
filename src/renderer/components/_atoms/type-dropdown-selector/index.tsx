@@ -17,26 +17,14 @@ export const TypeDropdownSelector = ({
   value,
   onSelect,
   variableTypes,
-  libraryTypes,
   disabled = false,
 }: TypeDropdownSelectorProps) => {
-  const [inputFilter, setInputFilter] = useState('')
   const [poppoverIsOpen, setPoppoverIsOpen] = useState(false)
 
   const [variableFilters, setVariableFilters] = useState<Record<string, string>>({
     'base-type': '',
     'user-data-type': '',
   })
-
-  const filteredSystemLibraries =
-    libraryTypes
-      .find((l) => l.definition === 'system')
-      ?.values.filter((v) => v.toUpperCase().includes(inputFilter.toUpperCase())) || []
-
-  const filteredUserLibraries =
-    libraryTypes
-      .find((l) => l.definition === 'user')
-      ?.values.filter((v) => v.toUpperCase().includes(inputFilter.toUpperCase())) || []
 
   return (
     <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
@@ -114,7 +102,7 @@ export const TypeDropdownSelector = ({
             )
           })}
 
-          {libraryTypes.map((scope) => {
+          {/* {libraryTypes.map((scope) => {
             const filteredValues = scope.definition === 'system' ? filteredSystemLibraries : filteredUserLibraries
 
             return (
@@ -165,7 +153,7 @@ export const TypeDropdownSelector = ({
                 </PrimitiveDropdown.Portal>
               </PrimitiveDropdown.Sub>
             )
-          })}
+          })} */}
         </PrimitiveDropdown.Content>
       </PrimitiveDropdown.Portal>
     </PrimitiveDropdown.Root>
