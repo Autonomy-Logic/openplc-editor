@@ -80,20 +80,10 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on('compiler:generate-c-files', this.handleCompilerGenerateCFiles)
 
     // Work in progress
-    this.ipcMain.on('compiler:run-compile-program', (event: IpcMainEvent, _) => {
-      console.log('Arguments received for compile program:', _)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.ipcMain.on('compiler:run-compile-program', (event: IpcMainEvent, args: any[]) => {
       const mainProcessPort = event.ports[0]
-      mainProcessPort.start()
-      console.warn('Main process port:', mainProcessPort)
-      if (!mainProcessPort) {
-        console.error('No main process port available for compilation')
-        return
-      }
-      mainProcessPort.postMessage('Starting compilation process...')
-      setTimeout(() => {
-        mainProcessPort.postMessage('Compilation process completed successfully!')
-      }, 3000)
-      // this.compilerModule.compileProgram(args, mainProcessPort)
+      void this.compilerModule.compileProgram(args, mainProcessPort)
     })
 
     // ===================== WINDOW CONTROLS =====================
