@@ -6,7 +6,7 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
 import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
 import { autoUpdater } from 'electron-updater'
@@ -21,8 +21,7 @@ import { CompilerModule } from './modules/compiler'
 import { HardwareModule } from './modules/hardware'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { HardwareService, ProjectService, UserService } from './services'
-import { CompilerService } from './services/compiler-service'
+import { ProjectService, UserService } from './services'
 import { resolveHtmlPath } from './utils'
 
 enableMapSet()
@@ -34,6 +33,8 @@ class AppUpdater {
     void autoUpdater.checkForUpdatesAndNotify()
   }
 }
+
+Menu.setApplicationMenu(null)
 
 export let mainWindow: BrowserWindow | null = null
 export let splash: BrowserWindow | null = null
@@ -282,9 +283,6 @@ const createMainWindow = async () => {
   /**
    * Creates a singleton instance for compiler service, which will be used across the entire application
    */
-  const compilerService = new CompilerService()
-
-  const hardwareService = new HardwareService()
 
   const compilerModule = new CompilerModule()
 
@@ -294,10 +292,8 @@ const createMainWindow = async () => {
     mainWindow,
     ipcMain,
     projectService,
-    compilerService,
     store,
     menuBuilder,
-    hardwareService,
     compilerModule,
     hardwareModule,
   } as unknown as MainIpcModuleConstructor)
