@@ -1,6 +1,5 @@
-import { ScrollArea } from '@radix-ui/react-scroll-area'
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
-import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { Button } from '@root/renderer/components/_atoms'
 import {
   Modal,
   ModalContent,
@@ -12,6 +11,7 @@ import {
 import { BaseType } from '@root/types/PLC/open-plc'
 
 import TableActions from '../table-actions'
+import { TypeDropdownSelector } from '../type-dropdown-selector'
 import { ArrayDimensionsInput } from './array-dimensions-input'
 
 interface DimensionsModalProps {
@@ -20,7 +20,8 @@ interface DimensionsModalProps {
   onCancel: () => void
   onSave: () => void
   typeValue: string
-  allTypes: string[]
+  variableTypes: { definition: string; values: string[] }[]
+  libraryTypes: { definition: string; values: string[] }[]
   onTypeChange: (value: BaseType) => void
   dimensions: string[]
   selectedInput: string
@@ -37,7 +38,6 @@ export const DimensionsModal = ({
   onCancel,
   onSave,
   typeValue,
-  allTypes,
   onTypeChange,
   dimensions,
   selectedInput,
@@ -46,6 +46,8 @@ export const DimensionsModal = ({
   onRearrangeDimensions,
   onInputClick,
   onUpdateDimension,
+  libraryTypes,
+  variableTypes,
 }: DimensionsModalProps) => {
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
@@ -71,33 +73,13 @@ export const DimensionsModal = ({
               <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
                 Base type
               </label>
-              <Select value={typeValue} onValueChange={onTypeChange} aria-label='Array data type base type select'>
-                <SelectTrigger
-                  withIndicator
-                  placeholder='Base type'
-                  className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
-                />
-                <SelectContent
-                  position='popper'
-                  side='bottom'
-                  sideOffset={-28}
-                  className='box z-[999] max-h-[300px] w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
-                >
-                  <ScrollArea className='max-h-[300px] overflow-y-auto'>
-                    {allTypes.map((type) => (
-                      <SelectItem
-                        key={type}
-                        value={type}
-                        className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                      >
-                        <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                          {type.toUpperCase()}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </ScrollArea>
-                </SelectContent>
-              </Select>
+
+              <TypeDropdownSelector
+                value={typeValue}
+                onSelect={(_definition, value) => onTypeChange(value as BaseType)}
+                variableTypes={variableTypes}
+                libraryTypes={libraryTypes}
+              />
             </div>
 
             <div
