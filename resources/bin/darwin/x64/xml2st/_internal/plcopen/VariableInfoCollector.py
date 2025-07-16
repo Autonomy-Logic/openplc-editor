@@ -4,7 +4,7 @@
 # See COPYING file for copyrights details.
 
 
-from . XSLTModelQuery import XSLTModelQuery, _StringValue, _BoolValue, _translate_args
+from .XSLTModelQuery import XSLTModelQuery, _StringValue, _BoolValue, _translate_args
 
 # -------------------------------------------------------------------------------
 #                 Helpers object for generating pou var list
@@ -12,8 +12,18 @@ from . XSLTModelQuery import XSLTModelQuery, _StringValue, _BoolValue, _translat
 
 
 class _VariableInfos(object):
-    __slots__ = ["Name", "Class", "Option", "Location", "InitialValue",
-                 "Edit", "Documentation", "Type", "Tree", "Number"]
+    __slots__ = [
+        "Name",
+        "Class",
+        "Option",
+        "Location",
+        "InitialValue",
+        "Edit",
+        "Documentation",
+        "Type",
+        "Tree",
+        "Number",
+    ]
 
     def __init__(self, *args):
         for attr, value in zip(self.__slots__, args):
@@ -24,7 +34,7 @@ class _VariableInfos(object):
 
 
 class VariablesInfosFactory(object):
-    """ Helpers object for generating pou var list """
+    """Helpers object for generating pou var list"""
 
     def __init__(self, variables):
         self.Variables = variables
@@ -44,8 +54,7 @@ class VariablesInfosFactory(object):
         return (self.TreeStack.pop(-1), self.Dimensions)
 
     def AddDimension(self, context, *args):
-        self.Dimensions.append(tuple(
-            _translate_args([_StringValue] * 2, args)))
+        self.Dimensions.append(tuple(_translate_args([_StringValue] * 2, args)))
 
     def AddTree(self, context, *args):
         self.TreeStack.append([])
@@ -56,27 +65,40 @@ class VariablesInfosFactory(object):
         self.TreeStack[-1].append(var)
 
     def AddVariable(self, context, *args):
-        self.Variables.append(_VariableInfos(*(
-            _translate_args([_StringValue] * 5 + [_BoolValue] + [_StringValue], args) +
-            [self.GetType(), self.GetTree()])))
+        self.Variables.append(
+            _VariableInfos(
+                *(
+                    _translate_args(
+                        [_StringValue] * 5 + [_BoolValue] + [_StringValue], args
+                    )
+                    + [self.GetType(), self.GetTree()]
+                )
+            )
+        )
 
 
 class VariableInfoCollector(XSLTModelQuery):
     def __init__(self, controller):
-        XSLTModelQuery.__init__(self,
-                                controller,
-                                "variables_infos.xslt",
-                                [(name, self.FactoryCaller(name))
-                                 for name in [
-                                     "SetType",
-                                     "AddDimension",
-                                     "AddTree",
-                                     "AddVarToTree",
-                                     "AddVariable"]])
+        XSLTModelQuery.__init__(
+            self,
+            controller,
+            "variables_infos.xslt",
+            [
+                (name, self.FactoryCaller(name))
+                for name in [
+                    "SetType",
+                    "AddDimension",
+                    "AddTree",
+                    "AddVarToTree",
+                    "AddVariable",
+                ]
+            ],
+        )
 
     def FactoryCaller(self, funcname):
         def CallFactory(*args):
             return getattr(self.factory, funcname)(*args)
+
         return CallFactory
 
     def Collect(self, root, debug, variables, tree):

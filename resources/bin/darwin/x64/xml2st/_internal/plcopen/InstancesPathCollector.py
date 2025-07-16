@@ -4,17 +4,17 @@
 # See COPYING file for copyrights details.
 
 
-from . XSLTModelQuery import XSLTModelQuery
+from .XSLTModelQuery import XSLTModelQuery
 
 
 class InstancesPathCollector(XSLTModelQuery):
-    """ object for collecting instances path list"""
+    """object for collecting instances path list"""
+
     def __init__(self, controller):
         self.Instances = []
-        XSLTModelQuery.__init__(self,
-                                controller,
-                                "instances_path.xslt",
-                                [("AddInstance", self.AddInstance)])
+        XSLTModelQuery.__init__(
+            self, controller, "instances_path.xslt", [("AddInstance", self.AddInstance)]
+        )
 
     def AddInstance(self, context, *args):
         self.Instances.append(args[0][0])

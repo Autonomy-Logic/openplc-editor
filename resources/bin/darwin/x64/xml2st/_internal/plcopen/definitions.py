@@ -24,33 +24,37 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-
 from os.path import join
 import util.paths as paths
+
 sd = paths.AbsDir(__file__)
 
 LANGUAGES = ["IL", "ST", "FBD", "LD", "SFC"]
 
-LOCATIONDATATYPES = {"X": ["BOOL"],
-                     "B": ["SINT", "USINT", "BYTE", "STRING"],
-                     "W": ["INT", "UINT", "WORD", "WSTRING"],
-                     "D": ["DINT", "UDINT", "REAL", "DWORD"],
-                     "L": ["LINT", "ULINT", "LREAL", "LWORD"]}
+LOCATIONDATATYPES = {
+    "X": ["BOOL"],
+    "B": ["SINT", "USINT", "BYTE", "STRING"],
+    "W": ["INT", "UINT", "WORD", "WSTRING"],
+    "D": ["DINT", "UDINT", "REAL", "DWORD"],
+    "L": ["LINT", "ULINT", "LREAL", "LWORD"],
+}
 
 # -------------------------------------------------------------------------------
 #                        Function Block Types definitions
 # -------------------------------------------------------------------------------
 
-StdTC6Libs = [("Standard function blocks",   join(sd, "Standard_Function_Blocks.xml")),
-              ("Additional function blocks", join(sd, "Additional_Function_Blocks.xml")),
-              ("Arduino", join(sd, "Arduino_Function_Blocks.xml")),
-              ("Microver", join(sd, "CAN_Function_Blocks.xml")),
-              ("Communication", join(sd, "Communication_Blocks.xml")),
-              ("P1AM Modules", join(sd, "P1AM.xml")),
-              ("MQTT", join(sd, "MQTT.xml")),
-              ("Sequent Microsystems Modules", join(sd, "SM_Cards.xml")),
-              ("Jaguar", join(sd, "Jaguar.xml")),
-              ("SL-RP4", join(sd, "SL-RP4.xml"))]
+StdTC6Libs = [
+    ("Standard function blocks", join(sd, "Standard_Function_Blocks.xml")),
+    ("Additional function blocks", join(sd, "Additional_Function_Blocks.xml")),
+    ("Arduino", join(sd, "Arduino_Function_Blocks.xml")),
+    ("Microver", join(sd, "CAN_Function_Blocks.xml")),
+    ("Communication", join(sd, "Communication_Blocks.xml")),
+    ("P1AM Modules", join(sd, "P1AM.xml")),
+    ("MQTT", join(sd, "MQTT.xml")),
+    ("Sequent Microsystems Modules", join(sd, "SM_Cards.xml")),
+    ("Jaguar", join(sd, "Jaguar.xml")),
+    ("SL-RP4", join(sd, "SL-RP4.xml")),
+]
 
 StdFuncsCSV = join(sd, "iec_std.csv")
 
@@ -58,11 +62,15 @@ StdFuncsCSV = join(sd, "iec_std.csv")
 def GetBlockInfos(pou):
     infos = pou.getblockInfos()
     infos["inputs"] = [
-        (var_name, var_type, "rising")
-        if var_name in ["CU", "CD"]
-        else (var_name, var_type, var_modifier)
-        for var_name, var_type, var_modifier in infos["inputs"]]
+        (
+            (var_name, var_type, "rising")
+            if var_name in ["CU", "CD"]
+            else (var_name, var_type, var_modifier)
+        )
+        for var_name, var_type, var_modifier in infos["inputs"]
+    ]
     return infos
+
 
 # -------------------------------------------------------------------------------
 #                           Data Types definitions
@@ -106,21 +114,21 @@ TypeHierarchy_list = [
     ("BYTE", "ANY_NBIT"),
     ("WORD", "ANY_NBIT"),
     ("DWORD", "ANY_NBIT"),
-    ("LWORD", "ANY_NBIT")
+    ("LWORD", "ANY_NBIT"),
     # ("WSTRING", "ANY_STRING") # TODO
 ]
 
 DefaultType = "DINT"
 
 DataTypeRange_list = [
-    ("SINT",  (-2**7,  2**7 - 1)),
-    ("INT",   (-2**15, 2**15 - 1)),
-    ("DINT",  (-2**31, 2**31 - 1)),
-    ("LINT",  (-2**63, 2**63 - 1)),
-    ("USINT", (0,      2**8 - 1)),
-    ("UINT",  (0,      2**16 - 1)),
-    ("UDINT", (0,      2**32 - 1)),
-    ("ULINT", (0,      2**64 - 1))
+    ("SINT", (-(2**7), 2**7 - 1)),
+    ("INT", (-(2**15), 2**15 - 1)),
+    ("DINT", (-(2**31), 2**31 - 1)),
+    ("LINT", (-(2**63), 2**63 - 1)),
+    ("USINT", (0, 2**8 - 1)),
+    ("UINT", (0, 2**16 - 1)),
+    ("UDINT", (0, 2**32 - 1)),
+    ("ULINT", (0, 2**64 - 1)),
 ]
 
 ANY_TO_ANY_FILTERS = {
@@ -134,18 +142,18 @@ ANY_TO_ANY_FILTERS = {
         (("ANY_REAL",), ("ANY_BIT",)),
         # TO_TIME
         (("ANY_INT", "ANY_BIT"), ("ANY_DATE", "TIME")),
-        (("ANY_REAL",),          ("ANY_DATE", "TIME")),
-        (("ANY_STRING",),        ("ANY_DATE", "TIME")),
+        (("ANY_REAL",), ("ANY_DATE", "TIME")),
+        (("ANY_STRING",), ("ANY_DATE", "TIME")),
         # FROM_TIME
         (("ANY_DATE", "TIME"), ("ANY_REAL",)),
         (("ANY_DATE", "TIME"), ("ANY_INT", "ANY_NBIT")),
         (("TIME",), ("ANY_STRING",)),
         (("DATE",), ("ANY_STRING",)),
-        (("TOD",),  ("ANY_STRING",)),
-        (("DT",),   ("ANY_STRING",)),
+        (("TOD",), ("ANY_STRING",)),
+        (("DT",), ("ANY_STRING",)),
         # TO_STRING
-        (("BOOL",),     ("ANY_STRING",)),
-        (("ANY_BIT",),  ("ANY_STRING",)),
+        (("BOOL",), ("ANY_STRING",)),
+        (("ANY_BIT",), ("ANY_STRING",)),
         (("ANY_REAL",), ("ANY_STRING",)),
         (("ANY_SINT",), ("ANY_STRING",)),
         (("ANY_UINT",), ("ANY_STRING",)),
@@ -154,18 +162,18 @@ ANY_TO_ANY_FILTERS = {
         (("ANY_STRING",), ("ANY_BIT",)),
         (("ANY_STRING",), ("ANY_SINT",)),
         (("ANY_STRING",), ("ANY_UINT",)),
-        (("ANY_STRING",), ("ANY_REAL",))
+        (("ANY_STRING",), ("ANY_REAL",)),
     ],
     "BCD_TO_ANY": [
-        (("BYTE",),  ("USINT",)),
-        (("WORD",),  ("UINT",)),
+        (("BYTE",), ("USINT",)),
+        (("WORD",), ("UINT",)),
         (("DWORD",), ("UDINT",)),
-        (("LWORD",), ("ULINT",))
+        (("LWORD",), ("ULINT",)),
     ],
     "ANY_TO_BCD": [
         (("USINT",), ("BYTE",)),
-        (("UINT",),  ("WORD",)),
+        (("UINT",), ("WORD",)),
         (("UDINT",), ("DWORD",)),
-        (("ULINT",), ("LWORD",))
-    ]
+        (("ULINT",), ("LWORD",)),
+    ],
 }

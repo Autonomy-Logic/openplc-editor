@@ -12,7 +12,7 @@ ITEMS_EDITABLE = [
     ITEM_ACTION,
     ITEM_CONFIGURATION,
     ITEM_RESOURCE,
-    ITEM_DATATYPE
+    ITEM_DATATYPE,
 ] = list(range(8))
 
 ITEMS_UNEDITABLE = [
@@ -24,7 +24,7 @@ ITEMS_UNEDITABLE = [
     ITEM_ACTIONS,
     ITEM_CONFIGURATIONS,
     ITEM_RESOURCES,
-    ITEM_PROPERTIES
+    ITEM_PROPERTIES,
 ] = list(range(8, 17))
 
 ITEMS_VARIABLE = [
@@ -34,19 +34,20 @@ ITEMS_VARIABLE = [
     ITEM_VAR_TEMP,
     ITEM_VAR_INPUT,
     ITEM_VAR_OUTPUT,
-    ITEM_VAR_INOUT
+    ITEM_VAR_INOUT,
 ] = list(range(17, 24))
 
 ITEM_CONFNODE = 25
 
 VAR_CLASS_INFOS = {
-    "Local":    ("localVars",    ITEM_VAR_LOCAL),
-    "Global":   ("globalVars",   ITEM_VAR_GLOBAL),
+    "Local": ("localVars", ITEM_VAR_LOCAL),
+    "Global": ("globalVars", ITEM_VAR_GLOBAL),
     "External": ("externalVars", ITEM_VAR_EXTERNAL),
-    "Temp":     ("tempVars",     ITEM_VAR_TEMP),
-    "Input":    ("inputVars",    ITEM_VAR_INPUT),
-    "Output":   ("outputVars",   ITEM_VAR_OUTPUT),
-    "InOut":    ("inOutVars",    ITEM_VAR_INOUT)}
+    "Temp": ("tempVars", ITEM_VAR_TEMP),
+    "Input": ("inputVars", ITEM_VAR_INPUT),
+    "Output": ("outputVars", ITEM_VAR_OUTPUT),
+    "InOut": ("inOutVars", ITEM_VAR_INOUT),
+}
 
 POU_TYPES = {
     "program": ITEM_PROGRAM,
@@ -59,23 +60,43 @@ CLASS_TYPES = {
     "resource": ITEM_RESOURCE,
     "action": ITEM_ACTION,
     "transition": ITEM_TRANSITION,
-    "program": ITEM_PROGRAM
+    "program": ITEM_PROGRAM,
 }
 
-LOCATIONS_ITEMS = [LOCATION_CONFNODE,
-                   LOCATION_MODULE,
-                   LOCATION_GROUP,
-                   LOCATION_VAR_INPUT,
-                   LOCATION_VAR_OUTPUT,
-                   LOCATION_VAR_MEMORY] = list(range(6))
+LOCATIONS_ITEMS = [
+    LOCATION_CONFNODE,
+    LOCATION_MODULE,
+    LOCATION_GROUP,
+    LOCATION_VAR_INPUT,
+    LOCATION_VAR_OUTPUT,
+    LOCATION_VAR_MEMORY,
+] = list(range(6))
 
-UNEDITABLE_NAMES = ["User-defined POUs", "Functions", "Function Blocks",
-                    "Programs", "Data Types", "Transitions", "Actions",
-                    "Configurations", "Resources", "Properties"]
+UNEDITABLE_NAMES = [
+    "User-defined POUs",
+    "Functions",
+    "Function Blocks",
+    "Programs",
+    "Data Types",
+    "Transitions",
+    "Actions",
+    "Configurations",
+    "Resources",
+    "Properties",
+]
 
-[USER_DEFINED_POUS, FUNCTIONS, FUNCTION_BLOCKS, PROGRAMS,
- DATA_TYPES, TRANSITIONS, ACTIONS, CONFIGURATIONS,
- RESOURCES, PROPERTIES] = UNEDITABLE_NAMES
+[
+    USER_DEFINED_POUS,
+    FUNCTIONS,
+    FUNCTION_BLOCKS,
+    PROGRAMS,
+    DATA_TYPES,
+    TRANSITIONS,
+    ACTIONS,
+    CONFIGURATIONS,
+    RESOURCES,
+    PROPERTIES,
+] = UNEDITABLE_NAMES
 
 # -------------------------------------------------------------------------------
 #                   Project Element tag name computation functions
@@ -122,5 +143,5 @@ def GetElementType(tagname):
         "T": ITEM_TRANSITION,
         "A": ITEM_ACTION,
         "C": ITEM_CONFIGURATION,
-        "R": ITEM_RESOURCE
+        "R": ITEM_RESOURCE,
     }[words[0]]

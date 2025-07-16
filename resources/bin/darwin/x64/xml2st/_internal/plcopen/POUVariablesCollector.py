@@ -4,8 +4,8 @@
 # See COPYING file for copyrights details.
 
 
-from . XSLTModelQuery import XSLTModelQuery, _StringValue, _BoolValue, _translate_args
-from . types_enums import CLASS_TYPES, POU_TYPES, VAR_CLASS_INFOS
+from .XSLTModelQuery import XSLTModelQuery, _StringValue, _BoolValue, _translate_args
+from .types_enums import CLASS_TYPES, POU_TYPES, VAR_CLASS_INFOS
 
 
 def class_extraction(value):
@@ -32,7 +32,9 @@ class _VariablesTreeItemInfos(object):
             setattr(self, attr, value if value is not None else "")
 
     def copy(self):
-        return _VariablesTreeItemInfos(*[getattr(self, attr) for attr in self.__slots__])
+        return _VariablesTreeItemInfos(
+            *[getattr(self, attr) for attr in self.__slots__]
+        )
 
 
 class VariablesTreeInfosFactory(object):
@@ -45,29 +47,44 @@ class VariablesTreeInfosFactory(object):
 
     def SetRoot(self, context, *args):
         self.Root = _VariablesTreeItemInfos(
-            *([''] + _translate_args(
-                [class_extraction, _StringValue] + [_BoolValue] * 2,
-                args) + [[]]))
+            *(
+                [""]
+                + _translate_args(
+                    [class_extraction, _StringValue] + [_BoolValue] * 2, args
+                )
+                + [[]]
+            )
+        )
 
     def AddVariable(self, context, *args):
         if self.Root is not None:
-            self.Root.variables.append(_VariablesTreeItemInfos(
-                *(_translate_args(
-                    [_StringValue, class_extraction, _StringValue] +
-                    [_BoolValue] * 2, args) + [[]])))
+            self.Root.variables.append(
+                _VariablesTreeItemInfos(
+                    *(
+                        _translate_args(
+                            [_StringValue, class_extraction, _StringValue]
+                            + [_BoolValue] * 2,
+                            args,
+                        )
+                        + [[]]
+                    )
+                )
+            )
 
 
 class POUVariablesCollector(XSLTModelQuery):
     def __init__(self, controller):
-        XSLTModelQuery.__init__(self,
-                                controller,
-                                "pou_variables.xslt",
-                                [(name, self.FactoryCaller(name))
-                                 for name in ["SetRoot", "AddVariable"]])
+        XSLTModelQuery.__init__(
+            self,
+            controller,
+            "pou_variables.xslt",
+            [(name, self.FactoryCaller(name)) for name in ["SetRoot", "AddVariable"]],
+        )
 
     def FactoryCaller(self, funcname):
         def CallFactory(*args):
             return getattr(self.factory, funcname)(*args)
+
         return CallFactory
 
     def Collect(self, root, debug):

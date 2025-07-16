@@ -5,7 +5,7 @@
 
 
 from collections import OrderedDict, namedtuple
-from . XSLTModelQuery import XSLTModelQuery, _StringValue, _BoolValue, _translate_args
+from .XSLTModelQuery import XSLTModelQuery, _StringValue, _BoolValue, _translate_args
 
 # -------------------------------------------------------------------------------
 #           Helpers object for generating pou block instances list
@@ -16,37 +16,42 @@ _Point = namedtuple("Point", ["x", "y"])
 
 _BlockInstanceInfos = namedtuple(
     "BlockInstanceInfos",
-    ["type", "id", "x", "y", "width", "height", "specific_values", "inputs", "outputs"])
+    ["type", "id", "x", "y", "width", "height", "specific_values", "inputs", "outputs"],
+)
 
 _BlockSpecificValues = (
-    namedtuple("BlockSpecificValues",
-               ["name", "execution_order"]),
-    [_StringValue, int])
+    namedtuple("BlockSpecificValues", ["name", "execution_order"]),
+    [_StringValue, int],
+)
 _VariableSpecificValues = (
-    namedtuple("VariableSpecificValues",
-               ["name", "value_type", "execution_order"]),
-    [_StringValue, _StringValue, int])
+    namedtuple("VariableSpecificValues", ["name", "value_type", "execution_order"]),
+    [_StringValue, _StringValue, int],
+)
 _ConnectionSpecificValues = (
     namedtuple("ConnectionSpecificValues", ["name"]),
-    [_StringValue])
+    [_StringValue],
+)
 
 _PowerRailSpecificValues = (
     namedtuple("PowerRailSpecificValues", ["connectors"]),
-    [int])
+    [int],
+)
 
 _LDElementSpecificValues = (
-    namedtuple("LDElementSpecificValues",
-               ["name", "negated", "edge", "storage", "execution_order"]),
-    [_StringValue, _BoolValue, _StringValue, _StringValue, int])
+    namedtuple(
+        "LDElementSpecificValues",
+        ["name", "negated", "edge", "storage", "execution_order"],
+    ),
+    [_StringValue, _BoolValue, _StringValue, _StringValue, int],
+)
 
 _DivergenceSpecificValues = (
     namedtuple("DivergenceSpecificValues", ["connectors"]),
-    [int])
+    [int],
+)
 
 _SpecificValuesTuples = {
-    "comment": (
-        namedtuple("CommentSpecificValues", ["content"]),
-        [_StringValue]),
+    "comment": (namedtuple("CommentSpecificValues", ["content"]), [_StringValue]),
     "input": _VariableSpecificValues,
     "output": _VariableSpecificValues,
     "inout": _VariableSpecificValues,
@@ -58,30 +63,33 @@ _SpecificValuesTuples = {
     "coil": _LDElementSpecificValues,
     "step": (
         namedtuple("StepSpecificValues", ["name", "initial", "action"]),
-        [_StringValue, _BoolValue, lambda x: x]),
+        [_StringValue, _BoolValue, lambda x: x],
+    ),
     "transition": (
-        namedtuple("TransitionSpecificValues",
-                   ["priority", "condition_type", "condition", "connection"]),
-        [int, _StringValue, _StringValue, lambda x: x]),
+        namedtuple(
+            "TransitionSpecificValues",
+            ["priority", "condition_type", "condition", "connection"],
+        ),
+        [int, _StringValue, _StringValue, lambda x: x],
+    ),
     "selectionDivergence": _DivergenceSpecificValues,
     "selectionConvergence": _DivergenceSpecificValues,
     "simultaneousDivergence": _DivergenceSpecificValues,
     "simultaneousConvergence": _DivergenceSpecificValues,
-    "jump": (
-        namedtuple("JumpSpecificValues", ["target"]),
-        [_StringValue]),
+    "jump": (namedtuple("JumpSpecificValues", ["target"]), [_StringValue]),
     "actionBlock": (
         namedtuple("ActionBlockSpecificValues", ["actions"]),
-        [lambda x: x]),
+        [lambda x: x],
+    ),
 }
 
 _InstanceConnectionInfos = namedtuple(
-    "InstanceConnectionInfos",
-    ["name", "negated", "edge", "position", "links"])
+    "InstanceConnectionInfos", ["name", "negated", "edge", "position", "links"]
+)
 
 _ConnectionLinkInfos = namedtuple(
-    "ConnectionLinkInfos",
-    ["refLocalId", "formalParameter", "points"])
+    "ConnectionLinkInfos", ["refLocalId", "formalParameter", "points"]
+)
 
 
 class _ActionInfos(object):
@@ -111,31 +119,41 @@ class BlockInstanceFactory(object):
         self.CurrentLink = None
 
     def AddBlockInstance(self, context, *args):
-        specific_values_tuple, specific_values_translation = \
-            _SpecificValuesTuples.get(args[0][0], _BlockSpecificValues)
+        specific_values_tuple, specific_values_translation = _SpecificValuesTuples.get(
+            args[0][0], _BlockSpecificValues
+        )
 
-        if args[0][0] == "step" and len(self.SpecificValues) < 3 or \
-           args[0][0] == "transition" and len(self.SpecificValues) < 4:
+        if (
+            args[0][0] == "step"
+            and len(self.SpecificValues) < 3
+            or args[0][0] == "transition"
+            and len(self.SpecificValues) < 4
+        ):
             self.SpecificValues.append([None])
         elif args[0][0] == "actionBlock" and len(self.SpecificValues) < 1:
             self.SpecificValues.append([[]])
-        specific_values = specific_values_tuple(*_translate_args(
-            specific_values_translation, self.SpecificValues))
+        specific_values = specific_values_tuple(
+            *_translate_args(specific_values_translation, self.SpecificValues)
+        )
         self.SpecificValues = None
 
         self.CurrentInstance = _BlockInstanceInfos(
-            *(_translate_args([_StringValue, int] + [int] * 4, args) +
-              [specific_values, [], []]))
+            *(
+                _translate_args([_StringValue, int] + [int] * 4, args)
+                + [specific_values, [], []]
+            )
+        )
 
         self.BlockInstances[self.CurrentInstance.id] = self.CurrentInstance
 
     def AddInstanceConnection(self, context, *args):
         connection_args = _translate_args(
-            [_StringValue] * 2 + [_BoolValue, _StringValue] + [int] * 2, args)
+            [_StringValue] * 2 + [_BoolValue, _StringValue] + [int] * 2, args
+        )
 
         self.CurrentConnection = _InstanceConnectionInfos(
-            *(connection_args[1:4] + [
-                _Point(*connection_args[4:6]), []]))
+            *(connection_args[1:4] + [_Point(*connection_args[4:6]), []])
+        )
 
         if self.CurrentInstance is not None:
             if connection_args[0] == "input":
@@ -147,12 +165,12 @@ class BlockInstanceFactory(object):
 
     def AddConnectionLink(self, context, *args):
         self.CurrentLink = _ConnectionLinkInfos(
-            *(_translate_args([int, _StringValue], args) + [[]]))
+            *(_translate_args([int, _StringValue], args) + [[]])
+        )
         self.CurrentConnection.links.append(self.CurrentLink)
 
     def AddLinkPoint(self, context, *args):
-        self.CurrentLink.points.append(_Point(
-            *_translate_args([int] * 2, args)))
+        self.CurrentLink.points.append(_Point(*_translate_args([int] * 2, args)))
 
     def AddAction(self, context, *args):
         if len(self.SpecificValues) == 0:
@@ -162,22 +180,30 @@ class BlockInstanceFactory(object):
 
 
 class BlockInstanceCollector(XSLTModelQuery):
-    """ object for collecting instances path list"""
+    """object for collecting instances path list"""
+
     def __init__(self, controller):
-        XSLTModelQuery.__init__(self,
-                                controller,
-                                "pou_block_instances.xslt",
-                                [(name, self.FactoryCaller(name))
-                                 for name in ["AddBlockInstance",
-                                              "SetSpecificValues",
-                                              "AddInstanceConnection",
-                                              "AddConnectionLink",
-                                              "AddLinkPoint",
-                                              "AddAction"]])
+        XSLTModelQuery.__init__(
+            self,
+            controller,
+            "pou_block_instances.xslt",
+            [
+                (name, self.FactoryCaller(name))
+                for name in [
+                    "AddBlockInstance",
+                    "SetSpecificValues",
+                    "AddInstanceConnection",
+                    "AddConnectionLink",
+                    "AddLinkPoint",
+                    "AddAction",
+                ]
+            ],
+        )
 
     def FactoryCaller(self, funcname):
         def CallFactory(*args):
             return getattr(self.factory, funcname)(*args)
+
         return CallFactory
 
     def Collect(self, root, debug):

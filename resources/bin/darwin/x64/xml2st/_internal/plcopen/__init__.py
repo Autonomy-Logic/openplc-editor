@@ -27,6 +27,13 @@
 # plcopen module dynamically creates its classes
 
 
-from . plcopen import \
-    PLCOpenParser, LoadProject, SaveProject, LoadPou, \
-    LoadPouInstances, VarOrder, QualifierList, rect
+from .plcopen import (
+    PLCOpenParser,
+    LoadProject,
+    SaveProject,
+    LoadPou,
+    LoadPouInstances,
+    VarOrder,
+    QualifierList,
+    rect,
+)

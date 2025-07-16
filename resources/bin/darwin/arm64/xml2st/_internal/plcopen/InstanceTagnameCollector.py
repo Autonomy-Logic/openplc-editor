@@ -4,8 +4,8 @@
 # See COPYING file for copyrights details.
 
 
-from . XSLTModelQuery import XSLTModelQuery
-from . types_enums import *
+from .XSLTModelQuery import XSLTModelQuery
+from .types_enums import *
 
 
 class InstanceTagName(object):
@@ -34,21 +34,29 @@ class InstanceTagName(object):
 
 
 class InstanceTagnameCollector(XSLTModelQuery):
-    """ object for collecting instances path list"""
+    """object for collecting instances path list"""
+
     def __init__(self, controller):
-        XSLTModelQuery.__init__(self,
-                                controller,
-                                "instance_tagname.xslt",
-                                [(name, self.FactoryCaller(name))
-                                 for name in ["ConfigTagName",
-                                              "ResourceTagName",
-                                              "PouTagName",
-                                              "ActionTagName",
-                                              "TransitionTagName"]])
+        XSLTModelQuery.__init__(
+            self,
+            controller,
+            "instance_tagname.xslt",
+            [
+                (name, self.FactoryCaller(name))
+                for name in [
+                    "ConfigTagName",
+                    "ResourceTagName",
+                    "PouTagName",
+                    "ActionTagName",
+                    "TransitionTagName",
+                ]
+            ],
+        )
 
     def FactoryCaller(self, funcname):
         def CallFactory(*args):
             return getattr(self.factory, funcname)(*args)
+
         return CallFactory
 
     def Collect(self, root, debug, instance_path):
