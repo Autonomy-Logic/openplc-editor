@@ -191,6 +191,7 @@ class MainProcessBridge implements MainIpcModule {
     void this.compilerModule.compileProgram(args, mainProcessPort)
   }
 
+  // TODO: These handlers are outdated and should be removed.
   // handleCompilerSetupEnvironment = (event: IpcMainEvent) => {
   //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined
   //   if (replyPort) {

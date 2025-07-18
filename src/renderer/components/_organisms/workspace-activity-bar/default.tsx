@@ -1,5 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
-import { cn } from '@root/utils'
+import { BufferToStringArray, cn } from '@root/utils'
 
 import {
   DebuggerButton,
@@ -24,18 +24,35 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     },
     consoleActions: { addLog },
   } = useOpenPLCStore()
+
   const handleRequest = () => {
     // This function is a placeholder for the zoom functionality
     // Todo: Test receive a callback
     window.bridge.runCompileProgram(
       [projectMeta.path, deviceBoard, projectData],
-      (data: { logLevel: 'info' | 'error' | 'warning'; message: string }) => {
+      (data: { logLevel?: 'info' | 'error' | 'warning'; message: string | Buffer }) => {
         console.log('Received from main process:', data)
-        addLog({
-          id: crypto.randomUUID(),
-          type: data.logLevel,
-          message: `Received from main process: ${data.message}`,
-        })
+        if (typeof data.message === 'string') {
+          data.message
+            .trim()
+            .split('\n')
+            .forEach((line) => {
+              addLog({
+                id: crypto.randomUUID(),
+                level: data.logLevel,
+                message: line,
+              })
+            })
+        }
+        if (data.message && typeof data.message !== 'string') {
+          BufferToStringArray(data.message).forEach((message) => {
+            addLog({
+              id: crypto.randomUUID(),
+              level: data.logLevel,
+              message,
+            })
+          })
+        }
       },
     )
   }

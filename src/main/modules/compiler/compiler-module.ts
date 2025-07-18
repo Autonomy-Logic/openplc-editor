@@ -1,5 +1,5 @@
 import { exec, spawn } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -10,7 +10,7 @@ import { XmlGenerator } from '@root/utils'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 
-// import type { ArduinoCliConfig, BoardInfo, HalsFile } from './compiler-types'
+import type { HalsFile } from './compiler-types'
 
 interface MethodsResult<T> {
   success: boolean
@@ -51,6 +51,14 @@ class CompilerModule {
   }
 
   // ############################################################################
+  // =========================== Static methods =================================
+  // ############################################################################
+  static async readJSONFile<T>(filePath: string): Promise<T> {
+    const data = await readFile(filePath, 'utf-8')
+    return JSON.parse(data) as T
+  }
+
+  // ############################################################################
   // =========================== Private methods ================================
   // ############################################################################
 
@@ -74,19 +82,22 @@ class CompilerModule {
     )
   }
 
-  // TODO: Validate the path.
   #constructArduinoCliBinaryPath(): string {
     return join(this.binaryDirectoryPath, 'arduino-cli')
   }
 
-  // TODO: Validate the path.
   #constructXml2stBinaryPath(): string {
     return join(this.binaryDirectoryPath, 'xml2st', CompilerModule.HOST_PLATFORM === 'darwin' ? 'xml2st' : '')
   }
 
-  // TODO: Validate the path.
   #constructIec2cBinaryPath(): string {
     return join(this.binaryDirectoryPath, 'iec2c')
+  }
+
+  async #getBoardRuntime(board: string) {
+    const halsFilePath = join(this.sourceDirectoryPath, 'boards', 'hals.json')
+    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(halsFilePath)
+    return halsFileContent[board]['compiler']
   }
 
   // ############################################################################
@@ -97,12 +108,12 @@ class CompilerModule {
 
   getHostHardwareInfo() {
     return `
-      System Architecture: ${process.arch},
-      Operating System: ${process.platform},
-      Processor: ${process.env.PROCESSOR_IDENTIFIER},
-      Logical CPU Cores: ${os.cpus().length},
-      CPU Frequency: ${os.cpus()[0].speed} MHz,
-      CPU Model: ${os.cpus()[0].model},
+      System Architecture - ${process.arch}
+      Operating System - ${process.platform}
+      Processor - ${process.env.PROCESSOR_IDENTIFIER}
+      Logical CPU Cores - ${os.cpus().length}
+      CPU Frequency - ${os.cpus()[0].speed} MHz
+      CPU Model - ${os.cpus()[0].model}
     `
   }
 
@@ -117,12 +128,28 @@ class CompilerModule {
     }
     // INFO: We use the version command to check if the arduino-cli is available.
     // INFO: If the command is not available, it will throw an error.
-    const { stdout, stderr } = await executeCommand(`"${binaryPath}" version ${flag} "${configFilePath}"`)
+    const { stdout, stderr } = await executeCommand(`"${binaryPath}" version ${flag} "${configFilePath}" --json`)
     if (stderr) {
-      return { success: false, data: stderr }
+      throw new Error(`Arduino CLI not available: ${stderr}`)
     }
 
-    return { success: true, data: stdout }
+    /**
+     * Parses the JSON output from the Arduino CLI.
+     * @example The output will be like:
+     * {
+     *  "Application": "arduino-cli",
+     *  "VersionString": "x.y.z",
+     *  "Commit": "commit-hash",
+     *  "Status": "version-status",
+     *  "Date": "release-date",
+     * }
+     * @updatedAt 17/07/2025
+     */
+    const stdoutAsJsonObject = JSON.parse(stdout) as Record<string, string>
+
+    const { VersionString } = stdoutAsJsonObject
+
+    return { success: true, data: VersionString }
   }
 
   async checkIec2cAvailability(): Promise<MethodsResult<string>> {
@@ -137,10 +164,14 @@ class CompilerModule {
     // INFO: If the command is not available, it will throw an error.
     const { stdout, stderr } = await executeCommand(`"${binaryPath}" -v`)
     if (stderr) {
-      return { success: false, data: stderr }
+      throw new Error(`IEC2C not available: ${stderr}`)
     }
 
-    return { success: true, data: stdout }
+    const firstLine = stdout.split('\n')[0] // Get the first line of the output
+    const lineAsArray = firstLine.split(' ') // Split the line by spaces
+    const version = lineAsArray[lineAsArray.length - 1] // The version is the last element in the array
+
+    return { success: true, data: version }
   }
 
   // ++ ========================= Build Steps ================================= ++
@@ -170,51 +201,52 @@ class CompilerModule {
         result = { success: true }
       }
     } catch (_error) {
-      result.data = 'Error creating directories'
+      throw new Error(`Error creating directories: ${_error as string}`)
     }
 
     return result
   }
 
   // INFO: This method is a placeholder for copying static files.
-  // async copyStaticFiles(compilationPath: string): Promise<MethodsResult> {
-  //   console.log('Copying static build files...')
-  //   let result: MethodsResult = { success: false }
-  //   const staticArduinoFilesPath = join(this.sourceDirectoryPath, 'arduino')
-  //   const staticBaremetalFilesPath = join(this.sourceDirectoryPath, 'baremetal')
+  async copyStaticFiles(compilationPath: string): Promise<MethodsResult<string>> {
+    let result: MethodsResult<string> = { success: false }
+    const staticArduinoFilesPath = join(this.sourceDirectoryPath, 'arduino')
+    const staticBaremetalFilesPath = join(this.sourceDirectoryPath, 'baremetal')
+    const staticMatIECLibraryFilesPath = join(this.sourceDirectoryPath, 'MatIEC', 'lib')
 
-  //   try {
-  //     // Implement the logic to copy static build files.
-  //     const results = await Promise.all([
-  //       cp(staticArduinoFilesPath, join(compilationPath, 'arduino'), { recursive: true }),
-  //       cp(staticBaremetalFilesPath, join(compilationPath, 'baremetal'), { recursive: true }),
-  //     ])
-  //     console.log('Static build files copied successfully:', results)
-  //     result = { success: true, data: results }
-  //   } catch (error) {
-  //     console.error(`Error copying static build files: ${String(error)}`)
-  //     result.data = error
-  //   }
+    try {
+      // Implement the logic to copy static build files.
+      const results = await Promise.all([
+        cp(staticArduinoFilesPath, join(compilationPath, 'arduino'), { recursive: true }),
+        cp(staticBaremetalFilesPath, join(compilationPath, 'baremetal'), { recursive: true }),
+        cp(staticMatIECLibraryFilesPath, join(compilationPath, 'lib'), { recursive: true }),
+      ])
+      if (results.every((res) => res === undefined)) {
+        result = { success: true, data: 'Static build files copied successfully' }
+      }
+    } catch (error) {
+      throw new Error(`Error copying static files: ${error as string}`)
+    }
 
-  //   return result
-  // }
+    return result
+  }
 
   // +++++++++++++++++++++++++++ Compilation Methods +++++++++++++++++++++++++++++
 
   async handleGenerateXMLfromJSON(sourceTargetFolderPath: string, jsonData: ProjectState['data']) {
-    return new Promise<MethodsResult<string>>((resolve) => {
+    return new Promise<MethodsResult<string>>((resolve, reject) => {
       const { data: xmlData } = XmlGenerator(jsonData, 'old-editor')
       if (typeof xmlData !== 'string') {
-        resolve({ success: false, data: 'XML data is not a string' })
+        reject(new Error('XML data is not a string'))
         return
       }
 
       const xmlCreationResult = CreateXMLFile(sourceTargetFolderPath, xmlData, 'plc')
 
       if (xmlCreationResult.success) {
-        resolve({ success: true })
+        resolve({ success: true, data: sourceTargetFolderPath })
       } else {
-        resolve({ success: false, data: 'Failed to create XML file' })
+        reject(new Error('Failed to create XML file'))
       }
     })
   }
@@ -223,34 +255,93 @@ class CompilerModule {
   // INFO: This method will transpile the XML file to ST using the xml2st binary.
   // INFO: The xml2st binary will be used to transpile the XML file
   // INFO: to ST (Structured Text) code.
-  async handleTranspileXMLtoST(generatedXMLFilePath: string, mainProcessPort: MessagePortMain) {
+  async handleTranspileXMLtoST(
+    generatedXMLFilePath: string,
+    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+  ) {
     let binaryPath = this.xml2stBinaryPath
     if (CompilerModule.HOST_PLATFORM === 'win32') {
       // INFO: On Windows, we need to add the .exe extension to the binary path.
       binaryPath += '.exe'
     }
-    return new Promise<MethodsResult<string | Buffer>>((resolve) => {
+    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
       const executeCommand = spawn(binaryPath, ['--generate-st', generatedXMLFilePath])
 
-      // INFO: We use the xml2st command to transpile the XML file to ST.
-      executeCommand.stdout.on('data', (data: Buffer) => {
-        mainProcessPort.postMessage({ logLevel: 'warning', message: data.toString() })
-      })
+      let stderrData = ''
 
-      executeCommand.stderr.on('data', (data: Buffer) => {
-        mainProcessPort.postMessage({ logLevel: 'error', message: `Error transpiling XML to ST: ${data.toString()}` })
-        resolve({ success: false, data: 'Error transpiling XML to ST' })
+      // INFO: We use the xml2st command to transpile the XML file to ST.
+      executeCommand.stdout?.on('data', (data: Buffer) => {
+        console.log('stdout triggered')
+        handleOutputData(data)
+      })
+      executeCommand.stderr?.on('data', (data: Buffer) => {
+        console.log('stderr triggered')
+        stderrData += data.toString()
       })
 
       executeCommand.on('close', (code) => {
         if (code === 0) {
-          mainProcessPort.postMessage({
-            logLevel: 'warning',
-            message: `Transpiled XML to ST successfully: ${generatedXMLFilePath}`,
+          handleOutputData(
+            `ST file generated successfully at: ${generatedXMLFilePath.replace('plc.xml', 'program.st')}`,
+            'info',
+          )
+          resolve({
+            success: true,
           })
-          resolve({ success: true })
         } else {
-          resolve({ success: false, data: `xml2st process exited with code ${code}` })
+          handleOutputData(`xml2st process exited with code ${code}${stderrData}`, 'error')
+          reject(new Error(`xml2st process exited with code ${code}${stderrData}`))
+        }
+      })
+    })
+  }
+
+  async handleTranspileSTtoC(
+    generatedSTFilePath: string,
+    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+  ) {
+    // As the iec2c binary generates the C files in the same directory as the binary location,
+    // we need to set the target directory for the output files accordingly with the generated ST file path.
+    const targetDirectoryForOutput = join(generatedSTFilePath.replace('program.st', ''))
+    // // We need to set the cwd - current working directory - for the iec2c binary to the sources/MatIEC folder.
+    // // This is necessary because the iec2c binary expects the lib folder to be in the same directory as the binary.
+    // const cwdForIec2c = join(
+    //   CompilerModule.DEVELOPMENT_MODE ? process.cwd() : process.resourcesPath,
+    //   CompilerModule.DEVELOPMENT_MODE ? 'resources' : '',
+    //   'sources',
+    //   'MatIEC',
+    // )
+
+    let binaryPath = this.iec2cBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') {
+      // INFO: On Windows, we need to add the .exe extension to the binary path.
+      binaryPath += '.exe'
+    }
+
+    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
+      const executeCommand = spawn(binaryPath, ['-f', '-p', '-i', '-l', generatedSTFilePath], {
+        cwd: targetDirectoryForOutput,
+      })
+
+      let stderrData = ''
+
+      // INFO: We use the iec2c command to transpile the ST file to C.
+      executeCommand.stdout?.on('data', (data: Buffer) => {
+        handleOutputData(data)
+      })
+      executeCommand.stderr?.on('data', (data: Buffer) => {
+        stderrData += data.toString()
+      })
+
+      executeCommand.on('close', (code) => {
+        if (code === 0) {
+          handleOutputData(`C files generated successfully at: ${targetDirectoryForOutput}`, 'info')
+          resolve({
+            success: true,
+          })
+        } else {
+          // handleOutputData(`iec2c process exited with code ${code}${stderrData}`, 'error')
+          reject(new Error(`iec2c process exited with code ${code} - ${stderrData}`))
         }
       })
     })
@@ -309,66 +400,150 @@ class CompilerModule {
     // INFO: the second argument is the board target, and the third argument is the project data.
     const [projectPath, boardTarget, projectData] = args as [string, string, ProjectState['data']]
 
+    const _boardRuntime = await this.#getBoardRuntime(boardTarget) // Get the board runtime from the hals.json file
+
     const normalizedProjectPath = projectPath.replace('project.json', '')
 
     const sourceTargetFolderPath = join(normalizedProjectPath, 'build', boardTarget, 'src') // Assuming the source folder is named 'src'
 
     // --- Print basic information ---
     _mainProcessPort.postMessage({
-      logLevel: 'warning',
+      logLevel: 'info',
       message: `Compiling program for project: ${projectPath} and board target: ${boardTarget}`,
     })
-    _mainProcessPort.postMessage({ logLevel: 'warning', message: `Host Hardware Info:\n${this.getHostHardwareInfo()}` })
+    _mainProcessPort.postMessage({
+      logLevel: 'warning',
+      message: 'Host Hardware Info:',
+    })
+    _mainProcessPort.postMessage({
+      message: this.getHostHardwareInfo(),
+    })
 
     // --- Check tools availability ---
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Checking tools availability...' })
-    const [arduinoCliCheckResult, iec2cCheckResult] = await Promise.all([
-      this.checkArduinoCliAvailability(),
-      this.checkIec2cAvailability(),
-    ])
-    if (!arduinoCliCheckResult.success || !iec2cCheckResult.success) {
+
+    try {
+      const [arduinoCliCheckResult, iec2cCheckResult] = await Promise.all([
+        this.checkArduinoCliAvailability(),
+        this.checkIec2cAvailability(),
+      ])
+      _mainProcessPort.postMessage({
+        message: `Arduino CLI available at version ${arduinoCliCheckResult.data}\nIEC2C available at version ${iec2cCheckResult.data}`,
+      })
+      if (!arduinoCliCheckResult.success || !iec2cCheckResult.success) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: `Missing necessary tools.`,
+        })
+        throw new Error('Missing necessary tools.')
+      }
+    } catch (_error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
-        message: `Missing necessary tools..`,
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+        message: `Error checking tools availability: ${_error}`,
       })
-      return
     }
-    _mainProcessPort.postMessage({
-      logLevel: 'info',
-      message: `Arduino CLI Version: ${arduinoCliCheckResult.data}\nIEC2C Version: ${iec2cCheckResult.data}`,
-    })
 
     // Step 1: Create basic directories
-    const createDirsResult = await this.createBasicDirectories(projectPath, boardTarget)
-    if (!createDirsResult.success) {
+    try {
+      const createDirsResult = await this.createBasicDirectories(projectPath, boardTarget)
+      if (!createDirsResult.success) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: `Failed to create basic directories: ${createDirsResult.data as string}`,
+        })
+        return
+      }
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: 'Basic directories created successfully!',
+      })
+    } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
-        message: `Failed to create basic directories: ${createDirsResult.data as string}`,
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+        message: `Error creating basic directories: ${error}`,
       })
       return
     }
 
     // Step 2: Generate XML from JSON
-    const generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
-    if (!generateXMLResult.success) {
+    try {
+      const generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: `Generated XML from JSON successfully at: ${generateXMLResult.data as string}`,
+      })
+    } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
-        message: `Failed to generate XML from JSON: ${generateXMLResult.data as string}`,
+        message: `Error generating XML from JSON: ${error as string}`,
       })
       return
     }
 
     // Step 3: Transpile XML to ST
     const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml') // Assuming the XML file is named 'plc.xml'
-    const transpileXMLResult = await this.handleTranspileXMLtoST(generatedXMLFilePath, _mainProcessPort)
-    if (!transpileXMLResult.success) {
+    try {
+      await this.handleTranspileXMLtoST(generatedXMLFilePath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+      _mainProcessPort.postMessage({ logLevel: 'info', message: 'XML transpiled to ST successfully.' })
+    } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
-        message: `Failed to transpile XML to ST: ${transpileXMLResult.data as string}`,
+        message: `Error transpiling XML to ST: ${error as string}`,
       })
       return
     }
-    _mainProcessPort.postMessage({ logLevel: 'info', message: 'XML transpiled to ST successfully.' })
+
+    // -- Verify if the runtime target is Arduino or OpenPLC --
+    // INFO: If the runtime target is OpenPLC we will finish the process here.
+    if (_boardRuntime === 'openplc-compiler') {
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: 'OpenPLC runtime detected, stopping compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
+    // INFO: If the runtime target is Arduino, we will continue the compilation process.
+    // -- Copy static files (if necessary) --
+    _mainProcessPort.postMessage({ logLevel: 'info', message: 'Copying static files...' })
+    try {
+      await this.copyStaticFiles(sourceTargetFolderPath)
+      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Static files copied successfully.' })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error copying static files: ${error as string}`,
+      })
+      return
+    }
+
+    // Step 4: Generate C code from ST
+    const generatedSTFilePath = join(sourceTargetFolderPath, 'program.st') // Assuming the ST file is named 'program.st'
+    try {
+      await this.handleTranspileSTtoC(generatedSTFilePath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+      _mainProcessPort.postMessage({ logLevel: 'info', message: 'ST transpiled to C successfully.' })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+    }
+
+    // -- Final message --
+    _mainProcessPort.postMessage({
+      message:
+        '-------------------------------------------------------------------------------------------------------------\n',
+    })
+
+    // INFO: This step is under development.
     _mainProcessPort.close()
   }
 }

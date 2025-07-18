@@ -15,7 +15,7 @@
   "mac": {
     "extraResources": [
       {
-        "from": "./resources/bin",
+        "from": "./resources/bin/darwin/${arch}",
         "to": "./bin"
       },
       {
@@ -58,7 +58,7 @@
   "win": {
     "extraResources": [
       {
-        "from": "./resources/bin",
+        "from": "./resources/bin/win32/${arch}",
         "to": "./bin"
       },
       {
@@ -75,7 +75,7 @@
   "linux": {
     "extraResources": [
       {
-        "from": "./resources/bin",
+        "from": "./resources/bin/linux/${arch}",
         "to": "./bin"
       },
       {

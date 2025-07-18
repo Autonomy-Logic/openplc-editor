@@ -12,6 +12,7 @@ const ArduinoCliConfigSchema = z.object({
 type ArduinoCliConfig = z.infer<typeof ArduinoCliConfigSchema>
 
 const BoardInfoSchema = z.object({
+  compiler: z.enum(['arduino-cli', 'openplc-compiler']),
   core: z.string(),
   default_ain: z.string(),
   default_aout: z.string(),
