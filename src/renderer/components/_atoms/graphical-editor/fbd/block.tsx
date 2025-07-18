@@ -453,14 +453,14 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    const blockType = (node.data as BlockNodeData<BlockVariant>).variant.name
+    const nodeBlockType = (node.data as BlockNodeData<BlockVariant>).variant.name
 
     const findMatchingVariable = () =>
       variables.all.find(
         (variable) =>
           variable.name === variableNameToSubmit &&
           variable.type.definition === 'derived' &&
-          variable.type.value === blockType,
+          variable.type.value === nodeBlockType,
       )
 
     const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) =>
@@ -495,7 +495,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           data: {
             id: uuidv4(),
             name: variableNameToSubmit,
-            type: { definition: 'derived', value: blockType },
+            type: { definition: 'derived', value: nodeBlockType },
             class: 'local',
             location: '',
             documentation: '',
