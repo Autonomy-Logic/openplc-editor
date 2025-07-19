@@ -208,21 +208,30 @@ class CompilerModule {
   }
 
   // INFO: This method is a placeholder for copying static files.
-  async copyStaticFiles(compilationPath: string): Promise<MethodsResult<string>> {
+  async copyStaticFiles(compilationPath: string, boardTarget: string): Promise<MethodsResult<string>> {
     let result: MethodsResult<string> = { success: false }
+    let filesToCopy: Promise<void>[] = []
+
     const staticArduinoFilesPath = join(this.sourceDirectoryPath, 'arduino')
     const staticBaremetalFilesPath = join(this.sourceDirectoryPath, 'baremetal')
     const staticMatIECLibraryFilesPath = join(this.sourceDirectoryPath, 'MatIEC', 'lib')
 
-    try {
-      // Implement the logic to copy static build files.
-      const results = await Promise.all([
+    if (boardTarget !== 'openplc-compiler') {
+      filesToCopy = [
         cp(staticArduinoFilesPath, join(compilationPath, 'arduino'), { recursive: true }),
         cp(staticBaremetalFilesPath, join(compilationPath, 'baremetal'), { recursive: true }),
         cp(staticMatIECLibraryFilesPath, join(compilationPath, 'lib'), { recursive: true }),
-      ])
+      ]
+    } else {
+      // INFO: If the board target is OpenPLC, we only copy the MatIEC library files.
+      filesToCopy = [cp(staticMatIECLibraryFilesPath, join(compilationPath, 'lib'), { recursive: true })]
+    }
+
+    try {
+      // Implement the logic to copy static build files.
+      const results = await Promise.all(filesToCopy)
       if (results.every((res) => res === undefined)) {
-        result = { success: true, data: 'Static build files copied successfully' }
+        result = { success: true, data: 'Static build files available' }
       }
     } catch (error) {
       throw new Error(`Error copying static files: ${error as string}`)
@@ -251,10 +260,6 @@ class CompilerModule {
     })
   }
 
-  // TODO: We need to change the binary for xml2st.
-  // INFO: This method will transpile the XML file to ST using the xml2st binary.
-  // INFO: The xml2st binary will be used to transpile the XML file
-  // INFO: to ST (Structured Text) code.
   async handleTranspileXMLtoST(
     generatedXMLFilePath: string,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
@@ -271,11 +276,9 @@ class CompilerModule {
 
       // INFO: We use the xml2st command to transpile the XML file to ST.
       executeCommand.stdout?.on('data', (data: Buffer) => {
-        console.log('stdout triggered')
         handleOutputData(data)
       })
       executeCommand.stderr?.on('data', (data: Buffer) => {
-        console.log('stderr triggered')
         stderrData += data.toString()
       })
 
@@ -347,6 +350,45 @@ class CompilerModule {
     })
   }
 
+  async handleGenerateDebugFiles(
+    sourceTargetFolderPath: string,
+    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+  ) {
+    const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml') // Assuming the XML file is named 'plc.xml'
+    const generatedVARIABLESFilePath = join(sourceTargetFolderPath, 'VARIABLES.csv') // Assuming the VARIABLES file is named 'VARIABLES.csv'
+    let binaryPath = this.xml2stBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') {
+      // INFO: On Windows, we need to add the .exe extension to the binary path.
+      binaryPath += '.exe'
+    }
+
+    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
+      const executeCommand = spawn(binaryPath, ['--generate-debug', generatedXMLFilePath, generatedVARIABLESFilePath])
+
+      let stderrData = ''
+
+      // INFO: We use the xml2st command to generate debug files.
+      executeCommand.stdout?.on('data', (data: Buffer) => {
+        handleOutputData(data)
+      })
+      executeCommand.stderr?.on('data', (data: Buffer) => {
+        stderrData += data.toString()
+      })
+
+      executeCommand.on('close', (code) => {
+        if (code === 0) {
+          handleOutputData(`Debug files generated successfully at: ${sourceTargetFolderPath}`, 'info')
+          resolve({
+            success: true,
+          })
+        } else {
+          handleOutputData(`xml2st process exited with code ${code}${stderrData}`, 'error')
+          reject(new Error(`xml2st process exited with code ${code}${stderrData}`))
+        }
+      })
+    })
+  }
+
   // !! Deprecated: This method is a outdated implementation and should be removed.
   async createXmlFile(
     pathToUserProject: string,
@@ -400,7 +442,7 @@ class CompilerModule {
     // INFO: the second argument is the board target, and the third argument is the project data.
     const [projectPath, boardTarget, projectData] = args as [string, string, ProjectState['data']]
 
-    const _boardRuntime = await this.#getBoardRuntime(boardTarget) // Get the board runtime from the hals.json file
+    const boardRuntime = await this.#getBoardRuntime(boardTarget) // Get the board runtime from the hals.json file
 
     const normalizedProjectPath = projectPath.replace('project.json', '')
 
@@ -498,22 +540,10 @@ class CompilerModule {
       return
     }
 
-    // -- Verify if the runtime target is Arduino or OpenPLC --
-    // INFO: If the runtime target is OpenPLC we will finish the process here.
-    if (_boardRuntime === 'openplc-compiler') {
-      _mainProcessPort.postMessage({
-        logLevel: 'info',
-        message: 'OpenPLC runtime detected, stopping compilation process.',
-      })
-      _mainProcessPort.close()
-      return
-    }
-
-    // INFO: If the runtime target is Arduino, we will continue the compilation process.
-    // -- Copy static files (if necessary) --
+    // -- Copy static files --
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Copying static files...' })
     try {
-      await this.copyStaticFiles(sourceTargetFolderPath)
+      await this.copyStaticFiles(sourceTargetFolderPath, boardRuntime)
       _mainProcessPort.postMessage({ logLevel: 'info', message: 'Static files copied successfully.' })
     } catch (error) {
       _mainProcessPort.postMessage({
@@ -535,6 +565,35 @@ class CompilerModule {
         logLevel: 'error',
         message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
       })
+    }
+
+    // Step 5: Generate debug files
+    try {
+      await this.handleGenerateDebugFiles(sourceTargetFolderPath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Debug files generated successfully.' })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+    }
+
+    // -- Verify if the runtime target is Arduino or OpenPLC --
+    // INFO: If the runtime target is Arduino, we will continue the compilation process.
+    // INFO: If the runtime target is OpenPLC we will finish the process here.
+    if (boardRuntime === 'openplc-compiler') {
+      _mainProcessPort.postMessage({
+        logLevel: 'info',
+        message: 'OpenPLC runtime detected, stopping compilation process.',
+      })
+      _mainProcessPort.postMessage({
+        message:
+          '-------------------------------------------------------------------------------------------------------------\n',
+      })
+      _mainProcessPort.close()
+      return
     }
 
     // -- Final message --
