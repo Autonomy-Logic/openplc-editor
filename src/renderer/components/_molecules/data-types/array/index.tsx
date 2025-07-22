@@ -1,7 +1,7 @@
-import { ScrollArea } from '@radix-ui/react-scroll-area'
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
-import { InputWithRef, Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
+import { InputWithRef } from '@root/renderer/components/_atoms'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
+import { TypeDropdownSelector } from '@root/renderer/components/_atoms/type-dropdown-selector'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { baseTypeSchema, PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
@@ -12,6 +12,10 @@ type ArrayDatatypeProps = ComponentPropsWithoutRef<'div'> & {
   data: PLCArrayDatatype
 }
 
+type Pou = { type: string; name: string }
+type UserLibWithPous = { pous: Pou[] }
+type UserLibFunctionBlock = { type: string; name: string }
+
 const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const {
     editor,
@@ -19,11 +23,33 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     project: {
       data: { dataTypes },
     },
+    libraries: sliceLibraries,
   } = useOpenPLCStore()
-  const baseTypes = baseTypeSchema.options
-  const allTypes = [
-    ...baseTypes,
-    ...dataTypes.map((type) => (type.name !== editor.meta.name ? type.name : '')).filter((type) => type !== ''),
+  const baseTypes = baseTypeSchema.options.filter((type) => type.toUpperCase() !== 'ARRAY')
+  const userDataTypes = dataTypes
+    .map((type) => type.name)
+    .filter((name) => name !== editor.meta.name && name.toUpperCase() !== 'ARRAY')
+
+  const systemFunctionBlocks = sliceLibraries.system.flatMap((lib) =>
+    lib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
+  )
+
+  const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) =>
+    'pous' in userLib && Array.isArray(userLib.pous)
+      ? userLib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase())
+      : (userLib as UserLibFunctionBlock).type === 'function-block'
+        ? [(userLib as UserLibFunctionBlock).name.toUpperCase()]
+        : [],
+  )
+
+  const VariableTypes = [
+    { definition: 'base-type', values: baseTypes },
+    { definition: 'user-data-type', values: userDataTypes },
+  ]
+
+  const LibraryTypes = [
+    { definition: 'system', values: systemFunctionBlocks },
+    { definition: 'user', values: userFunctionBlocks },
   ]
 
   const ROWS_NOT_SELECTED = -1
@@ -53,20 +79,12 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
     updateDatatype(data.name, updatedData as PLCArrayDatatype)
   }
 
-  const onSelectValueChange = (selectedValue: string) => {
-    setBaseType(selectedValue)
-    let isBaseType = false
-    baseTypes.forEach((type) => {
-      if (type === selectedValue) isBaseType = true
-    })
-    const updatedData = {
+  const handleSelect = (definition: string, value: string) => {
+    setBaseType(value)
+    updateDatatype(data.name, {
       ...data,
-      baseType: {
-        value: selectedValue,
-        definition: isBaseType ? 'base-type' : 'user-data-type',
-      },
-    }
-    updateDatatype(data.name, updatedData as PLCArrayDatatype)
+      baseType: { value, definition },
+    } as PLCArrayDatatype)
   }
 
   const addNewRow = () => {
@@ -152,39 +170,13 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
             <label className='cursor-default select-none pr-6 font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
               Base Type
             </label>
-            <Select
-              aria-label='Array data type base type select'
-              onValueChange={(e) => onSelectValueChange(e)}
+
+            <TypeDropdownSelector
               value={baseType}
-            >
-              <SelectTrigger
-                withIndicator
-                placeholder='BOOL'
-                className='flex h-7 w-full max-w-44 items-center justify-between gap-2 rounded-lg border border-neutral-400 bg-white px-3 py-2 font-caption text-xs font-normal text-neutral-950 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
-              />
-              <SelectContent
-                position='popper'
-                side='bottom'
-                sideOffset={-28}
-                className='box h-fit w-[--radix-select-trigger-width] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
-              >
-                <ScrollArea className='max-h-[300px] overflow-y-auto'>
-                  {allTypes.map((type) => {
-                    return (
-                      <SelectItem
-                        key={type}
-                        value={type}
-                        className='flex w-full cursor-pointer items-center justify-center py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800'
-                      >
-                        <span className='text-center font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                          {type.toLocaleUpperCase()}
-                        </span>
-                      </SelectItem>
-                    )
-                  })}
-                </ScrollArea>
-              </SelectContent>
-            </Select>
+              onSelect={handleSelect}
+              variableTypes={VariableTypes}
+              libraryTypes={LibraryTypes}
+            />
           </div>
         </div>
         <div aria-label='Array initial value container' className='w-1/2'>

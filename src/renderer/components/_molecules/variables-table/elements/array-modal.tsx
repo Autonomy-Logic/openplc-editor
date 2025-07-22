@@ -13,6 +13,10 @@ type ArrayModalProps = {
   closeContainer: () => void
 }
 
+type Pou = { type: string; name: string }
+type UserLibWithPous = { pous: Pou[] }
+type UserLibFunctionBlock = { type: string; name: string }
+
 export const ArrayModal = ({
   arrayModalIsOpen,
   closeContainer,
@@ -28,12 +32,35 @@ export const ArrayModal = ({
       data: { dataTypes, pous },
     },
     projectActions: { updateVariable },
+    libraries: sliceLibraries,
   } = useOpenPLCStore()
 
-  const baseTypes = baseTypeSchema.options
-  const allTypes = [
-    ...baseTypes,
-    ...dataTypes.map((type) => (type.name !== name ? type.name : '')).filter((type) => type !== ''),
+  const baseTypes = baseTypeSchema.options.filter((type) => type.toUpperCase() !== 'ARRAY')
+
+  const userDataTypes = dataTypes
+    .map((type) => type.name)
+    .filter((typeName) => typeName !== name && typeName.toUpperCase() !== 'ARRAY')
+
+  const systemFunctionBlocks = sliceLibraries.system.flatMap((lib) =>
+    lib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase()),
+  )
+
+  const userFunctionBlocks = sliceLibraries.user.flatMap((userLib: UserLibWithPous | UserLibFunctionBlock) =>
+    'pous' in userLib && Array.isArray(userLib.pous)
+      ? userLib.pous.filter((pou) => pou.type === 'function-block').map((pou) => pou.name.toUpperCase())
+      : (userLib as UserLibFunctionBlock).type === 'function-block'
+        ? [(userLib as UserLibFunctionBlock).name.toUpperCase()]
+        : [],
+  )
+
+  const VariableTypes = [
+    { definition: 'base-type', values: baseTypes },
+    { definition: 'user-data-type', values: userDataTypes },
+  ]
+
+  const LibraryTypes = [
+    { definition: 'system', values: systemFunctionBlocks },
+    { definition: 'user', values: userFunctionBlocks },
   ]
 
   const [selectedInput, setSelectedInput] = useState<string>('')
@@ -154,7 +181,6 @@ export const ArrayModal = ({
       onCancel={handleCancel}
       onSave={handleSave}
       typeValue={typeValue}
-      allTypes={allTypes}
       onTypeChange={handleUpdateType}
       dimensions={dimensions}
       selectedInput={selectedInput}
@@ -163,6 +189,8 @@ export const ArrayModal = ({
       onRearrangeDimensions={handleRearrangeDimensions}
       onInputClick={handleInputClick}
       onUpdateDimension={handleUpdateDimension}
+      variableTypes={VariableTypes}
+      libraryTypes={LibraryTypes}
     />
   )
 }
