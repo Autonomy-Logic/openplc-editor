@@ -1,7 +1,7 @@
 import * as PrimitiveDropdown from '@radix-ui/react-dropdown-menu'
 import { ArrowIcon, DebuggerIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { LadderFlowActions, LadderFlowState } from '@root/renderer/store/slices'
+import { FBDFlowActions, FBDFlowState, LadderFlowActions, LadderFlowState } from '@root/renderer/store/slices'
 import type { PLCVariable } from '@root/types/PLC/open-plc'
 import { baseTypeSchema } from '@root/types/PLC/open-plc'
 import { cn } from '@root/utils'
@@ -28,6 +28,7 @@ const SelectableTypeCell = ({
       data: { dataTypes, pous },
     },
     ladderFlowActions: { updateNode },
+    fbdFlowActions: { updateNode: updateFBDNode },
     libraries: sliceLibraries,
   } = useOpenPLCStore()
 
@@ -163,8 +164,64 @@ const SelectableTypeCell = ({
     )
   }
 
+  const syncNodesWithVariablesFBD = (
+    newVars: PLCVariable[],
+    fbdFlows: FBDFlowState['fbdFlows'],
+    updateNode: FBDFlowActions['updateNode'],
+  ) => {
+    fbdFlows.forEach((flow) =>
+      flow.rung.nodes.forEach((node) => {
+        const nodeVar = (node.data as { variable?: PLCVariable }).variable
+
+        if (!nodeVar) return
+
+        const target = newVars.find((v) => v.name.toLowerCase() === nodeVar.name.toLowerCase())
+
+        if (!target) return
+
+        const expectedType = getBlockExpectedType(node)
+
+        const isTheSameType = sameType(target.type.value, expectedType)
+
+        if (!isTheSameType) {
+          updateNode({
+            editorName: flow.name,
+            nodeId: node.id,
+            node: {
+              ...node,
+              data: {
+                ...node.data,
+                variable: { ...target, id: `broken-${node.id}` },
+                wrongVariable: true,
+              },
+            },
+          })
+
+          return
+        }
+
+        if ((node.data as { wrongVariable?: PLCVariable }).wrongVariable) {
+          updateNode({
+            editorName: flow.name,
+            nodeId: node.id,
+            node: {
+              ...node,
+              data: {
+                ...node.data,
+                variable: target,
+                wrongVariable: false,
+              },
+            },
+          })
+        }
+      }),
+    )
+  }
+
   // When the input is blurred, we'll call our table meta's updateData function
   const onSelect = (definition: PLCVariable['type']['definition'], value: PLCVariable['type']['value']) => {
+    const language = 'language' in editor.meta ? editor.meta.language : undefined
+
     table.options.meta?.updateData(index, id, { definition, value })
 
     const {
@@ -172,13 +229,20 @@ const SelectableTypeCell = ({
         data: { pous: freshPous },
       },
       ladderFlows: freshLadderFlows,
+      fbdFlows: freshFBDFlows,
     } = useOpenPLCStore.getState()
 
     const pou = freshPous.find((p) => p.data.name === editor.meta.name)
 
     const newVars = pou?.data.variables ?? []
 
-    syncNodesWithVariables(newVars, freshLadderFlows, updateNode)
+    if (language === 'fbd') {
+      syncNodesWithVariablesFBD(newVars, freshFBDFlows, updateFBDNode)
+    }
+
+    if (language === 'ld') {
+      syncNodesWithVariables(newVars, freshLadderFlows, updateNode)
+    }
 
     setCellValue(value)
   }
@@ -338,6 +402,7 @@ const SelectableTypeCell = ({
     </PrimitiveDropdown.Root>
   )
 }
+
 const VariableClasses = ['input', 'output', 'inOut', 'external', 'local', 'temp']
 
 const SelectableClassCell = ({
