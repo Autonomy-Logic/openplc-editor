@@ -12,6 +12,7 @@
         "lword",
         "modbus",
         "openplc",
+        "pous",
         "prefault",
         "sublabel",
         "tailwindcss",

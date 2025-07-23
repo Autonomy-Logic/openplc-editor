@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { pinSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'

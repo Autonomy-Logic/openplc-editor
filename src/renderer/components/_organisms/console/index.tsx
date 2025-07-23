@@ -19,7 +19,7 @@ const Console = () => {
           })
         }
       },
-      0,
+      75,
       { leading: false, trailing: true },
     )
     debouncedScrollToBottomLog()
