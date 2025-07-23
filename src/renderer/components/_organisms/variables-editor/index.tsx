@@ -3,7 +3,13 @@ import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { LadderFlowActions, LadderFlowState, VariablesTable as VariablesTableType } from '@root/renderer/store/slices'
+import {
+  FBDFlowActions,
+  FBDFlowState,
+  LadderFlowActions,
+  LadderFlowState,
+  VariablesTable as VariablesTableType,
+} from '@root/renderer/store/slices'
 import { baseTypes } from '@root/shared/data'
 import { PLCVariable as VariablePLC } from '@root/types/PLC'
 import { BaseType, PLCVariable } from '@root/types/PLC/open-plc'
@@ -26,6 +32,8 @@ const VariablesEditor = () => {
     editor,
     ladderFlows,
     ladderFlowActions: { updateNode },
+    fbdFlows,
+    fbdFlowActions: { updateNode: updateFBDNode },
     workspace: {
       systemConfigs: { shouldUseDarkMode },
     },
@@ -279,6 +287,36 @@ const VariablesEditor = () => {
       setConfirmRenameBlocksOpen(true)
     })
 
+  const unlinkRenamedVariablesByNameFBD = (
+    renamedPairs: { oldName: string; type: string }[],
+    fbdFlows: FBDFlowState['fbdFlows'],
+    updateNode: FBDFlowActions['updateNode'],
+  ) =>
+    fbdFlows.forEach((flow) =>
+      flow.rung.nodes.forEach((node) => {
+        const data = (node.data as { variable?: PLCVariable }).variable
+        if (!data) return
+
+        const renamed = renamedPairs.find(
+          (p) => p.oldName.toLowerCase() === data.name.toLowerCase() && p.type === data.type.value.toLowerCase(),
+        )
+        if (!renamed) return
+
+        updateNode({
+          editorName: flow.name,
+          nodeId: node.id,
+          node: {
+            ...node,
+            data: {
+              ...node.data,
+              variable: { ...data, id: `broken-${node.id}` },
+              wrongVariable: true,
+            },
+          },
+        })
+      }),
+    )
+
   const unlinkRenamedVariablesByName = (
     renamedPairs: { oldName: string; type: string }[],
     ladderFlows: LadderFlowState['ladderFlows'],
@@ -363,6 +401,53 @@ const VariablesEditor = () => {
     )
   }
 
+  const relinkVariablesByNameFBD = (
+    renamedPairs: { oldName: string; newName: string; type: string }[],
+    newVariables: PLCVariable[],
+    fbdFlows: FBDFlowState['fbdFlows'],
+    updateNode: FBDFlowActions['updateNode'],
+    propagateRenamed: boolean,
+  ): void => {
+    fbdFlows.forEach((flow) =>
+      flow.rung.nodes.forEach((node) => {
+        const nodeVar = (node.data as { variable?: PLCVariable }).variable
+
+        if (!nodeVar?.name) {
+          return
+        }
+
+        const pair = renamedPairs.find((p) => p.oldName.toLowerCase() === nodeVar.name.toLowerCase())
+
+        if (pair && !propagateRenamed) {
+          return
+        }
+
+        const targetName = pair ? pair.newName : nodeVar.name
+
+        const target = newVariables.find((v) => v.name.toLowerCase() === targetName.toLowerCase())
+
+        if (!target || target === nodeVar) {
+          return
+        }
+
+        const expectedType = getBlockExpectedType(node)
+
+        if (!sameType(target.type.value, expectedType)) {
+          return
+        }
+
+        updateNode({
+          editorName: flow.name,
+          nodeId: node.id,
+          node: {
+            ...node,
+            data: { ...node.data, variable: target, wrongVariable: false },
+          },
+        })
+      }),
+    )
+  }
+
   const getBlockExpectedType = (node: Node): string => {
     const variant = (node.data as { variant?: { name?: string } }).variant
 
@@ -434,23 +519,91 @@ const VariablesEditor = () => {
     )
   }
 
+  const syncNodesWithVariablesFBD = (
+    newVars: PLCVariable[],
+    fbdFlows: FBDFlowState['fbdFlows'],
+    updateNode: FBDFlowActions['updateNode'],
+  ) => {
+    fbdFlows.forEach((flow) =>
+      flow.rung.nodes.forEach((node) => {
+        const nodeVar = (node.data as { variable?: PLCVariable }).variable
+
+        if (!nodeVar) return
+
+        const target = newVars.find((v) => v.name.toLowerCase() === nodeVar.name.toLowerCase())
+
+        if (!target) return
+
+        const expectedType = getBlockExpectedType(node)
+
+        const isTheSameType = sameType(target.type.value, expectedType)
+
+        if (!isTheSameType) {
+          updateNode({
+            editorName: flow.name,
+            nodeId: node.id,
+            node: {
+              ...node,
+              data: {
+                ...node.data,
+                variable: { ...target, id: `broken-${node.id}` },
+                wrongVariable: true,
+              },
+            },
+          })
+
+          return
+        }
+
+        if ((node.data as { wrongVariable?: PLCVariable }).wrongVariable) {
+          updateNode({
+            editorName: flow.name,
+            nodeId: node.id,
+            node: {
+              ...node,
+              data: {
+                ...node.data,
+                variable: target,
+                wrongVariable: false,
+              },
+            },
+          })
+        }
+      }),
+    )
+  }
+
   const commitCode = async (): Promise<boolean> => {
     try {
+      const language = 'language' in editor.meta ? editor.meta.language : undefined
+
+      if (!language) return false
+
       const newVariables = parseIecStringToVariables(editorCode)
 
-      const renamedPairs = tableData.flatMap((oldVar) => {
-        const candidate = newVariables.find(
-          (nv) =>
-            nv.name !== oldVar.name &&
-            nv.type.value.toLowerCase() === oldVar.type.value.toLowerCase() &&
-            !tableData.some((tv) => tv.name.toLowerCase() === nv.name.toLowerCase()),
+      const renamedPairs = tableData.flatMap((previousVariable) => {
+        const variableStillExists = newVariables.some(
+          (newVariable) => newVariable.name.toLowerCase() === previousVariable.name.toLowerCase(),
         )
-        return candidate
+
+        if (variableStillExists) {
+          return []
+        }
+
+        const renameCandidate = newVariables.find(
+          (newVariable) =>
+            newVariable.type.value.toLowerCase() === previousVariable.type.value.toLowerCase() &&
+            !tableData.some(
+              (existingVariable) => existingVariable.name.toLowerCase() === newVariable.name.toLowerCase(),
+            ),
+        )
+
+        return renameCandidate
           ? [
               {
-                oldName: oldVar.name,
-                newName: candidate.name,
-                type: oldVar.type.value.toLowerCase(),
+                oldName: previousVariable.name,
+                newName: renameCandidate.name,
+                type: previousVariable.type.value.toLowerCase(),
               },
             ]
           : []
@@ -458,7 +611,7 @@ const VariablesEditor = () => {
 
       let shouldPropagate = true
 
-      if (renamedPairs.length) {
+      if (renamedPairs.length && language === 'ld') {
         const blockUsesOldName = ladderFlows.some((flow) =>
           flow.rungs.some((rung) =>
             rung.nodes.some((node) => {
@@ -467,6 +620,18 @@ const VariablesEditor = () => {
             }),
           ),
         )
+
+        if (blockUsesOldName) shouldPropagate = await askRenameBlocks()
+      }
+
+      if (renamedPairs.length && language === 'fbd') {
+        const blockUsesOldName = fbdFlows.some((flow) =>
+          flow.rung.nodes.some((node) => {
+            const varName = (node.data as { variable?: PLCVariable }).variable?.name || ''
+            return renamedPairs.some((p) => p.oldName.toLowerCase() === varName.toLowerCase())
+          }),
+        )
+
         if (blockUsesOldName) shouldPropagate = await askRenameBlocks()
       }
 
@@ -474,15 +639,32 @@ const VariablesEditor = () => {
         pouName: pou?.data?.name ?? '',
         variables: newVariables as PLCVariable[],
       })
-      if (!response.ok) throw new Error(response.title + (response.message ? `: ${response.message}` : ''))
 
-      syncNodesWithVariables(newVariables as PLCVariable[], ladderFlows, updateNode)
+      if (!response.ok) {
+        throw new Error(response.title + (response.message ? `: ${response.message}` : ''))
+      }
+
+      if (language === 'ld') {
+        syncNodesWithVariables(newVariables as PLCVariable[], ladderFlows, updateNode)
+      }
+
+      if (language === 'fbd') {
+        syncNodesWithVariablesFBD(newVariables as PLCVariable[], fbdFlows, updateFBDNode)
+      }
 
       if (shouldPropagate) {
-        relinkVariablesByName(renamedPairs, newVariables as PLCVariable[], ladderFlows, updateNode, true)
+        if (language === 'fbd') {
+          relinkVariablesByNameFBD(renamedPairs, newVariables as PLCVariable[], fbdFlows, updateFBDNode, true)
+        }
+
+        if (language === 'ld') {
+          relinkVariablesByName(renamedPairs, newVariables as PLCVariable[], ladderFlows, updateNode, true)
+        }
       } else {
         relinkVariablesByName(renamedPairs, newVariables as PLCVariable[], ladderFlows, updateNode, false)
+        relinkVariablesByNameFBD(renamedPairs, newVariables as PLCVariable[], fbdFlows, updateFBDNode, false)
         unlinkRenamedVariablesByName(renamedPairs, ladderFlows, updateNode)
+        unlinkRenamedVariablesByNameFBD(renamedPairs, fbdFlows, updateFBDNode)
       }
 
       toast({ title: 'Variables updated', description: 'Changes applied successfully.' })
