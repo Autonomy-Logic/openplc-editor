@@ -46,13 +46,16 @@ function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
     }
   }
 
-  const entries = readdirSync(basePath, { withFileTypes: true })
+  const entries = readdirSync(basePath, { withFileTypes: true, recursive: true })
   let isValidProject = true
   let hasProjectFile = false
   for (const entry of entries) {
     // If any entry is a file, it should be one of the expected project files
     if (entry.isFile()) {
-      console.log(`Found file: ${entry.name}`)
+      if (entry.path.includes('pous') || entry.path.includes('build')) {
+        continue // Skip POU files for now, they will be handled separately
+      }
+
       if (entry.name === 'project.json') {
         hasProjectFile = true
       }
@@ -64,7 +67,6 @@ function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
 
     // If any entry is a directory, it should be one of the expected directories
     if (entry.isDirectory()) {
-      console.log(`Found directory: ${entry.name}`)
       if (!projectDefaultDirectoriesValidation.some((dir) => dir.includes(entry.name))) {
         return {
           success: false,
