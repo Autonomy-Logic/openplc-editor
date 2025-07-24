@@ -213,14 +213,16 @@ class CompilerModule {
     let filesToCopy: Promise<void>[] = []
 
     const staticArduinoFilesPath = join(this.sourceDirectoryPath, 'arduino')
-    const staticBaremetalFilesPath = join(this.sourceDirectoryPath, 'baremetal')
+    const staticBaremetalFilesPath = join(this.sourceDirectoryPath, 'Baremetal')
     const staticMatIECLibraryFilesPath = join(this.sourceDirectoryPath, 'MatIEC', 'lib')
+
+    const sourceTargetFolderPath = join(compilationPath, 'src')
 
     if (boardTarget !== 'openplc-compiler') {
       filesToCopy = [
-        cp(staticArduinoFilesPath, join(compilationPath, 'arduino'), { recursive: true }),
-        cp(staticBaremetalFilesPath, join(compilationPath, 'baremetal'), { recursive: true }),
-        cp(staticMatIECLibraryFilesPath, join(compilationPath, 'lib'), { recursive: true }),
+        cp(staticArduinoFilesPath, sourceTargetFolderPath, { recursive: true }),
+        cp(staticMatIECLibraryFilesPath, join(sourceTargetFolderPath, 'lib'), { recursive: true }),
+        cp(staticBaremetalFilesPath, join(compilationPath, 'examples', 'Baremetal'), { recursive: true }),
       ]
     } else {
       // INFO: If the board target is OpenPLC, we only copy the MatIEC library files.
@@ -284,16 +286,12 @@ class CompilerModule {
 
       executeCommand.on('close', (code) => {
         if (code === 0) {
-          handleOutputData(
-            `ST file generated successfully at: ${generatedXMLFilePath.replace('plc.xml', 'program.st')}`,
-            'info',
-          )
+          handleOutputData(`ST file generated at: ${generatedXMLFilePath.replace('plc.xml', 'program.st')}`, 'info')
           resolve({
             success: true,
           })
         } else {
-          handleOutputData(`xml2st process exited with code ${code}${stderrData}`, 'error')
-          reject(new Error(`xml2st process exited with code ${code}${stderrData}`))
+          reject(new Error(`xml2st process exited with code ${code}\n${stderrData}`))
         }
       })
     })
@@ -306,14 +304,6 @@ class CompilerModule {
     // As the iec2c binary generates the C files in the same directory as the binary location,
     // we need to set the target directory for the output files accordingly with the generated ST file path.
     const targetDirectoryForOutput = join(generatedSTFilePath.replace('program.st', ''))
-    // // We need to set the cwd - current working directory - for the iec2c binary to the sources/MatIEC folder.
-    // // This is necessary because the iec2c binary expects the lib folder to be in the same directory as the binary.
-    // const cwdForIec2c = join(
-    //   CompilerModule.DEVELOPMENT_MODE ? process.cwd() : process.resourcesPath,
-    //   CompilerModule.DEVELOPMENT_MODE ? 'resources' : '',
-    //   'sources',
-    //   'MatIEC',
-    // )
 
     let binaryPath = this.iec2cBinaryPath
     if (CompilerModule.HOST_PLATFORM === 'win32') {
@@ -338,13 +328,12 @@ class CompilerModule {
 
       executeCommand.on('close', (code) => {
         if (code === 0) {
-          handleOutputData(`C files generated successfully at: ${targetDirectoryForOutput}`, 'info')
+          handleOutputData(`C files generated at: ${targetDirectoryForOutput}`, 'info')
           resolve({
             success: true,
           })
         } else {
-          // handleOutputData(`iec2c process exited with code ${code}${stderrData}`, 'error')
-          reject(new Error(`iec2c process exited with code ${code} - ${stderrData}`))
+          reject(new Error(`iec2c process exited with code ${code}\n${stderrData}`))
         }
       })
     })
@@ -377,13 +366,12 @@ class CompilerModule {
 
       executeCommand.on('close', (code) => {
         if (code === 0) {
-          handleOutputData(`Debug files generated successfully at: ${sourceTargetFolderPath}`, 'info')
+          handleOutputData(`Debug files generated at: ${sourceTargetFolderPath}`, 'info')
           resolve({
             success: true,
           })
         } else {
-          handleOutputData(`xml2st process exited with code ${code}${stderrData}`, 'error')
-          reject(new Error(`xml2st process exited with code ${code}${stderrData}`))
+          reject(new Error(`xml2st process exited with code ${code}\n${stderrData}`))
         }
       })
     })
@@ -414,14 +402,14 @@ class CompilerModule {
     const result = CreateXMLFile(filePath, projectDataAsString, 'plc')
     try {
       await writeFile(filePath, projectDataAsString)
-      console.log('File written successfully to:', filePath)
+      console.log('File written to:', filePath)
     } catch (err) {
       console.error('Error writing file:', err)
     }
 
     return {
       success: result.success,
-      message: result.success ? ` XML file created successfully at ${filePath}` : 'Failed to create XML file',
+      message: result.success ? ` XML file created at ${filePath}` : 'Failed to create XML file',
     }
   }
 
@@ -446,7 +434,9 @@ class CompilerModule {
 
     const normalizedProjectPath = projectPath.replace('project.json', '')
 
-    const sourceTargetFolderPath = join(normalizedProjectPath, 'build', boardTarget, 'src') // Assuming the source folder is named 'src'
+    const compilationPath = join(normalizedProjectPath, 'build', boardTarget) // Assuming the build folder is named 'build'
+
+    const sourceTargetFolderPath = join(compilationPath, 'src') // Assuming the source folder is named 'src'
 
     // --- Print basic information ---
     _mainProcessPort.postMessage({
@@ -515,7 +505,7 @@ class CompilerModule {
       const generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
       _mainProcessPort.postMessage({
         logLevel: 'info',
-        message: `Generated XML from JSON successfully at: ${generateXMLResult.data as string}`,
+        message: `Generated XML from JSON at: ${generateXMLResult.data as string}`,
       })
     } catch (error) {
       _mainProcessPort.postMessage({
@@ -531,7 +521,6 @@ class CompilerModule {
       await this.handleTranspileXMLtoST(generatedXMLFilePath, (data, logLevel) => {
         _mainProcessPort.postMessage({ logLevel, message: data })
       })
-      _mainProcessPort.postMessage({ logLevel: 'info', message: 'XML transpiled to ST successfully.' })
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
@@ -543,7 +532,7 @@ class CompilerModule {
     // -- Copy static files --
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Copying static files...' })
     try {
-      await this.copyStaticFiles(sourceTargetFolderPath, boardRuntime)
+      await this.copyStaticFiles(compilationPath, boardRuntime)
       _mainProcessPort.postMessage({ logLevel: 'info', message: 'Static files copied successfully.' })
     } catch (error) {
       _mainProcessPort.postMessage({
@@ -559,7 +548,6 @@ class CompilerModule {
       await this.handleTranspileSTtoC(generatedSTFilePath, (data, logLevel) => {
         _mainProcessPort.postMessage({ logLevel, message: data })
       })
-      _mainProcessPort.postMessage({ logLevel: 'info', message: 'ST transpiled to C successfully.' })
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
@@ -572,7 +560,6 @@ class CompilerModule {
       await this.handleGenerateDebugFiles(sourceTargetFolderPath, (data, logLevel) => {
         _mainProcessPort.postMessage({ logLevel, message: data })
       })
-      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Debug files generated successfully.' })
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
