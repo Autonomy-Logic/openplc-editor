@@ -170,7 +170,7 @@ function readDirectoryRecursive(baseDir: string, baseFileName: string, projectFi
 
     // If the entry is a file, read and parse it
     if (entry.isFile()) {
-      const schema = baseDir.includes('pous') ? PLCPouSchema : undefined
+      const schema = projectPouDirectories.some((pouDir) => baseDir.includes(pouDir)) ? PLCPouSchema : undefined
       if (!schema) {
         throw new Error(`No schema found for file: ${entryPath}`)
       }
@@ -238,7 +238,12 @@ export function readProjectFiles(basePath: string): IProjectServiceReadFilesResp
   }
 
   for (const [_fileName, file] of Object.entries(pouFiles)) {
-    returnData.project.data.pous.push(file as PLCPou)
+    const pou = file as PLCPou
+    // Check if POU already exists in project by name
+    const existingIndex = returnData.project.data.pous.findIndex((existing) => existing.data.name === pou.data.name)
+    if (existingIndex === -1) {
+      returnData.project.data.pous.push(pou)
+    }
   }
 
   return {
