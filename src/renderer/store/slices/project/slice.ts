@@ -47,6 +47,13 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
+    setPous: (pous): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          project.data.pous = pous as typeof project.data.pous
+        }),
+      )
+    },
     clearProjects: (): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
