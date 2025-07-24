@@ -1,4 +1,5 @@
 /* eslint-disable no-useless-escape */
+import { PLCDataType } from '@root/types/PLC/open-plc'
 import { languages } from 'monaco-editor'
 
 // Optimized regex based on tmlanguage rules
@@ -9,6 +10,46 @@ const dateLiterals = /D#[0-9\-]+|DT#[0-9\-_:]+|TOD#[0-9:]+/
 const bitLiterals = /[XBWDL]#[0-9A-Fa-f_]+|%[IQM][XBWDL]?[0-9.]+/
 const gxwDevices = /\b[MTCRSDXYZ][0-9]{1,5}(?:[ZV][0-9])?\b/
 const identifiers = /[a-zA-Z_][a-zA-Z0-9_]*/
+
+const standardFBVariables = [
+  // Timer variables
+  'IN',
+  'PT',
+  'Q',
+  'ET',
+  // Counter variables
+  'CU',
+  'CD',
+  'RESET',
+  'LOAD',
+  'PV',
+  'CV',
+  'QU',
+  'QD',
+  // Trigger variables
+  'CLK',
+  'M',
+  // Bistable variables
+  'S',
+  'R',
+  'S1',
+  'R1',
+  'Q1',
+  // Common FB outputs
+  'OUT',
+  'ERROR',
+  'STATUS',
+  'DONE',
+  'BUSY',
+  // Common FB inputs
+  'ENABLE',
+  'START',
+  'STOP',
+  'EXECUTE',
+]
+
+// Dynamic DataType variables (will be populated at runtime)
+const customDataTypeVariables: string[] = []
 
 export const conf: languages.LanguageConfiguration = {
   comments: {
@@ -50,6 +91,8 @@ export const language: languages.IMonarchLanguage = {
   defaultToken: 'invalid',
   tokenPostfix: '.st',
   localVariables: [],
+  standardFBVariables, // Add FB variables to the language definition
+  customDataTypeVariables, // Dynamic variables for custom data types
 
   keywords: [
     // Structural declarations
@@ -445,6 +488,8 @@ export const language: languages.IMonarchLanguage = {
             '@keywords': 'st.keyword',
             '@builtinFunctions': 'keyword',
             '@operators': 'operator',
+            '@standardFBVariables': 'keyword',
+            '@customDataTypeVariables': 'keyword',
             'TRUE|FALSE': 'constant.language',
             '@default': 'variable',
           },
@@ -549,6 +594,24 @@ export const language: languages.IMonarchLanguage = {
 export const updateLocalVariablesInTokenizer = (localVariables: string[]) => {
   language.localVariables = localVariables
 
+  void import('monaco-editor').then((monaco) => {
+    monaco.languages.setMonarchTokensProvider('st', language)
+  })
+}
+
+export const updateDataTypeVariablesInTokenizer = (customDataTypes: PLCDataType[]) => {
+  // Extract all variable names from all structure data types
+  const allVariableNames = customDataTypes
+    .filter((dt) => dt.derivation === 'structure')
+    .flatMap((dt) => dt.variable.map((v) => v.name))
+    .filter((name, index, arr) => arr.indexOf(name) === index) // Remove duplicates
+
+  // Update the global array and language definition
+  customDataTypeVariables.length = 0
+  customDataTypeVariables.push(...allVariableNames)
+  language.customDataTypeVariables = customDataTypeVariables
+
+  // Re-register the language with Monaco
   void import('monaco-editor').then((monaco) => {
     monaco.languages.setMonarchTokensProvider('st', language)
   })
