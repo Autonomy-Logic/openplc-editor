@@ -343,7 +343,7 @@ class CompilerModule {
     sourceTargetFolderPath: string,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
   ) {
-    const generatedXMLFilePath = join(sourceTargetFolderPath, 'plc.xml') // Assuming the XML file is named 'plc.xml'
+    const generatedSTFilePath = join(sourceTargetFolderPath, 'program.st') // Assuming the XML file is named 'program.st'
     const generatedVARIABLESFilePath = join(sourceTargetFolderPath, 'VARIABLES.csv') // Assuming the VARIABLES file is named 'VARIABLES.csv'
     let binaryPath = this.xml2stBinaryPath
     if (CompilerModule.HOST_PLATFORM === 'win32') {
@@ -352,7 +352,7 @@ class CompilerModule {
     }
 
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, ['--generate-debug', generatedXMLFilePath, generatedVARIABLESFilePath])
+      const executeCommand = spawn(binaryPath, ['--generate-debug', generatedSTFilePath, generatedVARIABLESFilePath])
 
       let stderrData = ''
 
