@@ -28,37 +28,38 @@ export const duplicateDataType = (
   original: PLCDataType,
   newName: string,
   createDatatype: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => boolean,
-) => {
+): boolean => {
   const clone = structuredClone(original)
   clone.name = newName
 
   switch (clone.derivation) {
     case 'array':
-      createDatatype({
+      return createDatatype({
         name: newName,
         derivation: 'array',
         baseType: clone.baseType,
         initialValue: clone.initialValue,
         dimensions: [...clone.dimensions],
       })
-      break
 
     case 'enumerated':
-      createDatatype({
+      return createDatatype({
         name: newName,
         derivation: 'enumerated',
         initialValue: clone.initialValue,
         values: [...clone.values],
       })
-      break
 
     case 'structure':
-      createDatatype({
+      return createDatatype({
         name: newName,
         derivation: 'structure',
         variable: [...clone.variable],
       })
-      break
+
+    default:
+      console.error(`Unknown derivation type: ${(clone as PLCDataType).derivation}`)
+      return false
   }
 }
 
@@ -74,7 +75,7 @@ export const duplicatePouAndEditor = (
   clone.data.name = newName
 
   if (typeof clone.data.body.value === 'object' && 'name' in clone.data.body.value) {
-    clone.data.body.value.name = newName
+    ;(clone.data.body.value as { name: string }).name = newName
   }
 
   createPou(clone)
@@ -84,6 +85,10 @@ export const duplicatePouAndEditor = (
 
   if ('path' in cloneEditor.meta && typeof cloneEditor.meta.path === 'string') {
     const parts = cloneEditor.meta.path.split('/')
+    if (parts.length === 0) {
+      console.warn('Invalid editor path format, cannot update path')
+      return
+    }
     parts[parts.length - 1] = newName
     cloneEditor.meta.path = parts.join('/')
   }
@@ -100,10 +105,14 @@ export const duplicateGraphicalFlow = (
   fbdFlows: FBDFlowType[],
   addLadderFlow: (flow: LadderFlowType) => void,
   addFBDFlow: (flow: FBDFlowType) => void,
-) => {
-  if (language === 'ld') {
-    const originalFlow = ladderFlows.find((flow) => flow.name === label)
-    if (originalFlow) {
+): boolean => {
+  switch (language) {
+    case 'ld': {
+      const originalFlow = ladderFlows.find((flow) => flow.name === label)
+      if (!originalFlow) {
+        console.error(`Ladder flow '${label}' not found`)
+        return false
+      }
       const flowClone = structuredClone(originalFlow)
       flowClone.name = newName
       flowClone.rungs = flowClone.rungs.map((rung) => ({
@@ -112,12 +121,15 @@ export const duplicateGraphicalFlow = (
         selectedNodes: [],
       }))
       addLadderFlow(flowClone)
+      return true
     }
-  }
 
-  if (language === 'fbd') {
-    const originalFlow = fbdFlows.find((flow) => flow.name === label)
-    if (originalFlow) {
+    case 'fbd': {
+      const originalFlow = fbdFlows.find((flow) => flow.name === label)
+      if (!originalFlow) {
+        console.error(`FBD flow '${label}' not found`)
+        return false
+      }
       const flowClone = structuredClone(originalFlow)
       flowClone.name = newName
       flowClone.rung = {
@@ -125,6 +137,11 @@ export const duplicateGraphicalFlow = (
         selectedNodes: [],
       }
       addFBDFlow(flowClone)
+      return true
     }
+
+    default:
+      console.error(`Unsupported language: ${language}`)
+      return false
   }
 }

@@ -132,6 +132,14 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     updatePouName: (name, newName): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
+          const nameExists =
+            project.data.pous.some((pou) => pou.data.name === newName) ||
+            project.data.dataTypes.some((dt) => dt.name === newName)
+          if (nameExists) {
+            console.error(`Name "${newName}" already exists`)
+            return
+          }
+
           const draft = project.data.pous.find((pou) => {
             return pou.data.name === name
           })
@@ -580,6 +588,14 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
     updateDataTypeName: (name, newName) => {
       setState(
         produce(({ project }: ProjectSlice) => {
+          const nameExists =
+            project.data.pous.some((pou) => pou.data.name === newName) ||
+            project.data.dataTypes.some((dt) => dt.name === newName)
+          if (nameExists) {
+            console.error(`Name "${newName}" already exists`)
+            return
+          }
+
           const datatypeToUpdate = project.data.dataTypes.find((datatype) => datatype.name === name)
           if (datatypeToUpdate) datatypeToUpdate.name = newName
 

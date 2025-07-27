@@ -391,7 +391,7 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
             if (e.key === 'Escape') setEditing(false)
           }}
           onBlur={(e) => handleRename(e.target.value || '')}
-          className='w-full px-1 text-xs border-0 bg-transparent text-neutral-850 dark:text-neutral-300 focus:outline-none'
+          className='w-full border-0 bg-transparent px-1 text-xs text-neutral-850 focus:outline-none dark:text-neutral-300'
         />
       ) : (
         <span
@@ -420,12 +420,13 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
             <Popover.Content
               align='start'
               side='right'
-              className='focus:outline-none focus-visible:outline-none z-[100]'
+              className='z-[100] focus:outline-none focus-visible:outline-none'
               onClick={(e) => e.stopPropagation()}
             >
-              <div className='box flex h-fit w-[110px] flex-col text-xs rounded-lg bg-white dark:bg-neutral-950 text-neutral-1000 dark:text-neutral-300'>
+              <div className='box flex h-fit w-[110px] flex-col rounded-lg bg-white text-xs text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300'>
                 {options.map((option) => (
                   <div
+                    key={option.name}
                     className='flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
                     onClick={() => {
                       option.onClick()
