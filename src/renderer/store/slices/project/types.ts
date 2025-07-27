@@ -147,6 +147,7 @@ const _projectActionsSchema = z.object({
     .function()
     .args(z.object({ name: z.string(), content: bodySchema }))
     .returns(z.void()),
+  updatePouName: z.function().args(z.string(), z.string()).returns(z.void()),
   deletePou: z.function().args(z.string()).returns(z.void()),
   updatePouDocumentation: z.function().args(z.string(), z.string()).returns(z.void()),
   updatePouReturnType: z.function().args(z.string(), z.string()).returns(z.void()),
@@ -217,6 +218,7 @@ const _projectActionsSchema = z.object({
     .returns(projectResponseSchema),
   deleteDatatype: z.function().args(z.string()).returns(z.void()),
   updateDatatype: z.function().args(z.string(), PLCDataTypeSchema.optional()).returns(z.void()),
+  updateDataTypeName: z.function().args(z.string(), z.string()).returns(z.void()),
   createArrayDimension: z
     .function()
     .args(z.object({ name: z.string(), derivation: z.enum(['array', 'enumerated', 'structure']) })),

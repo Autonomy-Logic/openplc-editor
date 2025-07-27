@@ -202,6 +202,18 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       )
     },
 
+    updateEditorName: (name: string, newName: string) => {
+      setState(
+        produce((state: EditorState) => {
+          const draft = state.editors.find((editor) => {
+            return editor.meta.name === name
+          })
+          if (draft) draft.meta.name = newName
+          if (state.editor.meta.name === name) state.editor.meta.name = newName
+        }),
+      )
+    },
+
     setEditor: (newEditor) =>
       setState(
         produce((state: EditorState) => {

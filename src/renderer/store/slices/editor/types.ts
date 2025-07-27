@@ -194,6 +194,7 @@ const _editorActionsSchema = z.object({
   addModel: z.function().args(editorModelSchema).returns(z.void()),
   removeModel: z.function().args(z.string()).returns(z.void()),
   updateEditorModel: z.function().args(z.string(), z.string()).returns(z.void()),
+  updateEditorName: z.function().args(z.string(), z.string()).returns(z.void()),
   updateModelVariables: z
     .function()
     .args(

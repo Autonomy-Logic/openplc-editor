@@ -59,6 +59,16 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
         }),
       )
     },
+    updateLibraryName: (name: string, newName: string) => {
+      setState(
+        produce(({ libraries: { user: userLibraries } }: LibrarySlice) => {
+          const draft = userLibraries.find((library) => {
+            return library.name === name
+          })
+          if (draft) draft.name = newName
+        }),
+      )
+    },
     clearUserLibraries: () => {
       setState(
         produce((slice: LibrarySlice) => {

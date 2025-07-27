@@ -129,6 +129,37 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
+    updatePouName: (name, newName): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const draft = project.data.pous.find((pou) => {
+            return pou.data.name === name
+          })
+          if (!draft) return
+
+          draft.data.name = newName
+
+          project.data.pous = project.data.pous.map((pou) => {
+            const pouVariables = pou.data.variables.map((variable) => {
+              if (variable.type.definition !== 'user-data-type' && variable.type.value === name.toUpperCase()) {
+                variable.type.value = newName.toUpperCase()
+              }
+              return variable
+            })
+            pou.data.variables = pouVariables
+
+            return pou
+          })
+
+          if (draft.type === 'program') {
+            const instanceDraft = project.data.configuration.resource.instances.find(
+              (instance) => instance.program === name,
+            )
+            if (instanceDraft) instanceDraft.program = newName
+          }
+        }),
+      )
+    },
     deletePou: (pouToBeDeleted): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
@@ -543,6 +574,26 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           const datatypeToUpdateIndex = project.data.dataTypes.findIndex((datatype) => datatype.name === name)
           if (datatypeToUpdateIndex === -1) return
           Object.assign(project.data.dataTypes[datatypeToUpdateIndex], dataToUpdate)
+        }),
+      )
+    },
+    updateDataTypeName: (name, newName) => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const datatypeToUpdate = project.data.dataTypes.find((datatype) => datatype.name === name)
+          if (datatypeToUpdate) datatypeToUpdate.name = newName
+
+          project.data.pous = project.data.pous.map((pou) => {
+            const pouVariables = pou.data.variables.map((variable) => {
+              if (variable.type.definition === 'user-data-type' && variable.type.value === name) {
+                variable.type.value = newName
+              }
+              return variable
+            })
+            pou.data.variables = pouVariables
+
+            return pou
+          })
         }),
       )
     },
