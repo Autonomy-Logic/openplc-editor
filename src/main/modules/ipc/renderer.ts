@@ -66,6 +66,7 @@ const rendererProcessBridge = {
 
   // ===================== POU METHODS =====================
   createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),
+  deletePouFile: (filePath: string): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:delete', filePath),
   deletePouAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:delete-pou-accelerator', callback),
   removeDeletePouListener: () => ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),

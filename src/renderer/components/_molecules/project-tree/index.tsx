@@ -20,8 +20,11 @@ import {
   StructureIcon,
 } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { pousAllLanguages } from '@root/types/PLC/pous/language'
 import { cn } from '@root/utils'
-import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
+import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
+
+import { toast } from '../../_features/[app]/toast/use-toast'
 
 type IProjectTreeRootProps = ComponentPropsWithoutRef<'ul'> & {
   label: string
@@ -225,22 +228,67 @@ const LeafSources = {
   devConfig: { LeafIcon: ConfigIcon },
   devPin: { LeafIcon: DeviceTransferIcon },
 }
-const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => {
+const ProjectTreeLeaf = ({ leafLang, label, onClick: handleLeafClick, ...res }: IProjectTreeLeafProps) => {
   const {
     editor: {
       meta: { name },
     },
-    modalActions: { openModal },
+    workspace: { selectedProjectTreeLeaf },
+    workspaceActions: { setSelectedProjectTreeLeaf },
+    pouActions: { deleteRequest: deletePouRequest },
+    datatypeActions: { deleteRequest: deleteDatatypeRequest },
   } = useOpenPLCStore()
 
-  const [leafIsSelected, setLeafIsSelected] = useState<boolean>(false)
   const { LeafIcon } = LeafSources[leafLang]
 
-  const handleLeafSelection = useCallback(() => setLeafIsSelected(!leafIsSelected), [leafIsSelected])
-  const modalData = { leafLang, label }
+  const isAPou = useMemo(() => pousAllLanguages.includes(leafLang as (typeof pousAllLanguages)[number]), [leafLang])
+  const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
 
-  const handleDeleteTab = () => {
-    openModal('confirm-delete-element', modalData)
+  const handleLeafSelection = () => {
+    if (!label) {
+      toast({
+        title: 'Error',
+        description: 'Pou or datatype label is required to select.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    setSelectedProjectTreeLeaf({ label, type: isAPou ? 'pou' : isDatatype ? 'datatype' : null })
+  }
+
+  useEffect(() => {
+    console.log('selectedProjectTreeLeaf', selectedProjectTreeLeaf)
+  }, [selectedProjectTreeLeaf])
+
+  const handleDeleteFile = () => {
+    if (!isAPou && !isDatatype) {
+      toast({
+        title: 'Error',
+        description: 'Only POU or datatype files can be deleted.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    if (!label) {
+      toast({
+        title: 'Error',
+        description: 'Pou or datatype label is required to delete.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    if (isAPou) {
+      deletePouRequest(label)
+      return
+    }
+
+    if (isDatatype) {
+      deleteDatatypeRequest(label)
+      return
+    }
   }
 
   return (
@@ -249,7 +297,11 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
         ' group flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
         name === label && 'bg-slate-50 dark:bg-neutral-900',
       )}
-      onClick={handleLeafSelection}
+      onClick={(e) => {
+        handleLeafSelection()
+
+        if (handleLeafClick) handleLeafClick(e)
+      }}
       {...res}
     >
       <LeafIcon className='flex-shrink-0' />
@@ -267,7 +319,7 @@ const ProjectTreeLeaf = ({ leafLang, label, ...res }: IProjectTreeLeafProps) => 
           className='mr-2 flex h-5 w-5 items-center'
           onClick={(e) => {
             e.stopPropagation()
-            handleDeleteTab()
+            handleDeleteFile()
           }}
           aria-haspopup='dialog'
           aria-expanded='false'

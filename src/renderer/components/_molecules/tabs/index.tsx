@@ -13,7 +13,6 @@ const Tabs = () => {
     editor,
     tabsActions: { sortTabs },
     editorActions: { setEditor, getEditorFromEditors },
-    modalActions: { openModal },
   } = useOpenPLCStore()
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const hasTabs = tabs.length > 0
@@ -42,10 +41,6 @@ const Tabs = () => {
     setEditor(candidate)
   }
 
-  const handleDeletePou = () => {
-    openModal('confirm-delete-element', null)
-  }
-
   const handleDragStart = ({ tab, idx }: { tab: TabsProps; idx: number }) => {
     dndTab.current = idx
     setSelectedTab(tab.name)
@@ -59,14 +54,10 @@ const Tabs = () => {
     setSelectedTab(editor.meta.name)
   }, [editor.meta.name])
 
-  useEffect(() => {}, [tabs])
-
   useEffect(() => {
     window.bridge.closeTabAccelerator((_event) => handleRemoveTab(selectedTab))
-    window.bridge.deletePouAccelerator((_event) => handleDeletePou())
     return () => {
       void window.bridge.removeCloseTabListener()
-      void window.bridge.removeDeletePouListener()
     }
   })
 

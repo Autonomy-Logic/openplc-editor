@@ -16,6 +16,17 @@ class PouService {
       return { success: false, error: { title: 'POU Creation Error', description: 'Failed to create POU file', error } }
     }
   }
+
+  async deletePouFile(filePath: string): Promise<PouServiceResponse> {
+    try {
+      console.log('Deleting POU file at:', filePath)
+      await UserService.deleteFile(filePath)
+      return { success: true }
+    } catch (error) {
+      console.error('Error deleting POU file:', error)
+      return { success: false, error: { title: 'POU Deletion Error', description: 'Failed to delete POU file', error } }
+    }
+  }
 }
 
 export { PouService }

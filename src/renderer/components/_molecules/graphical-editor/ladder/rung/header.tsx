@@ -8,6 +8,7 @@ import { CloseIcon } from '@root/renderer/assets'
 import { DragHandleIcon } from '@root/renderer/assets/icons/interface/DragHandle'
 import { DuplicateIcon } from '@root/renderer/assets/icons/interface/Duplicate'
 import { StickArrowIcon } from '@root/renderer/assets/icons/interface/StickArrow'
+import { pouSelectors, projectSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
 import { cn } from '@root/utils'
@@ -30,6 +31,9 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
     modalActions: { openModal },
   } = useOpenPLCStore()
 
+  const pou = pouSelectors.usePous(editor.meta.name)
+  const projectPath = projectSelectors.useProjectPath()
+
   const editorName = editor.meta.name
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -48,7 +52,13 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
   }, [rung.comment])
 
   const handleRemoveRung = () => {
-    openModal('confirm-delete-element', rung)
+    openModal('confirm-delete-element', {
+      type: 'ladder-rung',
+      file: editor.meta.name,
+      path: `${projectPath}/pous/${pou.type}s/${pou.data.name}.json`,
+      pou,
+      rung,
+    })
   }
 
   return (

@@ -21,6 +21,10 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       app: false,
       appDarwin: false,
     },
+    selectedProjectTreeLeaf: {
+      label: '',
+      type: null,
+    },
   },
 
   workspaceActions: {
@@ -105,6 +109,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           } else {
             workspace.isModalOpen.push({ modalName, modalState })
           }
+        }),
+      )
+    },
+    setSelectedProjectTreeLeaf: (selectedProjectTreeLeaf): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.selectedProjectTreeLeaf = selectedProjectTreeLeaf
         }),
       )
     },

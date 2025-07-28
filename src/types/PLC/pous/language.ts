@@ -6,4 +6,9 @@ const pousLanguageSchema = z.object({
 })
 type PousLanguage = z.infer<typeof pousLanguageSchema>
 
-export { PousLanguage, pousLanguageSchema }
+const pousAllLanguages = [
+  ...pousLanguageSchema.shape.textual.options,
+  ...pousLanguageSchema.shape.graphical.options,
+] as const
+
+export { pousAllLanguages, PousLanguage, pousLanguageSchema }

@@ -1,4 +1,5 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { DeleteDatatype, DeletePou } from '@root/renderer/components/_organisms/modals'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
@@ -25,12 +26,20 @@ export type SharedSlice = {
   pouActions: {
     create: (propsToCreatePou: PropsToCreatePou) => boolean
     update: () => void
-    delete: () => void
+    deleteRequest: (pouName: string) => void
+    delete: (data: DeletePou) => {
+      success: boolean
+      error?: { title: string; description: string }
+    }
   }
   datatypeActions: {
     create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => boolean
     update: () => void
-    delete: () => void
+    deleteRequest: (datatypeName: string) => void
+    delete: (data: DeleteDatatype) => {
+      success: boolean
+      error?: { title: string; description: string }
+    }
   }
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => void
@@ -188,10 +197,84 @@ export const createSharedSlice: StateCreator<
       if (propsToCreatePou.type !== 'program')
         getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
 
+      getState().workspaceActions.setSelectedProjectTreeLeaf({
+        label: propsToCreatePou.name,
+        type: 'pou',
+      })
+
       return true
     },
+
     update: () => {},
-    delete: () => {},
+
+    deleteRequest: (pouName) => {
+      const pou = getState().project.data.pous.find((pou) => pou.data.name === pouName)
+      if (!pou) {
+        toast({
+          title: 'Error',
+          description: `POU with name ${pouName} not found.`,
+          variant: 'fail',
+        })
+        return
+      }
+
+      const projectPath = getState().project.meta.path
+
+      const modalData: DeletePou = {
+        type: 'pou',
+        file: pou.data.name,
+        path: `${projectPath}/pous/${pou.type}s/${pou.data.name}.json`,
+        pou,
+      }
+
+      getState().modalActions.openModal('confirm-delete-element', modalData)
+    },
+
+    delete: (data) => {
+      const { file: targetLabel, path } = data
+
+      window.bridge
+        .deletePouFile(path)
+        .then((response) => {
+          if (!response.success) {
+            toast({
+              title: 'Error deleting POU',
+              description: `POU "${targetLabel}" could not be deleted.`,
+              variant: 'fail',
+            })
+            return {
+              success: false,
+              error: {
+                title: 'Error deleting POU',
+                description: `POU "${targetLabel}" could not be deleted.`,
+              },
+            }
+          }
+        })
+        .catch((error) => {
+          console.error('Error deleting POU file:', error)
+          toast({
+            title: 'Error deleting POU',
+            description: `An error occurred while deleting the POU "${targetLabel}". Please try again.`,
+            variant: 'fail',
+          })
+          return {
+            success: false,
+            error: {
+              title: 'Error deleting POU',
+              description: `An error occurred while deleting the POU "${targetLabel}". Please try again.`,
+            },
+          }
+        })
+
+      getState().projectActions.deletePou(targetLabel)
+      getState().ladderFlowActions.removeLadderFlow(targetLabel)
+      getState().libraryActions.removeUserLibrary(targetLabel)
+
+      return {
+        success: true,
+      }
+    },
   },
   datatypeActions: {
     create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => {
@@ -216,11 +299,50 @@ export const createSharedSlice: StateCreator<
         name: propsToCreateDatatype.name,
         elementType: { type: 'data-type', derivation: propsToCreateDatatype.derivation },
       })
+      getState().workspaceActions.setSelectedProjectTreeLeaf({
+        label: propsToCreateDatatype.name,
+        type: 'datatype',
+      })
 
       return true
     },
+
     update: () => {},
-    delete: () => {},
+
+    deleteRequest: () => {
+      const { selectedProjectTreeLeaf } = getState().workspace
+      const { label } = selectedProjectTreeLeaf
+
+      const datatype = getState().project.data.dataTypes.find((dt) => dt.name === label)
+      if (!datatype) {
+        toast({
+          title: 'Error',
+          description: `Datatype with name ${label} not found.`,
+          variant: 'fail',
+        })
+        return
+      }
+
+      const projectPath = getState().project.meta.path
+
+      const modalData: DeleteDatatype = {
+        type: 'datatype',
+        file: datatype.name,
+        path: `${projectPath}/datatypes/${datatype.name}`,
+      }
+
+      getState().modalActions.openModal('confirm-delete-element', modalData)
+    },
+
+    delete: (data) => {
+      getState().projectActions.deleteDatatype(data.file)
+      getState().ladderFlowActions.removeLadderFlow(data.file)
+      getState().libraryActions.removeUserLibrary(data.file)
+
+      return {
+        success: true,
+      }
+    },
   },
 
   sharedWorkspaceActions: {
@@ -294,6 +416,10 @@ export const createSharedSlice: StateCreator<
             getState().tabsActions.updateTabs(tabToBeCreated)
             getState().editorActions.addModel(model)
             getState().editorActions.setEditor(model)
+            getState().workspaceActions.setSelectedProjectTreeLeaf({
+              label: mainPou.data.name,
+              type: 'pou',
+            })
           }
         }
 

@@ -63,6 +63,7 @@ class MainProcessBridge implements MainIpcModule {
 
     // Pou-related handlers
     this.ipcMain.handle('pou:create', this.handleCreatePouFile)
+    this.ipcMain.handle('pou:delete', this.handleDeletePouFile)
 
     // App and system handlers
     this.ipcMain.handle('open-external-link', this.handleOpenExternalLink)
@@ -146,11 +147,18 @@ class MainProcessBridge implements MainIpcModule {
   handleCreatePouFile = async (_event: IpcMainInvokeEvent, props: CreatePouFileProps) => {
     try {
       const response = await this.pouService.createPouFile(props)
-      this.mainWindow?.webContents.send('pou:create-pou-file-accelerator', { ok: true, data: response })
       return response
     } catch (error) {
       console.error('Error creating POU file:', error)
-      this.mainWindow?.webContents.send('pou:create-pou-file-accelerator', { ok: false, error })
+      return { ok: false, error }
+    }
+  }
+  handleDeletePouFile = async (_event: IpcMainInvokeEvent, filePath: string) => {
+    try {
+      const response = await this.pouService.deletePouFile(filePath)
+      return response
+    } catch (error) {
+      console.error('Error deleting POU file:', error)
       return { ok: false, error }
     }
   }

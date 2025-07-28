@@ -1,7 +1,6 @@
 import { exec } from 'child_process'
 import { app } from 'electron'
-import { rm } from 'fs'
-import { access, constants, mkdir, writeFile } from 'fs/promises'
+import { access, constants, mkdir, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { promisify } from 'util'
 
@@ -67,6 +66,14 @@ class UserService {
       } else {
         console.error(`Error creating file at ${filePath}: ${String(err)}`)
       }
+    }
+  }
+
+  static async deleteFile(filePath: string): Promise<void> {
+    try {
+      await rm(filePath, { recursive: true, force: true })
+    } catch (err) {
+      console.error(`Error deleting file at ${filePath}: ${String(err)}`)
     }
   }
 

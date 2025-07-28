@@ -1,4 +1,5 @@
 import { useOpenPLCStore } from '@root/renderer/store'
+import { PLCPou } from '@root/types/PLC/open-plc'
 
 // ===================== Device screen selectors. =====================
 const rtuSelectors = {
@@ -68,7 +69,7 @@ const communicationSelectors = {
   useSetCommunicationPreferences: () => useOpenPLCStore((state) => state.deviceActions.setCommunicationPreferences),
 }
 
-// ===================== Project search selectors. =====================
+// ===================== Search selectors. =====================
 const searchSelectors = {
   useSearchQuery: () => useOpenPLCStore((state) => state.searchQuery),
   useSearchResults: () => useOpenPLCStore((state) => state.searchResults),
@@ -84,13 +85,25 @@ const editorSelectors = {
   useEditorState: () => useOpenPLCStore((state) => state.editor),
 }
 
+// ===================== Pous selectors. =====================
+const pouSelectors = {
+  usePous: (fileName: string) =>
+    useOpenPLCStore((state) => state.project.data.pous.find((pou) => pou.data.name === fileName) as PLCPou),
+}
+
+// ===================== Project selectors. =====================
+const projectSelectors = {
+  useProjectPath: () => useOpenPLCStore((state) => state.project.meta.path),
+}
+
 /**
- * Workspace selectors.
+ * ====================== Workspace selectors. =====================
  */
 const workspaceSelectors = {
   useWorkspace: () => useOpenPLCStore((state) => state.workspace),
   useEditingState: () => useOpenPLCStore((state) => state.workspace.editingState),
   useSetEditingState: () => useOpenPLCStore((state) => state.workspaceActions.setEditingState),
+  useSelectedProjectTreeLeaf: () => useOpenPLCStore((state) => state.workspace.selectedProjectTreeLeaf),
 }
 
 // ===================== Console selectors. =====================
@@ -107,6 +120,8 @@ export {
   consoleSelectors,
   editorSelectors,
   pinSelectors,
+  pouSelectors,
+  projectSelectors,
   rtuSelectors,
   searchSelectors,
   staticHostSelectors,
