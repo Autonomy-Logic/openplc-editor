@@ -140,6 +140,7 @@ class UserService {
    * - Must validate if this implementation for the core list file is correct.
    */
 
+  // eslint-disable-next-line no-unused-private-class-members
   async #checkIfArduinoCoreControlFileExists(): Promise<void> {
     const arduinoCli = promisify(exec)
     const pathToRuntimeFolder = join(app.getPath('userData'), 'User', 'Runtime')
@@ -198,7 +199,7 @@ class UserService {
     await this.#checkIfLogFolderExists()
     await this.#checkIfUserHistoryFolderExists()
     await this.#checkIfArduinoCliConfigExists()
-    await this.#checkIfArduinoCoreControlFileExists()
+    // await this.#checkIfArduinoCoreControlFileExists()
   }
 }
 
