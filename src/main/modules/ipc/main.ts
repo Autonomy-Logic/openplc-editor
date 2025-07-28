@@ -1,4 +1,5 @@
 import { getProjectPath } from '@root/main/utils'
+import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
@@ -29,6 +30,7 @@ class MainProcessBridge implements MainIpcModule {
   compilerService
   menuBuilder
   hardwareService
+  pouService
 
   constructor({
     ipcMain,
@@ -38,6 +40,7 @@ class MainProcessBridge implements MainIpcModule {
     compilerService,
     menuBuilder,
     hardwareService,
+    pouService,
   }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
@@ -46,6 +49,7 @@ class MainProcessBridge implements MainIpcModule {
     this.store = store
     this.menuBuilder = menuBuilder
     this.hardwareService = hardwareService
+    this.pouService = pouService
   }
 
   // ===================== IPC HANDLER REGISTRATION =====================
@@ -56,6 +60,9 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('project:path-picker', this.handleProjectPathPicker)
     this.ipcMain.handle('project:save', this.handleProjectSave)
     this.ipcMain.handle('project:open-by-path', this.handleProjectOpenByPath)
+
+    // Pou-related handlers
+    this.ipcMain.handle('pou:create', this.handleCreatePouFile)
 
     // App and system handlers
     this.ipcMain.handle('open-external-link', this.handleOpenExternalLink)
@@ -132,6 +139,19 @@ class MainProcessBridge implements MainIpcModule {
           description: 'Please try again',
         },
       }
+    }
+  }
+
+  // Pou-related handlers
+  handleCreatePouFile = async (_event: IpcMainInvokeEvent, props: CreatePouFileProps) => {
+    try {
+      const response = await this.pouService.createPouFile(props)
+      this.mainWindow?.webContents.send('pou:create-pou-file-accelerator', { ok: true, data: response })
+      return response
+    } catch (error) {
+      console.error('Error creating POU file:', error)
+      this.mainWindow?.webContents.send('pou:create-pou-file-accelerator', { ok: false, error })
+      return { ok: false, error }
     }
   }
 

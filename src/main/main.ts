@@ -19,7 +19,7 @@ import { MainIpcModuleConstructor } from './contracts/types/modules/ipc/main'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { store } from './modules/store'
-import { HardwareService, ProjectService, UserService } from './services'
+import { HardwareService, PouService, ProjectService, UserService } from './services'
 import { CompilerService } from './services/compiler-service'
 import { resolveHtmlPath } from './utils'
 
@@ -278,6 +278,11 @@ const createMainWindow = async () => {
   const projectService = new ProjectService(mainWindow)
 
   /**
+   * Creates a singleton instance for POU service, which will be used across the entire application
+   */
+  const pouService = new PouService()
+
+  /**
    * Creates a singleton instance for compiler service, which will be used across the entire application
    */
   const compilerService = new CompilerService()
@@ -292,6 +297,7 @@ const createMainWindow = async () => {
     store,
     menuBuilder,
     hardwareService,
+    pouService,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
 

@@ -4,7 +4,7 @@ import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@
 import { StateCreator } from 'zustand'
 
 import { DeviceSlice } from '../device'
-import { EditorSlice } from '../editor'
+import { EditorModel, EditorSlice } from '../editor'
 import { FBDFlowSlice, FBDFlowType } from '../fbd'
 import { LadderFlowSlice, LadderFlowType } from '../ladder'
 import { LibrarySlice } from '../library'
@@ -72,15 +72,45 @@ export const createSharedSlice: StateCreator<
 > = (_setState, getState) => ({
   pouActions: {
     create: (propsToCreatePou: PropsToCreatePou) => {
+      const newPouData = CreatePouObject(propsToCreatePou)
+
+      /**
+       * First create the POU in the project (client-side).
+       * This will allow the editor to be updated with the new POU and it is easier to make validations.
+       */
+      const res = getState().projectActions.createPou(newPouData)
+      if (!res.ok) throw new Error()
+
+      const projectPath = getState().project.meta.path
+      const path = `${projectPath}/pous/${propsToCreatePou.type}s/${propsToCreatePou.name}.json`
+
+      /**
+       * Then, create the POU file in the filesystem.
+       * This will allow the POU to be saved and loaded correctly.
+       */
+      window.bridge
+        .createPouFile({
+          path,
+          pou: newPouData,
+        })
+        .then((response) => {
+          if (!response.success) {
+            throw new Error(response.error?.description || 'An error occurred while creating the POU file.')
+          }
+        })
+        .catch((error) => {
+          throw error
+        })
+
+      let editorData: EditorModel
+      // Textual languages
       if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
-        const res = getState().projectActions.createPou(CreatePouObject(propsToCreatePou))
-        if (!res.ok) throw new Error()
-        const data = CreateEditorObject({
+        editorData = CreateEditorObject({
           type: 'plc-textual',
           meta: {
             name: propsToCreatePou.name,
             language: propsToCreatePou.language,
-            path: `/data/pous/${propsToCreatePou.type}/${propsToCreatePou.name}`,
+            path: path,
             pouType: propsToCreatePou.type,
           },
           variable: {
@@ -90,33 +120,15 @@ export const createSharedSlice: StateCreator<
             selectedRow: '-1',
           },
         })
-        getState().editorActions.addModel(data)
-        getState().editorActions.setEditor(data)
-        getState().tabsActions.updateTabs({
-          name: propsToCreatePou.name,
-          elementType: {
-            type: propsToCreatePou.type,
-            language: propsToCreatePou.language,
-          },
-        })
-        if (propsToCreatePou.type !== 'program')
-          getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
-        return true
       }
-
-      if (
-        propsToCreatePou.language === 'ld' ||
-        propsToCreatePou.language === 'sfc' ||
-        propsToCreatePou.language === 'fbd'
-      ) {
-        const res = getState().projectActions.createPou(CreatePouObject(propsToCreatePou))
-        if (!res.ok) throw new Error()
-        const data = CreateEditorObject({
+      // Graphical languages
+      else {
+        editorData = CreateEditorObject({
           type: 'plc-graphical',
           meta: {
             name: propsToCreatePou.name,
             language: propsToCreatePou.language,
-            path: `/data/pous/${propsToCreatePou.type}/${propsToCreatePou.name}`,
+            path: path,
             pouType: propsToCreatePou.type,
           },
           variable: {
@@ -140,40 +152,43 @@ export const createSharedSlice: StateCreator<
                   }
                 : { language: propsToCreatePou.language },
         })
-        getState().editorActions.addModel(data)
-        getState().editorActions.setEditor(data)
-        getState().tabsActions.updateTabs({
+      }
+
+      getState().editorActions.addModel(editorData)
+      getState().editorActions.setEditor(editorData)
+      getState().tabsActions.updateTabs({
+        name: propsToCreatePou.name,
+        elementType: {
+          type: propsToCreatePou.type,
+          language: propsToCreatePou.language,
+        },
+      })
+
+      if (propsToCreatePou.language === 'fbd') {
+        getState().fbdFlowActions.addFBDFlow({
           name: propsToCreatePou.name,
-          elementType: {
-            type: propsToCreatePou.type,
-            language: propsToCreatePou.language,
+          updated: true,
+          rung: {
+            comment: '',
+            nodes: [],
+            edges: [],
+            selectedNodes: [],
           },
         })
-        if (propsToCreatePou.language === 'fbd') {
-          getState().fbdFlowActions.addFBDFlow({
-            name: propsToCreatePou.name,
-            updated: true,
-            rung: {
-              comment: '',
-              nodes: [],
-              edges: [],
-              selectedNodes: [],
-            },
-          })
-        }
-        if (propsToCreatePou.language === 'ld') {
-          getState().ladderFlowActions.addLadderFlow({
-            name: propsToCreatePou.name,
-            updated: true,
-            rungs: [],
-          })
-        }
-        if (propsToCreatePou.type !== 'program') {
-          getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
-        }
-        return true
       }
-      return false
+
+      if (propsToCreatePou.language === 'ld') {
+        getState().ladderFlowActions.addLadderFlow({
+          name: propsToCreatePou.name,
+          updated: true,
+          rungs: [],
+        })
+      }
+
+      if (propsToCreatePou.type !== 'program')
+        getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
+
+      return true
     },
     update: () => {},
     delete: () => {},
@@ -272,7 +287,7 @@ export const createSharedSlice: StateCreator<
           if (mainPou) {
             const tabToBeCreated: TabsProps = {
               name: mainPou.data.name,
-              path: '/data/pous/program/main',
+              path: '/pous/programs/main',
               elementType: { type: 'program', language: mainPou.data.language },
             }
             const model = CreateEditorObjectFromTab(tabToBeCreated)

@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return */
+import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
@@ -40,8 +41,6 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('project:create', data),
   createProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
-  deletePouAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('workspace:delete-pou-accelerator', callback),
   findInProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:find-in-project-accelerator', callback),
   handleOpenProjectRequest: (callback: IpcRendererCallbacks) =>
@@ -56,7 +55,6 @@ const rendererProcessBridge = {
   removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
   removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
   removeCreateProjectAccelerator: () => ipcRenderer.removeAllListeners('project:create-accelerator'),
-  removeDeletePouListener: () => ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
   removeOpenProjectAccelerator: () => ipcRenderer.removeAllListeners('project:open-project-request'),
   removeOpenRecentListener: () => ipcRenderer.removeAllListeners('project:open-recent-accelerator'),
   removeSaveProjectAccelerator: () => ipcRenderer.removeAllListeners('project:save-accelerator'),
@@ -65,6 +63,12 @@ const rendererProcessBridge = {
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('workspace:switch-perspective-accelerator', callback),
+
+  // ===================== POU METHODS =====================
+  createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),
+  deletePouAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('workspace:delete-pou-accelerator', callback),
+  removeDeletePouListener: () => ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
 
   // ===================== APP & SYSTEM METHODS =====================
   darwinAppIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:darwin-is-closing', callback),
