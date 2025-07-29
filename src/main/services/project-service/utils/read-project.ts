@@ -233,17 +233,9 @@ export function readProjectFiles(basePath: string): IProjectServiceReadFilesResp
 
   const returnData: IProjectServiceReadFilesResponse['data'] = {
     project: projectFiles['project.json'] as PLCProject,
+    pous: Object.values(pouFiles).map((pou) => pou as PLCPou),
     deviceConfiguration: projectFiles['devices/configuration.json'] as DeviceConfiguration,
     devicePinMapping: projectFiles['devices/pin-mapping.json'] as DevicePin[],
-  }
-
-  for (const [_fileName, file] of Object.entries(pouFiles)) {
-    const pou = file as PLCPou
-    // Check if POU already exists in project by name
-    const existingIndex = returnData.project.data.pous.findIndex((existing) => existing.data.name === pou.data.name)
-    if (existingIndex === -1) {
-      returnData.project.data.pous.push(pou)
-    }
   }
 
   return {

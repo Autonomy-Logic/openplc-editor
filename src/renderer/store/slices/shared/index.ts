@@ -236,7 +236,7 @@ export const createSharedSlice: StateCreator<
       if (data) {
         getState().workspaceActions.setEditingState('unsaved')
 
-        const { project, deviceConfiguration, devicePinMapping } = data.content
+        const { project, pous, deviceConfiguration, devicePinMapping } = data.content
 
         const projectMeta = {
           name: project.meta.name,
@@ -249,27 +249,26 @@ export const createSharedSlice: StateCreator<
           data: projectData,
           meta: projectMeta,
         })
+        getState().projectActions.setPous(pous)
 
-        const ladderPous = projectData.pous.filter((pou) => pou.data.language === 'ld')
+        const ladderPous = pous.filter((pou) => pou.data.language === 'ld')
         if (ladderPous.length)
           ladderPous.forEach((pou) => {
             if (pou.data.body.language === 'ld')
               getState().ladderFlowActions.addLadderFlow(pou.data.body.value as LadderFlowType)
           })
 
-        const fbdPous = projectData.pous.filter((pou) => pou.data.language === 'fbd')
+        const fbdPous = pous.filter((pou) => pou.data.language === 'fbd')
         if (fbdPous.length)
           fbdPous.forEach((pou) => {
             if (pou.data.body.language === 'fbd')
               getState().fbdFlowActions.addFBDFlow(pou.data.body.value as FBDFlowType)
           })
 
-        projectData.pous.map(
-          (pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type),
-        )
+        pous.map((pou) => pou.type !== 'program' && getState().libraryActions.addLibrary(pou.data.name, pou.type))
 
-        if (projectData.pous.length !== 0) {
-          const mainPou = projectData.pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
+        if (pous.length !== 0) {
+          const mainPou = pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
           if (mainPou) {
             const tabToBeCreated: TabsProps = {
               name: mainPou.data.name,
@@ -399,6 +398,7 @@ export const createSharedSlice: StateCreator<
         },
         data: result.data.content.project.data,
       })
+      getState().projectActions.setPous(result.data.content.pous)
 
       result.data.content.project.data.pous.forEach((pou) => {
         if (pou.data.language === 'fbd') {

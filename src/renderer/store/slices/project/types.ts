@@ -4,6 +4,7 @@ import {
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
   PLCInstanceSchema,
+  PLCPouSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
   PLCStructureVariableSchema,
@@ -131,6 +132,7 @@ const _projectActionsSchema = z.object({
    * Update/Set Project state
    */
   setProject: z.function().args(projectStateSchema).returns(z.void()),
+  setPous: z.function().args(z.array(PLCPouSchema)).returns(z.void()),
   clearProjects: z.function().args(z.void()).returns(z.void()),
 
   /**

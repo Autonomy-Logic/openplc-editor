@@ -1,5 +1,5 @@
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
-import { PLCProject } from '@root/types/PLC/open-plc'
+import { PLCPou, PLCProject } from '@root/types/PLC/open-plc'
 
 /**
  * Type designed to create a new project file in OpenPLC Editor.
@@ -29,6 +29,7 @@ export type CreateProjectDefaultDirectoriesResponse = {
     }
     content: {
       project: PLCProject
+      pous: PLCPou[]
       deviceConfiguration: DeviceConfiguration
       devicePinMapping: DevicePin[]
     }

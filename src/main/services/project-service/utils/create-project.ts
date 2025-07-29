@@ -1,4 +1,5 @@
 import { createDirectory, fileOrDirectoryExists } from '@root/main/utils'
+import { CreateJSONFile } from '@root/main/utils'
 import {
   CreateProjectDefaultDirectoriesResponse,
   CreateProjectFileProps,
@@ -6,77 +7,71 @@ import {
   projectDefaultFilesMapSchema,
 } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
+import { PLCPou, PLCProject } from '@root/types/PLC/open-plc'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 
-import { PLCProject } from '../../../../types/PLC/open-plc'
-import { CreateJSONFile } from '../../../utils'
-
-const definePouBodyData = (language: CreateProjectFileProps['language']) => {
-  switch (language) {
-    case 'ld':
-      return { language, value: { name: 'main', rungs: [] } }
-    case 'fbd':
-      return {
-        language,
-        value: {
-          name: 'main',
-          rung: {
-            comment: '',
-            edges: [],
-            nodes: [],
-          },
-        },
+const definePou = (language: CreateProjectFileProps['language']): PLCPou => ({
+  type: 'program',
+  data: {
+    name: 'main',
+    language: language,
+    variables: [],
+    documentation: '',
+    body: (() => {
+      switch (language) {
+        case 'ld':
+          return { language, value: { name: 'main', rungs: [] } }
+        case 'fbd':
+          return {
+            language,
+            value: {
+              name: 'main',
+              rung: {
+                comment: '',
+                edges: [],
+                nodes: [],
+              },
+            },
+          }
+        default:
+          return { language, value: '' }
       }
-    default:
-      return { language, value: '' }
-  }
-}
+    })(),
+  },
+})
 
-const createProjectFile = (dataToCreateProjectFile: CreateProjectFileProps): PLCProject => {
-  return {
-    meta: {
-      name: dataToCreateProjectFile.name,
-      type: dataToCreateProjectFile.type,
-    },
-    data: {
-      pous: [
-        {
-          type: 'program',
-          data: {
-            name: 'main',
-            language: dataToCreateProjectFile.language,
-            variables: [],
-            documentation: '',
-            body: definePouBodyData(dataToCreateProjectFile.language),
+const createProjectFile = (dataToCreateProjectFile: CreateProjectFileProps): PLCProject => ({
+  meta: {
+    name: dataToCreateProjectFile.name,
+    type: dataToCreateProjectFile.type,
+  },
+  data: {
+    pous: [],
+    dataTypes: [],
+    configuration: {
+      resource: {
+        tasks: [
+          {
+            name: 'task0',
+            triggering: 'Cyclic',
+            interval: dataToCreateProjectFile.time,
+            priority: 1,
+            id: '0',
           },
-        },
-      ],
-      dataTypes: [],
-      configuration: {
-        resource: {
-          tasks: [
-            {
-              name: 'task0',
-              triggering: 'Cyclic',
-              interval: dataToCreateProjectFile.time,
-              priority: 1,
-              id: '0',
-            },
-          ],
-          instances: [
-            {
-              name: 'instance0',
-              program: 'main',
-              task: 'task0',
-              id: '0',
-            },
-          ],
-          globalVariables: [],
-        },
+        ],
+        instances: [
+          {
+            name: 'instance0',
+            program: 'main',
+            task: 'task0',
+            id: '0',
+          },
+        ],
+        globalVariables: [],
       },
     },
-  }
-}
+  },
+})
 
 const createProjectDefaultStructure = (
   basePath: string,
@@ -168,9 +163,23 @@ const createProjectDefaultStructure = (
     }
   }
 
-  /**
-   * TODO: Create the default pou separated from other files at pous directory
-   */
+  const pou = definePou(dataToCreateProjectFile.language)
+  const pouPath = `${basePath}/pous/${pou.type}s`
+
+  try {
+    CreateJSONFile(pouPath, JSON.stringify(pou, null, 2), pou.data.name)
+  } catch (error) {
+    return {
+      success: false,
+      error: {
+        title: 'Error creating POU file',
+        description: `Failed to create POU file at ${pouPath}`,
+        error: error,
+      },
+    }
+  }
+
+  content.project?.data.pous.push(pou)
 
   return {
     success: true,
@@ -178,6 +187,7 @@ const createProjectDefaultStructure = (
       meta: { path: basePath },
       content: content as {
         project: PLCProject
+        pous: PLCPou[]
         deviceConfiguration: DeviceConfiguration
         devicePinMapping: DevicePin[]
       },
