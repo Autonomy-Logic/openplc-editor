@@ -261,7 +261,7 @@ const AcceleratorHandler = () => {
   }, [project, deviceDefinitions])
 
   /**
-   * ==== POU Related Accelerators ====
+   * -- Delete files
    */
   useEffect(() => {
     const handleDelete = () => {
@@ -281,14 +281,18 @@ const AcceleratorHandler = () => {
       }
     }
 
-    window.bridge.deletePouAccelerator((_event) => {
+    window.bridge.deleteFileAccelerator((_event) => {
       handleDelete()
     })
 
     return () => {
-      window.bridge.removeDeletePouListener()
+      window.bridge.removeDeleteFileListener()
     }
   }, [selectedProjectLeft])
+
+  /**
+   * ==== POU Related Accelerators ====
+   */
 
   /**
    * ==== Window Related Accelerators ====

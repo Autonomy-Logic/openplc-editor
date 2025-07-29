@@ -22,24 +22,25 @@ type PropsToCreatePou = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
 }
 
+type BasicSharedSliceResponse = {
+  success: boolean
+  error?: { title: string; description: string }
+}
+
 export type SharedSlice = {
   pouActions: {
-    create: (propsToCreatePou: PropsToCreatePou) => boolean
+    create: (propsToCreatePou: PropsToCreatePou) => Promise<BasicSharedSliceResponse>
     update: () => void
     deleteRequest: (pouName: string) => void
-    delete: (data: DeletePou) => {
-      success: boolean
-      error?: { title: string; description: string }
-    }
+    delete: (data: DeletePou) => Promise<BasicSharedSliceResponse>
   }
   datatypeActions: {
-    create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => boolean
+    create: (
+      propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype,
+    ) => BasicSharedSliceResponse
     update: () => void
     deleteRequest: (datatypeName: string) => void
-    delete: (data: DeleteDatatype) => {
-      success: boolean
-      error?: { title: string; description: string }
-    }
+    delete: (data: DeleteDatatype) => BasicSharedSliceResponse
   }
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => void
@@ -80,7 +81,7 @@ export const createSharedSlice: StateCreator<
   SharedSlice
 > = (_setState, getState) => ({
   pouActions: {
-    create: (propsToCreatePou: PropsToCreatePou) => {
+    create: async (propsToCreatePou: PropsToCreatePou) => {
       const newPouData = CreatePouObject(propsToCreatePou)
 
       /**
@@ -97,19 +98,32 @@ export const createSharedSlice: StateCreator<
        * Then, create the POU file in the filesystem.
        * This will allow the POU to be saved and loaded correctly.
        */
-      window.bridge
-        .createPouFile({
+      try {
+        const response = await window.bridge.createPouFile({
           path,
           pou: newPouData,
         })
-        .then((response) => {
-          if (!response.success) {
-            throw new Error(response.error?.description || 'An error occurred while creating the POU file.')
+        if (!response.success) {
+          return {
+            success: false,
+            error: {
+              title: 'Error creating POU',
+              description: response.error
+                ? response.error.description
+                : `POU "${propsToCreatePou.name}" could not be created.`,
+            },
           }
-        })
-        .catch((error) => {
-          throw error
-        })
+        }
+      } catch (error) {
+        console.error('Error creating POU file:', error)
+        return {
+          success: false,
+          error: {
+            title: 'Error creating POU',
+            description: `An error occurred while creating the POU "${propsToCreatePou.name}".`,
+          },
+        }
+      }
 
       let editorData: EditorModel
       // Textual languages
@@ -202,7 +216,9 @@ export const createSharedSlice: StateCreator<
         type: 'pou',
       })
 
-      return true
+      return {
+        success: true,
+      }
     },
 
     update: () => {},
@@ -230,42 +246,30 @@ export const createSharedSlice: StateCreator<
       getState().modalActions.openModal('confirm-delete-element', modalData)
     },
 
-    delete: (data) => {
+    delete: async (data) => {
       const { file: targetLabel, path } = data
 
-      window.bridge
-        .deletePouFile(path)
-        .then((response) => {
-          if (!response.success) {
-            toast({
-              title: 'Error deleting POU',
-              description: `POU "${targetLabel}" could not be deleted.`,
-              variant: 'fail',
-            })
-            return {
-              success: false,
-              error: {
-                title: 'Error deleting POU',
-                description: `POU "${targetLabel}" could not be deleted.`,
-              },
-            }
-          }
-        })
-        .catch((error) => {
-          console.error('Error deleting POU file:', error)
-          toast({
-            title: 'Error deleting POU',
-            description: `An error occurred while deleting the POU "${targetLabel}". Please try again.`,
-            variant: 'fail',
-          })
+      try {
+        const response = await window.bridge.deletePouFile(path)
+        if (!response.success) {
           return {
             success: false,
             error: {
               title: 'Error deleting POU',
-              description: `An error occurred while deleting the POU "${targetLabel}". Please try again.`,
+              description: response.error ? response.error.description : `POU "${targetLabel}" could not be deleted.`,
             },
           }
-        })
+        }
+      } catch (error) {
+        console.error('Error deleting POU file:', error)
+        return {
+          success: false,
+          error: {
+            title: 'Error deleting POU',
+            description: `An error occurred while deleting the POU "${targetLabel}".`,
+          },
+        }
+      }
 
       getState().projectActions.deletePou(targetLabel)
       getState().ladderFlowActions.removeLadderFlow(targetLabel)
@@ -304,7 +308,9 @@ export const createSharedSlice: StateCreator<
         type: 'datatype',
       })
 
-      return true
+      return {
+        success: true,
+      }
     },
 
     update: () => {},

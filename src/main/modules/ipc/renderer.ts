@@ -41,6 +41,8 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('project:create', data),
   createProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:create-accelerator', (_event) => callback(_event)),
+  deleteFileAccelerator: (callback: IpcRendererCallbacks) =>
+    ipcRenderer.on('workspace:delete-file-accelerator', callback),
   findInProjectAccelerator: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('project:find-in-project-accelerator', callback),
   handleOpenProjectRequest: (callback: IpcRendererCallbacks) =>
@@ -55,6 +57,7 @@ const rendererProcessBridge = {
   removeCloseProjectListener: () => ipcRenderer.removeAllListeners('workspace:close-project-accelerator'),
   removeCloseTabListener: () => ipcRenderer.removeAllListeners('workspace:close-tab-accelerator'),
   removeCreateProjectAccelerator: () => ipcRenderer.removeAllListeners('project:create-accelerator'),
+  removeDeleteFileListener: () => ipcRenderer.removeAllListeners('workspace:delete-file-accelerator'),
   removeOpenProjectAccelerator: () => ipcRenderer.removeAllListeners('project:open-project-request'),
   removeOpenRecentListener: () => ipcRenderer.removeAllListeners('project:open-recent-accelerator'),
   removeSaveProjectAccelerator: () => ipcRenderer.removeAllListeners('project:save-accelerator'),
@@ -67,9 +70,6 @@ const rendererProcessBridge = {
   // ===================== POU METHODS =====================
   createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),
   deletePouFile: (filePath: string): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:delete', filePath),
-  deletePouAccelerator: (callback: IpcRendererCallbacks) =>
-    ipcRenderer.on('workspace:delete-pou-accelerator', callback),
-  removeDeletePouListener: () => ipcRenderer.removeAllListeners('workspace:delete-pou-accelerator'),
 
   // ===================== APP & SYSTEM METHODS =====================
   darwinAppIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:darwin-is-closing', callback),

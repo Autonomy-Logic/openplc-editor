@@ -150,7 +150,14 @@ class MainProcessBridge implements MainIpcModule {
       return response
     } catch (error) {
       console.error('Error creating POU file:', error)
-      return { ok: false, error }
+      return {
+        success: false,
+        error: {
+          title: 'Error creating POU file',
+          description: 'Please try again',
+          error,
+        },
+      }
     }
   }
   handleDeletePouFile = async (_event: IpcMainInvokeEvent, filePath: string) => {
@@ -159,7 +166,14 @@ class MainProcessBridge implements MainIpcModule {
       return response
     } catch (error) {
       console.error('Error deleting POU file:', error)
-      return { ok: false, error }
+      return {
+        success: false,
+        error: {
+          title: 'Error deleting POU file',
+          description: 'Please try again',
+          error,
+        },
+      }
     }
   }
 

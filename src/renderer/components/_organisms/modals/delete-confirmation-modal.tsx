@@ -123,10 +123,10 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
     })
   }
 
-  const handleDeletePou = (data: DeletePou) => {
+  const handleDeletePou = async (data: DeletePou) => {
     const { file: targetLabel } = data
 
-    const res = deletePouAction(data)
+    const res = await deletePouAction(data)
     if (!res.success) {
       toast({
         title: res.error?.title || 'Error deleting POU',
@@ -148,7 +148,7 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
     try {
       switch (data.type) {
         case 'pou': {
-          handleDeletePou(data)
+          void handleDeletePou(data)
           break
         }
         case 'datatype': {
