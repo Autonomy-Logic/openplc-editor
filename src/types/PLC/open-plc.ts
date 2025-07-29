@@ -85,7 +85,7 @@ const PLCStructureVariableSchema = z.object({
     }),
     z.object({
       /**
-       * This should be ommited at variable table type options
+       * This should be omitted at variable table type options
        */
       definition: z.literal('derived'),
       value: z.string(),
