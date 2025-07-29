@@ -81,7 +81,7 @@ export default class MenuBuilder {
   }
 
   handleDeletePou() {
-    this.mainWindow.webContents.send('workspace:delete-pou-accelerator')
+    this.mainWindow.webContents.send('workspace:delete-file-accelerator')
   }
 
   handleSwitchPerspective() {

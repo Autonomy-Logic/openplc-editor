@@ -1,5 +1,5 @@
 import type { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
-import { useCompiler } from '@root/renderer/hooks'
+import { useCompiler, workspaceSelectors } from '@root/renderer/hooks'
 import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
 import type { DeviceState, ModalTypes, ProjectState } from '@root/renderer/store/slices'
@@ -114,9 +114,13 @@ const AcceleratorHandler = () => {
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, openProject, openRecentProject },
     workspaceActions: { setEditingState, switchAppTheme, toggleMaximizedWindow },
+    pouActions: { deleteRequest: deletePouRequest },
+    datatypeActions: { deleteRequest: deleteDatatypeRequest },
   } = useOpenPLCStore()
 
   const { handleWindowClose, handleAppIsClosingDarwin } = useQuitApp()
+
+  const selectedProjectLeft = workspaceSelectors.useSelectedProjectTreeLeaf()
 
   /**
    * Compiler Related Accelerators
@@ -255,6 +259,40 @@ const AcceleratorHandler = () => {
       window.bridge.removeSaveProjectAccelerator()
     }
   }, [project, deviceDefinitions])
+
+  /**
+   * -- Delete files
+   */
+  useEffect(() => {
+    const handleDelete = () => {
+      const { label, type } = selectedProjectLeft
+
+      if (type === 'pou') {
+        deletePouRequest(label)
+      } else if (type === 'datatype') {
+        deleteDatatypeRequest(label)
+      } else {
+        toast({
+          title: 'Error',
+          description: 'This element cannot be deleted.',
+          variant: 'fail',
+        })
+        return
+      }
+    }
+
+    window.bridge.deleteFileAccelerator((_event) => {
+      handleDelete()
+    })
+
+    return () => {
+      window.bridge.removeDeleteFileListener()
+    }
+  }, [selectedProjectLeft])
+
+  /**
+   * ==== POU Related Accelerators ====
+   */
 
   /**
    * ==== Window Related Accelerators ====

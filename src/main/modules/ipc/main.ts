@@ -1,4 +1,5 @@
 import { getProjectPath } from '@root/main/utils'
+import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
@@ -29,6 +30,7 @@ class MainProcessBridge implements MainIpcModule {
   compilerService
   menuBuilder
   hardwareService
+  pouService
 
   constructor({
     ipcMain,
@@ -38,6 +40,7 @@ class MainProcessBridge implements MainIpcModule {
     compilerService,
     menuBuilder,
     hardwareService,
+    pouService,
   }: MainIpcModuleConstructor) {
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
@@ -46,6 +49,7 @@ class MainProcessBridge implements MainIpcModule {
     this.store = store
     this.menuBuilder = menuBuilder
     this.hardwareService = hardwareService
+    this.pouService = pouService
   }
 
   // ===================== IPC HANDLER REGISTRATION =====================
@@ -56,6 +60,10 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('project:path-picker', this.handleProjectPathPicker)
     this.ipcMain.handle('project:save', this.handleProjectSave)
     this.ipcMain.handle('project:open-by-path', this.handleProjectOpenByPath)
+
+    // Pou-related handlers
+    this.ipcMain.handle('pou:create', this.handleCreatePouFile)
+    this.ipcMain.handle('pou:delete', this.handleDeletePouFile)
 
     // App and system handlers
     this.ipcMain.handle('open-external-link', this.handleOpenExternalLink)
@@ -130,6 +138,40 @@ class MainProcessBridge implements MainIpcModule {
         error: {
           title: 'Error opening project',
           description: 'Please try again',
+        },
+      }
+    }
+  }
+
+  // Pou-related handlers
+  handleCreatePouFile = async (_event: IpcMainInvokeEvent, props: CreatePouFileProps) => {
+    try {
+      const response = await this.pouService.createPouFile(props)
+      return response
+    } catch (error) {
+      console.error('Error creating POU file:', error)
+      return {
+        success: false,
+        error: {
+          title: 'Error creating POU file',
+          description: 'Please try again',
+          error,
+        },
+      }
+    }
+  }
+  handleDeletePouFile = async (_event: IpcMainInvokeEvent, filePath: string) => {
+    try {
+      const response = await this.pouService.deletePouFile(filePath)
+      return response
+    } catch (error) {
+      console.error('Error deleting POU file:', error)
+      return {
+        success: false,
+        error: {
+          title: 'Error deleting POU file',
+          description: 'Please try again',
+          error,
         },
       }
     }

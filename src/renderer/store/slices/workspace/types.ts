@@ -21,6 +21,10 @@ const workspaceStateSchema = z.object({
       app: z.boolean(),
       appDarwin: z.boolean(),
     }),
+    selectedProjectTreeLeaf: z.object({
+      label: z.string(),
+      type: z.enum(['pou', 'datatype', 'file']).nullable(),
+    }),
   }),
 })
 type WorkspaceState = z.infer<typeof workspaceStateSchema>
@@ -43,6 +47,15 @@ const workspaceActionsSchema = z.object({
   toggleMaximizedWindow: z.function().returns(z.void()),
   toggleCollapse: z.function().returns(z.void()),
   setModalOpen: z.function().args(z.string(), z.boolean()).returns(z.void()),
+  setSelectedProjectTreeLeaf: z
+    .function()
+    .args(
+      z.object({
+        label: z.string(),
+        type: z.enum(['pou', 'datatype', 'file']).nullable(),
+      }),
+    )
+    .returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 

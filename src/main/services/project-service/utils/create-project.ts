@@ -167,6 +167,7 @@ const createProjectDefaultStructure = (
   const pouPath = `${basePath}/pous/${pou.type}s`
 
   try {
+    if (!fileOrDirectoryExists(pouPath)) createDirectory(pouPath)
     CreateJSONFile(pouPath, JSON.stringify(pou, null, 2), pou.data.name)
   } catch (error) {
     return {
@@ -179,7 +180,7 @@ const createProjectDefaultStructure = (
     }
   }
 
-  content.project?.data.pous.push(pou)
+  if (content.project) content.project?.data.pous.push(pou)
 
   return {
     success: true,

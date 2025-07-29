@@ -1,10 +1,11 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { DeleteDatatype, DeletePou } from '@root/renderer/components/_organisms/modals'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
 import { DeviceSlice } from '../device'
-import { EditorSlice } from '../editor'
+import { EditorModel, EditorSlice } from '../editor'
 import { FBDFlowSlice, FBDFlowType } from '../fbd'
 import { LadderFlowSlice, LadderFlowType } from '../ladder'
 import { LibrarySlice } from '../library'
@@ -21,16 +22,25 @@ type PropsToCreatePou = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
 }
 
+type BasicSharedSliceResponse = {
+  success: boolean
+  error?: { title: string; description: string }
+}
+
 export type SharedSlice = {
   pouActions: {
-    create: (propsToCreatePou: PropsToCreatePou) => boolean
+    create: (propsToCreatePou: PropsToCreatePou) => Promise<BasicSharedSliceResponse>
     update: () => void
-    delete: () => void
+    deleteRequest: (pouName: string) => void
+    delete: (data: DeletePou) => Promise<BasicSharedSliceResponse>
   }
   datatypeActions: {
-    create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => boolean
+    create: (
+      propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype,
+    ) => BasicSharedSliceResponse
     update: () => void
-    delete: () => void
+    deleteRequest: (datatypeName: string) => void
+    delete: (data: DeleteDatatype) => BasicSharedSliceResponse
   }
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => void
@@ -71,16 +81,59 @@ export const createSharedSlice: StateCreator<
   SharedSlice
 > = (_setState, getState) => ({
   pouActions: {
-    create: (propsToCreatePou: PropsToCreatePou) => {
+    create: async (propsToCreatePou: PropsToCreatePou) => {
+      const newPouData = CreatePouObject(propsToCreatePou)
+
+      /**
+       * First create the POU in the project (client-side).
+       * This will allow the editor to be updated with the new POU and it is easier to make validations.
+       */
+      const res = getState().projectActions.createPou(newPouData)
+      if (!res.ok) throw new Error()
+
+      const projectPath = getState().project.meta.path
+      const path = `${projectPath}/pous/${propsToCreatePou.type}s/${propsToCreatePou.name}.json`
+
+      /**
+       * Then, create the POU file in the filesystem.
+       * This will allow the POU to be saved and loaded correctly.
+       */
+      try {
+        const response = await window.bridge.createPouFile({
+          path,
+          pou: newPouData,
+        })
+        if (!response.success) {
+          return {
+            success: false,
+            error: {
+              title: 'Error creating POU',
+              description: response.error
+                ? response.error.description
+                : `POU "${propsToCreatePou.name}" could not be created.`,
+            },
+          }
+        }
+      } catch (error) {
+        console.error('Error creating POU file:', error)
+        return {
+          success: false,
+          error: {
+            title: 'Error creating POU',
+            description: `An error occurred while creating the POU "${propsToCreatePou.name}".`,
+          },
+        }
+      }
+
+      let editorData: EditorModel
+      // Textual languages
       if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
-        const res = getState().projectActions.createPou(CreatePouObject(propsToCreatePou))
-        if (!res.ok) throw new Error()
-        const data = CreateEditorObject({
+        editorData = CreateEditorObject({
           type: 'plc-textual',
           meta: {
             name: propsToCreatePou.name,
             language: propsToCreatePou.language,
-            path: `/data/pous/${propsToCreatePou.type}/${propsToCreatePou.name}`,
+            path: path,
             pouType: propsToCreatePou.type,
           },
           variable: {
@@ -90,33 +143,15 @@ export const createSharedSlice: StateCreator<
             selectedRow: '-1',
           },
         })
-        getState().editorActions.addModel(data)
-        getState().editorActions.setEditor(data)
-        getState().tabsActions.updateTabs({
-          name: propsToCreatePou.name,
-          elementType: {
-            type: propsToCreatePou.type,
-            language: propsToCreatePou.language,
-          },
-        })
-        if (propsToCreatePou.type !== 'program')
-          getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
-        return true
       }
-
-      if (
-        propsToCreatePou.language === 'ld' ||
-        propsToCreatePou.language === 'sfc' ||
-        propsToCreatePou.language === 'fbd'
-      ) {
-        const res = getState().projectActions.createPou(CreatePouObject(propsToCreatePou))
-        if (!res.ok) throw new Error()
-        const data = CreateEditorObject({
+      // Graphical languages
+      else {
+        editorData = CreateEditorObject({
           type: 'plc-graphical',
           meta: {
             name: propsToCreatePou.name,
             language: propsToCreatePou.language,
-            path: `/data/pous/${propsToCreatePou.type}/${propsToCreatePou.name}`,
+            path: path,
             pouType: propsToCreatePou.type,
           },
           variable: {
@@ -140,43 +175,110 @@ export const createSharedSlice: StateCreator<
                   }
                 : { language: propsToCreatePou.language },
         })
-        getState().editorActions.addModel(data)
-        getState().editorActions.setEditor(data)
-        getState().tabsActions.updateTabs({
+      }
+
+      getState().editorActions.addModel(editorData)
+      getState().editorActions.setEditor(editorData)
+      getState().tabsActions.updateTabs({
+        name: propsToCreatePou.name,
+        elementType: {
+          type: propsToCreatePou.type,
+          language: propsToCreatePou.language,
+        },
+      })
+
+      if (propsToCreatePou.language === 'fbd') {
+        getState().fbdFlowActions.addFBDFlow({
           name: propsToCreatePou.name,
-          elementType: {
-            type: propsToCreatePou.type,
-            language: propsToCreatePou.language,
+          updated: true,
+          rung: {
+            comment: '',
+            nodes: [],
+            edges: [],
+            selectedNodes: [],
           },
         })
-        if (propsToCreatePou.language === 'fbd') {
-          getState().fbdFlowActions.addFBDFlow({
-            name: propsToCreatePou.name,
-            updated: true,
-            rung: {
-              comment: '',
-              nodes: [],
-              edges: [],
-              selectedNodes: [],
-            },
-          })
-        }
-        if (propsToCreatePou.language === 'ld') {
-          getState().ladderFlowActions.addLadderFlow({
-            name: propsToCreatePou.name,
-            updated: true,
-            rungs: [],
-          })
-        }
-        if (propsToCreatePou.type !== 'program') {
-          getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
-        }
-        return true
       }
-      return false
+
+      if (propsToCreatePou.language === 'ld') {
+        getState().ladderFlowActions.addLadderFlow({
+          name: propsToCreatePou.name,
+          updated: true,
+          rungs: [],
+        })
+      }
+
+      if (propsToCreatePou.type !== 'program')
+        getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
+
+      getState().workspaceActions.setSelectedProjectTreeLeaf({
+        label: propsToCreatePou.name,
+        type: 'pou',
+      })
+
+      return {
+        success: true,
+      }
     },
+
     update: () => {},
-    delete: () => {},
+
+    deleteRequest: (pouName) => {
+      const pou = getState().project.data.pous.find((pou) => pou.data.name === pouName)
+      if (!pou) {
+        toast({
+          title: 'Error',
+          description: `POU with name ${pouName} not found.`,
+          variant: 'fail',
+        })
+        return
+      }
+
+      const projectPath = getState().project.meta.path
+
+      const modalData: DeletePou = {
+        type: 'pou',
+        file: pou.data.name,
+        path: `${projectPath}/pous/${pou.type}s/${pou.data.name}.json`,
+        pou,
+      }
+
+      getState().modalActions.openModal('confirm-delete-element', modalData)
+    },
+
+    delete: async (data) => {
+      const { file: targetLabel, path } = data
+
+      try {
+        const response = await window.bridge.deletePouFile(path)
+        if (!response.success) {
+          return {
+            success: false,
+            error: {
+              title: 'Error deleting POU',
+              description: response.error ? response.error.description : `POU "${targetLabel}" could not be deleted.`,
+            },
+          }
+        }
+      } catch (error) {
+        console.error('Error deleting POU file:', error)
+        return {
+          success: false,
+          error: {
+            title: 'Error deleting POU',
+            description: `An error occurred while deleting the POU "${targetLabel}".`,
+          },
+        }
+      }
+
+      getState().projectActions.deletePou(targetLabel)
+      getState().ladderFlowActions.removeLadderFlow(targetLabel)
+      getState().libraryActions.removeUserLibrary(targetLabel)
+
+      return {
+        success: true,
+      }
+    },
   },
   datatypeActions: {
     create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => {
@@ -201,11 +303,52 @@ export const createSharedSlice: StateCreator<
         name: propsToCreateDatatype.name,
         elementType: { type: 'data-type', derivation: propsToCreateDatatype.derivation },
       })
+      getState().workspaceActions.setSelectedProjectTreeLeaf({
+        label: propsToCreateDatatype.name,
+        type: 'datatype',
+      })
 
-      return true
+      return {
+        success: true,
+      }
     },
+
     update: () => {},
-    delete: () => {},
+
+    deleteRequest: () => {
+      const { selectedProjectTreeLeaf } = getState().workspace
+      const { label } = selectedProjectTreeLeaf
+
+      const datatype = getState().project.data.dataTypes.find((dt) => dt.name === label)
+      if (!datatype) {
+        toast({
+          title: 'Error',
+          description: `Datatype with name ${label} not found.`,
+          variant: 'fail',
+        })
+        return
+      }
+
+      const projectPath = getState().project.meta.path
+
+      const modalData: DeleteDatatype = {
+        type: 'datatype',
+        file: datatype.name,
+        path: `${projectPath}/datatypes/${datatype.name}`,
+      }
+
+      getState().modalActions.openModal('confirm-delete-element', modalData)
+    },
+
+    delete: (data) => {
+      getState().projectActions.deleteDatatype(data.file)
+      getState().ladderFlowActions.removeLadderFlow(data.file)
+      getState().libraryActions.removeUserLibrary(data.file)
+
+      return {
+        success: true,
+      }
+    },
   },
 
   sharedWorkspaceActions: {
@@ -272,13 +415,17 @@ export const createSharedSlice: StateCreator<
           if (mainPou) {
             const tabToBeCreated: TabsProps = {
               name: mainPou.data.name,
-              path: '/data/pous/program/main',
+              path: '/pous/programs/main',
               elementType: { type: 'program', language: mainPou.data.language },
             }
             const model = CreateEditorObjectFromTab(tabToBeCreated)
             getState().tabsActions.updateTabs(tabToBeCreated)
             getState().editorActions.addModel(model)
             getState().editorActions.setEditor(model)
+            getState().workspaceActions.setSelectedProjectTreeLeaf({
+              label: mainPou.data.name,
+              type: 'pou',
+            })
           }
         }
 

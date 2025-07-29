@@ -5,138 +5,162 @@ import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
-import { useEffect } from 'react'
+import { PLCPou } from '@root/types/PLC/open-plc'
 
 import { Modal, ModalContent } from '../../_molecules/modal'
 
-type ModalData = {
-  leafLang: string
-  label: string
+export type DeletePou = {
+  type: 'pou'
+  file: string
+  path: string
+  pou: PLCPou
 }
 
-type ConfirmDeleteElementProps = {
-  rung?: RungLadderState | null
+export type DeleteDatatype = {
+  type: 'datatype'
+  file: string
+  path: string
+}
+
+export type DeleteLadderRung = {
+  type: 'ladder-rung'
+  file: string
+  path: string
+  pou: PLCPou
+  rung: RungLadderState
+}
+
+export type ConfirmDeleteModalProps = {
   isOpen: boolean
-  validationContext: string | null
-  modalData?: ModalData
+  data: DeletePou | DeleteDatatype | DeleteLadderRung
 }
 
-const ConfirmDeleteElementModal = ({
-  rung,
-  modalData,
-  isOpen,
-  validationContext,
-  ...rest
-}: ConfirmDeleteElementProps) => {
+const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModalProps) => {
   const {
     editor,
-    projectActions: { deletePou, deleteDatatype, deleteVariable },
-    ladderFlowActions: { removeLadderFlow, removeRung },
+    projectActions: { deleteVariable },
+    ladderFlowActions: { removeRung },
     editorActions: { updateModelVariables },
-    libraryActions: { removeUserLibrary },
     modalActions: { onOpenChange, closeModal },
-    project: {
-      data: { pous },
-    },
+    pouActions: { delete: deletePouAction },
+    datatypeActions: { delete: deleteDatatypeAction },
   } = useOpenPLCStore()
 
   const { handleRemoveTab } = useHandleRemoveTab()
-  const editorName = editor.meta.name
-  const pou = pous.find((pou) => pou.data.name === editorName)
 
-  useEffect(() => {}, [modalData, editor])
+  const handleDeleteLadderRung = (data: DeleteLadderRung) => {
+    const { pou, rung } = data
+    if (Array.isArray(rung.nodes)) {
+      /**
+       * Remove the variable associated with the block node
+       * If the editor is a graphical editor and the variable display is set to table, update the model variables
+       * If the variable is the selected row, set the selected row to -1
+       *
+       * !IMPORTANT: This function must be used inside of components, because the functions deleteVariable and updateModelVariables are just available at the useOpenPLCStore hook
+       * -- This block of code references at project:
+       *    -- src/renderer/components/_molecules/rung/body.tsx
+       *    -- src/renderer/components/_molecules/menu-bar/modals/delete-confirmation-modal.tsx
+       *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
+       *    -- src/renderer/components/_molecules/graphical-editor/fbd/index.tsx
+       */
+      const blockNodes = rung.nodes.filter((node) => node.type === 'block')
+
+      if (blockNodes.length > 0) {
+        let variables: PLCVariable[] = []
+        if (pou) variables = [...pou.data.variables] as PLCVariable[]
+
+        blockNodes.forEach((blockNode) => {
+          const variableData = (blockNode.data as BasicNodeData)?.variable
+          const variableIndex = variables.findIndex((variable) => variable.id === variableData?.id)
+
+          if (variableIndex !== -1) {
+            deleteVariable({
+              variableId: variableData?.id,
+              scope: 'local',
+              associatedPou: editor.meta.name,
+            })
+            variables.splice(variableIndex, 1)
+          }
+
+          if (
+            editor.type === 'plc-graphical' &&
+            editor.variable.display === 'table' &&
+            parseInt(editor.variable.selectedRow, 10) === variableIndex
+          ) {
+            updateModelVariables({ display: 'table', selectedRow: -1 })
+          }
+        })
+      }
+
+      removeRung(editor.meta.name, rung.id)
+
+      toast({
+        title: 'Rung deleted success!',
+        description: 'Your rung was successfully deleted.',
+        variant: 'default',
+      })
+    }
+  }
+
+  const handleDeleteDatatype = (data: DeleteDatatype) => {
+    const { file: targetLabel } = data
+
+    const res = deleteDatatypeAction(data)
+    if (!res.success) {
+      toast({
+        title: res.error?.title || 'Error deleting datatype',
+        description: res.error?.description || 'An error occurred while deleting the datatype. Please try again.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    handleRemoveTab(targetLabel)
+    toast({
+      title: 'Datatype deleted success!',
+      description: `Datatype "${targetLabel}" was successfully deleted.`,
+      variant: 'default',
+    })
+  }
+
+  const handleDeletePou = async (data: DeletePou) => {
+    const { file: targetLabel } = data
+
+    const res = await deletePouAction(data)
+    if (!res.success) {
+      toast({
+        title: res.error?.title || 'Error deleting POU',
+        description: res.error?.description || 'An error occurred while deleting the POU. Please try again.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    handleRemoveTab(targetLabel)
+    toast({
+      title: 'POU deleted success!',
+      description: `POU "${targetLabel}" was successfully deleted.`,
+      variant: 'default',
+    })
+  }
 
   const handleDeleteElement = (): void => {
     try {
-      if (rung && Array.isArray(rung.nodes)) {
-        /**
-         * Remove the variable associated with the block node
-         * If the editor is a graphical editor and the variable display is set to table, update the model variables
-         * If the variable is the selected row, set the selected row to -1
-         *
-         * !IMPORTANT: This function must be used inside of components, because the functions deleteVariable and updateModelVariables are just available at the useOpenPLCStore hook
-         * -- This block of code references at project:
-         *    -- src/renderer/components/_molecules/rung/body.tsx
-         *    -- src/renderer/components/_molecules/menu-bar/modals/delete-confirmation-modal.tsx
-         *    -- src/renderer/components/_organisms/workspace-activity-bar/ladder-toolbox.tsx
-         *    -- src/renderer/components/_molecules/graphical-editor/fbd/index.tsx
-         */
-        const blockNodes = rung.nodes.filter((node) => node.type === 'block')
-
-        if (blockNodes.length > 0) {
-          let variables: PLCVariable[] = []
-          if (pou) variables = [...pou.data.variables] as PLCVariable[]
-
-          blockNodes.forEach((blockNode) => {
-            const variableData = (blockNode.data as BasicNodeData)?.variable
-            const variableIndex = variables.findIndex((variable) => variable.id === variableData?.id)
-
-            if (variableIndex !== -1) {
-              deleteVariable({
-                variableId: variableData?.id,
-                scope: 'local',
-                associatedPou: editor.meta.name,
-              })
-              variables.splice(variableIndex, 1)
-            }
-
-            if (
-              editor.type === 'plc-graphical' &&
-              editor.variable.display === 'table' &&
-              parseInt(editor.variable.selectedRow, 10) === variableIndex
-            ) {
-              updateModelVariables({ display: 'table', selectedRow: -1 })
-            }
-          })
+      switch (data.type) {
+        case 'pou': {
+          void handleDeletePou(data)
+          break
         }
-
-        removeRung(editor.meta.name, rung.id)
-
-        toast({
-          title: 'Rung deleted success!',
-          description: 'Your rung was successfully deleted.',
-          variant: 'default',
-        })
-        closeModal()
-        return
-      }
-
-      if (editor.type === 'plc-datatype') {
-        const targetLabel = modalData?.label
-        if (!targetLabel) {
-          throw new Error('No label found for datatype deletion.')
+        case 'datatype': {
+          handleDeleteDatatype(data)
+          break
         }
-
-        deleteDatatype(targetLabel)
-        removeLadderFlow(targetLabel)
-        removeUserLibrary(targetLabel)
-        handleRemoveTab(targetLabel)
-
-        toast({
-          title: 'Datatype deleted success!',
-          description: `Datatype "${targetLabel}" was successfully deleted.`,
-          variant: 'default',
-        })
-        closeModal()
-        return
-      }
-
-      if (editor.type === 'plc-textual' || editor.type === 'plc-graphical') {
-        const targetLabel = modalData?.label
-        if (!targetLabel) {
-          throw new Error('No label found for POU deletion.')
+        case 'ladder-rung': {
+          handleDeleteLadderRung(data)
+          break
         }
-        deletePou(targetLabel)
-        removeLadderFlow(targetLabel)
-        removeUserLibrary(targetLabel)
-        handleRemoveTab(targetLabel)
-        toast({
-          title: 'Pou deleted success!',
-          description: `POU "${targetLabel}" was successfully deleted.`,
-          variant: 'default',
-        })
-        closeModal()
-        return
+        default:
+          throw new Error('Unknown element type')
       }
     } catch (_error) {
       toast({
@@ -145,7 +169,8 @@ const ConfirmDeleteElementModal = ({
         variant: 'fail',
       })
     }
-    closeModal()
+
+    handleCloseModal()
   }
 
   const handleCloseModal = () => {
