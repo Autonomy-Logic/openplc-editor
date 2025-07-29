@@ -16,8 +16,11 @@ import {
   oldEditorParsePousToXML,
 } from './xml-generator/old-editor'
 
-const XmlGenerator = (projectToGenerateXML: ProjectState['data'], parseTo: 'old-editor' | 'codesys' = 'old-editor') => {
-  let xmlResult = parseTo === 'old-editor' ? getBaseOldEditorXmlStructure() : getBaseCodeSysXmlStructure()
+const XmlGenerator = (
+  projectToGenerateXML: ProjectState['data'],
+  xmlFormatTarget: 'old-editor' | 'codesys' = 'old-editor',
+) => {
+  let xmlResult = xmlFormatTarget === 'old-editor' ? getBaseOldEditorXmlStructure() : getBaseCodeSysXmlStructure()
 
   /**
    * Parse POUs
@@ -27,7 +30,7 @@ const XmlGenerator = (projectToGenerateXML: ProjectState['data'], parseTo: 'old-
   const mainPou = pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
   if (!mainPou) return { ok: false, message: 'Main POU not found.', data: undefined }
 
-  if (parseTo === 'old-editor') {
+  if (xmlFormatTarget === 'old-editor') {
     xmlResult = oldEditorParsePousToXML(xmlResult as oldBaseXml, pous)
 
     /**
