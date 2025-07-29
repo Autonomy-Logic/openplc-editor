@@ -5,6 +5,7 @@ import type { PLCVariable } from '@root/types/PLC'
 import { cn, generateNumericUUID } from '@root/utils'
 import { Node, NodeProps, Position } from '@xyflow/react'
 import { FocusEvent, useEffect, useRef, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { InputWithRef } from '../../input'
@@ -331,7 +332,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     project: {
       data: { pous },
     },
-    projectActions: { createVariable, updateVariable },
+    projectActions: { createVariable },
     fbdFlows,
     fbdFlowActions: { updateNode },
   } = useOpenPLCStore()
@@ -351,13 +352,16 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   /**
    * useEffect to focus the variable input when the correct block type is selected
    */
+  const hasCreatedRef = useRef(false)
+
   useEffect(() => {
     if (data.variable && data.variable.name !== '' && blockType === 'function-block') {
       setBlockVariableValue(data.variable.name)
+      hasCreatedRef.current = true
       return
     }
 
-    if (inputVariableRef.current && selected) {
+    if (inputVariableRef.current && selected && !hasCreatedRef.current) {
       switch (blockType) {
         case 'function-block': {
           if (!data.variable || data.variable.name === '') {
@@ -368,7 +372,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
               variables.all,
               (data.variant as BlockVariant).name.toUpperCase(),
             )
-            handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`)
+            handleSubmitBlockVariableOnTextareaBlur(`${name}${number}`, true)
+            hasCreatedRef.current = true
             return
           }
           inputVariableRef.current.focus()
@@ -427,7 +432,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
   /**
    * Handle with the variable input onBlur event
    */
-  const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string) => {
+  const handleSubmitBlockVariableOnTextareaBlur = (variableName?: string, createIfNotFound?: boolean) => {
     const variableNameToSubmit = variableName || blockVariableValue
 
     if (variableNameToSubmit === '') {
@@ -438,6 +443,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     const { rung, node, variables } = getFBDPouVariablesRungNodeAndEdges(editor, pous, fbdFlows, {
       nodeId: id,
     })
+
     if (!rung || !node) {
       toast({
         title: 'Error',
@@ -447,78 +453,76 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    /**
-     * Check if the variable exists in the table of variables
-     * If exists, update the node variable
-     */
-    let variable: PLCVariable | undefined = variables.selected
-    if (variable) {
-      if (variable.name === variableNameToSubmit) return
-      const res = updateVariable({
-        data: {
-          ...variable,
-          name: variableNameToSubmit,
-          type: {
-            definition: 'derived',
-            value: (node.data as BlockNodeData<BlockVariant>).variant.name,
-          },
+    const nodeBlockType = (node.data as BlockNodeData<BlockVariant>).variant.name
+
+    const findMatchingVariable = () =>
+      variables.all.find(
+        (variable) =>
+          variable.name === variableNameToSubmit &&
+          variable.type.definition === 'derived' &&
+          variable.type.value === nodeBlockType,
+      )
+
+    const updateNodeVariable = (variable: Partial<PLCVariable> | { name: string }) =>
+      updateNode({
+        editorName: editor.meta.name,
+        nodeId: node.id,
+        node: {
+          ...node,
+          data: { ...node.data, variable },
         },
-        rowId: variables.all.indexOf(variable),
-        scope: 'local',
-        associatedPou: editor.meta.name,
       })
-      if (!res.ok) {
-        toast({
-          title: res.title,
-          description: res.message,
-          variant: 'fail',
-        })
-        setBlockVariableValue(variable.name)
+
+    let variableToLink = variables.selected
+
+    const matchingVariable = findMatchingVariable()
+
+    if (variableToLink) {
+      if (variableToLink.name === variableNameToSubmit) return
+
+      if (matchingVariable && matchingVariable.id !== variableToLink.id) {
+        variableToLink = matchingVariable
+      } else {
+        updateNodeVariable({ name: variableNameToSubmit })
+        setWrongVariable(true)
         return
       }
-      variable = res.data as PLCVariable | undefined
     } else {
-      const res = createVariable({
-        data: {
-          id: crypto.randomUUID(),
-          name: variableNameToSubmit,
-          type: {
-            definition: 'derived',
-            value: (node.data as BlockNodeData<BlockVariant>).variant.name,
+      if (matchingVariable) {
+        variableToLink = matchingVariable
+      } else if (createIfNotFound) {
+        const creationResult = createVariable({
+          data: {
+            id: uuidv4(),
+            name: variableNameToSubmit,
+            type: { definition: 'derived', value: nodeBlockType },
+            class: 'local',
+            location: '',
+            documentation: '',
+            debug: false,
           },
-          class: 'local',
-          location: '',
-          documentation: '',
-          debug: false,
-        },
-        scope: 'local',
-        associatedPou: editor.meta.name,
-      })
-      if (!res.ok) {
-        toast({
-          title: res.title,
-          description: res.message,
-          variant: 'fail',
+          scope: 'local',
+          associatedPou: editor.meta.name,
         })
+
+        if (!creationResult.ok) {
+          toast({
+            title: creationResult.title,
+            description: creationResult.message,
+            variant: 'fail',
+          })
+          return
+        }
+        variableToLink = creationResult.data as PLCVariable
+      } else {
+        updateNodeVariable({ name: variableNameToSubmit })
+        setWrongVariable(true)
         return
-      }
-      variable = res.data as PLCVariable | undefined
-      if (variable?.name !== variableNameToSubmit) {
-        setBlockVariableValue(variable?.name ?? '')
       }
     }
 
-    updateNode({
-      editorName: editor.meta.name,
-      nodeId: node.id,
-      node: {
-        ...node,
-        data: {
-          ...node.data,
-          variable: variable ?? { name: '' },
-        },
-      },
-    })
+    updateNodeVariable(variableToLink)
+    setBlockVariableValue(variableToLink.name)
     setWrongVariable(false)
   }
 
@@ -557,7 +561,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
           <HighlightedTextArea
             textAreaValue={blockVariableValue}
             setTextAreaValue={setBlockVariableValue}
-            handleSubmit={handleSubmitBlockVariableOnTextareaBlur}
+            handleSubmit={() => handleSubmitBlockVariableOnTextareaBlur(blockVariableValue, false)}
             onFocus={(e) => e.target.select()}
             onBlur={() => {}}
             inputHeight={{
