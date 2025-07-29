@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 const logObjectSchema = z.object({
   id: z.string(),
-  type: z.enum(['info', 'warning', 'error']),
+  level: z.enum(['info', 'warning', 'error']).optional(),
   message: z.string(),
 })
 

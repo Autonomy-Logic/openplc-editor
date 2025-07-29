@@ -89,7 +89,7 @@ export const FileMenu = () => {
               <span>{i18n.t('menu:file.submenu.exportToPLCOpenXml')}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} onClick={() => void handleExportProject('codesys')}>
-              <span>{i18n.t('menu:file.submenu.exportToCodeSys')}</span>
+              <span>{i18n.t('menu:file.submenu.exportToCodesysXml')}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
             <MenuPrimitive.Item className={ITEM} disabled>
