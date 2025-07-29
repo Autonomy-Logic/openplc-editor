@@ -1,16 +1,22 @@
+import { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { DeleteDatatype, DeletePou } from '@root/renderer/components/_organisms/modals'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
-import { PLCArrayDatatype, PLCEnumeratedDatatype, PLCStructureDatatype } from '@root/types/PLC/open-plc'
+import {
+  PLCArrayDatatype,
+  PLCEnumeratedDatatype,
+  PLCProjectSchema,
+  PLCStructureDatatype,
+} from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
 
-import { DeviceSlice } from '../device'
+import { deviceConfigurationSchema, devicePinSchema, DeviceSlice, DeviceState } from '../device'
 import { EditorModel, EditorSlice } from '../editor'
 import { FBDFlowSlice, FBDFlowType } from '../fbd'
 import { LadderFlowSlice, LadderFlowType } from '../ladder'
 import { LibrarySlice } from '../library'
 import { ModalSlice } from '../modal'
-import { ProjectSlice } from '../project'
+import { ProjectSlice, ProjectState } from '../project'
 import { TabsProps, TabsSlice } from '../tabs'
 import { CreateEditorObjectFromTab } from '../tabs/utils'
 import { WorkspaceSlice } from '../workspace'
@@ -62,6 +68,7 @@ export type SharedSlice = {
       success: boolean
       error?: { title: string; description: string }
     }>
+    saveProject: (project: ProjectState, device: DeviceState['deviceDefinitions']) => Promise<ISaveDataResponse>
   }
 }
 
@@ -580,6 +587,96 @@ export const createSharedSlice: StateCreator<
       return {
         success: true,
       }
+    },
+
+    saveProject: async (
+      project: ProjectState,
+      device: DeviceState['deviceDefinitions'],
+    ): Promise<ISaveDataResponse> => {
+      getState().workspaceActions.setEditingState('save-request')
+      toast({
+        title: 'Save changes',
+        description: 'Trying to save the changes in the project file.',
+        variant: 'warn',
+      })
+
+      const projectData = PLCProjectSchema.safeParse(project)
+      if (!projectData.success) {
+        getState().workspaceActions.setEditingState('unsaved')
+        toast({
+          title: 'Error in the save request!',
+          description: 'The project data is not valid.',
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          reason: { title: 'Error in the save request!', description: 'The project data is not valid.' },
+        }
+      }
+
+      const deviceConfiguration = deviceConfigurationSchema.safeParse(device.configuration)
+      if (!deviceConfiguration.success) {
+        getState().workspaceActions.setEditingState('unsaved')
+        toast({
+          title: 'Error in the save request!',
+          description: 'The device configuration data is not valid.',
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          reason: { title: 'Error in the save request!', description: 'The device configuration data is not valid.' },
+        }
+      }
+
+      const devicePinMapping = devicePinSchema.array().safeParse(device.pinMapping.pins)
+      if (!devicePinMapping.success) {
+        getState().workspaceActions.setEditingState('unsaved')
+        toast({
+          title: 'Error in the save request!',
+          description: 'The device pin mapping data is not valid.',
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          reason: { title: 'Error in the save request!', description: 'The device pin mapping data is not valid.' },
+        }
+      }
+
+      // Remove the POU from the project data before saving
+      // This is because the POU data is not needed in the project file
+      // and it is stored in the filesystem
+      // This is a workaround to avoid circular references
+      // and to reduce the size of the project file
+      const pous = projectData.data.data.pous
+      projectData.data.data.pous = []
+
+      const { success, reason } = await window.bridge.saveProject({
+        projectPath: project.meta.path,
+        content: {
+          projectData: projectData.data,
+          pous,
+          deviceConfiguration: deviceConfiguration.data,
+          devicePinMapping: devicePinMapping.data,
+        },
+      })
+
+      if (success) {
+        getState().workspaceActions.setEditingState('saved')
+        toast({
+          title: 'Changes saved!',
+          description: 'The project was saved successfully!',
+          variant: 'default',
+        })
+      } else {
+        getState().workspaceActions.setEditingState('unsaved')
+        toast({
+          title: 'Error in the save request!',
+          description: reason?.description,
+          variant: 'fail',
+        })
+      }
+
+      return { success, reason }
     },
   },
 })

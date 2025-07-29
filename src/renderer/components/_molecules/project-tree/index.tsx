@@ -233,7 +233,6 @@ const ProjectTreeLeaf = ({ leafLang, label, onClick: handleLeafClick, ...res }: 
     editor: {
       meta: { name },
     },
-    workspace: { selectedProjectTreeLeaf },
     workspaceActions: { setSelectedProjectTreeLeaf },
     pouActions: { deleteRequest: deletePouRequest },
     datatypeActions: { deleteRequest: deleteDatatypeRequest },
@@ -256,10 +255,6 @@ const ProjectTreeLeaf = ({ leafLang, label, onClick: handleLeafClick, ...res }: 
 
     setSelectedProjectTreeLeaf({ label, type: isAPou ? 'pou' : isDatatype ? 'datatype' : null })
   }
-
-  useEffect(() => {
-    console.log('selectedProjectTreeLeaf', selectedProjectTreeLeaf)
-  }, [selectedProjectTreeLeaf])
 
   const handleDeleteFile = () => {
     if (!isAPou && !isDatatype) {

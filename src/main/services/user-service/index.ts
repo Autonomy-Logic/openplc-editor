@@ -1,6 +1,6 @@
 import { exec } from 'child_process'
 import { app } from 'electron'
-import { access, constants, mkdir, rm, writeFile } from 'fs/promises'
+import { access, constants, mkdir, rename, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { promisify } from 'util'
 
@@ -74,6 +74,32 @@ class UserService {
       await rm(filePath, { recursive: true, force: true })
     } catch (err) {
       console.error(`Error deleting file at ${filePath}: ${String(err)}`)
+    }
+  }
+
+  static async renameFile(
+    oldFilePath: string,
+    newFilePath: string,
+  ): Promise<{
+    success: boolean
+    error?: {
+      title: string
+      description: string
+      error: Error
+    }
+    data?: { filePath: string }
+  }> {
+    const newFileName = newFilePath.split('/').pop() || ''
+
+    try {
+      await rename(oldFilePath, newFilePath)
+      return { success: true, data: { filePath: newFilePath } }
+    } catch (err) {
+      console.error(`Error renaming file at ${oldFilePath} to ${newFileName}: ${String(err)}`)
+      return {
+        success: false,
+        error: { title: 'File Rename Error', description: 'Failed to rename file', error: err as Error },
+      }
     }
   }
 

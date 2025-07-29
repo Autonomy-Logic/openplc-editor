@@ -154,12 +154,12 @@ export default class MenuBuilder {
       label: i18n.t('menu:file.label'),
       submenu: [
         {
-          label: i18n.t('menu:file.submenu.new'),
+          label: i18n.t('menu:file.submenu.newProject'),
           accelerator: 'Cmd+N',
           click: () => void this.handleCreateProject(),
         },
         {
-          label: i18n.t('menu:file.submenu.open'),
+          label: i18n.t('menu:file.submenu.openProject'),
           accelerator: 'Cmd+O',
           click: () => this.sendOpenRequest(),
         },
@@ -412,12 +412,12 @@ export default class MenuBuilder {
         visible: false,
         submenu: [
           {
-            label: i18n.t('menu:file.submenu.new'),
+            label: i18n.t('menu:file.submenu.newProject'),
             accelerator: 'Ctrl+N',
             click: () => this.handleCreateProject(),
           },
           {
-            label: i18n.t('menu:file.submenu.open'),
+            label: i18n.t('menu:file.submenu.openProject'),
             accelerator: 'Ctrl+O',
             click: () => this.sendOpenRequest(),
           },
