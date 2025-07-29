@@ -9,13 +9,14 @@ import { join } from 'path'
 import { platform } from 'process'
 
 import { ProjectState } from '../../../renderer/store/slices'
-import { PLCProject } from '../../../types/PLC/open-plc'
+import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 import { MainIpcModule, MainIpcModuleConstructor } from '../../contracts/types/modules/ipc/main'
 import { logger } from '../../services'
 
 type IDataToWrite = {
   projectPath: string
   content: {
+    pous: PLCPou[]
     projectData: PLCProject
     deviceConfiguration: DeviceConfiguration
     devicePinMapping: DevicePin[]

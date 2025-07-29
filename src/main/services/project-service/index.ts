@@ -1,3 +1,4 @@
+import { fileOrDirectoryExists } from '@root/main/utils'
 import {
   CreateProjectFileProps,
   IProjectRecentHistoryEntry,
@@ -8,7 +9,7 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
 import { join, normalize } from 'path'
 
-import { PLCProject } from '../../../types/PLC/open-plc'
+import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
 import { createProjectDefaultStructure, readProjectFiles } from './utils'
 
@@ -239,6 +240,7 @@ class ProjectService {
     projectPath: string
     content: {
       projectData: PLCProject
+      pous: PLCPou[]
       deviceConfiguration: DeviceConfiguration
       devicePinMapping: DevicePin[]
     }
@@ -280,6 +282,42 @@ class ProjectService {
           title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
           description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
             filePath: projectPath,
+          }),
+          error,
+        },
+      }
+    }
+
+    // Save pous
+    try {
+      const savedPous = {
+        programs: data.content.pous.filter((pou) => pou.type === 'program'),
+        functions: data.content.pous.filter((pou) => pou.type === 'function'),
+        'function-blocks': data.content.pous.filter((pou) => pou.type === 'function-block'),
+      }
+
+      // Save each POU in its respective folder
+      for (const [type, pous] of Object.entries(savedPous)) {
+        const dir = join(directoryPath, 'pous', type)
+
+        if (!fileOrDirectoryExists(dir)) {
+          throw new Error(`Directory does not exist: ${dir}`)
+        }
+
+        // Write/update each POU file
+        for (const pou of pous) {
+          const filePath = join(dir, `${pou.data.name}.json`)
+          await promises.writeFile(filePath, JSON.stringify(pou, null, 2))
+        }
+      }
+    } catch (error) {
+      console.error('Error saving POUs:', error)
+      return {
+        success: false,
+        error: {
+          title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
+          description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
+            filePath: directoryPath,
           }),
           error,
         },

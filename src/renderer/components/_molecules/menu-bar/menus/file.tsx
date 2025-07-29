@@ -1,5 +1,4 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
-import { saveProjectRequest } from '@root/renderer/components/_templates'
 import { useCompiler, useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { i18n } from '@utils/i18n'
@@ -15,9 +14,8 @@ export const FileMenu = () => {
     workspace,
     deviceDefinitions,
 
-    workspaceActions: { setEditingState },
     modalActions: { openModal },
-    sharedWorkspaceActions: { closeProject, openProject },
+    sharedWorkspaceActions: { closeProject, openProject, saveProject },
   } = useOpenPLCStore()
   const { editingState } = workspace
   const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
@@ -71,10 +69,7 @@ export const FileMenu = () => {
               <span className={ACCELERATOR}>{'Ctrl + O'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
-            <MenuPrimitive.Item
-              className={ITEM}
-              onClick={() => void saveProjectRequest(project, deviceDefinitions, setEditingState)}
-            >
+            <MenuPrimitive.Item className={ITEM} onClick={() => void saveProject(project, deviceDefinitions)}>
               <span>{i18n.t('menu:file.submenu.save')}</span>
               <span className={ACCELERATOR}>{'Ctrl + S'}</span>
             </MenuPrimitive.Item>

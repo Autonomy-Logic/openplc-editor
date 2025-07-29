@@ -5,7 +5,6 @@ import { IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ComponentPropsWithoutRef } from 'react'
 
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
-import { saveProjectRequest } from '../../_templates'
 
 export type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
@@ -19,7 +18,7 @@ const SaveChangesModal = ({ isOpen, validationContext, recentResponse, ...rest }
     deviceDefinitions,
     workspaceActions: { setEditingState },
     modalActions: { closeModal, onOpenChange, openModal },
-    sharedWorkspaceActions: { clearStatesOnCloseProject, openProject, openRecentProject },
+    sharedWorkspaceActions: { clearStatesOnCloseProject, openProject, openRecentProject, saveProject },
   } = useOpenPLCStore()
 
   const { handleQuitApp, handleCancelQuitApp } = useQuitApp()
@@ -32,7 +31,7 @@ const SaveChangesModal = ({ isOpen, validationContext, recentResponse, ...rest }
     closeModal()
 
     if (operation === 'save') {
-      const { success } = await saveProjectRequest(project, deviceDefinitions, setEditingState)
+      const { success } = await saveProject(project, deviceDefinitions)
       if (!success) {
         return
       }
