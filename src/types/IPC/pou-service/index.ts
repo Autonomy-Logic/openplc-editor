@@ -11,6 +11,7 @@ export type PouServiceResponse = {
   }
   message?: string
   data?: {
-    pou: PLCPou
+    filePath?: string
+    pou?: PLCPou
   }
 }

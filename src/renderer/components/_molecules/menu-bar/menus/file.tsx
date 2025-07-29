@@ -63,11 +63,11 @@ export const FileMenu = () => {
         <MenuPrimitive.Portal>
           <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
             <MenuPrimitive.Item className={ITEM} onClick={() => void handleCreateProject()}>
-              <span>{i18n.t('menu:file.submenu.new')}</span>
+              <span>{i18n.t('menu:file.submenu.newProject')}</span>
               <span className={ACCELERATOR}>{'Ctrl + N'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} onClick={() => void handleOpenProject()}>
-              <span>{i18n.t('menu:file.submenu.open')}</span>
+              <span>{i18n.t('menu:file.submenu.openProject')}</span>
               <span className={ACCELERATOR}>{'Ctrl + O'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />

@@ -19,12 +19,26 @@ class PouService {
 
   async deletePouFile(filePath: string): Promise<PouServiceResponse> {
     try {
-      console.log('Deleting POU file at:', filePath)
       await UserService.deleteFile(filePath)
       return { success: true }
     } catch (error) {
       console.error('Error deleting POU file:', error)
       return { success: false, error: { title: 'POU Deletion Error', description: 'Failed to delete POU file', error } }
+    }
+  }
+
+  async renamePouFile(filePath: string, newFileName: string): Promise<PouServiceResponse> {
+    try {
+      const newFilePath = filePath.replace(/[^/]+$/, newFileName)
+      const result = await UserService.renameFile(filePath, newFilePath)
+      if (result.success) {
+        return { success: true, data: { filePath: newFilePath } }
+      } else {
+        return { success: false, error: result.error }
+      }
+    } catch (error) {
+      console.error('Error renaming POU file:', error)
+      return { success: false, error: { title: 'POU Rename Error', description: 'Failed to rename POU file', error } }
     }
   }
 }
