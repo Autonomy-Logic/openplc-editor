@@ -184,8 +184,7 @@ class CompilerModule {
     // INFO: We don't need to check if the directories already exist, as mkdir with { recursive: true } will handle that.
     // INFO: We will create a build directory (if it does not exist), a board-specific directory, and a source directory within the board directory.
     let result: MethodsResult<string | string[]> = { success: false }
-    const projectFolderNormalizedPath = projectFolderPath.replace('project.json', '') // Normalize the project path
-    const buildDirectory = join(projectFolderNormalizedPath, 'build')
+    const buildDirectory = join(projectFolderPath, 'build')
     const boardDirectory = join(buildDirectory, boardTarget)
     const sourceDirectory = join(boardDirectory, 'src')
 
@@ -480,7 +479,7 @@ class CompilerModule {
 
     // Step 1: Create basic directories
     try {
-      const createDirsResult = await this.createBasicDirectories(projectPath, boardTarget)
+      const createDirsResult = await this.createBasicDirectories(normalizedProjectPath, boardTarget)
       if (!createDirsResult.success) {
         _mainProcessPort.postMessage({
           logLevel: 'error',
