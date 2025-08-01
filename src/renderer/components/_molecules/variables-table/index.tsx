@@ -3,7 +3,12 @@ import { PLCVariable } from '@root/types/PLC/open-plc'
 import { ColumnFiltersState, createColumnHelper, OnChangeFn } from '@tanstack/react-table'
 
 import { GenericTable } from '../../_atoms/generic-table'
-import { EditableDocumentationCell, EditableLocationCell, EditableNameCell } from './editable-cell'
+import {
+  EditableDocumentationCell,
+  EditableInitialValueCell,
+  EditableLocationCell,
+  EditableNameCell,
+} from './editable-cell'
 import { SelectableClassCell, SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 
 const columnHelper = createColumnHelper<PLCVariable>()
@@ -46,7 +51,7 @@ const columnsPrograms = [
   columnHelper.accessor('initialValue', {
     header: 'Initial Value',
     enableResizing: true,
-    cell: EditableNameCell,
+    cell: EditableInitialValueCell,
   }),
   columnHelper.accessor('documentation', {
     header: 'Documentation',
@@ -92,7 +97,7 @@ const columns = [
   columnHelper.accessor('initialValue', {
     header: 'Initial Value',
     enableResizing: true,
-    cell: EditableNameCell,
+    cell: EditableInitialValueCell,
   }),
   columnHelper.accessor('documentation', {
     header: 'Documentation',
