@@ -16,10 +16,8 @@ import { SETTINGS_DATA } from './data/settings'
  * This approach is taken to avoid the need for a singleton instance and to leave room for future changes in the class structure.
  */
 class UserService {
-  compilerDirectory: string
   constructor() {
     void this.#initializeUserSettingsAndHistory()
-    this.compilerDirectory = this.#constructCompilerDirectoryPath()
   }
 
   /**
@@ -68,11 +66,6 @@ class UserService {
         console.error(`Error creating file at ${filePath}: ${String(err)}`)
       }
     }
-  }
-
-  #constructCompilerDirectoryPath() {
-    const isDevelopment = process.env.NODE_ENV === 'development'
-    return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'compilers')
   }
 
   /**
@@ -136,38 +129,31 @@ class UserService {
   /**
    * Checks if the Core List file exists and creates it if it doesn't.
    * TODO: This function must be refactored.
-   * - Must be validate if the json content is being written correctly.
    * - Must validate if this implementation for the core list file is correct.
    */
 
-  // eslint-disable-next-line no-unused-private-class-members
   async #checkIfArduinoCoreControlFileExists(): Promise<void> {
-    const arduinoCli = promisify(exec)
+    const developmentMode = process.env.NODE_ENV === 'development'
+    const executeCommand = promisify(exec)
+
     const pathToRuntimeFolder = join(app.getPath('userData'), 'User', 'Runtime')
     const pathToArduinoCoreControlFile = join(pathToRuntimeFolder, 'arduino-core-control.json')
-    let pathToArduinoCliBinary = ''
 
-    switch (process.platform) {
-      case 'win32':
-        pathToArduinoCliBinary = join(this.compilerDirectory, 'Windows', 'arduino-cli', 'bin', 'arduino-cli.exe')
-        break
-      case 'darwin':
-        pathToArduinoCliBinary = join(this.compilerDirectory, 'MacOS', 'arduino-cli', 'bin', 'arduino-cli')
-        break
-      case 'linux':
-        pathToArduinoCliBinary = join(
-          this.compilerDirectory,
-          'Linux',
-          'arduino-cli',
-          'bin',
-          `${process.arch === 'arm64' || process.arch === 'arm' ? 'arduino-cli-arm' : 'arduino-cli'}`,
-        )
-        break
-      default:
-        throw new Error(`Unsupported platform: ${process.platform}`)
+    const platformSpecificBinaryPath = join(process.platform, process.arch)
+
+    let binaryPath = join(
+      developmentMode ? process.cwd() : process.resourcesPath,
+      developmentMode ? 'resources' : '',
+      'bin',
+      developmentMode ? platformSpecificBinaryPath : '',
+      'arduino-cli',
+    )
+
+    if (process.platform === 'win32') {
+      binaryPath = `${binaryPath}.exe`
     }
 
-    const { stderr, stdout } = await arduinoCli(`"${pathToArduinoCliBinary}" core list --json`)
+    const { stderr, stdout } = await executeCommand(`"${binaryPath}" core list --json`)
     if (stderr) {
       console.error(`Error listing cores: ${String(stderr)}`)
       return
@@ -199,7 +185,7 @@ class UserService {
     await this.#checkIfLogFolderExists()
     await this.#checkIfUserHistoryFolderExists()
     await this.#checkIfArduinoCliConfigExists()
-    // await this.#checkIfArduinoCoreControlFileExists()
+    await this.#checkIfArduinoCoreControlFileExists()
   }
 }
 

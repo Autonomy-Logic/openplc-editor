@@ -377,6 +377,10 @@ class CompilerModule {
     })
   }
 
+  async handleCoreInstallationCheck() {
+    // Check if the core components are installed
+  }
+
   // !! Deprecated: This method is a outdated implementation and should be removed.
   async createXmlFile(
     pathToUserProject: string,
