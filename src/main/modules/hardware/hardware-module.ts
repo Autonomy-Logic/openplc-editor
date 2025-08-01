@@ -100,7 +100,7 @@ class HardwareModule {
       binaryPath += '.exe'
     }
 
-    const { stdout, stderr } = await executeCommand(`${binaryPath} list_ports`)
+    const { stdout, stderr } = await executeCommand(`"${binaryPath}" list_ports`)
 
     if (stderr) {
       console.error('Error while getting available serial ports:', stderr)
