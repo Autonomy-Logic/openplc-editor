@@ -3,8 +3,9 @@ import { StateCreator } from 'zustand'
 
 import type { TabsProps, TabsSlice } from './types'
 
-export const createTabsSlice: StateCreator<TabsSlice, [], [], TabsSlice> = (setState) => ({
+export const createTabsSlice: StateCreator<TabsSlice, [], [], TabsSlice> = (setState, getState) => ({
   tabs: [],
+  selectedTab: null,
 
   tabsActions: {
     updateTabs: (tab) => {
@@ -46,8 +47,19 @@ export const createTabsSlice: StateCreator<TabsSlice, [], [], TabsSlice> = (setS
       setState(
         produce((slice: TabsSlice) => {
           slice.tabs = []
+          slice.selectedTab = null
         }),
       )
+    },
+    setSelectedTab: (tabName) => {
+      setState(
+        produce((slice: TabsSlice) => {
+          slice.selectedTab = tabName
+        }),
+      )
+    },
+    getSelectedTab: () => {
+      return getState().selectedTab
     },
   },
 })

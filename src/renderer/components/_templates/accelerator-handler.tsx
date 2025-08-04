@@ -25,9 +25,10 @@ const AcceleratorHandler = () => {
   const {
     project,
     deviceDefinitions,
+    selectedTab,
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
-    sharedWorkspaceActions: { closeProject, openProject, openRecentProject, saveProject },
+    sharedWorkspaceActions: { closeProject, openProject, openRecentProject, saveProject, closeFileRequest },
     workspaceActions: { switchAppTheme, toggleMaximizedWindow },
     pouActions: { deleteRequest: deletePouRequest },
     datatypeActions: { deleteRequest: deleteDatatypeRequest },
@@ -176,6 +177,10 @@ const AcceleratorHandler = () => {
   }, [project, deviceDefinitions])
 
   /**
+   * ==== File Related Accelerators ====
+   */
+
+  /**
    * -- Delete files
    */
   useEffect(() => {
@@ -206,8 +211,15 @@ const AcceleratorHandler = () => {
   }, [selectedProjectLeft])
 
   /**
-   * ==== POU Related Accelerators ====
+   * -- Close tabs/editor
    */
+  useEffect(() => {
+    window.bridge.closeTabAccelerator((_event) => closeFileRequest(selectedTab))
+
+    return () => {
+      void window.bridge.removeCloseTabListener()
+    }
+  }, [selectedTab])
 
   /**
    * ==== Window Related Accelerators ====

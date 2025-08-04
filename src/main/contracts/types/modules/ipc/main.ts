@@ -21,10 +21,10 @@ export type MainIpcModule = {
 export type MainIpcModuleConstructor = {
   ipcMain: IpcMain
   mainWindow: InstanceType<typeof BrowserWindow> | null
-  pouService: InstanceType<typeof PouService> 
-  projectService: InstanceType<typeof ProjectService>                            
+  pouService: InstanceType<typeof PouService>
+  projectService: InstanceType<typeof ProjectService>
   store: TStoreType
-  menuBuilder: InstanceType<typeof MenuBuilder>  
+  menuBuilder: InstanceType<typeof MenuBuilder>
   compilerModule: InstanceType<typeof CompilerModule>
-  hardwareModule: InstanceType<typeof HardwareModule>  
+  hardwareModule: InstanceType<typeof HardwareModule>
 }

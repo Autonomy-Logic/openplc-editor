@@ -1,27 +1,16 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
-import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
-import { useEffect } from 'react'
 
 import { MenuClasses } from '../constants'
 
 export const EditMenu = () => {
   const {
-    editor,
     workspaceActions: { setModalOpen },
     modalActions: { openModal },
   } = useOpenPLCStore()
-  const { setSelectedTab } = useHandleRemoveTab()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
-  useEffect(() => {
-    setSelectedTab(editor.meta.name)
-    return () => {
-      setSelectedTab('')
-    }
-  }, [editor])
-
   const findInProject = () => {
     setModalOpen('findInProject', true)
   }

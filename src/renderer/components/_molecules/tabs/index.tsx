@@ -1,31 +1,27 @@
 import type { TabsProps } from '@process:renderer/store/slices'
-import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
 // import { CreateEditorObject } from '@root/renderer/store/slices/shared/utils'
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 
 import { Tab, TabList } from '../../_atoms'
 
 const Tabs = () => {
   const {
     tabs,
-    editor,
-    tabsActions: { sortTabs },
+    selectedTab,
+    tabsActions: { sortTabs, setSelectedTab },
     editorActions: { setEditor, getEditorFromEditors },
+    sharedWorkspaceActions: { closeFileRequest },
   } = useOpenPLCStore()
-  const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const hasTabs = tabs.length > 0
   const dndTab = useRef<number>(0)
   const replaceTab = useRef<number>(0)
 
-  const handleSort = () => {
-    const tabClone = [...tabs]
-    const draggedTab = tabClone[dndTab.current]
-    tabClone.splice(dndTab.current, 1)
-    tabClone.splice(replaceTab.current, 0, draggedTab)
-    sortTabs(tabClone)
+  const handleRemoveTab = (tabName: string | null) => {
+    closeFileRequest(tabName)
   }
+
   /**
    * Todo: this tab handler should be refactored to fit all possibles cases
    * @param tab the selected tab
@@ -41,6 +37,13 @@ const Tabs = () => {
     setEditor(candidate)
   }
 
+  const handleSortOnDragEnd = () => {
+    const tabClone = [...tabs]
+    const draggedTab = tabClone[dndTab.current]
+    tabClone.splice(dndTab.current, 1)
+    tabClone.splice(replaceTab.current, 0, draggedTab)
+    sortTabs(tabClone)
+  }
   const handleDragStart = ({ tab, idx }: { tab: TabsProps; idx: number }) => {
     dndTab.current = idx
     setSelectedTab(tab.name)
@@ -50,17 +53,6 @@ const Tabs = () => {
     replaceTab.current = idx
   }
 
-  useEffect(() => {
-    setSelectedTab(editor.meta.name)
-  }, [editor.meta.name])
-
-  useEffect(() => {
-    window.bridge.closeTabAccelerator((_event) => handleRemoveTab(selectedTab))
-    return () => {
-      void window.bridge.removeCloseTabListener()
-    }
-  })
-
   return (
     <TabList>
       {hasTabs &&
@@ -68,7 +60,7 @@ const Tabs = () => {
           <Tab
             onDragStart={() => handleDragStart({ tab: element, idx })}
             onDragEnter={() => handleDragEnter(idx)}
-            onDragEnd={() => handleSort()}
+            onDragEnd={() => handleSortOnDragEnd()}
             onDragOver={(e) => e.preventDefault()}
             handleClickedTab={() => handleClickedTab(element)}
             handleDeleteTab={() => handleRemoveTab(element.name)}

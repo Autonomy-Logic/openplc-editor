@@ -1,24 +1,21 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
-import { useCompiler, useHandleRemoveTab } from '@root/renderer/hooks'
+import { useCompiler } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { i18n } from '@utils/i18n'
 import _ from 'lodash'
-import { useEffect } from 'react'
 
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
   const {
-    editor,
     project,
     workspace,
     deviceDefinitions,
-
+    selectedTab,
     modalActions: { openModal },
-    sharedWorkspaceActions: { closeProject, openProject, saveProject },
+    sharedWorkspaceActions: { closeProject, openProject, saveProject, closeFileRequest },
   } = useOpenPLCStore()
   const { editingState } = workspace
-  const { handleRemoveTab, selectedTab, setSelectedTab } = useHandleRemoveTab()
   const { handleExportProject } = useCompiler()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
@@ -41,10 +38,6 @@ export const FileMenu = () => {
     if (handleUnsavedChanges('open-project')) return
     await openProject()
   }
-
-  useEffect(() => {
-    setSelectedTab(editor.meta.name)
-  }, [editor])
 
   const handleCloseProject = () => {
     closeProject()
@@ -77,7 +70,7 @@ export const FileMenu = () => {
               <span>{i18n.t('menu:file.submenu.saveAs')}</span>
               <span className={ACCELERATOR}>{'Ctrl + Shift + S'}</span>
             </MenuPrimitive.Item>
-            <MenuPrimitive.Item className={ITEM} onClick={() => void handleRemoveTab(selectedTab)}>
+            <MenuPrimitive.Item className={ITEM} onClick={() => void closeFileRequest(selectedTab)}>
               <span>{i18n.t('menu:file.submenu.closeTab')}</span>
               <span className={ACCELERATOR}>{'Ctrl + W'}</span>
             </MenuPrimitive.Item>

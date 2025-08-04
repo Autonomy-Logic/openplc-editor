@@ -1,5 +1,6 @@
 import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '@components/_molecules/project-tree'
 import { FolderIcon } from '@root/renderer/assets'
+import { projectSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
@@ -20,6 +21,8 @@ const Project = () => {
   const [isEditing, setIsEditing] = useState(false)
   const [inputValue, setInputValue] = useState<string>(name)
 
+  const projectPath = projectSelectors.useProjectPath()
+
   const handleCreateTab = (data: TabsProps) => {
     openFile(data)
   }
@@ -39,6 +42,7 @@ const Project = () => {
     <div id='project-container' className='flex h-full w-full flex-col pr-2'>
       {/* Actions handler */}
       <div id='project-actions-container' className='relative z-10 my-3 flex w-full justify-normal gap-2 pl-2'>
+        {/* Project name input */}
         <div
           id='project-name-container'
           className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 py-[1px] dark:bg-brand-dark'
@@ -76,6 +80,7 @@ const Project = () => {
       {/* Data display */}
       <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto'>
         <ProjectTreeRoot label={name}>
+          {/* Project Functions tree branch */}
           <ProjectTreeBranch branchTarget='function'>
             {pous
               ?.filter(({ type }) => type === 'function')
@@ -87,7 +92,7 @@ const Project = () => {
                   onClick={() =>
                     handleCreateTab({
                       name: data.name,
-                      path: `/data/pous/function/${data.name}`,
+                      path: `${projectPath}/pous/functions/${data.name}.json`,
                       elementType: { type: 'function', language: data.language },
                     })
                   }
@@ -95,6 +100,7 @@ const Project = () => {
               ))}
           </ProjectTreeBranch>
 
+          {/* Project Function Blocks tree branch */}
           <ProjectTreeBranch branchTarget='function-block'>
             {pous
               ?.filter(({ type }) => type === 'function-block')
@@ -106,13 +112,15 @@ const Project = () => {
                   onClick={() =>
                     handleCreateTab({
                       name: data.name,
-                      path: `/data/pous/function-block/${data.name}`,
+                      path: `${projectPath}/pous/function-blocks/${data.name}.json`,
                       elementType: { type: 'function-block', language: data.language },
                     })
                   }
                 />
               ))}
           </ProjectTreeBranch>
+
+          {/* Project Programs tree branch */}
           <ProjectTreeBranch branchTarget='program'>
             {pous
               ?.filter(({ type }) => type === 'program')
@@ -124,7 +132,7 @@ const Project = () => {
                   onClick={() =>
                     handleCreateTab({
                       name: data.name,
-                      path: `/data/pous/program/${data.name}`,
+                      path: `${projectPath}/pous/programs/${data.name}.json`,
                       elementType: { type: 'program', language: data.language },
                     })
                   }
@@ -132,6 +140,7 @@ const Project = () => {
               ))}
           </ProjectTreeBranch>
 
+          {/* Project Data Types tree branch */}
           <ProjectTreeBranch branchTarget='data-type'>
             {dataTypes
               ?.filter(({ derivation }) => derivation === 'array')
@@ -188,6 +197,7 @@ const Project = () => {
               ))}
           </ProjectTreeBranch>
 
+          {/* Project Resources tree branch */}
           <ProjectTreeBranch
             branchTarget='resource'
             onClick={() =>
@@ -200,6 +210,7 @@ const Project = () => {
             }
           />
 
+          {/* Project Device tree branch */}
           <ProjectTreeBranch branchTarget='device'>
             <ProjectTreeLeaf
               key='Configuration'

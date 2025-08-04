@@ -1,16 +1,15 @@
 import z from 'zod'
 
-const fileSliceTypeSchema = z.enum(['pou', 'datatype', 'device'])
+const fileSliceTypeSchema = z.enum(['pou', 'data-type', 'device'])
+type FileSliceType = z.infer<typeof fileSliceTypeSchema>
 
-const fileSliceDataSchema = z.record(
-  z.string(),
-  z.object({
-    type: fileSliceTypeSchema,
-    filePath: z.string(),
-    saved: z.boolean(),
-  }),
-)
-type FileSliceData = z.infer<typeof fileSliceDataSchema>
+const fileSliceDataSchema = z.object({
+  type: fileSliceTypeSchema,
+  filePath: z.string(),
+  saved: z.boolean(),
+})
+const fileSliceDataObjectSchema = z.record(z.string(), fileSliceDataSchema)
+type FileSliceData = z.infer<typeof fileSliceDataObjectSchema>
 
 const fileSliceActionsSchema = z.object({
   addFile: z
@@ -23,7 +22,6 @@ const fileSliceActionsSchema = z.object({
       }),
     )
     .returns(z.boolean()),
-
   removeFile: z
     .function()
     .args(
@@ -32,7 +30,6 @@ const fileSliceActionsSchema = z.object({
       }),
     )
     .returns(z.void()),
-
   updateFile: z
     .function()
     .args(
@@ -42,6 +39,14 @@ const fileSliceActionsSchema = z.object({
       }),
     )
     .returns(z.void()),
+  getFile: z
+    .function()
+    .args(
+      z.object({
+        name: z.string(),
+      }),
+    )
+    .returns(z.object({ file: fileSliceDataSchema.optional() })),
 
   getSavedState: z
     .function()
@@ -58,10 +63,10 @@ const fileSliceActionsSchema = z.object({
 })
 
 const fileSliceSchema = z.object({
-  data: fileSliceDataSchema,
-  actions: fileSliceActionsSchema,
+  files: fileSliceDataObjectSchema,
+  fileActions: fileSliceActionsSchema,
 })
 type FileSlice = z.infer<typeof fileSliceSchema>
 
-export type { FileSlice, FileSliceData }
-export { fileSliceActionsSchema, fileSliceDataSchema, fileSliceSchema, fileSliceTypeSchema }
+export type { FileSlice, FileSliceData, FileSliceType }
+export { fileSliceActionsSchema, fileSliceDataObjectSchema, fileSliceDataSchema, fileSliceSchema, fileSliceTypeSchema }
