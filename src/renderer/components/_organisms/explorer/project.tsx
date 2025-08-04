@@ -1,6 +1,5 @@
 import { ProjectTreeBranch, ProjectTreeLeaf, ProjectTreeRoot } from '@components/_molecules/project-tree'
 import { FolderIcon } from '@root/renderer/assets'
-import { projectSelectors } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
@@ -20,8 +19,6 @@ const Project = () => {
   } = useOpenPLCStore()
   const [isEditing, setIsEditing] = useState(false)
   const [inputValue, setInputValue] = useState<string>(name)
-
-  const projectPath = projectSelectors.useProjectPath()
 
   const handleCreateTab = (data: TabsProps) => {
     openFile(data)
@@ -92,7 +89,7 @@ const Project = () => {
                   onClick={() =>
                     handleCreateTab({
                       name: data.name,
-                      path: `${projectPath}/pous/functions/${data.name}.json`,
+                      path: `/pous/functions/${data.name}.json`,
                       elementType: { type: 'function', language: data.language },
                     })
                   }
@@ -112,7 +109,7 @@ const Project = () => {
                   onClick={() =>
                     handleCreateTab({
                       name: data.name,
-                      path: `${projectPath}/pous/function-blocks/${data.name}.json`,
+                      path: `/pous/function-blocks/${data.name}.json`,
                       elementType: { type: 'function-block', language: data.language },
                     })
                   }
@@ -132,7 +129,7 @@ const Project = () => {
                   onClick={() =>
                     handleCreateTab({
                       name: data.name,
-                      path: `${projectPath}/pous/programs/${data.name}.json`,
+                      path: `/pous/programs/${data.name}.json`,
                       elementType: { type: 'program', language: data.language },
                     })
                   }

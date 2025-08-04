@@ -255,12 +255,10 @@ export const createSharedSlice: StateCreator<
         return
       }
 
-      const projectPath = getState().project.meta.path
-
       const modalData: DeletePou = {
         type: 'pou',
         file: pou.data.name,
-        path: `${projectPath}/pous/${pou.type}s/${pou.data.name}.json`,
+        path: `/pous/${pou.type}s/${pou.data.name}.json`,
         pou,
       }
 
@@ -309,7 +307,7 @@ export const createSharedSlice: StateCreator<
       getState().fileActions.addFile({
         name: propsToCreateDatatype.name,
         type: 'data-type',
-        filePath: `data/datatypes/${propsToCreateDatatype.name}`,
+        filePath: `/data/datatypes/${propsToCreateDatatype.name}`,
       })
 
       // Add and set the editor
@@ -364,12 +362,10 @@ export const createSharedSlice: StateCreator<
         return
       }
 
-      const projectPath = getState().project.meta.path
-
       const modalData: DeleteDatatype = {
         type: 'datatype',
         file: datatype.name,
-        path: `${projectPath}/datatypes/${datatype.name}`,
+        path: `/datatypes/${datatype.name}`,
       }
 
       getState().modalActions.openModal('confirm-delete-element', modalData)
@@ -458,7 +454,7 @@ export const createSharedSlice: StateCreator<
             getState().fileActions.addFile({
               name: tabToBeCreated.name,
               type: 'pou',
-              filePath: `${data.meta.path}/pous/programs/${tabToBeCreated.name}.json`,
+              filePath: `/pous/programs/${tabToBeCreated.name}.json`,
             })
 
             // Add and set editor
@@ -584,8 +580,10 @@ export const createSharedSlice: StateCreator<
         }
       }
 
+      window.bridge.rebuildMenu()
+
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
-      getState().workspaceActions.setEditingState('unsaved')
+
       getState().projectActions.setProject({
         meta: {
           name: dataToCreateProjectFile.name,
@@ -594,10 +592,10 @@ export const createSharedSlice: StateCreator<
         },
         data: result.data.content.project.data,
       })
-      console.log('Project created:', result.data.content)
-      getState().projectActions.setPous(result.data.content.pous)
 
-      result.data.content.project.data.pous.forEach((pou) => {
+      const pous = result.data.content.pous
+      getState().projectActions.setPous(pous)
+      pous.forEach((pou) => {
         if (pou.data.language === 'fbd') {
           getState().fbdFlowActions.addFBDFlow({
             name: pou.data.name,
@@ -619,7 +617,38 @@ export const createSharedSlice: StateCreator<
         }
       })
 
-      window.bridge.rebuildMenu()
+      getState().workspaceActions.setEditingState('unsaved')
+
+      const mainPou = pous.find((pou) => pou.data.name === 'main' && pou.type === 'program')
+      if (mainPou) {
+        const tabToBeCreated: TabsProps = {
+          name: mainPou.data.name,
+          path: '/pous/programs/main',
+          elementType: { type: 'program', language: mainPou.data.language },
+        }
+
+        // Add the file to the file slice
+        getState().fileActions.addFile({
+          name: tabToBeCreated.name,
+          type: 'pou',
+          filePath: `/pous/programs/${tabToBeCreated.name}.json`,
+        })
+
+        // Add and set editor
+        const model = CreateEditorObjectFromTab(tabToBeCreated)
+        getState().editorActions.addModel(model)
+        getState().editorActions.setEditor(model)
+
+        // Add and set tab
+        getState().tabsActions.updateTabs(tabToBeCreated)
+        getState().tabsActions.setSelectedTab(tabToBeCreated.name)
+
+        // Set selected project tree leaf
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: mainPou.data.name,
+          type: 'pou',
+        })
+      }
 
       toast({
         title: 'The project was created successfully!',

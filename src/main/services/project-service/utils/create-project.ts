@@ -186,7 +186,7 @@ const createProjectDefaultStructure = (
     }
   }
 
-  if (content.project) content.project?.data.pous.push(pou)
+  content.pous.push(pou)
 
   return {
     success: true,
