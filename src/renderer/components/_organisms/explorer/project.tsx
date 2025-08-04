@@ -3,38 +3,26 @@ import { FolderIcon } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { TabsProps } from '@root/renderer/store/slices'
 import { extractSearchQuery } from '@root/renderer/store/slices/search/utils'
-import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { CreatePLCElement } from '../../_features/[workspace]/create-element'
 
 const Project = () => {
   const {
+    searchQuery,
     project: {
       data: { pous, dataTypes, configuration },
       meta: { name },
     },
     projectActions: { updateMetaName },
-    tabsActions: { updateTabs },
-    editorActions: { setEditor, addModel, getEditorFromEditors },
-    searchQuery,
+    sharedWorkspaceActions: { openFile },
   } = useOpenPLCStore()
-  const handleCreateTab = ({ elementType, name, path }: TabsProps) => {
-    const tabToBeCreated = { name, path, elementType }
-    updateTabs(tabToBeCreated)
-
-    const editor = getEditorFromEditors(tabToBeCreated.name)
-    if (!editor) {
-      const model = CreateEditorObjectFromTab(tabToBeCreated)
-      addModel(model)
-      setEditor(model)
-      return
-    }
-    addModel(editor)
-    setEditor(editor)
-  }
   const [isEditing, setIsEditing] = useState(false)
   const [inputValue, setInputValue] = useState<string>(name)
+
+  const handleCreateTab = (data: TabsProps) => {
+    openFile(data)
+  }
 
   const handleBlur = () => {
     setIsEditing(false)

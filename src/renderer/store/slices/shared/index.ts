@@ -49,26 +49,22 @@ export type SharedSlice = {
     delete: (data: DeleteDatatype) => BasicSharedSliceResponse
   }
   sharedWorkspaceActions: {
+    // Clear all states when closing a project
     clearStatesOnCloseProject: () => void
+    // Close project operation
     closeProject: () => void
+    // Open project operations
     handleOpenProjectRequest: (data: IProjectServiceResponse['data']) => void
-    openProject: () => Promise<{
-      success: boolean
-      error?: { title: string; description: string }
-    }>
-    openProjectByPath: (projectPath: string) => Promise<{
-      success: boolean
-      error?: { title: string; description: string }
-    }>
-    openRecentProject: (response: IProjectServiceResponse) => {
-      success: boolean
-      error?: { title: string; description: string }
-    }
-    createProject: (dataToCreateProjectFile: CreateProjectFileProps) => Promise<{
-      success: boolean
-      error?: { title: string; description: string }
-    }>
+    openProject: () => Promise<BasicSharedSliceResponse>
+    openProjectByPath: (projectPath: string) => Promise<BasicSharedSliceResponse>
+    openRecentProject: (response: IProjectServiceResponse) => BasicSharedSliceResponse
+    // Create project operation
+    createProject: (dataToCreateProjectFile: CreateProjectFileProps) => Promise<BasicSharedSliceResponse>
+    // Save project operation
     saveProject: (project: ProjectState, device: DeviceState['deviceDefinitions']) => Promise<ISaveDataResponse>
+    // File operations
+    openFile: (data: TabsProps) => BasicSharedSliceResponse
+    closeFile: (name: string) => BasicSharedSliceResponse & { data?: { tabs: TabsProps[] } }
   }
 }
 
@@ -552,6 +548,7 @@ export const createSharedSlice: StateCreator<
         },
         data: result.data.content.project.data,
       })
+      console.log('Project created:', result.data.content)
       getState().projectActions.setPous(result.data.content.pous)
 
       result.data.content.project.data.pous.forEach((pou) => {
@@ -677,6 +674,24 @@ export const createSharedSlice: StateCreator<
       }
 
       return { success, reason }
+    },
+
+    openFile: ({ name, path, elementType }: TabsProps) => {
+      const editorTabToBeCreated = { name, path, elementType }
+      getState().tabsActions.updateTabs(editorTabToBeCreated)
+
+      const editor = getState().editorActions.getEditorFromEditors(editorTabToBeCreated.name)
+      const editorModel: EditorModel = editor || CreateEditorObjectFromTab(editorTabToBeCreated)
+
+      getState().editorActions.addModel(editorModel)
+      getState().editorActions.setEditor(editorModel)
+      return { success: true }
+    },
+    closeFile: (name) => {
+      const { tabs: filteredTabs } = getState().tabsActions.removeTab(name)
+      getState().editorActions.removeModel(name)
+
+      return { success: true, data: { tabs: filteredTabs } }
     },
   },
 })

@@ -41,6 +41,7 @@ class ProjectService {
         error: projectDefaultDirectoriesResponse.error,
       }
     }
+    console.log('Project directories created:', projectDefaultDirectoriesResponse.data.content)
     await this.updateProjectHistory(data.path)
     return {
       success: true,
