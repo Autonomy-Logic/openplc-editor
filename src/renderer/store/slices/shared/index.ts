@@ -1,6 +1,7 @@
 import { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { DeleteDatatype, DeletePou } from '@root/renderer/components/_organisms/modals'
+import { SaveFileChangeModalProps } from '@root/renderer/components/_organisms/modals/save-file-changes-modal'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import {
   PLCArrayDatatype,
@@ -8,11 +9,13 @@ import {
   PLCProjectSchema,
   PLCStructureDatatype,
 } from '@root/types/PLC/open-plc'
+import { pouTypesArr } from '@root/types/PLC/pous'
 import { StateCreator } from 'zustand'
 
 import { deviceConfigurationSchema, devicePinSchema, DeviceSlice, DeviceState } from '../device'
 import { EditorModel, EditorSlice } from '../editor'
 import { FBDFlowSlice, FBDFlowType } from '../fbd'
+import { FileSlice, FileSliceType } from '../files'
 import { LadderFlowSlice, LadderFlowType } from '../ladder'
 import { LibrarySlice } from '../library'
 import { ModalSlice } from '../modal'
@@ -64,7 +67,9 @@ export type SharedSlice = {
     saveProject: (project: ProjectState, device: DeviceState['deviceDefinitions']) => Promise<ISaveDataResponse>
     // File operations
     openFile: (data: TabsProps) => BasicSharedSliceResponse
-    closeFile: (name: string) => BasicSharedSliceResponse & { data?: { tabs: TabsProps[] } }
+    closeFileRequest: (name: string | null) => void
+    closeFile: (name: string) => BasicSharedSliceResponse
+    saveFile: (name: string) => BasicSharedSliceResponse
   }
 }
 
@@ -78,6 +83,7 @@ export const createSharedSlice: StateCreator<
     LadderFlowSlice &
     WorkspaceSlice &
     DeviceSlice &
+    FileSlice &
     SharedSlice,
   [],
   [],
@@ -180,16 +186,6 @@ export const createSharedSlice: StateCreator<
         })
       }
 
-      getState().editorActions.addModel(editorData)
-      getState().editorActions.setEditor(editorData)
-      getState().tabsActions.updateTabs({
-        name: propsToCreatePou.name,
-        elementType: {
-          type: propsToCreatePou.type,
-          language: propsToCreatePou.language,
-        },
-      })
-
       if (propsToCreatePou.language === 'fbd') {
         getState().fbdFlowActions.addFBDFlow({
           name: propsToCreatePou.name,
@@ -214,6 +210,28 @@ export const createSharedSlice: StateCreator<
       if (propsToCreatePou.type !== 'program')
         getState().libraryActions.addLibrary(propsToCreatePou.name, propsToCreatePou.type)
 
+      // Add the file to the file slice
+      getState().fileActions.addFile({
+        name: propsToCreatePou.name,
+        type: 'pou',
+        filePath: path,
+      })
+
+      // Add and set the editor
+      getState().editorActions.addModel(editorData)
+      getState().editorActions.setEditor(editorData)
+
+      // Add and set the tab
+      getState().tabsActions.updateTabs({
+        name: propsToCreatePou.name,
+        elementType: {
+          type: propsToCreatePou.type,
+          language: propsToCreatePou.language,
+        },
+      })
+      getState().tabsActions.setSelectedTab(propsToCreatePou.name)
+
+      // Set selected project tree leaf
       getState().workspaceActions.setSelectedProjectTreeLeaf({
         label: propsToCreatePou.name,
         type: 'pou',
@@ -286,6 +304,15 @@ export const createSharedSlice: StateCreator<
   datatypeActions: {
     create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => {
       getState().projectActions.createDatatype({ data: propsToCreateDatatype })
+
+      // Add the file to the file slice
+      getState().fileActions.addFile({
+        name: propsToCreateDatatype.name,
+        type: 'data-type',
+        filePath: `data/datatypes/${propsToCreateDatatype.name}`,
+      })
+
+      // Add and set the editor
       getState().editorActions.addModel({
         type: 'plc-datatype',
         meta: { name: propsToCreateDatatype.name, derivation: propsToCreateDatatype.derivation },
@@ -302,10 +329,15 @@ export const createSharedSlice: StateCreator<
           description: '',
         },
       })
+
+      // Add and set the tab
       getState().tabsActions.updateTabs({
         name: propsToCreateDatatype.name,
         elementType: { type: 'data-type', derivation: propsToCreateDatatype.derivation },
       })
+      getState().tabsActions.setSelectedTab(propsToCreateDatatype.name)
+
+      // Set selected project tree leaf
       getState().workspaceActions.setSelectedProjectTreeLeaf({
         label: propsToCreateDatatype.name,
         type: 'datatype',
@@ -421,10 +453,24 @@ export const createSharedSlice: StateCreator<
               path: '/pous/programs/main',
               elementType: { type: 'program', language: mainPou.data.language },
             }
+
+            // Add the file to the file slice
+            getState().fileActions.addFile({
+              name: tabToBeCreated.name,
+              type: 'pou',
+              filePath: `${data.meta.path}/pous/programs/${tabToBeCreated.name}.json`,
+            })
+
+            // Add and set editor
             const model = CreateEditorObjectFromTab(tabToBeCreated)
-            getState().tabsActions.updateTabs(tabToBeCreated)
             getState().editorActions.addModel(model)
             getState().editorActions.setEditor(model)
+
+            // Add and set tab
+            getState().tabsActions.updateTabs(tabToBeCreated)
+            getState().tabsActions.setSelectedTab(tabToBeCreated.name)
+
+            // Set selected project tree leaf
             getState().workspaceActions.setSelectedProjectTreeLeaf({
               label: mainPou.data.name,
               type: 'pou',
@@ -676,22 +722,112 @@ export const createSharedSlice: StateCreator<
       return { success, reason }
     },
 
+    // =========== File operations ===========
     openFile: ({ name, path, elementType }: TabsProps) => {
       const editorTabToBeCreated = { name, path, elementType }
+
+      if (!editorTabToBeCreated.path)
+        return {
+          success: false,
+          error: {
+            title: 'Error opening file',
+            description: 'The file path is not defined.',
+          },
+        }
+
+      // Define file at the file slice
+      const fileType: FileSliceType = pouTypesArr.includes(
+        editorTabToBeCreated.elementType.type as (typeof pouTypesArr)[number],
+      )
+        ? 'pou'
+        : editorTabToBeCreated.elementType.type === 'data-type'
+          ? 'data-type'
+          : 'device'
+      getState().fileActions.addFile({
+        name: editorTabToBeCreated.name,
+        type: fileType,
+        filePath: editorTabToBeCreated.path,
+      })
+
+      // Define editor model at the editor slice
+      const editor =
+        getState().editorActions.getEditorFromEditors(editorTabToBeCreated.name) ||
+        CreateEditorObjectFromTab(editorTabToBeCreated)
+      getState().editorActions.addModel(editor)
+      getState().editorActions.setEditor(editor)
+
+      // Define tab at the tabs slice
       getState().tabsActions.updateTabs(editorTabToBeCreated)
+      getState().tabsActions.setSelectedTab(editor.meta.name)
 
-      const editor = getState().editorActions.getEditorFromEditors(editorTabToBeCreated.name)
-      const editorModel: EditorModel = editor || CreateEditorObjectFromTab(editorTabToBeCreated)
-
-      getState().editorActions.addModel(editorModel)
-      getState().editorActions.setEditor(editorModel)
       return { success: true }
     },
+    closeFileRequest: (name) => {
+      if (!name) {
+        toast({
+          title: 'Error closing file',
+          description: 'File name is not defined.',
+          variant: 'fail',
+        })
+        return
+      }
+
+      const { file } = getState().fileActions.getFile({ name })
+      if (!file) {
+        toast({
+          title: 'Error closing file',
+          description: `File with name ${name} does not exist.`,
+          variant: 'fail',
+        })
+        return
+      }
+      if (!file.saved) {
+        const modalData: Pick<SaveFileChangeModalProps, 'fileName' | 'validationContext'> = {
+          fileName: name,
+          validationContext: 'close-file',
+        }
+        getState().modalActions.openModal('save-changes-file', modalData)
+        return
+      }
+
+      getState().sharedWorkspaceActions.closeFile(name)
+    },
     closeFile: (name) => {
+      // Remove the file from the file slice
+      getState().fileActions.removeFile({ name })
+
+      // Remove the tab from the tabs slice and the editor model from the editor slice
       const { tabs: filteredTabs } = getState().tabsActions.removeTab(name)
       getState().editorActions.removeModel(name)
 
-      return { success: true, data: { tabs: filteredTabs } }
+      // Set the current tab and the current editor
+      const nextTab = filteredTabs[filteredTabs.length - 1]
+      if (!nextTab) {
+        getState().editorActions.setEditor({
+          type: 'available',
+          meta: { name: '' },
+        })
+        getState().tabsActions.setSelectedTab('')
+        return { success: true }
+      }
+      const editor = getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
+      getState().editorActions.setEditor(editor)
+      getState().tabsActions.setSelectedTab(nextTab.name)
+
+      return { success: true }
+    },
+    saveFile: (name) => {
+      const { file } = getState().fileActions.getFile({ name: name })
+      if (!file) {
+        toast({
+          title: 'Error saving file',
+          description: `File with name ${name} does not exist.`,
+          variant: 'fail',
+        })
+        return { success: false }
+      }
+
+      return { success: true }
     },
   },
 })

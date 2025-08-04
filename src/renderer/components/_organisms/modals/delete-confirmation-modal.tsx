@@ -1,7 +1,6 @@
 import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
 import { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { useHandleRemoveTab } from '@root/renderer/hooks'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { RungLadderState } from '@root/renderer/store/slices'
 import { PLCVariable } from '@root/types/PLC'
@@ -44,9 +43,8 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
     modalActions: { onOpenChange, closeModal },
     pouActions: { delete: deletePouAction },
     datatypeActions: { delete: deleteDatatypeAction },
+    sharedWorkspaceActions: { closeFile },
   } = useOpenPLCStore()
-
-  const { handleRemoveTab } = useHandleRemoveTab()
 
   const handleDeleteLadderRung = (data: DeleteLadderRung) => {
     const { pou, rung } = data
@@ -115,7 +113,7 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
       return
     }
 
-    handleRemoveTab(targetLabel)
+    closeFile(targetLabel)
     toast({
       title: 'Datatype deleted success!',
       description: `Datatype "${targetLabel}" was successfully deleted.`,
@@ -136,7 +134,7 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
       return
     }
 
-    handleRemoveTab(targetLabel)
+    closeFile(targetLabel)
     toast({
       title: 'POU deleted success!',
       description: `POU "${targetLabel}" was successfully deleted.`,

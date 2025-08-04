@@ -1,84 +1,45 @@
 import { WarningIcon } from '@root/renderer/assets/icons/interface/Warning'
-import { useQuitApp } from '@root/renderer/hooks/use-quit-app'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ComponentPropsWithoutRef } from 'react'
 
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
-export type SaveChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
+export type SaveFileChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & {
   isOpen: boolean
-  validationContext: 'create-project' | 'open-project' | 'open-recent-project' | 'close-project' | 'close-app'
-  recentResponse?: IProjectServiceResponse
+  fileName: string
+  validationContext: 'close-file'
 }
 
-const SaveChangesModal = ({ isOpen, validationContext, recentResponse, ...rest }: SaveChangeModalProps) => {
+const SaveFileChangesModal = ({ isOpen, validationContext, fileName, ...rest }: SaveFileChangeModalProps) => {
   const {
-    project,
-    deviceDefinitions,
-    workspaceActions: { setEditingState },
-    modalActions: { closeModal, onOpenChange, openModal },
-    sharedWorkspaceActions: { clearStatesOnCloseProject, openProject, openRecentProject, saveProject },
+    modalActions: { closeModal, onOpenChange },
+    sharedWorkspaceActions: { saveFile },
   } = useOpenPLCStore()
 
-  const { handleQuitApp, handleCancelQuitApp } = useQuitApp()
-
-  const onClose = () => {
-    clearStatesOnCloseProject()
-  }
-
-  const handleAcceptCloseModal = async (operation: 'save' | 'not-saving') => {
+  const handleAcceptCloseModal = (operation: 'save' | 'not-saving') => {
     closeModal()
 
     if (operation === 'save') {
-      const { success } = await saveProject(project, deviceDefinitions)
+      const { success } = saveFile(fileName)
       if (!success) {
         return
       }
-    }
-
-    switch (validationContext) {
-      case 'create-project':
-        onClose()
-        openModal('create-project', null)
-        return
-      case 'open-project':
-        await openProject()
-        return
-      case 'open-recent-project': {
-        if (!recentResponse) {
-          console.error('No recent response provided for opening recent project.')
-          return
-        }
-        openRecentProject(recentResponse)
-        return
-      }
-      case 'close-project':
-        setEditingState('initial-state')
-        onClose()
-        return
-      case 'close-app':
-        handleQuitApp()
-        return
-      default:
-        break
     }
   }
 
   const handleCancelModal = () => {
     closeModal()
-    if (validationContext === 'close-app') handleCancelQuitApp()
   }
 
   return (
     <Modal open={isOpen} onOpenChange={(open) => onOpenChange('save-changes-project', open)} {...rest}>
       <ModalContent className='flex h-[420px] w-[340px] select-none flex-col items-center justify-evenly rounded-lg'>
-        <ModalTitle className='hidden'>Save project changes</ModalTitle>
+        <ModalTitle className='hidden'>Save file changes</ModalTitle>
         <div className='flex h-[350px] select-none flex-col items-center gap-6'>
           <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px]' />
           <div>
             <p className='text-m w-full text-center font-bold text-gray-600 dark:text-neutral-100'>
-              There are unsaved changes in your <strong>project</strong>. Do you want to save before closing?
+              There are unsaved changes in your <strong>file</strong>. Do you want to save before closing?
             </p>
           </div>
 
@@ -113,4 +74,4 @@ const SaveChangesModal = ({ isOpen, validationContext, recentResponse, ...rest }
     </Modal>
   )
 }
-export { SaveChangesModal }
+export { SaveFileChangesModal }
