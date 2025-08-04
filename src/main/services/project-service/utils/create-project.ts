@@ -78,10 +78,16 @@ const createProjectDefaultStructure = (
   dataToCreateProjectFile: CreateProjectFileProps,
 ): CreateProjectDefaultDirectoriesResponse => {
   const content: {
-    project?: PLCProject
-    deviceConfiguration?: DeviceConfiguration
-    devicePinMapping?: DevicePin[]
-  } = {}
+    project: PLCProject | null
+    pous: PLCPou[]
+    deviceConfiguration: DeviceConfiguration | null
+    devicePinMapping: DevicePin[]
+  } = {
+    project: null,
+    pous: [],
+    deviceConfiguration: null,
+    devicePinMapping: [],
+  }
 
   /**
    * Create the default directories in the project structure
