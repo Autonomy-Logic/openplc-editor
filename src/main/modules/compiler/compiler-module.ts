@@ -373,8 +373,39 @@ class CompilerModule {
     })
   }
 
-  // Check if the core components are installed
-  // WARNING: This method assume that the arduino core control file is already created.
+  // TODO: This method is used to update the index of the Arduino core.
+  // We should validate if this is necessary and if it works correctly.
+  async handleCoreUpdateIndex(handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void) {
+    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
+      let binaryPath = this.arduinoCliBinaryPath
+      const [flag, configFilePath] = this.arduinoCliBaseParameters
+
+      if (CompilerModule.HOST_PLATFORM === 'win32') {
+        // INFO: On Windows, we need to add the .exe extension to the binary path.
+        binaryPath += '.exe'
+      }
+      const executeCommand = spawn(binaryPath, ['core', 'update-index', flag, `"${configFilePath}"`])
+
+      let stderrData = ''
+
+      executeCommand.stdout?.on('data', (data: Buffer) => {
+        handleOutputData(data)
+      })
+      executeCommand.stderr?.on('data', (data: Buffer) => {
+        stderrData += data.toString()
+      })
+      executeCommand.on('close', (code) => {
+        if (code === 0) {
+          resolve({
+            success: true,
+          })
+        } else {
+          reject(new Error(`Arduino CLI process exited with code ${code}\n${stderrData}`))
+        }
+      })
+    })
+  }
+
   async handleCoreInstallation(
     boardCore: string | null,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
@@ -409,7 +440,6 @@ class CompilerModule {
       })
       executeCommand.on('close', (code) => {
         if (code === 0) {
-          handleOutputData(`Core ${boardCore} installed.`, 'info')
           resolve({
             success: true,
           })
