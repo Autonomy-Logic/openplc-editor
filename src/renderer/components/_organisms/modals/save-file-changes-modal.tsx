@@ -17,7 +17,7 @@ const SaveFileChangesModal = ({ isOpen, validationContext, fileName, ...rest }: 
   } = useOpenPLCStore()
 
   /**
-   * TODO: Add rollback to file changes if the save operation is not-saving and the file is only closed.
+   * TODO: Add rollback to file changes if the save operation is "not-saving" and the file is only closed.
    */
   const handleAcceptCloseModal = async (operation: 'save' | 'not-saving') => {
     closeModal()
@@ -55,14 +55,14 @@ const SaveFileChangesModal = ({ isOpen, validationContext, fileName, ...rest }: 
               >
                 Save and close
               </button>
-              <button
+              {/* <button
                 onClick={() => {
                   void handleAcceptCloseModal('not-saving')
                 }}
                 className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center font-medium text-neutral-1000 dark:bg-neutral-850 dark:text-neutral-100'
               >
                 Close without saving
-              </button>
+              </button> */}
             </div>
             <button
               onClick={() => handleCancelModal()}
