@@ -13,7 +13,7 @@ export const FileMenu = () => {
     deviceDefinitions,
     selectedTab,
     modalActions: { openModal },
-    sharedWorkspaceActions: { closeProject, openProject, saveProject, closeFileRequest },
+    sharedWorkspaceActions: { closeProject, openProject, saveProject, saveFile, closeFileRequest },
   } = useOpenPLCStore()
   const { editingState } = workspace
   const { handleExportProject } = useCompiler()
@@ -62,9 +62,13 @@ export const FileMenu = () => {
               <span className={ACCELERATOR}>{'Ctrl + O'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Separator className={SEPARATOR} />
-            <MenuPrimitive.Item className={ITEM} onClick={() => void saveProject(project, deviceDefinitions)}>
+            <MenuPrimitive.Item className={ITEM} onClick={() => selectedTab && void saveFile(selectedTab)}>
               <span>{i18n.t('menu:file.submenu.save')}</span>
               <span className={ACCELERATOR}>{'Ctrl + S'}</span>
+            </MenuPrimitive.Item>
+            <MenuPrimitive.Item className={ITEM} onClick={() => void saveProject(project, deviceDefinitions)}>
+              <span>{i18n.t('menu:file.submenu.saveProject')}</span>
+              <span className={ACCELERATOR}>{'Ctrl + Alt + S'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} disabled>
               <span>{i18n.t('menu:file.submenu.saveAs')}</span>

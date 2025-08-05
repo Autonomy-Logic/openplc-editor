@@ -8,7 +8,7 @@ export default function FbdEditor() {
     editor,
     fbdFlows,
     fbdFlowActions,
-    workspaceActions: { setEditingState },
+    fileActions: { updateFile },
     projectActions: { updatePou },
   } = useOpenPLCStore()
   const flow = fbdFlows.find((flow) => flow.name === editor.meta.name)
@@ -31,11 +31,11 @@ export default function FbdEditor() {
       },
     })
 
-    /**
-     * TODO: Verify if this is method is declared
-     */
     fbdFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
-    setEditingState('unsaved')
+    updateFile({
+      name: editor.meta.name,
+      saved: false,
+    })
   }, [flowUpdated])
 
   return (

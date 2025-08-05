@@ -329,6 +329,28 @@ class ProjectService {
       message: i18n.t('projectServiceResponses:saveProject.success.successToSaveFile.message'),
     }
   }
+
+  async saveFile(filePath: string, content: unknown): Promise<IProjectServiceResponse> {
+    try {
+      await promises.writeFile(filePath, JSON.stringify(content, null, 2))
+      return {
+        success: true,
+        message: i18n.t('projectServiceResponses:saveProject.success.successToSaveFile.message'),
+      }
+    } catch (error) {
+      console.error('Error saving file:', error)
+      return {
+        success: false,
+        error: {
+          title: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.title'),
+          description: i18n.t('projectServiceResponses:saveProject.errors.failedToSaveFile.description', {
+            filePath,
+          }),
+          error,
+        },
+      }
+    }
+  }
 }
 
 export { ProjectService }

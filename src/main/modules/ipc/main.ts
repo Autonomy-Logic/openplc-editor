@@ -59,6 +59,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.handle('project:open', this.handleProjectOpen)
     this.ipcMain.handle('project:path-picker', this.handleProjectPathPicker)
     this.ipcMain.handle('project:save', this.handleProjectSave)
+    this.ipcMain.handle('project:save-file', this.handleFileSave)
     this.ipcMain.handle('project:open-by-path', this.handleProjectOpenByPath)
 
     // Pou-related handlers
@@ -131,6 +132,8 @@ class MainProcessBridge implements MainIpcModule {
       console.error('Error getting project path:', error)
     }
   }
+  handleFileSave = async (_event: IpcMainInvokeEvent, filePath: string, content: unknown) =>
+    await this.projectService.saveFile(filePath, content)
   handleProjectSave = (_event: IpcMainInvokeEvent, { projectPath, content }: IDataToWrite) =>
     this.projectService.saveProject({ projectPath, content })
   handleProjectOpenByPath = async (_event: IpcMainInvokeEvent, projectPath: string) => {
