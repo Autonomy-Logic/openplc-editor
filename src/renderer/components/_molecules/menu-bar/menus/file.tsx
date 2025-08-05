@@ -68,11 +68,11 @@ export const FileMenu = () => {
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} onClick={() => void saveProject(project, deviceDefinitions)}>
               <span>{i18n.t('menu:file.submenu.saveProject')}</span>
-              <span className={ACCELERATOR}>{'Ctrl + Alt + S'}</span>
+              <span className={ACCELERATOR}>{'Ctrl + Shift + S'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} disabled>
               <span>{i18n.t('menu:file.submenu.saveAs')}</span>
-              <span className={ACCELERATOR}>{'Ctrl + Shift + S'}</span>
+              <span className={ACCELERATOR}>{'Ctrl + Shift + A'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} onClick={() => void closeFileRequest(selectedTab)}>
               <span>{i18n.t('menu:file.submenu.closeTab')}</span>
@@ -91,7 +91,7 @@ export const FileMenu = () => {
             <MenuPrimitive.Separator className={SEPARATOR} />
             <MenuPrimitive.Item className={ITEM} disabled>
               <span>{i18n.t('menu:file.submenu.pageSetup')}</span>
-              <span className={ACCELERATOR}>"Ctrl + Alt + P"</span>
+              <span className={ACCELERATOR}>{'Ctrl + Alt + P'}</span>
             </MenuPrimitive.Item>
             <MenuPrimitive.Item className={ITEM} disabled>
               <span>{i18n.t('menu:file.submenu.preview')}</span>
