@@ -28,7 +28,7 @@ const AcceleratorHandler = () => {
     selectedTab,
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
-    sharedWorkspaceActions: { closeProject, openProject, openRecentProject, saveProject, closeFileRequest },
+    sharedWorkspaceActions: { closeProject, openProject, openRecentProject, saveFile, saveProject, closeFileRequest },
     workspaceActions: { switchAppTheme, toggleMaximizedWindow },
     pouActions: { deleteRequest: deletePouRequest },
     datatypeActions: { deleteRequest: deleteDatatypeRequest },
@@ -218,6 +218,20 @@ const AcceleratorHandler = () => {
 
     return () => {
       void window.bridge.removeCloseTabListener()
+    }
+  }, [selectedTab])
+
+  /**
+   * -- Save file
+   */
+  useEffect(() => {
+    window.bridge.saveFileAccelerator((_event) => {
+      if (!selectedTab) return
+      void saveFile(selectedTab)
+    })
+
+    return () => {
+      window.bridge.removeSaveFileAccelerator()
     }
   }, [selectedTab])
 

@@ -58,6 +58,10 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-accelerator')
   }
 
+  handleSaveFile() {
+    this.mainWindow.webContents.send('project:save-file-accelerator')
+  }
+
   handleExportProjectRequest(xmlFormatTarget: 'old-editor' | 'codesys') {
     this.mainWindow.webContents.send('compiler:export-project-request', xmlFormatTarget)
   }
@@ -167,6 +171,11 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.save'),
           accelerator: 'Cmd+S',
+          click: () => this.handleSaveFile(),
+        },
+        {
+          label: i18n.t('menu:file.submenu.saveProject'),
+          accelerator: 'Cmd+Alt+S',
           click: () => this.handleSaveProject(),
         },
         {
@@ -427,6 +436,11 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.save'),
             accelerator: 'Ctrl+S',
+            click: () => this.handleSaveFile(),
+          },
+          {
+            label: i18n.t('menu:file.submenu.saveProject'),
+            accelerator: 'Ctrl+Alt+S',
             click: () => this.handleSaveProject(),
           },
           {

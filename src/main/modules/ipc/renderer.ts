@@ -61,7 +61,11 @@ const rendererProcessBridge = {
   removeDeleteFileListener: () => ipcRenderer.removeAllListeners('workspace:delete-file-accelerator'),
   removeOpenProjectAccelerator: () => ipcRenderer.removeAllListeners('project:open-project-request'),
   removeOpenRecentListener: () => ipcRenderer.removeAllListeners('project:open-recent-accelerator'),
+  removeSaveFileAccelerator: () => ipcRenderer.removeAllListeners('project:save-file-accelerator'),
   removeSaveProjectAccelerator: () => ipcRenderer.removeAllListeners('project:save-accelerator'),
+  saveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('project:save-file', filePath, content),
+  saveFileAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-file-accelerator', callback),
   saveProject: (dataToWrite: IDataToWrite): Promise<ISaveDataResponse> =>
     ipcRenderer.invoke('project:save', dataToWrite),
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => ipcRenderer.on('project:save-accelerator', callback),

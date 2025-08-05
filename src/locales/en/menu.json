@@ -16,7 +16,8 @@
           "trafficLightFBD": "7: Traffic_Light_FBD"
         }
       },
-      "save": "Save",
+      "save": "Save File",
+      "saveProject": "Save Project",
       "saveAs": "Save As",
       "closeTab": "Close Tab",
       "closeProject": "Close Project",

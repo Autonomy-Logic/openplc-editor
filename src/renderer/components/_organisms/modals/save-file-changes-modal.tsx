@@ -13,18 +13,20 @@ export type SaveFileChangeModalProps = ComponentPropsWithoutRef<typeof Modal> & 
 const SaveFileChangesModal = ({ isOpen, validationContext, fileName, ...rest }: SaveFileChangeModalProps) => {
   const {
     modalActions: { closeModal, onOpenChange },
-    sharedWorkspaceActions: { saveFile },
+    sharedWorkspaceActions: { saveFile, closeFile },
   } = useOpenPLCStore()
 
-  const handleAcceptCloseModal = (operation: 'save' | 'not-saving') => {
+  /**
+   * TODO: Add rollback to file changes if the save operation is not-saving and the file is only closed.
+   */
+  const handleAcceptCloseModal = async (operation: 'save' | 'not-saving') => {
     closeModal()
 
     if (operation === 'save') {
-      const { success } = saveFile(fileName)
-      if (!success) {
-        return
-      }
+      await saveFile(fileName)
     }
+
+    closeFile(fileName)
   }
 
   const handleCancelModal = () => {

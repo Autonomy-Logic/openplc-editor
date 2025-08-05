@@ -6,6 +6,7 @@ import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC
 import {
   PLCArrayDatatype,
   PLCEnumeratedDatatype,
+  PLCPou,
   PLCProjectSchema,
   PLCStructureDatatype,
 } from '@root/types/PLC/open-plc'
@@ -69,7 +70,7 @@ export type SharedSlice = {
     openFile: (data: TabsProps) => BasicSharedSliceResponse
     closeFileRequest: (name: string | null) => void
     closeFile: (name: string) => BasicSharedSliceResponse
-    saveFile: (name: string) => BasicSharedSliceResponse
+    saveFile: (name: string) => Promise<BasicSharedSliceResponse>
   }
 }
 
@@ -365,7 +366,7 @@ export const createSharedSlice: StateCreator<
       const modalData: DeleteDatatype = {
         type: 'datatype',
         file: datatype.name,
-        path: `/datatypes/${datatype.name}`,
+        path: `datatypes/${datatype.name}`,
       }
 
       getState().modalActions.openModal('confirm-delete-element', modalData)
@@ -588,7 +589,7 @@ export const createSharedSlice: StateCreator<
         meta: {
           name: dataToCreateProjectFile.name,
           type: dataToCreateProjectFile.type,
-          path: dataToCreateProjectFile.path + '/project.json',
+          path: dataToCreateProjectFile.path,
         },
         data: result.data.content.project.data,
       })
@@ -845,7 +846,7 @@ export const createSharedSlice: StateCreator<
 
       return { success: true }
     },
-    saveFile: (name) => {
+    saveFile: async (name) => {
       const { file } = getState().fileActions.getFile({ name: name })
       if (!file) {
         toast({
@@ -856,6 +857,58 @@ export const createSharedSlice: StateCreator<
         return { success: false }
       }
 
+      let saveContent: PLCPou | undefined
+      switch (file.type) {
+        case 'pou':
+          saveContent = getState().project.data.pous.find((pou) => pou.data.name === name)
+          break
+        default:
+          break
+      }
+
+      if (!saveContent) {
+        toast({
+          title: 'Error saving file',
+          description: `File ${name} could not be saved. Content is missing.`,
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error saving file',
+            description: `File ${name} could not be saved. Content is missing.`,
+          },
+        }
+      }
+
+      const projectFilePath = getState().project.meta.path
+      const saveResponse = await window.bridge.saveFile(`${projectFilePath}/${file.filePath}`, saveContent)
+
+      if (!saveResponse.success) {
+        toast({
+          title: 'Error saving file',
+          description: `File ${name} could not be saved.`,
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error saving file',
+            description: saveResponse.error ? saveResponse.error : `File ${name} could not be saved.`,
+          },
+        }
+      }
+
+      getState().fileActions.updateFile({
+        name,
+        saved: true,
+      })
+
+      toast({
+        title: 'File saved',
+        description: `File ${name} has been saved successfully.`,
+        variant: 'default',
+      })
       return { success: true }
     },
   },
