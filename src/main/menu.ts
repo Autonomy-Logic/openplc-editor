@@ -175,12 +175,12 @@ export default class MenuBuilder {
         },
         {
           label: i18n.t('menu:file.submenu.saveProject'),
-          accelerator: 'Cmd+Alt+S',
+          accelerator: 'Cmd+Shift+S',
           click: () => this.handleSaveProject(),
         },
         {
           label: i18n.t('menu:file.submenu.saveAs'),
-          accelerator: 'Cmd+Shift+S',
+          accelerator: 'Cmd+Shift+A',
           click: () => {},
           enabled: false,
         },
@@ -206,7 +206,7 @@ export default class MenuBuilder {
         { type: 'separator' },
         {
           label: i18n.t('menu:file.submenu.pageSetup'),
-          accelerator: 'Cmd+Alt+P',
+          accelerator: 'Cmd+Option+P',
           enabled: false,
         },
         {
@@ -440,12 +440,12 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.saveProject'),
-            accelerator: 'Ctrl+Alt+S',
+            accelerator: 'Ctrl+Shift+S',
             click: () => this.handleSaveProject(),
           },
           {
             label: i18n.t('menu:file.submenu.saveAs'),
-            accelerator: 'Ctrl+Shift+S',
+            accelerator: 'Ctrl+Shift+A',
             enabled: false,
           },
           {
