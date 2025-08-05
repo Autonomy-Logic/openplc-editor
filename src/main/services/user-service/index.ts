@@ -8,6 +8,7 @@ import { promisify } from 'util'
 import { ARDUINO_DATA } from './data/arduino'
 import { HISTORY_DATA } from './data/history'
 import { SETTINGS_DATA } from './data/settings'
+import type { ArduinoPlatformData } from './user-service-types'
 
 /**
  * UserService class responsible for user settings and history management.
@@ -158,16 +159,15 @@ class UserService {
       console.error(`Error listing cores: ${String(stderr)}`)
       return
     }
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const cores = JSON.parse(stdout)
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    const coreControl = cores.platforms.map((core: { id: string; installed_version: string }) => ({
+    const coreListOutput = JSON.parse(stdout) as ArduinoPlatformData
+
+    const installedCoresFromListOutput = coreListOutput.platforms.map((core) => ({
       [core.id]: core.installed_version,
     }))
 
     await UserService.createDirectoryIfNotExists(pathToRuntimeFolder)
-    await UserService.createJSONFileIfNotExists(pathToArduinoCoreControlFile, coreControl as object)
+    await writeFile(pathToArduinoCoreControlFile, JSON.stringify(installedCoresFromListOutput, null, 2), { flag: 'w' })
 
     // This is a legacy file that is no longer used, should be removed in the next major release!!!
     const removeLegacy = promisify(rm)
