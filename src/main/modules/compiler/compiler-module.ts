@@ -226,7 +226,7 @@ class CompilerModule {
       ]
     } else {
       // INFO: If the board target is OpenPLC, we only copy the MatIEC library files.
-      filesToCopy = [cp(staticMatIECLibraryFilesPath, join(compilationPath, 'lib'), { recursive: true })]
+      filesToCopy = [cp(staticMatIECLibraryFilesPath, join(sourceTargetFolderPath, 'lib'), { recursive: true })]
     }
 
     try {
@@ -475,11 +475,12 @@ class CompilerModule {
         // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
         message: `Error checking tools availability: ${_error}`,
       })
+      return
     }
 
     // Step 1: Create basic directories
     try {
-      const createDirsResult = await this.createBasicDirectories(projectPath, boardTarget)
+      const createDirsResult = await this.createBasicDirectories(normalizedProjectPath, boardTarget)
       if (!createDirsResult.success) {
         _mainProcessPort.postMessage({
           logLevel: 'error',
@@ -553,6 +554,7 @@ class CompilerModule {
         logLevel: 'error',
         message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
       })
+      return
     }
 
     // Step 5: Generate debug files
@@ -565,6 +567,7 @@ class CompilerModule {
         logLevel: 'error',
         message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
       })
+      return
     }
 
     // -- Verify if the runtime target is Arduino or OpenPLC --
