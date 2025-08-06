@@ -90,6 +90,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
     project: {
       data: { pous, dataTypes },
     },
+    fileActions: { getFile },
   } = useOpenPLCStore()
   const [branchIsOpen, setBranchIsOpen] = useState(false)
   const { BranchIcon, label } = BranchSources[branchTarget]
@@ -99,6 +100,16 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
     branchTarget === 'device' ||
     (branchTarget === 'data-type' && dataTypes.length > 0)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
+
+  const { file: associatedFile } = getFile({ name: label || '' })
+  const handleLabel = useCallback(
+    (label: string | undefined) => {
+      if (!associatedFile || associatedFile?.saved) return label
+
+      return `* <i>${label}</i>`
+    },
+    [associatedFile],
+  )
 
   return (
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
@@ -124,7 +135,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
             'truncate font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
             branchIsOpen && 'font-medium text-neutral-1000 dark:text-white',
           )}
-          dangerouslySetInnerHTML={{ __html: label || '' }}
+          dangerouslySetInnerHTML={{ __html: handleLabel(label) || '' }}
         />
       </div>
 
@@ -238,12 +249,15 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     workspaceActions: { setSelectedProjectTreeLeaf },
     pouActions: { deleteRequest: deletePouRequest },
     datatypeActions: { deleteRequest: deleteDatatypeRequest },
+    fileActions: { getFile },
   } = useOpenPLCStore()
 
   const { LeafIcon } = LeafSources[leafLang]
 
   const isAPou = useMemo(() => pousAllLanguages.includes(leafLang as (typeof pousAllLanguages)[number]), [leafLang])
   const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
+
+  const { file: associatedFile } = getFile({ name: label || '' })
 
   const handleLeafSelection = () => {
     if (!label) {
@@ -288,6 +302,15 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     }
   }
 
+  const handleLabel = useCallback(
+    (label: string | undefined) => {
+      if (!associatedFile || associatedFile?.saved) return label
+
+      return `* <i>${label}</i>`
+    },
+    [associatedFile],
+  )
+
   return (
     <li
       className={cn(
@@ -307,7 +330,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
           'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
           name === label && 'font-medium text-neutral-1000 dark:text-white',
         )}
-        dangerouslySetInnerHTML={{ __html: label || '' }}
+        dangerouslySetInnerHTML={{ __html: handleLabel(label) || '' }}
       />
       {leafLang === 'devPin' || leafLang === 'devConfig' ? null : (
         <button
