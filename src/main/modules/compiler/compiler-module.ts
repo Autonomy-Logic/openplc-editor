@@ -384,7 +384,7 @@ class CompilerModule {
         // INFO: On Windows, we need to add the .exe extension to the binary path.
         binaryPath += '.exe'
       }
-      const executeCommand = spawn(binaryPath, ['core', 'update-index', flag, `"${configFilePath}"`])
+      const executeCommand = spawn(binaryPath, ['core', 'update-index', flag, configFilePath])
 
       let stderrData = ''
 
@@ -416,7 +416,7 @@ class CompilerModule {
 
     const isCoreInstalled = Object.keys(coreControlFileContent).some((core) => core === boardCore)
     if (isCoreInstalled) {
-      handleOutputData(`Core ${boardCore} is already installed.}`, 'info')
+      handleOutputData(`Core ${boardCore} is already installed.`, 'info')
       return
     }
 
@@ -428,7 +428,7 @@ class CompilerModule {
       binaryPath += '.exe'
     }
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, ['core', 'install', boardCore, flag, `"${configFilePath}"`])
+      const executeCommand = spawn(binaryPath, ['core', 'install', boardCore, flag, configFilePath])
 
       let stderrData = ''
 
