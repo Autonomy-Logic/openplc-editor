@@ -50,6 +50,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     sensitiveCase,
     regularExpression,
     workspace: {
+      editingState,
       systemConfigs: { shouldUseDarkMode },
     },
     project: {
@@ -64,6 +65,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     editorActions: { saveEditorViewState },
     projectActions: { updatePou, createVariable },
     fileActions: { updateFile, getFile },
+    workspaceActions: { setEditingState },
   } = useOpenPLCStore()
 
   const [isOpen, setIsOpen] = useState<boolean>(false)
@@ -71,7 +73,6 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const [newName, setNewName] = useState<string>('')
 
   const pou = pous.find((pou) => pou.data.name === name)
-  const { file } = getFile({ name })
 
   useEffect(() => {
     if (editorRef.current && searchQuery) {
@@ -312,7 +313,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
   function handleWriteInPou(value: string | undefined) {
     if (!value) return
-    if (file?.saved) updateFile({ name: editor.meta.name, saved: false })
+
+    const { file: pouFile } = getFile({ name })
+    if (pouFile?.saved) updateFile({ name: editor.meta.name, saved: false })
+    if (editingState !== 'unsaved') setEditingState('unsaved')
+
     updatePou({ name, content: { language, value } })
   }
 

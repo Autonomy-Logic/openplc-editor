@@ -10,10 +10,20 @@ const fileSliceDataSchema = z.object({
   filePath: z.string(),
   saved: z.boolean(),
 })
+type FileSliceData = z.infer<typeof fileSliceDataSchema>
+
 const fileSliceDataObjectSchema = z.record(z.string(), fileSliceDataSchema)
-type FileSliceData = z.infer<typeof fileSliceDataObjectSchema>
+type FileSliceDataObject = z.infer<typeof fileSliceDataObjectSchema>
 
 const fileSliceActionsSchema = z.object({
+  setFiles: z
+    .function()
+    .args(
+      z.object({
+        files: fileSliceDataObjectSchema,
+      }),
+    )
+    .returns(z.void()),
   addFile: z
     .function()
     .args(
@@ -50,6 +60,8 @@ const fileSliceActionsSchema = z.object({
     )
     .returns(z.object({ file: fileSliceDataSchema.optional() })),
 
+  setAllToSaved: z.function().args().returns(z.void()),
+  setAllToUnsaved: z.function().args().returns(z.void()),
   getSavedState: z
     .function()
     .args(
@@ -70,5 +82,5 @@ const fileSliceSchema = z.object({
 })
 type FileSlice = z.infer<typeof fileSliceSchema>
 
-export type { FileSlice, FileSliceData, FileSliceType }
+export type { FileSlice, FileSliceData, FileSliceDataObject, FileSliceType }
 export { fileSliceActionsSchema, fileSliceDataObjectSchema, fileSliceDataSchema, fileSliceSchema, fileSliceTypeSchema }

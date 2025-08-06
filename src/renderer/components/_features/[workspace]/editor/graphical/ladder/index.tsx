@@ -39,10 +39,13 @@ export default function LadderEditor() {
     ladderFlowActions,
     searchNodePosition,
     modals,
+    workspace: { editingState },
+
     projectActions: { updatePou },
     editorActions: { saveEditorViewState },
-    fileActions: { updateFile },
     modalActions: { closeModal },
+    fileActions: { updateFile, getFile },
+    workspaceActions: { setEditingState },
   } = useOpenPLCStore()
 
   const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
@@ -80,10 +83,14 @@ export default function LadderEditor() {
     })
 
     ladderFlowActions.setFlowUpdated({ editorName: editor.meta.name, updated: false })
-    updateFile({
-      name: editor.meta.name,
-      saved: false,
-    })
+
+    const { file: pouFile } = getFile({ name: editor.meta.name })
+    if (pouFile)
+      updateFile({
+        name: editor.meta.name,
+        saved: false,
+      })
+    if (editingState !== 'unsaved') setEditingState('unsaved')
   }, [flowUpdated])
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)

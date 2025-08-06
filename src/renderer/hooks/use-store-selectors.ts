@@ -96,6 +96,11 @@ const projectSelectors = {
   useProjectPath: () => useOpenPLCStore((state) => state.project.meta.path),
 }
 
+// ===================== Resource selectors. =====================
+const resourceSelectors = {
+  useResources: () => useOpenPLCStore((state) => state.project.data.configuration.resource),
+}
+
 /**
  * ====================== Workspace selectors. =====================
  */
@@ -114,14 +119,23 @@ const consoleSelectors = {
   useClearLogs: () => useOpenPLCStore((state) => state.consoleActions.clearLogs),
 }
 
+// ===================== File selectors =====================
+const fileSelectors = {
+  useFiles: () => useOpenPLCStore((state) => state.files),
+  useGetFile: () => useOpenPLCStore((state) => state.fileActions.getFile),
+  useUpdateFile: () => useOpenPLCStore((state) => state.fileActions.updateFile),
+}
+
 export {
   boardSelectors,
   communicationSelectors,
   consoleSelectors,
   editorSelectors,
+  fileSelectors,
   pinSelectors,
   pouSelectors,
   projectSelectors,
+  resourceSelectors,
   rtuSelectors,
   searchSelectors,
   staticHostSelectors,
