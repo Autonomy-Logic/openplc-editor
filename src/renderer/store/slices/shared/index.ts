@@ -16,7 +16,7 @@ import { ConsoleSlice } from '../console'
 import { deviceConfigurationSchema, devicePinSchema, DeviceSlice, DeviceState } from '../device'
 import { EditorModel, EditorSlice } from '../editor'
 import { FBDFlowSlice, FBDFlowType } from '../fbd'
-import { FileSlice } from '../files'
+import { FileSlice, FileSliceDataObject } from '../files'
 import { LadderFlowSlice, LadderFlowType } from '../ladder'
 import { LibrarySlice } from '../library'
 import { ModalSlice } from '../modal'
@@ -400,7 +400,9 @@ export const createSharedSlice: StateCreator<
 
     closeProject: () => {
       const editingState = getState().workspace.editingState
-      if (editingState === 'unsaved') {
+      const isFilesSaved = getState().fileActions.checkIfAllFilesAreSaved(editingState)
+
+      if (!isFilesSaved && editingState === 'unsaved') {
         getState().modalActions.openModal('save-changes-project', {
           validationContext: 'close-project',
         })
@@ -422,10 +424,13 @@ export const createSharedSlice: StateCreator<
         }
         const projectData = project.data
 
+        // Set project data
         getState().projectActions.setProject({
           data: projectData,
           meta: projectMeta,
         })
+
+        // Set pous
         getState().projectActions.setPous(pous)
 
         const ladderPous = pous.filter((pou) => pou.data.language === 'ld')
@@ -453,13 +458,6 @@ export const createSharedSlice: StateCreator<
               elementType: { type: 'program', language: mainPou.data.language },
             }
 
-            // Add the file to the file slice
-            getState().fileActions.addFile({
-              name: tabToBeCreated.name,
-              type: 'program',
-              filePath: `/pous/programs/${tabToBeCreated.name}.json`,
-            })
-
             // Add and set editor
             const model = CreateEditorObjectFromTab(tabToBeCreated)
             getState().editorActions.addModel(model)
@@ -477,10 +475,39 @@ export const createSharedSlice: StateCreator<
           }
         }
 
+        // Set device definitions
         getState().deviceActions.setDeviceDefinitions({
           configuration: deviceConfiguration,
           pinMapping: devicePinMapping,
         })
+
+        // Set files in the file slice
+        const files: FileSliceDataObject = {}
+        pous.forEach((pou) => {
+          files[pou.data.name] = {
+            type: pou.type,
+            filePath: `/pous/${pou.type}s/${pou.data.name}.json`,
+            saved: true,
+          }
+        })
+        projectData.dataTypes.forEach((datatype) => {
+          files[datatype.name] = {
+            type: 'data-type',
+            filePath: `/project.json`,
+            saved: true,
+          }
+        })
+        files['Resource'] = {
+          type: 'resource',
+          filePath: `/project.json`,
+          saved: true,
+        }
+        files['Configuration'] = {
+          type: 'device',
+          filePath: `/device`,
+          saved: true,
+        }
+        getState().fileActions.setFiles({ files })
 
         toast({
           title: 'Project opened!',
@@ -737,6 +764,7 @@ export const createSharedSlice: StateCreator<
 
       if (success) {
         getState().workspaceActions.setEditingState('saved')
+        getState().fileActions.setAllToSaved()
         toast({
           title: 'Changes saved!',
           description: 'The project was saved successfully!',
@@ -744,6 +772,7 @@ export const createSharedSlice: StateCreator<
         })
       } else {
         getState().workspaceActions.setEditingState('unsaved')
+        getState().fileActions.setAllToUnsaved()
         toast({
           title: 'Error in the save request!',
           description: reason?.description,
@@ -767,12 +796,6 @@ export const createSharedSlice: StateCreator<
           },
         }
 
-      getState().fileActions.addFile({
-        name: editorTabToBeCreated.name,
-        type: editorTabToBeCreated.elementType.type,
-        filePath: editorTabToBeCreated.path,
-      })
-
       // Define editor model at the editor slice
       const editor =
         getState().editorActions.getEditorFromEditors(editorTabToBeCreated.name) ||
@@ -793,9 +816,6 @@ export const createSharedSlice: StateCreator<
       return { success: true }
     },
     closeFile: (name) => {
-      // Remove the file from the file slice
-      getState().fileActions.removeFile({ name })
-
       // Remove the tab from the tabs slice and the editor model from the editor slice
       const { tabs: filteredTabs } = getState().tabsActions.removeTab(name)
       getState().editorActions.removeModel(name)

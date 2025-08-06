@@ -7,6 +7,13 @@ export const createFileSlice: StateCreator<FileSlice, [], [], FileSlice> = (setS
   files: {},
 
   fileActions: {
+    setFiles: ({ files }) => {
+      setState(
+        produce(({ files: currentFiles }: FileSlice) => {
+          Object.assign(currentFiles, files)
+        }),
+      )
+    },
     addFile: (file) => {
       let returnValue = true // Default to true, will be set to false if file already exists
       setState(
@@ -55,6 +62,24 @@ export const createFileSlice: StateCreator<FileSlice, [], [], FileSlice> = (setS
       }
     },
 
+    setAllToSaved: () => {
+      setState(
+        produce(({ files }: FileSlice) => {
+          Object.keys(files).forEach((key) => {
+            files[key].saved = true
+          })
+        }),
+      )
+    },
+    setAllToUnsaved: () => {
+      setState(
+        produce(({ files }: FileSlice) => {
+          Object.keys(files).forEach((key) => {
+            files[key].saved = false
+          })
+        }),
+      )
+    },
     getSavedState: ({ name }) => {
       return getState().files[name]?.saved ?? false
     },
