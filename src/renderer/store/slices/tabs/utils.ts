@@ -86,7 +86,7 @@ const CreateEditorModelObject = (
   return CreatePLCTextualObject(name, language as 'il' | 'st', pouType)
 }
 
-const CreateResourceEditor = (name = 'resource'): EditorModel => {
+const CreateResourceEditor = (name = 'Resource'): EditorModel => {
   const editor = CreateEditorObject({
     type: 'plc-resource',
     meta: {

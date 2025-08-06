@@ -16,6 +16,7 @@ const Project = () => {
     },
     projectActions: { updateMetaName },
     sharedWorkspaceActions: { openFile },
+    workspaceActions: { setSelectedProjectTreeLeaf },
   } = useOpenPLCStore()
   const [isEditing, setIsEditing] = useState(false)
   const [inputValue, setInputValue] = useState<string>(name)
@@ -85,6 +86,7 @@ const Project = () => {
                 <ProjectTreeLeaf
                   key={data.name}
                   leafLang={data.language}
+                  leafType='function'
                   label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
                   onClick={() =>
                     handleCreateTab({
@@ -105,6 +107,7 @@ const Project = () => {
                 <ProjectTreeLeaf
                   key={data.name}
                   leafLang={data.language}
+                  leafType='function-block'
                   label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
                   onClick={() =>
                     handleCreateTab({
@@ -125,6 +128,7 @@ const Project = () => {
                 <ProjectTreeLeaf
                   key={data.name}
                   leafLang={data.language}
+                  leafType='program'
                   label={searchQuery ? extractSearchQuery(data.name, searchQuery) : data.name}
                   onClick={() =>
                     handleCreateTab({
@@ -146,6 +150,7 @@ const Project = () => {
                   nested={true}
                   key={name}
                   leafLang='arr'
+                  leafType='data-type'
                   label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
                   onClick={() =>
                     handleCreateTab({
@@ -163,6 +168,7 @@ const Project = () => {
                   nested={true}
                   key={name}
                   leafLang='enum'
+                  leafType='data-type'
                   label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
                   /** Todo: Update the tab state */
                   onClick={() =>
@@ -181,6 +187,7 @@ const Project = () => {
                   nested={true}
                   key={name}
                   leafLang='str'
+                  leafType='data-type'
                   label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
                   /** Todo: Update the tab state */
                   onClick={() =>
@@ -197,14 +204,18 @@ const Project = () => {
           {/* Project Resources tree branch */}
           <ProjectTreeBranch
             branchTarget='resource'
-            onClick={() =>
+            onClick={() => {
               handleCreateTab({
                 configuration: configuration,
-                name: 'resource',
+                name: 'Resource',
                 path: `/data/configuration/resource`,
                 elementType: { type: 'resource' },
               })
-            }
+              setSelectedProjectTreeLeaf({
+                label: 'Resource',
+                type: 'resource',
+              })
+            }}
           />
 
           {/* Project Device tree branch */}
@@ -212,6 +223,7 @@ const Project = () => {
             <ProjectTreeLeaf
               key='Configuration'
               leafLang='devConfig'
+              leafType='device'
               label='Configuration'
               /** Todo: Update the tab state */
               onClick={() =>

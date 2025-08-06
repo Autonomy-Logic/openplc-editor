@@ -119,6 +119,17 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    clearWorkspace: (): void => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.editingState = 'initial-state'
+          workspace.selectedProjectTreeLeaf = {
+            label: '',
+            type: null,
+          }
+        }),
+      )
+    },
   },
 })
 
