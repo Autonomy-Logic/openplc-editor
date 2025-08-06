@@ -6,6 +6,7 @@ import {
   PLCArrayDatatype,
   PLCEnumeratedDatatype,
   PLCPou,
+  PLCProject,
   PLCProjectSchema,
   PLCStructureDatatype,
 } from '@root/types/PLC/open-plc'
@@ -307,7 +308,7 @@ export const createSharedSlice: StateCreator<
       getState().fileActions.addFile({
         name: propsToCreateDatatype.name,
         type: 'data-type',
-        filePath: `/data/datatypes/${propsToCreateDatatype.name}`,
+        filePath: `/project.json`,
       })
 
       // Add and set the editor
@@ -836,13 +837,75 @@ export const createSharedSlice: StateCreator<
         return { success: false }
       }
 
-      let saveContent: PLCPou | undefined
+      let saveContent: PLCProject | PLCPou | DeviceState['deviceDefinitions'] | undefined
       switch (file.type) {
         case 'function':
         case 'function-block':
         case 'program':
           saveContent = getState().project.data.pous.find((pou) => pou.data.name === name)
           break
+        case 'device': {
+          const deviceConfiguration = deviceConfigurationSchema.safeParse(getState().deviceDefinitions.configuration)
+          if (!deviceConfiguration.success) {
+            toast({
+              title: 'Error saving file',
+              description: `File ${name} could not be saved. Device configuration is invalid.`,
+              variant: 'fail',
+            })
+            return {
+              success: false,
+              error: {
+                title: 'Error saving file',
+                description: `File ${name} could not be saved. Device configuration is invalid.`,
+              },
+            }
+          }
+
+          const devicePinMapping = devicePinSchema.array().safeParse(getState().deviceDefinitions.pinMapping.pins)
+          if (!devicePinMapping.success) {
+            toast({
+              title: 'Error saving file',
+              description: `File ${name} could not be saved. Device pin mapping is invalid.`,
+              variant: 'fail',
+            })
+            return {
+              success: false,
+              error: {
+                title: 'Error saving file',
+                description: `File ${name} could not be saved. Device pin mapping is invalid.`,
+              },
+            }
+          }
+
+          saveContent = {
+            configuration: deviceConfiguration.data,
+            pinMapping: {
+              pins: devicePinMapping.data,
+              currentSelectedPinTableRow: -1,
+            },
+          }
+          break
+        }
+        case 'data-type':
+        case 'resource': {
+          const projectData = PLCProjectSchema.safeParse(getState().project)
+          if (!projectData.success) {
+            toast({
+              title: 'Error saving file',
+              description: `File ${name} could not be saved. Project data is invalid.`,
+              variant: 'fail',
+            })
+            return {
+              success: false,
+              error: {
+                title: 'Error saving file',
+                description: `File ${name} could not be saved. Project data is invalid.`,
+              },
+            }
+          }
+          saveContent = projectData.data
+          break
+        }
         default:
           break
       }
@@ -863,7 +926,37 @@ export const createSharedSlice: StateCreator<
       }
 
       const projectFilePath = getState().project.meta.path
-      const saveResponse = await window.bridge.saveFile(`${projectFilePath}/${file.filePath}`, saveContent)
+
+      let saveResponse: { success: boolean; error?: string }
+      switch (file.type) {
+        case 'function':
+        case 'function-block':
+        case 'program':
+          saveResponse = await window.bridge.saveFile(`${projectFilePath}/${file.filePath}`, saveContent)
+          break
+        case 'device': {
+          const deviceConfigSaveResponse = await window.bridge.saveFile(
+            `${projectFilePath}/devices/configuration.json`,
+            (saveContent as DeviceState['deviceDefinitions']).configuration,
+          )
+          const devicePinMappingSaveResponse = await window.bridge.saveFile(
+            `${projectFilePath}/devices/pin-mapping.json`,
+            (saveContent as DeviceState['deviceDefinitions']).pinMapping.pins,
+          )
+          saveResponse = {
+            success: deviceConfigSaveResponse.success && devicePinMappingSaveResponse.success,
+            error: deviceConfigSaveResponse.error || devicePinMappingSaveResponse.error,
+          }
+          break
+        }
+        case 'data-type':
+        case 'resource':
+          saveResponse = await window.bridge.saveFile(`${projectFilePath}/project.json`, saveContent)
+          break
+        default:
+          saveResponse = { success: false, error: 'Unknown file type' }
+          break
+      }
 
       if (!saveResponse.success) {
         toast({

@@ -155,7 +155,7 @@ const Project = () => {
                   onClick={() =>
                     handleCreateTab({
                       name,
-                      path: `/data/data-types/array/${name}`,
+                      path: `/project.json`,
                       elementType: { type: 'data-type', derivation: 'array' },
                     })
                   }
@@ -174,7 +174,7 @@ const Project = () => {
                   onClick={() =>
                     handleCreateTab({
                       name,
-                      path: `/data/data-types/enumerated/${name}`,
+                      path: `/project.json`,
                       elementType: { type: 'data-type', derivation: 'enumerated' },
                     })
                   }
@@ -193,7 +193,7 @@ const Project = () => {
                   onClick={() =>
                     handleCreateTab({
                       name,
-                      path: `/data/data-types/structure/${name}`,
+                      path: `/project.json`,
                       elementType: { type: 'data-type', derivation: 'structure' },
                     })
                   }
@@ -208,7 +208,7 @@ const Project = () => {
               handleCreateTab({
                 configuration: configuration,
                 name: 'Resource',
-                path: `/data/configuration/resource`,
+                path: `/project.json`,
                 elementType: { type: 'resource' },
               })
               setSelectedProjectTreeLeaf({
@@ -229,7 +229,7 @@ const Project = () => {
               onClick={() =>
                 handleCreateTab({
                   name: 'Configuration',
-                  path: `/data/configuration/device/configuration`,
+                  path: `/device`,
                   elementType: { type: 'device', derivation: 'configuration' },
                 })
               }
