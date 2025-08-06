@@ -13,14 +13,19 @@ type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
 
 const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   const {
+    searchQuery,
     project: {
       data: { dataTypes },
     },
+    workspace: { editingState },
+
     tabsActions: { updateTabName },
     editorActions: { updateEditorModel },
     projectActions: { updateDatatype },
-    searchQuery,
+    fileActions: { getFile, updateFile },
+    workspaceActions: { setEditingState },
   } = useOpenPLCStore()
+
   const [editorContent, setEditorContent] = useState<PLCDataType>()
   const [isEditing, setIsEditing] = useState(false)
 
@@ -31,6 +36,17 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
       setEditorContent(dataType)
     }
   }, [dataTypes, dataTypeName])
+
+  useEffect(() => {
+    const { file: dataTypeFile } = getFile({ name: dataTypeName })
+    if (dataTypeFile?.saved) {
+      updateFile({
+        name: dataTypeName,
+        saved: false,
+      })
+    }
+    if (editingState !== 'unsaved') setEditingState('unsaved')
+  }, [dataTypes])
 
   const handleStartEditing = () => {
     setIsEditing(true)

@@ -123,6 +123,7 @@ const consoleSelectors = {
 const fileSelectors = {
   useFiles: () => useOpenPLCStore((state) => state.files),
   useGetFile: () => useOpenPLCStore((state) => state.fileActions.getFile),
+  useIsFileSaved: () => useOpenPLCStore((state) => state.fileActions.getSavedState),
   useUpdateFile: () => useOpenPLCStore((state) => state.fileActions.updateFile),
 }
 
