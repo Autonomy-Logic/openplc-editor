@@ -91,7 +91,7 @@ const CreateResourceEditor = (name = 'Resource'): EditorModel => {
     type: 'plc-resource',
     meta: {
       name,
-      path: `/data/configuration/resource`,
+      path: `/project.json`,
     },
     variable: {
       display: 'table',
