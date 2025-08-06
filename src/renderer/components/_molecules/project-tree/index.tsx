@@ -20,6 +20,7 @@ import {
   StructureIcon,
 } from '@root/renderer/assets'
 import { useOpenPLCStore } from '@root/renderer/store'
+import { WorkspaceProjectTreeLeafType } from '@root/renderer/store/slices/workspace/types'
 import { pousAllLanguages } from '@root/types/PLC/pous/language'
 import { cn } from '@root/utils'
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
@@ -212,6 +213,7 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
 type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
   nested?: boolean
   leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res' | 'devConfig' | 'devPin'
+  leafType: WorkspaceProjectTreeLeafType
   label?: string
 }
 
@@ -228,7 +230,7 @@ const LeafSources = {
   devConfig: { LeafIcon: ConfigIcon },
   devPin: { LeafIcon: DeviceTransferIcon },
 }
-const ProjectTreeLeaf = ({ leafLang, label, onClick: handleLeafClick, ...res }: IProjectTreeLeafProps) => {
+const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, ...res }: IProjectTreeLeafProps) => {
   const {
     editor: {
       meta: { name },
@@ -253,7 +255,7 @@ const ProjectTreeLeaf = ({ leafLang, label, onClick: handleLeafClick, ...res }: 
       return
     }
 
-    setSelectedProjectTreeLeaf({ label, type: isAPou ? 'pou' : isDatatype ? 'datatype' : null })
+    setSelectedProjectTreeLeaf({ label, type: leafType })
   }
 
   const handleDeleteFile = () => {

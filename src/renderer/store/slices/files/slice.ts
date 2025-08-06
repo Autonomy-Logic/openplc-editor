@@ -63,7 +63,7 @@ export const createFileSlice: StateCreator<FileSlice, [], [], FileSlice> = (setS
       return Object.values(files).every((file) => file.saved)
     },
 
-    resetFiles: () => {
+    clearFiles: () => {
       setState({
         files: {},
       })

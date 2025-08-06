@@ -1,6 +1,8 @@
 import z from 'zod'
 
-const fileSliceTypeSchema = z.enum(['pou', 'data-type', 'device'])
+const fileSliceTypeSchema = z
+  .enum(['function', 'function-block', 'program', 'data-type', 'device', 'resource'])
+  .nullable()
 type FileSliceType = z.infer<typeof fileSliceTypeSchema>
 
 const fileSliceDataSchema = z.object({
@@ -59,7 +61,7 @@ const fileSliceActionsSchema = z.object({
 
   checkIfAllFilesAreSaved: z.function().args(z.string()).returns(z.boolean()),
 
-  resetFiles: z.function().args(z.object({})).returns(z.void()),
+  clearFiles: z.function().args().returns(z.void()),
 })
 
 const fileSliceSchema = z.object({

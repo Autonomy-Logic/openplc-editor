@@ -25,10 +25,9 @@ const AcceleratorHandler = () => {
   const {
     project,
     deviceDefinitions,
-    selectedTab,
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
-    sharedWorkspaceActions: { closeProject, openProject, openRecentProject, saveFile, saveProject, closeFileRequest },
+    sharedWorkspaceActions: { closeProject, openProject, openRecentProject, saveFile, saveProject, closeFile },
     workspaceActions: { switchAppTheme, toggleMaximizedWindow },
     pouActions: { deleteRequest: deletePouRequest },
     datatypeActions: { deleteRequest: deleteDatatypeRequest },
@@ -36,7 +35,7 @@ const AcceleratorHandler = () => {
 
   const { handleWindowClose, handleAppIsClosingDarwin } = useQuitApp()
 
-  const selectedProjectLeft = workspaceSelectors.useSelectedProjectTreeLeaf()
+  const selectedProjectLeaf = workspaceSelectors.useSelectedProjectTreeLeaf()
 
   /**
    * Compiler Related Accelerators
@@ -185,11 +184,22 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     const handleDelete = () => {
-      const { label, type } = selectedProjectLeft
+      const { label, type } = selectedProjectLeaf
+      if (!type || !label) {
+        toast({
+          title: 'Error',
+          description: 'No file selected to delete.',
+          variant: 'fail',
+        })
+        return
+      }
 
-      if (type === 'pou') {
+      const isPou = ['function', 'function-block', 'program'].includes(type)
+      const isDatatype = type === 'data-type'
+
+      if (isPou) {
         deletePouRequest(label)
-      } else if (type === 'datatype') {
+      } else if (isDatatype) {
         deleteDatatypeRequest(label)
       } else {
         toast({
@@ -208,32 +218,31 @@ const AcceleratorHandler = () => {
     return () => {
       window.bridge.removeDeleteFileListener()
     }
-  }, [selectedProjectLeft])
+  }, [selectedProjectLeaf])
 
   /**
    * -- Close tabs/editor
    */
   useEffect(() => {
-    window.bridge.closeTabAccelerator((_event) => closeFileRequest(selectedTab))
+    window.bridge.closeTabAccelerator((_event) => closeFile(selectedProjectLeaf.label))
 
     return () => {
       void window.bridge.removeCloseTabListener()
     }
-  }, [selectedTab])
+  }, [selectedProjectLeaf])
 
   /**
    * -- Save file
    */
   useEffect(() => {
     window.bridge.saveFileAccelerator((_event) => {
-      if (!selectedTab) return
-      void saveFile(selectedTab)
+      void saveFile(selectedProjectLeaf.label)
     })
 
     return () => {
       window.bridge.removeSaveFileAccelerator()
     }
-  }, [selectedTab])
+  }, [selectedProjectLeaf])
 
   /**
    * ==== Window Related Accelerators ====

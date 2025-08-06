@@ -1,7 +1,5 @@
 import type { TabsProps } from '@process:renderer/store/slices'
 import { useOpenPLCStore } from '@root/renderer/store'
-import { CreateEditorObjectFromTab } from '@root/renderer/store/slices/tabs/utils'
-// import { CreateEditorObject } from '@root/renderer/store/slices/shared/utils'
 import { useRef } from 'react'
 
 import { Tab, TabList } from '../../_atoms'
@@ -10,16 +8,16 @@ const Tabs = () => {
   const {
     tabs,
     selectedTab,
-    tabsActions: { sortTabs, setSelectedTab },
-    editorActions: { setEditor, getEditorFromEditors },
-    sharedWorkspaceActions: { closeFileRequest },
+    tabsActions: { sortTabs },
+    sharedWorkspaceActions: { closeFile, openFile },
   } = useOpenPLCStore()
   const hasTabs = tabs.length > 0
   const dndTab = useRef<number>(0)
   const replaceTab = useRef<number>(0)
 
   const handleRemoveTab = (tabName: string | null) => {
-    closeFileRequest(tabName)
+    if (!tabName) return
+    closeFile(tabName)
   }
 
   /**
@@ -28,13 +26,7 @@ const Tabs = () => {
    */
   const handleClickedTab = (tab: TabsProps) => {
     if (tab.name === selectedTab) return
-    setSelectedTab(tab.name)
-    const candidate = getEditorFromEditors(tab.name)
-    if (!candidate) {
-      setEditor(CreateEditorObjectFromTab(tab))
-      return
-    }
-    setEditor(candidate)
+    openFile(tab)
   }
 
   const handleSortOnDragEnd = () => {
@@ -46,8 +38,7 @@ const Tabs = () => {
   }
   const handleDragStart = ({ tab, idx }: { tab: TabsProps; idx: number }) => {
     dndTab.current = idx
-    setSelectedTab(tab.name)
-    setEditor(CreateEditorObjectFromTab(tab))
+    openFile(tab)
   }
   const handleDragEnter = (idx: number) => {
     replaceTab.current = idx

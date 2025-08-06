@@ -1,7 +1,6 @@
 import { ISaveDataResponse } from '@root/main/modules/ipc/renderer'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { DeleteDatatype, DeletePou } from '@root/renderer/components/_organisms/modals'
-import { SaveFileChangeModalProps } from '@root/renderer/components/_organisms/modals/save-file-changes-modal'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import {
   PLCArrayDatatype,
@@ -10,13 +9,13 @@ import {
   PLCProjectSchema,
   PLCStructureDatatype,
 } from '@root/types/PLC/open-plc'
-import { pouTypesArr } from '@root/types/PLC/pous'
 import { StateCreator } from 'zustand'
 
+import { ConsoleSlice } from '../console'
 import { deviceConfigurationSchema, devicePinSchema, DeviceSlice, DeviceState } from '../device'
 import { EditorModel, EditorSlice } from '../editor'
 import { FBDFlowSlice, FBDFlowType } from '../fbd'
-import { FileSlice, FileSliceType } from '../files'
+import { FileSlice } from '../files'
 import { LadderFlowSlice, LadderFlowType } from '../ladder'
 import { LibrarySlice } from '../library'
 import { ModalSlice } from '../modal'
@@ -68,7 +67,6 @@ export type SharedSlice = {
     saveProject: (project: ProjectState, device: DeviceState['deviceDefinitions']) => Promise<ISaveDataResponse>
     // File operations
     openFile: (data: TabsProps) => BasicSharedSliceResponse
-    closeFileRequest: (name: string | null) => void
     closeFile: (name: string) => BasicSharedSliceResponse
     saveFile: (name: string) => Promise<BasicSharedSliceResponse>
   }
@@ -85,6 +83,7 @@ export const createSharedSlice: StateCreator<
     WorkspaceSlice &
     DeviceSlice &
     FileSlice &
+    ConsoleSlice &
     SharedSlice,
   [],
   [],
@@ -214,7 +213,7 @@ export const createSharedSlice: StateCreator<
       // Add the file to the file slice
       getState().fileActions.addFile({
         name: propsToCreatePou.name,
-        type: 'pou',
+        type: propsToCreatePou.type,
         filePath: path,
       })
 
@@ -235,7 +234,7 @@ export const createSharedSlice: StateCreator<
       // Set selected project tree leaf
       getState().workspaceActions.setSelectedProjectTreeLeaf({
         label: propsToCreatePou.name,
-        type: 'pou',
+        type: propsToCreatePou.type,
       })
 
       return {
@@ -339,7 +338,7 @@ export const createSharedSlice: StateCreator<
       // Set selected project tree leaf
       getState().workspaceActions.setSelectedProjectTreeLeaf({
         label: propsToCreateDatatype.name,
-        type: 'datatype',
+        type: 'data-type',
       })
 
       return {
@@ -385,7 +384,6 @@ export const createSharedSlice: StateCreator<
 
   sharedWorkspaceActions: {
     clearStatesOnCloseProject: () => {
-      getState().workspaceActions.setEditingState('initial-state')
       getState().editorActions.clearEditor()
       getState().tabsActions.clearTabs()
       getState().libraryActions.clearUserLibraries()
@@ -393,6 +391,9 @@ export const createSharedSlice: StateCreator<
       getState().ladderFlowActions.clearLadderFlows()
       getState().projectActions.clearProjects()
       getState().deviceActions.clearDeviceDefinitions()
+      getState().workspaceActions.clearWorkspace()
+      getState().fileActions.clearFiles()
+      getState().consoleActions.clearLogs()
       window.bridge.rebuildMenu()
     },
 
@@ -454,7 +455,7 @@ export const createSharedSlice: StateCreator<
             // Add the file to the file slice
             getState().fileActions.addFile({
               name: tabToBeCreated.name,
-              type: 'pou',
+              type: 'program',
               filePath: `/pous/programs/${tabToBeCreated.name}.json`,
             })
 
@@ -470,7 +471,7 @@ export const createSharedSlice: StateCreator<
             // Set selected project tree leaf
             getState().workspaceActions.setSelectedProjectTreeLeaf({
               label: mainPou.data.name,
-              type: 'pou',
+              type: 'program',
             })
           }
         }
@@ -631,7 +632,7 @@ export const createSharedSlice: StateCreator<
         // Add the file to the file slice
         getState().fileActions.addFile({
           name: tabToBeCreated.name,
-          type: 'pou',
+          type: 'program',
           filePath: `/pous/programs/${tabToBeCreated.name}.json`,
         })
 
@@ -647,7 +648,7 @@ export const createSharedSlice: StateCreator<
         // Set selected project tree leaf
         getState().workspaceActions.setSelectedProjectTreeLeaf({
           label: mainPou.data.name,
-          type: 'pou',
+          type: 'program',
         })
       }
 
@@ -765,17 +766,9 @@ export const createSharedSlice: StateCreator<
           },
         }
 
-      // Define file at the file slice
-      const fileType: FileSliceType = pouTypesArr.includes(
-        editorTabToBeCreated.elementType.type as (typeof pouTypesArr)[number],
-      )
-        ? 'pou'
-        : editorTabToBeCreated.elementType.type === 'data-type'
-          ? 'data-type'
-          : 'device'
       getState().fileActions.addFile({
         name: editorTabToBeCreated.name,
-        type: fileType,
+        type: editorTabToBeCreated.elementType.type,
         filePath: editorTabToBeCreated.path,
       })
 
@@ -790,37 +783,13 @@ export const createSharedSlice: StateCreator<
       getState().tabsActions.updateTabs(editorTabToBeCreated)
       getState().tabsActions.setSelectedTab(editor.meta.name)
 
+      // Set selected project tree leaf
+      getState().workspaceActions.setSelectedProjectTreeLeaf({
+        label: editor.meta.name,
+        type: editorTabToBeCreated.elementType.type,
+      })
+
       return { success: true }
-    },
-    closeFileRequest: (name) => {
-      if (!name) {
-        toast({
-          title: 'Error closing file',
-          description: 'File name is not defined.',
-          variant: 'fail',
-        })
-        return
-      }
-
-      const { file } = getState().fileActions.getFile({ name })
-      if (!file) {
-        toast({
-          title: 'Error closing file',
-          description: `File with name ${name} does not exist.`,
-          variant: 'fail',
-        })
-        return
-      }
-      if (!file.saved) {
-        const modalData: Pick<SaveFileChangeModalProps, 'fileName' | 'validationContext'> = {
-          fileName: name,
-          validationContext: 'close-file',
-        }
-        getState().modalActions.openModal('save-changes-file', modalData)
-        return
-      }
-
-      getState().sharedWorkspaceActions.closeFile(name)
     },
     closeFile: (name) => {
       // Remove the file from the file slice
@@ -830,7 +799,7 @@ export const createSharedSlice: StateCreator<
       const { tabs: filteredTabs } = getState().tabsActions.removeTab(name)
       getState().editorActions.removeModel(name)
 
-      // Set the current tab and the current editor
+      // Check if there are any remaining tabs
       const nextTab = filteredTabs[filteredTabs.length - 1]
       if (!nextTab) {
         getState().editorActions.setEditor({
@@ -838,11 +807,21 @@ export const createSharedSlice: StateCreator<
           meta: { name: '' },
         })
         getState().tabsActions.setSelectedTab('')
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: '',
+          type: null,
+        })
         return { success: true }
       }
+
+      // If there is no next tab, set the editor to available
       const editor = getState().editorActions.getEditorFromEditors(nextTab.name) || CreateEditorObjectFromTab(nextTab)
       getState().editorActions.setEditor(editor)
       getState().tabsActions.setSelectedTab(nextTab.name)
+      getState().workspaceActions.setSelectedProjectTreeLeaf({
+        label: nextTab.name,
+        type: nextTab.elementType.type,
+      })
 
       return { success: true }
     },
@@ -859,7 +838,9 @@ export const createSharedSlice: StateCreator<
 
       let saveContent: PLCPou | undefined
       switch (file.type) {
-        case 'pou':
+        case 'function':
+        case 'function-block':
+        case 'program':
           saveContent = getState().project.data.pous.find((pou) => pou.data.name === name)
           break
         default:

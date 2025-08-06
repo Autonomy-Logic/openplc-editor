@@ -1,5 +1,10 @@
 import { z } from 'zod'
 
+const workspaceProjectTreeLeafSchema = z
+  .enum(['function', 'function-block', 'program', 'data-type', 'device', 'resource'])
+  .nullable()
+type WorkspaceProjectTreeLeafType = z.infer<typeof workspaceProjectTreeLeafSchema>
+
 const systemConfigsSchema = z.object({
   OS: z.enum(['win32', 'linux', 'darwin', '']),
   arch: z.enum(['x64', 'arm', '']),
@@ -23,7 +28,7 @@ const workspaceStateSchema = z.object({
     }),
     selectedProjectTreeLeaf: z.object({
       label: z.string(),
-      type: z.enum(['pou', 'datatype', 'file']).nullable(),
+      type: workspaceProjectTreeLeafSchema,
     }),
   }),
 })
@@ -52,10 +57,11 @@ const workspaceActionsSchema = z.object({
     .args(
       z.object({
         label: z.string(),
-        type: z.enum(['pou', 'datatype', 'file']).nullable(),
+        type: workspaceProjectTreeLeafSchema,
       }),
     )
     .returns(z.void()),
+  clearWorkspace: z.function().returns(z.void()),
 })
 type WorkspaceActions = z.infer<typeof workspaceActionsSchema>
 
@@ -63,5 +69,18 @@ type WorkspaceSlice = WorkspaceState & {
   workspaceActions: WorkspaceActions
 }
 
-export { systemConfigsSchema, workspaceActionsSchema, workspaceResponseSchema, workspaceStateSchema }
-export type { SystemConfigs, WorkspaceActions, WorkspaceResponse, WorkspaceSlice, WorkspaceState }
+export {
+  systemConfigsSchema,
+  workspaceActionsSchema,
+  workspaceProjectTreeLeafSchema,
+  workspaceResponseSchema,
+  workspaceStateSchema,
+}
+export type {
+  SystemConfigs,
+  WorkspaceActions,
+  WorkspaceProjectTreeLeafType,
+  WorkspaceResponse,
+  WorkspaceSlice,
+  WorkspaceState,
+}

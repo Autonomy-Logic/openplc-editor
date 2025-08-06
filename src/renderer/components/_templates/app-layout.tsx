@@ -7,7 +7,6 @@ import { ComponentPropsWithoutRef, ReactNode, useEffect, useState } from 'react'
 import Toaster from '../_features/[app]/toast/toaster'
 import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 import { ConfirmDeleteElementModal, QuitApplicationModal, SaveChangesModal } from '../_organisms/modals'
-import { SaveFileChangeModalProps, SaveFileChangesModal } from '../_organisms/modals/save-file-changes-modal'
 import { AcceleratorHandler } from './accelerator-handler'
 
 type AppLayoutProps = ComponentPropsWithoutRef<'main'>
@@ -18,6 +17,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     files,
     tabs,
     selectedTab,
+    workspace: { selectedProjectTreeLeaf },
 
     modals,
     workspaceActions: { setSystemConfigs, setRecent },
@@ -47,7 +47,8 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     console.log('Editor:', editor)
     console.log('Tabs:', tabs)
     console.log('Selected Tab:', selectedTab)
-  }, [files, editor, tabs, selectedTab])
+    console.log('Selected Project Tree Leaf:', selectedProjectTreeLeaf)
+  }, [files, editor, tabs, selectedTab, selectedProjectTreeLeaf])
 
   return (
     <>
@@ -67,13 +68,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
             isOpen={modals['save-changes-project'].open}
             validationContext={(modals['save-changes-project'].data as SaveChangeModalProps).validationContext}
             recentResponse={(modals['save-changes-project'].data as SaveChangeModalProps).recentResponse}
-          />
-        )}
-        {modals?.['save-changes-file']?.open === true && (
-          <SaveFileChangesModal
-            isOpen={modals['save-changes-file'].open}
-            validationContext={(modals['save-changes-file'].data as SaveFileChangeModalProps).validationContext}
-            fileName={(modals['save-changes-file'].data as SaveFileChangeModalProps).fileName}
           />
         )}
         {modals?.['quit-application']?.open === true && (
