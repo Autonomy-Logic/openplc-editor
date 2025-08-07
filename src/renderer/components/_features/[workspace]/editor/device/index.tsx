@@ -6,10 +6,7 @@ import { DeviceConfigurationEditor } from './configuration'
 
 const DeviceEditor = () => {
   const {
-    workspace: { editingState },
-
-    fileActions: { updateFile, getFile },
-    workspaceActions: { setEditingState },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const deviceUpdated = deviceSelectors.useDeviceUpdated()
@@ -17,22 +14,10 @@ const DeviceEditor = () => {
 
   useEffect(() => {
     if (deviceUpdated) {
-      const { file: deviceFile } = getFile({ name: 'Configuration' })
-      if (deviceFile) {
-        updateFile({
-          name: 'Configuration',
-          saved: false,
-        })
-        return
-      }
-
-      if (editingState !== 'unsaved') {
-        setEditingState('unsaved')
-        return
-      }
+      handleFileAndWorkspaceSavedState('Configuration')
       resetDeviceUpdated()
     }
-  }, [editingState, deviceUpdated])
+  }, [deviceUpdated])
 
   return <DeviceConfigurationEditor />
 }

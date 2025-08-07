@@ -70,6 +70,8 @@ export type SharedSlice = {
     openFile: (data: TabsProps) => BasicSharedSliceResponse
     closeFile: (name: string) => BasicSharedSliceResponse
     saveFile: (name: string) => Promise<BasicSharedSliceResponse>
+    // File and workspace saved state management
+    handleFileAndWorkspaceSavedState: (name: string) => void
   }
 }
 
@@ -1004,6 +1006,27 @@ export const createSharedSlice: StateCreator<
         variant: 'default',
       })
       return { success: true }
+    },
+
+    // File and workspace saved state management
+    handleFileAndWorkspaceSavedState: (name: string) => {
+      const { file } = getState().fileActions.getFile({ name })
+      if (!file) {
+        console.warn(`File with name ${name} does not exist.`)
+      }
+
+      // If the file is saved, set the saved to false because it was modified
+      if (file?.saved) {
+        getState().fileActions.updateFile({
+          name,
+          saved: false,
+        })
+      }
+
+      // If the workspace state is not 'unsaved', set it to 'unsaved' because a file was modified
+      if (getState().workspace.editingState !== 'unsaved') {
+        getState().workspaceActions.setEditingState('unsaved')
+      }
     },
   },
 })

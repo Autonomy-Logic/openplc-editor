@@ -11,19 +11,11 @@ const ResourcesEditor = () => {
         configuration: { resource },
       },
     },
-    workspace: { editingState },
-    workspaceActions: { setEditingState },
-    fileActions: { updateFile, getFile },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   useEffect(() => {
-    const { file: resourceFile } = getFile({ name: 'Resource' })
-    if (resourceFile?.saved)
-      updateFile({
-        name: 'Resource',
-        saved: false,
-      })
-    if (editingState !== 'unsaved') setEditingState('unsaved')
+    handleFileAndWorkspaceSavedState('Resource')
   }, [resource])
 
   return (
