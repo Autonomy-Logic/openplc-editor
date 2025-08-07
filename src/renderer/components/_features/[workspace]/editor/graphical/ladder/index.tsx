@@ -48,7 +48,7 @@ export default function LadderEditor() {
 
   const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
   const rungs = flow?.rungs || []
-  const flowUpdated = flow?.updated
+  const flowUpdated = flow?.updated || false
   console.log('Ladder flow updated:', flowUpdated)
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
@@ -86,6 +86,35 @@ export default function LadderEditor() {
 
     handleFileAndWorkspaceSavedState(editor.meta.name)
   }, [flowUpdated])
+
+  /**
+   * Editor state management for scroll position
+   */
+  useEffect(() => {
+    const unsub = openPLCStoreBase.subscribe(
+      (state) => state.editor.meta.name,
+      (newName, prevEditorName) => {
+        if (newName === prevEditorName || !scrollableRef.current) return
+        const scrollTop = scrollableRef.current.scrollTop
+        saveEditorViewState({
+          prevEditorName,
+          scrollPosition: { top: scrollTop, left: 0 },
+        })
+      },
+    )
+    return () => unsub()
+  }, [])
+  useEffect(() => {
+    const scrollable = scrollableRef.current
+    const scrollData = openPLCStoreBase.getState().editor.scrollPosition
+
+    if (scrollable && scrollData) {
+      scrollable.scrollTop = scrollData.top
+      requestAnimationFrame(() => {
+        scrollable.scrollTop = scrollData.top
+      })
+    }
+  }, [scrollableRef.current, editor.meta.name])
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
 
@@ -159,36 +188,6 @@ export default function LadderEditor() {
   const handleModalClose = () => {
     closeModal()
   }
-
-  useEffect(() => {
-    const unsub = openPLCStoreBase.subscribe(
-      (state) => state.editor.meta.name,
-      (newName, prevEditorName) => {
-        if (newName === prevEditorName || !scrollableRef.current) return
-
-        const scrollTop = scrollableRef.current.scrollTop
-
-        saveEditorViewState({
-          prevEditorName,
-          scrollPosition: { top: scrollTop, left: 0 },
-        })
-      },
-    )
-
-    return () => unsub()
-  }, [])
-
-  useEffect(() => {
-    const scrollable = scrollableRef.current
-    const scrollData = openPLCStoreBase.getState().editor.scrollPosition
-
-    if (scrollable && scrollData) {
-      scrollable.scrollTop = scrollData.top
-      requestAnimationFrame(() => {
-        scrollable.scrollTop = scrollData.top
-      })
-    }
-  }, [scrollableRef.current, editor.meta.name])
 
   return (
     <div className='h-full w-full overflow-y-auto' ref={scrollableRef} style={{ scrollbarGutter: 'stable' }}>

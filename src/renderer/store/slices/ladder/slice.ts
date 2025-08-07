@@ -566,7 +566,6 @@ export const createLadderFlowSlice: StateCreator<LadderFlowSlice, [], [], Ladder
           if (!rung) return
 
           rung.reactFlowViewport = reactFlowViewport
-          flow.updated = true
         }),
       )
     },

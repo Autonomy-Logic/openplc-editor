@@ -53,7 +53,6 @@ export const createFileSlice: StateCreator<FileSlice, [], [], FileSlice> = (setS
     getFile: ({ name }) => {
       const file = getState().files[name]
       if (!file) {
-        console.warn(`File with name ${name} does not exist.`)
         return { file: undefined }
       }
 
