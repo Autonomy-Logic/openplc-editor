@@ -1,6 +1,7 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { useUndoRedoShortcut } from '@root/renderer/hooks/useUndoRedoShortcut'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { StructureTableType } from '@root/renderer/store/slices'
 import { PLCStructureVariable } from '@root/types/PLC/open-plc'
@@ -16,8 +17,14 @@ const StructureDataType = () => {
       data: { dataTypes },
     },
     editorActions: { updateModelStructure },
-    projectActions: { updateDatatype, rearrangeStructureVariables },
+    projectActions: { updateDatatype, rearrangeStructureVariables, pushToHistory, undo, redo },
   } = useOpenPLCStore()
+
+  useUndoRedoShortcut({
+    undo: () => undo(editor.meta.name),
+    redo: () => redo(editor.meta.name),
+  })
+
   const [tableData, setTableData] = useState<PLCStructureVariable[]>([])
 
   const [editorStructure, setEditorStructure] = useState<StructureTableType>({
@@ -52,6 +59,8 @@ const StructureDataType = () => {
   }
 
   const handleCreateStructureVariable = () => {
+    pushToHistory(editor.meta.name)
+
     const structureVariables = tableData.filter((variable) => variable.name || variable.type)
     const selectedRow = parseInt(editorStructure.selectedRow)
 
@@ -139,6 +148,8 @@ const StructureDataType = () => {
   }
 
   const handleDeleteStructureVariable = () => {
+    pushToHistory(editor.meta.name)
+
     const structureVariables = tableData.filter((variable) => variable.name || variable.type)
     const selectedRow = parseInt(editorStructure.selectedRow)
 
@@ -167,6 +178,8 @@ const StructureDataType = () => {
   }
 
   const handleRearrangeStructureVariables = (index: number, row?: number) => {
+    pushToHistory(editor.meta.name)
+
     rearrangeStructureVariables({
       associatedDataType: editor.meta.name,
       rowId: row ?? parseInt(editorStructure.selectedRow),

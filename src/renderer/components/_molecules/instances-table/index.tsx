@@ -42,7 +42,10 @@ type PLCInstancesTableProps = {
 
 const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstancesTableProps) => {
   const {
-    projectActions: { updateInstance },
+    editor: {
+      meta: { name },
+    },
+    projectActions: { updateInstance, pushToHistory },
   } = useOpenPLCStore()
 
   return (
@@ -51,8 +54,11 @@ const InstancesTable = ({ tableData, handleRowClick, selectedRow }: PLCInstances
       tableData={tableData}
       selectedRow={selectedRow}
       handleRowClick={handleRowClick}
-      // @ts-expect-error - The data value is a literal type that need to be parsed
-      updateData={(rowIndex, columnId, value) => updateInstance({ rowId: rowIndex, data: { [columnId]: value } })}
+      updateData={(rowIndex, columnId, value) => {
+        pushToHistory(name)
+        // @ts-expect-error - The data value is a literal type that need to be parsed
+        return updateInstance({ rowId: rowIndex, data: { [columnId]: value } })
+      }}
       tableContext='Instances'
     />
   )

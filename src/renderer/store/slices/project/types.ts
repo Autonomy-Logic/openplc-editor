@@ -1,16 +1,23 @@
+import { PLCVariable } from '@root/types/PLC'
 import {
   bodySchema,
+  PLCDataType,
   PLCDataTypeSchema,
   PLCFunctionBlockSchema,
   PLCFunctionSchema,
+  PLCInstance,
   PLCInstanceSchema,
   PLCProgramSchema,
   PLCProjectDataSchema,
   PLCStructureVariableSchema,
+  PLCTask,
   PLCTaskSchema,
   PLCVariableSchema,
 } from '@root/types/PLC/open-plc'
 import { z } from 'zod'
+
+import { ZodFBDFlowState, ZodFBDFlowType } from '../fbd'
+import { ZodLadderFlowState, ZodLadderFlowType } from '../ladder'
 
 /**
  * =====================================
@@ -280,8 +287,27 @@ const _projectActionsSchema = z.object({
     .function()
     .args(z.object({ rowId: z.number(), newIndex: z.number() }))
     .returns(z.void()),
+  pushToHistory: z.function().args(z.string()).returns(z.void()),
+  undo: z.function().args(z.string()).returns(z.void()),
+  redo: z.function().args(z.string()).returns(z.void()),
 })
 type ProjectActions = z.infer<typeof _projectActionsSchema>
+
+type PouHistorySnapshot = {
+  variables: PLCVariable[]
+  body: unknown
+  ladderFlow?: ZodLadderFlowType
+  fbdFlow?: ZodFBDFlowType
+  globalVariables?: PLCVariable[]
+  tasks?: PLCTask[]
+  instances?: PLCInstance[]
+  dataTypes?: PLCDataType[]
+}
+
+type PouHistory = {
+  past: PouHistorySnapshot[]
+  future: PouHistorySnapshot[]
+}
 
 /**
  * Project Slice
@@ -290,6 +316,10 @@ type ProjectActions = z.infer<typeof _projectActionsSchema>
 type ProjectSlice = {
   project: ProjectState
   projectActions: ProjectActions
+  undoRedo: Record<string, PouHistory>
+  ladderFlows: ZodLadderFlowState['ladderFlows']
+  fbdFlows: ZodFBDFlowState['fbdFlows']
+  isMonacoFocused: boolean
 }
 
 export { projectMetaSchema, projectResponseSchema, projectStateSchema }
@@ -298,6 +328,8 @@ export {
   DataTypeDTO,
   InstanceDTO,
   PouDTO,
+  PouHistory,
+  PouHistorySnapshot,
   ProjectMeta,
   ProjectResponse,
   ProjectSlice,

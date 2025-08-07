@@ -1,6 +1,7 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
+import { useUndoRedoShortcut } from '@root/renderer/hooks/useUndoRedoShortcut'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
@@ -12,8 +13,15 @@ type EnumDatatypeProps = ComponentPropsWithoutRef<'div'> & {
 }
 const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   const {
-    projectActions: { updateDatatype },
+    editor,
+    projectActions: { updateDatatype, undo, redo, pushToHistory },
   } = useOpenPLCStore()
+
+  useUndoRedoShortcut({
+    undo: () => undo(editor.meta.name),
+    redo: () => redo(editor.meta.name),
+  })
+
   const ROWS_NOT_SELECTED = -1
 
   const [arrayTable, setArrayTable] = useState<{ selectedRow: number }>({ selectedRow: ROWS_NOT_SELECTED })
@@ -31,6 +39,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
 
   const handleInitialValueChange = (value: string) => {
     setInitialValueData(value)
+    pushToHistory(editor.meta.name)
     updateDatatype(data.name, {
       ...data,
       initialValue: value,
@@ -38,6 +47,8 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const addNewRow = () => {
+    pushToHistory(editor.meta.name)
+
     setTableData((prevRows) => {
       const newRows = [...prevRows, { description: '' }]
       setArrayTable({ selectedRow: newRows.length - 1 })
@@ -50,6 +61,8 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const removeRow = () => {
+    pushToHistory(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null) {
         const newRows = prevRows.filter((_, index) => index !== arrayTable.selectedRow)
@@ -69,6 +82,8 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const moveRowUp = () => {
+    pushToHistory(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
         const newRows = [...prevRows]
@@ -91,6 +106,8 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const moveRowDown = () => {
+    pushToHistory(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow < prevRows.length - 1) {
         const newRows = [...prevRows]

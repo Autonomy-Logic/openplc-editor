@@ -29,7 +29,7 @@ const InstancesEditor = () => {
       },
     },
     editorActions: { updateModelInstances },
-    projectActions: { createInstance, rearrangeInstances, deleteInstance, setInstances, setTasks },
+    projectActions: { createInstance, rearrangeInstances, deleteInstance, setInstances, setTasks, pushToHistory },
   } = useOpenPLCStore()
 
   const [instanceData, setInstanceData] = useState<PLCInstance[]>([])
@@ -96,6 +96,9 @@ const InstancesEditor = () => {
 
   const handleRearrangeInstances = (index: number, row?: number) => {
     if (editorInstances.display === 'code') return
+
+    pushToHistory(editor.meta.name)
+
     rearrangeInstances({
       rowId: row ?? parseInt(editorInstances.selectedRow),
       newIndex: (row ?? parseInt(editorInstances.selectedRow)) + index,
@@ -108,6 +111,9 @@ const InstancesEditor = () => {
 
   const handleCreateInstance = () => {
     if (editorInstances.display === 'code') return
+
+    pushToHistory(editor.meta.name)
+
     const instances = instanceData.filter((instance) => instance.name)
     const selectedRow = parseInt(editorInstances.selectedRow)
 
@@ -153,6 +159,8 @@ const InstancesEditor = () => {
   const handleDeleteInstance = () => {
     if (editorInstances.display === 'code') return
 
+    pushToHistory(editor.meta.name)
+
     const selectedRow = parseInt(editorInstances.selectedRow)
     deleteInstance({
       rowId: selectedRow,
@@ -177,6 +185,8 @@ const InstancesEditor = () => {
 
   const commitCode = (): boolean => {
     try {
+      pushToHistory(editor.meta.name)
+
       const { instances, tasks } = parseResourceStringToConfiguration(editorCode)
 
       const response = setInstances({

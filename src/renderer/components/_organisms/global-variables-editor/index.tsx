@@ -31,7 +31,7 @@ const GlobalVariablesEditor = () => {
       },
     },
     editorActions: { updateModelVariables },
-    projectActions: { createVariable, deleteVariable, rearrangeVariables, setGlobalVariables },
+    projectActions: { createVariable, deleteVariable, rearrangeVariables, setGlobalVariables, pushToHistory },
   } = useOpenPLCStore()
 
   /**
@@ -91,6 +91,9 @@ const GlobalVariablesEditor = () => {
 
   const handleRearrangeVariables = (index: number, row?: number) => {
     if (editorVariables.display === 'code') return
+
+    pushToHistory(editor.meta.name)
+
     rearrangeVariables({
       scope: 'global',
       rowId: row ?? parseInt(editorVariables.selectedRow),
@@ -104,6 +107,8 @@ const GlobalVariablesEditor = () => {
 
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
+
+    pushToHistory(editor.meta.name)
 
     const variables = globalVariables.filter((variable) => variable.name)
     const selectedRow = parseInt(editorVariables.selectedRow)
@@ -152,6 +157,8 @@ const GlobalVariablesEditor = () => {
   const handleRemoveVariable = () => {
     if (editorVariables.display === 'code') return
 
+    pushToHistory(editor.meta.name)
+
     const selectedRow = parseInt(editorVariables.selectedRow)
     deleteVariable({ scope: 'global', rowId: selectedRow })
 
@@ -173,6 +180,8 @@ const GlobalVariablesEditor = () => {
 
   const commitCode = (): boolean => {
     try {
+      pushToHistory(editor.meta.name)
+
       const newVariables = parseIecStringToVariables(editorCode)
 
       const response = setGlobalVariables({

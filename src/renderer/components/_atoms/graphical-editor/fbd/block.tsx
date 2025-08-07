@@ -68,7 +68,7 @@ export const BlockNodeElement = <T extends object>({
     project: {
       data: { pous },
     },
-    projectActions: { updateVariable, deleteVariable },
+    projectActions: { updateVariable, deleteVariable, pushToHistory },
   } = useOpenPLCStore()
 
   const {
@@ -163,6 +163,8 @@ export const BlockNodeElement = <T extends object>({
         title: '',
       }
 
+      pushToHistory(editor.meta.name)
+
       if ((libraryBlock as BlockVariant).type !== 'function-block') {
         deleteVariable({
           rowId: variableIndex,
@@ -242,6 +244,8 @@ export const BlockNodeElement = <T extends object>({
       }
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
+
+    pushToHistory(editor.meta.name)
 
     setNodes({
       editorName: editor.meta.name,
@@ -332,7 +336,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     project: {
       data: { pous },
     },
-    projectActions: { createVariable },
+    projectActions: { createVariable, pushToHistory },
     fbdFlows,
     fbdFlowActions: { updateNode },
   } = useOpenPLCStore()
@@ -491,6 +495,8 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       if (matchingVariable) {
         variableToLink = matchingVariable
       } else if (createIfNotFound) {
+        pushToHistory(editor.meta.name)
+
         const creationResult = createVariable({
           data: {
             id: uuidv4(),

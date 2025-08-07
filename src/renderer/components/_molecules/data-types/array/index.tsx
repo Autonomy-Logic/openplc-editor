@@ -2,6 +2,7 @@ import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { InputWithRef } from '@root/renderer/components/_atoms'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { TypeDropdownSelector } from '@root/renderer/components/_atoms/type-dropdown-selector'
+import { useUndoRedoShortcut } from '@root/renderer/hooks/useUndoRedoShortcut'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { baseTypeSchema, PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
@@ -19,12 +20,18 @@ type UserLibFunctionBlock = { type: string; name: string }
 const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const {
     editor,
-    projectActions: { updateDatatype },
+    projectActions: { updateDatatype, pushToHistory, undo, redo },
     project: {
       data: { dataTypes },
     },
     libraries: sliceLibraries,
   } = useOpenPLCStore()
+
+  useUndoRedoShortcut({
+    undo: () => undo(editor.meta.name),
+    redo: () => redo(editor.meta.name),
+  })
+
   const baseTypes = baseTypeSchema.options.filter((type) => type.toUpperCase() !== 'ARRAY')
   const userDataTypes = dataTypes
     .map((type) => type.name)
@@ -89,7 +96,13 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
 
   const addNewRow = () => {
     setTableData((prevRows) => {
+      const isFirst = prevRows.length === 0
       const newRows = [...prevRows, { dimension: '' }]
+
+      if (isFirst) {
+        pushToHistory(editor.meta.name)
+      }
+
       setArrayTable({ selectedRow: newRows.length - 1 })
       updateDatatype(data.name, { dimensions: newRows } as PLCArrayDatatype)
       return newRows
@@ -97,6 +110,8 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   }
 
   const removeRow = () => {
+    pushToHistory(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null) {
         const newRows = prevRows.filter((_, index) => index !== arrayTable.selectedRow)
@@ -117,6 +132,8 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   }
 
   const moveRowUp = () => {
+    pushToHistory(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
         const newRows = [...prevRows]
@@ -140,6 +157,8 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   }
 
   const moveRowDown = () => {
+    pushToHistory(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow < prevRows.length - 1) {
         const newRows = [...prevRows]
