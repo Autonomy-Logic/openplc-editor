@@ -17,13 +17,11 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     project: {
       data: { dataTypes },
     },
-    workspace: { editingState },
 
     tabsActions: { updateTabName },
     editorActions: { updateEditorModel },
     projectActions: { updateDatatype },
-    fileActions: { getFile, updateFile },
-    workspaceActions: { setEditingState },
+    sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
   const [editorContent, setEditorContent] = useState<PLCDataType>()
@@ -38,14 +36,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   }, [dataTypes, dataTypeName])
 
   useEffect(() => {
-    const { file: dataTypeFile } = getFile({ name: dataTypeName })
-    if (dataTypeFile?.saved) {
-      updateFile({
-        name: dataTypeName,
-        saved: false,
-      })
-    }
-    if (editingState !== 'unsaved') setEditingState('unsaved')
+    handleFileAndWorkspaceSavedState(dataTypeName)
   }, [dataTypes])
 
   const handleStartEditing = () => {
