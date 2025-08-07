@@ -10,7 +10,7 @@ import { XmlGenerator } from '@root/utils'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 
-import type { HalsFile } from './compiler-types'
+import type { ArduinoCoreControl, HalsFile } from './compiler-types'
 
 interface MethodsResult<T> {
   success: boolean
@@ -188,20 +188,16 @@ class CompilerModule {
     const boardDirectory = join(buildDirectory, boardTarget)
     const sourceDirectory = join(boardDirectory, 'src')
 
-    try {
-      // Create the directories recursively.
-      // INFO: We don't have to create the build directory separately
-      const results = await Promise.all([
-        mkdir(boardDirectory, { recursive: true }),
-        mkdir(sourceDirectory, { recursive: true }),
-      ])
-      if (results[0] || results[1]) {
-        result = { success: true, data: [boardDirectory, sourceDirectory] }
-      } else {
-        result = { success: true }
-      }
-    } catch (_error) {
-      throw new Error(`Error creating directories: ${_error as string}`)
+    // Create the directories recursively.
+    // INFO: We don't have to create the build directory separately
+    const results = await Promise.all([
+      mkdir(boardDirectory, { recursive: true }),
+      mkdir(sourceDirectory, { recursive: true }),
+    ])
+    if (results[0] || results[1]) {
+      result = { success: true, data: [boardDirectory, sourceDirectory] }
+    } else {
+      result = { success: true }
     }
 
     return result
@@ -377,6 +373,83 @@ class CompilerModule {
     })
   }
 
+  // TODO: This method is used to update the index of the Arduino core.
+  // We should validate if this is necessary and if it works correctly.
+  async handleCoreUpdateIndex(handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void) {
+    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
+      let binaryPath = this.arduinoCliBinaryPath
+      const [flag, configFilePath] = this.arduinoCliBaseParameters
+
+      if (CompilerModule.HOST_PLATFORM === 'win32') {
+        // INFO: On Windows, we need to add the .exe extension to the binary path.
+        binaryPath += '.exe'
+      }
+      const executeCommand = spawn(binaryPath, ['core', 'update-index', flag, configFilePath])
+
+      let stderrData = ''
+
+      executeCommand.stdout?.on('data', (data: Buffer) => {
+        handleOutputData(data)
+      })
+      executeCommand.stderr?.on('data', (data: Buffer) => {
+        stderrData += data.toString()
+      })
+      executeCommand.on('close', (code) => {
+        if (code === 0) {
+          resolve({
+            success: true,
+          })
+        } else {
+          reject(new Error(`Arduino CLI process exited with code ${code}\n${stderrData}`))
+        }
+      })
+    })
+  }
+
+  async handleCoreInstallation(
+    boardCore: string | null,
+    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+  ) {
+    if (boardCore === null) return
+    const coreControlFilePath = join(electronApp.getPath('userData'), 'User', 'Runtime', 'arduino-core-control.json')
+    const coreControlFileContent = await CompilerModule.readJSONFile<ArduinoCoreControl>(coreControlFilePath)
+
+    const isCoreInstalled = Object.keys(coreControlFileContent).some((core) => core === boardCore)
+    if (isCoreInstalled) {
+      handleOutputData(`Core ${boardCore} is already installed.`, 'info')
+      return
+    }
+
+    let binaryPath = this.arduinoCliBinaryPath
+    const [flag, configFilePath] = this.arduinoCliBaseParameters
+
+    if (CompilerModule.HOST_PLATFORM === 'win32') {
+      // INFO: On Windows, we need to add the .exe extension to the binary path.
+      binaryPath += '.exe'
+    }
+    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
+      const executeCommand = spawn(binaryPath, ['core', 'install', boardCore, flag, configFilePath])
+
+      let stderrData = ''
+
+      executeCommand.stdout?.on('data', (data: Buffer) => {
+        handleOutputData(data)
+      })
+      executeCommand.stderr?.on('data', (data: Buffer) => {
+        stderrData += data.toString()
+      })
+      executeCommand.on('close', (code) => {
+        if (code === 0) {
+          resolve({
+            success: true,
+          })
+        } else {
+          reject(new Error(`Arduino CLI process exited with code ${code}\n${stderrData}`))
+        }
+      })
+    })
+  }
+
   // !! Deprecated: This method is a outdated implementation and should be removed.
   async createXmlFile(
     pathToUserProject: string,
@@ -420,7 +493,10 @@ class CompilerModule {
    * It will handle all the compilation process, will orchestrate the various steps involved in compiling a program.
    */
   // Work in progress - we should specify the arguments and the return type correctly.
-  async compileProgram(args: Array<string | ProjectState['data']>, _mainProcessPort: MessagePortMain): Promise<void> {
+  async compileProgram(
+    args: Array<string | null | ProjectState['data']>,
+    _mainProcessPort: MessagePortMain,
+  ): Promise<void> {
     // Start the main process port to communicate with the renderer process.
     // INFO: This is necessary to send messages back to the renderer process.
     _mainProcessPort.start()
@@ -428,7 +504,12 @@ class CompilerModule {
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Starting compilation process...' })
     // INFO: We assume the first argument is the project path,
     // INFO: the second argument is the board target, and the third argument is the project data.
-    const [projectPath, boardTarget, projectData] = args as [string, string, ProjectState['data']]
+    const [projectPath, boardTarget, boardCore, projectData] = args as [
+      string,
+      string,
+      string | null,
+      ProjectState['data'],
+    ]
 
     const boardRuntime = await this.#getBoardRuntime(boardTarget) // Get the board runtime from the hals.json file
 
@@ -462,42 +543,30 @@ class CompilerModule {
       _mainProcessPort.postMessage({
         message: `Arduino CLI available at version ${arduinoCliCheckResult.data}\nIEC2C available at version ${iec2cCheckResult.data}`,
       })
-      if (!arduinoCliCheckResult.success || !iec2cCheckResult.success) {
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: `Missing necessary tools.`,
-        })
-        throw new Error('Missing necessary tools.')
-      }
     } catch (_error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
         // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-        message: `Error checking tools availability: ${_error}`,
+        message: `${_error}\nStopping compilation process.`,
       })
+      _mainProcessPort.close()
       return
     }
 
     // Step 1: Create basic directories
     try {
-      const createDirsResult = await this.createBasicDirectories(normalizedProjectPath, boardTarget)
-      if (!createDirsResult.success) {
-        _mainProcessPort.postMessage({
-          logLevel: 'error',
-          message: `Failed to create basic directories: ${createDirsResult.data as string}`,
-        })
-        return
-      }
+      await this.createBasicDirectories(normalizedProjectPath, boardTarget)
       _mainProcessPort.postMessage({
         logLevel: 'info',
-        message: 'Basic directories created successfully!',
+        message: 'Directories for compilation source files created.',
       })
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
         // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-        message: `Error creating basic directories: ${error}`,
+        message: `${error}\nStopping compilation process.`,
       })
+      _mainProcessPort.close()
       return
     }
 
@@ -511,8 +580,9 @@ class CompilerModule {
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
-        message: `Error generating XML from JSON: ${error as string}`,
+        message: `Error generating XML from JSON: ${error as string}\nStopping compilation process.`,
       })
+      _mainProcessPort.close()
       return
     }
 
@@ -525,8 +595,9 @@ class CompilerModule {
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
-        message: `Error transpiling XML to ST: ${error as string}`,
+        message: `Error transpiling XML to ST: ${error as string}\nStopping compilation process.`,
       })
+      _mainProcessPort.close()
       return
     }
 
@@ -538,8 +609,9 @@ class CompilerModule {
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
-        message: `Error copying static files: ${error as string}`,
+        message: `Error copying static files: ${error as string}\nStopping compilation process.`,
       })
+      _mainProcessPort.close()
       return
     }
 
@@ -554,6 +626,11 @@ class CompilerModule {
         logLevel: 'error',
         message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
       })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping compilation process.',
+      })
+      _mainProcessPort.close()
       return
     }
 
@@ -567,6 +644,11 @@ class CompilerModule {
         logLevel: 'error',
         message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
       })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping compilation process.',
+      })
+      _mainProcessPort.close()
       return
     }
 
@@ -586,6 +668,24 @@ class CompilerModule {
       return
     }
 
+    // Step 6: Handle core installation
+    _mainProcessPort.postMessage({ logLevel: 'info', message: 'Handling core installation...' })
+    try {
+      await this.handleCoreInstallation(boardCore, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
     // -- Final message --
     _mainProcessPort.postMessage({
       message:

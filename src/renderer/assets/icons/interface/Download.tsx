@@ -8,7 +8,6 @@ export const DownloadIcon = (props: IIconProps) => {
   const sizeClasses = IconStyles.sizeClasses.small[size]
   return (
     <svg
-      role='button'
       viewBox='0 0 24 22'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'
