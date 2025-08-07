@@ -104,7 +104,8 @@ export const createSharedSlice: StateCreator<
       if (!res.ok) throw new Error()
 
       const projectPath = getState().project.meta.path
-      const path = `${projectPath}/pous/${propsToCreatePou.type}s/${propsToCreatePou.name}.json`
+      const pouPath = `/pous/${propsToCreatePou.type}s/${propsToCreatePou.name}.json`
+      const path = `${projectPath}${pouPath}`
 
       /**
        * Then, create the POU file in the filesystem.
@@ -145,7 +146,7 @@ export const createSharedSlice: StateCreator<
           meta: {
             name: propsToCreatePou.name,
             language: propsToCreatePou.language,
-            path: path,
+            path: pouPath,
             pouType: propsToCreatePou.type,
           },
           variable: {
@@ -163,7 +164,7 @@ export const createSharedSlice: StateCreator<
           meta: {
             name: propsToCreatePou.name,
             language: propsToCreatePou.language,
-            path: path,
+            path: pouPath,
             pouType: propsToCreatePou.type,
           },
           variable: {
@@ -217,7 +218,7 @@ export const createSharedSlice: StateCreator<
       getState().fileActions.addFile({
         name: propsToCreatePou.name,
         type: propsToCreatePou.type,
-        filePath: path,
+        filePath: pouPath,
       })
 
       // Add and set the editor
@@ -368,7 +369,7 @@ export const createSharedSlice: StateCreator<
       const modalData: DeleteDatatype = {
         type: 'datatype',
         file: datatype.name,
-        path: `datatypes/${datatype.name}`,
+        path: `/project.json`,
       }
 
       getState().modalActions.openModal('confirm-delete-element', modalData)
