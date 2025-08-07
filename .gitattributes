@@ -16,16 +16,4 @@
 ##########################
 iec2c   binary
 xml2st  binary
-resources/compilers/MacOS/xml2st/x64/_internal/**/*  binary
-resources/compilers/MacOS/xml2st/arm64/_internal/**/*  binary
-resources/compilers/Windows/xml2st/_internal/**/*  binary
-resources/compilers/Linux/xml2st/**/*  binary
-resources/compilers/MacOS/arduino-cli/**/*  binary
-resources/compilers/Windows/arduino-cli/**/*  binary
-resources/compilers/Linux/arduino-cli/**/*  binary
-resources/compilers/MacOS/iec2c/**/*  binary
-resources/compilers/Windows/iec2c/**/*  binary
-resources/compilers/Linux/iec2c/**/*  binary
-resources/serial-communication/Macos/**/*  binary
-resources/serial-communication/Linux/**/*  binary
-resources/serial-communication/Windows/**/*  binary
+resources/bin/**/*  binary

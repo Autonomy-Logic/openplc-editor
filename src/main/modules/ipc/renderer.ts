@@ -105,6 +105,35 @@ const rendererProcessBridge = {
   winHandleUpdateTheme: () => ipcRenderer.send('system:update-theme'),
 
   // ===================== COMPILER/BUILD METHODS =====================
+  // !! Deprecated: This method is an outdated implementation and should be substituted.
+  exportProjectXml: async (
+    pathToUserProject: string,
+    dataToCreateXml: ProjectState['data'],
+    parseTo: 'old-editor' | 'codesys',
+  ): Promise<{ success: boolean; message: string }> =>
+    ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml, parseTo),
+  // =================== Work in Progress ===================
+  // This method is a placeholder for running the compile program.
+  runCompileProgram: (
+    compileProgramArgs: Array<string | null | ProjectState['data']>,
+    callback: (args: any) => void,
+  ) => {
+    // Create a MessageChannel to communicate between the renderer and main process
+    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
+    // Send to the main process a message to run the compile program
+    // The main process will handle the compilation and send the result back through the port
+    ipcRenderer.postMessage('compiler:run-compile-program', compileProgramArgs, [mainProcessPort])
+    rendererProcessPort.onmessage = (event) => callback(event.data)
+    rendererProcessPort.addEventListener('close', () =>
+      callback({
+        closePort: true,
+      }),
+    )
+    // rendererProcessPort.start()
+    // Set up the renderer process port to listen for messages from the main process
+  },
+
+  // !! Deprecated: These methods are an outdated implementation and should be removed.
   compileRequest: (xmlPath: string, callback: (args: any) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:build-st-program', xmlPath, [mainProcessPort])
@@ -120,12 +149,6 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('compiler:build-xml-file', pathToUserProject, dataToCreateXml),
   exportProjectRequest: (callback: IpcRendererCallbacks) =>
     ipcRenderer.on('compiler:export-project-request', (_event, value) => callback(_event, value)),
-  exportProjectXml: async (
-    pathToUserProject: string,
-    dataToCreateXml: ProjectState['data'],
-    parseTo: 'old-editor' | 'codesys',
-  ): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml, parseTo),
   generateCFilesRequest: (pathToStProgram: string, callback: (args: any) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:generate-c-files', pathToStProgram, [mainProcessPort])
