@@ -13,7 +13,7 @@ export default function FbdEditor() {
   } = useOpenPLCStore()
 
   const flow = fbdFlows.find((flow) => flow.name === editor.meta.name)
-  const flowUpdated = flow?.updated
+  const flowUpdated = flow?.updated || false
 
   /**
    * Update the flow state to project JSON
