@@ -61,7 +61,7 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
             if (!connectedNode || !(connectedNode.data.variant as BlockVariant).variables) return
 
             const variableType = (connectedNode.data.variant as BlockVariant).variables.find(
-              (v) => v.name === (block.type === 'input-variable' ? edge.targetHandle : edge.sourceHandle),
+              (variable) => variable.name === (block.type === 'input-variable' ? edge.targetHandle : edge.sourceHandle),
             )?.type.value
             if (!variableType) return
 
@@ -245,7 +245,8 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
       }
 
       const selectedVariable =
-        filteredVariables.find((v) => v.id === variable.id) ?? filteredVariables.find((v) => v.name === variable.name)
+        filteredVariables.find((variable) => variable.id === variable.id) ??
+        filteredVariables.find((variable) => variable.name === variable.name)
       if (!selectedVariable) {
         submitAddVariable({ variableName: valueToSearch })
         return

@@ -29,9 +29,10 @@ import { buildGenericNode } from './fbd-utils/nodes'
 
 interface FBDProps {
   rung: FBDRungState
+  nodeDivergences?: string[]
 }
 
-export const FBDBody = ({ rung }: FBDProps) => {
+export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
   const {
     editor,
     editorActions: { updateModelVariables, saveEditorViewState },
@@ -69,7 +70,13 @@ export const FBDBody = ({ rung }: FBDProps) => {
   const updateRungLocalFromStore = () => {
     // console.log('updateRungLocalFromStore --')
     // console.log('rung', rung)
-    setRungLocal(rung)
+    setRungLocal({
+      ...rung,
+      nodes: rung.nodes.map((node) => ({
+        ...node,
+        data: { ...node.data, hasDivergence: nodeDivergences.includes(node.id) },
+      })),
+    })
   }
 
   const updateRungState = () => {

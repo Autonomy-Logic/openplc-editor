@@ -24,9 +24,10 @@ import { findNode } from './ladder-utils/nodes'
 type RungBodyProps = {
   rung: RungLadderState
   className?: string
+  nodeDivergences?: string[]
 }
 
-export const RungBody = ({ rung, className }: RungBodyProps) => {
+export const RungBody = ({ rung, className, nodeDivergences = [] }: RungBodyProps) => {
   const {
     ladderFlowActions,
     libraries,
@@ -95,7 +96,13 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
    *  Update the local rung state when the rung state changes
    */
   useEffect(() => {
-    setRungLocal(rung)
+    setRungLocal({
+      ...rung,
+      nodes: rung.nodes.map((node) => ({
+        ...node,
+        data: { ...node.data, hasDivergence: nodeDivergences.includes(`${rung.id}:${node.id}`) },
+      })),
+    })
     updateReactFlowPanelExtent(rung)
   }, [rung.nodes])
 
