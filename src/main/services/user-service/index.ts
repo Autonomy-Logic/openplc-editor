@@ -127,18 +127,9 @@ class UserService {
     }
   }
 
-  /**
-   * Checks if the Core List file exists and creates it if it doesn't.
-   * TODO: This function must be refactored.
-   * - Must validate if this implementation for the core list file is correct.
-   */
-
-  async #checkIfArduinoCoreControlFileExists(): Promise<void> {
+  async #executeArduinoCliCommand(command: string): Promise<{ stderr: string; stdout: string }> {
     const developmentMode = process.env.NODE_ENV === 'development'
     const executeCommand = promisify(exec)
-
-    const pathToRuntimeFolder = join(app.getPath('userData'), 'User', 'Runtime')
-    const pathToArduinoCoreControlFile = join(pathToRuntimeFolder, 'arduino-core-control.json')
 
     const platformSpecificBinaryPath = join(process.platform, process.arch)
 
@@ -154,7 +145,20 @@ class UserService {
       binaryPath = `${binaryPath}.exe`
     }
 
-    const { stderr, stdout } = await executeCommand(`"${binaryPath}" core list --json`)
+    return executeCommand(`"${binaryPath}" ${command}`)
+  }
+
+  /**
+   * Checks if the Core List file exists and creates it if it doesn't.
+   * TODO: This function must be refactored.
+   * - Must validate if this implementation for the core list file is correct.
+   */
+
+  async #checkIfArduinoCoreControlFileExists(): Promise<void> {
+    const pathToRuntimeFolder = join(app.getPath('userData'), 'User', 'Runtime')
+    const pathToArduinoCoreControlFile = join(pathToRuntimeFolder, 'arduino-core-control.json')
+
+    const { stderr, stdout } = await this.#executeArduinoCliCommand('core list --json')
     if (stderr) {
       console.error(`Error listing cores: ${String(stderr)}`)
       return
@@ -176,27 +180,10 @@ class UserService {
   }
 
   async #checkIfArduinoLibraryControlFileExists() {
-    const developmentMode = process.env.NODE_ENV === 'development'
-    const executeCommand = promisify(exec)
-
     const pathToRuntimeFolder = join(app.getPath('userData'), 'User', 'Runtime')
     const pathToArduinoLibraryControlFile = join(pathToRuntimeFolder, 'arduino-library-control.json')
 
-    const platformSpecificBinaryPath = join(process.platform, process.arch)
-
-    let binaryPath = join(
-      developmentMode ? process.cwd() : process.resourcesPath,
-      developmentMode ? 'resources' : '',
-      'bin',
-      developmentMode ? platformSpecificBinaryPath : '',
-      'arduino-cli',
-    )
-
-    if (process.platform === 'win32') {
-      binaryPath = `${binaryPath}.exe`
-    }
-
-    const { stderr, stdout } = await executeCommand(`"${binaryPath}" lib list --json`)
+    const { stderr, stdout } = await this.#executeArduinoCliCommand('lib list --json')
     if (stderr) {
       console.error(`Error listing libraries: ${String(stderr)}`)
       return

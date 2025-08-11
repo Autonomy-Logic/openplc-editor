@@ -213,7 +213,9 @@ class CompilerModule {
     const libraryControlFileContent =
       await CompilerModule.readJSONFile<Array<Record<string, string>>>(libraryControlFilePath)
 
-    return libraryControlFileContent
+    const installedLibraries = libraryControlFileContent.map((lib) => Object.keys(lib)[0])
+
+    return installedLibraries
   }
 
   // ++ ========================= Build Steps ================================= ++
@@ -499,7 +501,7 @@ class CompilerModule {
     const requiredLibraries = Array.from(new Set([...CompilerModule.GLOBAL_LIBRARIES, ...extraLibraries]))
 
     // 2. Check if all required libraries are already installed
-    const installedLibraries = (await this.getArduinoInstalledLibraries()).map((lib) => Object.keys(lib)[0])
+    const installedLibraries = await this.getArduinoInstalledLibraries()
     const missingLibraries = requiredLibraries.filter((lib) => !installedLibraries.includes(lib))
 
     if (missingLibraries.length === 0) {
