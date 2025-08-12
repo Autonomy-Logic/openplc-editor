@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 
 import { CreateXMLFile } from '@root/main/utils'
 import { ProjectState } from '@root/renderer/store/slices'
+import type { DeviceConfiguration } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
@@ -21,6 +22,7 @@ type HandleOutputDataCallback = (chunk: Buffer | string, logLevel?: 'info' | 'er
 class CompilerModule {
   binaryDirectoryPath: string
   sourceDirectoryPath: string
+  halsFilePath: string
 
   arduinoCliBinaryPath: string
   arduinoCliConfigurationFilePath: string
@@ -63,6 +65,7 @@ class CompilerModule {
   constructor() {
     this.binaryDirectoryPath = this.#constructBinaryDirectoryPath()
     this.sourceDirectoryPath = this.#constructSourceDirectoryPath()
+    this.halsFilePath = this.#constructHalsFilePath()
 
     this.arduinoCliBinaryPath = this.#constructArduinoCliBinaryPath()
     this.arduinoCliConfigurationFilePath = join(electronApp.getPath('userData'), 'User', 'arduino-cli.yaml')
@@ -106,6 +109,16 @@ class CompilerModule {
     )
   }
 
+  #constructHalsFilePath(): string {
+    return join(
+      CompilerModule.DEVELOPMENT_MODE ? process.cwd() : process.resourcesPath,
+      CompilerModule.DEVELOPMENT_MODE ? 'resources' : '',
+      'sources',
+      'boards',
+      'hals.json',
+    )
+  }
+
   #constructArduinoCliBinaryPath(): string {
     return join(this.binaryDirectoryPath, 'arduino-cli')
   }
@@ -119,7 +132,7 @@ class CompilerModule {
   }
 
   async #getBoardRuntime(board: string) {
-    const halsFilePath = join(this.sourceDirectoryPath, 'boards', 'hals.json')
+    const halsFilePath = this.halsFilePath
     const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(halsFilePath)
     return halsFileContent[board]['compiler']
   }
@@ -203,6 +216,7 @@ class CompilerModule {
     const coreControlFileContent = await CompilerModule.readJSONFile<ArduinoCoreControl>(coreControlFilePath)
     return coreControlFileContent
   }
+
   async getArduinoInstalledLibraries() {
     const libraryControlFilePath = join(
       electronApp.getPath('userData'),
@@ -216,6 +230,41 @@ class CompilerModule {
     const installedLibraries = libraryControlFileContent.map((lib) => Object.keys(lib)[0])
 
     return installedLibraries
+  }
+
+  // ++ =========================== Defines.h methods ==========================++
+  async createMD5Hash(content: string): Promise<string> {
+    const crypto = await import('node:crypto')
+    return crypto.createHash('md5').update(content).digest('hex')
+  }
+
+  async writeDefinitionsFileHeader() {}
+
+  async writeDefinitionsFileContent(deviceDirectoryPath: string, buildMD5Hash: string) {
+    let DEFINES_CONTENT: string = ''
+
+    // We will read the device files content
+    const { communicationConfiguration } = await CompilerModule.readJSONFile<DeviceConfiguration>(
+      join(deviceDirectoryPath, 'configuration.json'),
+    )
+    const _devicePinMappingFileContent = await CompilerModule.readJSONFile(
+      join(deviceDirectoryPath, 'pin-mapping.json'),
+    )
+
+    // ===== Defines.h content generation =====
+
+    // 1. Program MD5
+    DEFINES_CONTENT += '//Program MD5'
+    DEFINES_CONTENT += `#define PROGRAM_MD5 "${buildMD5Hash}"\n\n`
+
+    // 2. Device Configuration
+    DEFINES_CONTENT += '//Comms Configuration\n'
+    DEFINES_CONTENT += `#define MBSERIAL_IFACE ${communicationConfiguration.modbusRTU.rtuInterface}\n`
+    DEFINES_CONTENT += `#define MBSERIAL_BAUD ${communicationConfiguration.modbusRTU.rtuBaudRate}\n`
+    DEFINES_CONTENT += `#define MBSERIAL_SLAVE ${communicationConfiguration.modbusRTU.rtuSlaveId}\n` // TODO: Verify if a null value should be parsed to 1
+    DEFINES_CONTENT += `#define MBTCP_MAC ${communicationConfiguration.modbusTCP.tcpMacAddress}\n`
+
+    return DEFINES_CONTENT
   }
 
   // ++ ========================= Build Steps ================================= ++
@@ -285,7 +334,7 @@ class CompilerModule {
   // +++++++++++++++++++++++++++ Compilation Methods +++++++++++++++++++++++++++++
 
   async handleGenerateXMLfromJSON(sourceTargetFolderPath: string, jsonData: ProjectState['data']) {
-    return new Promise<MethodsResult<string>>((resolve, reject) => {
+    return new Promise<MethodsResult<{ xmlPath: string; xmlContent: string }>>((resolve, reject) => {
       const { data: xmlData } = XmlGenerator(jsonData, 'old-editor')
       if (typeof xmlData !== 'string') {
         reject(new Error('XML data is not a string'))
@@ -295,7 +344,7 @@ class CompilerModule {
       const xmlCreationResult = CreateXMLFile(sourceTargetFolderPath, xmlData, 'plc')
 
       if (xmlCreationResult.success) {
-        resolve({ success: true, data: sourceTargetFolderPath })
+        resolve({ success: true, data: { xmlPath: sourceTargetFolderPath, xmlContent: xmlData } })
       } else {
         reject(new Error('Failed to create XML file'))
       }
@@ -579,6 +628,34 @@ class CompilerModule {
     })
   }
 
+  async handleGenerateDefinitionsFile(
+    compilationPath: string,
+    boardTarget: string,
+    _handleOutputData: HandleOutputDataCallback,
+  ) {
+    let _DEFINES_CONTENT: string = ''
+    const _definitionsFilePath = join(compilationPath, 'src', 'defines.h')
+    const halsFilePath = this.halsFilePath
+    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(halsFilePath)
+    const boardEntry = halsFileContent[boardTarget]
+
+    // 1. We need to verify if the board entry in the hals.json file has the define property.
+    if (boardEntry && boardEntry.define) {
+      // 2. If it has the defines property, we will write a header and iterate over the defines to create the content for the defines.h file.
+      _DEFINES_CONTENT = '// Board defines\n'
+      if (Array.isArray(boardEntry.define)) {
+        // 3. If the defines property is an array, we will iterate over it and add each define to the content.
+        boardEntry.define.forEach((define) => {
+          _DEFINES_CONTENT += `#define ${define}\n`
+        })
+      } else if (typeof boardEntry.define === 'string') {
+        // 4. If the defines property is a string, we will add it directly to the content.
+        _DEFINES_CONTENT += `#define ${boardEntry.define}\n`
+      }
+    }
+    // 2. If the board entry does not have the define property, we will just write a double breakline to the file.
+    _DEFINES_CONTENT += '\n\n'
+  }
   // !! Deprecated: This method is a outdated implementation and should be removed.
   async createXmlFile(
     pathToUserProject: string,
@@ -648,6 +725,8 @@ class CompilerModule {
 
     const sourceTargetFolderPath = join(compilationPath, 'src') // Assuming the source folder is named 'src'
 
+    let buildMD5Hash: string | null = null
+
     // --- Print basic information ---
     _mainProcessPort.postMessage({
       logLevel: 'info',
@@ -700,11 +779,12 @@ class CompilerModule {
     }
 
     // Step 2: Generate XML from JSON
+    let generateXMLResult: MethodsResult<{ xmlPath: string; xmlContent: string }> = { success: false }
     try {
-      const generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
+      generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
       _mainProcessPort.postMessage({
         logLevel: 'info',
-        message: `Generated XML from JSON at: ${generateXMLResult.data as string}`,
+        message: `Generated XML from JSON at: ${generateXMLResult.data?.xmlPath as string}`,
       })
     } catch (error) {
       _mainProcessPort.postMessage({
@@ -713,6 +793,23 @@ class CompilerModule {
       })
       _mainProcessPort.close()
       return
+    }
+
+    // Step 2.1: Generate MD5 hash of the XML file
+    try {
+      const xmlContentToGenerateHash = generateXMLResult.data?.xmlContent
+      if (xmlContentToGenerateHash) {
+        buildMD5Hash = await this.createMD5Hash(xmlContentToGenerateHash)
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: `Build MD5 hash: ${buildMD5Hash}`,
+        })
+      }
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error generating MD5 hash of the XML file: ${error as string}\n`,
+      })
     }
 
     // Step 3: Transpile XML to ST
@@ -833,6 +930,10 @@ class CompilerModule {
       _mainProcessPort.close()
       return
     }
+
+    // Step 8: Handle defines.h file generation
+    const _deviceDirectoryPath = join(normalizedProjectPath, 'device')
+
     // -- Final message --
     _mainProcessPort.postMessage({
       message:
