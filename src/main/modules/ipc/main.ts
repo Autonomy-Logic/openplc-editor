@@ -184,6 +184,22 @@ class MainProcessBridge implements MainIpcModule {
       }
     }
   }
+  handleRenamePouFile = async (_event: IpcMainInvokeEvent, filePath: string, newFileName: string) => {
+    try {
+      const response = await this.pouService.renamePouFile(filePath, newFileName)
+      return response
+    } catch (error) {
+      console.error('Error renaming POU file:', error)
+      return {
+        success: false,
+        error: {
+          title: 'Error renaming POU file',
+          description: 'Please try again',
+          error,
+        },
+      }
+    }
+  }
 
   // App and system handlers
   handleOpenExternalLink = async (_event: IpcMainInvokeEvent, url: string) => {

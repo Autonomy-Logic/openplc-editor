@@ -43,6 +43,7 @@ export type SharedSlice = {
     update: () => void
     deleteRequest: (pouName: string) => void
     delete: (data: DeletePou) => Promise<BasicSharedSliceResponse>
+    rename: (pouName: string, newPouName: string) => Promise<BasicSharedSliceResponse>
   }
   datatypeActions: {
     create: (
@@ -51,6 +52,7 @@ export type SharedSlice = {
     update: () => void
     deleteRequest: (datatypeName: string) => void
     delete: (data: DeleteDatatype) => BasicSharedSliceResponse
+    rename: (datatypeName: string, newDatatypeName: string) => BasicSharedSliceResponse
   }
   sharedWorkspaceActions: {
     // Clear all states when closing a project
@@ -302,6 +304,60 @@ export const createSharedSlice: StateCreator<
         success: true,
       }
     },
+
+    rename: async (pouName, newPouName) => {
+      const pou = getState().project.data.pous.find((pou) => pou.data.name === pouName)
+      if (!pou) {
+        toast({
+          title: 'Error',
+          description: `POU with name ${pouName} not found.`,
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error renaming POU',
+            description: `POU with name ${pouName} not found.`,
+          },
+        }
+      }
+
+      const pouPath = `/pous/${pou.type}s/${pouName}.json`
+
+      try {
+        const response = await window.bridge.renamePouFile(pouPath, newPouName)
+        if (!response.success) {
+          return {
+            success: false,
+            error: {
+              title: 'Error renaming POU',
+              description: response.error ? response.error.description : `POU "${pouName}" could not be renamed.`,
+            },
+          }
+        }
+      } catch (error) {
+        console.error('Error renaming POU file:', error)
+        return {
+          success: false,
+          error: {
+            title: 'Error renaming POU',
+            description: `An error occurred while renaming the POU "${pouName}".`,
+          },
+        }
+      }
+
+      getState().projectActions.updatePouName(pouName, newPouName)
+      getState().tabsActions.updateTabName(pouName, newPouName)
+      getState().editorActions.updateEditorName(pouName, newPouName)
+      getState().fileActions.updateFile({
+        name: pouName,
+        newName: newPouName,
+      })
+
+      return {
+        success: true,
+      }
+    },
   },
   datatypeActions: {
     create: (propsToCreateDatatype: PLCArrayDatatype | PLCEnumeratedDatatype | PLCStructureDatatype) => {
@@ -379,6 +435,39 @@ export const createSharedSlice: StateCreator<
       getState().projectActions.deleteDatatype(data.file)
       getState().ladderFlowActions.removeLadderFlow(data.file)
       getState().libraryActions.removeUserLibrary(data.file)
+
+      return {
+        success: true,
+      }
+    },
+
+    rename(datatypeName, newDatatypeName) {
+      const datatype = getState().project.data.dataTypes.find((dt) => dt.name === datatypeName)
+      if (!datatype) {
+        toast({
+          title: 'Error',
+          description: `Datatype with name ${datatypeName} not found.`,
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error renaming Datatype',
+            description: `Datatype with name ${datatypeName} not found.`,
+          },
+        }
+      }
+
+      getState().projectActions.updateDatatype(datatypeName, {
+        ...datatype,
+        name: newDatatypeName,
+      })
+      getState().tabsActions.updateTabName(datatypeName, newDatatypeName)
+      getState().editorActions.updateEditorName(datatypeName, newDatatypeName)
+      getState().fileActions.updateFile({
+        name: datatypeName,
+        newName: newDatatypeName,
+      })
 
       return {
         success: true,

@@ -154,7 +154,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
-
     updatePouDocumentation: (pouName, documentation): void => {
       setState(
         produce(({ project }: ProjectSlice) => {
@@ -162,6 +161,23 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             return pou.data.name === pouName
           })
           if (draft) draft.data.documentation = documentation
+        }),
+      )
+    },
+    updatePouName: (oldName, newName): void => {
+      setState(
+        produce(({ project }: ProjectSlice) => {
+          const pou = project.data.pous.find((pou) => pou.data.name === oldName)
+          if (!pou) {
+            toast({
+              title: 'Error',
+              description: `POU with name ${oldName} not found.`,
+              variant: 'fail',
+            })
+            return
+          }
+
+          pou.data.name = newName
         }),
       )
     },

@@ -258,5 +258,16 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       if (name === editor.meta.name) return editor
       return editors.find((model) => model.meta.name === name) ?? null
     },
+
+    updateEditorName: (oldName, newName) =>
+      setState(
+        produce((state: EditorState) => {
+          const editor = state.editors.find((model) => model.meta.name === oldName)
+          if (!editor) return
+
+          editor.meta.name = newName
+          state.editor.meta.name = state.editor.meta.name === oldName ? newName : state.editor.meta.name
+        }),
+      ),
   },
 })

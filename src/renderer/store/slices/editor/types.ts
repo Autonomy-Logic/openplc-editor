@@ -252,6 +252,7 @@ const _editorActionsSchema = z.object({
     )
     .returns(z.void()),
   getEditorFromEditors: z.function().args(z.string()).returns(editorModelSchema.or(z.null())),
+  updateEditorName: z.function().args(z.string(), z.string()).returns(z.void()),
 })
 
 type StructureTableType = z.infer<typeof editorStructureSchema>

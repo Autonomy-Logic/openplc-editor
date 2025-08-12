@@ -75,6 +75,8 @@ const rendererProcessBridge = {
   // ===================== POU METHODS =====================
   createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),
   deletePouFile: (filePath: string): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:delete', filePath),
+  renamePouFile: (filePath: string, newFileName: string): Promise<PouServiceResponse> =>
+    ipcRenderer.invoke('pou:rename', filePath, newFileName),
 
   // ===================== APP & SYSTEM METHODS =====================
   darwinAppIsClosing: (callback: IpcRendererCallbacks) => ipcRenderer.on('app:darwin-is-closing', callback),
