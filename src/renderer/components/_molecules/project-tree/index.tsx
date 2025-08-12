@@ -1,3 +1,4 @@
+import * as Popover from '@radix-ui/react-popover'
 import {
   ArrayIcon,
   ArrowIcon,
@@ -12,6 +13,8 @@ import {
   FunctionIcon,
   ILIcon,
   LDIcon,
+  MoreOptionsIcon,
+  PencilIcon,
   PLCIcon,
   ProgramIcon,
   ResourceIcon,
@@ -23,6 +26,7 @@ import { useOpenPLCStore } from '@root/renderer/store'
 import { WorkspaceProjectTreeLeafType } from '@root/renderer/store/slices/workspace/types'
 import { pousAllLanguages } from '@root/types/PLC/pous/language'
 import { cn } from '@root/utils'
+import { unsavedLabel } from '@root/utils/unsaved-label'
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { toast } from '../../_features/[app]/toast/use-toast'
@@ -102,14 +106,7 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
 
   const { file: associatedFile } = getFile({ name: label || '' })
-  const handleLabel = useCallback(
-    (label: string | undefined) => {
-      if (!associatedFile || associatedFile?.saved) return label
-
-      return `* <i>${label}</i>`
-    },
-    [associatedFile],
-  )
+  const handleLabel = useCallback((label: string | undefined) => unsavedLabel(label, associatedFile), [associatedFile])
 
   return (
     <li aria-expanded={branchIsOpen} className='cursor-pointer aria-expanded:cursor-default ' {...res}>
@@ -252,11 +249,12 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     fileActions: { getFile },
   } = useOpenPLCStore()
 
-  const { LeafIcon } = LeafSources[leafLang]
+  const [isPopoverOpen, setPopoverOpen] = useState(false)
 
   const isAPou = useMemo(() => pousAllLanguages.includes(leafLang as (typeof pousAllLanguages)[number]), [leafLang])
   const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
 
+  const { LeafIcon } = LeafSources[leafLang]
   const { file: associatedFile } = getFile({ name: label || '' })
 
   const handleLeafSelection = () => {
@@ -302,19 +300,30 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     }
   }
 
-  const handleLabel = useCallback(
-    (label: string | undefined) => {
-      if (!associatedFile || associatedFile?.saved) return label
-
-      return `* <i>${label}</i>`
-    },
-    [associatedFile],
-  )
+  const handleLabel = useCallback((label: string | undefined) => unsavedLabel(label, associatedFile), [associatedFile])
+  const popoverOptions = useMemo(() => {
+    return [
+      {
+        name: 'Edit',
+        onClick: () => {
+          // Handle edit action
+        },
+        icon: <PencilIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
+      },
+      {
+        name: 'Delete',
+        onClick: () => {
+          handleDeleteFile()
+        },
+        icon: <CloseIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
+      },
+    ]
+  }, [handleDeleteFile])
 
   return (
     <li
       className={cn(
-        ' group flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
+        'group flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
         name === label && 'bg-slate-50 dark:bg-neutral-900',
       )}
       onClick={(e) => {
@@ -332,20 +341,52 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
         )}
         dangerouslySetInnerHTML={{ __html: handleLabel(label) || '' }}
       />
+
       {leafLang === 'devPin' || leafLang === 'devConfig' ? null : (
-        <button
-          aria-label='delete element button'
-          type='button'
-          className='mr-2 flex h-5 w-5 items-center'
-          onClick={(e) => {
-            e.stopPropagation()
-            handleDeleteFile()
-          }}
-          aria-haspopup='dialog'
-          aria-expanded='false'
-        >
-          <CloseIcon className='h-4 w-4 group-hover:stroke-red-500' />
-        </button>
+        <Popover.Root open={isPopoverOpen} onOpenChange={setPopoverOpen}>
+          <Popover.Trigger
+            className={cn(
+              'mr-2 flex h-5 w-5 items-center justify-center rounded-md opacity-0 hover:bg-neutral-200 group-hover:opacity-100 dark:hover:bg-neutral-850',
+              { 'bg-neutral-200 opacity-100 dark:bg-neutral-850': isPopoverOpen },
+            )}
+          >
+            <MoreOptionsIcon className='h-4 w-4' />
+          </Popover.Trigger>
+
+          <Popover.Portal>
+            <Popover.Content
+              align='start'
+              side='right'
+              sideOffset={2}
+              className={cn(
+                'box z-[100] flex h-fit w-fit min-w-32 flex-col rounded-lg text-xs',
+                'focus:outline-none focus-visible:outline-none',
+                'bg-white text-neutral-1000 dark:bg-neutral-950 dark:text-neutral-300',
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {popoverOptions.map((option, index) => (
+                <div
+                  key={option.name}
+                  className={cn(
+                    'flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900',
+                    {
+                      'rounded-t-lg': index === 0,
+                      'rounded-b-lg': index === popoverOptions.length - 1,
+                    },
+                  )}
+                  onClick={() => {
+                    option.onClick()
+                    setPopoverOpen(false)
+                  }}
+                >
+                  {option.icon}
+                  <p>{option.name}</p>
+                </div>
+              ))}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
       )}
     </li>
   )
