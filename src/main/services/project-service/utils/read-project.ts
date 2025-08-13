@@ -231,6 +231,18 @@ export function readProjectFiles(basePath: string): IProjectServiceReadFilesResp
     }
   }
 
+  /**
+   * Get pou name by extracting the file name from the path.
+   */
+  Object.keys(pouFiles).forEach((key) => {
+    const pouFile = pouFiles[key] as PLCPou
+    const pouName = key.split('/').pop()?.replace('.json', '')
+    if (pouName) {
+      pouFile.data.name = pouName
+      pouFiles[key] = pouFile
+    }
+  })
+
   const returnData: IProjectServiceReadFilesResponse['data'] = {
     project: projectFiles['project.json'] as PLCProject,
     pous: Object.values(pouFiles).map((pou) => pou as PLCPou),

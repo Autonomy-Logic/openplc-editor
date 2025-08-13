@@ -48,6 +48,7 @@ const fileSliceActionsSchema = z.object({
       z.object({
         name: z.string(),
         saved: z.boolean().optional(),
+        filePath: z.string().optional(),
         newName: z.string().optional(),
       }),
     )

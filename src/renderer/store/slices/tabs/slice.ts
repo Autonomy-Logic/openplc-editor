@@ -39,12 +39,18 @@ export const createTabsSlice: StateCreator<TabsSlice, [], [], TabsSlice> = (setS
     },
     updateTabName: (oldName: string, newName: string) => {
       setState((state) => {
-        const tabExists = state.tabs.find((tab) => tab.name === newName)
+        const tabExists = state.tabs.find((tab) => tab.name === oldName)
         if (!tabExists) {
           return state
         }
 
         const updatedTabs = state.tabs.map((tab) => (tab.name === oldName ? { ...tab, name: newName } : tab))
+        state.tabs = updatedTabs
+
+        if (state.selectedTab === oldName) {
+          state.selectedTab = newName
+        }
+
         return { ...state, tabs: updatedTabs }
       })
     },

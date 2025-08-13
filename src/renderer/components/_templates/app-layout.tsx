@@ -17,6 +17,9 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     files,
     tabs,
     selectedTab,
+    project: {
+      data: { pous, dataTypes },
+    },
     workspace: { selectedProjectTreeLeaf },
 
     modals,
@@ -43,12 +46,15 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   }, [setSystemConfigs])
 
   useEffect(() => {
+    console.log('--------------- App Layout State ---------------')
     console.log('Files:', files)
     console.log('Editor:', editor)
     console.log('Tabs:', tabs)
     console.log('Selected Tab:', selectedTab)
     console.log('Selected Project Tree Leaf:', selectedProjectTreeLeaf)
-  }, [files, editor, tabs, selectedTab, selectedProjectTreeLeaf])
+    console.log('Pous:', pous)
+    console.log('Data Types:', dataTypes)
+  }, [pous, dataTypes, files, editor, tabs, selectedTab, selectedProjectTreeLeaf])
 
   return (
     <>

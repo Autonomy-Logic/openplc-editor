@@ -65,6 +65,7 @@ class MainProcessBridge implements MainIpcModule {
     // Pou-related handlers
     this.ipcMain.handle('pou:create', this.handleCreatePouFile)
     this.ipcMain.handle('pou:delete', this.handleDeletePouFile)
+    this.ipcMain.handle('pou:rename', this.handleRenamePouFile)
 
     // App and system handlers
     this.ipcMain.handle('open-external-link', this.handleOpenExternalLink)
@@ -184,9 +185,17 @@ class MainProcessBridge implements MainIpcModule {
       }
     }
   }
-  handleRenamePouFile = async (_event: IpcMainInvokeEvent, filePath: string, newFileName: string) => {
+  handleRenamePouFile = async (
+    _event: IpcMainInvokeEvent,
+    data: {
+      filePath: string
+      newFileName: string
+      fileContent?: unknown
+    },
+  ) => {
+    console.log('MAIN.TS: Renaming POU file with data:', data)
     try {
-      const response = await this.pouService.renamePouFile(filePath, newFileName)
+      const response = await this.pouService.renamePouFile(data)
       return response
     } catch (error) {
       console.error('Error renaming POU file:', error)

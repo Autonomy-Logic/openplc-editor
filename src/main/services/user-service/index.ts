@@ -90,7 +90,6 @@ class UserService {
     data?: { filePath: string }
   }> {
     const newFileName = newFilePath.split('/').pop() || ''
-
     try {
       await rename(oldFilePath, newFilePath)
       return { success: true, data: { filePath: newFilePath } }

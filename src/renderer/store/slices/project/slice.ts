@@ -164,7 +164,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
-    updatePouName: (oldName, newName): void => {
+    updatePouName: (oldName, newName) => {
       setState(
         produce(({ project }: ProjectSlice) => {
           const pou = project.data.pous.find((pou) => pou.data.name === oldName)
@@ -175,6 +175,12 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               variant: 'fail',
             })
             return
+          }
+
+          if (pou.data.language === 'ld' && typeof pou.data.body.value !== 'string') {
+            pou.data.body.value.name = newName
+          } else if (pou.data.language === 'fbd' && typeof pou.data.body.value !== 'string') {
+            pou.data.body.value.name = newName
           }
 
           pou.data.name = newName

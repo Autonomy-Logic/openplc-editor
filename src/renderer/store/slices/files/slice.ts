@@ -40,13 +40,14 @@ export const createFileSlice: StateCreator<FileSlice, [], [], FileSlice> = (setS
         }),
       )
     },
-    updateFile: ({ name, saved, newName }) => {
+    updateFile: ({ name, saved, filePath, newName }) => {
       setState(
         produce(({ files }: FileSlice) => {
           if (!files[name]) return
 
           const existingFile = files[name]
           existingFile.saved = saved ?? existingFile.saved
+          existingFile.filePath = filePath ?? existingFile.filePath
 
           if (newName) {
             files[newName] = { ...existingFile, filePath: existingFile.filePath.replace(name, newName) }

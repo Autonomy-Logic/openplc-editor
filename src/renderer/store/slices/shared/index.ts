@@ -32,7 +32,7 @@ type PropsToCreatePou = {
   language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
 }
 
-type BasicSharedSliceResponse = {
+export type BasicSharedSliceResponse = {
   success: boolean
   error?: { title: string; description: string }
 }
@@ -298,7 +298,18 @@ export const createSharedSlice: StateCreator<
 
       getState().projectActions.deletePou(targetLabel)
       getState().ladderFlowActions.removeLadderFlow(targetLabel)
+      getState().fbdFlowActions.removeFBDFlow(targetLabel)
+      getState().tabsActions.removeTab(targetLabel)
+      getState().editorActions.removeModel(targetLabel)
       getState().libraryActions.removeUserLibrary(targetLabel)
+
+      const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+      if (selectedProjectTreeLeaf.label === data.file) {
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: '',
+          type: null,
+        })
+      }
 
       return {
         success: true,
@@ -322,11 +333,76 @@ export const createSharedSlice: StateCreator<
         }
       }
 
-      const pouPath = `/pous/${pou.type}s/${pouName}.json`
+      const { file } = getState().fileActions.getFile({ name: pouName })
+      if (!file) {
+        toast({
+          title: 'Error',
+          description: `File for POU with name ${pouName} not found.`,
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error renaming POU',
+            description: `File for POU with name ${pouName} not found.`,
+          },
+        }
+      }
 
+      getState().projectActions.updatePouName(pouName, newPouName)
+      const newPou = getState().project.data.pous.find((pou) => pou.data.name === newPouName)
+      if (!newPou) {
+        toast({
+          title: 'Error renaming POU',
+          description: `An error occurred while renaming the POU "${pouName}".`,
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error renaming POU',
+            description: `An error occurred while renaming the POU "${pouName}".`,
+          },
+        }
+      }
+
+      getState().tabsActions.updateTabName(pouName, newPouName)
+      getState().editorActions.updateEditorName(pouName, newPouName)
+      getState().fileActions.updateFile({
+        name: pouName,
+        saved: true,
+        filePath: `/pous/${pou.type}s/${newPouName}.json`,
+        newName: newPouName,
+      })
+
+      const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+      if (selectedProjectTreeLeaf.label === pouName) {
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: newPouName,
+          type: selectedProjectTreeLeaf.type,
+        })
+      }
+
+      const projectPath = `${getState().project.meta.path}${file.filePath}`
+
+      console.log('SHARED: Renaming POU file with data:', {
+        filePath: projectPath,
+        newFileName: `${newPouName}.json`,
+        fileContent: newPou,
+      })
       try {
-        const response = await window.bridge.renamePouFile(pouPath, newPouName)
+        const response = await window.bridge.renamePouFile({
+          filePath: projectPath,
+          newFileName: `${newPouName}.json`,
+          fileContent: newPou,
+        })
         if (!response.success) {
+          console.error('Error renaming POU file:', response.error)
+          toast({
+            title: 'Error renaming POU',
+            description: `An error occurred while renaming the POU "${pouName}".`,
+            variant: 'fail',
+          })
           return {
             success: false,
             error: {
@@ -337,6 +413,11 @@ export const createSharedSlice: StateCreator<
         }
       } catch (error) {
         console.error('Error renaming POU file:', error)
+        toast({
+          title: 'Error renaming POU',
+          description: `An error occurred while renaming the POU "${pouName}".`,
+          variant: 'fail',
+        })
         return {
           success: false,
           error: {
@@ -345,14 +426,6 @@ export const createSharedSlice: StateCreator<
           },
         }
       }
-
-      getState().projectActions.updatePouName(pouName, newPouName)
-      getState().tabsActions.updateTabName(pouName, newPouName)
-      getState().editorActions.updateEditorName(pouName, newPouName)
-      getState().fileActions.updateFile({
-        name: pouName,
-        newName: newPouName,
-      })
 
       return {
         success: true,
@@ -433,8 +506,17 @@ export const createSharedSlice: StateCreator<
 
     delete: (data) => {
       getState().projectActions.deleteDatatype(data.file)
-      getState().ladderFlowActions.removeLadderFlow(data.file)
+      getState().tabsActions.removeTab(data.file)
+      getState().editorActions.removeModel(data.file)
       getState().libraryActions.removeUserLibrary(data.file)
+
+      const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+      if (selectedProjectTreeLeaf.label === data.file) {
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: '',
+          type: null,
+        })
+      }
 
       return {
         success: true,
@@ -468,6 +550,14 @@ export const createSharedSlice: StateCreator<
         name: datatypeName,
         newName: newDatatypeName,
       })
+
+      const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
+      if (selectedProjectTreeLeaf.label === datatypeName) {
+        getState().workspaceActions.setSelectedProjectTreeLeaf({
+          label: newDatatypeName,
+          type: selectedProjectTreeLeaf.type,
+        })
+      }
 
       return {
         success: true,

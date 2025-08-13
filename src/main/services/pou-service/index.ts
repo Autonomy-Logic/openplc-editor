@@ -1,4 +1,5 @@
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
+import { promises } from 'fs'
 
 import { UserService } from '../user-service'
 
@@ -27,19 +28,44 @@ class PouService {
     }
   }
 
-  async renamePouFile(filePath: string, newFileName: string): Promise<PouServiceResponse> {
+  async renamePouFile(data: {
+    filePath: string
+    newFileName: string
+    fileContent?: unknown
+  }): Promise<PouServiceResponse> {
+    console.log('POU-SERVICE: Renaming POU file with data:', data)
+
+    const { filePath, newFileName, fileContent } = data
+    const newFilePath = filePath.replace(/[^/]+$/, newFileName)
+
     try {
-      const newFilePath = filePath.replace(/[^/]+$/, newFileName)
       const result = await UserService.renameFile(filePath, newFilePath)
-      if (result.success) {
-        return { success: true, data: { filePath: newFilePath } }
-      } else {
+      if (!result.success) {
+        console.error('Error renaming POU file:', result.error)
         return { success: false, error: result.error }
       }
     } catch (error) {
       console.error('Error renaming POU file:', error)
       return { success: false, error: { title: 'POU Rename Error', description: 'Failed to rename POU file', error } }
     }
+
+    if (fileContent) {
+      try {
+        await promises.writeFile(newFilePath, JSON.stringify(fileContent, null, 2))
+      } catch (writeError) {
+        console.error(`Error writing content to renamed file at ${newFilePath}: ${String(writeError)}`)
+        return {
+          success: false,
+          error: {
+            title: 'File Write Error',
+            description: 'Failed to write content to renamed file',
+            error: writeError as Error,
+          },
+        }
+      }
+    }
+
+    return { success: true, data: { filePath: newFilePath } }
   }
 }
 

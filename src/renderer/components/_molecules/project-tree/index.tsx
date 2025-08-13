@@ -27,7 +27,7 @@ import { WorkspaceProjectTreeLeafType } from '@root/renderer/store/slices/worksp
 import { pousAllLanguages } from '@root/types/PLC/pous/language'
 import { cn } from '@root/utils'
 import { unsavedLabel } from '@root/utils/unsaved-label'
-import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
+import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { toast } from '../../_features/[app]/toast/use-toast'
 
@@ -244,12 +244,16 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       meta: { name },
     },
     workspaceActions: { setSelectedProjectTreeLeaf },
-    pouActions: { deleteRequest: deletePouRequest },
-    datatypeActions: { deleteRequest: deleteDatatypeRequest },
+    pouActions: { deleteRequest: deletePouRequest, rename: renamePou },
+    datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype },
     fileActions: { getFile },
   } = useOpenPLCStore()
 
+  const [isEditing, setIsEditing] = useState(false)
+  const [newName, setNewName] = useState(label || '')
   const [isPopoverOpen, setPopoverOpen] = useState(false)
+
+  const inputNameRef = useRef<HTMLInputElement>(null)
 
   const isAPou = useMemo(() => pousAllLanguages.includes(leafLang as (typeof pousAllLanguages)[number]), [leafLang])
   const isDatatype = useMemo(() => leafLang === 'arr' || leafLang === 'enum' || leafLang === 'str', [leafLang])
@@ -268,6 +272,51 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     }
 
     setSelectedProjectTreeLeaf({ label, type: leafType })
+  }
+
+  const handleRenameFile = async (newLabel: string) => {
+    console.log('PROJECT-TREE: Renaming file with new label:', newLabel)
+
+    setIsEditing(false)
+
+    if (!isAPou && !isDatatype) {
+      toast({
+        title: 'Error',
+        description: 'Only POU or datatype files can be renamed.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    if (!newLabel || !label) {
+      toast({
+        title: 'Error',
+        description: 'Pou or datatype label is required to rename.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    if (newLabel === label) {
+      setNewName(label || '')
+      return
+    }
+
+    if (isAPou) {
+      const res = await renamePou(label, newName)
+      if (!res.success) {
+        setNewName(label)
+      }
+      return
+    }
+
+    if (isDatatype) {
+      const res = renameDatatype(label, newName)
+      if (!res.success) {
+        setNewName(label)
+      }
+      return
+    }
   }
 
   const handleDeleteFile = () => {
@@ -304,9 +353,9 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
   const popoverOptions = useMemo(() => {
     return [
       {
-        name: 'Edit',
+        name: 'Rename',
         onClick: () => {
-          // Handle edit action
+          setIsEditing(true)
         },
         icon: <PencilIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
       },
@@ -318,7 +367,14 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
         icon: <CloseIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
       },
     ]
-  }, [handleDeleteFile])
+  }, [handleDeleteFile, setIsEditing, isEditing])
+
+  useEffect(() => {
+    if (isEditing && inputNameRef.current) {
+      inputNameRef.current.focus()
+      inputNameRef.current.select()
+    }
+  }, [inputNameRef, isEditing])
 
   return (
     <li
@@ -334,13 +390,29 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       {...res}
     >
       <LeafIcon className='flex-shrink-0' />
-      <span
-        className={cn(
-          'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
-          name === label && 'font-medium text-neutral-1000 dark:text-white',
-        )}
-        dangerouslySetInnerHTML={{ __html: handleLabel(label) || '' }}
-      />
+
+      {isEditing ? (
+        <input
+          ref={inputNameRef}
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void handleRenameFile(newName.trim() || '')
+            if (e.key === 'Escape') setIsEditing(false)
+          }}
+          onBlur={(_e) => void handleRenameFile(newName || '')}
+          className='w-full border-0 bg-transparent px-1 text-xs text-neutral-850 focus:outline-none dark:text-neutral-300'
+        />
+      ) : (
+        <span
+          className={cn(
+            'ml-1 w-[90%] overflow-hidden text-ellipsis whitespace-nowrap font-caption text-xs font-normal text-neutral-850 dark:text-neutral-300',
+            name === label && 'font-medium text-neutral-1000 dark:text-white',
+          )}
+          onDoubleClick={() => setIsEditing(true)}
+          dangerouslySetInnerHTML={{ __html: handleLabel(label) || '' }}
+        />
+      )}
 
       {leafLang === 'devPin' || leafLang === 'devConfig' ? null : (
         <Popover.Root open={isPopoverOpen} onOpenChange={setPopoverOpen}>
