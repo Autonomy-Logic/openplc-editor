@@ -311,7 +311,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     }
 
     if (isDatatype) {
-      const res = renameDatatype(label, newName)
+      const res = await renameDatatype(label, newName)
       if (!res.success) {
         setNewName(label)
       }

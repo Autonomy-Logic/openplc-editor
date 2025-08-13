@@ -52,7 +52,7 @@ export type SharedSlice = {
     update: () => void
     deleteRequest: (datatypeName: string) => void
     delete: (data: DeleteDatatype) => BasicSharedSliceResponse
-    rename: (datatypeName: string, newDatatypeName: string) => BasicSharedSliceResponse
+    rename: (datatypeName: string, newDatatypeName: string) => Promise<BasicSharedSliceResponse>
   }
   sharedWorkspaceActions: {
     // Clear all states when closing a project
@@ -273,9 +273,11 @@ export const createSharedSlice: StateCreator<
 
     delete: async (data) => {
       const { file: targetLabel, path } = data
+      const projectPath = getState().project.meta.path
+      const filePath = path.includes(projectPath) ? path : `${projectPath}${path}`
 
       try {
-        const response = await window.bridge.deletePouFile(path)
+        const response = await window.bridge.deletePouFile(filePath)
         if (!response.success) {
           return {
             success: false,
@@ -368,11 +370,12 @@ export const createSharedSlice: StateCreator<
 
       getState().tabsActions.updateTabName(pouName, newPouName)
       getState().editorActions.updateEditorName(pouName, newPouName)
+      console.log(`Filepath from: ${file.filePath} to /pous/${newPou.type}s/${newPouName}.json`)
       getState().fileActions.updateFile({
         name: pouName,
-        saved: true,
-        filePath: `/pous/${pou.type}s/${newPouName}.json`,
         newName: newPouName,
+        filePath: `/pous/${pou.type}s/${newPouName}.json`,
+        saved: true,
       })
 
       const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
@@ -383,18 +386,13 @@ export const createSharedSlice: StateCreator<
         })
       }
 
-      const projectPath = `${getState().project.meta.path}${file.filePath}`
+      const projectPath = getState().project.meta.path
+      const filePath = file.filePath.includes(projectPath) ? file.filePath : `${projectPath}${file.filePath}`
 
-      console.log('SHARED: Renaming POU file with data:', {
-        filePath: projectPath,
-        newFileName: `${newPouName}.json`,
-        fileContent: newPou,
-      })
       try {
         const response = await window.bridge.renamePouFile({
-          filePath: projectPath,
+          filePath,
           newFileName: `${newPouName}.json`,
-          fileContent: newPou,
         })
         if (!response.success) {
           console.error('Error renaming POU file:', response.error)
@@ -427,9 +425,7 @@ export const createSharedSlice: StateCreator<
         }
       }
 
-      return {
-        success: true,
-      }
+      return await getState().sharedWorkspaceActions.saveFile(newPouName)
     },
   },
   datatypeActions: {
@@ -523,7 +519,7 @@ export const createSharedSlice: StateCreator<
       }
     },
 
-    rename(datatypeName, newDatatypeName) {
+    rename: async (datatypeName, newDatatypeName) => {
       const datatype = getState().project.data.dataTypes.find((dt) => dt.name === datatypeName)
       if (!datatype) {
         toast({
@@ -549,6 +545,7 @@ export const createSharedSlice: StateCreator<
       getState().fileActions.updateFile({
         name: datatypeName,
         newName: newDatatypeName,
+        saved: true,
       })
 
       const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
@@ -559,9 +556,7 @@ export const createSharedSlice: StateCreator<
         })
       }
 
-      return {
-        success: true,
-      }
+      return await getState().sharedWorkspaceActions.saveFile(newDatatypeName)
     },
   },
 
@@ -636,7 +631,7 @@ export const createSharedSlice: StateCreator<
           if (mainPou) {
             const tabToBeCreated: TabsProps = {
               name: mainPou.data.name,
-              path: '/pous/programs/main',
+              path: '/pous/programs/main.json',
               elementType: { type: 'program', language: mainPou.data.language },
             }
 
@@ -1038,6 +1033,7 @@ export const createSharedSlice: StateCreator<
         })
         return { success: false }
       }
+      console.log(`Saving file: ${name} of type ${file.type} at path ${file.filePath}`)
 
       let saveContent: PLCProject | PLCPou | DeviceState['deviceDefinitions'] | undefined
       switch (file.type) {
@@ -1128,13 +1124,14 @@ export const createSharedSlice: StateCreator<
       }
 
       const projectFilePath = getState().project.meta.path
+      const filePath = file.filePath.includes(projectFilePath) ? file.filePath : `${projectFilePath}${file.filePath}`
 
       let saveResponse: { success: boolean; error?: string }
       switch (file.type) {
         case 'function':
         case 'function-block':
         case 'program':
-          saveResponse = await window.bridge.saveFile(`${projectFilePath}/${file.filePath}`, saveContent)
+          saveResponse = await window.bridge.saveFile(filePath, saveContent)
           break
         case 'device': {
           const deviceConfigSaveResponse = await window.bridge.saveFile(
