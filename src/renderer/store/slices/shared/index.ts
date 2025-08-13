@@ -370,7 +370,6 @@ export const createSharedSlice: StateCreator<
 
       getState().tabsActions.updateTabName(pouName, newPouName)
       getState().editorActions.updateEditorName(pouName, newPouName)
-      console.log(`Filepath from: ${file.filePath} to /pous/${newPou.type}s/${newPouName}.json`)
       getState().fileActions.updateFile({
         name: pouName,
         newName: newPouName,
@@ -1033,7 +1032,6 @@ export const createSharedSlice: StateCreator<
         })
         return { success: false }
       }
-      console.log(`Saving file: ${name} of type ${file.type} at path ${file.filePath}`)
 
       let saveContent: PLCProject | PLCPou | DeviceState['deviceDefinitions'] | undefined
       switch (file.type) {

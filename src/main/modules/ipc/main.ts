@@ -193,7 +193,6 @@ class MainProcessBridge implements MainIpcModule {
       fileContent?: unknown
     },
   ) => {
-    console.log('MAIN.TS: Renaming POU file with data:', data)
     try {
       const response = await this.pouService.renamePouFile(data)
       return response

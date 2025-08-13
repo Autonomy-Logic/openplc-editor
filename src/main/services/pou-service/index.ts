@@ -33,13 +33,8 @@ class PouService {
     newFileName: string
     fileContent?: unknown
   }): Promise<PouServiceResponse> {
-    console.log('POU-SERVICE: Renaming POU file with data:', data)
-
     const { filePath, newFileName, fileContent } = data
     const newFilePath = filePath.replace(/[^/]+$/, newFileName)
-
-    console.log(`Renaming POU file from ${filePath} to ${newFilePath}`)
-    console.log(`File content to write:`, fileContent)
 
     try {
       const result = await UserService.renameFile(filePath, newFilePath)

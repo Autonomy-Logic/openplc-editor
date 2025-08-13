@@ -275,8 +275,6 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
   }
 
   const handleRenameFile = async (newLabel: string) => {
-    console.log('PROJECT-TREE: Renaming file with new label:', newLabel)
-
     setIsEditing(false)
 
     if (!isAPou && !isDatatype) {
