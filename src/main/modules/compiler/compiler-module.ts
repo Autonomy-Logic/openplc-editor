@@ -6,7 +6,7 @@ import { promisify } from 'node:util'
 
 import { CreateXMLFile } from '@root/main/utils'
 import { ProjectState } from '@root/renderer/store/slices'
-import type { DeviceConfiguration } from '@root/types/PLC/devices'
+import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
@@ -238,31 +238,94 @@ class CompilerModule {
     return crypto.createHash('md5').update(content).digest('hex')
   }
 
-  async writeDefinitionsFileHeader() {}
-
-  async writeDefinitionsFileContent(deviceDirectoryPath: string, buildMD5Hash: string) {
-    let DEFINES_CONTENT: string = ''
+  async writeDefinitionsFileContent(deviceDirectoryPath: string, buildMD5Hash: string, defineHeader: string) {
+    let DEFINES_CONTENT: string = defineHeader
 
     // We will read the device files content
-    const { communicationConfiguration } = await CompilerModule.readJSONFile<DeviceConfiguration>(
-      join(deviceDirectoryPath, 'configuration.json'),
-    )
-    const _devicePinMappingFileContent = await CompilerModule.readJSONFile(
+    const {
+      communicationConfiguration: { modbusRTU, modbusTCP, communicationPreferences },
+    } = await CompilerModule.readJSONFile<DeviceConfiguration>(join(deviceDirectoryPath, 'configuration.json'))
+    const devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(
       join(deviceDirectoryPath, 'pin-mapping.json'),
     )
 
+    /**
+     * TODOS
+     * 1. We need to add validation to the mac address value
+     * 2. We need to remove the whitespace in the values that are receiving an empty string.
+     * 3. In the device configuration we need to verify why the values that should be null are being set to empty strings.
+     * 4. We need to ensure that the pins are correctly sorted according to their address.
+     * 5. We need to write the arduino libraries definition - this will be done as we validate if some libraries are being used in the project.
+     */
     // ===== Defines.h content generation =====
 
     // 1. Program MD5
-    DEFINES_CONTENT += '//Program MD5'
-    DEFINES_CONTENT += `#define PROGRAM_MD5 "${buildMD5Hash}"\n\n`
+    DEFINES_CONTENT += '//Program MD5\n'
+    DEFINES_CONTENT += `#define PROGRAM_MD5 "${buildMD5Hash}"`
+    DEFINES_CONTENT += `\n\n`
 
     // 2. Device Configuration
     DEFINES_CONTENT += '//Comms Configuration\n'
-    DEFINES_CONTENT += `#define MBSERIAL_IFACE ${communicationConfiguration.modbusRTU.rtuInterface}\n`
-    DEFINES_CONTENT += `#define MBSERIAL_BAUD ${communicationConfiguration.modbusRTU.rtuBaudRate}\n`
-    DEFINES_CONTENT += `#define MBSERIAL_SLAVE ${communicationConfiguration.modbusRTU.rtuSlaveId}\n` // TODO: Verify if a null value should be parsed to 1
-    DEFINES_CONTENT += `#define MBTCP_MAC ${communicationConfiguration.modbusTCP.tcpMacAddress}\n`
+    DEFINES_CONTENT += `#define MBSERIAL_IFACE ${modbusRTU.rtuInterface}\n`
+    DEFINES_CONTENT += `#define MBSERIAL_BAUD ${modbusRTU.rtuBaudRate}\n`
+    if (modbusRTU.rtuSlaveId !== null) DEFINES_CONTENT += `#define MBSERIAL_SLAVE ${modbusRTU.rtuSlaveId}\n`
+    if (modbusRTU.rtuRS485ENPin !== null) DEFINES_CONTENT += `#define MBSERIAL_TXPIN ${modbusRTU.rtuRS485ENPin}\n`
+    if (modbusTCP.tcpMacAddress !== null) DEFINES_CONTENT += `#define MBTCP_MAC ${modbusTCP.tcpMacAddress}\n`
+    // OBS: This is giving us an empty string and this is being printed as a space
+    if (modbusTCP.tcpStaticHostConfiguration.ipAddress !== null)
+      DEFINES_CONTENT += `#define MBTCP_IP ${modbusTCP.tcpStaticHostConfiguration.ipAddress}\n`
+    if (modbusTCP.tcpStaticHostConfiguration.dns !== null)
+      DEFINES_CONTENT += `#define MBTCP_DNS ${modbusTCP.tcpStaticHostConfiguration.dns}\n`
+    if (modbusTCP.tcpStaticHostConfiguration.gateway !== null)
+      DEFINES_CONTENT += `#define MBTCP_GATEWAY ${modbusTCP.tcpStaticHostConfiguration.gateway}\n`
+    if (modbusTCP.tcpStaticHostConfiguration.subnet !== null)
+      DEFINES_CONTENT += `#define MBTCP_SUBNET ${modbusTCP.tcpStaticHostConfiguration.subnet}\n`
+
+    if (communicationPreferences.enabledRTU) {
+      DEFINES_CONTENT += '#define MBSERIAL\n'
+      DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
+    }
+
+    if (communicationPreferences.enabledTCP) {
+      DEFINES_CONTENT += '#define MBTCP\n'
+      DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
+      if (modbusTCP.tcpInterface === 'Wi-Fi') {
+        if (modbusTCP.tcpWifiSSID !== null) {
+          DEFINES_CONTENT += `#define MBTCP_SSID ${modbusTCP.tcpWifiSSID}\n`
+        }
+        if (modbusTCP.tcpWifiPassword !== null) {
+          DEFINES_CONTENT += `#define MBTCP_PWD ${modbusTCP.tcpWifiPassword}\n`
+        }
+        DEFINES_CONTENT += '#define MBTCP_WIFI\n'
+      } else {
+        DEFINES_CONTENT += '#define MBTCP_ETHERNET\n'
+      }
+    }
+
+    DEFINES_CONTENT += `\n\n`
+
+    // INFO: If null, only the define value
+    // 3. IO Config defines
+    DEFINES_CONTENT += '//IO Config\n'
+    // INFO: This approach assumes that the pins are sorted.
+    const digitalInputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalInput')
+    const analogInputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogInput')
+    const digitalOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalOutput')
+    const analogOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogOutput')
+
+    DEFINES_CONTENT += `#define PINMASK_DIN ${digitalInputPins.map(({ pin }) => pin).join(', ')}\n`
+    DEFINES_CONTENT += `#define PINMASK_AIN ${analogInputPins.map(({ pin }) => pin).join(', ')}\n`
+    DEFINES_CONTENT += `#define PINMASK_DOUT ${digitalOutputPins.map(({ pin }) => pin).join(', ')}\n`
+    DEFINES_CONTENT += `#define PINMASK_AOUT ${analogOutputPins.map(({ pin }) => pin).join(', ')}\n`
+
+    DEFINES_CONTENT += `#define NUM_DISCRETE_INPUT ${digitalInputPins.length}\n`
+    DEFINES_CONTENT += `#define NUM_ANALOG_INPUT ${analogInputPins.length}\n`
+    DEFINES_CONTENT += `#define NUM_DISCRETE_OUTPUT ${digitalOutputPins.length}\n`
+    DEFINES_CONTENT += `#define NUM_ANALOG_OUTPUT ${analogOutputPins.length}\n`
+    DEFINES_CONTENT += `\n\n`
+
+    // 4. Arduino libraries defines
+    DEFINES_CONTENT += '//Arduino libraries'
 
     return DEFINES_CONTENT
   }
@@ -630,11 +693,13 @@ class CompilerModule {
 
   async handleGenerateDefinitionsFile(
     compilationPath: string,
+    deviceDirectoryPath: string,
     boardTarget: string,
+    buildMD5Hash: string,
     _handleOutputData: HandleOutputDataCallback,
   ) {
-    let _DEFINES_CONTENT: string = ''
-    const _definitionsFilePath = join(compilationPath, 'src', 'defines.h')
+    let DEFINES_HEADER: string = ''
+    const definitionsFilePath = join(compilationPath, 'src', 'defines.h')
     const halsFilePath = this.halsFilePath
     const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(halsFilePath)
     const boardEntry = halsFileContent[boardTarget]
@@ -642,19 +707,27 @@ class CompilerModule {
     // 1. We need to verify if the board entry in the hals.json file has the define property.
     if (boardEntry && boardEntry.define) {
       // 2. If it has the defines property, we will write a header and iterate over the defines to create the content for the defines.h file.
-      _DEFINES_CONTENT = '// Board defines\n'
+      DEFINES_HEADER = '// Board defines\n'
       if (Array.isArray(boardEntry.define)) {
         // 3. If the defines property is an array, we will iterate over it and add each define to the content.
         boardEntry.define.forEach((define) => {
-          _DEFINES_CONTENT += `#define ${define}\n`
+          DEFINES_HEADER += `#define ${define}\n`
         })
       } else if (typeof boardEntry.define === 'string') {
         // 4. If the defines property is a string, we will add it directly to the content.
-        _DEFINES_CONTENT += `#define ${boardEntry.define}\n`
+        DEFINES_HEADER += `#define ${boardEntry.define}\n`
       }
     }
-    // 2. If the board entry does not have the define property, we will just write a double breakline to the file.
-    _DEFINES_CONTENT += '\n\n'
+    // 2. If the board entry does not have the define property, we will just write a double line break to the file.
+    DEFINES_HEADER += '\n\n'
+    const DEFINES_CONTENT = await this.writeDefinitionsFileContent(deviceDirectoryPath, buildMD5Hash, DEFINES_HEADER)
+    // 3. Finally, we will write the content to the defines.h file.
+    try {
+      await writeFile(definitionsFilePath, DEFINES_CONTENT, { encoding: 'utf8' })
+      _handleOutputData(`Defines file created at: ${definitionsFilePath}`, 'info')
+    } catch (_error) {
+      _handleOutputData('Error writing defines.h file', 'error')
+    }
   }
   // !! Deprecated: This method is a outdated implementation and should be removed.
   async createXmlFile(
@@ -932,7 +1005,23 @@ class CompilerModule {
     }
 
     // Step 8: Handle defines.h file generation
-    const _deviceDirectoryPath = join(normalizedProjectPath, 'device')
+    const deviceDirectoryPath = join(normalizedProjectPath, 'devices')
+    try {
+      await this.handleGenerateDefinitionsFile(
+        compilationPath,
+        deviceDirectoryPath,
+        boardTarget,
+        buildMD5Hash as string,
+        (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        },
+      )
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+    }
 
     // -- Final message --
     _mainProcessPort.postMessage({
