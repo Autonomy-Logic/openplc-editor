@@ -13,10 +13,12 @@ import { appendSerialConnection } from './serial'
 
 export const addNewElement = <T>(
   rung: RungLadderState,
-  newNode: {
-    elementType: string
-    blockVariant?: T
-  },
+  newNode:
+    | {
+        elementType: string
+        blockVariant?: T
+      }
+    | Node,
 ): { nodes: Node[]; edges: Edge[]; newNode?: Node } => {
   let newNodeData: Node | undefined
   let newNodes = [...rung.nodes]
