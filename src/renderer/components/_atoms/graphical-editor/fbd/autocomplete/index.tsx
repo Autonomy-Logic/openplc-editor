@@ -245,8 +245,8 @@ const FBDBlockAutoComplete = forwardRef<HTMLDivElement, FBDBlockAutoCompleteProp
       }
 
       const selectedVariable =
-        filteredVariables.find((variable) => variable.id === variable.id) ??
-        filteredVariables.find((variable) => variable.name === variable.name)
+        filteredVariables.find((variableItem) => variableItem.id === variable.id) ??
+        filteredVariables.find((variableItem) => variableItem.name === variable.name)
       if (!selectedVariable) {
         submitAddVariable({ variableName: valueToSearch })
         return
