@@ -15,7 +15,6 @@ export const LibraryOpenFolderIcon = (props: ILibraryOpenFolderIconProps) => {
   const { size = 'sm', className, ...res } = props
   return (
     <svg
-      role='button'
       viewBox='0 0 28 28'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'
