@@ -82,6 +82,7 @@ const Project = () => {
           <ProjectTreeBranch branchTarget='function'>
             {pous
               ?.filter(({ type }) => type === 'function')
+              .sort((a, b) => a.data.name.localeCompare(b.data.name))
               .map(({ data }) => (
                 <ProjectTreeLeaf
                   key={data.name}
@@ -103,6 +104,7 @@ const Project = () => {
           <ProjectTreeBranch branchTarget='function-block'>
             {pous
               ?.filter(({ type }) => type === 'function-block')
+              .sort((a, b) => a.data.name.localeCompare(b.data.name))
               .map(({ data }) => (
                 <ProjectTreeLeaf
                   key={data.name}
@@ -124,6 +126,7 @@ const Project = () => {
           <ProjectTreeBranch branchTarget='program'>
             {pous
               ?.filter(({ type }) => type === 'program')
+              .sort((a, b) => a.data.name.localeCompare(b.data.name))
               .map(({ data }) => (
                 <ProjectTreeLeaf
                   key={data.name}
@@ -145,6 +148,7 @@ const Project = () => {
           <ProjectTreeBranch branchTarget='data-type'>
             {dataTypes
               ?.filter(({ derivation }) => derivation === 'array')
+              .sort((a, b) => a.name.localeCompare(b.name))
               .map(({ name }) => (
                 <ProjectTreeLeaf
                   nested={true}
@@ -163,6 +167,7 @@ const Project = () => {
               ))}
             {dataTypes
               ?.filter(({ derivation }) => derivation === 'enumerated')
+              .sort((a, b) => a.name.localeCompare(b.name))
               .map(({ name }) => (
                 <ProjectTreeLeaf
                   nested={true}
@@ -182,6 +187,7 @@ const Project = () => {
               ))}
             {dataTypes
               ?.filter(({ derivation }) => derivation === 'structure')
+              .sort((a, b) => a.name.localeCompare(b.name))
               .map(({ name }) => (
                 <ProjectTreeLeaf
                   nested={true}
