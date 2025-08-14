@@ -132,8 +132,7 @@ class CompilerModule {
   }
 
   async #getBoardRuntime(board: string) {
-    const halsFilePath = this.halsFilePath
-    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(halsFilePath)
+    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
     return halsFileContent[board]['compiler']
   }
 
@@ -1072,7 +1071,7 @@ class CompilerModule {
         return
       }
       await this.handleGenerateDefinitionsFile({
-        projectPath,
+        projectPath: normalizedProjectPath,
         boardTarget,
         buildMD5Hash,
         _handleOutputData: (data, logLevel) => {
