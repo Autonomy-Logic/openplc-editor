@@ -453,6 +453,7 @@ export const createSharedSlice: StateCreator<
   },
   snapshotActions: {
     addSnapshot: (pouName) => {
+      console.log('Adding snapshot for', pouName)
       const ladderFlows = getState().ladderFlows
       const fbdFlows = getState().fbdFlows
       const resource = getState().project.data.configuration.resource
@@ -533,6 +534,7 @@ export const createSharedSlice: StateCreator<
       }
     },
     undo: (pouName) => {
+      console.log('Undo action triggered', pouName)
       const ladderFlows = getState().ladderFlows
       const fbdFlows = getState().fbdFlows
       const resource = getState().project.data.configuration.resource
@@ -622,6 +624,7 @@ export const createSharedSlice: StateCreator<
       }
     },
     redo: (pouName) => {
+      console.log('Redo action triggered', pouName)
       const ladderFlows = getState().ladderFlows
       const fbdFlows = getState().fbdFlows
       const resource = getState().project.data.configuration.resource
