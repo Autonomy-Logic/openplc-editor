@@ -1,3 +1,4 @@
+import { RefreshIcon } from '@root/renderer/assets'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { updateDiagramElementsPosition } from '@root/renderer/components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { useOpenPLCStore } from '@root/renderer/store'
@@ -39,6 +40,7 @@ export type BlockNodeData<T> = BasicNodeData & {
   lockExecutionControl: boolean
   connectedVariables: Variables
   variable: { id: string; name: string } | PLCVariable
+  hasDivergence?: boolean
 }
 
 export type BlockNode<T> = Node<BlockNodeData<T>>
@@ -398,15 +400,21 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       data: { pous },
     },
     projectActions: { createVariable },
+    libraries: { user: userLibraries },
     ladderFlows,
-    ladderFlowActions: { updateNode },
     snapshotActions: { addSnapshot },
+    ladderFlowActions: { updateNode, setNodes, setEdges },
   } = useOpenPLCStore()
   const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
   const documentation = getBlockDocumentation(data.variant as newBlockVariant)
 
   const [blockVariableValue, setBlockVariableValue] = useState<string>('')
   const [wrongVariable, setWrongVariable] = useState<boolean>(false)
+  const [hoveringBlock, setHoveringBlock] = useState(false)
+
+  const { variables, rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+    nodeId: id,
+  })
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
@@ -428,9 +436,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       switch (blockType) {
         case 'function-block': {
           if (!data.variable || data.variable.name === '') {
-            const { variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
-              nodeId: id,
-            })
             const { name, number } = checkVariableNameUnit(
               variables.all,
               (data.variant as BlockVariant).name.toUpperCase(),
@@ -456,9 +461,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    const { variables, node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
-      nodeId: id,
-    })
     if (!node || !rung) {
       console.error('Node or rung not found for ID:', id)
       return
@@ -502,8 +504,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       setWrongVariable(true)
       return
     }
-
-    const { rung, node, variables } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId: id })
 
     if (!rung || !node) {
       toast({ title: 'Error', description: 'Could not find the related rung or node', variant: 'fail' })
@@ -582,12 +582,119 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     setWrongVariable(false)
   }
 
+  const handleUpdateDivergence = () => {
+    const { variables, rung, node, edges } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
+      nodeId: id,
+    })
+
+    if (!node || !rung) return
+
+    const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
+    if (!variant) return
+
+    const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
+    if (!libMatch) return
+
+    const libVariables = pous.find((pou) => pou.data.name === libMatch.name)?.data
+
+    const blockVariant = node.data.variant as BlockVariant
+
+    const newNodeVariables = (libVariables?.variables || []).map((variable) => ({
+      ...variable,
+      type: {
+        ...variable.type,
+        value: variable.type.value.toUpperCase(),
+      },
+    }))
+    const updatedNewNode = buildBlockNode({
+      id: `BLOCK_${uuidv4()}`,
+      posX: node.position.x,
+      posY: node.position.y,
+      handleX: (node.data as BasicNodeData).handles[0].glbPosition.x,
+      handleY: (node.data as BasicNodeData).handles[0].glbPosition.y,
+      variant: { ...libVariables, type: blockVariant.type, variables: newNodeVariables },
+      executionControl: (node.data as BlockNodeData<BlockVariant>).executionControl,
+    })
+    updatedNewNode.data = {
+      ...updatedNewNode.data,
+      variable: variables.selected ?? { name: '' },
+    }
+
+    if (!rung) return
+
+    const newBlockNode = { ...updatedNewNode }
+
+    let newNodes = [...rung.nodes]
+    let newEdges = [...rung.edges]
+
+    newNodes = newNodes.map((n) => (n.id === node.id ? newBlockNode : n))
+
+    edges.source?.forEach((edge) => {
+      const newEdge = {
+        ...edge,
+        id: edge.id.replace(node.id, newBlockNode.id),
+        source: newBlockNode.id,
+        sourceHandle: newBlockNode.data.outputConnector.id,
+      }
+      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
+    })
+    edges.target?.forEach((edge) => {
+      const newEdge = {
+        ...edge,
+        id: edge.id.replace(node.id, newBlockNode.id),
+        target: newBlockNode.id,
+        targetHandle: newBlockNode.data.inputConnector.id,
+      }
+      newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
+    })
+
+    const { nodes: variableNodes, edges: variableEdges } = updateDiagramElementsPosition(
+      {
+        ...rung,
+        nodes: newNodes,
+        edges: newEdges,
+      },
+      [rung.defaultBounds[0], rung.defaultBounds[1]],
+    )
+
+    setNodes({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      nodes: variableNodes,
+    })
+    setEdges({
+      editorName: editor.meta.name,
+      rungId: rung.id,
+      edges: variableEdges,
+    })
+  }
+
   return (
     <div
       className={cn('relative', {
         'opacity-40': id.startsWith('copycat'),
       })}
+      onMouseEnter={() => setHoveringBlock(true)}
+      onMouseLeave={() => setHoveringBlock(false)}
     >
+      {data.hasDivergence && hoveringBlock && (
+        <div
+          className='pointer absolute right-[-12px] top-[-12px] z-10 flex h-6 w-6 items-center justify-center rounded-full bg-slate-600 shadow-sm'
+          onClick={handleUpdateDivergence}
+        >
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <RefreshIcon />
+              </TooltipTrigger>
+              <TooltipContent side='top' className='text-xs'>
+                Update node
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      )}
+
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger>
@@ -620,9 +727,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
             handleSubmit={() => handleSubmitBlockVariableOnTextareaBlur(blockVariableValue, false)}
             onFocus={(e) => {
               e.target.select()
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
-                nodeId: id ?? '',
-              })
               if (!node || !rung) return
               updateNode({
                 editorName: editor.meta.name,
@@ -636,9 +740,6 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
               return
             }}
             onBlur={() => {
-              const { node, rung } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, {
-                nodeId: id ?? '',
-              })
               if (!node || !rung) return
               updateNode({
                 editorName: editor.meta.name,
@@ -826,9 +927,9 @@ const getBlockVariantAndExecutionControl = (variantLib: BlockVariant, executionC
 
   const mustHaveExecutionControlEnabled =
     inputConnectors.length === 0 ||
-    !validateVariableType('BOOL', inputConnectors[0].type.value).isValid ||
+    !validateVariableType('BOOL', inputConnectors[0].type.value.toUpperCase()).isValid ||
     outputConnectors.length === 0 ||
-    !validateVariableType('BOOL', outputConnectors[0].type.value).isValid
+    !validateVariableType('BOOL', outputConnectors[0].type.value.toUpperCase()).isValid
 
   if (executionControl || mustHaveExecutionControlEnabled) {
     const executionControlVariable = variant.variables.some(

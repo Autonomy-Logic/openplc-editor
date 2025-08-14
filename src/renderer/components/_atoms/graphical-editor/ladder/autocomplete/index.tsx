@@ -199,7 +199,8 @@ const VariablesBlockAutoComplete = forwardRef<HTMLDivElement, VariablesBlockAuto
       }
 
       const selectedVariable =
-        filteredVariables.find((v) => v.id === variable.id) ?? filteredVariables.find((v) => v.name === variable.name)
+        filteredVariables.find((variableItem) => variableItem.id === variable.id) ??
+        filteredVariables.find((variableItem) => variableItem.name === variable.name)
       if (!selectedVariable) {
         submitAddVariable({ variableName: valueToSearch })
         return
