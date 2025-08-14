@@ -40,9 +40,10 @@ export const FBDBody = ({ rung }: FBDProps) => {
     project: {
       data: { pous },
     },
-    projectActions: { deleteVariable, pushToHistory },
+    projectActions: { deleteVariable },
     modals,
     modalActions: { closeModal, openModal },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
@@ -127,7 +128,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
     newNodeType: CustomFbdNodeTypes,
     library: string | undefined,
   ) => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     let pouLibrary = undefined
     if (library) {
@@ -207,7 +208,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
    * It is used to remove the selected nodes and edges from the flow
    */
   const handleOnDelete = (nodes: FlowNode[], edges: FlowEdge[]) => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     if (nodes.length > 0) {
       fbdFlowActions.removeNodes({
@@ -269,7 +270,7 @@ export const FBDBody = ({ rung }: FBDProps) => {
    * It is used to update the local rung state
    */
   const handleOnConnect = (connection: Connection) => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     setRungLocal((rung) => ({
       ...rung,

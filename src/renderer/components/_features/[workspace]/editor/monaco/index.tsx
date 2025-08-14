@@ -64,8 +64,9 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     },
     libraries: sliceLibraries,
     editorActions: { saveEditorViewState },
-    projectActions: { updatePou, createVariable, pushToHistory },
+    projectActions: { updatePou, createVariable },
     workspaceActions: { setEditingState },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const [isOpen, setIsOpen] = useState<boolean>(false)
@@ -429,7 +430,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const handleRenamePou = () => {
     if (!contentToDrop || !editorRef.current) return
 
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     const currentEditor = pous.find((pou) => pou.data.name === editor.meta.name)
     if (!currentEditor) return

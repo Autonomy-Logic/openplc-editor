@@ -2,7 +2,7 @@ import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { InputWithRef } from '@root/renderer/components/_atoms'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { TypeDropdownSelector } from '@root/renderer/components/_atoms/type-dropdown-selector'
-import { useUndoRedoShortcut } from '@root/renderer/hooks/useUndoRedoShortcut'
+import { useUndoRedoShortcut } from '@root/renderer/hooks/use-undo-redo-shortcut'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { baseTypeSchema, PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
@@ -20,11 +20,12 @@ type UserLibFunctionBlock = { type: string; name: string }
 const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   const {
     editor,
-    projectActions: { updateDatatype, pushToHistory, undo, redo },
+    projectActions: { updateDatatype },
     project: {
       data: { dataTypes },
     },
     libraries: sliceLibraries,
+    snapshotActions: { addSnapshot, redo, undo },
   } = useOpenPLCStore()
 
   useUndoRedoShortcut({
@@ -100,7 +101,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       const newRows = [...prevRows, { dimension: '' }]
 
       if (isFirst) {
-        pushToHistory(editor.meta.name)
+        addSnapshot(editor.meta.name)
       }
 
       setArrayTable({ selectedRow: newRows.length - 1 })
@@ -110,7 +111,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   }
 
   const removeRow = () => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null) {
@@ -132,7 +133,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   }
 
   const moveRowUp = () => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
@@ -157,7 +158,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
   }
 
   const moveRowDown = () => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow < prevRows.length - 1) {

@@ -70,7 +70,8 @@ const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVar
     editor: {
       meta: { name },
     },
-    projectActions: { updateVariable, pushToHistory },
+    projectActions: { updateVariable },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   return (
@@ -80,7 +81,7 @@ const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVar
       selectedRow={selectedRow}
       handleRowClick={handleRowClick}
       updateData={(rowIndex, columnId, value) => {
-        pushToHistory(name)
+        addSnapshot(name)
         return updateVariable({ scope: 'global', rowId: rowIndex, data: { [columnId]: value } })
       }}
       tableContext='Variables'

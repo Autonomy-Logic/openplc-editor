@@ -1,7 +1,7 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
-import { useUndoRedoShortcut } from '@root/renderer/hooks/useUndoRedoShortcut'
+import { useUndoRedoShortcut } from '@root/renderer/hooks/use-undo-redo-shortcut'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
@@ -14,7 +14,8 @@ type EnumDatatypeProps = ComponentPropsWithoutRef<'div'> & {
 const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   const {
     editor,
-    projectActions: { updateDatatype, undo, redo, pushToHistory },
+    projectActions: { updateDatatype },
+    snapshotActions: { addSnapshot, redo, undo },
   } = useOpenPLCStore()
 
   useUndoRedoShortcut({
@@ -39,7 +40,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
 
   const handleInitialValueChange = (value: string) => {
     setInitialValueData(value)
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
     updateDatatype(data.name, {
       ...data,
       initialValue: value,
@@ -47,7 +48,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const addNewRow = () => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     setTableData((prevRows) => {
       const newRows = [...prevRows, { description: '' }]
@@ -61,7 +62,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const removeRow = () => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null) {
@@ -82,7 +83,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const moveRowUp = () => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
@@ -106,7 +107,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const moveRowDown = () => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow < prevRows.length - 1) {

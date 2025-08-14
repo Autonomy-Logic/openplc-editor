@@ -29,7 +29,8 @@ const DimensionsTable = ({
 
   const {
     editor,
-    projectActions: { updateDatatype, pushToHistory },
+    projectActions: { updateDatatype },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const columnHelper = createColumnHelper<{ dimension: string }>()
@@ -64,7 +65,7 @@ const DimensionsTable = ({
       const validation = arrayValidation({ value: inputValue })
 
       if (!validation.ok || inputValue === '') {
-        pushToHistory(editor.meta.name)
+        addSnapshot(editor.meta.name)
 
         const newRows = prevRows.filter((_, index) => index !== rowIndex)
         const optionalSchema = {
@@ -79,7 +80,7 @@ const DimensionsTable = ({
           variant: 'fail',
         })
       } else {
-        pushToHistory(editor.meta.name)
+        addSnapshot(editor.meta.name)
 
         const newRows = prevRows.map((row, index) => ({
           ...row,

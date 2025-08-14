@@ -35,10 +35,11 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
     project: {
       data: { pous },
     },
-    projectActions: { deleteVariable, pushToHistory },
+    projectActions: { deleteVariable },
     modalActions: { openModal },
     searchQuery,
     searchActions: { setSearchNodePosition },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
@@ -209,7 +210,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
       blockVariant: pouLibrary,
     })
 
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes })
     ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges })
@@ -228,7 +229,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
   const handleRemoveNode = (nodes: FlowNode[]) => {
     const { nodes: newNodes, edges: newEdges } = removeElements({ ...rungLocal }, nodes)
 
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: newNodes })
     ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rungLocal.id, edges: newEdges })
@@ -318,7 +319,7 @@ export const RungBody = ({ rung, className }: RungBodyProps) => {
   const handleNodeDragStop = (node: FlowNode) => {
     const result = onElementDrop(rungLocal, rung, node)
 
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     setDragging(false)
     ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rungLocal.id, nodes: result.nodes })

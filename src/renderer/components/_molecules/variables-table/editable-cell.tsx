@@ -43,7 +43,8 @@ const EditableNameCell = ({
     fbdFlows,
     fbdFlowActions: { updateNode: updateFBDNode },
     searchQuery,
-    projectActions: { getVariable, pushToHistory },
+    projectActions: { getVariable },
+    snapshotActions: { addSnapshot },
     project: {
       data: { pous },
     },
@@ -135,7 +136,7 @@ const EditableNameCell = ({
 
     /* 2 ▸ IF NOT propagating, break the link before renaming */
     if (nodesUsingVarLadder.length && !shouldPropagate && language === 'ld') {
-      pushToHistory(editor.meta.name)
+      addSnapshot(editor.meta.name)
 
       nodesUsingVarLadder.forEach(({ rungId, nodeId }) => {
         const { rung, node } = getLadderPouVariablesRungNodeAndEdges(editor, pous, ladderFlows, { nodeId })
@@ -164,7 +165,7 @@ const EditableNameCell = ({
     }
 
     if (nodesUsingVarFbd.length && !shouldPropagate && language === 'fbd') {
-      pushToHistory(editor.meta.name)
+      addSnapshot(editor.meta.name)
 
       nodesUsingVarFbd.forEach(({ flowName, nodeId }) => {
         const flow = fbdFlows.find((f) => f.name === flowName)

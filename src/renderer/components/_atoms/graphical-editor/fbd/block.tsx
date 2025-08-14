@@ -68,7 +68,8 @@ export const BlockNodeElement = <T extends object>({
     project: {
       data: { pous },
     },
-    projectActions: { updateVariable, deleteVariable, pushToHistory },
+    projectActions: { updateVariable, deleteVariable },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const {
@@ -163,7 +164,7 @@ export const BlockNodeElement = <T extends object>({
         title: '',
       }
 
-      pushToHistory(editor.meta.name)
+      addSnapshot(editor.meta.name)
 
       if ((libraryBlock as BlockVariant).type !== 'function-block') {
         deleteVariable({
@@ -245,7 +246,7 @@ export const BlockNodeElement = <T extends object>({
       newEdges = newEdges.map((e) => (e.id === edge.id ? newEdge : e))
     })
 
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     setNodes({
       editorName: editor.meta.name,
@@ -336,9 +337,10 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
     project: {
       data: { pous },
     },
-    projectActions: { createVariable, pushToHistory },
+    projectActions: { createVariable },
     fbdFlows,
     fbdFlowActions: { updateNode },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
   const { type: blockType } = (data.variant as BlockVariant) ?? DEFAULT_BLOCK_TYPE
   const documentation = getBlockDocumentation(data.variant as BlockVariant)
@@ -495,7 +497,7 @@ export const Block = <T extends object>(block: BlockProps<T>) => {
       if (matchingVariable) {
         variableToLink = matchingVariable
       } else if (createIfNotFound) {
-        pushToHistory(editor.meta.name)
+        addSnapshot(editor.meta.name)
 
         const creationResult = createVariable({
           data: {

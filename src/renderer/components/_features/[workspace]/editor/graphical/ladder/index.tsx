@@ -38,11 +38,12 @@ export default function LadderEditor() {
     editor,
     ladderFlowActions,
     searchNodePosition,
-    projectActions: { updatePou, pushToHistory },
+    projectActions: { updatePou },
     workspaceActions: { setEditingState },
     editorActions: { saveEditorViewState },
     modals,
     modalActions: { closeModal },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
 
   const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
@@ -95,7 +96,7 @@ export default function LadderEditor() {
   }
 
   const handleAddNewRung = () => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     const defaultViewport: [number, number] = [300, 100]
 
@@ -145,7 +146,7 @@ export default function LadderEditor() {
     auxRungs.splice(destinationIndex, 0, removed)
 
     try {
-      pushToHistory(editor.meta.name)
+      addSnapshot(editor.meta.name)
       ladderFlowActions.setRungs({ editorName: editor.meta.name, rungs: auxRungs })
     } catch (error) {
       console.error('Failed to update rungs:', error)

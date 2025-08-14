@@ -2,7 +2,7 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
-import { useUndoRedoShortcut } from '@root/renderer/hooks/useUndoRedoShortcut'
+import { useUndoRedoShortcut } from '@root/renderer/hooks/use-undo-redo-shortcut'
 import { useOpenPLCStore } from '@root/renderer/store'
 import {
   FBDFlowActions,
@@ -49,10 +49,8 @@ const VariablesEditor = () => {
       updatePouDocumentation,
       updatePouReturnType,
       setPouVariables,
-      pushToHistory,
-      undo,
-      redo,
     },
+    snapshotActions: { addSnapshot, redo, undo },
   } = useOpenPLCStore()
 
   useUndoRedoShortcut({
@@ -160,7 +158,7 @@ const VariablesEditor = () => {
   const handleRearrangeVariables = (index: number, row?: number) => {
     if (editorVariables.display === 'code') return
 
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     const variable = tableData[row ?? parseInt(editorVariables.selectedRow)]
     rearrangeVariables({
@@ -178,7 +176,7 @@ const VariablesEditor = () => {
   const handleCreateVariable = () => {
     if (editorVariables.display === 'code') return
 
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     const variables = pous.filter((pou) => pou.data.name === editor.meta.name)[0].data.variables
     const selectedRow = parseInt(editorVariables.selectedRow)
@@ -241,7 +239,7 @@ const VariablesEditor = () => {
   const handleRemoveVariable = () => {
     if (editorVariables.display === 'code') return
 
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     const selectedRow = parseInt(editorVariables.selectedRow)
     const selectedVariable = tableData[selectedRow]
@@ -307,7 +305,7 @@ const VariablesEditor = () => {
     fbdFlows: FBDFlowState['fbdFlows'],
     updateNode: FBDFlowActions['updateNode'],
   ) => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
     fbdFlows.forEach((flow) =>
       flow.rung.nodes.forEach((node) => {
         const data = (node.data as { variable?: PLCVariable }).variable
@@ -339,7 +337,7 @@ const VariablesEditor = () => {
     ladderFlows: LadderFlowState['ladderFlows'],
     updateNode: LadderFlowActions['updateNode'],
   ) => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     ladderFlows.forEach((flow) =>
       flow.rungs.forEach((rung) =>
@@ -377,7 +375,7 @@ const VariablesEditor = () => {
     updateNode: LadderFlowActions['updateNode'],
     propagateRenamed: boolean,
   ): void => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     ladderFlows.forEach((flow) =>
       flow.rungs.forEach((rung) =>
@@ -429,7 +427,7 @@ const VariablesEditor = () => {
     updateNode: FBDFlowActions['updateNode'],
     propagateRenamed: boolean,
   ): void => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     fbdFlows.forEach((flow) =>
       flow.rung.nodes.forEach((node) => {
@@ -598,7 +596,7 @@ const VariablesEditor = () => {
 
   const commitCode = async (): Promise<boolean> => {
     try {
-      pushToHistory(editor.meta.name)
+      addSnapshot(editor.meta.name)
 
       const language = 'language' in editor.meta ? editor.meta.language : undefined
 

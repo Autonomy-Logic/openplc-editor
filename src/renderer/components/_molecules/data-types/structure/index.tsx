@@ -1,7 +1,7 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
-import { useUndoRedoShortcut } from '@root/renderer/hooks/useUndoRedoShortcut'
+import { useUndoRedoShortcut } from '@root/renderer/hooks/use-undo-redo-shortcut'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { StructureTableType } from '@root/renderer/store/slices'
 import { PLCStructureVariable } from '@root/types/PLC/open-plc'
@@ -17,7 +17,8 @@ const StructureDataType = () => {
       data: { dataTypes },
     },
     editorActions: { updateModelStructure },
-    projectActions: { updateDatatype, rearrangeStructureVariables, pushToHistory, undo, redo },
+    projectActions: { updateDatatype, rearrangeStructureVariables },
+    snapshotActions: { addSnapshot, redo, undo },
   } = useOpenPLCStore()
 
   useUndoRedoShortcut({
@@ -59,7 +60,7 @@ const StructureDataType = () => {
   }
 
   const handleCreateStructureVariable = () => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     const structureVariables = tableData.filter((variable) => variable.name || variable.type)
     const selectedRow = parseInt(editorStructure.selectedRow)
@@ -148,7 +149,7 @@ const StructureDataType = () => {
   }
 
   const handleDeleteStructureVariable = () => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     const structureVariables = tableData.filter((variable) => variable.name || variable.type)
     const selectedRow = parseInt(editorStructure.selectedRow)
@@ -178,7 +179,7 @@ const StructureDataType = () => {
   }
 
   const handleRearrangeStructureVariables = (index: number, row?: number) => {
-    pushToHistory(editor.meta.name)
+    addSnapshot(editor.meta.name)
 
     rearrangeStructureVariables({
       associatedDataType: editor.meta.name,

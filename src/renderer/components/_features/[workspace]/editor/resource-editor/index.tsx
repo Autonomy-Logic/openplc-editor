@@ -1,13 +1,13 @@
 import { GlobalVariablesEditor } from '@root/renderer/components/_organisms/global-variables-editor'
 import { InstancesEditor } from '@root/renderer/components/_organisms/instances-editor'
 import { TaskEditor } from '@root/renderer/components/_organisms/task-editor'
-import { useUndoRedoShortcut } from '@root/renderer/hooks/useUndoRedoShortcut'
+import { useUndoRedoShortcut } from '@root/renderer/hooks/use-undo-redo-shortcut'
 import { useOpenPLCStore } from '@root/renderer/store'
 
 const ResourcesEditor = () => {
   const {
     editor,
-    projectActions: { undo, redo },
+    snapshotActions: { undo, redo },
   } = useOpenPLCStore()
 
   useUndoRedoShortcut({
