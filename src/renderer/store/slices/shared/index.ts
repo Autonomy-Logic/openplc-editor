@@ -16,7 +16,8 @@ import { StateCreator } from 'zustand'
 import { ConsoleSlice } from '../console'
 import { deviceConfigurationSchema, devicePinSchema, DeviceSlice, DeviceState } from '../device'
 import { EditorModel, EditorSlice } from '../editor'
-import { FBDFlowSlice, FBDFlowType } from '../fbd'
+import { FBDFlowSlice, FBDFlowType, ZodFBDFlowType } from '../fbd'
+import { duplicateFBDRung } from '../fbd/utils'
 import { FileSlice, FileSliceDataObject } from '../files'
 import { LadderFlowSlice, LadderFlowType, ZodLadderFlowType } from '../ladder'
 import { duplicateLadderRung } from '../ladder/utils'
@@ -46,7 +47,7 @@ export type SharedSlice = {
     deleteRequest: (pouName: string) => void
     delete: (data: DeletePou) => Promise<BasicSharedSliceResponse>
     rename: (pouName: string, newPouName: string) => Promise<BasicSharedSliceResponse>
-    duplicate: (pouName: string) => BasicSharedSliceResponse
+    duplicate: (pouName: string) => Promise<BasicSharedSliceResponse>
   }
   datatypeActions: {
     create: (
@@ -390,8 +391,24 @@ export const createSharedSlice: StateCreator<
           })
           break
         }
-        case 'fbd':
+        case 'fbd': {
+          const fbdFlow = getState().fbdFlows.find((ff) => ff.name === pouName)
+          const copiedFBDFlow = {
+            name: newPou.data.name,
+            rung: fbdFlow ? duplicateFBDRung(fbdFlow.rung) : { comment: '', nodes: [], edges: [], selectedNodes: [] },
+            updated: true,
+          }
+          getState().fbdFlowActions.removeFBDFlow(pouName)
+          getState().fbdFlowActions.addFBDFlow(copiedFBDFlow)
+          getState().projectActions.updatePou({
+            name: newPou.data.name,
+            content: {
+              language: newPou.data.language,
+              value: copiedFBDFlow as ZodFBDFlowType,
+            },
+          })
           break
+        }
         default:
           break
       }
@@ -455,7 +472,7 @@ export const createSharedSlice: StateCreator<
       return await getState().sharedWorkspaceActions.saveFile(newPouName)
     },
 
-    duplicate: (pouName: string) => {
+    duplicate: async (pouName: string) => {
       const originalPou = getState().project.data.pous.find((pou) => pou.data.name === pouName)
 
       if (!originalPou) {
@@ -497,11 +514,27 @@ export const createSharedSlice: StateCreator<
           copiedPou.data.body.value =
             copiedPou.data.body.language === 'ld'
               ? ({ name: copiedLadderFlow.name, rungs: copiedLadderFlow.rungs } as ZodLadderFlowType)
-              : ''
+              : ({ name: copiedLadderFlow.name, rungs: [] } as ZodLadderFlowType)
           getState().ladderFlowActions.addLadderFlow(copiedLadderFlow)
           break
         }
         case 'fbd': {
+          const originalFBDFlow = getState().fbdFlows.find((ff) => ff.name === originalPou.data.name)
+          const copiedFBDFlow = {
+            name: copiedPou.data.name,
+            rung: originalFBDFlow
+              ? duplicateFBDRung(originalFBDFlow.rung)
+              : { comment: '', nodes: [], edges: [], selectedNodes: [] },
+            updated: true,
+          }
+          copiedPou.data.body.value =
+            copiedPou.data.body.language === 'fbd'
+              ? ({ name: copiedFBDFlow.name, rung: copiedFBDFlow.rung } as ZodFBDFlowType)
+              : ({
+                  name: copiedFBDFlow.name,
+                  rung: { comment: '', nodes: [], edges: [], selectedNodes: [] },
+                } as ZodFBDFlowType)
+          getState().fbdFlowActions.addFBDFlow(copiedFBDFlow)
           break
         }
         default:
@@ -509,6 +542,34 @@ export const createSharedSlice: StateCreator<
       }
 
       getState().projectActions.createPou(copiedPou)
+      if (copiedPou.type !== 'program') getState().libraryActions.addLibrary(copiedPou.data.name, copiedPou.type)
+      getState().fileActions.addFile({
+        name: copiedPou.data.name,
+        type: copiedPou.type,
+        filePath: `/pous/${copiedPou.type}s/${copiedPou.data.name}.json`,
+      })
+
+      try {
+        const res = await window.bridge.createPouFile({
+          path: `${getState().project.meta.path}/pous/${copiedPou.type}s/${copiedPou.data.name}.json`,
+          pou: copiedPou,
+        })
+        if (!res.success) throw new Error(res.error?.description || 'Error creating duplicated POU file')
+      } catch (_error) {
+        console.log(_error)
+        toast({
+          title: 'Error creating duplicated POU file',
+          description: 'An error occurred while creating the duplicated POU file.',
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error creating duplicated POU file',
+            description: 'An error occurred while creating the duplicated POU file.',
+          },
+        }
+      }
 
       return { success: true }
     },
