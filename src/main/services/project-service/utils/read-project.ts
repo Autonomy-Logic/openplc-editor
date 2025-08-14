@@ -9,7 +9,7 @@ import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { PLCPou, PLCPouSchema, PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
-import { readdirSync, readFileSync, writeFileSync } from 'fs'
+import { promises, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { ZodTypeAny } from 'zod'
 
@@ -50,12 +50,13 @@ function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
   let isValidProject = true
   let hasProjectFile = false
   for (const entry of entries) {
+    // Skip any entries that are not relevant to the project structure
+    if (entry.path.includes('pous') || entry.path.includes('build')) {
+      continue
+    }
+
     // If any entry is a file, it should be one of the expected project files
     if (entry.isFile()) {
-      if (entry.path.includes('pous') || entry.path.includes('build')) {
-        continue // Skip POU files for now, they will be handled separately
-      }
-
       if (entry.name === 'project.json') {
         hasProjectFile = true
       }
@@ -185,7 +186,7 @@ function readDirectoryRecursive(baseDir: string, baseFileName: string, projectFi
   }
 }
 
-export function readProjectFiles(basePath: string): IProjectServiceReadFilesResponse {
+export async function readProjectFiles(basePath: string): Promise<IProjectServiceReadFilesResponse> {
   const isValidProjectDirectory = checkIfDirectoryIsAValidProjectDirectory(basePath)
   if (!isValidProjectDirectory.success) {
     return isValidProjectDirectory
@@ -225,10 +226,23 @@ export function readProjectFiles(basePath: string): IProjectServiceReadFilesResp
     const pouDirPath = join(basePath, pouDirectory)
     if (fileOrDirectoryExists(pouDirPath)) {
       readDirectoryRecursive(pouDirPath, pouDirectory, pouFiles)
-    } else {
-      // If the POU directory does not exist, create it
-      createDirectory(pouDirPath)
     }
+  }
+
+  // Create pou files based on the project file's POU data
+  if (projectFiles['project.json']) {
+    const project = projectFiles['project.json'] as PLCProject
+    await Promise.all(
+      project.data.pous.map(async (pou) => {
+        const pouType = pou.type.toLowerCase() + 's' // Convert type to lowercase and append 's'
+        const pouFilePath = join(basePath, 'pous', pouType, `${pou.data.name}.json`)
+        if (!fileOrDirectoryExists(pouFilePath)) {
+          await promises.mkdir(dirname(pouFilePath), { recursive: true })
+          await promises.writeFile(pouFilePath, JSON.stringify(pou, null, 2), 'utf-8')
+        }
+        pouFiles[join('pous', pouType, `${pou.data.name}.json`)] = pou
+      }),
+    )
   }
 
   /**
@@ -243,9 +257,15 @@ export function readProjectFiles(basePath: string): IProjectServiceReadFilesResp
     }
   })
 
+  // Combine project files and POU files into a single response object
+  const pous = new Set<PLCPou>([
+    ...Object.values(pouFiles).map((pou) => pou as PLCPou),
+    ...(projectFiles['project.json'] as PLCProject).data.pous,
+  ])
+
   const returnData: IProjectServiceReadFilesResponse['data'] = {
     project: projectFiles['project.json'] as PLCProject,
-    pous: Object.values(pouFiles).map((pou) => pou as PLCPou),
+    pous: pous.size > 0 ? Array.from(pous) : [],
     deviceConfiguration: projectFiles['devices/configuration.json'] as DeviceConfiguration,
     devicePinMapping: projectFiles['devices/pin-mapping.json'] as DevicePin[],
   }

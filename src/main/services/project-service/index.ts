@@ -123,7 +123,7 @@ class ProjectService {
   async openProjectByPath(projectPath: string): Promise<IProjectServiceResponse> {
     try {
       await promises.access(projectPath)
-      const projectFiles = readProjectFiles(projectPath)
+      const projectFiles = await readProjectFiles(projectPath)
 
       if (!projectFiles.success || !projectFiles.data) {
         console.log(`Error opening project at path: ${projectPath}`, projectFiles.error)
@@ -190,7 +190,7 @@ class ProjectService {
 
     try {
       await promises.access(directoryPath)
-      const projectFiles = readProjectFiles(directoryPath)
+      const projectFiles = await readProjectFiles(directoryPath)
 
       if (!projectFiles.success || !projectFiles.data) {
         console.log(`Error opening project at path: ${directoryPath}`, projectFiles.error)
@@ -301,7 +301,7 @@ class ProjectService {
         const dir = join(directoryPath, 'pous', type)
 
         if (!fileOrDirectoryExists(dir)) {
-          throw new Error(`Directory does not exist: ${dir}`)
+          await promises.mkdir(dir, { recursive: true })
         }
 
         // Write/update each POU file
@@ -332,6 +332,11 @@ class ProjectService {
 
   async saveFile(filePath: string, content: unknown): Promise<IProjectServiceResponse> {
     try {
+      if (!fileOrDirectoryExists(filePath)) {
+        const dir = filePath.substring(0, filePath.lastIndexOf('/'))
+        await promises.mkdir(dir, { recursive: true })
+      }
+
       await promises.writeFile(filePath, JSON.stringify(content, null, 2))
       return {
         success: true,
