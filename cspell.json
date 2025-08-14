@@ -4,6 +4,7 @@
     "dictionaryDefinitions": [],
     "dictionaries": [],
     "words": [
+        "ARDUINOCAN",
         "baremetal",
         "baudrate",
         "CODESYS",
@@ -13,6 +14,7 @@
         "MBSERIAL",
         "MBTCP",
         "modbus",
+        "MOSFET",
         "openplc",
         "PINMASK",
         "pous",
