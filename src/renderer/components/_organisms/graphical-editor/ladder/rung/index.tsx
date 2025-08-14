@@ -15,9 +15,10 @@ type RungProps = {
   index: number
   id: string
   rung: RungLadderState
+  nodeDivergences?: string[]
 }
 
-export const Rung = ({ className, index, id, rung }: RungProps) => {
+export const Rung = ({ className, index, id, rung, nodeDivergences }: RungProps) => {
   const {
     ladderFlows,
     editorActions: { updateModelLadder, getIsRungOpen },
@@ -74,6 +75,7 @@ export const Rung = ({ className, index, id, rung }: RungProps) => {
           className={cn('border border-transparent', {
             'rounded-b-lg': index === flow.rungs.length - 1,
           })}
+          nodeDivergences={nodeDivergences}
         />
       )}
     </div>

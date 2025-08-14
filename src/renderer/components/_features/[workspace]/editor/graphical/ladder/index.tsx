@@ -15,7 +15,7 @@ import {
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
-import { BlockNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
+import { BlockNode, BlockNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/block'
 import { CoilNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/coil'
 import { ContactNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/contact'
 import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/types/block'
@@ -38,11 +38,15 @@ export default function LadderEditor() {
     editor,
     ladderFlowActions,
     searchNodePosition,
+    project: {
+      data: { pous },
+    },
     projectActions: { updatePou },
     workspaceActions: { setEditingState },
     editorActions: { saveEditorViewState },
     modals,
     modalActions: { closeModal },
+    libraries: { user: userLibraries },
   } = useOpenPLCStore()
 
   const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
@@ -50,6 +54,7 @@ export default function LadderEditor() {
   const flowUpdated = flow?.updated
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
   const [activeItem, setActiveItem] = useState<RungLadderState | null>(null)
+  const nodeDivergences = getLibraryDivergences()
 
   const scrollableRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -189,6 +194,43 @@ export default function LadderEditor() {
     }
   }, [scrollableRef.current, editor.meta.name])
 
+  function getLibraryDivergences() {
+    if (!flow) return []
+
+    const divergences = []
+
+    for (const rung of flow.rungs) {
+      for (const node of rung.nodes) {
+        const variant = (node.data as BlockNodeData<BlockVariant>)?.variant
+        if (!variant) continue
+
+        const libMatch = userLibraries.find((lib) => lib.name === variant.name && lib.type === variant.type)
+        if (!libMatch) continue
+
+        const original = pous.find((pou) => pou.data.name === libMatch.name)?.data?.variables
+        const currentVariables = variant.variables.filter((variable) => !['OUT', 'EN', 'ENO'].includes(variable.name))
+
+        const formatVariable = (variable: {
+          name: string
+          class?: string
+          type: { definition: string; value: string }
+        }) => `${variable.name}|${variable.class}|${variable.type.definition}|${variable.type.value?.toLowerCase()}`
+
+        const currentMap = new Map(currentVariables.map((variable) => [formatVariable(variable), true]))
+
+        const hasDivergence =
+          original?.length !== currentVariables.length ||
+          !original?.every((variable) => currentMap.has(formatVariable(variable)))
+
+        if (hasDivergence) {
+          divergences.push(`${rung.id}:${node.id}`)
+        }
+      }
+    }
+
+    return divergences
+  }
+
   return (
     <div className='h-full w-full overflow-y-auto' ref={scrollableRef} style={{ scrollbarGutter: 'stable' }}>
       <div className='flex flex-1 flex-col gap-4 px-2'>
@@ -208,6 +250,7 @@ export default function LadderEditor() {
                   className={cn({
                     'opacity-35': activeId === rung.id,
                   })}
+                  nodeDivergences={nodeDivergences}
                 />
               ))}
             </SortableContext>
