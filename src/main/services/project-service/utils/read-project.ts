@@ -257,15 +257,9 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
     }
   })
 
-  // Combine project files and POU files into a single response object
-  const pous = new Set<PLCPou>([
-    ...Object.values(pouFiles).map((pou) => pou as PLCPou),
-    ...(projectFiles['project.json'] as PLCProject).data.pous,
-  ])
-
   const returnData: IProjectServiceReadFilesResponse['data'] = {
     project: projectFiles['project.json'] as PLCProject,
-    pous: pous.size > 0 ? Array.from(pous) : [],
+    pous: Object.values(pouFiles).map((pou) => pou as PLCPou),
     deviceConfiguration: projectFiles['devices/configuration.json'] as DeviceConfiguration,
     devicePinMapping: projectFiles['devices/pin-mapping.json'] as DevicePin[],
   }
