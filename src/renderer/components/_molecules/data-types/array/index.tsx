@@ -2,7 +2,6 @@ import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { InputWithRef } from '@root/renderer/components/_atoms'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
 import { TypeDropdownSelector } from '@root/renderer/components/_atoms/type-dropdown-selector'
-import { useUndoRedoShortcut } from '@root/renderer/hooks/use-undo-redo-shortcut'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { baseTypeSchema, PLCArrayDatatype } from '@root/types/PLC/open-plc'
 import { ChangeEvent, ComponentPropsWithoutRef, useEffect, useState } from 'react'
@@ -25,13 +24,8 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
       data: { dataTypes },
     },
     libraries: sliceLibraries,
-    snapshotActions: { addSnapshot, redo, undo },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
-
-  useUndoRedoShortcut({
-    undo: () => undo(editor.meta.name),
-    redo: () => redo(editor.meta.name),
-  })
 
   const baseTypes = baseTypeSchema.options.filter((type) => type.toUpperCase() !== 'ARRAY')
   const userDataTypes = dataTypes

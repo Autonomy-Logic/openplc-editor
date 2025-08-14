@@ -5,9 +5,7 @@ import {
   PLCArrayDatatype,
   PLCDataType,
   PLCEnumeratedDatatype,
-  PLCInstance,
   PLCStructureDatatype,
-  PLCTask,
   PLCVariable,
 } from '@root/types/PLC/open-plc'
 import { StateCreator } from 'zustand'
@@ -453,7 +451,6 @@ export const createSharedSlice: StateCreator<
   },
   snapshotActions: {
     addSnapshot: (pouName) => {
-      console.log('Adding snapshot for', pouName)
       const ladderFlows = getState().ladderFlows
       const fbdFlows = getState().fbdFlows
       const resource = getState().project.data.configuration.resource
@@ -534,7 +531,6 @@ export const createSharedSlice: StateCreator<
       }
     },
     undo: (pouName) => {
-      console.log('Undo action triggered', pouName)
       const ladderFlows = getState().ladderFlows
       const fbdFlows = getState().fbdFlows
       const resource = getState().project.data.configuration.resource
@@ -577,54 +573,49 @@ export const createSharedSlice: StateCreator<
 
       getState().historyActions.addFutureHistory(pouName, currentSnapshot)
 
-      const previous = history.past.pop()!
+      const previous = getState().historyActions.popPastHistory(pouName)
+
+      if (!previous) {
+        return
+      }
 
       if (isResource) {
-        getState().project.data.configuration.resource.globalVariables = previous.globalVariables as PLCVariable[]
-        getState().project.data.configuration.resource.tasks = previous.tasks as PLCTask[]
-        getState().project.data.configuration.resource.instances = previous.instances as PLCInstance[]
+        const { setGlobalVariables, setTasks, setInstances } = getState().projectActions
+
+        setGlobalVariables({ variables: (previous?.globalVariables ?? []) as PLCVariable[] })
+        setTasks({ tasks: previous?.tasks ?? [] })
+        setInstances({ instances: previous?.instances ?? [] })
+
         return
       }
 
       if (isDataType && previous.dataTypes) {
-        const index = getState().project.data.dataTypes.findIndex((dataType) => dataType.name === pouName)
+        const { applyDatatypeSnapshot } = getState().projectActions
 
-        if (index !== -1) {
-          getState().project.data.dataTypes[index] = previous.dataTypes as unknown as PLCDataType
-        }
+        applyDatatypeSnapshot(pouName, previous.dataTypes as unknown as PLCDataType)
+
         return
       }
 
       if (!isResource && pou) {
-        pou.data.variables = previous.variables as PLCVariable[]
-        pou.data.body = previous.body as typeof pou.data.body
+        getState().projectActions.applyPouSnapshot(
+          pouName,
+          previous.variables as PLCVariable[],
+          previous.body as typeof pou.data.body,
+        )
       }
 
-      if (previous.ladderFlow) {
-        getState().ladderFlows = [
-          ...ladderFlows.slice(0, flowIndex),
-          previous.ladderFlow,
-          ...ladderFlows.slice(flowIndex + 1),
-        ] as LadderFlowType[]
-      } else {
-        getState().ladderFlows = ladderFlows.filter((ladderFlow) => ladderFlow.name !== pouName)
-      }
+      getState().ladderFlowActions.applyLadderFlowSnapshot({
+        editorName: pouName,
+        snapshot: previous.ladderFlow as LadderFlowType | null,
+      })
 
-      if (previous.fbdFlow) {
-        if (fbdIndex !== -1) {
-          getState().fbdFlows = [
-            ...fbdFlows.slice(0, fbdIndex),
-            previous.fbdFlow,
-            ...fbdFlows.slice(fbdIndex + 1),
-          ] as FBDFlowType[]
-          getState().fbdFlows = [...fbdFlows, previous.fbdFlow] as FBDFlowType[]
-        }
-      } else {
-        getState().fbdFlows = fbdFlows.filter((f) => f.name !== pouName)
-      }
+      getState().fbdFlowActions.applyFBDFlowSnapshot({
+        editorName: pouName,
+        snapshot: previous.fbdFlow as FBDFlowType | null,
+      })
     },
     redo: (pouName) => {
-      console.log('Redo action triggered', pouName)
       const ladderFlows = getState().ladderFlows
       const fbdFlows = getState().fbdFlows
       const resource = getState().project.data.configuration.resource
@@ -634,7 +625,7 @@ export const createSharedSlice: StateCreator<
 
       const history = getState().history[pouName]
 
-      if (!history || history.future.length === 0) {
+      if (!history || history.past.length === 0) {
         return
       }
 
@@ -667,63 +658,47 @@ export const createSharedSlice: StateCreator<
 
       getState().historyActions.addPastHistory(pouName, currentSnapshot)
 
-      const next = history.future.pop()!
+      const next = getState().historyActions.popFutureHistory(pouName)
+
+      if (!next) {
+        return
+      }
 
       if (isResource) {
-        getState().project.data.configuration.resource.globalVariables = next.globalVariables as PLCVariable[]
-        getState().project.data.configuration.resource.tasks = next.tasks as PLCTask[]
-        getState().project.data.configuration.resource.instances = next.instances as PLCInstance[]
+        const { setGlobalVariables, setTasks, setInstances } = getState().projectActions
+
+        setGlobalVariables({ variables: (next?.globalVariables ?? []) as PLCVariable[] })
+        setTasks({ tasks: next?.tasks ?? [] })
+        setInstances({ instances: next?.instances ?? [] })
 
         return
       }
 
       if (isDataType && next.dataTypes) {
-        const index = getState().project.data.dataTypes.findIndex((dt) => dt.name === pouName)
+        const { applyDatatypeSnapshot } = getState().projectActions
 
-        if (index !== -1) {
-          getState().project.data.dataTypes[index] = next.dataTypes as unknown as PLCDataType
-        }
+        applyDatatypeSnapshot(pouName, next.dataTypes as unknown as PLCDataType)
+
         return
       }
 
       if (!isResource && pou) {
-        pou.data.variables = next.variables as PLCVariable[]
-        pou.data.body = next.body as typeof pou.data.body
+        getState().projectActions.applyPouSnapshot(
+          pouName,
+          next.variables as PLCVariable[],
+          next.body as typeof pou.data.body,
+        )
       }
 
-      if (next.ladderFlow) {
-        const index = ladderFlows.findIndex((ladderFlow) => ladderFlow.name === pouName)
+      getState().ladderFlowActions.applyLadderFlowSnapshot({
+        editorName: pouName,
+        snapshot: next.ladderFlow as LadderFlowType | null,
+      })
 
-        if (index !== -1) {
-          getState().ladderFlows = [
-            ...ladderFlows.slice(0, index),
-            next.ladderFlow,
-            ...ladderFlows.slice(index + 1),
-          ] as LadderFlowType[]
-        } else {
-          getState().ladderFlows = [...ladderFlows, next.ladderFlow] as LadderFlowType[]
-        }
-      } else {
-        getState().ladderFlows = ladderFlows.filter((ladderFlow) => ladderFlow.name !== pouName)
-      }
-
-      if (next.fbdFlow) {
-        if (fbdIndex !== -1) {
-          getState().fbdFlows = [
-            ...fbdFlows.slice(0, fbdIndex),
-            next.fbdFlow,
-            ...fbdFlows.slice(fbdIndex + 1),
-          ] as FBDFlowType[]
-        } else {
-          getState().fbdFlows = [...fbdFlows, next.fbdFlow] as FBDFlowType[]
-        }
-      } else {
-        getState().fbdFlows = fbdFlows.filter((f) => f.name !== pouName)
-      }
-
-      if (next.globalVariables) {
-        getState().project.data.configuration.resource.globalVariables = next.globalVariables as PLCVariable[]
-      }
+      getState().fbdFlowActions.applyFBDFlowSnapshot({
+        editorName: pouName,
+        snapshot: next.fbdFlow as FBDFlowType | null,
+      })
     },
   },
 })

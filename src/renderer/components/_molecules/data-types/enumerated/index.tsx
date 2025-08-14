@@ -1,7 +1,6 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/renderer/components/_atoms'
 import TableActions from '@root/renderer/components/_atoms/table-actions'
-import { useUndoRedoShortcut } from '@root/renderer/hooks/use-undo-redo-shortcut'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { PLCEnumeratedDatatype } from '@root/types/PLC/open-plc'
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
@@ -15,13 +14,8 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   const {
     editor,
     projectActions: { updateDatatype },
-    snapshotActions: { addSnapshot, redo, undo },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
-
-  useUndoRedoShortcut({
-    undo: () => undo(editor.meta.name),
-    redo: () => redo(editor.meta.name),
-  })
 
   const ROWS_NOT_SELECTED = -1
 

@@ -2,7 +2,6 @@
 import { MinusIcon, PlusIcon, StickArrowIcon } from '@root/renderer/assets'
 import { CodeIcon } from '@root/renderer/assets/icons/interface/CodeIcon'
 import { TableIcon } from '@root/renderer/assets/icons/interface/TableIcon'
-import { useUndoRedoShortcut } from '@root/renderer/hooks/use-undo-redo-shortcut'
 import { useOpenPLCStore } from '@root/renderer/store'
 import {
   FBDFlowActions,
@@ -50,13 +49,8 @@ const VariablesEditor = () => {
       updatePouReturnType,
       setPouVariables,
     },
-    snapshotActions: { addSnapshot, redo, undo },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
-
-  useUndoRedoShortcut({
-    undo: () => undo(editor.meta.name),
-    redo: () => redo(editor.meta.name),
-  })
 
   /**
    * Table data and column filters states to keep track of the table data and column filters
