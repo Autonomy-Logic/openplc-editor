@@ -625,7 +625,7 @@ export const createSharedSlice: StateCreator<
 
       const history = getState().history[pouName]
 
-      if (!history || history.past.length === 0) {
+      if (!history || history.future.length === 0) {
         return
       }
 
