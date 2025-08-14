@@ -150,7 +150,7 @@ const _projectActionsSchema = z.object({
   deletePou: z.function().args(z.string()).returns(z.void()),
   updatePouDocumentation: z.function().args(z.string(), z.string()).returns(z.void()),
   updatePouReturnType: z.function().args(z.string(), z.string()).returns(z.void()),
-  applyPouSnapshot: z.function().args(z.string(), z.array(PLCVariableSchema), z.any()).returns(z.void()),
+  applyPouSnapshot: z.function().args(z.string(), z.array(PLCVariableSchema), bodySchema).returns(z.void()),
 
   /**
    * Variables Table Actions
@@ -282,6 +282,7 @@ const _projectActionsSchema = z.object({
     .function()
     .args(z.object({ rowId: z.number(), newIndex: z.number() }))
     .returns(z.void()),
+  setMonacoFocused: z.function().args(z.boolean()).returns(z.void()),
 })
 type ProjectActions = z.infer<typeof _projectActionsSchema>
 

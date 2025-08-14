@@ -267,6 +267,11 @@ const AcceleratorHandler = () => {
       if (isMonacoFocused) {
         return
       }
+
+      if (!meta?.name) {
+        return
+      }
+
       undo(meta.name)
     })
     return () => {
@@ -278,6 +283,11 @@ const AcceleratorHandler = () => {
       if (isMonacoFocused) {
         return
       }
+
+      if (!meta?.name) {
+        return
+      }
+
       redo(meta.name)
     })
     return () => {

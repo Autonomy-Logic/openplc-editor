@@ -833,9 +833,10 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
         }),
       )
     },
-  },
-  setMonacoFocused: (focused: boolean) => {
-    setState({ isMonacoFocused: focused })
+
+    setMonacoFocused: (focused: boolean) => {
+      setState({ isMonacoFocused: focused })
+    },
   },
 })
 
