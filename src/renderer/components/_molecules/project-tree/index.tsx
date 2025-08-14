@@ -246,7 +246,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     },
     workspaceActions: { setSelectedProjectTreeLeaf },
     pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
-    datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype },
+    datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype, duplicate: duplicateDatatype },
     fileActions: { getFile },
   } = useOpenPLCStore()
 
@@ -318,7 +318,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     }
   }
 
-  const handleDuplicateFile = () => {
+  const handleDuplicateFile = async () => {
     if (!isAPou && !isDatatype) {
       toast({
         title: 'Error',
@@ -338,13 +338,18 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     }
 
     if (isAPou) {
-      duplicatePou(label)
+      await duplicatePou(label)
+      return
+    }
+
+    if (isDatatype) {
+      await duplicateDatatype(label)
       return
     }
 
     toast({
       title: 'Error',
-      description: 'Duplicate functionality is not implemented yet.',
+      description: 'Only POU or datatype files can be duplicated.',
       variant: 'fail',
     })
   }
@@ -377,6 +382,12 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       deleteDatatypeRequest(label)
       return
     }
+
+    toast({
+      title: 'Error',
+      description: 'Only POU or datatype files can be deleted.',
+      variant: 'fail',
+    })
   }
 
   const handleLabel = useCallback((label: string | undefined) => unsavedLabel(label, associatedFile), [associatedFile])
@@ -392,7 +403,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       {
         name: 'Duplicate',
         onClick: () => {
-          handleDuplicateFile()
+          void handleDuplicateFile()
         },
         icon: <DuplicateIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
       },

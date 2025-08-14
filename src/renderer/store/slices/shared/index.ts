@@ -57,6 +57,7 @@ export type SharedSlice = {
     deleteRequest: (datatypeName: string) => void
     delete: (data: DeleteDatatype) => BasicSharedSliceResponse
     rename: (datatypeName: string, newDatatypeName: string) => Promise<BasicSharedSliceResponse>
+    duplicate: (datatypeName: string) => Promise<BasicSharedSliceResponse>
   }
   sharedWorkspaceActions: {
     // Clear all states when closing a project
@@ -703,6 +704,42 @@ export const createSharedSlice: StateCreator<
       }
 
       return await getState().sharedWorkspaceActions.saveFile(newDatatypeName)
+    },
+
+    duplicate: async (datatypeName) => {
+      const originalDatatype = getState().project.data.dataTypes.find((dt) => dt.name === datatypeName)
+
+      if (!originalDatatype) {
+        toast({
+          title: 'Error duplicating Datatype',
+          description: `Datatype with name ${datatypeName} not found.`,
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error duplicating Datatype',
+            description: `Datatype with name ${datatypeName} not found.`,
+          },
+        }
+      }
+
+      const copiedDatatype = {
+        ...originalDatatype,
+        name: generatePouCopyUniqueName(
+          originalDatatype.name,
+          getState().project.data.dataTypes.map((dt) => dt.name),
+        ),
+      }
+
+      getState().projectActions.createDatatype({ data: copiedDatatype })
+      getState().fileActions.addFile({
+        name: copiedDatatype.name,
+        type: 'data-type',
+        filePath: `/project.json`,
+      })
+
+      return await getState().sharedWorkspaceActions.saveFile(copiedDatatype.name)
     },
   },
 
