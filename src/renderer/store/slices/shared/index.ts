@@ -10,6 +10,7 @@ import {
   PLCProjectSchema,
   PLCStructureDatatype,
 } from '@root/types/PLC/open-plc'
+import { generatePouCopyUniqueName } from '@root/utils/generate-pou-copy-unique-name'
 import { StateCreator } from 'zustand'
 
 import { ConsoleSlice } from '../console'
@@ -17,7 +18,8 @@ import { deviceConfigurationSchema, devicePinSchema, DeviceSlice, DeviceState } 
 import { EditorModel, EditorSlice } from '../editor'
 import { FBDFlowSlice, FBDFlowType } from '../fbd'
 import { FileSlice, FileSliceDataObject } from '../files'
-import { LadderFlowSlice, LadderFlowType } from '../ladder'
+import { LadderFlowSlice, LadderFlowType, ZodLadderFlowType } from '../ladder'
+import { duplicateLadderRung } from '../ladder/utils'
 import { LibrarySlice } from '../library'
 import { ModalSlice } from '../modal'
 import { ProjectSlice, ProjectState } from '../project'
@@ -44,6 +46,7 @@ export type SharedSlice = {
     deleteRequest: (pouName: string) => void
     delete: (data: DeletePou) => Promise<BasicSharedSliceResponse>
     rename: (pouName: string, newPouName: string) => Promise<BasicSharedSliceResponse>
+    duplicate: (pouName: string) => BasicSharedSliceResponse
   }
   datatypeActions: {
     create: (
@@ -368,6 +371,31 @@ export const createSharedSlice: StateCreator<
         }
       }
 
+      switch (newPou.data.language) {
+        case 'ld': {
+          const ladderFlow = getState().ladderFlows.find((lf) => lf.name === pouName)
+          const copiedLadderFlow = {
+            name: newPou.data.name,
+            rungs: ladderFlow ? ladderFlow.rungs.map((rung) => duplicateLadderRung(newPou.data.name, rung)) : [],
+            updated: true,
+          }
+          getState().ladderFlowActions.removeLadderFlow(pouName)
+          getState().ladderFlowActions.addLadderFlow(copiedLadderFlow)
+          getState().projectActions.updatePou({
+            name: newPou.data.name,
+            content: {
+              language: newPou.data.language,
+              value: copiedLadderFlow as ZodLadderFlowType,
+            },
+          })
+          break
+        }
+        case 'fbd':
+          break
+        default:
+          break
+      }
+
       getState().tabsActions.updateTabName(pouName, newPouName)
       getState().editorActions.updateEditorName(pouName, newPouName)
       getState().fileActions.updateFile({
@@ -425,6 +453,64 @@ export const createSharedSlice: StateCreator<
       }
 
       return await getState().sharedWorkspaceActions.saveFile(newPouName)
+    },
+
+    duplicate: (pouName: string) => {
+      const originalPou = getState().project.data.pous.find((pou) => pou.data.name === pouName)
+
+      if (!originalPou) {
+        toast({
+          title: 'Error duplicating POU',
+          description: `POU with name ${pouName} not found.`,
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error duplicating POU',
+            description: `POU with name ${pouName} not found.`,
+          },
+        }
+      }
+
+      const copiedPou = {
+        type: originalPou.type,
+        data: {
+          ...originalPou.data,
+          name: generatePouCopyUniqueName(
+            originalPou.data.name,
+            getState().project.data.pous.map((pou) => pou.data.name),
+          ),
+        },
+      } as PLCPou
+
+      switch (copiedPou.data.language) {
+        case 'ld': {
+          const originalLadderFlow = getState().ladderFlows.find((lf) => lf.name === originalPou.data.name)
+          const copiedLadderFlow = {
+            name: copiedPou.data.name,
+            rungs: originalLadderFlow
+              ? [...originalLadderFlow.rungs.map((rung) => duplicateLadderRung(copiedPou.data.name, rung))]
+              : [],
+            updated: true,
+          }
+          copiedPou.data.body.value =
+            copiedPou.data.body.language === 'ld'
+              ? ({ name: copiedLadderFlow.name, rungs: copiedLadderFlow.rungs } as ZodLadderFlowType)
+              : ''
+          getState().ladderFlowActions.addLadderFlow(copiedLadderFlow)
+          break
+        }
+        case 'fbd': {
+          break
+        }
+        default:
+          break
+      }
+
+      getState().projectActions.createPou(copiedPou)
+
+      return { success: true }
     },
   },
   datatypeActions: {

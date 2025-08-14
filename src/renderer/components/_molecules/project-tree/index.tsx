@@ -22,6 +22,7 @@ import {
   STIcon,
   StructureIcon,
 } from '@root/renderer/assets'
+import { DuplicateIcon } from '@root/renderer/assets/icons/interface/Duplicate'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { WorkspaceProjectTreeLeafType } from '@root/renderer/store/slices/workspace/types'
 import { pousAllLanguages } from '@root/types/PLC/pous/language'
@@ -244,7 +245,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       meta: { name },
     },
     workspaceActions: { setSelectedProjectTreeLeaf },
-    pouActions: { deleteRequest: deletePouRequest, rename: renamePou },
+    pouActions: { deleteRequest: deletePouRequest, rename: renamePou, duplicate: duplicatePou },
     datatypeActions: { deleteRequest: deleteDatatypeRequest, rename: renameDatatype },
     fileActions: { getFile },
   } = useOpenPLCStore()
@@ -317,6 +318,37 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     }
   }
 
+  const handleDuplicateFile = () => {
+    if (!isAPou && !isDatatype) {
+      toast({
+        title: 'Error',
+        description: 'Only POU or datatype files can be renamed.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    if (!label) {
+      toast({
+        title: 'Error',
+        description: 'Pou or datatype label is required to select.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    if (isAPou) {
+      duplicatePou(label)
+      return
+    }
+
+    toast({
+      title: 'Error',
+      description: 'Duplicate functionality is not implemented yet.',
+      variant: 'fail',
+    })
+  }
+
   const handleDeleteFile = () => {
     if (!isAPou && !isDatatype) {
       toast({
@@ -356,6 +388,13 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
           setIsEditing(true)
         },
         icon: <PencilIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
+      },
+      {
+        name: 'Duplicate',
+        onClick: () => {
+          handleDuplicateFile()
+        },
+        icon: <DuplicateIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
       },
       {
         name: 'Delete',
