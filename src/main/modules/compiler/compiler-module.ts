@@ -12,6 +12,7 @@ import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 
 import type { ArduinoCoreControl, HalsFile } from './compiler-types'
+import { FormatMacAddress } from './utils/formatters'
 
 interface MethodsResult<T> {
   success: boolean
@@ -656,7 +657,6 @@ class CompilerModule {
 
     /**
      * TODOS
-     * 1. We need to add validation to the mac address value
      * 3. In the device configuration we need to verify why the values that should be null are being set to empty strings.
      * 4. We need to ensure that the pins are correctly sorted according to their address.
      */
@@ -672,16 +672,17 @@ class CompilerModule {
     DEFINES_CONTENT += `#define MBSERIAL_BAUD ${modbusRTU.rtuBaudRate}\n`
     if (modbusRTU.rtuSlaveId !== null) DEFINES_CONTENT += `#define MBSERIAL_SLAVE ${modbusRTU.rtuSlaveId}\n`
     if (modbusRTU.rtuRS485ENPin !== null) DEFINES_CONTENT += `#define MBSERIAL_TXPIN ${modbusRTU.rtuRS485ENPin}\n`
-    if (modbusTCP.tcpMacAddress !== null) DEFINES_CONTENT += `#define MBTCP_MAC ${modbusTCP.tcpMacAddress}\n`
+    if (modbusTCP.tcpMacAddress !== null)
+      DEFINES_CONTENT += `#define MBTCP_MAC ${FormatMacAddress(modbusTCP.tcpMacAddress)}\n`
     // OBS: This is giving us an empty string and this is being printed as a space
     if (modbusTCP.tcpStaticHostConfiguration.ipAddress !== null)
-      DEFINES_CONTENT += `#define MBTCP_IP ${modbusTCP.tcpStaticHostConfiguration.ipAddress}\n`
+      DEFINES_CONTENT += `#define MBTCP_IP ${modbusTCP.tcpStaticHostConfiguration.ipAddress.replaceAll('.', ',')}\n`
     if (modbusTCP.tcpStaticHostConfiguration.dns !== null)
-      DEFINES_CONTENT += `#define MBTCP_DNS ${modbusTCP.tcpStaticHostConfiguration.dns}\n`
+      DEFINES_CONTENT += `#define MBTCP_DNS ${modbusTCP.tcpStaticHostConfiguration.dns.replaceAll('.', ',')}\n`
     if (modbusTCP.tcpStaticHostConfiguration.gateway !== null)
-      DEFINES_CONTENT += `#define MBTCP_GATEWAY ${modbusTCP.tcpStaticHostConfiguration.gateway}\n`
+      DEFINES_CONTENT += `#define MBTCP_GATEWAY ${modbusTCP.tcpStaticHostConfiguration.gateway.replaceAll('.', ',')}\n`
     if (modbusTCP.tcpStaticHostConfiguration.subnet !== null)
-      DEFINES_CONTENT += `#define MBTCP_SUBNET ${modbusTCP.tcpStaticHostConfiguration.subnet}\n`
+      DEFINES_CONTENT += `#define MBTCP_SUBNET ${modbusTCP.tcpStaticHostConfiguration.subnet.replaceAll('.', ',')}\n`
 
     if (communicationPreferences.enabledRTU) {
       DEFINES_CONTENT += '#define MBSERIAL\n'
@@ -693,10 +694,10 @@ class CompilerModule {
       DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
       if (modbusTCP.tcpInterface === 'Wi-Fi') {
         if (modbusTCP.tcpWifiSSID !== null) {
-          DEFINES_CONTENT += `#define MBTCP_SSID ${modbusTCP.tcpWifiSSID}\n`
+          DEFINES_CONTENT += `#define MBTCP_SSID "${modbusTCP.tcpWifiSSID}"\n`
         }
         if (modbusTCP.tcpWifiPassword !== null) {
-          DEFINES_CONTENT += `#define MBTCP_PWD ${modbusTCP.tcpWifiPassword}\n`
+          DEFINES_CONTENT += `#define MBTCP_PWD "${modbusTCP.tcpWifiPassword}"\n`
         }
         DEFINES_CONTENT += '#define MBTCP_WIFI\n'
       } else {

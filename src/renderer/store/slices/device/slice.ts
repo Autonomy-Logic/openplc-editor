@@ -16,7 +16,7 @@ const createDeviceSlice: StateCreator<DeviceSlice, [], [], DeviceSlice> = (setSt
   deviceAvailableOptions: {
     availableBoards: new Map(),
     availableCommunicationPorts: [],
-    availableRTUInterfaces: ['Serial', 'Serial 1', 'Serial 2', 'Serial 3'],
+    availableRTUInterfaces: ['Serial', 'Serial1', 'Serial2', 'Serial3'],
     availableRTUBaudRates: ['9600', '14400', '19200', '38400', '57600', '115200'],
     availableTCPInterfaces: ['Ethernet', 'Wi-Fi'], // The available TCP interfaces is always ['ethernet', 'wifi'], so we can set it on the slice creation.
   },
