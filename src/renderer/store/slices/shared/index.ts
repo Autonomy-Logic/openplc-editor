@@ -327,6 +327,46 @@ export const createSharedSlice: StateCreator<
     },
 
     rename: async (pouName, newPouName) => {
+      /**
+       * Basic name validation
+       */
+      if (pouName === newPouName)
+        return {
+          success: false,
+        }
+
+      if (!(newPouName ?? '').trim()) {
+        toast({ title: 'Error', description: 'New name must be non-empty.', variant: 'fail' })
+        return {
+          success: false,
+          error: {
+            title: 'Error renaming POU',
+            description: 'New name must be non-empty.',
+          },
+        }
+      }
+
+      /**
+       * Check if the new POU name is already used in the project.
+       */
+      const isPouNameAlreadyUsed =
+        getState().project.data.pous.some((pou) => pou.data.name === newPouName) ||
+        getState().project.data.dataTypes.some((datatype) => datatype.name === newPouName)
+      if (isPouNameAlreadyUsed) {
+        toast({
+          title: 'Error renaming POU',
+          description: `Datatype or POU with name ${newPouName} already exists.`,
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error renaming POU',
+            description: `Datatype or POU with name ${newPouName} already exists.`,
+          },
+        }
+      }
+
       const pou = getState().project.data.pous.find((pou) => pou.data.name === pouName)
       if (!pou) {
         toast({
@@ -672,6 +712,46 @@ export const createSharedSlice: StateCreator<
     },
 
     rename: async (datatypeName, newDatatypeName) => {
+      /**
+       * Basic name validation
+       */
+      if (datatypeName === newDatatypeName)
+        return {
+          success: false,
+        }
+
+      if (!(newDatatypeName ?? '').trim()) {
+        toast({ title: 'Error', description: 'New name must be non-empty.', variant: 'fail' })
+        return {
+          success: false,
+          error: {
+            title: 'Error renaming POU',
+            description: 'New name must be non-empty.',
+          },
+        }
+      }
+
+      /**
+       * Check if the new POU name is already used in the project.
+       */
+      const isDatatypeNameAlreadyUsed =
+        getState().project.data.pous.some((pou) => pou.data.name === newDatatypeName) ||
+        getState().project.data.dataTypes.some((datatype) => datatype.name === newDatatypeName)
+      if (isDatatypeNameAlreadyUsed) {
+        toast({
+          title: 'Error renaming Datatype',
+          description: `Datatype or POU with name ${newDatatypeName} already exists.`,
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error renaming Datatype',
+            description: `Datatype or POU with name ${newDatatypeName} already exists.`,
+          },
+        }
+      }
+
       const datatype = getState().project.data.dataTypes.find((dt) => dt.name === datatypeName)
       if (!datatype) {
         toast({

@@ -296,11 +296,6 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       return
     }
 
-    if (newLabel === label) {
-      setNewName(label || '')
-      return
-    }
-
     if (isAPou) {
       const res = await renamePou(label, newName)
       if (!res.success) {
