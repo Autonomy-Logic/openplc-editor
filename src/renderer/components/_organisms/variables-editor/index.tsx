@@ -984,7 +984,7 @@ const VariablesEditor = () => {
         {editorVariables.display === 'table' && (
           <div
             aria-label='Variables editor table container'
-            className='h-full overflow-y-auto'
+            className='h-full overflow-x-auto overflow-y-auto lg:overflow-x-hidden'
             style={{ scrollbarGutter: 'stable' }}
           >
             <VariablesTable
