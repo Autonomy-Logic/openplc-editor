@@ -13,15 +13,6 @@ type AppLayoutProps = ComponentPropsWithoutRef<'main'>
 const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
-    // editor,
-    // files,
-    // tabs,
-    // selectedTab,
-    // project: {
-    //   data: { pous, dataTypes },
-    // },
-    // workspace: { selectedProjectTreeLeaf },
-
     modals,
     workspaceActions: { setSystemConfigs, setRecent },
   } = useOpenPLCStore()
@@ -44,17 +35,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     }
     void getUserSystemProps()
   }, [setSystemConfigs])
-
-  // useEffect(() => {
-  //   console.log('--------------- App Layout State ---------------')
-  //   console.log('Files:', files)
-  //   console.log('Editor:', editor)
-  //   console.log('Tabs:', tabs)
-  //   console.log('Selected Tab:', selectedTab)
-  //   console.log('Selected Project Tree Leaf:', selectedProjectTreeLeaf)
-  //   console.log('Pous:', pous)
-  //   console.log('Data Types:', dataTypes)
-  // }, [pous, dataTypes, files, editor, tabs, selectedTab, selectedProjectTreeLeaf])
 
   return (
     <>

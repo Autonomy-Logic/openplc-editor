@@ -51,7 +51,7 @@ function checkIfDirectoryIsAValidProjectDirectory(basePath: string): {
   let hasProjectFile = false
   for (const entry of entries) {
     // Skip any entries that are not relevant to the project structure
-    if (entry.path.includes('pous') || entry.path.includes('build')) {
+    if (entry.path.startsWith(join(basePath, 'pous')) || entry.path.startsWith(join(basePath, 'build'))) {
       continue
     }
 

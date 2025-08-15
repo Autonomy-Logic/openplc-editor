@@ -422,6 +422,7 @@ export const createSharedSlice: StateCreator<
         filePath: `/pous/${pou.type}s/${newPouName}.json`,
         saved: true,
       })
+      getState().libraryActions.updateLibraryName(pouName, newPouName)
 
       const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
       if (selectedProjectTreeLeaf.label === pouName) {
@@ -557,7 +558,7 @@ export const createSharedSlice: StateCreator<
         })
         if (!res.success) throw new Error(res.error?.description || 'Error creating duplicated POU file')
       } catch (_error) {
-        console.log(_error)
+        console.error(_error)
         toast({
           title: 'Error creating duplicated POU file',
           description: 'An error occurred while creating the duplicated POU file.',

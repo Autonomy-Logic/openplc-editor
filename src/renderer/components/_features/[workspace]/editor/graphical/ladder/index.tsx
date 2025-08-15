@@ -52,7 +52,6 @@ export default function LadderEditor() {
   const flow = ladderFlows.find((flow) => flow.name === editor.meta.name)
   const rungs = flow?.rungs || []
   const flowUpdated = flow?.updated || false
-  console.log('Ladder flow updated:', flowUpdated)
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
   const [activeItem, setActiveItem] = useState<RungLadderState | null>(null)
