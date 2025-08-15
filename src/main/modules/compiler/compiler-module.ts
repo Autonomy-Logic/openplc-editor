@@ -679,11 +679,13 @@ class CompilerModule {
         message: `${_error}\nStopping compilation process.`,
       })
       _mainProcessPort.close()
+      return
     }
 
     // Step 1: Create basic directories
     try {
       await this.createBasicDirectories(normalizedProjectPath, boardTarget)
+      _mainProcessPort.postMessage({
         logLevel: 'info',
         message: 'Directories for compilation source files created.',
       })
