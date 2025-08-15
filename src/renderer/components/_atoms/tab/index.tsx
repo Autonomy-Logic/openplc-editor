@@ -14,6 +14,7 @@ import {
 import type { TabsProps } from '@process:renderer/store/slices/tabs'
 import { useOpenPLCStore } from '@root/renderer/store'
 import { cn } from '@root/utils'
+import { unsavedLabel } from '@root/utils/unsaved-label'
 import { ComponentPropsWithoutRef, useCallback } from 'react'
 
 type ITabProps = ComponentPropsWithoutRef<'div'> & {
@@ -71,11 +72,7 @@ const Tab = (props: ITabProps) => {
 
   const { file: associatedFile } = getFile({ name: fileName || '' })
   const handleFileName = useCallback(
-    (name: string) => {
-      if (!associatedFile || associatedFile?.saved) return name
-
-      return `* <i>${name}</i>`
-    },
+    (label: string | undefined) => unsavedLabel(label, associatedFile),
     [associatedFile],
   )
 
@@ -95,7 +92,7 @@ const Tab = (props: ITabProps) => {
         {TabIcons[languageOrDerivation]}
         <span
           className='flex-grow overflow-hidden text-ellipsis whitespace-nowrap'
-          dangerouslySetInnerHTML={{ __html: handleFileName(fileName) }}
+          dangerouslySetInnerHTML={{ __html: handleFileName(fileName) as string }}
         />
         <span
           aria-hidden='true'

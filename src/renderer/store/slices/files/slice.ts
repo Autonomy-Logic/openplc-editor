@@ -50,6 +50,8 @@ export const createFileSlice: StateCreator<FileSlice, [], [], FileSlice> = (setS
           existingFile.filePath = filePath ?? existingFile.filePath
 
           if (newName) {
+            if (files[newName]) return
+
             const dir = existingFile.filePath.substring(0, existingFile.filePath.lastIndexOf('/'))
             const newFilePath = `${dir}/${newName.includes('.') ? newName : `${newName}.json`}`
             files[newName] = { ...existingFile, filePath: newFilePath }

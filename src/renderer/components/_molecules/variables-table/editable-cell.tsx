@@ -319,7 +319,7 @@ const EditableNameCell = ({
         <InputWithRef
           value={cellValue}
           onChange={(e) => setCellValue(e.target.value)}
-          onBlur={void onBlur}
+          onBlur={() => void onBlur}
           className={cn('flex w-full flex-1 bg-transparent p-2 text-center outline-none')}
         />
       ) : (

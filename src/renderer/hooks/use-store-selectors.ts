@@ -87,7 +87,7 @@ const editorSelectors = {
 
 // ===================== Pous selectors. =====================
 const pouSelectors = {
-  usePous: (fileName: string) =>
+  usePous: (fileName: string): PLCPou | undefined =>
     useOpenPLCStore((state) => state.project.data.pous.find((pou) => pou.data.name === fileName) as PLCPou),
 }
 

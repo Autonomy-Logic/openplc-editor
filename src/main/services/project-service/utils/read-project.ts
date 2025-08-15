@@ -10,7 +10,7 @@ import { PLCPou, PLCPouSchema, PLCProject } from '@root/types/PLC/open-plc'
 import { i18n } from '@root/utils'
 import { getDefaultSchemaValues } from '@root/utils/default-zod-schema-values'
 import { promises, readdirSync, readFileSync, writeFileSync } from 'fs'
-import { dirname, join } from 'path'
+import { basename, dirname, join } from 'path'
 import { ZodTypeAny } from 'zod'
 
 /**
@@ -236,11 +236,16 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
       project.data.pous.map(async (pou) => {
         const pouType = pou.type.toLowerCase() + 's' // Convert type to lowercase and append 's'
         const pouFilePath = join(basePath, 'pous', pouType, `${pou.data.name}.json`)
-        if (!fileOrDirectoryExists(pouFilePath)) {
-          await promises.mkdir(dirname(pouFilePath), { recursive: true })
-          await promises.writeFile(pouFilePath, JSON.stringify(pou, null, 2), 'utf-8')
+        try {
+          if (!fileOrDirectoryExists(pouFilePath)) {
+            await promises.mkdir(dirname(pouFilePath), { recursive: true })
+            await promises.writeFile(pouFilePath, JSON.stringify(pou, null, 2), 'utf-8')
+          }
+          pouFiles[join('pous', pouType, `${pou.data.name}.json`)] = pou
+        } catch (error) {
+          console.error(`Failed to create POU file ${pouFilePath}:`, error)
+          throw new Error(`Failed to create POU file for ${pou.data.name}`)
         }
-        pouFiles[join('pous', pouType, `${pou.data.name}.json`)] = pou
       }),
     )
   }
@@ -250,7 +255,7 @@ export async function readProjectFiles(basePath: string): Promise<IProjectServic
    */
   Object.keys(pouFiles).forEach((key) => {
     const pouFile = pouFiles[key] as PLCPou
-    const pouName = key.split('/').pop()?.replace('.json', '')
+    const pouName = basename(key, '.json')
     if (pouName) {
       pouFile.data.name = pouName
       pouFiles[key] = pouFile

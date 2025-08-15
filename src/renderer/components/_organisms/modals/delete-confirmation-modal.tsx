@@ -142,11 +142,11 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
     })
   }
 
-  const handleDeleteElement = (): void => {
+  const handleDeleteElement = async (): Promise<void> => {
     try {
       switch (data.type) {
         case 'pou': {
-          void handleDeletePou(data)
+          await handleDeletePou(data)
           break
         }
         case 'datatype': {
@@ -187,7 +187,7 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
           </div>
           <div className='flex w-[200px] flex-col gap-1 space-y-2 text-sm'>
             <button
-              onClick={handleDeleteElement}
+              onClick={() => void handleDeleteElement()}
               className='w-full rounded-lg bg-brand px-4 py-2 text-center font-medium text-white'
             >
               Delete

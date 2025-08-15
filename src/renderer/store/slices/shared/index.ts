@@ -124,6 +124,7 @@ export const createSharedSlice: StateCreator<
           pou: newPouData,
         })
         if (!response.success) {
+          getState().projectActions.deletePou(propsToCreatePou.name)
           return {
             success: false,
             error: {
@@ -136,6 +137,7 @@ export const createSharedSlice: StateCreator<
         }
       } catch (error) {
         console.error('Error creating POU file:', error)
+        getState().projectActions.deletePou(propsToCreatePou.name)
         return {
           success: false,
           error: {
@@ -309,6 +311,7 @@ export const createSharedSlice: StateCreator<
       getState().tabsActions.removeTab(targetLabel)
       getState().editorActions.removeModel(targetLabel)
       getState().libraryActions.removeUserLibrary(targetLabel)
+      getState().fileActions.removeFile({ name: targetLabel })
 
       const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
       if (selectedProjectTreeLeaf.label === data.file) {
@@ -352,6 +355,44 @@ export const createSharedSlice: StateCreator<
           error: {
             title: 'Error renaming POU',
             description: `File for POU with name ${pouName} not found.`,
+          },
+        }
+      }
+
+      const projectPath = getState().project.meta.path
+      const filePath = file.filePath.includes(projectPath) ? file.filePath : `${projectPath}${file.filePath}`
+      try {
+        const response = await window.bridge.renamePouFile({
+          filePath,
+          newFileName: `${newPouName}.json`,
+        })
+        if (!response.success) {
+          console.error('Error renaming POU file:', response.error)
+          toast({
+            title: 'Error renaming POU',
+            description: `An error occurred while renaming the POU "${pouName}".`,
+            variant: 'fail',
+          })
+          return {
+            success: false,
+            error: {
+              title: 'Error renaming POU',
+              description: response.error ? response.error.description : `POU "${pouName}" could not be renamed.`,
+            },
+          }
+        }
+      } catch (error) {
+        console.error('Error renaming POU file:', error)
+        toast({
+          title: 'Error renaming POU',
+          description: `An error occurred while renaming the POU "${pouName}".`,
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error renaming POU',
+            description: `An error occurred while renaming the POU "${pouName}".`,
           },
         }
       }
@@ -422,7 +463,6 @@ export const createSharedSlice: StateCreator<
         filePath: `/pous/${pou.type}s/${newPouName}.json`,
         saved: true,
       })
-      getState().libraryActions.updateLibraryName(pouName, newPouName)
 
       const selectedProjectTreeLeaf = getState().workspace.selectedProjectTreeLeaf
       if (selectedProjectTreeLeaf.label === pouName) {
@@ -432,43 +472,8 @@ export const createSharedSlice: StateCreator<
         })
       }
 
-      const projectPath = getState().project.meta.path
-      const filePath = file.filePath.includes(projectPath) ? file.filePath : `${projectPath}${file.filePath}`
-
-      try {
-        const response = await window.bridge.renamePouFile({
-          filePath,
-          newFileName: `${newPouName}.json`,
-        })
-        if (!response.success) {
-          console.error('Error renaming POU file:', response.error)
-          toast({
-            title: 'Error renaming POU',
-            description: `An error occurred while renaming the POU "${pouName}".`,
-            variant: 'fail',
-          })
-          return {
-            success: false,
-            error: {
-              title: 'Error renaming POU',
-              description: response.error ? response.error.description : `POU "${pouName}" could not be renamed.`,
-            },
-          }
-        }
-      } catch (error) {
-        console.error('Error renaming POU file:', error)
-        toast({
-          title: 'Error renaming POU',
-          description: `An error occurred while renaming the POU "${pouName}".`,
-          variant: 'fail',
-        })
-        return {
-          success: false,
-          error: {
-            title: 'Error renaming POU',
-            description: `An error occurred while renaming the POU "${pouName}".`,
-          },
-        }
+      if (newPou.type !== 'program') {
+        getState().libraryActions.updateLibraryName(pouName, newPouName)
       }
 
       return await getState().sharedWorkspaceActions.saveFile(newPouName)
@@ -476,7 +481,6 @@ export const createSharedSlice: StateCreator<
 
     duplicate: async (pouName: string) => {
       const originalPou = getState().project.data.pous.find((pou) => pou.data.name === pouName)
-
       if (!originalPou) {
         toast({
           title: 'Error duplicating POU',
@@ -502,6 +506,28 @@ export const createSharedSlice: StateCreator<
           ),
         },
       } as PLCPou
+
+      try {
+        const res = await window.bridge.createPouFile({
+          path: `${getState().project.meta.path}/pous/${copiedPou.type}s/${copiedPou.data.name}.json`,
+          pou: copiedPou,
+        })
+        if (!res.success) throw new Error(res.error?.description || 'Error creating duplicated POU file')
+      } catch (_error) {
+        console.error(_error)
+        toast({
+          title: 'Error creating duplicated POU file',
+          description: 'An error occurred while creating the duplicated POU file.',
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error creating duplicated POU file',
+            description: 'An error occurred while creating the duplicated POU file.',
+          },
+        }
+      }
 
       switch (copiedPou.data.language) {
         case 'ld': {
@@ -544,34 +570,12 @@ export const createSharedSlice: StateCreator<
       }
 
       getState().projectActions.createPou(copiedPou)
-      if (copiedPou.type !== 'program') getState().libraryActions.addLibrary(copiedPou.data.name, copiedPou.type)
       getState().fileActions.addFile({
         name: copiedPou.data.name,
         type: copiedPou.type,
         filePath: `/pous/${copiedPou.type}s/${copiedPou.data.name}.json`,
       })
-
-      try {
-        const res = await window.bridge.createPouFile({
-          path: `${getState().project.meta.path}/pous/${copiedPou.type}s/${copiedPou.data.name}.json`,
-          pou: copiedPou,
-        })
-        if (!res.success) throw new Error(res.error?.description || 'Error creating duplicated POU file')
-      } catch (_error) {
-        console.error(_error)
-        toast({
-          title: 'Error creating duplicated POU file',
-          description: 'An error occurred while creating the duplicated POU file.',
-          variant: 'fail',
-        })
-        return {
-          success: false,
-          error: {
-            title: 'Error creating duplicated POU file',
-            description: 'An error occurred while creating the duplicated POU file.',
-          },
-        }
-      }
+      if (copiedPou.type !== 'program') getState().libraryActions.addLibrary(copiedPou.data.name, copiedPou.type)
 
       return { success: true }
     },
@@ -1178,10 +1182,11 @@ export const createSharedSlice: StateCreator<
     },
     closeFile: (name) => {
       // Remove the tab from the tabs slice and the editor model from the editor slice
-      const { tabs: filteredTabs } = getState().tabsActions.removeTab(name)
+      getState().tabsActions.removeTab(name)
       getState().editorActions.removeModel(name)
 
       // Check if there are any remaining tabs
+      const filteredTabs = getState().tabs
       const nextTab = filteredTabs[filteredTabs.length - 1]
       if (!nextTab) {
         getState().editorActions.setEditor({

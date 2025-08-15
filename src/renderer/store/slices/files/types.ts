@@ -73,7 +73,7 @@ const fileSliceActionsSchema = z.object({
     )
     .returns(z.boolean()),
 
-  checkIfAllFilesAreSaved: z.function().args(z.string()).returns(z.boolean()),
+  checkIfAllFilesAreSaved: z.function().args().returns(z.boolean()),
 
   clearFiles: z.function().args().returns(z.void()),
 })

@@ -1,7 +1,7 @@
 import { exec } from 'child_process'
 import { app } from 'electron'
 import { access, constants, mkdir, rename, rm, writeFile } from 'fs/promises'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { promisify } from 'util'
 
 import { ARDUINO_DATA } from './data/arduino'
@@ -88,7 +88,7 @@ class UserService {
     }
     data?: { filePath: string }
   }> {
-    const newFileName = newFilePath.split('/').pop() || ''
+    const newFileName = basename(newFilePath)
     try {
       await rename(oldFilePath, newFilePath)
       return { success: true, data: { filePath: newFilePath } }
@@ -99,11 +99,6 @@ class UserService {
         error: { title: 'File Rename Error', description: 'Failed to rename file', error: err as Error },
       }
     }
-  }
-
-  #constructCompilerDirectoryPath() {
-    const isDevelopment = process.env.NODE_ENV === 'development'
-    return join(isDevelopment ? process.cwd() : process.resourcesPath, isDevelopment ? 'resources' : '', 'compilers')
   }
 
   /**

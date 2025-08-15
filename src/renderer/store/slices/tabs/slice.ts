@@ -18,7 +18,6 @@ export const createTabsSlice: StateCreator<TabsSlice, [], [], TabsSlice> = (setS
           slice.tabs = updatedTabs
         }),
       )
-      return { tabs: updatedTabs }
     },
     sortTabs: (tabs) => {
       setState(
@@ -28,31 +27,27 @@ export const createTabsSlice: StateCreator<TabsSlice, [], [], TabsSlice> = (setS
       )
     },
     removeTab: (tabToRemove) => {
-      let returnTabs: TabsProps[] = []
       setState(
         produce((slice: TabsSlice) => {
-          returnTabs = slice.tabs.filter((t) => t.name !== tabToRemove)
-          slice.tabs = returnTabs
+          slice.tabs = slice.tabs.filter((t) => t.name !== tabToRemove)
         }),
       )
-      return { tabs: returnTabs }
     },
     updateTabName: (oldName: string, newName: string) => {
-      setState((state) => {
-        const tabExists = state.tabs.find((tab) => tab.name === oldName)
-        if (!tabExists) {
-          return state
-        }
+      setState(
+        produce((state: TabsSlice) => {
+          const tabExists = state.tabs.find((tab) => tab.name === oldName)
+          if (!tabExists) {
+            return
+          }
 
-        const updatedTabs = state.tabs.map((tab) => (tab.name === oldName ? { ...tab, name: newName } : tab))
-        state.tabs = updatedTabs
+          state.tabs = state.tabs.map((tab) => (tab.name === oldName ? { ...tab, name: newName } : tab))
 
-        if (state.selectedTab === oldName) {
-          state.selectedTab = newName
-        }
-
-        return { ...state, tabs: updatedTabs }
-      })
+          if (state.selectedTab === oldName) {
+            state.selectedTab = newName
+          }
+        }),
+      )
     },
     clearTabs: () => {
       setState(

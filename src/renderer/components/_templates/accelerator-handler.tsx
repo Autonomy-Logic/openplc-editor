@@ -227,7 +227,7 @@ const AcceleratorHandler = () => {
     window.bridge.closeTabAccelerator((_event) => closeFile(selectedProjectLeaf.label))
 
     return () => {
-      void window.bridge.removeCloseTabListener()
+      window.bridge.removeCloseTabListener()
     }
   }, [selectedProjectLeaf])
 

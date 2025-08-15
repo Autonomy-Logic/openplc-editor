@@ -304,7 +304,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     if (isAPou) {
       const res = await renamePou(label, newName)
       if (!res.success) {
-        setNewName(label)
+        setNewName(label || '')
       }
       return
     }
@@ -312,7 +312,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     if (isDatatype) {
       const res = await renameDatatype(label, newName)
       if (!res.success) {
-        setNewName(label)
+        setNewName(label || '')
       }
       return
     }
@@ -322,7 +322,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     if (!isAPou && !isDatatype) {
       toast({
         title: 'Error',
-        description: 'Only POU or datatype files can be renamed.',
+        description: 'Only POU or datatype files can be duplicated.',
         variant: 'fail',
       })
       return
@@ -415,7 +415,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
         icon: <CloseIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />,
       },
     ]
-  }, [handleDeleteFile, setIsEditing, isEditing])
+  }, [handleDeleteFile, handleDuplicateFile, setIsEditing])
 
   useEffect(() => {
     if (isEditing && inputNameRef.current) {

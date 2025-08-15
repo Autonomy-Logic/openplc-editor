@@ -52,6 +52,8 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
   }, [rung.comment])
 
   const handleRemoveRung = () => {
+    if (!pou || !projectPath) return
+
     openModal('confirm-delete-element', {
       type: 'ladder-rung',
       file: pou.data.name,

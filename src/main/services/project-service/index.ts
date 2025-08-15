@@ -7,7 +7,7 @@ import {
 import { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { app, BrowserWindow, dialog } from 'electron'
 import { promises } from 'fs'
-import { join, normalize } from 'path'
+import { dirname, join, normalize } from 'path'
 
 import { PLCPou, PLCProject } from '../../../types/PLC/open-plc'
 import { i18n } from '../../../utils/i18n'
@@ -333,7 +333,7 @@ class ProjectService {
   async saveFile(filePath: string, content: unknown): Promise<IProjectServiceResponse> {
     try {
       if (!fileOrDirectoryExists(filePath)) {
-        const dir = filePath.substring(0, filePath.lastIndexOf('/'))
+        const dir = dirname(filePath)
         await promises.mkdir(dir, { recursive: true })
       }
 

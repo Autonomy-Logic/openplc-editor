@@ -129,7 +129,7 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
             numericId: generateNumericUUID(),
             block: {
               ...(node as VariableNode).data.block,
-              id: nodeMaps[(node as VariableNode).data.block.id].id,
+              id: nodeMaps[(node as VariableNode).data.block.id]?.id ?? (node as VariableNode).data.block.id,
             },
           },
         } as VariableNode
