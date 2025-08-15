@@ -7,6 +7,7 @@ import { promisify } from 'util'
 import { ARDUINO_DATA } from './data/arduino'
 import { HISTORY_DATA } from './data/history'
 import { SETTINGS_DATA } from './data/settings'
+import type { ArduinoListOutput } from './user-service-types'
 
 /**
  * UserService class responsible for user settings and history management.
@@ -15,10 +16,8 @@ import { SETTINGS_DATA } from './data/settings'
  * This approach is taken to avoid the need for a singleton instance and to leave room for future changes in the class structure.
  */
 class UserService {
-  compilerDirectory: string
   constructor() {
     void this.#initializeUserSettingsAndHistory()
-    this.compilerDirectory = this.#constructCompilerDirectoryPath()
   }
 
   /**
@@ -165,60 +164,78 @@ class UserService {
     }
   }
 
+  async #executeArduinoCliCommand(command: string): Promise<{ stderr: string; stdout: string }> {
+    const developmentMode = process.env.NODE_ENV === 'development'
+    const executeCommand = promisify(exec)
+
+    const platformSpecificBinaryPath = join(process.platform, process.arch)
+
+    let binaryPath = join(
+      developmentMode ? process.cwd() : process.resourcesPath,
+      developmentMode ? 'resources' : '',
+      'bin',
+      developmentMode ? platformSpecificBinaryPath : '',
+      'arduino-cli',
+    )
+
+    if (process.platform === 'win32') {
+      binaryPath = `${binaryPath}.exe`
+    }
+
+    return executeCommand(`"${binaryPath}" ${command}`)
+  }
+
   /**
    * Checks if the Core List file exists and creates it if it doesn't.
    * TODO: This function must be refactored.
-   * - Must be validate if the json content is being written correctly.
    * - Must validate if this implementation for the core list file is correct.
    */
 
-  // eslint-disable-next-line no-unused-private-class-members
   async #checkIfArduinoCoreControlFileExists(): Promise<void> {
-    const arduinoCli = promisify(exec)
     const pathToRuntimeFolder = join(app.getPath('userData'), 'User', 'Runtime')
     const pathToArduinoCoreControlFile = join(pathToRuntimeFolder, 'arduino-core-control.json')
-    let pathToArduinoCliBinary = ''
 
-    switch (process.platform) {
-      case 'win32':
-        pathToArduinoCliBinary = join(this.compilerDirectory, 'Windows', 'arduino-cli', 'bin', 'arduino-cli.exe')
-        break
-      case 'darwin':
-        pathToArduinoCliBinary = join(this.compilerDirectory, 'MacOS', 'arduino-cli', 'bin', 'arduino-cli')
-        break
-      case 'linux':
-        pathToArduinoCliBinary = join(
-          this.compilerDirectory,
-          'Linux',
-          'arduino-cli',
-          'bin',
-          `${process.arch === 'arm64' || process.arch === 'arm' ? 'arduino-cli-arm' : 'arduino-cli'}`,
-        )
-        break
-      default:
-        throw new Error(`Unsupported platform: ${process.platform}`)
-    }
-
-    const { stderr, stdout } = await arduinoCli(`"${pathToArduinoCliBinary}" core list --json`)
+    const { stderr, stdout } = await this.#executeArduinoCliCommand('core list --json')
     if (stderr) {
       console.error(`Error listing cores: ${String(stderr)}`)
       return
     }
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const cores = JSON.parse(stdout)
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-    const coreControl = cores.platforms.map((core: { id: string; installed_version: string }) => ({
+    const coreListOutput = JSON.parse(stdout) as ArduinoListOutput['core']
+
+    const installedCoresFromListOutput = coreListOutput.platforms.map((core) => ({
       [core.id]: core.installed_version,
     }))
 
     await UserService.createDirectoryIfNotExists(pathToRuntimeFolder)
-    await UserService.createJSONFileIfNotExists(pathToArduinoCoreControlFile, coreControl as object)
+    await writeFile(pathToArduinoCoreControlFile, JSON.stringify(installedCoresFromListOutput, null, 2), { flag: 'w' })
 
     // This is a legacy file that is no longer used, should be removed in the next major release!!!
     const removeLegacy = promisify(rm)
     const pathToLegacyHals = join(pathToRuntimeFolder, 'hals.json')
     await removeLegacy(pathToLegacyHals, { recursive: true, force: true })
+  }
+
+  async #checkIfArduinoLibraryControlFileExists() {
+    const pathToRuntimeFolder = join(app.getPath('userData'), 'User', 'Runtime')
+    const pathToArduinoLibraryControlFile = join(pathToRuntimeFolder, 'arduino-library-control.json')
+
+    const { stderr, stdout } = await this.#executeArduinoCliCommand('lib list --json')
+    if (stderr) {
+      console.error(`Error listing libraries: ${String(stderr)}`)
+      return
+    }
+
+    const libraryListOutput = JSON.parse(stdout) as ArduinoListOutput['library']
+
+    const installedLibrariesFromListOutput = libraryListOutput.installed_libraries.map(({ library }) => ({
+      [library.name]: library.version,
+    }))
+
+    await UserService.createDirectoryIfNotExists(pathToRuntimeFolder)
+    await writeFile(pathToArduinoLibraryControlFile, JSON.stringify(installedLibrariesFromListOutput, null, 2), {
+      flag: 'w',
+    })
   }
   /**
    * Initializes user settings and history by checking the relevant folders and files.
@@ -231,7 +248,8 @@ class UserService {
     await this.#checkIfLogFolderExists()
     await this.#checkIfUserHistoryFolderExists()
     await this.#checkIfArduinoCliConfigExists()
-    // await this.#checkIfArduinoCoreControlFileExists()
+    await this.#checkIfArduinoCoreControlFileExists()
+    await this.#checkIfArduinoLibraryControlFileExists()
   }
 }
 

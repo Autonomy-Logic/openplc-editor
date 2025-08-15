@@ -11,6 +11,10 @@ const ArduinoCliConfigSchema = z.object({
 
 type ArduinoCliConfig = z.infer<typeof ArduinoCliConfigSchema>
 
+const ArduinoCoreControlSchema = z.array(z.record(z.string(), z.string()))
+
+type ArduinoCoreControl = z.infer<typeof ArduinoCoreControlSchema>
+
 const BoardInfoSchema = z.object({
   compiler: z.enum(['arduino-cli', 'openplc-compiler']),
   core: z.string(),
@@ -40,6 +44,6 @@ const HalsFileSchema = z.record(z.string(), BoardInfoSchema)
 
 type HalsFile = z.infer<typeof HalsFileSchema>
 
-export { ArduinoCliConfigSchema, BoardInfoSchema, HalsFileSchema }
+export { ArduinoCliConfigSchema, ArduinoCoreControlSchema, BoardInfoSchema, HalsFileSchema }
 
-export type { ArduinoCliConfig, BoardInfo, HalsFile }
+export type { ArduinoCliConfig, ArduinoCoreControl, BoardInfo, HalsFile }

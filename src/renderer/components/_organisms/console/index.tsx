@@ -30,7 +30,7 @@ const Console = () => {
   return (
     <div
       aria-label='Console'
-      className='relative h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark shadow-xl focus:outline-none dark:text-neutral-50'
+      className='relative h-full w-full overflow-auto text-cp-base font-semibold text-brand-dark focus:outline-none dark:text-neutral-50'
     >
       {logs.length > 0 && logs.map((log) => <LogComponent key={log.id} level={log.level} message={log.message} />)}
       <div ref={bottomLogRef} id='bottom-log' />

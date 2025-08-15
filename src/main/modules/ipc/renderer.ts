@@ -129,14 +129,21 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml, parseTo),
   // =================== Work in Progress ===================
   // This method is a placeholder for running the compile program.
-  runCompileProgram: (compileProgramArgs: Array<string | ProjectState['data']>, callback: (args: any) => void) => {
+  runCompileProgram: (
+    compileProgramArgs: Array<string | null | ProjectState['data']>,
+    callback: (args: any) => void,
+  ) => {
     // Create a MessageChannel to communicate between the renderer and main process
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     // Send to the main process a message to run the compile program
     // The main process will handle the compilation and send the result back through the port
     ipcRenderer.postMessage('compiler:run-compile-program', compileProgramArgs, [mainProcessPort])
     rendererProcessPort.onmessage = (event) => callback(event.data)
-    rendererProcessPort.addEventListener('close', () => console.log('Port closed'))
+    rendererProcessPort.addEventListener('close', () =>
+      callback({
+        closePort: true,
+      }),
+    )
     // rendererProcessPort.start()
     // Set up the renderer process port to listen for messages from the main process
   },
