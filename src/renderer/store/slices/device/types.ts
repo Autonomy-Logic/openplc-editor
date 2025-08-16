@@ -70,7 +70,7 @@ const setRTUConfigParams = z.discriminatedUnion('rtuConfig', [
   z.object({ rtuConfig: z.literal('rtuInterface'), value: z.enum(interfaceOptions) }),
   z.object({ rtuConfig: z.literal('rtuBaudRate'), value: z.enum(baudRateOptions) }),
   z.object({ rtuConfig: z.literal('rtuSlaveId'), value: z.number() }),
-  z.object({ rtuConfig: z.literal('rtuRS485ENPin'), value: z.string() }),
+  z.object({ rtuConfig: z.literal('rtuRS485ENPin'), value: z.string().nullable() }),
 ])
 
 const setTCPConfigParams = z.discriminatedUnion('tcpConfig', [

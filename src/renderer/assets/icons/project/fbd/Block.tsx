@@ -37,17 +37,17 @@ export default function BlockIcon(props: IBlockIconProps) {
       <path
         d='M10.7273 9.25C10.7273 9.11193 10.8392 9 10.9773 9H17.9783C18.1164 9 18.2283 9.11193 18.2283 9.25V11.4545H10.7273V9.25Z'
         fill='#B4D0FE'
-        fill-opacity='0.5'
+        fillOpacity='0.5'
       />
-      <line x1='5' y1='13.2955' x2='9.90909' y2='13.2955' stroke='#B4D0FE' stroke-opacity='0.5' strokeWidth='1.22727' />
-      <line x1='5' y1='16.5682' x2='9.90909' y2='16.5682' stroke='#B4D0FE' stroke-opacity='0.5' strokeWidth='1.22727' />
+      <line x1='5' y1='13.2955' x2='9.90909' y2='13.2955' stroke='#B4D0FE' strokeOpacity='0.5' strokeWidth='1.22727' />
+      <line x1='5' y1='16.5682' x2='9.90909' y2='16.5682' stroke='#B4D0FE' strokeOpacity='0.5' strokeWidth='1.22727' />
       <line
         x1='18.9091'
         y1='14.9318'
         x2='23.8182'
         y2='14.9318'
         stroke='#B4D0FE'
-        stroke-opacity='0.5'
+        strokeOpacity='0.5'
         strokeWidth='1.22727'
       />
     </svg>
