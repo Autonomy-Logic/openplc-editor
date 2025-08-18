@@ -55,7 +55,7 @@ export type SharedSlice = {
     ) => BasicSharedSliceResponse
     update: () => void
     deleteRequest: (datatypeName: string) => void
-    delete: (data: DeleteDatatype) => BasicSharedSliceResponse
+    delete: (data: DeleteDatatype) => Promise<BasicSharedSliceResponse>
     rename: (datatypeName: string, newDatatypeName: string) => Promise<BasicSharedSliceResponse>
     duplicate: (datatypeName: string) => Promise<BasicSharedSliceResponse>
   }
@@ -692,7 +692,7 @@ export const createSharedSlice: StateCreator<
       getState().modalActions.openModal('confirm-delete-element', modalData)
     },
 
-    delete: (data) => {
+    delete: async (data) => {
       getState().projectActions.deleteDatatype(data.file)
       getState().tabsActions.removeTab(data.file)
       getState().editorActions.removeModel(data.file)
@@ -706,9 +706,7 @@ export const createSharedSlice: StateCreator<
         })
       }
 
-      return {
-        success: true,
-      }
+      return await getState().sharedWorkspaceActions.saveFile(data.file)
     },
 
     rename: async (datatypeName, newDatatypeName) => {
@@ -1300,7 +1298,10 @@ export const createSharedSlice: StateCreator<
           description: `File with name ${name} does not exist.`,
           variant: 'fail',
         })
-        return { success: false }
+        return {
+          success: false,
+          error: { title: 'Error saving file', description: `File with name ${name} does not exist.` },
+        }
       }
 
       let saveContent: PLCProject | PLCPou | DeviceState['deviceDefinitions'] | undefined

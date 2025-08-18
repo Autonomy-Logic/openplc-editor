@@ -4,8 +4,8 @@ import type { ParallelNode } from '@root/renderer/components/_atoms/graphical-ed
 import type { PlaceholderNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/placeholder'
 import type { BasicNodeData } from '@root/renderer/components/_atoms/graphical-editor/ladder/utils/types'
 import type { RungLadderState } from '@root/renderer/store/slices'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import type { Edge, Node } from '@xyflow/react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { buildEdge, connectNodes, removeEdge } from '../../edges'
 import { buildGenericNode, isNodeOfType, removeNode } from '../../nodes'
@@ -57,7 +57,7 @@ export const startParallelConnection = <T>(
     'serial',
   )
   const openParallelElement = nodesBuilder.parallel({
-    id: `PARALLEL_OPEN_${uuidv4()}`,
+    id: newGraphicalEditorNodeID('PARALLEL_OPEN'),
     type: 'open',
     posX: openParallelPosition.posX,
     posY: openParallelPosition.posY,
@@ -77,7 +77,7 @@ export const startParallelConnection = <T>(
     newElement = buildGenericNode({
       nodeType: node.elementType,
       blockType: node.blockVariant,
-      id: `${node.elementType.toUpperCase()}_${uuidv4()}`,
+      id: newGraphicalEditorNodeID(node.elementType.toUpperCase()),
       ...newElementPosition,
     })
   } else {
@@ -94,11 +94,11 @@ export const startParallelConnection = <T>(
       ? buildGenericNode({
           nodeType: aboveElement.type ?? '',
           blockType: aboveElement.data.blockType,
-          id: `${aboveElement.type?.toUpperCase()}_${uuidv4()}`,
+          id: newGraphicalEditorNodeID(aboveElement.type?.toUpperCase()),
           ...newAboveElementPosition,
         })
       : nodesBuilder.block({
-          id: `${aboveElement.type?.toUpperCase()}_${uuidv4()}`,
+          id: newGraphicalEditorNodeID(aboveElement.type?.toUpperCase()),
           variant: (aboveElement.data as BlockNodeData<object>).variant,
           executionControl: (aboveElement.data as BlockNodeData<object>).executionControl,
           ...newAboveElementPosition,
@@ -121,7 +121,7 @@ export const startParallelConnection = <T>(
   const closeParallelPositionSerial = getNodePositionBasedOnPreviousNode(newElement, 'parallel', 'serial')
   const closeParallelPositionParallel = getNodePositionBasedOnPreviousNode(placeholder.selected, 'parallel', 'serial')
   const closeParallelElement = nodesBuilder.parallel({
-    id: `PARALLEL_CLOSE_${uuidv4()}`,
+    id: newGraphicalEditorNodeID('PARALLEL_CLOSE'),
     type: 'close',
     posX:
       closeParallelPositionSerial.posX > closeParallelPositionParallel.posX

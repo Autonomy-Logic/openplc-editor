@@ -8,8 +8,25 @@ class PouService {
   constructor() {}
 
   async createPouFile(props: CreatePouFileProps): Promise<PouServiceResponse> {
+    const filePath = props.path
+
     try {
-      const filePath = props.path
+      await promises.access(filePath)
+      return {
+        success: false,
+        error: {
+          title: 'POU Create Error',
+          description: 'A file with the target name already exists',
+          error: new Error('EEXIST'),
+        },
+      }
+    } catch {
+      // File does not exist, proceed with creation
+      // If the file does not exist, we can create it
+      // No action needed here, just continue
+    }
+
+    try {
       await UserService.createJSONFileIfNotExists(filePath, props.pou)
 
       return { success: true, data: { pou: props.pou } }
@@ -36,6 +53,21 @@ class PouService {
   }): Promise<PouServiceResponse> {
     const { filePath, newFileName, fileContent } = data
     const newFilePath = join(dirname(filePath), newFileName)
+
+    try {
+      await promises.access(newFilePath)
+      return {
+        success: false,
+        error: {
+          title: 'POU Rename Error',
+          description: 'A file with the target name already exists',
+          error: new Error('EEXIST'),
+        },
+      }
+    } catch {
+      // File does not exist, proceed with renaming
+      // No action needed here, just continue
+    }
 
     if (fileContent) {
       try {

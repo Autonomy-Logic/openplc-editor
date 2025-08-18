@@ -6,6 +6,7 @@ import { ParallelNode } from '@root/renderer/components/_atoms/graphical-editor/
 import { PowerRailNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/power-rail'
 import { VariableNode } from '@root/renderer/components/_atoms/graphical-editor/ladder/variable'
 import { generateNumericUUID } from '@root/utils'
+import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Edge, Node } from '@xyflow/react'
 
 import { RungLadderState } from '../types'
@@ -15,7 +16,7 @@ export const duplicateLadderRung = (editorName: string, rung: RungLadderState): 
     (acc, node) => {
       acc[node.id] = {
         ...node,
-        id: node.type === 'powerRail' ? node.id : `${node.type?.toUpperCase()}_${crypto.randomUUID()}`,
+        id: node.type === 'powerRail' ? node.id : newGraphicalEditorNodeID(node.type?.toUpperCase()),
       }
       return acc
     },

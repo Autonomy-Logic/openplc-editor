@@ -60,10 +60,13 @@ class UserService {
       // If the error is due to the file already existing, log a warning and continue.
       if (err instanceof Error && err.message.includes('EEXIST')) {
         console.warn(`File already exists at ${filePath}.\nSkipping creation.`)
+        throw new Error(`File already exists at ${filePath}. Skipping creation.`)
       } else if (err instanceof Error) {
         console.error(`Error creating file at ${filePath}: ${String(err)}`)
+        throw new Error(`Failed to create file at ${filePath}: ${String(err)}`)
       } else {
         console.error(`Error creating file at ${filePath}: ${String(err)}`)
+        throw new Error(`Failed to create file at ${filePath}: ${String(err)}`)
       }
     }
   }
@@ -73,6 +76,7 @@ class UserService {
       await rm(filePath, { recursive: true, force: true })
     } catch (err) {
       console.error(`Error deleting file at ${filePath}: ${String(err)}`)
+      throw new Error(`Failed to delete file at ${filePath}: ${String(err)}`)
     }
   }
 

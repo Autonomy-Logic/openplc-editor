@@ -1,7 +1,6 @@
 import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
 import { PLCArrayDatatype, PLCGlobalVariable, PLCInstance, PLCTask, PLCVariable } from '@root/types/PLC/open-plc'
 import { produce } from 'immer'
-import { v4 as uuidv4 } from 'uuid'
 import { StateCreator } from 'zustand'
 
 import { ProjectResponse, ProjectSlice } from './types'
@@ -244,7 +243,7 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               variableToBeCreated.data = {
                 ...variableToBeCreated.data,
                 ...createVariableValidation(pou.data.variables, variableToBeCreated.data),
-                id: variableToBeCreated.data.id ? variableToBeCreated.data.id : uuidv4(),
+                id: variableToBeCreated.data.id ? variableToBeCreated.data.id : crypto.randomUUID(),
               }
               if (variableToBeCreated.rowToInsert !== undefined) {
                 const pouVariables = pou.data.variables.filter((variable) => variable.id !== 'OUT')
