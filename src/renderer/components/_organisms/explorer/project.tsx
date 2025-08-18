@@ -151,7 +151,6 @@ const Project = () => {
               .sort((a, b) => a.name.localeCompare(b.name))
               .map(({ name }) => (
                 <ProjectTreeLeaf
-                  nested={true}
                   key={name}
                   leafLang='arr'
                   leafType='data-type'
@@ -170,7 +169,6 @@ const Project = () => {
               .sort((a, b) => a.name.localeCompare(b.name))
               .map(({ name }) => (
                 <ProjectTreeLeaf
-                  nested={true}
                   key={name}
                   leafLang='enum'
                   leafType='data-type'
@@ -190,7 +188,6 @@ const Project = () => {
               .sort((a, b) => a.name.localeCompare(b.name))
               .map(({ name }) => (
                 <ProjectTreeLeaf
-                  nested={true}
                   key={name}
                   leafLang='str'
                   leafType='data-type'

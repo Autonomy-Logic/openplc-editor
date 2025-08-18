@@ -220,7 +220,6 @@ const ProjectTreeNestedBranch = ({ nestedBranchTarget, children, ...res }: IProj
 }
 
 type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
-  nested?: boolean
   leafLang: 'il' | 'st' | 'fbd' | 'sfc' | 'ld' | 'arr' | 'enum' | 'str' | 'res' | 'devConfig' | 'devPin'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
