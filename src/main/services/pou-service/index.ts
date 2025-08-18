@@ -1,6 +1,6 @@
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { promises } from 'fs'
-import { dirname, join } from 'path'
+import { basename, dirname, join } from 'path'
 
 import { UserService } from '../user-service'
 
@@ -52,7 +52,18 @@ class PouService {
     fileContent?: unknown
   }): Promise<PouServiceResponse> {
     const { filePath, newFileName, fileContent } = data
-    const newFilePath = join(dirname(filePath), newFileName)
+    const safeNewFileName = basename(newFileName)
+    if (!safeNewFileName || safeNewFileName === '.' || safeNewFileName === '..') {
+      return {
+        success: false,
+        error: {
+          title: 'POU Rename Error',
+          description: 'Invalid target file name',
+          error: new Error('EINVAL'),
+        },
+      }
+    }
+    const newFilePath = join(dirname(filePath), safeNewFileName)
 
     try {
       await promises.access(newFilePath)

@@ -250,7 +250,7 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
   } = useOpenPLCStore()
 
   const [isEditing, setIsEditing] = useState(false)
-  const [newName, setNewName] = useState(label || '')
+  const [newLabel, setNewLabel] = useState(label || '')
   const [isPopoverOpen, setPopoverOpen] = useState(false)
 
   const inputNameRef = useRef<HTMLInputElement>(null)
@@ -296,17 +296,17 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
     }
 
     if (isAPou) {
-      const res = await renamePou(label, newName)
+      const res = await renamePou(label, newLabel)
       if (!res.success) {
-        setNewName(label || '')
+        setNewLabel(label || '')
       }
       return
     }
 
     if (isDatatype) {
-      const res = await renameDatatype(label, newName)
+      const res = await renameDatatype(label, newLabel)
       if (!res.success) {
-        setNewName(label || '')
+        setNewLabel(label || '')
       }
       return
     }
@@ -436,13 +436,13 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
       {isEditing ? (
         <input
           ref={inputNameRef}
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') void handleRenameFile(newName.trim() || '')
+            if (e.key === 'Enter') void handleRenameFile(newLabel.trim() || '')
             if (e.key === 'Escape') setIsEditing(false)
           }}
-          onBlur={(_e) => void handleRenameFile(newName || '')}
+          onBlur={(_e) => void handleRenameFile(newLabel || '')}
           className='w-full border-0 bg-transparent px-1 text-xs text-neutral-850 focus:outline-none dark:text-neutral-300'
         />
       ) : (
