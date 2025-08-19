@@ -100,10 +100,10 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
     }
   }
 
-  const handleDeleteDatatype = (data: DeleteDatatype) => {
+  const handleDeleteDatatype = async (data: DeleteDatatype) => {
     const { file: targetLabel } = data
 
-    const res = deleteDatatypeAction(data)
+    const res = await deleteDatatypeAction(data)
     if (!res.success) {
       toast({
         title: res.error?.title || 'Error deleting datatype',
@@ -150,7 +150,7 @@ const ConfirmDeleteElementModal = ({ isOpen, data, ...rest }: ConfirmDeleteModal
           break
         }
         case 'datatype': {
-          handleDeleteDatatype(data)
+          await handleDeleteDatatype(data)
           break
         }
         case 'ladder-rung': {
