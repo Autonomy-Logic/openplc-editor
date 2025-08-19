@@ -527,20 +527,12 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
    */
   const handleCutEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
     console.log('Cutting viewport state to clipboard', rungLocal.selectedNodes, rungLocal.edges)
-
     setDataToClipboard(event)
-    fbdFlowActions.removeNodes({
-      editorName: editor.meta.name,
-      nodes: rungLocal.selectedNodes,
-    })
 
     const selectedEdges = rungLocal.edges.filter((edge) =>
       rungLocal.selectedNodes.some((node) => node.id === edge.source || node.id === edge.target),
     )
-    fbdFlowActions.removeEdges({
-      editorName: editor.meta.name,
-      edges: selectedEdges,
-    })
+    handleOnDelete(rungLocal.selectedNodes, selectedEdges)
   }
 
   /**

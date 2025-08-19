@@ -8,7 +8,7 @@ export const buildGenericNode = <T>({
   id,
   position,
 }: BuilderBasicProps & {
-  nodeType: CustomFbdNodeTypes
+  nodeType: CustomFbdNodeTypes | 'default'
   blockType?: T | undefined
   connectionLabel?: string
 }) => {
