@@ -786,6 +786,26 @@ class CompilerModule {
       _handleOutputData('Error writing defines.h file', 'error')
     }
   }
+
+  async handleGenerateArduinoCppFile(projectPath: string, boardTarget: string) {
+    let result: MethodsResult<string> = { success: false }
+
+    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+
+    const boardSourceFile = halsFileContent[boardTarget]['source']
+
+    const boardSourceFilePath = join(this.sourceDirectoryPath, 'hal', boardSourceFile)
+    const arduinoCppFilePath = join(projectPath, 'build', boardTarget, 'src', 'arduino.cpp')
+
+    try {
+      await cp(boardSourceFilePath, arduinoCppFilePath, { recursive: true })
+      result = { success: true, data: arduinoCppFilePath }
+    } catch (error) {
+      throw new Error(`Error copying Arduino source file: ${(error as Error).message}`)
+    }
+    return result
+  }
+
   // !! Deprecated: This method is a outdated implementation and should be removed.
   async createXmlFile(
     pathToUserProject: string,
@@ -1084,6 +1104,20 @@ class CompilerModule {
         logLevel: 'error',
         message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
       })
+    }
+
+    // Step 9: Generate Arduino CPP file
+    _mainProcessPort.postMessage({ logLevel: 'info', message: 'Generating Arduino CPP file...' })
+    try {
+      await this.handleGenerateArduinoCppFile(normalizedProjectPath, boardTarget)
+      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Arduino CPP file generated successfully.' })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.close()
+      return
     }
 
     // -- Final message --
