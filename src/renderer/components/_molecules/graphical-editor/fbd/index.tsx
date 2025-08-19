@@ -7,6 +7,7 @@ import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast
 import BlockElement from '@root/renderer/components/_features/[workspace]/editor/graphical/elements/fbd/block'
 import { openPLCStoreBase, useOpenPLCStore } from '@root/renderer/store'
 import { FBDRungState } from '@root/renderer/store/slices'
+import { ClipboardType } from '@root/types/clipboard'
 import { PLCVariable } from '@root/types/PLC/units/variable'
 import {
   addEdge,
@@ -22,8 +23,8 @@ import {
   SelectionMode,
   XYPosition,
 } from '@xyflow/react'
-import _ from 'lodash'
-import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { debounce, isEqual } from 'lodash'
+import { ClipboardEventHandler, DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { buildGenericNode } from './fbd-utils/nodes'
 
@@ -68,8 +69,6 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
   const updateRungLocalFromStore = () => {
-    // console.log('updateRungLocalFromStore --')
-    // console.log('rung', rung)
     setRungLocal({
       ...rung,
       nodes: rung.nodes.map((node) => ({
@@ -80,12 +79,7 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
   }
 
   const updateRungState = () => {
-    // console.log('updateRungState --')
-    // console.log('rungLocal', rungLocal)
-    // console.log('dragging', dragging)
-    // console.log('isEqual', _.isEqual(rungLocal, rung))
-
-    if (dragging || _.isEqual(rungLocal, rung)) {
+    if (dragging || isEqual(rungLocal, rung)) {
       return
     }
 
@@ -113,7 +107,7 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
       debounceUpdateRungRef.current?.()
     }
     // debounce the func that was created once, but has access to the latest sendRequest
-    return _.debounce(func, 100)
+    return debounce(func, 100)
     // no dependencies! never gets updated
   }, [])
 
@@ -125,6 +119,37 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
     debouncedUpdateRungStateCallback()
     return () => debouncedUpdateRungStateCallback.cancel()
   }, [rungLocal])
+
+  /**
+   * Handle screen position changes
+   */
+  useEffect(() => {
+    const unsub = openPLCStoreBase.subscribe(
+      (state) => state.editor.meta.name,
+      (newName, prevEditorName) => {
+        if (newName === prevEditorName || !reactFlowInstance) return
+
+        const { x, y, zoom } = reactFlowInstance.getViewport()
+
+        saveEditorViewState({
+          prevEditorName,
+          fbdPosition: { x, y, zoom },
+        })
+      },
+    )
+
+    return () => unsub()
+  }, [reactFlowInstance])
+
+  useEffect(() => {
+    if (editor.type !== 'plc-graphical') return
+    const viewport = editor.fbdPosition
+    if (!reactFlowInstance || !viewport) return
+
+    setTimeout(() => {
+      void reactFlowInstance.setViewport(viewport, { duration: 0 })
+    }, 0)
+  }, [reactFlowInstance, editor.meta.name])
 
   /**
    * Handle the addition of a new element by dropping it in the viewport
@@ -469,36 +494,71 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
     closeModal()
   }
 
-  useEffect(() => {
-    const unsub = openPLCStoreBase.subscribe(
-      (state) => state.editor.meta.name,
-      (newName, prevEditorName) => {
-        if (newName === prevEditorName || !reactFlowInstance) return
+  /**
+   * Set/Get data to clipboard when copying the viewport
+   */
+  const setDataToClipboard: ClipboardEventHandler<HTMLDivElement> = (event) => {
+    const clipboard: ClipboardType = {
+      language: 'fbd',
+      content: rungLocal.selectedNodes,
+    }
+    event.clipboardData?.setData('application/json', JSON.stringify(clipboard))
+    event.preventDefault()
+  }
 
-        const { x, y, zoom } = reactFlowInstance.getViewport()
+  const getDataFromClipboard: ClipboardEventHandler<HTMLDivElement> = (event): ClipboardType | undefined => {
+    const clipboardData = event.clipboardData?.getData('application/json')
+    if (!clipboardData) return
+    return JSON.parse(clipboardData) as ClipboardType
+  }
 
-        saveEditorViewState({
-          prevEditorName,
-          fbdPosition: { x, y, zoom },
-        })
-      },
-    )
+  /**
+   * Handle copy event in the viewport
+   */
+  const handleCopyEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
+    setDataToClipboard(event)
+  }
 
-    return () => unsub()
-  }, [reactFlowInstance])
+  /**
+   * Handle cut event in the viewport
+   */
+  const handleCutEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
+    setDataToClipboard(event)
+    fbdFlowActions.removeNodes({
+      editorName: editor.meta.name,
+      nodes: rungLocal.selectedNodes,
+    })
+  }
 
-  useEffect(() => {
-    if (editor.type !== 'plc-graphical') return
-    const viewport = editor.fbdPosition
-    if (!reactFlowInstance || !viewport) return
-
-    setTimeout(() => {
-      void reactFlowInstance.setViewport(viewport, { duration: 0 })
-    }, 0)
-  }, [reactFlowInstance, editor.meta.name])
+  /**
+   * Handle paste event in the viewport
+   */
+  const handlePasteEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
+    const clipboardData = getDataFromClipboard(event)
+    console.log('Pasting viewport state from clipboard', clipboardData)
+  }
 
   return (
-    <div className='h-full w-full rounded-lg border p-1 dark:border-neutral-800' ref={reactFlowViewportRef}>
+    <div
+      className='h-full w-full rounded-lg border p-1 dark:border-neutral-800'
+      ref={reactFlowViewportRef}
+      onCopy={handleCopyEvent}
+      onCut={handleCutEvent}
+      onPaste={handlePasteEvent}
+      onMouseMove={(event) => {
+        if (reactFlowViewportRef.current) {
+          const rect = reactFlowViewportRef.current.getBoundingClientRect()
+          const isInside =
+            event.clientX >= rect.left &&
+            event.clientX <= rect.right &&
+            event.clientY >= rect.top &&
+            event.clientY <= rect.bottom
+
+          if (isInside) reactFlowViewportRef.current.focus()
+          else reactFlowViewportRef.current.blur()
+        }
+      }}
+    >
       <ReactFlowPanel
         key={'fbd-react-flow'}
         background={true}
