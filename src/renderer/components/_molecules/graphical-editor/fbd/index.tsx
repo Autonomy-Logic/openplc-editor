@@ -7,6 +7,8 @@ import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast
 import BlockElement from '@root/renderer/components/_features/[workspace]/editor/graphical/elements/fbd/block'
 import { openPLCStoreBase, useOpenPLCStore } from '@root/renderer/store'
 import { FBDRungState } from '@root/renderer/store/slices'
+import { pasteNodesAtFBD } from '@root/renderer/store/slices/fbd/utils'
+import { EdgeType, NodeType } from '@root/renderer/store/slices/react-flow'
 import { ClipboardType } from '@root/types/clipboard'
 import { PLCVariable } from '@root/types/PLC/units/variable'
 import {
@@ -495,27 +497,28 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
   }
 
   /**
-   * Set/Get data to clipboard when copying the viewport
+   * Set data to clipboard when copying the viewport
    */
   const setDataToClipboard: ClipboardEventHandler<HTMLDivElement> = (event) => {
+    const selectedEdges = rungLocal.edges.filter((edge) =>
+      rungLocal.selectedNodes.some((node) => node.id === edge.source || node.id === edge.target),
+    )
     const clipboard: ClipboardType = {
       language: 'fbd',
-      content: rungLocal.selectedNodes,
+      content: {
+        nodes: rungLocal.selectedNodes as NodeType[],
+        edges: selectedEdges as EdgeType[],
+      },
     }
     event.clipboardData?.setData('application/json', JSON.stringify(clipboard))
     event.preventDefault()
-  }
-
-  const getDataFromClipboard: ClipboardEventHandler<HTMLDivElement> = (event): ClipboardType | undefined => {
-    const clipboardData = event.clipboardData?.getData('application/json')
-    if (!clipboardData) return
-    return JSON.parse(clipboardData) as ClipboardType
   }
 
   /**
    * Handle copy event in the viewport
    */
   const handleCopyEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
+    console.log('Copying viewport state to clipboard', rungLocal.selectedNodes, rungLocal.edges)
     setDataToClipboard(event)
   }
 
@@ -523,10 +526,20 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
    * Handle cut event in the viewport
    */
   const handleCutEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
+    console.log('Cutting viewport state to clipboard', rungLocal.selectedNodes, rungLocal.edges)
+
     setDataToClipboard(event)
     fbdFlowActions.removeNodes({
       editorName: editor.meta.name,
       nodes: rungLocal.selectedNodes,
+    })
+
+    const selectedEdges = rungLocal.edges.filter((edge) =>
+      rungLocal.selectedNodes.some((node) => node.id === edge.source || node.id === edge.target),
+    )
+    fbdFlowActions.removeEdges({
+      editorName: editor.meta.name,
+      edges: selectedEdges,
     })
   }
 
@@ -534,8 +547,35 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
    * Handle paste event in the viewport
    */
   const handlePasteEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
-    const clipboardData = getDataFromClipboard(event)
+    const clipboardData = JSON.parse(event.clipboardData?.getData('application/json')) as ClipboardType
     console.log('Pasting viewport state from clipboard', clipboardData)
+    if (!clipboardData || clipboardData.language !== 'fbd') {
+      toast({
+        title: 'Invalid clipboard data',
+        description: 'The clipboard data is not valid for FBD.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    const data = pasteNodesAtFBD(
+      clipboardData.content.nodes as FlowNode[],
+      clipboardData.content.edges as FlowEdge[],
+      reactFlowInstance?.getViewport() ?? { x: 0, y: 0 },
+    )
+
+    data.nodes.forEach((node) => {
+      fbdFlowActions.addNode({
+        node: node,
+        editorName: editor.meta.name,
+      })
+    })
+    data.edges.forEach((edge) => {
+      fbdFlowActions.addEdge({
+        edge: edge,
+        editorName: editor.meta.name,
+      })
+    })
   }
 
   return (
