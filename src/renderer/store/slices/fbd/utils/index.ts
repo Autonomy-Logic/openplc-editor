@@ -1,4 +1,5 @@
 import { CustomFbdNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
+import { VariableNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/variable'
 import { buildGenericNode } from '@root/renderer/components/_molecules/graphical-editor/fbd/fbd-utils/nodes'
 import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Edge, Node } from '@xyflow/react'
@@ -17,7 +18,7 @@ export const pasteNodesAtFBD = (nodes: Node[], edges: Edge[], mouse: { x: number
 
   const newNodes = nodes
     .map((node) => {
-      return buildGenericNode({
+      const newNode = buildGenericNode({
         id: newGraphicalEditorNodeID(node.type),
         nodeType: (node.type as CustomFbdNodeTypes) ?? 'default',
         position: {
@@ -26,6 +27,12 @@ export const pasteNodesAtFBD = (nodes: Node[], edges: Edge[], mouse: { x: number
         },
         blockType: node.data.variant,
       })
+
+      if (newNode?.type?.includes('variable')) {
+        ;(newNode as VariableNode).data.variable = (node as VariableNode).data.variable
+      }
+
+      return newNode
     })
     .filter((node) => node !== undefined) as Node[]
 
