@@ -111,6 +111,7 @@ function GenericTable<T>({
     onColumnFiltersChange: setColumnFilters,
     meta: {
       updateData: (rowIndex, columnId, value) => {
+        console.log({ rowIndex, columnId, value })
         return updateData(rowIndex, columnId, value)
       },
     },
