@@ -52,6 +52,8 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
   const pouRef = pous.find((pou) => pou.data.name === editor.meta.name)
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
   const [dragging, setDragging] = useState(false)
+
+  const [insideViewport, setInsideViewport] = useState(false)
   const [mousePosition, setMousePosition] = useState<XYPosition>({ x: 0, y: 0 })
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
@@ -519,6 +521,8 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
    * Handle copy event in the viewport
    */
   const handleCopyEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
+    if (!insideViewport) return
+
     setDataToClipboard(event)
     toast({
       title: 'Copied to clipboard',
@@ -531,6 +535,8 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
    * Handle cut event in the viewport
    */
   const handleCutEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
+    if (!insideViewport) return
+
     setDataToClipboard(event)
     const selectedEdges = rungLocal.edges.filter((edge) =>
       rungLocal.selectedNodes.some((node) => node.id === edge.source || node.id === edge.target),
@@ -547,8 +553,20 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
    * Handle paste event in the viewport
    */
   const handlePasteEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
-    const clipboardData = JSON.parse(event.clipboardData?.getData('application/json')) as ClipboardType
-    if (!clipboardData || clipboardData.language !== 'fbd') {
+    if (!insideViewport) return
+
+    const clipboardData = event.clipboardData?.getData('application/json')
+    if (!clipboardData) {
+      toast({
+        title: 'Invalid clipboard data',
+        description: 'The clipboard data is not valid.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    const parsedData = JSON.parse(clipboardData) as ClipboardType
+    if (parsedData.language !== 'fbd') {
       toast({
         title: 'Invalid clipboard data',
         description: 'The clipboard data is not valid for FBD.',
@@ -558,8 +576,8 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
     }
 
     const data = pasteNodesAtFBD(
-      clipboardData.content.nodes as FlowNode[],
-      clipboardData.content.edges as FlowEdge[],
+      parsedData.content.nodes as FlowNode[],
+      parsedData.content.edges as FlowEdge[],
       reactFlowInstance?.screenToFlowPosition({
         x: mousePosition.x,
         y: mousePosition.y,
@@ -588,21 +606,20 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
 
   return (
     <div
-      className='h-full w-full rounded-lg border p-1 dark:border-neutral-800'
+      className='h-full w-full rounded-lg border dark:border-neutral-800'
       ref={reactFlowViewportRef}
       onCopy={handleCopyEvent}
       onCut={handleCutEvent}
       onPaste={handlePasteEvent}
       onMouseEnter={() => {
-        reactFlowViewportRef.current?.focus()
+        setInsideViewport(true)
       }}
       onMouseLeave={() => {
+        setInsideViewport(false)
         setMousePosition({ x: 0, y: 0 })
-        reactFlowViewportRef.current?.blur()
       }}
       onMouseMove={(event) => {
         setMousePosition({ x: event.clientX, y: event.clientY })
-        reactFlowViewportRef.current?.focus()
       }}
     >
       <ReactFlowPanel
