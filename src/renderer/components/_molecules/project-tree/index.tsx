@@ -463,6 +463,9 @@ const ProjectTreeLeaf = ({ leafLang, leafType, label, onClick: handleLeafClick, 
               'mr-2 flex h-5 w-5 items-center justify-center rounded-md opacity-0 hover:bg-neutral-200 group-hover:opacity-100 dark:hover:bg-neutral-850',
               { 'bg-neutral-200 opacity-100 dark:bg-neutral-850': isPopoverOpen },
             )}
+            onClick={(e) => {
+              e.stopPropagation()
+            }}
           >
             <MoreOptionsIcon className='h-4 w-4' />
           </Popover.Trigger>
