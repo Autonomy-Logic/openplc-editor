@@ -508,7 +508,7 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
 
   return (
     <div
-      className='h-full w-full rounded-lg border dark:border-neutral-800'
+      className='h-full w-full rounded-lg border p-1 dark:border-neutral-800'
       ref={reactFlowViewportRef}
       onMouseEnter={() => {
         setInsideViewport(true)
