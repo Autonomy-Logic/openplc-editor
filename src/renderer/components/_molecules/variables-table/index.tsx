@@ -146,7 +146,6 @@ const VariablesTable = ({
       selectedRow={selectedRow}
       handleRowClick={handleRowClick}
       updateData={(rowIndex, columnId, value) => {
-        console.log({ rowIndex, columnId, value })
         if (columnId === 'class' && filterValue !== undefined && filterValue !== 'all' && filterValue !== value) {
           return {
             ok: false,
