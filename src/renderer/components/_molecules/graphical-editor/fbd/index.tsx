@@ -7,9 +7,6 @@ import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast
 import BlockElement from '@root/renderer/components/_features/[workspace]/editor/graphical/elements/fbd/block'
 import { openPLCStoreBase, useOpenPLCStore } from '@root/renderer/store'
 import { FBDRungState } from '@root/renderer/store/slices'
-import { pasteNodesAtFBD } from '@root/renderer/store/slices/fbd/utils'
-import { EdgeType, NodeType } from '@root/renderer/store/slices/react-flow'
-import { ClipboardType } from '@root/types/clipboard'
 import { PLCVariable } from '@root/types/PLC/units/variable'
 import {
   addEdge,
@@ -26,9 +23,10 @@ import {
   XYPosition,
 } from '@xyflow/react'
 import { debounce, isEqual } from 'lodash'
-import { ClipboardEventHandler, DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { buildGenericNode } from './fbd-utils/nodes'
+import { useFBDClipboard } from './fbd-utils/useCopyPaste'
 
 interface FBDProps {
   rung: FBDRungState
@@ -53,8 +51,20 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
   const [dragging, setDragging] = useState(false)
 
+  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
+  const reactFlowViewportRef = useRef<HTMLDivElement>(null)
+
   const [insideViewport, setInsideViewport] = useState(false)
   const [mousePosition, setMousePosition] = useState<XYPosition>({ x: 0, y: 0 })
+  const _fbdClipboard = useFBDClipboard({
+    mousePosition,
+    insideViewport,
+    reactFlowInstance,
+    rungLocal,
+    handleDeleteNodes: (nodes, edges) => {
+      handleOnDelete(nodes, edges)
+    },
+  })
 
   const nodeTypes = useMemo(() => customNodeTypes, [])
   const canZoom = useMemo(() => {
@@ -69,9 +79,6 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
     }
     return false
   }, [editor])
-
-  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
-  const reactFlowViewportRef = useRef<HTMLDivElement>(null)
 
   const updateRungLocalFromStore = () => {
     setRungLocal({
@@ -499,118 +506,10 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
     closeModal()
   }
 
-  /**
-   * Set data to clipboard when copying the viewport
-   */
-  const setDataToClipboard: ClipboardEventHandler<HTMLDivElement> = (event) => {
-    const selectedEdges = rungLocal.edges.filter((edge) =>
-      rungLocal.selectedNodes.some((node) => node.id === edge.source || node.id === edge.target),
-    )
-    const clipboard: ClipboardType = {
-      language: 'fbd',
-      content: {
-        nodes: rungLocal.selectedNodes as NodeType[],
-        edges: selectedEdges as EdgeType[],
-      },
-    }
-    event.clipboardData?.setData('application/json', JSON.stringify(clipboard))
-    event.preventDefault()
-  }
-
-  /**
-   * Handle copy event in the viewport
-   */
-  const handleCopyEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
-    if (!insideViewport) return
-
-    setDataToClipboard(event)
-    toast({
-      title: 'Copied to clipboard',
-      description: `FBD data copied to clipboard`,
-      variant: 'default',
-    })
-  }
-
-  /**
-   * Handle cut event in the viewport
-   */
-  const handleCutEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
-    if (!insideViewport) return
-
-    setDataToClipboard(event)
-    const selectedEdges = rungLocal.edges.filter((edge) =>
-      rungLocal.selectedNodes.some((node) => node.id === edge.source || node.id === edge.target),
-    )
-    handleOnDelete(rungLocal.selectedNodes, selectedEdges)
-    toast({
-      title: 'Cut to clipboard',
-      description: `FBD data cut to clipboard`,
-      variant: 'default',
-    })
-  }
-
-  /**
-   * Handle paste event in the viewport
-   */
-  const handlePasteEvent: ClipboardEventHandler<HTMLDivElement> = (event) => {
-    if (!insideViewport) return
-
-    const clipboardData = event.clipboardData?.getData('application/json')
-    if (!clipboardData) {
-      toast({
-        title: 'Invalid clipboard data',
-        description: 'The clipboard data is not valid.',
-        variant: 'fail',
-      })
-      return
-    }
-
-    const parsedData = JSON.parse(clipboardData) as ClipboardType
-    if (parsedData.language !== 'fbd') {
-      toast({
-        title: 'Invalid clipboard data',
-        description: 'The clipboard data is not valid for FBD.',
-        variant: 'fail',
-      })
-      return
-    }
-
-    const data = pasteNodesAtFBD(
-      parsedData.content.nodes as FlowNode[],
-      parsedData.content.edges as FlowEdge[],
-      reactFlowInstance?.screenToFlowPosition({
-        x: mousePosition.x,
-        y: mousePosition.y,
-      }) ?? { x: 0, y: 0 },
-    )
-
-    data.nodes.forEach((node) => {
-      fbdFlowActions.addNode({
-        node: node,
-        editorName: editor.meta.name,
-      })
-    })
-    data.edges.forEach((edge) => {
-      fbdFlowActions.addEdge({
-        edge: edge,
-        editorName: editor.meta.name,
-      })
-    })
-
-    toast({
-      title: 'Pasted from clipboard',
-      description: `FBD data pasted from clipboard`,
-      variant: 'default',
-    })
-  }
-
   return (
     <div
       className='h-full w-full rounded-lg border dark:border-neutral-800'
       ref={reactFlowViewportRef}
-      onCopy={handleCopyEvent}
-      onCut={handleCutEvent}
-      onPaste={handlePasteEvent}
       onMouseEnter={() => {
         setInsideViewport(true)
       }}

@@ -1,0 +1,159 @@
+import { toast } from '@root/renderer/components/_features/[app]/toast/use-toast'
+import { useOpenPLCStore } from '@root/renderer/store'
+import { FBDRungState } from '@root/renderer/store/slices'
+import { pasteNodesAtFBD } from '@root/renderer/store/slices/fbd/utils'
+import { EdgeType, NodeType } from '@root/renderer/store/slices/react-flow'
+import { ClipboardType } from '@root/types/clipboard'
+import { Edge, Node, ReactFlowInstance } from '@xyflow/react'
+import { useCallback, useEffect } from 'react'
+
+export const useFBDClipboard = ({
+  mousePosition,
+  insideViewport,
+  reactFlowInstance,
+  rungLocal,
+  handleDeleteNodes,
+}: {
+  mousePosition: { x: number; y: number }
+  insideViewport: boolean
+  reactFlowInstance: ReactFlowInstance | null
+  rungLocal: FBDRungState
+  handleDeleteNodes: (nodes: Node[], edges: Edge[]) => void
+}) => {
+  const { editor, fbdFlowActions } = useOpenPLCStore()
+
+  /**
+   * Set data to clipboard when copying the viewport
+   */
+  const setDataToClipboard = (event: ClipboardEvent) => {
+    const selectedEdges = rungLocal.edges.filter((edge) =>
+      rungLocal.selectedNodes.some((node) => node.id === edge.source || node.id === edge.target),
+    )
+    const clipboard: ClipboardType = {
+      language: 'fbd',
+      content: {
+        nodes: rungLocal.selectedNodes as NodeType[],
+        edges: selectedEdges as EdgeType[],
+      },
+    }
+    event.clipboardData?.setData('fbd:nodes', JSON.stringify(clipboard))
+    event.preventDefault()
+  }
+
+  /**
+   * Handle copy event in the viewport
+   */
+  const handleCopyEvent = useCallback(
+    (event: ClipboardEvent) => {
+      if (!insideViewport) return
+
+      setDataToClipboard(event)
+      toast({
+        title: 'Copied to clipboard',
+        description: `FBD data copied to clipboard`,
+        variant: 'default',
+      })
+    },
+    [insideViewport, rungLocal],
+  )
+
+  /**
+   * Handle cut event in the viewport
+   */
+  const handleCutEvent = useCallback(
+    (event: ClipboardEvent) => {
+      if (!insideViewport) return
+
+      setDataToClipboard(event)
+      const selectedEdges = rungLocal.edges.filter((edge) =>
+        rungLocal.selectedNodes.some((node) => node.id === edge.source || node.id === edge.target),
+      )
+      handleDeleteNodes(rungLocal.selectedNodes, selectedEdges)
+      toast({
+        title: 'Cut to clipboard',
+        description: `FBD data cut to clipboard`,
+        variant: 'default',
+      })
+    },
+    [insideViewport, rungLocal, handleDeleteNodes],
+  )
+
+  /**
+   * Handle paste event in the viewport
+   */
+  const handlePasteEvent = useCallback(
+    (event: ClipboardEvent) => {
+      if (!insideViewport) return
+
+      const clipboardData = event.clipboardData?.getData('fbd:nodes')
+      if (!clipboardData) {
+        toast({
+          title: 'Invalid clipboard data',
+          description: 'The clipboard data is not valid.',
+          variant: 'fail',
+        })
+        return
+      }
+
+      const parsedData = JSON.parse(clipboardData) as ClipboardType
+      if (parsedData.language !== 'fbd') {
+        toast({
+          title: 'Invalid clipboard data',
+          description: 'The clipboard data is not valid for FBD.',
+          variant: 'fail',
+        })
+        return
+      }
+
+      const data = pasteNodesAtFBD(
+        parsedData.content.nodes as Node[],
+        parsedData.content.edges as Edge[],
+        reactFlowInstance?.screenToFlowPosition({
+          x: mousePosition.x,
+          y: mousePosition.y,
+        }) ?? { x: 0, y: 0 },
+      )
+
+      data.nodes.forEach((node) => {
+        fbdFlowActions.addNode({
+          node: node,
+          editorName: editor.meta.name,
+        })
+      })
+      data.edges.forEach((edge) => {
+        fbdFlowActions.addEdge({
+          edge: edge,
+          editorName: editor.meta.name,
+        })
+      })
+
+      toast({
+        title: 'Pasted from clipboard',
+        description: `FBD data pasted from clipboard`,
+        variant: 'default',
+      })
+    },
+    [insideViewport, mousePosition, reactFlowInstance, fbdFlowActions],
+  )
+
+  useEffect(() => {
+    window.addEventListener('copy', handleCopyEvent)
+    return () => {
+      window.removeEventListener('copy', handleCopyEvent)
+    }
+  }, [handleCopyEvent])
+
+  useEffect(() => {
+    window.addEventListener('cut', handleCutEvent)
+    return () => {
+      window.removeEventListener('cut', handleCutEvent)
+    }
+  }, [handleCutEvent])
+
+  useEffect(() => {
+    window.addEventListener('paste', handlePasteEvent)
+    return () => {
+      window.removeEventListener('paste', handlePasteEvent)
+    }
+  }, [handlePasteEvent])
+}

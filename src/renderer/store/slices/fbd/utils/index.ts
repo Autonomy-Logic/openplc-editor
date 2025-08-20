@@ -1,4 +1,6 @@
 import { CustomFbdNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
+import { CommentNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/comment'
+import { ConnectionNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/connection'
 import { VariableNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/variable'
 import { buildGenericNode } from '@root/renderer/components/_molecules/graphical-editor/fbd/fbd-utils/nodes'
 import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
@@ -30,6 +32,14 @@ export const pasteNodesAtFBD = (nodes: Node[], edges: Edge[], mouse: { x: number
 
       if (newNode?.type?.includes('variable')) {
         ;(newNode as VariableNode).data.variable = (node as VariableNode).data.variable
+      }
+
+      if (newNode?.type === 'connector' || newNode?.type === 'continuation') {
+        ;(newNode as ConnectionNode).data.variable = (node as ConnectionNode).data.variable
+      }
+
+      if (newNode?.type === 'comment') {
+        ;(newNode as CommentNode).data.content = (node as CommentNode).data.content
       }
 
       return newNode
