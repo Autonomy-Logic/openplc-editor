@@ -26,9 +26,17 @@ export const useFBDClipboard = ({
    * Set data to clipboard when copying the viewport
    */
   const setDataToClipboard = (event: ClipboardEvent) => {
-    const selectedEdges = rungLocal.edges.filter((edge) =>
-      rungLocal.selectedNodes.some((node) => node.id === edge.source || node.id === edge.target),
-    )
+    if (!rungLocal.selectedNodes.length) {
+      toast({
+        title: 'Nothing to copy',
+        description: 'No nodes selected to copy.',
+        variant: 'fail',
+      })
+      return
+    }
+
+    const selectedIds = new Set(rungLocal.selectedNodes.map((n) => n.id))
+    const selectedEdges = rungLocal.edges.filter((edge) => selectedIds.has(edge.source) || selectedIds.has(edge.target))
     const clipboard: ClipboardType = {
       language: 'fbd',
       content: {
@@ -95,8 +103,18 @@ export const useFBDClipboard = ({
         return
       }
 
-      const parsedData = JSON.parse(clipboardData) as ClipboardType
-      if (parsedData.language !== 'fbd') {
+      let parsedData: ClipboardType | null = null
+      try {
+        parsedData = JSON.parse(clipboardData) as ClipboardType
+      } catch (_error) {
+        toast({
+          title: 'Internal error',
+          description: 'Could not parse clipboard data.',
+          variant: 'fail',
+        })
+        return
+      }
+      if (!parsedData || parsedData.language !== 'fbd') {
         toast({
           title: 'Invalid clipboard data',
           description: 'The clipboard data is not valid for FBD.',

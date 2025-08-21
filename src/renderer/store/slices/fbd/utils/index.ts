@@ -18,35 +18,31 @@ export const pasteNodesAtFBD = (nodes: Node[], edges: Edge[], mouse: { x: number
     { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity },
   )
 
-  const newNodes = nodes
-    .map((node) => {
-      const newNode = buildGenericNode({
-        id: newGraphicalEditorNodeID(node.type),
-        nodeType: (node.type as CustomFbdNodeTypes) ?? 'default',
-        position: {
-          x: mouse.x + (node.position.x - bounds.x1),
-          y: mouse.y + (node.position.y - bounds.y1),
-        },
-        blockType: node.data.variant,
-      })
-
-      if (newNode?.type?.includes('variable')) {
-        ;(newNode as VariableNode).data.variable = (node as VariableNode).data.variable
-      }
-
-      if (newNode?.type === 'connector' || newNode?.type === 'continuation') {
-        ;(newNode as ConnectionNode).data.variable = (node as ConnectionNode).data.variable
-      }
-
-      if (newNode?.type === 'comment') {
-        ;(newNode as CommentNode).data.content = (node as CommentNode).data.content
-      }
-
-      return newNode
+  const nodeIdMap = new Map<string, string>()
+  const newNodes: Node[] = []
+  for (const node of nodes) {
+    const newNode = buildGenericNode({
+      id: newGraphicalEditorNodeID(node.type),
+      nodeType: (node.type as CustomFbdNodeTypes) ?? 'default',
+      position: {
+        x: mouse.x + (node.position.x - bounds.x1),
+        y: mouse.y + (node.position.y - bounds.y1),
+      },
+      blockType: node.data.variant,
     })
-    .filter((node) => node !== undefined) as Node[]
-
-  const nodeIdMap = new Map(nodes.map((node, index) => [node.id, newNodes[index].id]))
+    if (!newNode) continue
+    if (newNode.type?.includes('variable')) {
+      ;(newNode as VariableNode).data.variable = (node as VariableNode).data.variable
+    }
+    if (newNode.type === 'connector' || newNode.type === 'continuation') {
+      ;(newNode as ConnectionNode).data.variable = (node as ConnectionNode).data.variable
+    }
+    if (newNode.type === 'comment') {
+      ;(newNode as CommentNode).data.content = (node as CommentNode).data.content
+    }
+    newNodes.push(newNode)
+    nodeIdMap.set(node.id, newNode.id)
+  }
 
   const remap = (id: string) => nodeIdMap.get(id) ?? id
   const isNodeSource = (edge: Edge) => nodeIdMap.has(edge.source)
