@@ -264,10 +264,6 @@ const AcceleratorHandler = () => {
    */
   useEffect(() => {
     window.bridge.handleUndoRequest((_) => {
-      if (isMonacoFocused) {
-        return
-      }
-
       if (!meta?.name) {
         return
       }
@@ -280,10 +276,6 @@ const AcceleratorHandler = () => {
   }, [meta.name, isMonacoFocused])
   useEffect(() => {
     window.bridge.handleRedoRequest((_) => {
-      if (isMonacoFocused) {
-        return
-      }
-
       if (!meta?.name) {
         return
       }

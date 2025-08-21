@@ -73,9 +73,14 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
   const [contentToDrop, setContentToDrop] = useState<PouToText>()
   const [newName, setNewName] = useState<string>('')
   const [localText, setLocalText] = useState<string>(() => {
-    const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
+    const pou = openPLCStoreBase.getState().project.data.pous.find((pou) => pou.data.name === name)
     return typeof pou?.data.body.value === 'string' ? pou.data.body.value : ''
   })
+
+  useEffect(() => {
+    const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.data.name === name)
+    setLocalText(typeof pou?.data.body.value === 'string' ? pou.data.body.value : '')
+  }, [name, language])
 
   const pou = pous.find((pou) => pou.data.name === name)
 
@@ -534,7 +539,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           width='100%'
           path={path}
           language={language}
-          defaultValue={localText}
+          value={localText}
           onMount={handleEditorDidMount}
           onChange={handleWriteInPou}
           theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}

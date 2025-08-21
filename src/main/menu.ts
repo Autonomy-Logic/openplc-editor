@@ -1,4 +1,4 @@
-import { BrowserWindow, globalShortcut, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
+import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } from 'electron'
 
 import { i18n } from '../utils/i18n'
 import { ProjectService } from './services'
@@ -42,10 +42,6 @@ export default class MenuBuilder {
 
     const menu = Menu.buildFromTemplate(template)
     Menu.setApplicationMenu(menu)
-
-    globalShortcut.register('CommandOrControl+Shift+Z', () => {
-      this.handleRedoRequest()
-    })
 
     return menu
   }

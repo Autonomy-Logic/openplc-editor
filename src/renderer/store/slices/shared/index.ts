@@ -614,6 +614,19 @@ export const createSharedSlice: StateCreator<
         editorName: pouName,
         snapshot: previous.fbdFlow as FBDFlowType | null,
       })
+
+      const variables = previous.variables as PLCVariable[]
+      if (variables.length > 0) {
+        getState().editorActions.updateModelVariables({
+          display: 'table',
+          selectedRow: variables.length - 1,
+        })
+      } else {
+        getState().editorActions.updateModelVariables({
+          display: 'table',
+          selectedRow: -1,
+        })
+      }
     },
     redo: (pouName) => {
       const ladderFlows = getState().ladderFlows
@@ -699,6 +712,22 @@ export const createSharedSlice: StateCreator<
         editorName: pouName,
         snapshot: next.fbdFlow as FBDFlowType | null,
       })
+
+      const variables = next.variables as PLCVariable[]
+
+      if (variables.length > 0) {
+        console.log(variables.length)
+
+        getState().editorActions.updateModelVariables({
+          display: 'table',
+          selectedRow: variables.length - 1,
+        })
+      } else {
+        getState().editorActions.updateModelVariables({
+          display: 'table',
+          selectedRow: -1,
+        })
+      }
     },
   },
 })
