@@ -415,8 +415,6 @@ const SelectableTypeCell = ({
   )
 }
 
-const VariableClasses = ['input', 'output', 'inOut', 'external', 'local', 'temp']
-
 const SelectableClassCell = ({
   getValue,
   row: { index },
@@ -424,6 +422,18 @@ const SelectableClassCell = ({
   table,
   selected = true,
 }: ISelectableCellProps) => {
+  const { editor } = useOpenPLCStore()
+
+  const getVariableClasses = () => {
+    const language = 'language' in editor.meta ? editor.meta.language : null
+    if (language === 'python') {
+      return ['input', 'output']
+    }
+    return ['input', 'output', 'inOut', 'external', 'local', 'temp']
+  }
+
+  const variableClasses = getVariableClasses()
+
   const initialValue = getValue()
   // We need to keep and update the state of the cell normally
   const [cellValue, setCellValue] = useState(initialValue)
@@ -463,7 +473,7 @@ const SelectableClassCell = ({
         sideOffset={-20}
         className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
       >
-        {VariableClasses.map((type) => (
+        {variableClasses.map((type) => (
           <SelectItem
             key={type}
             value={type}
