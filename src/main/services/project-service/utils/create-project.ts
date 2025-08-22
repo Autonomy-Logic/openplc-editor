@@ -127,7 +127,18 @@ const createProjectDefaultStructure = (
     switch (file) {
       case 'project.json':
         content.project = createProjectFile(dataToCreateProjectFile)
-        CreateJSONFile(filePath, JSON.stringify(content.project, null, 2), file.split('.')[0])
+        try {
+          CreateJSONFile(filePath, JSON.stringify(content.project, null, 2), file.split('.')[0])
+        } catch (error) {
+          return {
+            success: false,
+            error: {
+              title: 'Error creating project file',
+              description: `Failed to create project file at ${filePath}`,
+              error: error,
+            },
+          }
+        }
         break
       default:
         break
@@ -149,11 +160,33 @@ const createProjectDefaultStructure = (
         case 'devices/configuration.json':
           content.deviceConfiguration = defaultValue as DeviceConfiguration
           content.deviceConfiguration.communicationConfiguration.modbusRTU.rtuBaudRate = '115200'
-          CreateJSONFile(filePath, JSON.stringify(content.deviceConfiguration, null, 2), fileName.split('.')[0])
+          try {
+            CreateJSONFile(filePath, JSON.stringify(content.deviceConfiguration, null, 2), fileName.split('.')[0])
+          } catch (error) {
+            return {
+              success: false,
+              error: {
+                title: 'Error creating device configuration file',
+                description: `Failed to create device configuration file at ${filePath}`,
+                error: error,
+              },
+            }
+          }
           break
         case 'devices/pin-mapping.json':
           content.devicePinMapping = defaultValue as DevicePin[]
-          CreateJSONFile(filePath, JSON.stringify(content.devicePinMapping, null, 2), fileName.split('.')[0])
+          try {
+            CreateJSONFile(filePath, JSON.stringify(content.devicePinMapping, null, 2), fileName.split('.')[0])
+          } catch (error) {
+            return {
+              success: false,
+              error: {
+                title: 'Error creating device pin mapping file',
+                description: `Failed to create device pin mapping file at ${filePath}`,
+                error: error,
+              },
+            }
+          }
           break
         default:
           break
