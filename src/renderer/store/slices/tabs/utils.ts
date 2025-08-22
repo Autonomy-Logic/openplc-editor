@@ -4,7 +4,7 @@ import { TabsProps } from './types'
 
 const CreatePLCTextualObject = (
   name: string,
-  language: 'il' | 'st',
+  language: 'il' | 'st' | 'python',
   pouType: 'program' | 'function' | 'function-block',
 ): EditorModel => {
   const editor = CreateEditorObject({
@@ -56,7 +56,7 @@ const CreatePLCGraphicalObject = (
 
 const CreateEditorModelObject = (
   name: string,
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | null,
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | null,
   pouType: 'program' | 'function' | 'function-block' | null,
   derivation?: 'enumerated' | 'structure' | 'array',
 ): EditorModel => {
@@ -83,7 +83,7 @@ const CreateEditorModelObject = (
     return CreatePLCGraphicalObject(name, language as 'ld' | 'sfc' | 'fbd', pouType)
   }
 
-  return CreatePLCTextualObject(name, language as 'il' | 'st', pouType)
+  return CreatePLCTextualObject(name, language as 'il' | 'st' | 'python', pouType)
 }
 
 const CreateResourceEditor = (name = 'resource'): EditorModel => {

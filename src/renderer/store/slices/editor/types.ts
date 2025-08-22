@@ -105,7 +105,7 @@ const editorModelSchema = z.discriminatedUnion('type', [
       meta: z.object({
         name: z.string(),
         path: z.string(),
-        language: z.enum(['il', 'st']),
+        language: z.enum(['il', 'st', 'python']),
         pouType: z.enum(['program', 'function', 'function-block']),
       }),
       variable: editorVariablesSchema,

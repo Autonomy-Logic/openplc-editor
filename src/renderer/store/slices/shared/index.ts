@@ -18,7 +18,7 @@ import { CreateEditorObject, CreatePouObject } from './utils'
 type PropsToCreatePou = {
   name: string
   type: 'program' | 'function' | 'function-block'
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python'
 }
 
 export type SharedSlice = {
@@ -72,7 +72,11 @@ export const createSharedSlice: StateCreator<
 > = (_setState, getState) => ({
   pouActions: {
     create: (propsToCreatePou: PropsToCreatePou) => {
-      if (propsToCreatePou.language === 'il' || propsToCreatePou.language === 'st') {
+      if (
+        propsToCreatePou.language === 'il' ||
+        propsToCreatePou.language === 'st' ||
+        propsToCreatePou.language === 'python'
+      ) {
         const res = getState().projectActions.createPou(CreatePouObject(propsToCreatePou))
         if (!res.ok) throw new Error()
         const data = CreateEditorObject({

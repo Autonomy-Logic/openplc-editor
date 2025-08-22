@@ -6,6 +6,7 @@ import {
   ILIcon,
   LDIcon,
   ProgramIcon,
+  PythonIcon,
   SFCIcon,
   STIcon,
 } from '@root/renderer/assets'
@@ -30,6 +31,10 @@ const PouLanguageSources = [
   {
     icon: <SFCIcon />,
     value: 'Sequential Functional Chart',
+  },
+  {
+    icon: <PythonIcon />,
+    value: 'Python',
   },
 ] as const
 

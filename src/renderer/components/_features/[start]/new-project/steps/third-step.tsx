@@ -28,13 +28,14 @@ const BlockedLanguagesStyles = {
   'Ladder Diagram': '',
   'Structured Text': '',
   'Instruction List': '',
+  Python: '',
 } as const
 
 const Step3 = ({ onPrev, onFinish, onClose }: { onPrev: () => void; onFinish: () => void; onClose: () => void }) => {
   type FormData = {
     name: string
     path: string
-    language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+    language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python'
     time: string
   }
   const { toast } = useToast()

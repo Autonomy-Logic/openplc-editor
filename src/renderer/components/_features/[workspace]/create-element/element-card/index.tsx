@@ -22,7 +22,7 @@ type ElementCardProps = {
 type CreatePouFormProps = {
   type: 'function' | 'function-block' | 'program'
   name: string
-  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd'
+  language: 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python'
 }
 
 type CreateDataTypeFormProps = {
@@ -41,6 +41,7 @@ const BlockedLanguagesStyles = {
   'Ladder Diagram': '',
   'Structured Text': '',
   'Instruction List': '',
+  Python: '',
 } as const
 
 const ElementCard = (props: ElementCardProps): ReactNode => {

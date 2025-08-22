@@ -22,7 +22,7 @@ import { parsePouToStText } from './drag-and-drop/st'
 type monacoEditorProps = {
   path: string
   name: string
-  language: 'il' | 'st'
+  language: 'il' | 'st' | 'python'
 }
 
 type PouToText = {
@@ -140,7 +140,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     (range: monaco.IRange) => {
       const allSuggestions = keywordsCompletion({
         range,
-        language,
+        language: language as 'st' | 'il',
       }).suggestions
 
       let filteredSuggestions = allSuggestions
@@ -185,7 +185,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     (range: monaco.IRange) => {
       const suggestions = snippetsSTCompletion({
         range,
-        language,
+        language: language as 'st' | 'il',
       }).suggestions
       const labels = suggestions.map((suggestion) => suggestion.label)
       return {

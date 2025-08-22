@@ -6,6 +6,7 @@ import {
   FBDIcon,
   ILIcon,
   LDIcon,
+  PythonIcon,
   ResourceIcon,
   SFCIcon,
   STIcon,
@@ -29,6 +30,7 @@ const TabIcons = {
   fbd: <FBDIcon className='h-4 w-4 flex-shrink-0' />,
   st: <STIcon className='h-4 w-4 flex-shrink-0' />,
   il: <ILIcon className='h-4 w-4 flex-shrink-0' />,
+  python: <PythonIcon className='h-4 w-4 flex-shrink-0' />,
   enumerated: <EnumIcon className='h-4 w-4 flex-shrink-0' />,
   structure: <StructureIcon className='h-4 w-4 flex-shrink-0' />,
   array: <ArrayIcon className='h-4 w-4 flex-shrink-0' />,
@@ -45,6 +47,7 @@ const Tab = (props: ITabProps) => {
     | 'ld'
     | 'sfc'
     | 'fbd'
+    | 'python'
     | 'array'
     | 'enumerated'
     | 'structure'
