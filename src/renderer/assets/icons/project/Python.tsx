@@ -11,13 +11,14 @@ const sizeClasses = {
   lg: 'w-12 h-12',
 }
 
-export const PythonIcon = ({ size = 'sm', ...rest }: PythonIconProps) => {
+export const PythonIcon = (props: PythonIconProps) => {
+  const { className, size = 'sm', ...rest } = props
   return (
     <svg
       viewBox='0 0 28 28'
       fill='none'
       xmlns='http://www.w3.org/2000/svg'
-      className={cn(sizeClasses[size], rest.className)}
+      className={cn(`${sizeClasses[size]}`, className)}
       {...rest}
     >
       <path
