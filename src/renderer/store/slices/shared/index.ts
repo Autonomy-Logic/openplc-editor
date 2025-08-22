@@ -1100,12 +1100,24 @@ export const createSharedSlice: StateCreator<
           elementType: { type: 'program', language: mainPou.data.language },
         }
 
-        // Add the file to the file slice
-        getState().fileActions.addFile({
-          name: tabToBeCreated.name,
+        // Set files in the file slice
+        const files: FileSliceDataObject = {}
+        files[tabToBeCreated.name] = {
           type: 'program',
           filePath: `/pous/programs/${tabToBeCreated.name}.json`,
-        })
+          saved: true,
+        }
+        files['Resource'] = {
+          type: 'resource',
+          filePath: `/project.json`,
+          saved: true,
+        }
+        files['Configuration'] = {
+          type: 'device',
+          filePath: `/device`,
+          saved: true,
+        }
+        getState().fileActions.setFiles({ files })
 
         // Add and set editor
         const model = CreateEditorObjectFromTab(tabToBeCreated)
