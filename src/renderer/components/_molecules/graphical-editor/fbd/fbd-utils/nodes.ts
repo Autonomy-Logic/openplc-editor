@@ -5,12 +5,14 @@ export const buildGenericNode = <T>({
   nodeType,
   blockType,
   connectionLabel,
+  executionControl,
   id,
   position,
 }: BuilderBasicProps & {
   nodeType: CustomFbdNodeTypes | 'default'
   blockType?: T | undefined
   connectionLabel?: string
+  executionControl?: boolean
 }) => {
   switch (nodeType) {
     case 'block':
@@ -18,6 +20,7 @@ export const buildGenericNode = <T>({
         id,
         position,
         variant: blockType ?? undefined,
+        executionControl,
       })
     case 'input-variable':
     case 'output-variable':

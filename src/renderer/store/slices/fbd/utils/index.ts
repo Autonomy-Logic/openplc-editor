@@ -1,7 +1,9 @@
 import { CustomFbdNodeTypes } from '@root/renderer/components/_atoms/graphical-editor/fbd'
+import { BlockNodeData } from '@root/renderer/components/_atoms/graphical-editor/fbd/block'
 import { CommentNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/comment'
 import { ConnectionNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/connection'
 import { VariableNode } from '@root/renderer/components/_atoms/graphical-editor/fbd/variable'
+import { BlockVariant } from '@root/renderer/components/_atoms/graphical-editor/types/block'
 import { buildGenericNode } from '@root/renderer/components/_molecules/graphical-editor/fbd/fbd-utils/nodes'
 import { newGraphicalEditorNodeID } from '@root/utils/new-graphical-editor-node-id'
 import { Edge, Node } from '@xyflow/react'
@@ -29,6 +31,7 @@ export const pasteNodesAtFBD = (nodes: Node[], edges: Edge[], mouse: { x: number
         y: mouse.y + (node.position.y - bounds.y1),
       },
       blockType: node.data.variant,
+      executionControl: node.type === 'block' ? (node.data as BlockNodeData<BlockVariant>).executionControl : undefined,
     })
     if (!newNode) continue
 
