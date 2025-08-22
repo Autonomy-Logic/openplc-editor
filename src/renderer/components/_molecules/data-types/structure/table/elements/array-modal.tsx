@@ -154,6 +154,7 @@ export const ArrayModal = ({
     const updatedVariables: PLCStructureVariable[] = structure.variable.map((variable) => {
       if (variable.name === variableName) {
         const isBaseType = baseTypes.includes(typeValue as BaseType)
+
         return {
           ...variable,
           type: {
@@ -167,6 +168,7 @@ export const ArrayModal = ({
               dimensions: dimensionToSave.map((value) => ({ dimension: value })),
             },
           },
+          initialValue: variable.initialValue?.simpleValue?.value === '' ? undefined : variable.initialValue,
         }
       }
       return variable
