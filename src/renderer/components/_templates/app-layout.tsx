@@ -14,9 +14,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const [isLinux, setIsLinux] = useState(true)
   const {
     modals,
-    project: {
-      data: { pous },
-    },
     workspaceActions: { setSystemConfigs, setRecent },
   } = useOpenPLCStore()
 
@@ -38,10 +35,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     }
     void getUserSystemProps()
   }, [setSystemConfigs])
-
-  useEffect(() => {
-    console.log('POUS have changed:', pous)
-  }, [pous])
 
   return (
     <>

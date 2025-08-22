@@ -1305,6 +1305,17 @@ export const createSharedSlice: StateCreator<
     saveFile: async (name) => {
       const { file } = getState().fileActions.getFile({ name: name })
       if (!file) {
+        const editor = getState().editor
+        if (editor.type === 'available') {
+          return {
+            success: false,
+            error: {
+              title: 'Error saving file',
+              description: `There is no opened file. Editor is in available state.`,
+            },
+          }
+        }
+
         toast({
           title: 'Error saving file',
           description: `File with name ${name} does not exist.`,
