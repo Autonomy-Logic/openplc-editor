@@ -31,6 +31,7 @@ export const pasteNodesAtFBD = (nodes: Node[], edges: Edge[], mouse: { x: number
       blockType: node.data.variant,
     })
     if (!newNode) continue
+
     if (newNode.type?.includes('variable')) {
       ;(newNode as VariableNode).data.variable = (node as VariableNode).data.variable
     }
@@ -40,6 +41,8 @@ export const pasteNodesAtFBD = (nodes: Node[], edges: Edge[], mouse: { x: number
     if (newNode.type === 'comment') {
       ;(newNode as CommentNode).data.content = (node as CommentNode).data.content
     }
+
+    newNode.selected = true
     newNodes.push(newNode)
     nodeIdMap.set(node.id, newNode.id)
   }

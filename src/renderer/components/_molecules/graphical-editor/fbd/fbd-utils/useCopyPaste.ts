@@ -4,7 +4,7 @@ import { FBDRungState } from '@root/renderer/store/slices'
 import { pasteNodesAtFBD } from '@root/renderer/store/slices/fbd/utils'
 import { EdgeType, NodeType } from '@root/renderer/store/slices/react-flow'
 import { ClipboardType } from '@root/types/clipboard'
-import { Edge, Node, ReactFlowInstance } from '@xyflow/react'
+import { Edge, Node, ReactFlowInstance, XYPosition } from '@xyflow/react'
 import { useCallback, useEffect } from 'react'
 
 export const useFBDClipboard = ({
@@ -26,15 +26,6 @@ export const useFBDClipboard = ({
    * Set data to clipboard when copying the viewport
    */
   const setDataToClipboard = (event: ClipboardEvent) => {
-    if (!rungLocal.selectedNodes.length) {
-      toast({
-        title: 'Nothing to copy',
-        description: 'No nodes selected to copy.',
-        variant: 'fail',
-      })
-      return
-    }
-
     const selectedIds = new Set(rungLocal.selectedNodes.map((n) => n.id))
     const selectedEdges = rungLocal.edges.filter((edge) => selectedIds.has(edge.source) || selectedIds.has(edge.target))
     const clipboard: ClipboardType = {
@@ -53,7 +44,14 @@ export const useFBDClipboard = ({
    */
   const handleCopyEvent = useCallback(
     (event: ClipboardEvent) => {
-      if (!insideViewport) return
+      if (!rungLocal.selectedNodes.length) {
+        toast({
+          title: 'Nothing to copy',
+          description: 'No nodes selected to copy.',
+          variant: 'fail',
+        })
+        return
+      }
 
       setDataToClipboard(event)
       toast({
@@ -62,7 +60,7 @@ export const useFBDClipboard = ({
         variant: 'default',
       })
     },
-    [insideViewport, rungLocal],
+    [rungLocal],
   )
 
   /**
@@ -70,7 +68,14 @@ export const useFBDClipboard = ({
    */
   const handleCutEvent = useCallback(
     (event: ClipboardEvent) => {
-      if (!insideViewport) return
+      if (!rungLocal.selectedNodes.length) {
+        toast({
+          title: 'Nothing to cut',
+          description: 'No nodes selected to cut.',
+          variant: 'fail',
+        })
+        return
+      }
 
       setDataToClipboard(event)
       const selectedEdges = rungLocal.edges.filter((edge) =>
@@ -83,7 +88,7 @@ export const useFBDClipboard = ({
         variant: 'default',
       })
     },
-    [insideViewport, rungLocal, handleDeleteNodes],
+    [rungLocal, handleDeleteNodes],
   )
 
   /**
@@ -91,8 +96,6 @@ export const useFBDClipboard = ({
    */
   const handlePasteEvent = useCallback(
     (event: ClipboardEvent) => {
-      if (!insideViewport) return
-
       const clipboardData = event.clipboardData?.getData('fbd:nodes')
       if (!clipboardData) {
         toast({
@@ -123,21 +126,33 @@ export const useFBDClipboard = ({
         return
       }
 
-      const data = pasteNodesAtFBD(
-        parsedData.content.nodes as Node[],
-        parsedData.content.edges as Edge[],
-        reactFlowInstance?.screenToFlowPosition({
-          x: mousePosition.x,
-          y: mousePosition.y,
-        }) ?? { x: 0, y: 0 },
-      )
+      const nodePosition: XYPosition = reactFlowInstance
+        ? insideViewport
+          ? reactFlowInstance.screenToFlowPosition({
+              x: mousePosition.x,
+              y: mousePosition.y,
+            })
+          : { x: reactFlowInstance.getViewport().x, y: reactFlowInstance.getViewport().y }
+        : { x: 0, y: 0 }
 
-      data.nodes.forEach((node) => {
-        fbdFlowActions.addNode({
-          node: node,
-          editorName: editor.meta.name,
-        })
+      const data = pasteNodesAtFBD(parsedData.content.nodes as Node[], parsedData.content.edges as Edge[], nodePosition)
+
+      // De-Select all selected nodes
+      const newNodes = rungLocal.nodes.map((node) => {
+        if (parsedData.content.nodes.some((n) => n.id === node.id)) {
+          return {
+            ...node,
+            selected: false,
+          }
+        }
+        return node
       })
+      newNodes.push(...data.nodes)
+      fbdFlowActions.setNodes({
+        nodes: newNodes,
+        editorName: editor.meta.name,
+      })
+
       data.edges.forEach((edge) => {
         fbdFlowActions.addEdge({
           edge: edge,
@@ -151,7 +166,7 @@ export const useFBDClipboard = ({
         variant: 'default',
       })
     },
-    [insideViewport, mousePosition, reactFlowInstance, fbdFlowActions],
+    [insideViewport, mousePosition, reactFlowInstance, fbdFlowActions, rungLocal],
   )
 
   useEffect(() => {
