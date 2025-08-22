@@ -32,6 +32,8 @@ const SelectableTypeCell = ({
     libraries: sliceLibraries,
   } = useOpenPLCStore()
 
+  const language = 'language' in editor.meta ? editor.meta.language : null
+
   const VariableTypes = [
     {
       definition: 'base-type',
@@ -66,7 +68,25 @@ const SelectableTypeCell = ({
     },
   ]
 
-  // const pou = pous.find((pou) => pou.data.name === editor.meta.name)
+  // Filter available types based on language
+  const getAvailableTypes = () => {
+    if (language === 'python') {
+      // Only show Base Type for Python
+      return VariableTypes.filter((type) => type.definition === 'base-type')
+    }
+    return VariableTypes
+  }
+
+  const getAvailableLibraryTypes = () => {
+    if (language === 'python') {
+      // No library types for Python
+      return []
+    }
+    return LibraryTypes
+  }
+
+  const availableVariableTypes = getAvailableTypes()
+  const availableLibraryTypes = getAvailableLibraryTypes()
 
   const { value, definition } = getValue<PLCVariable['type']>()
   // We need to keep and update the state of the cell normally
@@ -82,24 +102,24 @@ const SelectableTypeCell = ({
   const [libraryFilter, setLibraryFilter] = useState('')
 
   const filteredBaseTypes =
-    VariableTypes.find((v) => v.definition === 'base-type')?.values.filter((val) =>
-      val.toUpperCase().includes(variableFilters['base-type'].toUpperCase()),
-    ) || []
+    availableVariableTypes
+      .find((v) => v.definition === 'base-type')
+      ?.values.filter((val) => val.toUpperCase().includes(variableFilters['base-type'].toUpperCase())) || []
 
   const filteredUserDataTypes =
-    VariableTypes.find((v) => v.definition === 'user-data-type')?.values.filter((val) =>
-      val.toUpperCase().includes(variableFilters['user-data-type'].toUpperCase()),
-    ) || []
+    availableVariableTypes
+      .find((v) => v.definition === 'user-data-type')
+      ?.values.filter((val) => val.toUpperCase().includes(variableFilters['user-data-type'].toUpperCase())) || []
 
   const filteredSystemLibraries =
-    LibraryTypes.find((l) => l.definition === 'system')?.values.filter((val) =>
-      val.toUpperCase().includes(libraryFilter.toUpperCase()),
-    ) || []
+    availableLibraryTypes
+      .find((l) => l.definition === 'system')
+      ?.values.filter((val) => val.toUpperCase().includes(libraryFilter.toUpperCase())) || []
 
   const filteredUserLibraries =
-    LibraryTypes.find((l) => l.definition === 'user')?.values.filter((val) =>
-      val.toUpperCase().includes(libraryFilter.toUpperCase()),
-    ) || []
+    availableLibraryTypes
+      .find((l) => l.definition === 'user')
+      ?.values.filter((val) => val.toUpperCase().includes(libraryFilter.toUpperCase())) || []
 
   const getBlockExpectedType = (node: Node): string => {
     const variant = (node.data as { variant?: { name?: string } }).variant
@@ -287,7 +307,7 @@ const SelectableTypeCell = ({
           sideOffset={-20}
           className='box h-fit w-[200px] overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
-          {VariableTypes.map((scope) => {
+          {availableVariableTypes.map((scope) => {
             const filterText = variableFilters[scope.definition] || ''
             const filteredValues = scope.definition === 'base-type' ? filteredBaseTypes : filteredUserDataTypes
             return (
@@ -348,17 +368,19 @@ const SelectableTypeCell = ({
             )
           })}
 
-          <PrimitiveDropdown.Item asChild>
-            <ArrayModal
-              variableName={variableName}
-              VariableRow={index}
-              arrayModalIsOpen={arrayModalIsOpen}
-              setArrayModalIsOpen={setArrayModalIsOpen}
-              closeContainer={() => setPoppoverIsOpen(false)}
-            />
-          </PrimitiveDropdown.Item>
+          {language !== 'python' && (
+            <PrimitiveDropdown.Item asChild>
+              <ArrayModal
+                variableName={variableName}
+                VariableRow={index}
+                arrayModalIsOpen={arrayModalIsOpen}
+                setArrayModalIsOpen={setArrayModalIsOpen}
+                closeContainer={() => setPoppoverIsOpen(false)}
+              />
+            </PrimitiveDropdown.Item>
+          )}
 
-          {LibraryTypes.map((scope) => {
+          {availableLibraryTypes.map((scope) => {
             const filteredValues = scope.definition === 'system' ? filteredSystemLibraries : filteredUserLibraries
             return (
               <PrimitiveDropdown.Sub key={scope.definition} onOpenChange={() => setLibraryFilter('')}>
