@@ -20,6 +20,11 @@ export const pasteNodesAtFBD = (nodes: Node[], edges: Edge[], mouse: { x: number
     { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity },
   )
 
+  console.log({
+    nodes,
+    edges,
+  })
+
   const nodeIdMap = new Map<string, string>()
   const newNodes: Node[] = []
   for (const node of nodes) {
@@ -54,12 +59,20 @@ export const pasteNodesAtFBD = (nodes: Node[], edges: Edge[], mouse: { x: number
   const isNodeSource = (edge: Edge) => nodeIdMap.has(edge.source)
   const isNodeTarget = (edge: Edge) => nodeIdMap.has(edge.target)
 
-  const newEdges = edges.filter(isNodeSource).map((edge) => ({
-    ...edge,
-    id: `xy-edge_${isNodeSource(edge) ? remap(edge.source) : edge.source}_${isNodeTarget(edge) ? remap(edge.target) : edge.target}__${edge.sourceHandle ?? ''}_${edge.targetHandle ?? ''}`,
-    source: isNodeSource(edge) ? remap(edge.source) : edge.source,
-    target: isNodeTarget(edge) ? remap(edge.target) : edge.target,
-  }))
+  const newEdges: Edge[] = []
+  for (const edge of edges) {
+    // If the edge is not only connected to a internal copy/cut node, ignore it
+    if (!isNodeSource(edge) || !isNodeTarget(edge)) {
+      continue
+    }
+
+    newEdges.push({
+      ...edge,
+      id: `xy-edge_${remap(edge.source)}_${remap(edge.target)}__${edge.sourceHandle ?? ''}_${edge.targetHandle ?? ''}`,
+      source: remap(edge.source),
+      target: remap(edge.target),
+    })
+  }
 
   return { nodes: newNodes, edges: newEdges }
 }
