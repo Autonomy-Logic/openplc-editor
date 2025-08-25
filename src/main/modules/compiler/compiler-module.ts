@@ -137,6 +137,14 @@ class CompilerModule {
     return halsFileContent[board]['compiler']
   }
 
+  #executeXml2st(args: string[]) {
+    let xml2stBinaryPath = this.xml2stBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') {
+      xml2stBinaryPath += '.exe'
+    }
+    return spawn(xml2stBinaryPath, args)
+  }
+
   // ############################################################################
   // =========================== Public methods =================================
   // ############################################################################
@@ -325,13 +333,8 @@ class CompilerModule {
     generatedXMLFilePath: string,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
   ) {
-    let binaryPath = this.xml2stBinaryPath
-    if (CompilerModule.HOST_PLATFORM === 'win32') {
-      // INFO: On Windows, we need to add the .exe extension to the binary path.
-      binaryPath += '.exe'
-    }
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, ['--generate-st', generatedXMLFilePath])
+      const executeCommand = this.#executeXml2st(['--generate-st', generatedXMLFilePath])
 
       let stderrData = ''
 
@@ -404,14 +407,9 @@ class CompilerModule {
   ) {
     const generatedSTFilePath = join(sourceTargetFolderPath, 'program.st') // Assuming the XML file is named 'program.st'
     const generatedVARIABLESFilePath = join(sourceTargetFolderPath, 'VARIABLES.csv') // Assuming the VARIABLES file is named 'VARIABLES.csv'
-    let binaryPath = this.xml2stBinaryPath
-    if (CompilerModule.HOST_PLATFORM === 'win32') {
-      // INFO: On Windows, we need to add the .exe extension to the binary path.
-      binaryPath += '.exe'
-    }
 
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, ['--generate-debug', generatedSTFilePath, generatedVARIABLESFilePath])
+      const executeCommand = this.#executeXml2st(['--generate-debug', generatedSTFilePath, generatedVARIABLESFilePath])
 
       let stderrData = ''
 
@@ -426,6 +424,37 @@ class CompilerModule {
       executeCommand.on('close', (code) => {
         if (code === 0) {
           handleOutputData(`Debug files generated at: ${sourceTargetFolderPath}`, 'info')
+          resolve({
+            success: true,
+          })
+        } else {
+          reject(new Error(`xml2st process exited with code ${code}\n${stderrData}`))
+        }
+      })
+    })
+  }
+
+  async handleGenerateGlueVars(
+    sourceTargetFolderPath: string,
+    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+  ) {
+    const generatedLocatedVariablesFilePath = join(sourceTargetFolderPath, 'LOCATED_VARIABLES.h')
+
+    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
+      const executeCommand = this.#executeXml2st(['--generate-gluevars', generatedLocatedVariablesFilePath])
+
+      let stderrData = ''
+
+      executeCommand.stdout?.on('data', (data: Buffer) => {
+        handleOutputData(data)
+      })
+      executeCommand.stderr?.on('data', (data: Buffer) => {
+        stderrData += data.toString()
+      })
+
+      executeCommand.on('close', (code) => {
+        if (code === 0) {
+          handleOutputData(`Glue vars generated at: ${sourceTargetFolderPath}`, 'info')
           resolve({
             success: true,
           })
@@ -1028,6 +1057,24 @@ class CompilerModule {
       return
     }
 
+    // Step 6: Generate glue vars
+    try {
+      await this.handleGenerateGlueVars(sourceTargetFolderPath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
     // -- Verify if the runtime target is Arduino or OpenPLC --
     // INFO: If the runtime target is Arduino, we will continue the compilation process.
     // INFO: If the runtime target is OpenPLC we will finish the process here.
@@ -1044,7 +1091,7 @@ class CompilerModule {
       return
     }
 
-    // Step 6: Handle core installation
+    // Step 7: Handle core installation
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Handling core installation...' })
     try {
       await this.handleCoreInstallation(boardCore, (data, logLevel) => {
@@ -1062,7 +1109,7 @@ class CompilerModule {
       _mainProcessPort.close()
       return
     }
-    // Step 7: Handle library installation
+    // Step 8: Handle library installation
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Handling library installation...' })
     try {
       await this.handleLibraryInstallation((data, logLevel) => {
@@ -1081,7 +1128,7 @@ class CompilerModule {
       return
     }
 
-    // Step 8: Handle defines.h file generation
+    // Step 9: Handle defines.h file generation
     try {
       if (buildMD5Hash === null) {
         _mainProcessPort.postMessage({
@@ -1106,7 +1153,7 @@ class CompilerModule {
       })
     }
 
-    // Step 9: Generate Arduino CPP file
+    // Step 10: Generate Arduino CPP file
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Generating Arduino CPP file...' })
     try {
       await this.handleGenerateArduinoCppFile(normalizedProjectPath, boardTarget)

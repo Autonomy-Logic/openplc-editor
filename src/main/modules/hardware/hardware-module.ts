@@ -88,35 +88,31 @@ class HardwareModule {
 
   // ++ ============================= Getters ================================ ++
   async getAvailableSerialPorts(): Promise<string[]> {
-    let binaryPath = join(
-      this.binaryDirectoryPath,
-      'serial-communication',
-      HardwareModule.HOST_PLATFORM === 'darwin' ? 'serial-communication' : '',
-    )
-
     const executeCommand = promisify(exec)
-    if (HardwareModule.HOST_PLATFORM === 'win32') {
-      // INFO: On Windows, we need to add the .exe extension to the binary path.
-      binaryPath += '.exe'
-    }
 
-    const { stdout, stderr } = await executeCommand(`"${binaryPath}" list_ports`)
+    const listCommand = HardwareModule.HOST_PLATFORM === 'win32' ? 'mode' : 'ls /dev/tty.*'
+
+    const { stdout, stderr } = await executeCommand(listCommand)
 
     if (stderr) {
       console.error('Error while getting available serial ports:', stderr)
       return []
     }
 
-    const normalizedOutput = JSON.parse(stdout) as { port: string }[]
+    let normalizedOutputString = ['fallback']
 
-    const ports = normalizedOutput.map(({ port }) => port)
+    if (HardwareModule.HOST_PLATFORM === 'win32') {
+      // Normalize Windows output
+      normalizedOutputString = stdout
+        .split('\n')
+        .filter((line) => line.startsWith('COM'))
+        .map((line) => line.split(' ')[0].trim())
+    } else {
+      // Normalize Unix output
+      normalizedOutputString = stdout.trim().split('\n').filter(Boolean)
+    }
 
-    // TODO: Improve error handling and return type
-    // if (ports.length === 0) {
-    //   return { success: false, data: undefined }
-    // }
-
-    return ports
+    return normalizedOutputString
   }
 
   async getAvailableBoards(): Promise<AvailableBoards> {
