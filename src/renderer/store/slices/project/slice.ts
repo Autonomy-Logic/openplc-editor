@@ -244,7 +244,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 dataToBeUpdated.data.id,
               )
               if (!variableToUpdate) {
-                console.error('Variable not found')
                 response = { ok: false, title: 'Variable not found' }
                 break
               }
