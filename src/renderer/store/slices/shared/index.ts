@@ -108,7 +108,20 @@ export const createSharedSlice: StateCreator<
        * This will allow the editor to be updated with the new POU and it is easier to make validations.
        */
       const res = getState().projectActions.createPou(newPouData)
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        toast({
+          title: 'Error creating POU',
+          description: `POU "${propsToCreatePou.name}" could not be created.`,
+          variant: 'fail',
+        })
+        return {
+          success: false,
+          error: {
+            title: 'Error creating POU',
+            description: `POU "${propsToCreatePou.name}" could not be created.`,
+          },
+        }
+      }
 
       const projectPath = getState().project.meta.path
       const pouPath = `/pous/${propsToCreatePou.type}s/${propsToCreatePou.name}.json`
