@@ -128,7 +128,7 @@ class MainProcessBridge implements MainIpcModule {
         const res = await getProjectPath(windowManager)
         return res
       }
-      console.log('Window object not defined')
+      console.error('Window object not defined')
     } catch (error) {
       console.error('Error getting project path:', error)
     }
@@ -211,7 +211,6 @@ class MainProcessBridge implements MainIpcModule {
 
   // App and system handlers
   handleOpenExternalLink = async (_event: IpcMainInvokeEvent, url: string) => {
-    console.log('Opening external link:', url)
     try {
       await shell.openExternal(url)
       return { success: true }

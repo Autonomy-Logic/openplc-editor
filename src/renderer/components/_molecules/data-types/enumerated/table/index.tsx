@@ -57,7 +57,6 @@ const EnumeratedTable = ({
 
   const handleBlur = (rowIndex: number) => {
     const prevRows = [...values]
-    console.log('rowIndex', rowIndex)
     const inputElement = document.getElementById(`description-input-${rowIndex}`) as HTMLInputElement
     if (inputElement) {
       const inputValue = inputElement.value.trim()

@@ -25,7 +25,6 @@ const Tabs = () => {
    * @param tab the selected tab
    */
   const handleClickedTab = (tab: TabsProps) => {
-    console.log(tab, selectedTab)
     if (tab.name === selectedTab) return
     openFile(tab)
   }

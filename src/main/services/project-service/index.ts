@@ -126,7 +126,7 @@ class ProjectService {
       const projectFiles = await readProjectFiles(projectPath)
 
       if (!projectFiles.success || !projectFiles.data) {
-        console.log(`Error opening project at path: ${projectPath}`, projectFiles.error)
+        console.error(`Error opening project at path: ${projectPath}`, projectFiles.error)
         await this.removeProjectFromHistory(projectPath)
 
         return {
@@ -153,7 +153,7 @@ class ProjectService {
         },
       }
     } catch (error) {
-      console.log(`Error opening project at path: ${projectPath}`, error)
+      console.error(`Error opening project at path: ${projectPath}`, error)
       await this.removeProjectFromHistory(projectPath)
 
       return {
@@ -193,7 +193,7 @@ class ProjectService {
       const projectFiles = await readProjectFiles(directoryPath)
 
       if (!projectFiles.success || !projectFiles.data) {
-        console.log(`Error opening project at path: ${directoryPath}`, projectFiles.error)
+        console.error(`Error opening project at path: ${directoryPath}`, projectFiles.error)
         await this.removeProjectFromHistory(directoryPath)
 
         return {

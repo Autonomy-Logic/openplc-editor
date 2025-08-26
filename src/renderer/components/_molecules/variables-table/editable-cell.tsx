@@ -117,8 +117,6 @@ const EditableNameCell = ({
   }
 
   const onBlur = async () => {
-    console.log('onBlur called')
-
     const language = 'language' in editor.meta ? editor.meta.language : undefined
 
     if (cellValue === initialValue) return setIsEditing(false)
