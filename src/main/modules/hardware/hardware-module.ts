@@ -105,7 +105,7 @@ class HardwareModule {
       // Normalize Windows output
       normalizedOutputString = stdout
         .split('\n')
-        .filter((line) => line.startsWith('COM'))
+        .filter((line) => line.includes('COM'))
         .map((line) => line.split(' ')[0].trim())
     } else {
       // Normalize Unix output
