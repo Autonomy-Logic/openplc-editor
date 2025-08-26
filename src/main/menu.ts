@@ -236,7 +236,7 @@ export default class MenuBuilder {
         },
         {
           label: i18n.t('menu:edit.submenu.redo'),
-          accelerator: 'Cmd+Y',
+          accelerator: 'Cmd+Shift+Z',
           click: () => this.handleRedoRequest(),
         },
         { type: 'separator' },
@@ -503,7 +503,7 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:edit.submenu.redo'),
-            accelerator: 'Ctrl+Y',
+            accelerator: 'Ctrl+Shift+Z',
             click: () => this.handleRedoRequest(),
           },
           { type: 'separator' },
