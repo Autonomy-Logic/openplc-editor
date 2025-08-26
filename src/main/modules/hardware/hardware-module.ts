@@ -114,7 +114,15 @@ class HardwareModule {
         .map((line) => line.split(' ')[0].trim())
     } else {
       // Normalize Unix output
-      normalizedOutputString = stdout.trim().split('\n').filter(Boolean)
+      normalizedOutputString = stdout
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((port) => {
+          const portNameUnnormalized = port.match(/\/dev\/tty.*/)
+          if (portNameUnnormalized) return portNameUnnormalized.join('')
+          return port
+        })
     }
 
     return normalizedOutputString
