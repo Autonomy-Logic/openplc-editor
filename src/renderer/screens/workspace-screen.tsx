@@ -161,11 +161,7 @@ const WorkspaceScreen = () => {
                     <>
                       {editor['type'] === 'plc-resource' && <ResourcesEditor />}
                       {editor['type'] === 'plc-device' && <DeviceEditor />}
-                      {editor['type'] === 'plc-datatype' && (
-                        <div aria-label='Datatypes editor container' className='flex h-full w-full flex-1 gap-2'>
-                          <DataTypeEditor dataTypeName={editor.meta.name} />{' '}
-                        </div>
-                      )}
+                      {editor['type'] === 'plc-datatype' && <DataTypeEditor dataTypeName={editor.meta.name} />}
                       {(editor['type'] === 'plc-textual' || editor['type'] === 'plc-graphical') && (
                         <ResizablePanelGroup
                           id='editorContentPanelGroup'

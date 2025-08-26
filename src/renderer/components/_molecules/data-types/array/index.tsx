@@ -196,7 +196,7 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
         </div>
       </div>
 
-      <div className='flex w-[600px] flex-col gap-3'>
+      <div aria-label='Data type specific container' className='flex h-full w-[600px] flex-col gap-3 overflow-hidden'>
         <div aria-label='Array data type table actions container' className='flex h-fit items-center justify-between'>
           <p className='cursor-default select-none font-caption text-xs font-medium text-neutral-1000 dark:text-neutral-100'>
             Dimensions
@@ -236,13 +236,19 @@ const ArrayDataType = ({ data, ...rest }: ArrayDatatypeProps) => {
           </div>
         </div>
 
-        <DimensionsTable
-          name={data.name}
-          tableData={tableData}
-          handleRowClick={(row) => setArrayTable({ selectedRow: parseInt(row.id) })}
-          selectedRow={arrayTable.selectedRow}
-          setArrayTable={setArrayTable}
-        />
+        <div
+          aria-label='Array table'
+          className='h-full w-full overflow-auto pr-1'
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          <DimensionsTable
+            name={data.name}
+            tableData={tableData}
+            handleRowClick={(row) => setArrayTable({ selectedRow: parseInt(row.id) })}
+            selectedRow={arrayTable.selectedRow}
+            setArrayTable={setArrayTable}
+          />
+        </div>
       </div>
     </div>
   )
