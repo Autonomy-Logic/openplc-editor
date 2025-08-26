@@ -290,7 +290,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 dataToBeUpdated.data.id,
               )
               if (!variableToUpdate) {
-                console.error('Variable not found')
                 response = { ok: false, title: 'Variable not found' }
                 break
               }
@@ -391,7 +390,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             variableToGet.variableId,
           )
           if (!variable) {
-            console.error('Variable not found')
             return undefined
           }
           return variable
@@ -409,7 +407,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
             variableToGet.variableId,
           )
           if (!variable) {
-            console.error('Variable not found')
             return undefined
           }
           return variable
@@ -427,7 +424,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           switch (scope) {
             case 'global': {
               if (variableToBeDeleted.rowId === -1) {
-                console.error('Variable not found')
                 break
               }
               const variable = getVariableBasedOnRowIdOrVariableId(
@@ -436,7 +432,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 variableToBeDeleted.variableId,
               )
               if (!variable) {
-                console.error('Variable not found')
                 return
               }
               const index = project.data.configuration.resource.globalVariables.indexOf(variable)
@@ -457,7 +452,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 variableToBeDeleted.variableId,
               )
               if (!variable) {
-                console.error('Variable not found')
                 return
               }
               const index = pou.data.variables.indexOf(variable)
@@ -486,7 +480,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
                 variableId,
               )
               if (!variableToBeRemoved) {
-                console.error('Variable not found')
                 return
               }
               const index = project.data.configuration.resource.globalVariables.indexOf(variableToBeRemoved)
@@ -503,7 +496,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
               const { rowId, variableId, newIndex } = variableToBeRearranged
               const variableToBeRemoved = getVariableBasedOnRowIdOrVariableId(pou.data.variables, rowId, variableId)
               if (!variableToBeRemoved) {
-                console.error('Variable not found')
                 return
               }
               const index = pou.data.variables.indexOf(variableToBeRemoved)

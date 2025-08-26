@@ -7,8 +7,9 @@ import { PropsWithChildren } from 'react'
 
 type ReactFlowPanelProps = PropsWithChildren & {
   background?: boolean
-  backgroundConfig?: BackgroundProps
   controls?: boolean
+
+  backgroundConfig?: BackgroundProps
   controlsConfig?: ControlProps
   viewportConfig?: ReactFlowProps
 }
@@ -16,8 +17,8 @@ type ReactFlowPanelProps = PropsWithChildren & {
 export const ReactFlowPanel = ({
   children,
   background,
-  backgroundConfig,
   controls = false,
+  backgroundConfig,
   controlsConfig,
   viewportConfig,
 }: ReactFlowPanelProps) => {
