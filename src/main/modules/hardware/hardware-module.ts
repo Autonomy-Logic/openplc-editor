@@ -90,7 +90,12 @@ class HardwareModule {
   async getAvailableSerialPorts(): Promise<string[]> {
     const executeCommand = promisify(exec)
 
-    const listCommand = HardwareModule.HOST_PLATFORM === 'win32' ? 'mode' : 'ls /dev/tty.*'
+    const listCommand =
+      HardwareModule.HOST_PLATFORM === 'win32'
+        ? 'mode'
+        : HardwareModule.HOST_PLATFORM === 'linux'
+          ? 'udevadm info -e | grep "DEVNAME=/dev/tty"'
+          : 'ls /dev/tty.*'
 
     const { stdout, stderr } = await executeCommand(listCommand)
 
