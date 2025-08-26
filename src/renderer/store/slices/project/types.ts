@@ -282,7 +282,6 @@ const _projectActionsSchema = z.object({
     .function()
     .args(z.object({ rowId: z.number(), newIndex: z.number() }))
     .returns(z.void()),
-  setMonacoFocused: z.function().args(z.boolean()).returns(z.void()),
 })
 type ProjectActions = z.infer<typeof _projectActionsSchema>
 
@@ -293,7 +292,6 @@ type ProjectActions = z.infer<typeof _projectActionsSchema>
 type ProjectSlice = {
   project: ProjectState
   projectActions: ProjectActions
-  isMonacoFocused: boolean
 }
 
 export { projectMetaSchema, projectResponseSchema, projectStateSchema }

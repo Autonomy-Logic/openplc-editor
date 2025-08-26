@@ -23,7 +23,6 @@ import {
 } from './validation/variables'
 
 const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (setState, getState) => ({
-  isMonacoFocused: false,
   project: {
     meta: {
       name: '',
@@ -832,10 +831,6 @@ const createProjectSlice: StateCreator<ProjectSlice, [], [], ProjectSlice> = (se
           project.data.configuration.resource.instances.splice(newIndex, 0, removed)
         }),
       )
-    },
-
-    setMonacoFocused: (focused: boolean) => {
-      setState({ isMonacoFocused: focused })
     },
   },
 })

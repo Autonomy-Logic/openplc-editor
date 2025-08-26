@@ -287,11 +287,11 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
     if (editorInstance) {
       focusDisposables.current.onFocus = editorInstance.onDidFocusEditorText(() => {
-        openPLCStoreBase.setState({ isMonacoFocused: true })
+        openPLCStoreBase.getState().editorActions.setMonacoFocused(true)
       })
 
       focusDisposables.current.onBlur = editorInstance.onDidBlurEditorText(() => {
-        openPLCStoreBase.setState({ isMonacoFocused: false })
+        openPLCStoreBase.getState().editorActions.setMonacoFocused(false)
       })
     }
 
