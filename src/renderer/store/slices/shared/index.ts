@@ -237,6 +237,7 @@ export const createSharedSlice: StateCreator<
       // Add and set the tab
       getState().tabsActions.updateTabs({
         name: propsToCreatePou.name,
+        path: pouPath,
         elementType: {
           type: propsToCreatePou.type,
           language: propsToCreatePou.language,
@@ -653,6 +654,7 @@ export const createSharedSlice: StateCreator<
       getState().tabsActions.updateTabs({
         name: propsToCreateDatatype.name,
         elementType: { type: 'data-type', derivation: propsToCreateDatatype.derivation },
+        path: `/project.json`,
       })
       getState().tabsActions.setSelectedTab(propsToCreateDatatype.name)
 
@@ -1242,7 +1244,12 @@ export const createSharedSlice: StateCreator<
     openFile: ({ name, path, elementType }: TabsProps) => {
       const editorTabToBeCreated = { name, path, elementType }
 
-      if (!editorTabToBeCreated.path)
+      if (!editorTabToBeCreated.path) {
+        toast({
+          title: 'Error opening file',
+          description: 'The file path is not defined.',
+          variant: 'fail',
+        })
         return {
           success: false,
           error: {
@@ -1250,6 +1257,7 @@ export const createSharedSlice: StateCreator<
             description: 'The file path is not defined.',
           },
         }
+      }
 
       // Define editor model at the editor slice
       const editor =
