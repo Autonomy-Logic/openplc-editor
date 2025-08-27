@@ -22,10 +22,11 @@ import {
   SelectionMode,
   XYPosition,
 } from '@xyflow/react'
-import _ from 'lodash'
+import { debounce, isEqual } from 'lodash'
 import { DragEventHandler, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { buildGenericNode } from './fbd-utils/nodes'
+import { useFBDClipboard } from './fbd-utils/useCopyPaste'
 
 interface FBDProps {
   rung: FBDRungState
@@ -51,6 +52,21 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
   const [rungLocal, setRungLocal] = useState<FBDRungState>(rung)
   const [dragging, setDragging] = useState(false)
 
+  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
+  const reactFlowViewportRef = useRef<HTMLDivElement>(null)
+
+  const [insideViewport, setInsideViewport] = useState(false)
+  const [mousePosition, setMousePosition] = useState<XYPosition>({ x: 0, y: 0 })
+  const _fbdClipboard = useFBDClipboard({
+    mousePosition,
+    insideViewport,
+    reactFlowInstance,
+    rungLocal,
+    handleDeleteNodes: (nodes, edges) => {
+      handleOnDelete(nodes, edges)
+    },
+  })
+
   const nodeTypes = useMemo(() => customNodeTypes, [])
   const canZoom = useMemo(() => {
     if (editor.type === 'plc-graphical' && editor.graphical.language === 'fbd') {
@@ -65,12 +81,7 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
     return false
   }, [editor])
 
-  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
-  const reactFlowViewportRef = useRef<HTMLDivElement>(null)
-
   const updateRungLocalFromStore = () => {
-    // console.log('updateRungLocalFromStore --')
-    // console.log('rung', rung)
     setRungLocal({
       ...rung,
       nodes: rung.nodes.map((node) => ({
@@ -81,12 +92,7 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
   }
 
   const updateRungState = () => {
-    // console.log('updateRungState --')
-    // console.log('rungLocal', rungLocal)
-    // console.log('dragging', dragging)
-    // console.log('isEqual', _.isEqual(rungLocal, rung))
-
-    if (dragging || _.isEqual(rungLocal, rung)) {
+    if (dragging || isEqual(rungLocal, rung)) {
       return
     }
 
@@ -114,7 +120,7 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
       debounceUpdateRungRef.current?.()
     }
     // debounce the func that was created once, but has access to the latest sendRequest
-    return _.debounce(func, 100)
+    return debounce(func, 100)
     // no dependencies! never gets updated
   }, [])
 
@@ -126,6 +132,37 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
     debouncedUpdateRungStateCallback()
     return () => debouncedUpdateRungStateCallback.cancel()
   }, [rungLocal])
+
+  /**
+   * Handle screen position changes
+   */
+  useEffect(() => {
+    const unsub = openPLCStoreBase.subscribe(
+      (state) => state.editor.meta.name,
+      (newName, prevEditorName) => {
+        if (newName === prevEditorName || !reactFlowInstance) return
+
+        const { x, y, zoom } = reactFlowInstance.getViewport()
+
+        saveEditorViewState({
+          prevEditorName,
+          fbdPosition: { x, y, zoom },
+        })
+      },
+    )
+
+    return () => unsub()
+  }, [reactFlowInstance])
+
+  useEffect(() => {
+    if (editor.type !== 'plc-graphical') return
+    const viewport = editor.fbdPosition
+    if (!reactFlowInstance || !viewport) return
+
+    setTimeout(() => {
+      void reactFlowInstance.setViewport(viewport, { duration: 0 })
+    }, 0)
+  }, [reactFlowInstance, editor.meta.name])
 
   /**
    * Handle the addition of a new element by dropping it in the viewport
@@ -476,36 +513,21 @@ export const FBDBody = ({ rung, nodeDivergences = [] }: FBDProps) => {
     closeModal()
   }
 
-  useEffect(() => {
-    const unsub = openPLCStoreBase.subscribe(
-      (state) => state.editor.meta.name,
-      (newName, prevEditorName) => {
-        if (newName === prevEditorName || !reactFlowInstance) return
-
-        const { x, y, zoom } = reactFlowInstance.getViewport()
-
-        saveEditorViewState({
-          prevEditorName,
-          fbdPosition: { x, y, zoom },
-        })
-      },
-    )
-
-    return () => unsub()
-  }, [reactFlowInstance])
-
-  useEffect(() => {
-    if (editor.type !== 'plc-graphical') return
-    const viewport = editor.fbdPosition
-    if (!reactFlowInstance || !viewport) return
-
-    setTimeout(() => {
-      void reactFlowInstance.setViewport(viewport, { duration: 0 })
-    }, 0)
-  }, [reactFlowInstance, editor.meta.name])
-
   return (
-    <div className='h-full w-full rounded-lg border p-1 dark:border-neutral-800' ref={reactFlowViewportRef}>
+    <div
+      className='h-full w-full rounded-lg border p-1 dark:border-neutral-800'
+      ref={reactFlowViewportRef}
+      onMouseEnter={() => {
+        setInsideViewport(true)
+      }}
+      onMouseLeave={() => {
+        setInsideViewport(false)
+        setMousePosition({ x: 0, y: 0 })
+      }}
+      onMouseMove={(event) => {
+        setMousePosition({ x: event.clientX, y: event.clientY })
+      }}
+    >
       <ReactFlowPanel
         key={'fbd-react-flow'}
         background={true}

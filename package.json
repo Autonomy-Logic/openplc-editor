@@ -1,7 +1,7 @@
 {
   "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
-  "version": "4.0.4-beta",
+  "version": "4.0.5-beta",
   "license": "MIT",
   "author": {
     "name": "Autonomy Logic"
@@ -160,7 +160,7 @@
     "webpack-merge": "^6.0.1"
   },
   "engines": {
-    "node": ">=20.x",
+    "node": ">=20.x <24",
     "npm": ">=10.x"
   },
   "electronmon": {

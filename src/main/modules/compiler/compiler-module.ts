@@ -6,11 +6,13 @@ import { promisify } from 'node:util'
 
 import { CreateXMLFile } from '@root/main/utils'
 import { ProjectState } from '@root/renderer/store/slices'
+import type { DeviceConfiguration, DevicePin } from '@root/types/PLC/devices'
 import { XmlGenerator } from '@root/utils'
 import { app as electronApp, dialog } from 'electron'
 import type { MessagePortMain } from 'electron/main'
 
 import type { ArduinoCoreControl, HalsFile } from './compiler-types'
+import { FormatMacAddress } from './utils/formatters'
 
 interface MethodsResult<T> {
   success: boolean
@@ -21,6 +23,7 @@ type HandleOutputDataCallback = (chunk: Buffer | string, logLevel?: 'info' | 'er
 class CompilerModule {
   binaryDirectoryPath: string
   sourceDirectoryPath: string
+  halsFilePath: string
 
   arduinoCliBinaryPath: string
   arduinoCliConfigurationFilePath: string
@@ -63,6 +66,7 @@ class CompilerModule {
   constructor() {
     this.binaryDirectoryPath = this.#constructBinaryDirectoryPath()
     this.sourceDirectoryPath = this.#constructSourceDirectoryPath()
+    this.halsFilePath = this.#constructHalsFilePath()
 
     this.arduinoCliBinaryPath = this.#constructArduinoCliBinaryPath()
     this.arduinoCliConfigurationFilePath = join(electronApp.getPath('userData'), 'User', 'arduino-cli.yaml')
@@ -106,6 +110,16 @@ class CompilerModule {
     )
   }
 
+  #constructHalsFilePath(): string {
+    return join(
+      CompilerModule.DEVELOPMENT_MODE ? process.cwd() : process.resourcesPath,
+      CompilerModule.DEVELOPMENT_MODE ? 'resources' : '',
+      'sources',
+      'boards',
+      'hals.json',
+    )
+  }
+
   #constructArduinoCliBinaryPath(): string {
     return join(this.binaryDirectoryPath, 'arduino-cli')
   }
@@ -119,9 +133,16 @@ class CompilerModule {
   }
 
   async #getBoardRuntime(board: string) {
-    const halsFilePath = join(this.sourceDirectoryPath, 'boards', 'hals.json')
-    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(halsFilePath)
+    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
     return halsFileContent[board]['compiler']
+  }
+
+  #executeXml2st(args: string[]) {
+    let xml2stBinaryPath = this.xml2stBinaryPath
+    if (CompilerModule.HOST_PLATFORM === 'win32') {
+      xml2stBinaryPath += '.exe'
+    }
+    return spawn(xml2stBinaryPath, args)
   }
 
   // ############################################################################
@@ -203,6 +224,7 @@ class CompilerModule {
     const coreControlFileContent = await CompilerModule.readJSONFile<ArduinoCoreControl>(coreControlFilePath)
     return coreControlFileContent
   }
+
   async getArduinoInstalledLibraries() {
     const libraryControlFilePath = join(
       electronApp.getPath('userData'),
@@ -218,6 +240,11 @@ class CompilerModule {
     return installedLibraries
   }
 
+  // ++ =========================== Defines.h methods ==========================++
+  async createMD5Hash(content: string): Promise<string> {
+    const crypto = await import('node:crypto')
+    return crypto.createHash('md5').update(content).digest('hex')
+  }
   // ++ ========================= Build Steps ================================= ++
 
   // +++++++++++++++++++++++++ Initialization Methods ++++++++++++++++++++++++++++
@@ -285,7 +312,7 @@ class CompilerModule {
   // +++++++++++++++++++++++++++ Compilation Methods +++++++++++++++++++++++++++++
 
   async handleGenerateXMLfromJSON(sourceTargetFolderPath: string, jsonData: ProjectState['data']) {
-    return new Promise<MethodsResult<string>>((resolve, reject) => {
+    return new Promise<MethodsResult<{ xmlPath: string; xmlContent: string }>>((resolve, reject) => {
       const { data: xmlData } = XmlGenerator(jsonData, 'old-editor')
       if (typeof xmlData !== 'string') {
         reject(new Error('XML data is not a string'))
@@ -295,7 +322,7 @@ class CompilerModule {
       const xmlCreationResult = CreateXMLFile(sourceTargetFolderPath, xmlData, 'plc')
 
       if (xmlCreationResult.success) {
-        resolve({ success: true, data: sourceTargetFolderPath })
+        resolve({ success: true, data: { xmlPath: sourceTargetFolderPath, xmlContent: xmlData } })
       } else {
         reject(new Error('Failed to create XML file'))
       }
@@ -306,13 +333,8 @@ class CompilerModule {
     generatedXMLFilePath: string,
     handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
   ) {
-    let binaryPath = this.xml2stBinaryPath
-    if (CompilerModule.HOST_PLATFORM === 'win32') {
-      // INFO: On Windows, we need to add the .exe extension to the binary path.
-      binaryPath += '.exe'
-    }
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, ['--generate-st', generatedXMLFilePath])
+      const executeCommand = this.#executeXml2st(['--generate-st', generatedXMLFilePath])
 
       let stderrData = ''
 
@@ -385,14 +407,9 @@ class CompilerModule {
   ) {
     const generatedSTFilePath = join(sourceTargetFolderPath, 'program.st') // Assuming the XML file is named 'program.st'
     const generatedVARIABLESFilePath = join(sourceTargetFolderPath, 'VARIABLES.csv') // Assuming the VARIABLES file is named 'VARIABLES.csv'
-    let binaryPath = this.xml2stBinaryPath
-    if (CompilerModule.HOST_PLATFORM === 'win32') {
-      // INFO: On Windows, we need to add the .exe extension to the binary path.
-      binaryPath += '.exe'
-    }
 
     return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, ['--generate-debug', generatedSTFilePath, generatedVARIABLESFilePath])
+      const executeCommand = this.#executeXml2st(['--generate-debug', generatedSTFilePath, generatedVARIABLESFilePath])
 
       let stderrData = ''
 
@@ -407,6 +424,37 @@ class CompilerModule {
       executeCommand.on('close', (code) => {
         if (code === 0) {
           handleOutputData(`Debug files generated at: ${sourceTargetFolderPath}`, 'info')
+          resolve({
+            success: true,
+          })
+        } else {
+          reject(new Error(`xml2st process exited with code ${code}\n${stderrData}`))
+        }
+      })
+    })
+  }
+
+  async handleGenerateGlueVars(
+    sourceTargetFolderPath: string,
+    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
+  ) {
+    const generatedLocatedVariablesFilePath = join(sourceTargetFolderPath, 'LOCATED_VARIABLES.h')
+
+    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
+      const executeCommand = this.#executeXml2st(['--generate-gluevars', generatedLocatedVariablesFilePath])
+
+      let stderrData = ''
+
+      executeCommand.stdout?.on('data', (data: Buffer) => {
+        handleOutputData(data)
+      })
+      executeCommand.stderr?.on('data', (data: Buffer) => {
+        stderrData += data.toString()
+      })
+
+      executeCommand.on('close', (code) => {
+        if (code === 0) {
+          handleOutputData(`Glue vars generated at: ${sourceTargetFolderPath}`, 'info')
           resolve({
             success: true,
           })
@@ -579,6 +627,214 @@ class CompilerModule {
     })
   }
 
+  async handleGenerateDefinitionsFile({
+    projectPath,
+    buildMD5Hash,
+    boardTarget,
+    _handleOutputData,
+  }: {
+    projectPath: string
+    boardTarget: string
+    buildMD5Hash: string
+    _handleOutputData: HandleOutputDataCallback
+  }) {
+    let DEFINES_CONTENT: string = ''
+
+    // === Directories and files paths ===
+    const devicesDirectoryPath = join(projectPath, 'devices')
+    const devicesConfigurationFilePath = join(devicesDirectoryPath, 'configuration.json')
+    const devicesPinMappingFilePath = join(devicesDirectoryPath, 'pin-mapping.json')
+
+    const buildTargetDirectoryPath = join(projectPath, 'build', boardTarget)
+
+    const stProgramFilePath = join(buildTargetDirectoryPath, 'src', 'program.st')
+
+    const definitionsFilePath = join(buildTargetDirectoryPath, 'src', 'defines.h')
+
+    // === Files contents that we need ===
+    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+    const {
+      communicationConfiguration: { modbusRTU, modbusTCP, communicationPreferences },
+    } = await CompilerModule.readJSONFile<DeviceConfiguration>(devicesConfigurationFilePath)
+    const devicePinMapping = await CompilerModule.readJSONFile<DevicePin[]>(devicesPinMappingFilePath)
+    const stProgramFileContent = await readFile(stProgramFilePath, 'utf-8')
+
+    // We extract the board entry from the hals file content to validate if it has the define property.
+    const boardEntry = halsFileContent[boardTarget]
+
+    // ===== Defines.h content generation =====
+
+    // 1. We need to verify if the board entry in the hals.json file has the define property.
+    if (boardEntry && boardEntry.define) {
+      // 1.2. If it has the defines property, we will write a header and iterate over the defines to create the content for the defines.h file.
+      DEFINES_CONTENT = '// Board defines\n'
+      if (Array.isArray(boardEntry.define)) {
+        // 1.3. If the defines property is an array, we will iterate over it and add each define to the content.
+        boardEntry.define.forEach((define) => {
+          DEFINES_CONTENT += `#define ${define}\n`
+        })
+      } else if (typeof boardEntry.define === 'string') {
+        // 1.4. If the defines property is a string, we will add it directly to the content.
+        DEFINES_CONTENT += `#define ${boardEntry.define}\n`
+      }
+    }
+
+    // 2. If the board entry does not have the define property, we will just write a double line break to the file.
+    DEFINES_CONTENT += '\n\n'
+
+    // 3. Now we write the information for the defines.h file based on the device configuration and other preferences.
+
+    /**
+     * TODOS
+     * 3. In the device configuration we need to verify why the values that should be null are being set to empty strings.
+     * 4. We need to ensure that the pins are correctly sorted according to their address.
+     */
+
+    // 3.1. Program MD5
+    DEFINES_CONTENT += '//Program MD5\n'
+    DEFINES_CONTENT += `#define PROGRAM_MD5 "${buildMD5Hash}"`
+    DEFINES_CONTENT += `\n\n`
+
+    // 3.2. Device Configuration
+    DEFINES_CONTENT += '//Comms Configuration\n'
+    DEFINES_CONTENT += `#define MBSERIAL_IFACE ${modbusRTU.rtuInterface}\n`
+    DEFINES_CONTENT += `#define MBSERIAL_BAUD ${modbusRTU.rtuBaudRate}\n`
+    if (modbusRTU.rtuSlaveId !== null) DEFINES_CONTENT += `#define MBSERIAL_SLAVE ${modbusRTU.rtuSlaveId}\n`
+    if (modbusRTU.rtuRS485ENPin !== null) DEFINES_CONTENT += `#define MBSERIAL_TXPIN ${modbusRTU.rtuRS485ENPin}\n`
+    if (modbusTCP.tcpMacAddress !== null)
+      DEFINES_CONTENT += `#define MBTCP_MAC ${FormatMacAddress(modbusTCP.tcpMacAddress)}\n`
+    // OBS: This is giving us an empty string and this is being printed as a space
+    if (modbusTCP.tcpStaticHostConfiguration.ipAddress !== null)
+      DEFINES_CONTENT += `#define MBTCP_IP ${modbusTCP.tcpStaticHostConfiguration.ipAddress.replaceAll('.', ',')}\n`
+    if (modbusTCP.tcpStaticHostConfiguration.dns !== null)
+      DEFINES_CONTENT += `#define MBTCP_DNS ${modbusTCP.tcpStaticHostConfiguration.dns.replaceAll('.', ',')}\n`
+    if (modbusTCP.tcpStaticHostConfiguration.gateway !== null)
+      DEFINES_CONTENT += `#define MBTCP_GATEWAY ${modbusTCP.tcpStaticHostConfiguration.gateway.replaceAll('.', ',')}\n`
+    if (modbusTCP.tcpStaticHostConfiguration.subnet !== null)
+      DEFINES_CONTENT += `#define MBTCP_SUBNET ${modbusTCP.tcpStaticHostConfiguration.subnet.replaceAll('.', ',')}\n`
+
+    if (communicationPreferences.enabledRTU) {
+      DEFINES_CONTENT += '#define MBSERIAL\n'
+      DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
+    }
+
+    if (communicationPreferences.enabledTCP) {
+      DEFINES_CONTENT += '#define MBTCP\n'
+      DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
+      if (modbusTCP.tcpInterface === 'Wi-Fi') {
+        if (modbusTCP.tcpWifiSSID !== null) {
+          DEFINES_CONTENT += `#define MBTCP_SSID "${modbusTCP.tcpWifiSSID}"\n`
+        }
+        if (modbusTCP.tcpWifiPassword !== null) {
+          DEFINES_CONTENT += `#define MBTCP_PWD "${modbusTCP.tcpWifiPassword}"\n`
+        }
+        DEFINES_CONTENT += '#define MBTCP_WIFI\n'
+      } else {
+        DEFINES_CONTENT += '#define MBTCP_ETHERNET\n'
+      }
+    }
+
+    DEFINES_CONTENT += `\n\n`
+
+    // INFO: If null, only the define value
+    // 3.3. IO Config defines
+    DEFINES_CONTENT += '//IO Config\n'
+    // INFO: This approach assumes that the pins are sorted.
+    const digitalInputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalInput')
+    const analogInputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogInput')
+    const digitalOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalOutput')
+    const analogOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogOutput')
+
+    DEFINES_CONTENT += `#define PINMASK_DIN ${digitalInputPins.map(({ pin }) => pin).join(', ')}\n`
+    DEFINES_CONTENT += `#define PINMASK_AIN ${analogInputPins.map(({ pin }) => pin).join(', ')}\n`
+    DEFINES_CONTENT += `#define PINMASK_DOUT ${digitalOutputPins.map(({ pin }) => pin).join(', ')}\n`
+    DEFINES_CONTENT += `#define PINMASK_AOUT ${analogOutputPins.map(({ pin }) => pin).join(', ')}\n`
+
+    DEFINES_CONTENT += `#define NUM_DISCRETE_INPUT ${digitalInputPins.length}\n`
+    DEFINES_CONTENT += `#define NUM_ANALOG_INPUT ${analogInputPins.length}\n`
+    DEFINES_CONTENT += `#define NUM_DISCRETE_OUTPUT ${digitalOutputPins.length}\n`
+    DEFINES_CONTENT += `#define NUM_ANALOG_OUTPUT ${analogOutputPins.length}\n`
+    DEFINES_CONTENT += `\n\n`
+
+    // 3.4. Arduino libraries defines
+    DEFINES_CONTENT += '//Arduino libraries\n'
+    if (
+      stProgramFileContent.includes('DS18B20;') ||
+      stProgramFileContent.includes('DS18B20_2_OUT;') ||
+      stProgramFileContent.includes('DS18B20_3_OUT;') ||
+      stProgramFileContent.includes('DS18B20_4_OUT;') ||
+      stProgramFileContent.includes('DS18B20_5_OUT;')
+    ) {
+      DEFINES_CONTENT += '#define USE_DS18B20_BLOCK\n'
+    }
+
+    if (stProgramFileContent.includes('P1AM_INIT;')) DEFINES_CONTENT += '#define USE_P1AM_BLOCKS\n'
+
+    if (stProgramFileContent.includes('CLOUD_BEGIN;')) DEFINES_CONTENT += '#define USE_CLOUD_BLOCKS\n'
+
+    if (stProgramFileContent.includes('MQTT_CONNECT;') || stProgramFileContent.includes('MQTT_CONNECT_AUTH;'))
+      DEFINES_CONTENT += '#define USE_MQTT_BLOCKS\n'
+
+    if (
+      stProgramFileContent.includes('ARDUINOCAN_CONF;') ||
+      stProgramFileContent.includes('ARDUINOCAN_WRITE;') ||
+      stProgramFileContent.includes('ARDUINOCAN_WRITE_WORD;') ||
+      stProgramFileContent.includes('ARDUINOCAN_READ;')
+    ) {
+      DEFINES_CONTENT += '#define USE_ARDUINOCAN_BLOCK\n'
+    }
+
+    if (
+      stProgramFileContent.includes('STM32CAN_CONF;') ||
+      stProgramFileContent.includes('STM32CAN_WRITE;') ||
+      stProgramFileContent.includes('STM32CAN_READ;')
+    ) {
+      DEFINES_CONTENT += '#define USE_STM32CAN_BLOCK\n'
+    }
+
+    if (
+      stProgramFileContent.includes('SM_8RELAY;') ||
+      stProgramFileContent.includes('SM_16RELAY;') ||
+      stProgramFileContent.includes('SM_8DIN;') ||
+      stProgramFileContent.includes('SM_16DIN;') ||
+      stProgramFileContent.includes('SM_4REL4IN;') ||
+      stProgramFileContent.includes('SM_INDUSTRIAL;') ||
+      stProgramFileContent.includes('SM_RTD;') ||
+      stProgramFileContent.includes('SM_BAS;') ||
+      stProgramFileContent.includes('SM_HOME;') ||
+      stProgramFileContent.includes('SM_8MOSFET;')
+    ) {
+      DEFINES_CONTENT += '#define USE_SM_BLOCKS\n'
+    }
+
+    // 4. Finally, we attempt to write the content to the defines.h file.
+    try {
+      await writeFile(definitionsFilePath, DEFINES_CONTENT, { encoding: 'utf8' })
+      _handleOutputData(`Defines file created at: ${definitionsFilePath}`, 'info')
+    } catch (_error) {
+      _handleOutputData('Error writing defines.h file', 'error')
+    }
+  }
+
+  async handleGenerateArduinoCppFile(projectPath: string, boardTarget: string) {
+    let result: MethodsResult<string> = { success: false }
+
+    const halsFileContent = await CompilerModule.readJSONFile<HalsFile>(this.halsFilePath)
+
+    const boardSourceFile = halsFileContent[boardTarget]['source']
+
+    const boardSourceFilePath = join(this.sourceDirectoryPath, 'hal', boardSourceFile)
+    const arduinoCppFilePath = join(projectPath, 'build', boardTarget, 'src', 'arduino.cpp')
+
+    try {
+      await cp(boardSourceFilePath, arduinoCppFilePath, { recursive: true })
+      result = { success: true, data: arduinoCppFilePath }
+    } catch (error) {
+      throw new Error(`Error copying Arduino source file: ${(error as Error).message}`)
+    }
+    return result
+  }
+
   // !! Deprecated: This method is a outdated implementation and should be removed.
   async createXmlFile(
     pathToUserProject: string,
@@ -648,6 +904,8 @@ class CompilerModule {
 
     const sourceTargetFolderPath = join(compilationPath, 'src') // Assuming the source folder is named 'src'
 
+    let buildMD5Hash: string | null = null
+
     // --- Print basic information ---
     _mainProcessPort.postMessage({
       logLevel: 'info',
@@ -700,11 +958,12 @@ class CompilerModule {
     }
 
     // Step 2: Generate XML from JSON
+    let generateXMLResult: MethodsResult<{ xmlPath: string; xmlContent: string }> = { success: false }
     try {
-      const generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
+      generateXMLResult = await this.handleGenerateXMLfromJSON(sourceTargetFolderPath, projectData)
       _mainProcessPort.postMessage({
         logLevel: 'info',
-        message: `Generated XML from JSON at: ${generateXMLResult.data as string}`,
+        message: `Generated XML from JSON at: ${generateXMLResult.data?.xmlPath as string}`,
       })
     } catch (error) {
       _mainProcessPort.postMessage({
@@ -713,6 +972,23 @@ class CompilerModule {
       })
       _mainProcessPort.close()
       return
+    }
+
+    // Step 2.1: Generate MD5 hash of the XML file
+    try {
+      const xmlContentToGenerateHash = generateXMLResult.data?.xmlContent
+      if (xmlContentToGenerateHash) {
+        buildMD5Hash = await this.createMD5Hash(xmlContentToGenerateHash)
+        _mainProcessPort.postMessage({
+          logLevel: 'info',
+          message: `Build MD5 hash: ${buildMD5Hash}`,
+        })
+      }
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `Error generating MD5 hash of the XML file: ${error as string}\n`,
+      })
     }
 
     // Step 3: Transpile XML to ST
@@ -781,6 +1057,24 @@ class CompilerModule {
       return
     }
 
+    // Step 6: Generate glue vars
+    try {
+      await this.handleGenerateGlueVars(sourceTargetFolderPath, (data, logLevel) => {
+        _mainProcessPort.postMessage({ logLevel, message: data })
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: 'Stopping compilation process.',
+      })
+      _mainProcessPort.close()
+      return
+    }
+
     // -- Verify if the runtime target is Arduino or OpenPLC --
     // INFO: If the runtime target is Arduino, we will continue the compilation process.
     // INFO: If the runtime target is OpenPLC we will finish the process here.
@@ -797,7 +1091,7 @@ class CompilerModule {
       return
     }
 
-    // Step 6: Handle core installation
+    // Step 7: Handle core installation
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Handling core installation...' })
     try {
       await this.handleCoreInstallation(boardCore, (data, logLevel) => {
@@ -815,7 +1109,7 @@ class CompilerModule {
       _mainProcessPort.close()
       return
     }
-    // Step 7: Handle library installation
+    // Step 8: Handle library installation
     _mainProcessPort.postMessage({ logLevel: 'info', message: 'Handling library installation...' })
     try {
       await this.handleLibraryInstallation((data, logLevel) => {
@@ -833,6 +1127,46 @@ class CompilerModule {
       _mainProcessPort.close()
       return
     }
+
+    // Step 9: Handle defines.h file generation
+    try {
+      if (buildMD5Hash === null) {
+        _mainProcessPort.postMessage({
+          logLevel: 'error',
+          message: 'Build MD5 hash is null, cannot generate defines.h file.',
+        })
+        _mainProcessPort.close()
+        return
+      }
+      await this.handleGenerateDefinitionsFile({
+        projectPath: normalizedProjectPath,
+        boardTarget,
+        buildMD5Hash,
+        _handleOutputData: (data, logLevel) => {
+          _mainProcessPort.postMessage({ logLevel, message: data })
+        },
+      })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+    }
+
+    // Step 10: Generate Arduino CPP file
+    _mainProcessPort.postMessage({ logLevel: 'info', message: 'Generating Arduino CPP file...' })
+    try {
+      await this.handleGenerateArduinoCppFile(normalizedProjectPath, boardTarget)
+      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Arduino CPP file generated successfully.' })
+    } catch (error) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: typeof error === 'string' ? error : error instanceof Error ? error.message : JSON.stringify(error),
+      })
+      _mainProcessPort.close()
+      return
+    }
+
     // -- Final message --
     _mainProcessPort.postMessage({
       message:

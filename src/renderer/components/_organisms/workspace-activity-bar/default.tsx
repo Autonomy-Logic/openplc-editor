@@ -10,6 +10,7 @@ import {
   ZoomButton,
 } from '../../_molecules/workspace-activity-bar/default'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
+import { saveProjectRequest } from '../../_templates'
 
 type DefaultWorkspaceActivityBarProps = {
   zoom?: {
@@ -20,10 +21,10 @@ type DefaultWorkspaceActivityBarProps = {
 export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBarProps) => {
   const {
     project: { data: projectData, meta: projectMeta },
-    deviceDefinitions: {
-      configuration: { deviceBoard },
-    },
+    deviceDefinitions,
     deviceAvailableOptions: { availableBoards },
+    workspace: { editingState },
+    workspaceActions: { setEditingState },
     consoleActions: { addLog },
   } = useOpenPLCStore()
 
@@ -32,9 +33,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const disabledButtonClass = 'disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
 
   const handleRequest = () => {
-    const boardCore = availableBoards.get(deviceBoard)?.core || null
+    const boardCore = availableBoards.get(deviceDefinitions.configuration.deviceBoard)?.core || null
     window.bridge.runCompileProgram(
-      [projectMeta.path, deviceBoard, boardCore, projectData],
+      [projectMeta.path, deviceDefinitions.configuration.deviceBoard, boardCore, projectData],
       (data: { logLevel?: 'info' | 'error' | 'warning'; message: string | Buffer; closePort?: boolean }) => {
         setIsCompiling(true)
         if (typeof data.message === 'string') {
@@ -64,6 +65,15 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       },
     )
   }
+
+  const verifyAndCompile = async () => {
+    if (editingState === 'unsaved') {
+      await saveProjectRequest({ data: projectData, meta: projectMeta }, deviceDefinitions, setEditingState)
+      handleRequest()
+    } else {
+      handleRequest()
+    }
+  }
   return (
     <>
       <TooltipSidebarWrapperButton tooltipContent='Search'>
@@ -76,7 +86,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         <DownloadButton
           disabled={isCompiling}
           className={cn(isCompiling ? `${disabledButtonClass}` : '')}
-          onClick={handleRequest}
+          // eslint-disable-next-line @typescript-eslint/no-misused-promises
+          onClick={() => verifyAndCompile()}
         />
       </TooltipSidebarWrapperButton>
       {/** TODO: Need to be implemented */}

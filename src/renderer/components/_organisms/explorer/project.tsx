@@ -149,7 +149,6 @@ const Project = () => {
               ?.filter(({ derivation }) => derivation === 'array')
               .map(({ name }) => (
                 <ProjectTreeLeaf
-                  nested={true}
                   key={name}
                   leafLang='arr'
                   label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
@@ -166,7 +165,6 @@ const Project = () => {
               ?.filter(({ derivation }) => derivation === 'enumerated')
               .map(({ name }) => (
                 <ProjectTreeLeaf
-                  nested={true}
                   key={name}
                   leafLang='enum'
                   label={searchQuery ? extractSearchQuery(name, searchQuery) : name}
@@ -184,7 +182,6 @@ const Project = () => {
               ?.filter(({ derivation }) => derivation === 'structure')
               .map(({ name }) => (
                 <ProjectTreeLeaf
-                  nested={true}
                   key={name}
                   leafLang='str'
                   label={searchQuery ? extractSearchQuery(name, searchQuery) : name}

@@ -54,6 +54,12 @@ const ModbusRTUComponent = memo(function ({ isModbusRTUEnabled }: { isModbusRTUE
   }
 
   useEffect(() => {
+    if (modbusRTU.rtuRS485ENPin) {
+      setEnableRS485ENPin(true)
+    }
+  }, [])
+
+  useEffect(() => {
     scrollToSelectedOption(rtuBaudRateRef, rtuBaudRateIsOpen)
   }, [rtuBaudRateIsOpen])
 
@@ -61,10 +67,15 @@ const ModbusRTUComponent = memo(function ({ isModbusRTUEnabled }: { isModbusRTUE
     scrollToSelectedOption(rtuInterfaceRef, rtuInterfaceIsOpen)
   }, [rtuInterfaceIsOpen])
 
-  const toggleEnableRS485ENPin = () => setEnableRS485ENPin((prev) => !prev)
+  const toggleEnableRS485ENPin = () => {
+    setEnableRS485ENPin((prev) => !prev)
+    if (enableRS485ENPin) {
+      setRTUConfig({ rtuConfig: 'rtuRS485ENPin', value: null })
+    }
+  }
 
   const handleRTUInterfaceChange = (value: string) => {
-    setRTUConfig({ rtuConfig: 'rtuInterface', value: value as 'Serial' | 'Serial 1' | 'Serial 2' | 'Serial 3' })
+    setRTUConfig({ rtuConfig: 'rtuInterface', value: value as 'Serial' | 'Serial1' | 'Serial2' | 'Serial3' })
   }
 
   const handleRTUBaudRateChange = (value: string) => {
@@ -73,8 +84,6 @@ const ModbusRTUComponent = memo(function ({ isModbusRTUEnabled }: { isModbusRTUE
       value: value as '9600' | '14400' | '19200' | '38400' | '57600' | '115200',
     })
   }
-
-  console.log(errors)
 
   return (
     <div id='modbus-rtu-form-config-container' className={cn('flex gap-6', !isModbusRTUEnabled && 'hidden')}>
@@ -224,9 +233,13 @@ const ModbusRTUComponent = memo(function ({ isModbusRTUEnabled }: { isModbusRTUE
                   id='rtuRS485ENPin'
                   placeholder='RS485 EN Pin'
                   {...field}
+                  autoFocus
+                  onFocus={() => {
+                    setRTUConfig({ rtuConfig: field.name, value: field.value === '' ? null : field.value })
+                  }}
                   onBlur={(_ev) => {
                     field.onBlur()
-                    setRTUConfig({ rtuConfig: field.name, value: field.value })
+                    setRTUConfig({ rtuConfig: field.name, value: field.value === '' ? null : field.value })
                   }}
                   disabled={!enableRS485ENPin}
                   className={errors.rtuRS485ENPin ? INPUT_STYLES.error : INPUT_STYLES.default}

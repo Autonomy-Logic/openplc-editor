@@ -8,7 +8,6 @@ export const getVariableBasedOnRowIdOrVariableId = (
   if (rowId !== undefined) {
     const variable = variables[rowId]
     if (!variable) {
-      console.error('Variable not found')
       return null
     }
     return variable
@@ -17,7 +16,6 @@ export const getVariableBasedOnRowIdOrVariableId = (
   if (variableId) {
     const variable = variables.find((variable) => variable.id === variableId)
     if (!variable) {
-      console.error('Variable not found')
       return null
     }
     return variable

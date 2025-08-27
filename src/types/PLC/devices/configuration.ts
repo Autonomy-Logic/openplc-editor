@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 const baudRateOptions = ['9600', '14400', '19200', '38400', '57600', '115200'] as const
 
-const interfaceOptions = ['Serial', 'Serial 1', 'Serial 2', 'Serial 3'] as const
+const interfaceOptions = ['Serial', 'Serial1', 'Serial2', 'Serial3'] as const
 
 const staticHostConfigurationSchema = z.object({
   ipAddress: z.string(), // This should have the format: XXX.XXX.XXX.XXX
