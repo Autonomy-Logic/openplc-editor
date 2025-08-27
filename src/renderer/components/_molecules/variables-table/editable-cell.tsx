@@ -441,8 +441,21 @@ const EditableInitialValueCell = ({
 
     if (cellValue === initialValue) return setIsEditing(false)
 
-    const oldName = initialValue
-    const newName = cellValue
+    // The decision was made to validate this issue at a later stage.
+
+    // if (id === 'initialValue' && variable?.type?.value) {
+    //   const validation = validateInitialValue(cellValue, variable.type.value)
+
+    //   if (!validation.valid) {
+    //     toast({ title: 'Error', description: validation.message, variant: 'fail' })
+    //     setCellValue('')
+    //     setIsEditing(false)
+    //     return
+    //   }
+    // }
+
+    const oldName = initialValue ?? ''
+    const newName = cellValue ?? ''
 
     /* 1 ▸ which blocks use the variable? */
     const nodesUsingVarLadder = findNodesUsingVariable(ladderFlows, oldName)
