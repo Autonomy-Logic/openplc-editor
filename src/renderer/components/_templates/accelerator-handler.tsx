@@ -109,12 +109,15 @@ const AcceleratorHandler = () => {
 
   const {
     project,
+    editor: { meta },
     deviceDefinitions,
     workspace: { editingState, systemConfigs, close },
     modalActions: { openModal },
     sharedWorkspaceActions: { closeProject, openProject, openRecentProject },
     workspaceActions: { setEditingState, switchAppTheme, toggleMaximizedWindow },
+    snapshotActions: { undo, redo },
   } = useOpenPLCStore()
+  const isMonacoFocused: boolean = useOpenPLCStore((state) => state.isMonacoFocused)
 
   const { handleWindowClose, handleAppIsClosingDarwin } = useQuitApp()
 
@@ -256,6 +259,33 @@ const AcceleratorHandler = () => {
     }
   }, [project, deviceDefinitions])
 
+  /**
+   * ==== Edit Related Accelerators ====
+   */
+  useEffect(() => {
+    window.bridge.handleUndoRequest((_) => {
+      if (!meta?.name) {
+        return
+      }
+
+      undo(meta.name)
+    })
+    return () => {
+      window.bridge.removeUndoRequestListener()
+    }
+  }, [meta.name, isMonacoFocused])
+  useEffect(() => {
+    window.bridge.handleRedoRequest((_) => {
+      if (!meta?.name) {
+        return
+      }
+
+      redo(meta.name)
+    })
+    return () => {
+      window.bridge.removeRedoRequestListener()
+    }
+  }, [meta.name, isMonacoFocused])
   /**
    * ==== Window Related Accelerators ====
    */
