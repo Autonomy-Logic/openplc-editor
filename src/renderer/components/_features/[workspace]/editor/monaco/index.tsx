@@ -4,6 +4,7 @@ import { Editor as PrimitiveEditor } from '@monaco-editor/react'
 import { Modal, ModalContent, ModalTitle } from '@process:renderer/components/_molecules/modal'
 import { openPLCStoreBase, useOpenPLCStore } from '@process:renderer/store'
 import { PLCVariable } from '@root/types/PLC'
+import { baseTypeSchema } from '@root/types/PLC/open-plc'
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
@@ -165,6 +166,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
         range,
         pouVariables: pou?.data.variables || [],
         customFBs,
+        editorName: name,
       }).suggestions
 
       const labels = suggestions.map((suggestion) => suggestion.label)
@@ -265,6 +267,28 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
     const disposable = monaco.languages.registerCompletionItemProvider(language, {
       triggerCharacters: ['.'],
       provideCompletionItems: (model, position) => {
+        const textUntilPosition = model.getValueInRange({
+          startLineNumber: position.lineNumber,
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
+        })
+
+        const dotAccessMatch = textUntilPosition.match(/(\w+)\.$/)
+        if (dotAccessMatch) {
+          const variableName = dotAccessMatch[1]
+
+          const primitiveTypes: string[] = baseTypeSchema.options
+
+          const allVariables = [...(pou?.data.variables ?? []), ...(globalVariables ?? [])]
+
+          const variable = allVariables.find((v) => v.name === variableName)
+
+          if (variable && primitiveTypes.includes(variable.type.value)) {
+            return { suggestions: [] }
+          }
+        }
+
         const word = model.getWordUntilPosition(position)
         const range = {
           startLineNumber: position.lineNumber,

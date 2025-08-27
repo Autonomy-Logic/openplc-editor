@@ -160,14 +160,18 @@ function findFBType(
 /**
  * Get variable suggestions for Standard Function Blocks
  */
-function getStandardFBVariableSuggestions(fbType: string, range: monaco.IRange): monaco.languages.CompletionItem[] {
+function getStandardFBVariableSuggestions(
+  fbType: string,
+  range: monaco.IRange,
+  editorName: string,
+): monaco.languages.CompletionItem[] {
   const standardFB = StandardFunctionBlocks.pous.find((fb) => fb.name === fbType)
   if (!standardFB) return []
 
   // Filter only public variables (Input, Output) - 'local' are private
-  const publicVariables = standardFB.variables.filter(
-    (variable) => variable.class === 'input' || variable.class === 'output',
-  )
+  const publicVariables = standardFB.variables
+    .filter((variable) => variable.class === 'input' || variable.class === 'output')
+    .filter((variable) => variable.name !== editorName)
 
   return publicVariables.map((variable) => ({
     label: variable.name,
@@ -189,15 +193,16 @@ function getCustomFBVariableSuggestions(
   fbType: string,
   customFBs: PLCProject['data']['pous'],
   range: monaco.IRange,
+  editorName: string,
 ): monaco.languages.CompletionItem[] {
   const functionBlock = customFBs.find((fb) => fb.data.name === fbType && fb.type === 'function-block')
 
   if (!functionBlock) return []
 
   // Filter only public variables (Input, Output, InOut) - same as Standard FBs
-  const publicVariables = functionBlock.data.variables.filter(
-    (variable) => variable.class === 'input' || variable.class === 'output' || variable.class === 'inOut',
-  )
+  const publicVariables = functionBlock.data.variables
+    .filter((variable) => variable.class === 'input' || variable.class === 'output' || variable.class === 'inOut')
+    .filter((variable) => variable.name !== editorName)
 
   return publicVariables.map((variable) => ({
     label: variable.name,
@@ -218,9 +223,11 @@ function getCustomFBVariableSuggestions(
 function getCustomFBInstanceSuggestions(
   customFBs: PLCProject['data']['pous'],
   range: monaco.IRange,
+  editorName: string,
 ): monaco.languages.CompletionItem[] {
   return customFBs
     .filter((fb) => fb.type === 'function-block')
+    .filter((fb) => fb.data.name !== editorName)
     .map((fb) => {
       const inputVars = fb.data.variables.filter((v) => v.class === 'input')
 
@@ -259,12 +266,14 @@ export const fbCompletion = ({
   model,
   position,
   range,
+  editorName,
   pouVariables = [],
   customFBs = [],
 }: {
   model: monaco.editor.ITextModel
   position: monaco.IPosition
   range: monaco.IRange
+  editorName: string
   pouVariables?: VariableDTO['data'][]
   customFBs?: PLCProject['data']['pous']
 }) => {
@@ -286,15 +295,15 @@ export const fbCompletion = ({
       let suggestions: monaco.languages.CompletionItem[] = []
 
       if (fbResult.isStandard) {
-        suggestions = getStandardFBVariableSuggestions(fbResult.type, range)
+        suggestions = getStandardFBVariableSuggestions(fbResult.type, range, editorName)
       } else {
-        suggestions = getCustomFBVariableSuggestions(fbResult.type, customFBs, range)
+        suggestions = getCustomFBVariableSuggestions(fbResult.type, customFBs, range, editorName)
       }
 
       return { suggestions }
     }
   } else {
-    const suggestions = getCustomFBInstanceSuggestions(customFBs, range)
+    const suggestions = getCustomFBInstanceSuggestions(customFBs, range, editorName)
 
     return { suggestions }
   }
