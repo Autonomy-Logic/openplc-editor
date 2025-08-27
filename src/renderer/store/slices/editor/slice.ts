@@ -10,6 +10,7 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       name: 'available',
     },
   },
+  isMonacoFocused: false,
   editorActions: {
     addModel: (editor) =>
       setState(
@@ -257,6 +258,9 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
       const { editor, editors } = getState()
       if (name === editor.meta.name) return editor
       return editors.find((model) => model.meta.name === name) ?? null
+    },
+    setMonacoFocused: (focused: boolean) => {
+      setState({ isMonacoFocused: focused })
     },
   },
 })

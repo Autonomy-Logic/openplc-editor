@@ -12,8 +12,11 @@ type EnumDatatypeProps = ComponentPropsWithoutRef<'div'> & {
 }
 const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   const {
+    editor,
     projectActions: { updateDatatype },
+    snapshotActions: { addSnapshot },
   } = useOpenPLCStore()
+
   const ROWS_NOT_SELECTED = -1
 
   const [arrayTable, setArrayTable] = useState<{ selectedRow: number }>({ selectedRow: ROWS_NOT_SELECTED })
@@ -31,6 +34,7 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
 
   const handleInitialValueChange = (value: string) => {
     setInitialValueData(value)
+    addSnapshot(editor.meta.name)
     updateDatatype(data.name, {
       ...data,
       initialValue: value,
@@ -38,6 +42,8 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const addNewRow = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       const newRows = [...prevRows, { description: '' }]
       setArrayTable({ selectedRow: newRows.length - 1 })
@@ -50,6 +56,8 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const removeRow = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null) {
         const newRows = prevRows.filter((_, index) => index !== arrayTable.selectedRow)
@@ -69,6 +77,8 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const moveRowUp = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow > 0) {
         const newRows = [...prevRows]
@@ -91,6 +101,8 @@ const EnumeratorDataType = ({ data, ...rest }: EnumDatatypeProps) => {
   }
 
   const moveRowDown = () => {
+    addSnapshot(editor.meta.name)
+
     setTableData((prevRows) => {
       if (arrayTable.selectedRow !== null && arrayTable.selectedRow < prevRows.length - 1) {
         const newRows = [...prevRows]

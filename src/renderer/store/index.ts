@@ -30,6 +30,7 @@ import {
   createTabsSlice,
   createWorkspaceSlice,
 } from './slices'
+import { createHistorySlice, HistorySlice } from './slices/history'
 
 export const openPLCStoreBase = create(
   subscribeWithSelector<
@@ -44,7 +45,8 @@ export const openPLCStoreBase = create(
       ProjectSlice &
       ConsoleSlice &
       ModalSlice &
-      DeviceSlice
+      DeviceSlice &
+      HistorySlice
   >((...a) => ({
     ...createWorkspaceSlice(...a),
     ...createEditorSlice(...a),
@@ -58,6 +60,7 @@ export const openPLCStoreBase = create(
     ...createConsoleSlice(...a),
     ...createModalSlice(...a),
     ...createDeviceSlice(...a),
+    ...createHistorySlice(...a),
   })),
 )
 

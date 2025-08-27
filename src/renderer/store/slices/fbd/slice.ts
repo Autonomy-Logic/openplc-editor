@@ -305,5 +305,37 @@ export const createFBDFlowSlice: StateCreator<FBDFlowSlice, [], [], FBDFlowSlice
         }),
       )
     },
+
+    /**
+     * Control the undo and redo actions
+     */
+
+    applyFBDFlowSnapshot: ({ editorName, snapshot }) => {
+      setState(
+        produce(({ fbdFlows }: FBDFlowState) => {
+          const index = fbdFlows.findIndex((fbdFlow) => fbdFlow.name === editorName)
+
+          if (snapshot) {
+            const newFlow = {
+              ...snapshot,
+              name: editorName,
+              rung: {
+                ...snapshot.rung,
+                selectedNodes: [],
+              },
+              updated: true,
+            }
+
+            if (index === -1) {
+              fbdFlows.push(newFlow)
+            } else {
+              fbdFlows[index] = newFlow
+            }
+          } else {
+            if (index !== -1) fbdFlows.splice(index, 1)
+          }
+        }),
+      )
+    },
   },
 })
